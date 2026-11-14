@@ -11,7 +11,6 @@ Directory: `docs/tasks`
 | TASK-Ud6Jq1Mk8Pz3Rt5Wy2Ne4Gb | Issue #431 実装タスク | in-progress | [implement-issue-431-webview-gpui-real-verify.md](./implement-issue-431-webview-gpui-real-verify.md) |
 | TASK-034T81mttwNdGpBq1wCGwP | Implement RF384/RF385: Driver-neutral contract docs + ruviform-ui-theme crate | in-progress | [implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md](./implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
 | TASK-034udQraUdxLs1SxuYiaAK | Issue #127 Linux 実配布方式 設計 — docs チェーン作成・索引再生成・検証・PR | in-progress | [issue-127-linux-dist-design.md](./issue-127-linux-dist-design.md) |
-| TASK-034WZ7YMSR5UKu8AhtpOgk | Issue #193 Migration Plan Update Snapshot 文書化 | todo | [issue-193-migration-plan-update-task.md](./issue-193-migration-plan-update-task.md) |
 | TASK-034R4Jx09ei8vexAKp8oe7 | T5 consumer-verify anonymous-HTTPS access mode（public repo 対応）+ 棚卸し refresh | in-progress | [issue-219-t5-anonymous-access.md](./issue-219-t5-anonymous-access.md) |
 | TASK-034Vj6McJYc0Zg8Cae9FZg | Issue #253 host-graph report consumer タスク（host drain API + fixture E2E） | completed | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
@@ -188,6 +187,7 @@ Directory: `docs/tasks`
 | TASK-034UCcxDGa2UGOpkpXCbQJ | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | done | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | TASK-034WYgYyoC0JWYkg6gXlBK | Issue #192 TA Invariant Map — 監査対応表の作成と非循環性の静的確認 | done | [issue-192-ta-invariant-map-task.md](./issue-192-ta-invariant-map-task.md) |
 | TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
+| TASK-034WZ7YMSR5UKu8AhtpOgk | Issue #193 Migration Plan Update Snapshot 文書化 | done | [issue-193-migration-plan-update-task.md](./issue-193-migration-plan-update-task.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
 | TASK-mO3RtjrUoyUadajAWyCadp | Issue #196 T-3: ruviform-audio-plugin-bridge crate | done | [issue-196-t-3-bridge-crate.md](./issue-196-t-3-bridge-crate.md) |

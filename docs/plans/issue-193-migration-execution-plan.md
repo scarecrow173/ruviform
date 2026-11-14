@@ -258,8 +258,12 @@ Required、macOS/Linux は利用要件発生まで Deferred。
   **CLOSED**。Consumer 側も SV #13〜#16/#24/#25/#83/
   #100/#104/#105/#110/#111/#113/#175/#190/#377、
   AL #105/#131/#132/#140〜#143/#166/#206 が CLOSED。
-- OPEN の残存 Owner/Gate: RF #219/#243/#251/#253/#262/
-  #275/#281/#294/#306/#313/#388/#389/#419/#465/#532/
+- 同日再実測で RF #243・#313 が CLOSED（COMPLETED）へ
+  遷移（2026-11-13T19:24-19:25Z closeout — OS-L1 Pass・
+  Windows 利用範囲 GUI-L2 Pass、残存 Deferred 能力は
+  SV #114・AL #127・RF #294 等の製品 Owner で追跡）。
+- OPEN の残存 Owner/Gate: RF #219/#251/#253/#262/
+  #275/#281/#294/#306/#388/#389/#419/#465/#532/
   #553/#558/#559/#560/#562/#315〜#318、SV #22/#23/#28/
   #84/#101/#106〜#109/#112/#114〜#117/#119/#124/#126/
   #127/#130/#138/#176/#177/#259/#264/#266/#271〜#274/
@@ -430,23 +434,26 @@ Build/Link・Headless/RT/CLI・必要 Feature を既存の
 - **開始条件**: 充足済み。
 - **着手可能 Headless Slice**: Window/Job 寿命分離・
   Dock/Restore・Generic Probe の headless/fake 継続。
-  GUI Test 基盤 #310〜#312/#314 は CLOSED、#313 が実 OS
-  Driver/Capability Matrix の残件。
+  GUI Test 基盤 #310〜#312/#314・実 OS Driver/
+  Capability Matrix #313 は CLOSED（#313 は 2026-11-14
+  現行スコープ Closeout）。
 - **完了定義**: G7 — 既存 API/Project/他 Consumer の
   回帰試験・platform evidence・Legacy Deprecation の
   理由/利用者通知/復旧手順・未検証事項の明記。後継 ADR
   なしに Accepted ADR と相反する方式へ変更しない。
 - **Integration Gate**: GUI lane Acceptance — GPUI 採否
-  #262→#419、Native Dock #388/#389/#532、実 Window/OS
-  #313/#243、SV #112/#114/#176/#177、AL #127/#189、
-  #219/#294 tuple、WebView 撤去 #465。
-- **責務**: RF #243/#262/#313/#388/#389/#419/#465/#532
-  が共通 Owner。SV #112/#114/#176/#177 と AL #127/#189
-  が製品 Owner。
+  #262→#419、Native Dock #388/#389/#532、SV #112/#114/
+  #176/#177、AL #127/#189、#219/#294 tuple、WebView
+  撤去 #465。実 Window/OS Driver 検証 #243/#313 は
+  2026-11-14 CLOSED（OS-L1 + Windows 利用範囲 GUI-L2
+  Pass）。残存の実 Window/製品 GUI 受入は SV #114・
+  AL #127 と #294 tuple が担う。
+- **責務**: RF #262/#388/#389/#419/#465/#532 が共通
+  Owner（#243/#313 は現行 Required 範囲を完了し
+  CLOSED）。SV #112/#114/#176/#177 と AL #127/#189 が
+  製品 Owner。
 - **Blocked by**: なし。
-- **独立 Owner Issue**: [#243](https://github.com/scarecrow173/ruviform/issues/243)、
-  [#262](https://github.com/scarecrow173/ruviform/issues/262)、
-  [#313](https://github.com/scarecrow173/ruviform/issues/313)、
+- **独立 Owner Issue**: [#262](https://github.com/scarecrow173/ruviform/issues/262)、
   [#388](https://github.com/scarecrow173/ruviform/issues/388)、
   [#389](https://github.com/scarecrow173/ruviform/issues/389)、
   [#419](https://github.com/scarecrow173/ruviform/issues/419)、
@@ -491,7 +498,7 @@ Build/Link・Headless/RT/CLI・必要 Feature を既存の
 
 | 製品利用条件 | 検証レベル | Owner Issue | 現行分類 |
 | --- | --- | --- | --- |
-| Windows 実 Window/Dock/IME/DPI/Focus | GUI-L2 | RF #313/#243、SV #114 | Required（提供機能のみ） |
+| Windows 実 Window/Dock/IME/DPI/Focus | GUI-L2 | SV #114、AL #127（RF #243/#313 は 2026-11-14 CLOSED — 現行利用範囲 Pass） | Required（提供機能のみ） |
 | 実 Plugin Native Dock（VST3/CLAP/AU） | EXT-L3 | RF #388/#389/#532、SV #176 | Required（Windows 利用時） |
 | 実 Audio Input Device 録音 | EXT-L3 | RF #251、SV #115/#117 | Required（利用時） |
 | OS MIDI backend・VST3 翻訳 | EXT-L3 | RF #253、SV #126/#127 | Required（利用時） |
@@ -534,7 +541,7 @@ Pass）は**別の完了条件**である。前者を後者の Pass と
 | M4 Plugin | RF #196（済）、#388/#389/#532、SV #176/#127 | G2+G3 契約。実 Plugin Dock は EXT-L3 |
 | M5 Device/Reader | RF #187/#197（済）、#251、SV #115/#117 | Mock 先行。実 Device は EXT-L3 |
 | M6 Output/Offline | RF #191/#198（済）、#306、SV #28/AL #127 | E2E-L 最低限済。#306 が合成 Gate |
-| M7 UI/Probe | RF #181/#182/#185（済）、#243/#262/#313/#388/#389/#419/#465/#532、SV #112/#114/#176/#177、AL #127/#189 | GUI lane Acceptance と直結 |
+| M7 UI/Probe | RF #181/#182/#185/#243/#313（済）、#262/#388/#389/#419/#465/#532、SV #112/#114/#176/#177、AL #127/#189 | GUI lane Acceptance と直結 |
 | Script Lane | RF #553/#558/#559/#560、SV #259/#264/#266/#271〜#274 | M0〜M7 を Block しない。共有契約は #294 で検証 |
 | Creative Branch Lane | SV #277〜#296、RF #562 | M0〜M7 を Block しない。RF #562 は Headless PoC |
 | Future capability | RF #315〜#318、SV #119/#124/#130/#138 | Trigger 未達で Deferred/NotStarted |
@@ -556,8 +563,8 @@ Pass）は**別の完了条件**である。前者を後者の Pass と
 - [x] AL f64/長尺/CLI・SV f32/DAW/RT の別 Oracle、候補
   SHA tuple、既存 Daily/手動 CI、OS 別実走証拠の接続先
   を M0〜M7 受入へ対応付けた。
-- [ ] `docs/` 以外に差分がないことを `git status`/
-  `git diff` で確認（PR 前に実施）。
+- [x] `docs/` 以外に差分がないことを `git status`/
+  `git diff` で確認（PR #615・本更新 PR で実施）。
 
 ## Implementation Handoff
 

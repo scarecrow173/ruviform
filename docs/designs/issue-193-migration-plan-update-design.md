@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034WZ7Y0r628xfq8Nhga00"
 type: "design"
-status: "draft"
+status: "approved"
 title: "Issue #193 Migration Plan Update — 版付き Snapshot 設計"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -182,7 +182,7 @@ census である。
 | M4 Plugin | #196（CLOSED、PR #232） | #388/#389/#532、SV #176/#127、#294 |
 | M5 Device/Reader | #187/#197（CLOSED） | #251、SV #115/#117 |
 | M6 Output/Offline | #191/#198（CLOSED） | #306、SV #28、AL #127 |
-| M7 UI/Probe | #181/#182/#185（CLOSED） | #243/#262/#313/#388/#389/#419/#465/#532、SV #112/#114/#176/#177、AL #127/#189、#219/#294 |
+| M7 UI/Probe | #181/#182/#185（CLOSED） | #262/#388/#389/#419/#465/#532、SV #112/#114/#176/#177、AL #127/#189、#219/#294（#243/#313 は 2026-11-14 Closeout で CLOSED） |
 
 （詳細な 7 項目の値は計画正本 2 文書の Snapshot 節を正本
 とする。本設計書は項目の意味と確定規則を定義する。）
@@ -222,16 +222,16 @@ census である。
    GUI/Device/Plugin Gate（#262/#388/#419・#288/#306・
    #275/#281・#219/#294・AL/SV Issue）を一律の実装
    Blocked by にしない。必要な L1 Fail/未実装は残す
-   （例: #306 の OS/FS/fault 未検証行、#313 の OS
-   Capability 未実走行）。
+   （例: #306 の OS/FS/fault 未検証行、#251 の実 Device
+   未検証行）。
 2. **Closed/Deferred/NotRun の誤記防止**: census で
    Closed を確認した項目（#288・#310〜#312・#314・
    #280・#282・#293・#295・#296・#305・#307〜#309・
    #384〜#387・#390・#598、SV #13〜#16・#24・#25・#83・
    #100・#104・#105・#110・#111・#113・#175・#190・
-   #377、AL #105・#131・#132・#140〜#143・#166・#206）
-   を「未着手」「Blocked」として記述しない。後続の
-   Open Gate（#306・#313・#281 等）を正本として接続
+   #377・#243・#313、AL #105・#131・#132・#140〜#143・
+   #166・#206）を「未着手」「Blocked」として記述しない。
+   後続の Open Gate（#306・#281 等）を正本として接続
    する。
 3. **新規 Lane の接続**: Script（RF #553/#558〜#560、
    SV #259/#264/#266/#271〜#274）・Creative Branch
@@ -260,7 +260,7 @@ Activation を計画へ接続）:
 
 | 製品利用条件 | 検証レベル | Owner Issue | 現行分類 |
 | --- | --- | --- | --- |
-| Windows 実 Window/Dock/IME/DPI/Focus | GUI-L2 | RF #313/#243、SV #114 | Required（提供機能のみ） |
+| Windows 実 Window/Dock/IME/DPI/Focus | GUI-L2 | SV #114、AL #127（RF #243/#313 は 2026-11-14 CLOSED — 現行利用範囲 Pass） | Required（提供機能のみ） |
 | 実 Plugin Native Dock（VST3/CLAP/AU） | EXT-L3 | RF #388/#389/#532、SV #176 | Required（Windows 利用時） |
 | 実 Audio Input Device 録音 | EXT-L3 | RF #251、SV #115/#117 | Required（利用時） |
 | OS MIDI backend・VST3 翻訳 | EXT-L3 | RF #253、SV #126/#127 | Required（利用時） |
@@ -330,9 +330,9 @@ Snapshot 作成）と「将来の実機受入」（上表の Required
   Open/Closed を記述していない。
 - [x] 参照する docs パス・Issue 番号が merge 済み正本
   または実在 Issue に解決されることを作成時に確認。
-- [ ] `docs/` 以外に差分がないことを `git status`/
-  `git diff` で確認（PR 前に実施）。
-- [ ] test-spec の検証観点（Snapshot の 7 項目完備・
+- [x] `docs/` 以外に差分がないことを `git status`/
+  `git diff` で確認（PR #615・本更新 PR で実施）。
+- [x] test-spec の検証観点（Snapshot の 7 項目完備・
   URL 実在・状態分類の正しさ・追記型・分離原則）を
   `docs/test-specs/issue-193-migration-plan-update.md`
   で固定する。

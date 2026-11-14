@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034WZ7XezzT5NZf0iyG6Wn"
 type: "spec"
-status: "draft"
+status: "approved"
 title: "Issue #193 Migration Plan Update — 版付き Snapshot・M0〜M7 Owner/Gate 確定 仕様"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -171,36 +171,36 @@ ir/exp の文書チェーン（`issue-193-migration-plan-update*`）
 - R-6: DAG と Owner の表を実装順序の正本として維持し、
   両 Consumer の最新 Issue へリンクする。実 Device/OS
   Native Dock/両 Consumer 実測の未完了は対応 Open Gate
-  Issue（#251/#253/#388/#313/#281/#294 等）へ具体的に
+  Issue（#251/#253/#388/#281/#294 等）へ具体的に
   接続する。
 - R-7: 本スライスは文書のみ。コード・テスト・CI・依存
   設定・Issue 本文・GitHub 依存関係を変更しない。
 
 ## Acceptance Criteria
 
-- [ ] 計画正本 2 文書に、版付き Snapshot 節（R-1〜R-3,
+- [x] 計画正本 2 文書に、版付き Snapshot 節（R-1〜R-3,
   R-5〜R-6 の内容を含む）が追記されている。
-- [ ] M0〜M7 全 Milestone の Snapshot 表に R-2 の 7 項目
+- [x] M0〜M7 全 Milestone の Snapshot 表に R-2 の 7 項目
   が Issue URL 付きで揃っている。
-- [ ] Issue 状態照合の検証記録（`gh` 実測に基づく
+- [x] Issue 状態照合の検証記録（`gh` 実測に基づく
   Open/Closed/Deferred 分類と Blocked by 誤記なしの
   確認）が Snapshot と `evidence/rf193/` に存在する
   （R-4）。
-- [ ] AL/SV 別 Oracle・候補 SHA・既存 CI・OS 別実走証拠
+- [x] AL/SV 別 Oracle・候補 SHA・既存 CI・OS 別実走証拠
   の M0〜M7 受入への接続が記録されている（R-5）。
-- [ ] L2/L3 の製品利用条件が Deferred/Activation として
+- [x] L2/L3 の製品利用条件が Deferred/Activation として
   記録され、計画 Snapshot 完了と将来実機受入が分離
   されている（R-3）。
-- [ ] `issue-193-migration-plan-update*` 文書チェーンと
+- [x] `issue-193-migration-plan-update*` 文書チェーンと
   impl 記録が作成され、docs index が整合している。
-- [ ] 差分が編集許可範囲内の文書・証拠・生成 index のみ
+- [x] 差分が編集許可範囲内の文書・証拠・生成 index のみ
   であることを `git status`/`git diff` で確認する。
 
 ## Deferred Design Concerns
 
 | Concern | Reason | Re-engagement trigger | Risk if ignored |
 | --- | --- | --- | --- |
-| 実装・実 OS・Consumer 受入の実行 | 各 Owner Issue（#219/#251/#253/#262/#281/#294/#306/#313/#388/#389/#419/#465/#532・SV/AL 各 Issue）の責務 | 各 Issue の実行開始指示 | Snapshot を受入完了と誤認 |
+| 実装・実 OS・Consumer 受入の実行 | 各 Owner Issue（#219/#251/#253/#262/#281/#294/#306/#388/#389/#419/#465/#532・SV/AL 各 Issue）の責務 | 各 Issue の実行開始指示 | Snapshot を受入完了と誤認 |
 | GitHub 正式 blockedBy の登録・削除 | Coordinator 責務。本タスクは本文記述の整合のみ | Issue 本文と GitHub 依存の齟齬検出時 | 文書と GitHub 依存の二重管理齟齬 |
 | L2/L3 実機受入（Windows 実 GUI/実 Device/実 Plugin） | 利用要件発生時に Required へ昇格（POLICIES §2） | 製品利用条件の確定 | 未実測を Pass 扱い |
 | macOS/Linux の GUI-L2/EXT-L3 | 利用要件発生まで Deferred | macOS/Linux での GUI/実機利用決定 | 設計対象外と誤認 |

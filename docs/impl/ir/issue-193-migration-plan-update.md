@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034WZ8jEVUJPCfjc4NtvqF"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue 193 migration plan update snapshot"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -149,7 +149,13 @@ Unsupported の分離、および 2026-11-13 のゲート正規化
 - `mise run fmt-check`・`mise exec -- prek run --files`
   ・doc-maintenance index・review-protocol・
   `git status`/`git diff` による編集範囲確認
-  （PR 前に実施、結果は PR 本文に記録）。
+  （PR #615 前に実施、結果は同 PR 本文に記録）。
+- 2026-11-14 follow-up: merge 後の同日再実測で RF #243・
+  #313 の CLOSED（COMPLETED）遷移を検出し、census 証拠・
+  計画正本 2 文書の Snapshot 節・本チェーンの状態記述
+  （spec/design/test-spec=approved、task=done、本 IR
+  =completed）を更新。文書チェーンの lifecycle status
+  を終端値へ揃え、検証 checkbox を実測済みとして記録。
 
 ## Risks
 

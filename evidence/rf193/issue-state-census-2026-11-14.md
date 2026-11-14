@@ -20,6 +20,15 @@ Issue 本文・計画本文・GitHub 依存関係（blockedBy）は変更しな�
 - crate 依存 DAG の照合は対象外: M0（#194, CLOSED）が
   `cargo metadata` による棚卸しを完了済みであり、本 Snapshot の
   DAG は Issue 間の計画依存を対象とする。
+- 再実測（同日追記）: 初回 census・PR #615 merge 後の
+  同日再実測（`gh issue list --state all` 3 repo 全件照合）で
+  RF #243・#313 が CLOSED（COMPLETED）へ遷移したことを
+  確認し、本表の状態を更新した。両 Issue の Close は
+  2026-11-13T19:24-19:25Z（JST 2026-11-14 04:24-04:25）で、
+  OS-L1 Pass・Windows 利用範囲 GUI-L2 Pass の
+  現行スコープ Closeout（各 Issue 本文の 2026-11-14 節）。
+  未実測の Deferred 能力は各製品 Owner Issue
+  （SV #114・AL #127・RF #294 等）で追跡される。
 
 ## Ruviform Issue 状態（計画関連分）
 
@@ -36,7 +45,7 @@ Issue 本文・計画本文・GitHub 依存関係（blockedBy）は変更しな�
 | #199 | M1 着手 Gate lint 緑化 | CLOSED |
 | #201 | M1 着手 Gate CI 自動化 | CLOSED |
 | #219 | Cross-Consumer 互換契約・Cross-Repo CI Gate | OPEN |
-| #243 | GPUI Multiwindow/Dock・Native Surface 実機 GUI 検証 | OPEN |
+| #243 | GPUI Multiwindow/Dock・Native Surface 実機 GUI 検証 | CLOSED（2026-11-14 再実測。OS-L1 + Windows 利用範囲 GUI-L2 Pass の現行スコープ Closeout） |
 | #251 | real backend audio input plumbing・実機検証 | OPEN |
 | #253 | OS MIDI backend・VST3 翻訳 | OPEN |
 | #262 | GPUI Native First 採用 Gate・OS/性能/互換性評価 | OPEN |
@@ -44,7 +53,7 @@ Issue 本文・計画本文・GitHub 依存関係（blockedBy）は変更しな�
 | #281 | OBS-06 Cross-Consumer 互換/RT/精度検証 Gate | OPEN |
 | #294 | consumer-verify 横断 Gate・候補 SHA tuple | OPEN |
 | #306 | IO-IMP-12 共通 I/O 合成 E2E・Fault/Fuzz/OS/FS・Consumer 受入 | OPEN |
-| #313 | GPUI Native Desktop/Window Driver・OS Capability Matrix・real-GUI Smoke | OPEN |
+| #313 | GPUI Native Desktop/Window Driver・OS Capability Matrix・real-GUI Smoke | CLOSED（2026-11-14 再実測。OS-L1 + Windows 利用範囲 GUI-L2 Pass の現行スコープ Closeout） |
 | #388 | NativeSurfaceSlot 契約・GPUI Dock 実 GUI 埋め込み PoC/採用 Gate | OPEN |
 | #389 | Plugin Editor Session・L0/L1 Native Dock/Floating/Recovery | OPEN |
 | #419 | #262 PoC 判定に基づく後継 ADR 最終採用（#384 残 DoD） | OPEN |
@@ -163,6 +172,10 @@ Gate は `### 統合・受入で関係する Issue（着手は止めない）`
 側に記録され、`着手条件（Blocked by）` は空。「Blocked by
 なし」は 2026-11-13 のゲート正規化（POLICIES.md §4:
 着手必須依存と統合・受入依存の分離）と整合する。
+照合後に CLOSED となった #243・#313 は Closeout により
+現行 Required 範囲の受入を完了しており、Blocked by 照合
+結果へ影響しない（Closed Issue は着手 Blocker になり得
+ない）。
 
 GitHub 正式依存（blockedBy）の登録・削除は本タスクの範囲外
 （Coordinator 責務）。本文上の `着手条件` 記述と GitHub
