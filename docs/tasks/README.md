@@ -300,6 +300,7 @@ Directory: `docs/tasks`
 | TASK-034XB27D04PGJexpQv3Eee | Issue #389 CLAP/L0 実外部 Editor attach タスク（adapter open_gui/close_gui + PoC clap lane） | done | [issue-389-clap-l0-editor-attach.md](./issue-389-clap-l0-editor-attach.md) |
 | TASK-hCLO8YPWLtzGOIGdhW5yxp | Issue #389 Plugin Editor Session headless fixture タスク（contract 認定 + DSP/RT 非干渉 fixture） | done | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
 | TASK-Q2ek2gQVRR1KvvM8kyaMei | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture タスク | done | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
+| TASK-034XGt0rhQewWd8KFPsSIY | Issue #389 dock-test session-lifecycle 実装 | done | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
 | TASK-034TnjAUsNWElluY7lj4cl | Issue #409 scoped re-root + bounded enumeration | done | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | TASK-034UwdhT5Gt2dptCoVPLfF | Issue #410 P2 — view ledger correlation hardening | done | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |

@@ -57,6 +57,7 @@ Directory: `docs/impl/exp`
 | [issue-253-midi-event-contract.jsonl](./issue-253-midi-event-contract.jsonl) |
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
 | [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
+| [issue-389-session-lifecycle-exp.jsonl](./issue-389-session-lifecycle-exp.jsonl) |
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |

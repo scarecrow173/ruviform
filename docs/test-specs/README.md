@@ -158,6 +158,7 @@ Directory: `docs/test-specs`
 | TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TESTSPEC-034WXSuI7vNQqJ4kL2mB8 | Issue #389 Parent Lease 移行 test-spec | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
 | TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
+| TSPEC-034XGrxwj0Si1Ax9A1b2X9 | Issue #389 dock-test session-lifecycle テスト仕様 | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TSPEC-034TaI7Luee0T88mH1IYv2 | Issue #390 Driver Boundary/Lab 検証 | draft | [issue-390-driver-boundary-lab.md](./issue-390-driver-boundary-lab.md) |
 | TSPEC-UiEoMhS5QMTr3jBiurbTtC | Issue #400 借用 readback → demuxer bounded 接続の test 仕様 | approved | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
