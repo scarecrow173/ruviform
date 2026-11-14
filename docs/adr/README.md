@@ -47,6 +47,7 @@ Directory: `docs/adr`
 | ADR-mNxXAe50ct0jI4imZUBwuT | Issue #465 旧 WebView 実装群を legacy/preview に分類し物理撤去を別 gate に委ねる | proposed | [issue-465-legacy-webview-retirement-status.md](./issue-465-legacy-webview-retirement-status.md) |
 | ADR-034UayXObVNeujQhc8JEP5 | Issue #468 RootedDir containment の canonical 前提を契約として維持する | proposed | [issue-468-rooteddir-canonical-premise.md](./issue-468-rooteddir-canonical-premise.md) |
 | ADR-034UevIyecjzQ9iBQ9W2SG | Issue #478 Fader/Knob の縦寸法契約 — grow+min_h slot | proposed | [issue-478-fader-knob-vertical-size-contract.md](./issue-478-fader-knob-vertical-size-contract.md) |
+| ADR-034Xe9xZEqz5ftcu5yCqXB | 言語非依存 Script Backend/Analyzer 契約（Issue #558 RF-SCRIPT-00） | accepted | [issue-558-script-backend-contract.md](./issue-558-script-backend-contract.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |
