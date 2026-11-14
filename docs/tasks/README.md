@@ -55,6 +55,7 @@ Directory: `docs/tasks`
 | TASK-034U1MMRtRon6XPgSgK7gD | Issue #461 残課題 — TimeAxis label canvas 描画の実装タスク | in-progress | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | in-progress | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
