@@ -8,7 +8,6 @@ Directory: `docs/impl/ir`
 | --- | --- | --- | --- |
 | IMPL-034VuaCh48ZagIaCgYEDjZ | RF-GT-05 CI offscreen lanes implementation record | draft | [gt-05-ci-offscreen-lanes-slice.md](./gt-05-ci-offscreen-lanes-slice.md) |
 | IMPL-034R4JLReInVta6Yn0RgRW | Issue #219 consumer-verify anonymous-HTTPS access mode + 棚卸し refresh | in-progress | [issue-219-consumer-verify-anonymous-https-access-mode-refresh.md](./issue-219-consumer-verify-anonymous-https-access-mode-refresh.md) |
-| IMPL-034XzMSBKZjfzGvbvOElaM | OBS-06 G0 observability feature matrix lane (Issue #281) | in-progress | [issue-281-obs-feature-matrix.md](./issue-281-obs-feature-matrix.md) |
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | IMPL-Rt5Bv8wKm2NcXd7PqLe4Yg | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証 — 実装記録 | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界・Consumer 検査 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
@@ -134,7 +133,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QOI4N1Bil7gejYxAo6i | Issue #258 headless value-gesture interaction contract | completed | [issue-258-headless-value-gesture-interaction-contract.md](./issue-258-headless-value-gesture-interaction-contract.md) |
 | IMPL-KOaepeNi5SFj7gy0GtgA38 | Issue #259 Framework-neutral Web Components / Reference Skin / Theme・Slot 実装記録 | completed | [issue-259-web-components-reference-skin-theme.md](./issue-259-web-components-reference-skin-theme.md) |
 | IMPL-GhxLqs97yNh1VgtsWdSDL3 | Issue #260 Reference Viz Renderer・VizStyle (Waveform / Meter / Spectrum) 実装記録 | completed | [issue-260-reference-viz-renderers-vizstyle.md](./issue-260-reference-viz-renderers-vizstyle.md) |
-| IMPL-262GPUIVERDICT001 | Issue #262 GPUI Native First採用Gate verdict 文書・証拠スライス実装記録 | completed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |
+| IMPL-IbedjE9oj9KCJ7tyaLScCC | Issue #262 GPUI Native First採用Gate verdict 文書・証拠スライス実装記録 | completed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |
 | IMPL-034QTOFbpeDKVZDoNfrXP5 | Issue #263 design system showcase theme matrix a11y regression cross-consumer gates | completed | [issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md](./issue-263-design-system-showcase-theme-matrix-a11y-regression-cross-consumer-gat.md) |
 | IMPL-034QMvf4KmvWw53y1DczqT | Issue #265 CorrelationPlan prefers_direct コストモデル校正（mixed-radix 実コスト反映と direct 維持ガード） | completed | [issue-265-correlationplan-prefers-direct-mixed-radix-direct.md](./issue-265-correlationplan-prefers-direct-mixed-radix-direct.md) |
 | IMPL-034V68pdzoGf0crvlem0Zy | Issue #275 Observability integration design reconciliation and contract-test inventory | completed | [issue-275-obs-design-reconciliation.md](./issue-275-obs-design-reconciliation.md) |
@@ -145,6 +144,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UXQ38rN5TtHZ9AGp6EW | Issue #278 OBS-03 tracing_export acceptance verification slice | completed | [issue-278-obs-03-tracing-export-acceptance-verification-slice.md](./issue-278-obs-03-tracing-export-acceptance-verification-slice.md) |
 | IMPL-034UBve3q5ki4mCV8cLprd | Issue #278 OBS-03 tracing_export slice 2 実装記録 | completed | [issue-278-obs-03-tracing-export-records.md](./issue-278-obs-03-tracing-export-records.md) |
 | IMPL-034Upz8rpFOqIgQe87GGYp | Issue #278 OBS-03 tracing_export 実装記録 | completed | [issue-278-obs-03-tracing-export.md](./issue-278-obs-03-tracing-export.md) |
+| IMPL-034XzMSBKZjfzGvbvOElaM | OBS-06 G0 observability feature matrix lane (Issue #281) | completed | [issue-281-obs-feature-matrix.md](./issue-281-obs-feature-matrix.md) |
 | IMPL-034V4ltq3DWHBuZVbOLTjH | Issue 284 IO-02 Structured Formats 設計正本照合・契約試験棚卸し slice | completed | [issue-284-io-02-structured-formats-slice.md](./issue-284-io-02-structured-formats-slice.md) |
 | IMPL-BneVKCjBRwNA5pxIVfIZ6X | Issue #285 IO-03 Compression — 設計正本照合・契約試験棚卸し | completed | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | IMPL-rAJqQxI07EYCwOdCi-Qyd | Issue #286 IO-04 ZIP/TAR Archive — 設計正本照合・契約試験棚卸し slice | completed | [issue-286-io-04-archive-acceptance-recheck.md](./issue-286-io-04-archive-acceptance-recheck.md) |
