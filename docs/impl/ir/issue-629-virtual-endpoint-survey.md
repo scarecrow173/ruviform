@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034XCe9Yszn1tqayGEjYYk"
 type: "impl"
-status: "draft"
+status: "completed"
 title: "Issue #629 virtual endpoint probe implementation record"
 created: "2026-11-14"
 updated: "2026-11-14"

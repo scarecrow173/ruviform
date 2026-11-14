@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034XCkcPRJrWqtaLLfUlAS"
 type: "plan"
-status: "draft"
+status: "approved"
 title: "Issue #629 virtual endpoint probe plan"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -40,9 +40,9 @@ relations:
     - "docs/designs/issue-629-virtual-endpoint-survey.md"
   derived-by:
     - "docs/tasks/issue-629-virtual-endpoint-survey.md"
-  verifies:
+  verifies: []
+  verified-by:
     - "docs/test-specs/issue-629-virtual-endpoint-survey.md"
-  verified-by: []
   references:
     - "evidence/rf629/endpoint_probe-windows-local.txt"
     - "evidence/rf629/midi_endpoint_probe-windows-local.txt"

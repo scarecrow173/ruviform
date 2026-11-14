@@ -1,7 +1,7 @@
 ---
 id: "TASK-034XCkcQ3OJUyxLkwM19xs"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #629 virtual endpoint probe task"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -69,9 +69,9 @@ Plan `PLAN-034XCkcPRJrWqtaLLfUlAS` の実装 task。Issue #629 first slice（inv
 - [x] W3: `crates/ruviform-midi-device/examples/midi_endpoint_probe.rs` — WinMM caps 列挙 + loopback 検出 + provisioning verdict
 - [x] W4: 両 probe を Windows 実機実行し `evidence/rf629/` に出力保存（MIDI `midiOutMessage` crash を修正して完走）
 - [x] W5: doc chain（spec/design/plan/task/test-spec/IR/exp）作成
-- [ ] W6: 管理 index 再生成 + canonical 検証（fmt/check/lint/test/prek）
-- [ ] W7: review-protocol 自己レビュー + blocker 解消
-- [ ] W8: commit → push → PR → worker_done
+- [x] W6: 管理 index 再生成 + canonical 検証（fmt-check / check / lint / test 両 crate / prek 全 Pass）
+- [x] W7: review-protocol 自己レビュー + blocker 解消（clippy/doc_markdown 修正、front-matter 相互参照修正）
+- [x] W8: commit → push → PR → worker_done
 
 ## Acceptance
 

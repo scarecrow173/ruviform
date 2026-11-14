@@ -1,7 +1,7 @@
 ---
 id: "TSPEC-034XCdLA9CKhCyJHi0wtK9"
 type: "test-spec"
-status: "draft"
+status: "approved"
 title: "Issue #629 virtual endpoint probe test spec"
 created: "2026-11-14"
 updated: "2026-11-14"

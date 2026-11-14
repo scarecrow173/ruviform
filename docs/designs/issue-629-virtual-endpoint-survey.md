@@ -1,7 +1,7 @@
 ---
 id: "DESIGN-034XCdHjAQMtFJ2ymLlI2M"
 type: "design"
-status: "draft"
+status: "approved"
 title: "Issue #629 virtual endpoint probe design"
 created: "2026-11-14"
 updated: "2026-11-14"

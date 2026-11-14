@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034XCi8anHlk3T9rYA7ysb"
 type: "spec"
-status: "draft"
+status: "approved"
 title: "Issue #629 first slice — Windows virtual endpoint survey and capability probe"
 created: "2026-11-14"
 updated: "2026-11-14"
