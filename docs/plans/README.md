@@ -215,6 +215,7 @@ Directory: `docs/plans`
 | PLAN-034QdTvxzjsU3jbWDIgBee | Issue #219 Consumer互換契約・影響判定テンプレート・Cross-Repo CI Gate 実装計画 | completed | [issue-219-consumer-cross-repo-ci-gate.md](./issue-219-consumer-cross-repo-ci-gate.md) |
 | PLAN-034WZGtEYdaixOYopRPVvk | Issue #243 — Window/Job 不変条件 Headless 検証 実装計画 | completed | [issue-243-window-job-headless-plan.md](./issue-243-window-job-headless-plan.md) |
 | PLAN-034V4uVEulNfghJYxbNL9Y | Issue #243 — Windows 実 OS multiwindow smoke 実装計画 | completed | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
+| PLAN-034Xzw4vyjdTI0ZYgqUJr1 | Issue #262 GPUI採用Gate verdict 文書・証拠スライス実装計画 | completed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |
 | PLAN-034JfDEU8mhCDj4ldYFZUG | Issue #28 UI 技術検証 PoC 実施計画 | completed | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
