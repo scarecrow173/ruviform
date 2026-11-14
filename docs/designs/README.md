@@ -203,6 +203,7 @@ Directory: `docs/designs`
 | DESIGN-034Wv6hcYDLZycrIcEQ7Ec | Issue #583 設計 — mr_boxington 回帰の原因確定と検証方針(設定変更不要の判断) | approved | [issue-583-consumer-verify-mise-design.md](./issue-583-consumer-verify-mise-design.md) |
 | DESIGN-MnDOJoPVmxmAz1hdgVs3T3 | Issue #586 設計 — ir front matter 是正分類・index marker 配置・検証手順 | approved | [issue-586-impl-index-generation-design.md](./issue-586-impl-index-generation-design.md) |
 | DESIGN-034WuVTmYfKSkp3sJ8biu2 | Issue #590 設計 — ir missing-section 補完方針・セクション記述規約・検証手順 | approved | [issue-590-ir-missing-sections-design.md](./issue-590-ir-missing-sections-design.md) |
+| DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
 | DESIGN-034L2Cjm1Zjxj8oQl2jINm | OFX ホストアダプタ詳細設計（Issue #98） | approved | [ofx-host-adapter.md](./ofx-host-adapter.md) |

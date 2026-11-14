@@ -337,6 +337,7 @@ Directory: `docs/tasks`
 | TASK-034NlPHnwYkRTWHq1nvYvo | L1 wire v2 docs/metadata sweep（README・bin doc・test-spec・親文書 addenda・literal sweep） | done | [l1-wire-v2-docs-sweep.md](./l1-wire-v2-docs-sweep.md) |
 | TASK-034NXuhy2LmLb9qDBo7gj6 | L1 wire v3 codec + vshm 定盤 + InvalidValue（video 動詞 tag 12-22・Reply 4-7・video 型 codec・WIRE_MAX_VIDEO_*） | done | [l1-wire-v3-video-codec.md](./l1-wire-v3-video-codec.md) |
 | TASK-034NhK97jcINkcEKDNbpum | L1 wire バージョン方針の記録と契約検証の補強 | done | [l1-wire-version-policy.md](./l1-wire-version-policy.md) |
+| TASK-034X9Vy4vI2WPlFTQsXqKD | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | done | [linux-distribution-task.md](./linux-distribution-task.md) |
 | TASK-034Qfs0cxlLQ9xk1dN3NJM | T-1 typed buffer arena + io views + compiler (schedule/slots/PDC) | done | [m2-t1-typed-compiler-buffer-io.md](./m2-t1-typed-compiler-buffer-io.md) |
 | TASK-034Qfs3QuOMXdVC8ZnuKz6 | T-2 typed RT runtime: GraphProcessor, GraphRuntime/RtRuntime, activation, faults | done | [m2-t2-typed-rt-runtime-activation.md](./m2-t2-typed-rt-runtime-activation.md) |
 | TASK-034Qfs4U6jKNPhfoasgTFI | T-3 acceptance tests + ownership PoC + fault injection | done | [m2-t3-tests-ownership-poc-faults.md](./m2-t3-tests-ownership-poc-faults.md) |
