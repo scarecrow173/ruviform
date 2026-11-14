@@ -1,5 +1,7 @@
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-endpoint-survey\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.37s
      Running `mbx-launch 'target\debug\examples\endpoint_probe.exe'`
+mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
 endpoint_probe — Issue #629 virtual-endpoint capability probe (WASAPI/MMDevice)
 manual diagnostic; the output is survey evidence, not a test verdict
 
@@ -173,7 +175,7 @@ manual diagnostic; the output is survey evidence, not a test verdict
   provisioning: NOT_PROVISIONED
   capability notes:
     mmdevice enumeration (all states) + id/state: observed
-    mix format / IsFormatSupported / device period / stream latency queries: observed per endpoint
+    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)
     virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)
   audio virtual-endpoint cases: NotRun — enumeration is not `virtual-os-endpoint` evidence; open/stream proof is the next slice
 
@@ -190,3 +192,4 @@ manual diagnostic; the output is survey evidence, not a test verdict
     - Analogue 1/2 (Audient iD4)  id=Some(DeviceId("wasapi:{0.0.1.00000000}.{e321b016-6f63-4154-9366-7db27a4a04d6}"))
   default_output_device: Analogue 1/2 (Audient iD4)
   default_input_device: Loop-back 1/2 (Audient iD4)
+mbx[savings]: 2.6 TiB logical of target/ was waiting for checkouts that are never coming back. it has stopped waiting.

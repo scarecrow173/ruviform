@@ -397,7 +397,15 @@ mod win {
                         Some(&raw mut closest),
                     )
                 };
-                let closest_desc = describe_closest(closest);
+                // `ppclosestmatch` is only populated on
+                // `AUDCLNT_E_UNSUPPORTED_FORMAT` — anything else leaves
+                // `closest` null, and freeing a pointer the API did not
+                // allocate would be unsound.
+                let closest_desc = if hr == Audio::AUDCLNT_E_UNSUPPORTED_FORMAT {
+                    describe_closest(closest)
+                } else {
+                    String::new()
+                };
                 let verdict = if hr.is_ok() {
                     "supported".to_owned()
                 } else if hr == Audio::AUDCLNT_E_UNSUPPORTED_FORMAT {
@@ -595,7 +603,7 @@ mod win {
         println!("  capability notes:");
         println!("    mmdevice enumeration (all states) + id/state: observed");
         println!(
-            "    mix format / IsFormatSupported / device period / stream latency queries: observed per endpoint"
+            "    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)"
         );
         println!(
             "    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)"

@@ -1,5 +1,7 @@
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
+   Compiling ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-endpoint-survey\crates\ruviform-midi-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.97s
      Running `mbx-launch 'target\debug\examples\midi_endpoint_probe.exe'`
+mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
 midi_endpoint_probe — Issue #629 virtual-endpoint capability probe (WinMM)
 manual diagnostic; the output is survey evidence, not a test verdict
 
@@ -21,7 +23,9 @@ manual diagnostic; the output is survey evidence, not a test verdict
   driver signature check: NotRun — driver/package signature query needs SetupAPI surfaces outside the declared `windows-sys` features (discovery doc gap)
   provisioning: NOT_PROVISIONED
   capability notes:
-    winmm in/out capability + interface-id enumeration: observed
+    winmm in/out capability enumeration: observed
+    input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)
     port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — needs a provisioned loopback plus the `midiOut*` send path the crate does not yet have (discovery doc gap)
     virtual hotplug / device-loss / permission-denial: NotRun — same reason
   midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); open/stream proof is the next slice
+mbx[savings]: 13.8 GiB of outputs exist once and appear everywhere. do not tell the checkouts.

@@ -380,7 +380,10 @@ mod win {
             }
         );
         println!("  capability notes:");
-        println!("    winmm in/out capability + interface-id enumeration: observed");
+        println!("    winmm in/out capability enumeration: observed");
+        println!(
+            "    input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)"
+        );
         println!(
             "    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — needs a provisioned loopback plus the `midiOut*` send path the crate does not yet have (discovery doc gap)"
         );
