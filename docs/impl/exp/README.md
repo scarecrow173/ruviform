@@ -61,5 +61,6 @@ Directory: `docs/impl/exp`
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
+| [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |
 | [rt-observability-poc.jsonl](./rt-observability-poc.jsonl) |
