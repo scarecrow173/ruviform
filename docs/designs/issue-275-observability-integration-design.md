@@ -559,6 +559,41 @@ Deferred ではなく #281 G0 の継続 gate 項目であり、
 macOS/Linux の GUI/EXT も同様に「利用要件発生まで
 Deferred」（POLICIES）であり、具体的な利用決定が Trigger。
 
+## OBS-01〜11 受入照合台帳と Consumer Gate 割当（2026-11-14 追記）
+
+Issue #275 現行受入の残件（公開 API・Feature・Owner・
+必要 OS-L1 Fixture・未対応 Case の一意照合と結果の
+Pass/Fail/NotRun/Unsupported 記録、および独立 Consumer
+Gate・Windows 利用機能 L2/L3 Gate の Issue 割当）は、
+実測証拠付きの照合台帳
+[`evidence/rf275/obs-acceptance-ledger.md`](../../evidence/rf275/obs-acceptance-ledger.md)
+が正本として保持する。本節はその索引と Gate 割当の要約で
+あり、台帳の記述を複写・改変しない。
+
+- **台帳の範囲**: OBS-01〜11 ごとの公開 API/module・
+  Cargo feature・Owner Issue・OS-L1 Fixture（test target・
+  必要 feature・実行 lane/OS）・Case・未対応 Case・
+  対象 Revision 付き結果。語彙は POLICIES §2/§3
+  （要件状態 Required/Deferred/NotApplicable × 実行結果
+  Pass/Fail/NotRun/Unsupported）。
+- **結果の扱い**: 台帳の `✓ @365c74ac` は crate diff 空を
+  確認した範囲の「同一コードへの CI 証拠」であり、監査基準
+  Revision `20d8e7c2` での実行済みを意味しない。対象
+  Revision の CI・consumer-verify run は未発生であり、
+  統合検証は merge 後 main SHA の Daily/手動 Full CI 証拠
+  が正本。`NotRun` を `Pass` に置き換えない。
+- **Consumer Gate 割当（要約）**:
+
+  | Gate | RF 側 Owner | Consumer Owner | 実行経路 |
+  | --- | --- | --- | --- |
+  | AL Logging/Privacy/f64 独立 Oracle | #281・#294・#219 | AL #127（#138 は CLOSED 履歴） | consumer-verify `verify-audiolens` lanes + AL repo 側 Oracle |
+  | SV RT/DAW/GUI 独立 Oracle | #281・#294・#219 | SV #28（#81 は CLOSED 履歴） | consumer-verify `verify-synvelis` lanes（`test-rt` 含む）+ SV repo 側 Oracle |
+  | Windows 利用機能 L2/L3 故障・RT/Privacy | #281・#294・#293・#313/#314 系 lane | AL #127・SV #28（製品機能 Owner） | 各 Consumer repo の Windows L2/L3 Case + RF real-window lanes。未利用機能は Required にしない |
+  | Feature compile matrix | #281 G0 | — | 既存 lane なし（`NotRun`・Required 維持） |
+
+- 一方の Consumer の Pass を他方へ転用しない。AL/SV それ
+  ぞれの repo 側 task・fixture・Oracle が受入の正本。
+
 ## #101/#103 前提の更新記録
 
 Issue 合意 G-9 に対応し、本 slice で以下 2 文書へ合意版
