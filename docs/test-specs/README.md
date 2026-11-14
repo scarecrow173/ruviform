@@ -150,6 +150,7 @@ Directory: `docs/test-specs`
 | TSPEC-0f0PqMFNljVvAz5wOtJEQu | Issue #388/#389 Native Dock 契約テスト仕様（slot/lease/session の headless 検証 + L0-L1 写像） | approved | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TSPEC-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 Editor 埋め込みの実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-layout-poc.md](./issue-388-native-dock-layout-poc.md) |
 | TSPEC-rf388DockWindowing01 | Issue #388 slice 3 windowing 挙動の実機テスト仕様（Windows / VST3 / L0） | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
+| TSPEC-034XAY5OnZ3JrUirJ49Rqh | Issue #389 CLAP/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-clap-l0-editor-attach.md](./issue-389-clap-l0-editor-attach.md) |
 | TSPEC-Vqv91J1zDZ6Qvi57khd2TT | Issue #389 Plugin Editor Session headless fixture テスト仕様（DSP/RT 非干渉 + contract edge + focus 境界） | approved | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
 | TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TESTSPEC-034WXSuI7vNQqJ4kL2mB8 | Issue #389 Parent Lease 移行 test-spec | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
