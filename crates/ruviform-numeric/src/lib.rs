@@ -67,6 +67,7 @@ mod rt_tests {
     /// Issue #150 RT-verification lane: `AllocDisabler` swaps the lib
     /// test binary's allocator so `assert_no_alloc` catches any
     /// allocation inside RT-suitable paths. One per crate test binary.
+    #[cfg(debug_assertions)]
     #[global_allocator]
     static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 

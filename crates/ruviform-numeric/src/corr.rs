@@ -1323,11 +1323,11 @@ mod tests {
         assert!(plan.fft.is_none());
         let ws = CorrelationWorkspace::new(&plan);
         assert!(ws.fft.is_none());
-        assert_eq!(ws.a_re, []);
-        assert_eq!(ws.a_im, []);
-        assert_eq!(ws.b_re, []);
-        assert_eq!(ws.b_im, []);
-        assert_eq!(ws.phat_energy, []);
+        assert_eq!(ws.a_re, [] as [f64; 0]);
+        assert_eq!(ws.a_im, [] as [f64; 0]);
+        assert_eq!(ws.b_re, [] as [f64; 0]);
+        assert_eq!(ws.b_im, [] as [f64; 0]);
+        assert_eq!(ws.phat_energy, [] as [f64; 0]);
         assert_eq!(ws.real.len(), 300 - 256 + 1);
         assert_eq!(ws.cumulative.len(), 301);
         assert_eq!(ws.norms.len(), 45);
@@ -1795,20 +1795,23 @@ mod tests {
                 plan.ncc(&mut ws, &template, &signal, usize::MAX)
                     .unwrap()
                     .values,
-                []
+                [] as [f64; 0]
             );
             assert_eq!(
                 plan.gcc_phat(&mut ws, &template, &signal, usize::MAX)
                     .unwrap(),
-                []
+                [] as [f64; 0]
             );
             assert_eq!(
                 plan.cross_correlation(&mut ws, &template, &signal, usize::MAX)
                     .unwrap(),
-                []
+                [] as [f64; 0]
             );
-            assert_eq!(ncc(&template, &signal, usize::MAX).unwrap(), []);
-            assert_eq!(gcc_phat(&template, &signal, usize::MAX).unwrap(), []);
+            assert_eq!(ncc(&template, &signal, usize::MAX).unwrap(), [] as [f64; 0]);
+            assert_eq!(
+                gcc_phat(&template, &signal, usize::MAX).unwrap(),
+                [] as [f64; 0]
+            );
             assert_eq!(
                 cross_correlation(&template, &signal, usize::MAX).unwrap(),
                 Vec::<f64>::new()
