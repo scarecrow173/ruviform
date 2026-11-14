@@ -253,6 +253,7 @@ Directory: `docs/impl/ir`
 | IMPL-034IwXvs801LZXZlip1tZ6 | Rewrite README for Ruviform | completed | [rewrite-readme-for-ruviform.md](./rewrite-readme-for-ruviform.md) |
 | IMPL-034VnQ9uBnTxr8BNjvWsMt | Issue #253 L1 wire report verb | completed | [rf-253-l1-report-verb.md](./rf-253-l1-report-verb.md) |
 | IMPL-034Xgif1IGRANhhbuKUGs1 | RF-SCRIPT-01 coexist PoC | completed | [rf-script-01-coexist-poc.md](./rf-script-01-coexist-poc.md) |
+| IMPL-034Xgit7eLLg54Qn3vg7Vl | RF-SCRIPT-02 Luau.Analysis native bridge PoC | completed | [rf-script-02-luau-bridge-poc.md](./rf-script-02-luau-bridge-poc.md) |
 | IMPL-034KW9YgStAXSjv8Dxwxvs | rt-observability-poc | completed | [rt-observability-poc.md](./rt-observability-poc.md) |
 | IMPL-034JywI99DQ33dDEZVnnqC | Run device PoC examples and record experiment log | completed | [run-device-poc-examples-and-record-experiment-log.md](./run-device-poc-examples-and-record-experiment-log.md) |
 | IMPL-034Ixn011MsolyFpmBB87l | Run placeholder sweep and verification | completed | [run-placeholder-sweep-and-verification.md](./run-placeholder-sweep-and-verification.md) |
