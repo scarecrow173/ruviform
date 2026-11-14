@@ -34,6 +34,18 @@
 //!   fixed-seed deterministic mutations of writer-canonical bytes
 //!   replayed through every composed reader under byte/decoded/
 //!   deadline budgets (`mise run test-io-e2e-corpus`, Issue #306 G08).
+//! - `large_staged` — `#[ignore]`d, opt-in real-filesystem 4 GiB
+//!   boundary lane: 4GiB−1 / 4GiB / 4GiB+1 through `CreateNew` /
+//!   `Replace` publish round-trips, conflict recovery, mid-write
+//!   `StorageFull` abort, and post-seal temp-delete recovery, with a
+//!   capacity preflight that reports genuine exhaustion as `NotRun`,
+//!   never Pass/Fail (Issue #306 G01).
+//!
+//! `benches/io_composition.rs` is the companion criterion baseline
+//! (Issue #306 G05): staged write/seal/publish/readback and
+//! TAR→`gzip`/`zstd`→`StagedFile` cells at 8 MiB with pre-defined
+//! thresholds and a peak-allocation probe — a measurement lane, not
+//! a test, run via `mise run bench`.
 //!
 //! # RT contract
 //!
