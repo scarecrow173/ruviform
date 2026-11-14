@@ -68,6 +68,7 @@ Directory: `docs/designs`
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
 | DESIGN-034Vj33PXgAsLoeNPU9c8f | Issue #253 plugin→host report の host-graph consumer 配線 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
+| DESIGN-034XCQnVGvNjCrIO3C5trY | Issue #253 MIDI event contract fixes — merge truncation / ledger 一本化 / anchor republish | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
@@ -216,6 +217,8 @@ Directory: `docs/designs`
 | DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
 | DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034XBGBV0qexwf6VzGt77S | Issue #628 設計 — deterministic core（VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata） | approved | [issue-628-deterministic-test-runtime-design.md](./issue-628-deterministic-test-runtime-design.md) |
+| DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

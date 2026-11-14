@@ -50,6 +50,7 @@ Directory: `docs/specs`
 | SPEC-034Qx7sstYyddu4xbj5Q7d | Issue #244 media-reader prefetch contract residual wart fixes — boundary-first fault emission, reopen-failure dead generation, End commit-once | approved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | SPEC-U5ytIWyq22nGIRlXTz2LIN | Issue #251 Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | SPEC-034Vj1oEP5t1a8EwNeZV4L | Issue #253 plugin→host report の host-graph consumer 配線 slice | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
+| SPEC-034XCLrvoEmreSmTn3sL4E | Issue #253 MIDI event contract fixes — merge truncation / ledger 一本化 / anchor republish | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | SPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend slice（Windows 実装 + macOS/Linux Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
@@ -185,6 +186,8 @@ Directory: `docs/specs`
 | SPEC-034XqAdHQcP0noGrfdbRqY | Issue #625 verify(ubuntu-latest) test-full 失敗 — e2e_process handshake refusal の error 分類 race を修正する | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | SPEC-034XAreKCCKojmpwC7OvJR | Issue #627 仮想優先の3repo検証契約・物理Gate置換・POLICIES整合と独立Oracle | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | SPEC-034XBGBcah0yYseU6Ypekr | Issue #628 Deterministic Audio/MIDI Test Runtime first slice — deterministic core | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

@@ -1,0 +1,38 @@
+[package]
+name = "ruviform-plugin-test-vst3"
+description = "Test-only VST3 test plugin (test_gain) for Ruviform host verification — not a shipping product"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# cdylib exports the VST3 module entry points (GetPluginFactory +
+# platform hooks) so the built artifact is a real `.vst3`/`.dll`
+# module a host can dlopen; rlib keeps the crate unit-testable
+# in-process (same shape as `ruviform-plugin-vst3`).
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# SDK-equivalent binding layer — the same `vst3` crate version the
+# production adapter uses; shared as the "SDK layer" only (see
+# docs/designs/issue-630-test-plugin-suite.md).
+vst3 = "0.3.0"
+# Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
+# Lifecycle/BufferView) — the plugin-side implementation target.
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# Zero-copy planar buffer views for the process path.
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[dev-dependencies]
+# RT non-allocation proof for the process path (Issue #22 lane
+# precedent: `ruviform-plugin-vst3` uses the same dev-dep).
+assert_no_alloc = "1.1"
+# Production host bridge for the real-file host-path test — dev-dep
+# edge only; the adapter itself stays pristine and this crate never
+# appears in its dependency tree.
+ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"] }
+
+[lints]
+workspace = true

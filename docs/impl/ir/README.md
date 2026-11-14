@@ -126,6 +126,7 @@ Directory: `docs/impl/ir`
 | IMPL-034R251StageWcl0seoutX | Issue #251 Stage W real-device closeout — Windows/WASAPI 実機 lane 証拠化 | completed | [issue-251-stage-w-real-device-closeout-slice.md](./issue-251-stage-w-real-device-closeout-slice.md) |
 | IMPL-034VjwX2YHM8koidKb6AhG | Issue #253 host-graph report consumer wiring | completed | [issue-253-host-graph-report-consumer-wiring.md](./issue-253-host-graph-report-consumer-wiring.md) |
 | IMPL-034UIypTlJgH6ElxJp3gHE | issue-253 midi backend fixture and vst3 translation | completed | [issue-253-midi-backend-fixture-and-vst3-translation.md](./issue-253-midi-backend-fixture-and-vst3-translation.md) |
+| IMPL-034XDbU0qW4r971UaTlEUp | issue-253-midi-event-contract | completed | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | IMPL-034WUeMyAfuU4RnkO7aDgw | Issue #253 OS-L1 既存CI証拠照合・Backend能力/未実装の正直な記録 | completed | [issue-253-midi-os-l1-evidence.md](./issue-253-midi-os-l1-evidence.md) |
 | IMPL-034Vi78tpdb4wvJ1oTJpLb | Issue #253 OS MIDI input backend adapter（Windows WinMM + 非対応 OS Unsupported 境界） | completed | [issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md](./issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md) |
 | IMPL-TUskALcC8xZ3ofmqqt0sMj0 | Issue #253 README/specs interim wording closeout — canonical lane 登録済み整合 | completed | [issue-253-readme-specs-interim-wording-closeout.md](./issue-253-readme-specs-interim-wording-closeout.md) |
@@ -227,6 +228,8 @@ Directory: `docs/impl/ir`
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

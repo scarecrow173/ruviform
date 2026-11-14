@@ -58,6 +58,7 @@ Directory: `docs/tasks`
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | in-progress | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -209,6 +210,7 @@ Directory: `docs/tasks`
 | TASK-034QxfiWo8R8kkqMasIoQm | T4 verification + review-protocol + impl record (Issue #244) | done | [issue-244-t4-verification-record.md](./issue-244-t4-verification-record.md) |
 | TASK-034QAsO7suXcts3TkIr3Un | Issue 249 prefetch Ended outcome must emit End marker | done | [issue-249-prefetch-ended-outcome-must-emit-end-marker.md](./issue-249-prefetch-ended-outcome-must-emit-end-marker.md) |
 | TASK-NhYDSYvlGjsQQzBFWEXYE7 | Issue #251-T1: Stage W closeout — 実機 lane 証拠化と残存受入項目の検証・記録 | done | [issue-251-task1-stage-w-real-device-closeout.md](./issue-251-task1-stage-w-real-device-closeout.md) |
+| TASK-034XCTdx2H01Fga6nmdMzZ | Issue #253 MIDI event contract fixes — V9/V11/V12 実装 | done | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | TASK-034UjQLrFyv9HY5QSH9HmW | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | done | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TASK-034XzvRtVDZG1xxfMh2b56 | Issue #262 GPUI採用Gate verdict 文書チェーン・証拠完成・検証 | done | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |
 | TASK-034WZKWej3HLlqCGxHSDcH | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けタスク | done | [issue-275-obs-owner-map-task.md](./issue-275-obs-owner-map-task.md) |
@@ -324,6 +326,7 @@ Directory: `docs/tasks`
 | TASK-034WuW3rqyBgYH8WlRZH2D | Issue #590 T1 — ir missing-section 本文補完・audit/index 検証 | done | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | TASK-034XqAHZThxH8yUF9OOG3k | Issue #625 T1 — handshake 分類正規化・doc-chain・lane 検証 | done | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TASK-034XAUE4Ki5ftJQfWI15b1 | Issue #627 T1 — 仮想優先3repo検証契約・POLICIES照合・移管台帳の文書化 | done | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
