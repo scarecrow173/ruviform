@@ -19,6 +19,9 @@ VST3 cdylib built by `ruviform-plugin-test-vst3`:
 | `artifact` | `PluginHostProbe` | `Pass` — resolve + SHA-256 + `Vst3Library::load` + descriptor |
 | `host-lifecycle` | `PluginHostProbe` | `Pass` — Scan → Instantiate → Initialize → Activate(48 kHz, 1..=512) → Destroy |
 | `editor-attach` | `PluginHostProbe` | `Unsupported` — `createView` null → `HostError::Unsupported` (fixture has no editor) |
+| `session-lifecycle` | `PluginHostProbe` | `Pass` — begin → `SessionBusy` → refused `open(Docked)` → adapter-free `close` converge → `end_session` → slot/generation-bumped re-begin → Destroy (Issue #389) |
+| `host-terminate` | `PluginHostProbe` | `Pass` — `Destroy` → `notify_terminated(HostLost)` → `Terminated{HostLost}` exactly once, second notify no-op (Issue #389) |
+| `open-or-degrade` | `PluginHostProbe` | `Pass` — `open_or_degrade(Docked→Floating)` double refusal → `Failed{Unsupported}`, zero `Degraded`/attach-family events (Issue #389) |
 | `dock-pixels` | `PluginHostProbe` | `NotRun` — no surface, no `VisualCapture` driver |
 
 Verdict honesty is the point: only steps that really executed against
