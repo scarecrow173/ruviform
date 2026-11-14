@@ -161,6 +161,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Sd294TupleEvidenceX9f | Issue #294 consumer-verify 候補 tuple 証拠契約（解決 SHA 捕捉・期待照合・SHA ref・UI lane・extra tasks・unsupported 状態） | completed | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | IMPL-034UlznQ9G787VMPYNa3S3 | Issue #294 daily candidate-tuple trigger（decide.mjs tuple mode + daily-ci decide-consumer-verify job） | completed | [issue-294-daily-candidate-tuple-trigger-decide-mjs-tuple-mode-daily-ci-decide-co.md](./issue-294-daily-candidate-tuple-trigger-decide-mjs-tuple-mode-daily-ci-decide-co.md) |
 | IMPL-034ThzZO69OSZMwwEi0OLO | Issue #294 GUI-CONTRACT lane 接続 — 候補 tree 上の boundary guard / Fake driver semantic 評価 | completed | [issue-294-gui-contract-lane-tree-boundary-guard-fake-driver-semantic.md](./issue-294-gui-contract-lane-tree-boundary-guard-fake-driver-semantic.md) |
+| IMPL-034Sdv2CaseSchemaQ7m | Issue #294 first slice — consumer-verify Case schema v2 証拠契約拡張（schemaVersion 1→2・contract v1 維持） | completed | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |
 | IMPL-034RwfDSIjD2OHsi69VaSc | Issue 295 ruviform-io-file staged publish contract | completed | [issue-295-ruviform-io-file-staged-publish-contract.md](./issue-295-ruviform-io-file-staged-publish-contract.md) |
 | IMPL-034RC7s5qGQoAFceg8oNDP | Issue 296 ruviform-io-file OS backend | completed | [issue-296-ruviform-io-file-os-backend.md](./issue-296-ruviform-io-file-os-backend.md) |
 | IMPL-034RTVShL0YrAoiEgYJyNu | Issue 297 ruviform-io-structured — Serde 型付き JSON/YAML/TOML | completed | [issue-297-ruviform-io-structured-serde-json-yaml-toml.md](./issue-297-ruviform-io-structured-serde-json-yaml-toml.md) |
@@ -203,6 +204,7 @@ Directory: `docs/impl/ir`
 | IMPL-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 VST3 Editor 埋め込み PoC 実装記録（Windows / L0） | completed | [issue-388-native-dock-layout-poc-implementation.md](./issue-388-native-dock-layout-poc-implementation.md) |
 | IMPL-rf388DockWindowingSlice301 | Issue #388 GPUI native dock slice 3 — ancestor clip / keyboard・focus routing / 2-phase re-dock 実装記録（Windows / VST3 / L0） | completed | [issue-388-native-dock-windowing-slice3-implementation.md](./issue-388-native-dock-windowing-slice3-implementation.md) |
 | IMPL-034WSQTRYaDQlCGdESELFh | Issue 388 OS L1 CI evidence | completed | [issue-388-os-l1-ci-evidence.md](./issue-388-os-l1-ci-evidence.md) |
+| IMPL-034XBBr5HDcEsujT6coC8S | Issue #389 CLAP/L0 実外部 Editor attach 実装記録 | completed | [issue-389-clap-l0-editor-attach.md](./issue-389-clap-l0-editor-attach.md) |
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
 | IMPL-034WYcEVkJHFgwJtp10GaL | Issue #389 Parent Lease 移行 IR | completed | [issue-389-parent-lease-ir.md](./issue-389-parent-lease-ir.md) |
@@ -224,6 +226,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XegYdJwFzsQhPajRIAg | Issue #558 Script/Analyzer契約 文書チェーン実装記録 | completed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
+| IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

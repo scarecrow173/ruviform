@@ -250,7 +250,7 @@ struct Windowing {
     session: PluginEditorSessionId,
     instance: PluginHandle,
     probe: Rc<ProbeShared>,
-    vst3_mode: bool,
+    external_mode: bool,
     evidence_dir: Option<PathBuf>,
     failures: Rc<Cell<u32>>,
     /// Real `DockWorkspace` model driving the detach→reattach flow.
@@ -425,7 +425,7 @@ impl Windowing {
         };
         match open_result {
             Ok(caps) => {
-                if self.vst3_mode {
+                if self.external_mode {
                     self.probe.parent_token.set(self.container as u64);
                     self.probe
                         .child_hwnd
@@ -1203,7 +1203,7 @@ pub(super) fn run() {
         closes: Cell::new(0),
     });
     let mut host = InProcessHost::new();
-    let (instance, vst3_mode) = instantiate(&mut host, &probe);
+    let (instance, external_mode) = instantiate(&mut host, &probe);
     let mut sessions = PluginEditorSessions::new();
     let session = sessions.begin_session(instance).expect("begin_session");
     let failures = Rc::new(Cell::new(0));
@@ -1217,7 +1217,7 @@ pub(super) fn run() {
         session,
         instance,
         probe,
-        vst3_mode,
+        external_mode,
         evidence_dir,
         failures: failures.clone(),
         ws: DockWorkspace::new(),

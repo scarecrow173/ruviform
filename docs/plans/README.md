@@ -47,6 +47,7 @@ Directory: `docs/plans`
 | PLAN-034T6RWSw6Tv9Mz2qJ5eL8 | Issue #387 Component/View Specs + Headless Behavior + GPUI Renderer 実装計画 | proposed | [implement-issue-387-component-renderer.md](./implement-issue-387-component-renderer.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-rf388DockWindowing01 | Issue #388 slice 3 実装計画 — clip 修正 + windowing PoC + 証拠 | approved | [implement-issue-388-native-dock-windowing-slice3.md](./implement-issue-388-native-dock-windowing-slice3.md) |
+| PLAN-034XB0UGHRPYuncbgF7bB6 | Issue #389 CLAP/L0 実外部 Editor attach の実装計画（adapter open_gui/close_gui + PoC clap lane） | approved | [implement-issue-389-clap-l0-editor-attach.md](./implement-issue-389-clap-l0-editor-attach.md) |
 | PLAN-KtWrNWuBuOq3OuF5yJ0x9o | Issue #389 Plugin Editor Session headless fixture slice 実装計画（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | approved | [implement-issue-389-editor-session-headless.md](./implement-issue-389-editor-session-headless.md) |
 | PLAN-HDjvE9BDnWUjWa0unFqU0g | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture slice 実装計画 | approved | [implement-issue-389-editor-session-statemachine.md](./implement-issue-389-editor-session-statemachine.md) |
 | PLAN-034UnzhplY5WerbCeab8un | Implement Issue #389 Plugin Editor Session hardening | approved | [implement-issue-389-session-hardening.md](./implement-issue-389-session-hardening.md) |
@@ -95,6 +96,7 @@ Directory: `docs/plans`
 | PLAN-034UtOFqGK9dkffJMoPRvK | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
 | PLAN-034S9vX2cF6hK9mP3rT7wZ | Issue #294 Cross-Consumer候補tuple Gate 実装計画 — evidence script・workflow 拡張・契約 test | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | PLAN-ARAErEdgpSOlWBQBofZQ2t | Issue #294 GUI-CONTRACT lane 接続 実装計画 — 候補 checkout/probe step・record 置換・contract test 更新 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
+| PLAN-034XC0f0Wxlvtq0vaQJb2t | Issue #294 first slice — consumer-verify Case schema v2 実装計画 | approved | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |
 | PLAN-034RoUNsT1SND8BxtMWhXC | Issue #295 ruviform-io-file 実装計画 (IO-IMP-01) | approved | [issue-295-io-file-staged-publish.md](./issue-295-io-file-staged-publish.md) |
 | PLAN-034RBIiZIxCPVB11km1utN | Issue #296 ruviform-io-file 実 OS バックエンド実装計画 (IO-IMP-02) | approved | [issue-296-io-file-os-backend.md](./issue-296-io-file-os-backend.md) |
 | PLAN-034RTeQAV1efnZZIhQamnc | Issue #297 ruviform-io-structured 実装計画 (IO-IMP-03) | approved | [issue-297-io-structured-json-yaml-toml.md](./issue-297-io-structured-json-yaml-toml.md) |
@@ -176,6 +178,7 @@ Directory: `docs/plans`
 | PLAN-8R4q0cr04yTyNYSk6Y5f3B | Issue #586 実施計画 — ir front matter 是正と ir/exp index 再生成 | approved | [issue-586-impl-index-generation-plan.md](./issue-586-impl-index-generation-plan.md) |
 | PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
 | PLAN-034XATq1VmM49W1cv5EO0P | Issue #627 仮想優先検証契約 実装・ロールアウト計画 | approved | [issue-627-virtual-first-verification-contract-plan.md](./issue-627-virtual-first-verification-contract-plan.md) |
+| PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |

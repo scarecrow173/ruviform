@@ -6611,6 +6611,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-audio-test"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+ "ruviform-audio-core",
+ "ruviform-media-core",
+ "ruviform-rt",
+]
+
+[[package]]
 name = "ruviform-cli-sample"
 version = "0.1.0"
 dependencies = [
@@ -6913,6 +6923,7 @@ dependencies = [
 name = "ruviform-poc-native-dock"
 version = "0.1.0"
 dependencies = [
+ "ruviform-plugin-clap",
  "ruviform-plugin-core",
  "ruviform-plugin-host",
  "ruviform-plugin-vst3",

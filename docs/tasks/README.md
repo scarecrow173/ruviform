@@ -16,6 +16,7 @@ Directory: `docs/tasks`
 | TASK-rf253osmidibackend001 | Issue #253 OS MIDI input backend 実装タスク | completed | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TASK-034VEU3ZiDLQ7qcsk69rl0 | Issue #253 unsupported 計数透過 + 実機 lane scaffold（bridge counter + mock + tests + E2E） | completed | [issue-253-task-unsupported-transparency.md](./issue-253-task-unsupported-transparency.md) |
 | TASK-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice タスク（IMidiMapping + plugin→host reporting） | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
+| TASK-034XC0Os34QkfxbVzBAbse | Issue #294 T1 — consumer-verify Case schema v2 証拠契約拡張 | in-progress | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |
 | TASK-004I6K3yrO0KrqC8a5SB9v | Issue #301 T1 — zstd feature/module と stream pump 一般化 | completed | [issue-301-t1-zstd-module.md](./issue-301-t1-zstd-module.md) |
 | TASK-AsjkeCFskQSQZMsB5Tgl5H | Issue #301 T2 — zstd format/contract/API 試験 | completed | [issue-301-t2-zstd-tests.md](./issue-301-t2-zstd-tests.md) |
 | TASK-nnP07tqKBoCJML7LH9xWsQ | Issue #301 T3 — compression-verify lane matrix・crate 文書 | completed | [issue-301-t3-ci-docs.md](./issue-301-t3-ci-docs.md) |
@@ -55,6 +56,7 @@ Directory: `docs/tasks`
 | TASK-034U1MMRtRon6XPgSgK7gD | Issue #461 残課題 — TimeAxis label canvas 描画の実装タスク | in-progress | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | in-progress | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | in-progress | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
@@ -293,6 +295,7 @@ Directory: `docs/tasks`
 | TASK-T6nZSLe2NKHl8o4neneyTK | T4 ci-issue-tracker-reconcile.yml 新設 + README/dev-env 同期（Issue #368） | done | [issue-368-t4-reconcile-workflow.md](./issue-368-t4-reconcile-workflow.md) |
 | TASK-1EfMLBvEIXGocxCFFgixSj | Issue #377 — QueryBinding adopt-on-join 実装と恒久テスト | done | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | TASK-034Uhnq0kOMsOzPLSOL8Bz | Issue #378 T1 oracle addBinding epoch 整合 | done | [issue-378-t1-oracle-addbinding-epoch.md](./issue-378-t1-oracle-addbinding-epoch.md) |
+| TASK-034XB27D04PGJexpQv3Eee | Issue #389 CLAP/L0 実外部 Editor attach タスク（adapter open_gui/close_gui + PoC clap lane） | done | [issue-389-clap-l0-editor-attach.md](./issue-389-clap-l0-editor-attach.md) |
 | TASK-hCLO8YPWLtzGOIGdhW5yxp | Issue #389 Plugin Editor Session headless fixture タスク（contract 認定 + DSP/RT 非干渉 fixture） | done | [issue-389-editor-session-headless.md](./issue-389-editor-session-headless.md) |
 | TASK-Q2ek2gQVRR1KvvM8kyaMei | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture タスク | done | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TASK-rR5kzaPGjtdQepckCVSO1Z | Issue #400 T1: 借用 readback → demuxer bounded 接続の実装 | done | [issue-400-t1-borrowed-readback-decoder-bridge.md](./issue-400-t1-borrowed-readback-decoder-bridge.md) |
