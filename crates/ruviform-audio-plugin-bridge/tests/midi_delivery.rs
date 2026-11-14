@@ -1,13 +1,16 @@
 //! Issue #188 `PoC` — timed `MIDI` input end-to-end:
-//! `MidiInput` → `InputStage` (stamp→frame map, ledger) →
-//! `merge_call_events` (release/plan/live) → `EventList`.
+//! `MidiInput` → `InputStage` (stamp→frame map) →
+//! `merge_call_events` (evict/release/chase/plan/live) → `EventList`.
 //!
 //! Covers: `NoteOn`/`NoteOff`, CC, `PitchBend` type+order
 //! preservation; duplicate timestamps (stable order); block-boundary
 //! behavior (in-block/late/future/rejected); `NoteOff` priority on
-//! colliding keys; `release_all` on stop; observable overflow/drop
-//! counters; and the RT no-allocation contract for `collect_block` +
-//! merge.
+//! colliding keys; anchor republish pending preservation and
+//! `anchor_rejected` classification (Issue #253 V12); observable
+//! overflow/drop counters; and the RT no-allocation contract for
+//! `collect_block` + merge. Note-state tracking/release authority
+//! lives in `PluginNode`'s delivered-note ledger — covered by
+//! `midi_wiring.rs` (Issue #253 V11).
 
 #[cfg(debug_assertions)]
 #[global_allocator]
@@ -199,23 +202,25 @@ fn midi_delivery_note_cc_bend_with_frame_offsets() {
         &mut merge_scratch,
         &mut src_scratch,
     )
-    .unwrap();
+    .unwrap()
+    .events;
     assert_eq!(merged.len(), 5);
     // plan wins the offset-96 tie over live.
     assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
 
-    // Ledger state: key 60 was turned on then off — nothing stuck.
-    assert_eq!(stage.active_notes(), 0);
+    // The stage holds no note state (Issue #253 V11 — the node
+    // ledger is the sole authority); nothing stays pending.
     assert_eq!(stage.pending_count(), 0);
     let counters = stage.counters();
     assert_eq!(counters.delivered, 4);
     assert_eq!(counters.mapped, 4);
     assert_eq!(counters.rejected, 0);
+    assert_eq!(counters.anchor_rejected, 0);
     assert_eq!(counters.late, 0);
 }
 
 #[test]
-fn midi_delivery_block_boundary_and_release_all() {
+fn midi_delivery_block_boundary_and_pending() {
     let mut stage = InputStage::new(frame_base());
     stage.publish_anchor(Some(anchor()));
     // One event inside block 2 (frame 512 = us 10666.67 → use 10800µs
@@ -242,18 +247,6 @@ fn midi_delivery_block_boundary_and_release_all() {
     assert_eq!(offs, [6, 0]);
     // The future event stays pending for a later block.
     assert_eq!(stage.pending_count(), 1);
-
-    // Stop while key 64 is still held → release_all emits its off.
-    let mut release_scratch = [param(0, 0.0); 8];
-    let released = stage.release_all(0, &mut release_scratch);
-    // Keys 60 and 64 are both active (60's off is still pending).
-    assert_eq!(released.len(), 2);
-    assert!(released.iter().all(|e| matches!(
-        e.kind(),
-        EventKind::Midi(m) if m.is_note_off()
-    )));
-    assert_eq!(stage.active_notes(), 0);
-    assert_eq!(stage.counters().released, 2);
 }
 
 #[test]
@@ -279,7 +272,172 @@ fn midi_delivery_rejections_are_observable() {
     assert_eq!(live.len(), 1);
     let counters = stage.counters();
     assert_eq!(counters.rejected, 1);
+    // Wrong domain is an anchor-coverage rejection (V12).
+    assert_eq!(counters.anchor_rejected, 1);
     assert_eq!(counters.dropped_backend, 3);
+}
+
+/// Issue #253 V12 — with no anchor published, `pending` waits
+/// unmapped (no rejection, no consumption); publishing an anchor maps
+/// the queued events under it.
+#[test]
+fn midi_delivery_anchor_none_pending_waits_then_maps() {
+    let mut stage = InputStage::new(frame_base());
+    let mut input = ScriptedInput {
+        pending: VecDeque::from(vec![
+            timed_us(0, note_on(60, 100)),
+            timed_us(2_000, note_off(60)),
+        ]),
+        dropped: 0,
+        unsupported: 0,
+    };
+    stage.read(&mut input).unwrap();
+
+    let mut scratch = [param(0, 0.0); 8];
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        256,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    assert_eq!(live.len(), 0);
+    assert_eq!(stage.pending_count(), 2);
+    let counters = stage.counters();
+    assert_eq!(counters.mapped, 0);
+    assert_eq!(counters.rejected, 0);
+    assert_eq!(counters.anchor_rejected, 0);
+
+    // The anchor arrives — the same pending events now map and deliver.
+    stage.publish_anchor(Some(anchor()));
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        256,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    assert_eq!(live.len(), 2);
+    let offs: Vec<u32> = live.iter().map(|e| e.frame_offset()).collect();
+    assert_eq!(offs, [0, 96]);
+    assert_eq!(stage.pending_count(), 0);
+}
+
+/// Issue #253 V12 — republishing a *recalibrated* anchor re-maps the
+/// pending queue under the new anchor: mapping authority is always
+/// the anchor current at `collect_block`, never the one published
+/// when the event was pushed.
+#[test]
+fn midi_delivery_anchor_republish_remaps_pending() {
+    let mut stage = InputStage::new(frame_base());
+    // Anchor A: stamp 0µs ↔ frame 0 — a 1000µs stamp maps to frame 48.
+    stage.publish_anchor(Some(anchor()));
+    let mut input = ScriptedInput {
+        pending: VecDeque::from(vec![timed_us(1_000, note_on(60, 100))]),
+        dropped: 0,
+        unsupported: 0,
+    };
+    stage.read(&mut input).unwrap();
+
+    // Republish anchor B *before* any collect: stamp 1000µs ↔ frame 0,
+    // so the same stamp now maps to frame 0 — not 48.
+    stage.publish_anchor(Some(ClockAnchor {
+        stamp_ticks: 1_000,
+        ..anchor()
+    }));
+    let mut scratch = [param(0, 0.0); 8];
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        256,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].frame_offset(), 0);
+    assert_eq!(stage.pending_count(), 0);
+}
+
+/// Issue #253 V12 — republishing an anchor for a *different domain*
+/// preserves the pending queue: stamps the new anchor covers are
+/// delivered, stamps it cannot cover are defined rejections counted
+/// as `anchor_rejected` — nothing is silently consumed by the
+/// republish itself.
+#[test]
+fn midi_delivery_anchor_republish_domain_switch() {
+    let mut stage = InputStage::new(frame_base());
+    stage.publish_anchor(Some(anchor())); // domain 1
+    let mut foreign = timed_us(0, cc(1, 10));
+    foreign.stamp.domain = ClockDomainId::new(99);
+    let mut input = ScriptedInput {
+        pending: VecDeque::from(vec![timed_us(0, note_on(60, 100)), foreign]),
+        dropped: 0,
+        unsupported: 0,
+    };
+    stage.read(&mut input).unwrap();
+
+    // Switch the anchor's domain before the first collect.
+    stage.publish_anchor(Some(ClockAnchor {
+        domain: ClockDomainId::new(99),
+        ..anchor()
+    }));
+    let mut scratch = [param(0, 0.0); 8];
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        256,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    // The domain-99 CC delivered; the domain-1 note-on is a defined
+    // anchor-coverage rejection — both survived the republish itself.
+    assert_eq!(live.len(), 1);
+    assert!(matches!(
+        live[0].kind(),
+        EventKind::Midi(m) if matches!(m.kind, MidiKind::ControlChange { .. })
+    ));
+    let counters = stage.counters();
+    assert_eq!(counters.rejected, 1);
+    assert_eq!(counters.anchor_rejected, 1);
+    assert_eq!(counters.delivered, 1);
+    assert_eq!(stage.pending_count(), 0);
+}
+
+/// Issue #253 V12 — rejection classification: anchor domain/base/
+/// epoch coverage failures count `anchor_rejected`; `BeforeAnchor`
+/// counts `rejected` only.
+#[test]
+fn midi_delivery_anchor_rejection_classification() {
+    let mut stage = InputStage::new(frame_base());
+    // Anchor claims stamp 5000µs ↔ frame 240.
+    stage.publish_anchor(Some(ClockAnchor {
+        stamp_ticks: 5_000,
+        frame: EngineFrame::new(epoch(), 240),
+        ..anchor()
+    }));
+    let mut foreign = timed_us(6_000, note_on(64, 90));
+    foreign.stamp.domain = ClockDomainId::new(99);
+    let mut input = ScriptedInput {
+        pending: VecDeque::from(vec![
+            timed_us(1_000, note_on(60, 100)), // BeforeAnchor — not anchor coverage
+            foreign,                           // UnmappedDomain — anchor coverage
+            timed_us(6_000, note_off(60)),     // maps to frame 288 — in-block
+        ]),
+        dropped: 0,
+        unsupported: 0,
+    };
+    stage.read(&mut input).unwrap();
+
+    let mut scratch = [param(0, 0.0); 8];
+    let (live, _) = stage.collect_block(
+        EngineFrame::new(epoch(), 0),
+        512,
+        EngineFrame::new(epoch(), 0),
+        &mut scratch,
+    );
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].frame_offset(), 288);
+    let counters = stage.counters();
+    assert_eq!(counters.rejected, 2);
+    assert_eq!(counters.anchor_rejected, 1);
+    assert_eq!(counters.mapped, 1);
+    assert_eq!(counters.delivered, 1);
 }
 
 /// Issue #253 — backend-reported untranslatable traffic must not die
@@ -378,7 +536,8 @@ fn rt_midi_delivery_collect_and_merge_no_alloc() {
             &mut merge_scratch,
             &mut src_scratch,
         )
-        .unwrap();
+        .unwrap()
+        .events;
         core::hint::black_box(merged)
     });
 }

@@ -107,8 +107,8 @@ pub use boundary::{
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
 pub use event::{
-    Event, EventKind, EventList, MAX_MERGE_SOURCES, MergeError, ParamEvent, merge_call_events,
-    sort_events_by_frame_offset,
+    Event, EventKind, EventList, MAX_MERGE_SOURCES, MergeError, MergeOutcome, ParamEvent,
+    merge_call_events, sort_events_by_frame_offset,
 };
 pub use lifecycle::{Lifecycle, LifecycleError, LifecycleEvent, LifecycleState};
 pub use param::{ParamFlags, ParamId, ParamInfo, ParamValue};

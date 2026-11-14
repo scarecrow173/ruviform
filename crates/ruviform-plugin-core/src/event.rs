@@ -437,19 +437,14 @@ fn merge_runs(left: &[Event], right: &[Event], dst: &mut [Event]) {
 pub const MAX_MERGE_SOURCES: usize = 8;
 
 /// The reason [`merge_call_events`] rejected its input — a defined
-/// rejection, never a partial or silent drop.
+/// rejection. Scratch capacity overflow is *not* an error: it is
+/// reported as [`MergeOutcome::truncated`] on an otherwise successful
+/// merge.
 ///
 /// **RT contract:** RT-suitable — `Copy` value type.
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MergeError {
-    /// The merged event count exceeded the caller-provided scratch.
-    Overflow {
-        /// Elements the merge needed.
-        needed: usize,
-        /// Elements the scratch could hold.
-        capacity: usize,
-    },
     /// More sources than [`MAX_MERGE_SOURCES`] were supplied.
     TooManySources {
         /// The supplied source count.
@@ -460,10 +455,6 @@ pub enum MergeError {
 impl core::fmt::Display for MergeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
-            Self::Overflow { needed, capacity } => write!(
-                f,
-                "event merge scratch overflow: needed {needed} > capacity {capacity}"
-            ),
             Self::TooManySources { count } => {
                 write!(
                     f,
@@ -475,6 +466,24 @@ impl core::fmt::Display for MergeError {
 }
 
 impl core::error::Error for MergeError {}
+
+/// The defined result of [`merge_call_events`]: the retained merged
+/// events plus the count that did not fit the caller's scratch.
+///
+/// **RT contract:** RT-suitable — borrows caller scratch, `Copy`
+/// fields only.
+#[derive(Debug)]
+pub struct MergeOutcome<'a> {
+    /// The retained merged events — stable merge order, at most
+    /// `min(scratch.len(), src_scratch.len())` elements. When the
+    /// merge fit entirely this is the whole merged list.
+    pub events: &'a mut [Event],
+    /// How many merged events exceeded the scratch capacity and were
+    /// truncated — always `0` when the merge fit. Truncation drops
+    /// the *tail* of the merge order: the retained prefix is exactly
+    /// what an unbounded merge would have emitted first.
+    pub truncated: usize,
+}
 
 /// The [`LedgerKey`] a [`EventKind::Midi`] event tracks, or `None` for
 /// non-note events.
@@ -527,10 +536,18 @@ fn event_is_note_on(event: Event) -> bool {
 /// semantics. Velocity-zero Note-Ons count as note-offs per the
 /// MIDI 1.0 running-status convention.
 ///
-/// `scratch` must hold `Σ sources[i].len()`; a smaller scratch is a
-/// defined [`MergeOverflow`], never a partial merge. `src_scratch`
-/// must be at least that long too — it receives each emitted event's
-/// source index (transient provenance used by the collision pass).
+/// `scratch` and `src_scratch` bound the merge output: at most
+/// `min(scratch.len(), src_scratch.len())` events are emitted, in
+/// stable merge order — the retained prefix. When the merged count
+/// exceeds that capacity the merge **truncates** instead of failing:
+/// [`MergeOutcome::truncated`] reports the shortfall so the loss is
+/// observable, never silent. `src_scratch` receives each emitted
+/// event's source index (transient provenance used by the collision
+/// pass) for the retained window only.
+///
+/// Note-off priority is applied to the retained window *after*
+/// truncation — it can reorder events inside the window but never
+/// pulls a truncated event back in.
 ///
 /// **RT contract:** RT-suitable — `O(total · k + run²)` bounded work
 /// on `Copy` elements (`k = sources.len()`, run = same-offset group);
@@ -554,36 +571,36 @@ fn event_is_note_on(event: Event) -> bool {
 /// ];
 /// let mut scratch = [plan[0]; 8];
 /// let mut src_scratch = [0u8; 8];
-/// let merged =
+/// let outcome =
 ///     merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+/// let merged = outcome.events;
 /// // plan wins the offset tie; the authored live order is preserved.
 /// let offs: Vec<u32> = merged.iter().map(|e| e.frame_offset()).collect();
 /// assert_eq!(offs, [64, 64, 64]);
+/// assert_eq!(outcome.truncated, 0);
 /// ```
 pub fn merge_call_events<'a>(
     sources: &[&[Event]],
     scratch: &'a mut [Event],
     src_scratch: &mut [u8],
-) -> core::result::Result<&'a mut [Event], MergeError> {
+) -> core::result::Result<MergeOutcome<'a>, MergeError> {
     if sources.len() > MAX_MERGE_SOURCES {
         return Err(MergeError::TooManySources {
             count: sources.len(),
         });
     }
     let needed: usize = sources.iter().map(|s| s.len()).sum();
-    if scratch.len() < needed || src_scratch.len() < needed {
-        return Err(MergeError::Overflow {
-            needed,
-            capacity: scratch.len().min(src_scratch.len()),
-        });
-    }
-    let out = &mut scratch[..needed];
-    let out_src = &mut src_scratch[..needed];
+    // Defined truncation: emit the stable-merge prefix that fits the
+    // smaller scratch; the shortfall is reported on the outcome.
+    let capacity = scratch.len().min(src_scratch.len());
+    let emitted = needed.min(capacity);
+    let out = &mut scratch[..emitted];
+    let out_src = &mut src_scratch[..emitted];
     // Stable k-way merge: pick the smallest offset; on ties prefer the
     // earlier source, preserving that source's own arrival order.
     let mut heads = [0usize; MAX_MERGE_SOURCES];
     let mut w = 0usize;
-    loop {
+    while w < emitted {
         let mut best: Option<usize> = None;
         let mut best_off = u32::MAX;
         for (s, source) in sources.iter().enumerate() {
@@ -600,9 +617,12 @@ pub fn merge_call_events<'a>(
         heads[s] += 1;
         w += 1;
     }
-    debug_assert_eq!(w, needed);
+    debug_assert_eq!(w, emitted);
     apply_note_off_priority(out, out_src);
-    Ok(out)
+    Ok(MergeOutcome {
+        events: out,
+        truncated: needed - emitted,
+    })
 }
 
 /// Applies the same-offset Note-Off-priority convention in place:
@@ -861,7 +881,9 @@ mod tests {
         ];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch)
+            .unwrap()
+            .events;
         // plan wins the offset-64 tie.
         assert!(matches!(merged[1].kind(), EventKind::ParamValue(_)));
         assert!(matches!(merged[2].kind(), EventKind::Midi(_)));
@@ -890,7 +912,9 @@ mod tests {
         let release = [off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged = merge_call_events(&[&release, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&release, &live], &mut scratch, &mut src_scratch)
+            .unwrap()
+            .events;
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if m.is_note_off()
@@ -910,7 +934,9 @@ mod tests {
         let live2 = [on_other, on];
         let mut scratch2 = [param_event(0, 0.0); 8];
         let mut src_scratch2 = [0u8; 8];
-        let merged2 = merge_call_events(&[&live2], &mut scratch2, &mut src_scratch2).unwrap();
+        let merged2 = merge_call_events(&[&live2], &mut scratch2, &mut src_scratch2)
+            .unwrap()
+            .events;
         assert_eq!(merged2.len(), 2);
         assert!(matches!(
             merged2[0].kind(),
@@ -940,7 +966,9 @@ mod tests {
         let live = [on, off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged = merge_call_events(&[&live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&live], &mut scratch, &mut src_scratch)
+            .unwrap()
+            .events;
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
@@ -974,7 +1002,9 @@ mod tests {
         let live = [off];
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
-        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap();
+        let merged = merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch)
+            .unwrap()
+            .events;
         assert!(matches!(
             merged[0].kind(),
             EventKind::Midi(m) if m.is_note_off()
@@ -985,28 +1015,113 @@ mod tests {
         ));
     }
 
+    /// V9 contract: an over-budget merge degrades to defined
+    /// truncation — the stable-merge prefix that fits the scratch is
+    /// delivered and `truncated` reports the shortfall. The smaller
+    /// of the two scratches bounds the output.
     #[test]
-    fn merge_call_events_rejects_overflow_and_too_many_sources() {
-        let one = [param_event(0, 0.1)];
-        let mut small = [param_event(0, 0.0); 1];
-        let mut small_src = [0u8; 1];
-        assert_eq!(
-            merge_call_events(&[&one, &one], &mut small, &mut small_src),
-            Err(MergeError::Overflow {
-                needed: 2,
-                capacity: 1,
-            })
+    fn merge_call_events_truncates_to_scratch_and_reports() {
+        let a = [param_event(0, 0.1), param_event(8, 0.2)];
+        let b = [param_event(4, 0.3), param_event(12, 0.4)];
+        let mut scratch = [param_event(0, 0.0); 2];
+        let mut src = [0u8; 2];
+        let outcome = merge_call_events(&[&a, &b], &mut scratch, &mut src).unwrap();
+        assert_eq!(outcome.truncated, 2);
+        let offs: Vec<u32> = outcome.events.iter().map(|e| e.frame_offset()).collect();
+        // Stable merge order: 0 (src 0), 4 (src 1), 8, 12 — first two kept.
+        assert_eq!(offs, [0, 4]);
+        assert_eq!(src[..2], [0, 1]);
+        // A fitting merge reports zero truncation.
+        let mut big = [param_event(0, 0.0); 8];
+        let mut big_src = [0u8; 8];
+        let outcome = merge_call_events(&[&a, &b], &mut big, &mut big_src).unwrap();
+        assert_eq!(outcome.events.len(), 4);
+        assert_eq!(outcome.truncated, 0);
+    }
+
+    /// The effective capacity is `min(scratch, src_scratch)` — an
+    /// undersized provenance scratch truncates just like the event
+    /// scratch does.
+    #[test]
+    fn merge_call_events_truncation_uses_min_scratch() {
+        let a = [
+            param_event(0, 0.1),
+            param_event(2, 0.2),
+            param_event(4, 0.3),
+        ];
+        let b = [
+            param_event(1, 0.4),
+            param_event(3, 0.5),
+            param_event(5, 0.6),
+        ];
+        let mut scratch = [param_event(0, 0.0); 8];
+        let mut src = [0u8; 3];
+        let outcome = merge_call_events(&[&a, &b], &mut scratch, &mut src).unwrap();
+        assert_eq!(outcome.events.len(), 3);
+        assert_eq!(outcome.truncated, 3);
+        let offs: Vec<u32> = outcome.events.iter().map(|e| e.frame_offset()).collect();
+        assert_eq!(offs, [0, 1, 2]);
+    }
+
+    /// Zero capacity is a defined empty delivery — every merged event
+    /// is reported truncated, nothing panics.
+    #[test]
+    fn merge_call_events_zero_capacity_truncates_all() {
+        let a = [param_event(0, 0.1)];
+        let mut scratch: [Event; 0] = [];
+        let mut src: [u8; 0] = [];
+        let outcome = merge_call_events(&[&a], &mut scratch, &mut src).unwrap();
+        assert_eq!(outcome.events.len(), 0);
+        assert_eq!(outcome.truncated, 1);
+    }
+
+    /// Truncation keeps the merge prefix *before* note-off priority:
+    /// a colliding off that would win priority is itself truncated
+    /// when it falls outside the retained window.
+    #[test]
+    fn merge_call_events_truncation_precedes_note_off_priority() {
+        let on = midi_event(
+            0,
+            MidiKind::NoteOn {
+                key: key(60),
+                velocity: MidiValue::from_u7(100),
+            },
         );
+        let off = midi_event(
+            0,
+            MidiKind::NoteOff {
+                key: key(60),
+                velocity: 0,
+            },
+        );
+        let plan = [on];
+        let live = [off];
+        let mut scratch = [param_event(0, 0.0); 1];
+        let mut src = [0u8; 1];
+        let outcome = merge_call_events(&[&plan, &live], &mut scratch, &mut src).unwrap();
+        assert_eq!(outcome.truncated, 1);
+        // The earlier source wins the offset tie, so the note-on is
+        // the retained prefix — the off is truncated, not reordered in.
+        assert!(matches!(
+            outcome.events[0].kind(),
+            EventKind::Midi(m) if matches!(m.effective_note_state(), Some(true))
+        ));
+    }
+
+    #[test]
+    fn merge_call_events_rejects_too_many_sources() {
+        let one = [param_event(0, 0.1)];
         let sources = [&one[..]; 9];
         let mut big = [param_event(0, 0.0); 16];
         let mut big_src = [0u8; 16];
-        assert_eq!(
+        assert!(matches!(
             merge_call_events(&sources, &mut big, &mut big_src),
             Err(MergeError::TooManySources { count: 9 })
-        );
+        ));
     }
 
-    /// RT contract: merge is bounded copy/compare work — no allocation.
+    /// RT contract: merge is bounded copy/compare work — no allocation,
+    /// including the defined-truncation path.
     #[test]
     fn rt_merge_call_events_no_alloc() {
         let plan = [param_event(32, 0.1), param_event(64, 0.2)];
@@ -1020,12 +1135,17 @@ mod tests {
         let mut scratch = [param_event(0, 0.0); 8];
         let mut src_scratch = [0u8; 8];
         let _ = assert_no_alloc::assert_no_alloc(|| {
-            core::hint::black_box(merge_call_events(
-                &[&plan, &live],
-                &mut scratch,
-                &mut src_scratch,
-            ))
-            .unwrap()
+            core::hint::black_box(
+                merge_call_events(&[&plan, &live], &mut scratch, &mut src_scratch).unwrap(),
+            )
+        });
+        // Over-budget scratch truncates inside the same bounded loop.
+        let mut small = [param_event(0, 0.0); 2];
+        let mut small_src = [0u8; 2];
+        let _ = assert_no_alloc::assert_no_alloc(|| {
+            let outcome = merge_call_events(&[&plan, &live], &mut small, &mut small_src).unwrap();
+            assert_eq!(outcome.truncated, 1);
+            core::hint::black_box(outcome.events)
         });
     }
 }

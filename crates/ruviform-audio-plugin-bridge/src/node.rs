@@ -522,6 +522,35 @@ impl CallSink<'_, '_> {
         n
     }
 
+    /// Merges the ordered call sources into the call scratch.
+    /// Over-budget scratch is defined truncation inside the merge —
+    /// the retained prefix is delivered and the shortfall is counted
+    /// on [`Counter::EventMergeTruncated`]; `TooManySources` is the
+    /// only rejection and yields an empty delivery plus `overflow`.
+    ///
+    /// **RT contract:** RT-suitable — bounded, no allocation.
+    fn merge_window<'a>(
+        sources: &[&[Event]],
+        scratch: &'a mut [Event],
+        src_scratch: &mut [u8],
+        status: &NodeStatus,
+        overflow: &mut bool,
+    ) -> &'a mut [Event] {
+        if let Ok(outcome) = merge_call_events(sources, scratch, src_scratch) {
+            if outcome.truncated > 0 {
+                // Partial delivery still ran — the incident is
+                // reported like any event-window loss; the amount
+                // rides the dedicated counter.
+                *overflow = true;
+                status.bump_by(Counter::EventMergeTruncated, outcome.truncated as u64);
+            }
+            outcome.events
+        } else {
+            *overflow = true;
+            <&mut [Event]>::default()
+        }
+    }
+
     /// One physical `process` call: merges
     /// `evict ++ release ++ chase ++ plan ++ live` into the call's `EventList`
     /// (each source already offset-sorted; release/chase ride only the
@@ -598,16 +627,13 @@ impl CallSink<'_, '_> {
             plan_list.as_slice(),
             live,
         ];
-        let merged = if let Ok(merged) =
-            merge_call_events(&sources, &mut *self.scratch, &mut *self.src_scratch)
-        {
-            merged
-        } else {
-            // Bounded-scratch loss — report, deliver an empty list
-            // rather than a partial merge.
-            overflow = true;
-            &mut self.scratch[..0]
-        };
+        let merged = Self::merge_window(
+            &sources,
+            &mut *self.scratch,
+            &mut *self.src_scratch,
+            self.status,
+            &mut overflow,
+        );
         let events = if let Ok(list) = EventList::new(merged, len_u32) {
             list
         } else {
