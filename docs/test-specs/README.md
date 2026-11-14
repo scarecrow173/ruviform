@@ -205,6 +205,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XAEUQyTZ4N0vdNcRAlI | Issue #627 仮想優先検証契約のテスト仕様 | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TSPEC-034XBMh4pr5313Dan0adpY | Issue #628 テスト仕様 — deterministic core の決定性・RT contract・独立 Oracle | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
