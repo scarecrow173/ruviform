@@ -170,6 +170,7 @@ Directory: `docs/specs`
 | SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-034Xe8fKEL6vpFX9pkgPU0 | Multi-backend Script/Analyzer言語非依存契約（Issue #558） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
+| SPEC-034Xei1fO0DkKhCsfrRdzI | Issue #562 — Generic Alternate Evaluation Context headless 2候補比較 PoC（RF-CB-01） | approved | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | SPEC-4LwDFLWjvbGeZQSqW0Y93X | Issue #565 WASAPI input frame_position: IAudioClock::GetPosition の device position を port に乗せる | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |
 | SPEC-QDhe8xTiwyoX9UufhbVtoS | Issue #582 ci 3 lane 失敗(gpui-verify 冷キャッシュ / libc pin 喪失 / moxcms 0.9.2 drift)を修正する | approved | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | SPEC-034Wv5sDkKQHAHjQDgLKG3 | Issue #583 consumer-verify preflight の mise mr_boxington 失敗を調査・検証する | approved | [issue-583-consumer-verify-mise.md](./issue-583-consumer-verify-mise.md) |
