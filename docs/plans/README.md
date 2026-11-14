@@ -112,6 +112,7 @@ Directory: `docs/plans`
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-dS6gH1jK4lM9nB2vC8xZ3q | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実施計画 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | PLAN-034UtCUZnaLUCtLUqb8nYz | Issue #306 IO E2E slice 2 実装計画 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| PLAN-034XCT9Qm6U9QcMldwvZAH | Issue #306 G01/G05 実装計画 | approved | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | PLAN-eShTb4vnZSc0gaiPtChnIU | Issue #306 IO E2E slice 3 実装計画 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Ui3RAJGJJ1dJAlUW9N0 | Issue #308 — Probe再Binding全件整合の実装計画 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |

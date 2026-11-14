@@ -115,6 +115,7 @@ Directory: `docs/designs`
 | DESIGN-ODmc6p5Cp7Kbq0u35OrAiR | Issue #306 汎用 I/O 合成 E2E — 試験専用クレート構成・境界試験設計 | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | DESIGN-fH3jK9mP2qW8rT5yU7iO4a | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 設計 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | DESIGN-034UtzREeBZLceakda7vIS | Issue #306 IO E2E slice 2 — Fault/Fuzz fixture 設計 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
+| DESIGN-034XCQLYJYZSmqpYRf01gv | Issue #306 G01/G05 実4GiB lane・性能 baseline 設計 | approved | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | DESIGN-CTGZSygUhyfXwQSdShQuap | Issue #306 IO E2E slice 3 — IO MSRV lane・DAG/RT 境界 audit 設計 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | DESIGN-dHUQ40Hk50tvziqjx7Kewj | Issue #307 attach 時 frame_base 検証 context — 実装設計 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | DESIGN-034Ui3n3nIZNFJKLyIv0Uf | Issue #308 — Probe再Bindingのstaged all-or-nothing設計 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
