@@ -38,6 +38,7 @@ use ruviform_ui::{UiError, WindowId};
 use serde::{Deserialize, Serialize};
 
 pub mod fake;
+pub mod plugin_dock;
 pub mod runner;
 pub mod visual;
 
@@ -233,6 +234,12 @@ pub enum ScenarioDriver {
     GpuiSimulated,
     /// Real OS input driver (Issue #313 scope).
     RealOs,
+    /// In-process plugin-host probe (Issue #631 plugin-dock lane) —
+    /// drives the production `InProcessHost`/`PluginEditorSessions`
+    /// path against a real plugin-ABI binary with a driver-neutral
+    /// `NativeSurfaceSlot`. ABI/host evidence only: never real-OS
+    /// window, input, or pixel proof.
+    PluginHostProbe,
 }
 
 /// Scenario verdict — the same five-value vocabulary as the #390
