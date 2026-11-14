@@ -4,8 +4,13 @@
 - OS: Windows (MINGW64_NT-10.0-26300, MSYS2/Git Bash)
 - Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), cargo 1.99.1, mise 2026.11.2
 - environment_kind: headless (no real MIDI device, no real plugin host, no GUI)
-- Base SHA: c6e4f334242567dbd0e0d8b7713d9d480a6aab66 (origin/main at branch point)
+- Base SHA: dd229f2f666c32b40958b51c1bfb80194bb52479 (origin/main, rebased)
 - Branch: scarecrow173/rf253-midifix
+- Note: an earlier merge of origin/main@996bdd0d surfaced a pre-existing
+  rustfmt violation in crates/ruviform-plugin-test-vst3 (PR #641, outside
+  this slice's scope). Coordinator confirmed the fix landed on main via
+  PR #643 (dd229f2f); the branch was rebased onto it and all lanes below
+  were re-run on the rebased tree.
 
 All commands run via `mise run` (canonical). Auxiliary `cargo` runs were used
 during development only and are not claimed as verification.
