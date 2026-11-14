@@ -170,6 +170,7 @@ Directory: `docs/specs`
 | SPEC-034UiRf9jEzvH2FbreqPsA | Issue #480 — Tabs strip の FocusHandle unmount 解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
+| SPEC-034XAXSMzbLxf6doTfUBYY | Issue #532 GPUI DComp public-surface 監査スライス | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-thW5o4Z4OMp1n1quFRk4uh | Consumer-neutral Workflow/CLI orchestration契約・両Consumer適用性レビュー（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | SPEC-034Xe8fKEL6vpFX9pkgPU0 | Multi-backend Script/Analyzer言語非依存契約（Issue #558） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
@@ -180,6 +181,7 @@ Directory: `docs/specs`
 | SPEC-Ede97f0t7vgWfr5wdww2Ib | Issue #586 docs/impl/ir・exp の管理 index を doc-maintenance で生成可能にする | approved | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | SPEC-034WuVytWK4glbu9CinZwq | Issue #590 docs/impl/ir の missing-section 本文補完 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | SPEC-034XqAdHQcP0noGrfdbRqY | Issue #625 verify(ubuntu-latest) test-full 失敗 — e2e_process handshake refusal の error 分類 race を修正する | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
+| SPEC-034XAreKCCKojmpwC7OvJR | Issue #627 仮想優先の3repo検証契約・物理Gate置換・POLICIES整合と独立Oracle | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

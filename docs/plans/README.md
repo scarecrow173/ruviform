@@ -169,12 +169,14 @@ Directory: `docs/plans`
 | PLAN-034UiTo1gkl570hZTb2iU7 | Issue #480 実装計画 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | PLAN-034WZEqWKThthcYF1frADG | Issue #532 DComp 監査文書チェーン計画 | approved | [issue-532-dcomp-audit-plan.md](./issue-532-dcomp-audit-plan.md) |
+| PLAN-034XB2HkzXlDdkYzRd4gWv | Issue #532 GPUI DComp public-surface 監査計画 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-zmhvig6ptUxYZGsi0NwJ4MGJBX | Issue #565 WASAPI-native input frame_position 実装 plan | approved | [issue-565-wasapi-input-frame-position-plan.md](./issue-565-wasapi-input-frame-position-plan.md) |
 | PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |
 | PLAN-034Wv7IN094RjMqLSM1Bzx | Issue #583 実施計画 — mr_boxington 失敗の原因確定・検証・記録 | approved | [issue-583-consumer-verify-mise-plan.md](./issue-583-consumer-verify-mise-plan.md) |
 | PLAN-8R4q0cr04yTyNYSk6Y5f3B | Issue #586 実施計画 — ir front matter 是正と ir/exp index 再生成 | approved | [issue-586-impl-index-generation-plan.md](./issue-586-impl-index-generation-plan.md) |
 | PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
+| PLAN-034XATq1VmM49W1cv5EO0P | Issue #627 仮想優先検証契約 実装・ロールアウト計画 | approved | [issue-627-virtual-first-verification-contract-plan.md](./issue-627-virtual-first-verification-contract-plan.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

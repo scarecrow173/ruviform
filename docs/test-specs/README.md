@@ -190,6 +190,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | TSPEC-034WZEsNYIpYAIB3snCErj | Issue #532 DComp 監査文書チェーン検証 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
+| TSPEC-034XB25A57vEBAhqcyKdIM | Issue #532 GPUI DComp public-surface 監査 検証仕様 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TSPEC-cFTjIZpnYGLaA5BcC74ahh | Consumer-neutral Workflow/CLI orchestration契約検証（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | TSPEC-034XecRP3Wpuq0BscTS283 | Multi-backend Script/Analyzer契約検証（Issue #558 RF-SCRIPT-00） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
@@ -200,6 +201,7 @@ Directory: `docs/test-specs`
 | TSPEC-qGTnI0yoN6l104dWZX2Oqx | Issue #586 テスト仕様 — index 生成可能性・front matter 不変性・audit 非回帰 | approved | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TSPEC-034WuVVSQeKKcnzXki6miZ | Issue #590 テスト仕様 — missing-section 0・本文品質・front matter/filename 不変・audit 非回帰 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | TSPEC-034XqAxz6XasjXM9geCdT7 | Issue #625 テスト仕様 — handshake channel-closed 分類の決定性と既存 refusal 契約の維持 | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
+| TSPEC-034XAEUQyTZ4N0vdNcRAlI | Issue #627 仮想優先検証契約のテスト仕様 | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

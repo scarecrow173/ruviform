@@ -200,6 +200,7 @@ Directory: `docs/designs`
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | DESIGN-034WZDs4eeCII39QySEoEq | Issue #532 DComp 監査文書チェーン設計 | approved | [issue-532-dcomp-audit-design.md](./issue-532-dcomp-audit-design.md) |
 | DESIGN-034WZDvbXaGkQVl6nT6jRx | Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計 | approved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
+| DESIGN-034XAYbSgNZPA0pCsrkqfy | Issue #532 GPUI DComp 監査 — 方式A/B/C 技術入力設計 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-sh006tWu0ht5WmSqG0V85w | Consumer-neutral Workflow/CLI orchestration契約設計（Issue #553 RF-AUTX-01） | approved | [issue-553-workflow-orchestration-design.md](./issue-553-workflow-orchestration-design.md) |
 | DESIGN-034XeaFjxZePL0m6LYuEeS | Multi-backend Script/Analyzer言語非依存契約設計（Issue #558 RF-SCRIPT-00） | approved | [issue-558-script-contract-design.md](./issue-558-script-contract-design.md) |
@@ -210,6 +211,8 @@ Directory: `docs/designs`
 | DESIGN-MnDOJoPVmxmAz1hdgVs3T3 | Issue #586 設計 — ir front matter 是正分類・index marker 配置・検証手順 | approved | [issue-586-impl-index-generation-design.md](./issue-586-impl-index-generation-design.md) |
 | DESIGN-034WuVTmYfKSkp3sJ8biu2 | Issue #590 設計 — ir missing-section 補完方針・セクション記述規約・検証手順 | approved | [issue-590-ir-missing-sections-design.md](./issue-590-ir-missing-sections-design.md) |
 | DESIGN-034XqAh1OycqOAK35pzCLQ | Issue #625 設計 — handshake hello 交換の transport error を Handshake 分類へ正規化 | approved | [issue-625-ci-e2e-handshake-race-design.md](./issue-625-ci-e2e-handshake-race-design.md) |
+| DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
+| DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
