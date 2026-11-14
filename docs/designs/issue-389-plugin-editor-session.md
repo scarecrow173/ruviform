@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針）"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -76,7 +76,8 @@ Issue #389 は規格別 Gui/View を Ruviform Window/Dock Presentation へ
 
 - L1 `OpenGui`/`CloseGui` は defined `Unsupported` rejection（wire 到達なし）。
 - L0 `InProcessHost::open_gui` 経路は live だが全 adapter が既定
-  `Unsupported`。
+  `Unsupported`。（改訂 2 時点: VST3・CLAP adapter は `open_gui`/
+  `close_gui` を実装済み — R5・S2 参照）
 - wire GUI 動詞は keep-for-future で存在するが lifecycle 実動詞なし。
 
 本設計は**新 Session 面を追加しつつ上記現実を変えない** — L1 は
@@ -98,9 +99,11 @@ pub struct ParentSlotLease(u64);
 // u64 payload の構造は発行側（SurfaceSlotRegistry 等）の opaque 実装選択。
 ```
 
-`GuiParentToken`/`GuiHandle`/`PluginHandle` は不変で共存。
-`ParentSlotLease` は `GuiParentToken` を**置き換えない** — 発行・
-検証機構を持たない raw token は OS adapter 内限定で残る。
+`GuiHandle`/`PluginHandle` は不変で共存。`GuiParentToken` は
+改訂 2 時点で**完全削除済み**（`crates/**/*.rs` 0 hit —
+`ParentLease`/`ParentSlotLease` へ移行）。session 面の opaque 語彙は
+`ParentSlotLease`、OS adapter redemption の出力は `ParentLease`
+（`generation: u32` + `payload: u64`）。
 
 ### D2: `PluginEditorSessions` registry（id mint・instance 帳簿）
 
@@ -180,13 +183,16 @@ pub trait EditorSessionOps {
 
 ### D5: L0/L1 写像（実装本 dispatch）
 
-- **L0**: `InProcessEditorOps<'a>(&'a mut InProcessHost, PluginHandle)`
-  — `open` → `host.execute(HostCommand::OpenGui{handle,parent:
-  GuiParentToken::new(lease.raw())})`。**ここが raw
-  `GuiParentToken::new` の唯一の production 呼出点**（session 面で
-  隔離）。`HostError::Unsupported` → `EditorOpError::Unsupported`
-  等の定義済み写像。plugin 既定 `Unsupported` は `Unsupported` へ
-  落ち、PASS に繰り上がらない。
+- **L0**: `InProcessEditorOps<'a>(&'a mut InProcessHost, PluginHandle,
+  redeemer)` — `open` → `redeemer(lease)` が `ParentSlotLease` を
+  issuer 側で検証・redeem し `ParentLease` を mint → `host.execute(
+  HostCommand::OpenGui{handle,parent})`（`OpenGui.parent` の型は
+  `ParentLease` — `GuiParentToken` から移行済み・改訂 2）。
+  非 `Docked` mode は L0 command surface が plain open のみ運ぶ
+  ため `Unsupported` を明示拒否（黙った docked 着地を fake
+  success にしない）。`HostError::Unsupported` →
+  `EditorOpError::Unsupported` 等の定義済み写像。plugin 既定
+  `Unsupported` は `Unsupported` へ落ち、PASS に繰り上がらない。
 - **L1**: `L1EditorOps` — 全 ops が `EditorOpError::Unsupported` を
   返す定義済み拒否（現行 `L1Instance::execute` の short-circuit と
   同じ意味を session 面で表現）。**wire に出さない・子 proc に
@@ -229,15 +235,15 @@ negotiation 案（将来 bump 前提・実装しない）:
 
 | 項目 | 扱い |
 | --- | --- |
-| `GuiParentToken(u64)` | **保持** — OS adapter 内限定の raw 語彙として残存 |
+| `GuiParentToken(u64)` | **削除済み**（改訂 2 で reconcile）— `ParentLease`/`ParentSlotLease` へ移行。`crates/**/*.rs` に残存参照なし |
 | `GuiHandle`/`HostCommand::OpenGui`/`CloseGui`/`HostReply::Opened` | **保持** — L0 経路として session ops が内部利用 |
 | `wire::Command::OpenGui`/`CloseGui`/`Reply::Opened` | **保持** — keep-for-future、L1 では依然 short-circuit |
 | `L1Instance::execute` の GUI reject | **保持・不変** — session `L1EditorOps` と意味一致 |
-| `Plugin::open_gui`/`close_gui`（既定 Unsupported） | **保持** — signature 不変、adapter 実装は別 Issue |
+| `Plugin::open_gui`/`close_gui`（既定 Unsupported） | **保持** — signature 不変。VST3・CLAP adapter 実装は済（改訂 2・R5 参照）。AU は初期対象外のまま |
 | `PluginEditorSessionId`/`ParentSlotLease` | **追加**（plugin-core boundary） |
 | `PluginEditorSession`/`Sessions`/`Ops`/`State`/`Event`/`Error`/`Capabilities`/`AttachMode` | **追加**（plugin-host editor_session） |
 | `HostError` | **保持** — 新 variant 追加なし（ops 側で `EditorOpError` へ写像） |
-| `WIRE_VERSION`=3/`Hello.capabilities` | **保持** — negotiation は設計のみ |
+| `WIRE_VERSION`=5/`Hello.capabilities` | **保持** — 現行値 5（改訂 2 時点）。`capabilities` は reserved u32・非 0 は `Malformed` hardening のまま。negotiation は設計のみ |
 
 ## Data and Control Flow
 
@@ -246,8 +252,8 @@ consumer(GUI Driver / app):
   slot_id = ui_driver.declare_slot(spec)              (ruviform-ui 側)
   lease   = ui_driver.lease_parent(slot_id)           (SlotLease, opaque)
   session = host_sessions.begin_session(plugin_handle)
-  session_state.open(ops, ParentSlotLease::new(lease.encode()), size, Docked)
-    -> ops.open → (L0) GuiParentToken::new(lease.raw) → HostCommand::OpenGui
+  session_state.open(ops, ParentSlotLease::new(lease.raw()), size, Docked)
+    -> ops.open → (L0) redeemer(lease) → ParentLease → HostCommand::OpenGui
        → plugin.open_gui → Ok/Unsupported
     -> Ok  → state=Attached{Docked} + event Attached
     -> Err → state=Failed{cause} + event Failed
@@ -324,7 +330,7 @@ Capability Matrix）を現行コードに照らして再検証し、発見した
 | --- | --- | --- |
 | `InProcessEditorOps::new(host, instance)`（pass-through） | **廃止** | lease を無検証で token 化する経路 |
 | `InProcessEditorOps::with_redeemer` | **保持（唯一の constructor）** | poc-native-dock・GPUI driver の redemption 接続点 |
-| `LeaseRedeemer<'a>`（出力 `GuiParentToken`） | **保持・seam として明示** | raw parent は OS adapter の redemption 出力に限定。公開 API から完全除去は未達（下記 DoD gap） |
+| `LeaseRedeemer<'a>`（出力 `ParentLease`） | **保持・seam として明示** | `GuiParentToken` は改訂 2 で完全削除済み — redemption 出力は `ParentLease{generation:u32,payload:u64}`（`plugin-core boundary`）。公開 API から raw token の除去は達成 |
 | `InProcessEditorOps::capabilities`（open 前 dock/close=Supported） | **挙動変更**: 全 Unsupported | 未検証の GUI 対応を主張しない |
 | `PluginEditorSession` 内部 `terminated: bool` | **廃止** | `concluded` と `Closed` 判定で代替 |
 | `PluginEditorSession` 内部 `editor_live: bool` | **追加**（非公開フィールド） | refused open の close 規律 |
@@ -358,21 +364,21 @@ Capability Matrix）を現行コードに照らして再検証し、発見した
 | `PluginEditorSessionId` | `PluginEditorSessions`（plugin-host registry） | slot+generation で mint/recycle。stale id は `UnknownSession` |
 | `ParentSlotLease` | 発行側（UI 側 `SurfaceSlotRegistry` / `GpuiSurfaceAdapter`） | opaque 値。session は運ぶだけで解釈しない |
 | `SurfaceSlotId` / `WindowId` / `ViewInstanceId` | `ruviform-ui`（dock/window 所有） | plugin-host の型には現れない。composition root が `lease` へ写像する |
-| raw parent（`GuiParentToken` / HWND・NSView 等） | OS adapter（`LeaseRedeemer` の出力側） | redemption 直後に `OpenGui` へ渡すのみ。session 面に現れない |
+| raw parent（`ParentLease` / HWND・NSView 等） | OS adapter（`LeaseRedeemer` の出力側） | redemption 直後に `OpenGui` へ渡すのみ。session 面に現れない。`GuiParentToken` は削除済み（改訂 2） |
 | widget teardown | UI driver（Dock/Window 側） | `Terminated` を受けて後始末。DSP/RT の停止を伴わない |
 | editor 生存判定（`editor_live`） | `PluginEditorSession` | 成功 attach で真、conclusion で偽。close 規律のみに使う |
 
-### R5: Capability Matrix（現行コード根拠・実機未検証）
+### R5: Capability Matrix（現行コード根拠・改訂 2 で reconcile）
 
-凡例: **Supported** = コード上で成功経路あり（実プラグイン実行は
-未実施）。**Unsupported** = 定義済み拒否。**NotRun** = 実機・実
-binary 未実施。**対象外** = 初期スコープ外。
+凡例: **Supported** = コード上で成功経路あり（実プラグイン実行の
+有無は行の根拠欄に記載）。**Unsupported** = 定義済み拒否。**NotRun**
+= 実機・実 binary 未実施。**対象外** = 初期スコープ外。
 
 | 経路 | Dock（Docked open） | Floating | Resize | Hide/Show | Reparent | Close | 根拠・状態 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| L0 / VST3（Windows） | Supported（`open_gui` 実装・`kPlatformTypeHWND`） | Unsupported | Unsupported（verb なし） | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-vst3/src/host.rs`。実 attach の証拠は #388 記録（本 PR では再実行せず NotRun） |
+| L0 / VST3（Windows） | Supported（`open_gui` 実装・`kPlatformTypeHWND`・`createView("editor")`） | Unsupported（`InProcessEditorOps` が非 Docked を明示拒否） | Unsupported（verb なし） | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-vst3/src/host.rs` L2614/L2675。実外部 VST3 module の HWND attach 証拠は `evidence/rf389-vst3-editor/`（task `issue-389-vst3-l0-editor-attach` completed）。`createView` null の plugin（test_gain 等）は honest `Unsupported`（dock-test `editor-attach` 実測） |
 | L0 / VST3（非 Windows） | Unsupported（`EDITOR_PLATFORM_TYPE=None`） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | 非 Windows attach は未実装 |
-| L0 / CLAP | Unsupported（`Plugin` 既定） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `ruviform-plugin-clap` は GUI verb を既定 Unsupported のまま |
+| L0 / CLAP | Supported（`clack-extensions` `gui` ext `PluginGui` 経由の `open_gui`/`close_gui`）※ ext 非対応 plugin は honest `Unsupported` | Unsupported（同上・非 Docked 明示拒否） | Unsupported | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-clap/src/host.rs` L1092/L1150。`clap.gui` ext を持たない plugin/fixture は `Unsupported`（`open_gui_without_gui_extension_is_unsupported`）。実外部 CLAP 証拠は `evidence/rf389-clap-editor/`（task `issue-389-clap-l0-editor-attach` done） |
 | L0 / AU（macOS） | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | ADR `plugin-architecture-clap-vst3`: AU は初期対象外。adapter crate なし |
 | L0 / Ruviform 製 GPUI Plugin | NotRun | NotRun | NotRun | NotRun | NotRun | NotRun | plugin 側 GPUI editor の adapter・実装なし |
 | L1 out-of-process（全規格） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `L1EditorOps` 全 op 拒否・`l1/mod.rs` の `OpenGui`/`CloseGui` 拒否 |
@@ -387,12 +393,75 @@ capability として宣言しない（実装 Issue が必要）。
 | --- | --- | --- |
 | L0/L1 移行表（追加/廃止/保持）・状態遷移表・所有責務 | **達成（文書）** | R2・R3・R4 |
 | fake driver の Open/Attach/Reparent/Detach/Close・stale generation・double close・timeout・OS unsupported・crash の terminal-event | **達成（契約層）** | `tests/editor_session.rs` 28 件。Reparent は `reattach` で検証。crash は `HostLost` で代用（GPU host 固有 cause は未定義・未達） |
-| 代表実 Plugin/Format の L0/L1 capability・GUI hang で DAW/RT を巻き込まない実機受入 | **未達（NotRun）** | 実 binary・実 DAW・実 GUI hang 試験なし。R5 の NotRun を維持 |
-| Floating / Recovery の安全 fallback（Floating へ明示的に degrade） | **未達** | `recover` は同 mode の再 open のみ。Floating への自動 degrade 経路と L0 の floating op は未実装（L0 Floating は `Unsupported`） |
-| GPUI 型・raw native handle の公開 API 非露出 | **部分達成** | session 面は `editor_session.rs` の名前検査（ES-23）と `check-ui-driver-boundary` で確認。raw `GuiParentToken` は OS adapter seam（`LeaseRedeemer` 出力）と `plugin-core` の既存 wire/`Plugin` trait に残存（`GuiParentToken` 自体の除去は既存 `open_gui` 契約変更が必要なため別 Issue） |
+| 代表実 Plugin/Format の L0/L1 capability・GUI hang で DAW/RT を巻き込まない実機受入 | **部分達成** | L0 VST3/CLAP の `open_gui`/`close_gui` は実外部 module で検証済み（`evidence/rf389-vst3-editor/`・`evidence/rf389-clap-editor/`）。dock-test は test_gain 実 binary で session 契約を実走検証（`evidence/rf389-dock/`）。GUI hang・DAW/RT 巻き込みの実機受入は依然 NotRun |
+| Floating / Recovery の安全 fallback（Floating へ明示的に degrade） | **部分達成** | session 面に `open_or_degrade`（`OpenOutcome::Degraded` + `Degraded` event）と mode 指定の `recover` が実装済み（session-hardening）。dock-test `open-or-degrade` case が実 binary で double-refusal → `Ops(Unsupported)`・degrade event 0 件を実測（`evidence/rf389-dock/`）。L0 Floating attach 自体は依然 `Unsupported`、実 editor への degrade attach は NotRun |
+| GPUI 型・raw native handle の公開 API 非露出 | **達成（session 面）** | `GuiParentToken` は完全削除済み（`crates/**/*.rs` 0 hit — 改訂 2）。session 面は `ParentSlotLease` opaque のみを運び、`ParentLease` は adapter-internal seam（`#[doc(hidden)] new`）。`editor_session.rs` 名前検査（ES-23）と `check-ui-driver-boundary` で確認 |
 | `SurfaceSlotId`/`WindowId`/`ViewInstanceId` の分離 | **設計文書で分離（型は未追加）** | R4 のとおり UI 側所有。plugin-host に写像用の型を増やさない（YAGNI）。consumer の composition 実装は別 Issue |
 | 同一 Plugin Instance の Dock/Float/Hidden 同一意味論 | **部分達成** | 状態機械上は同一（R3）。実装は L0 Docked のみ |
 | Native Dock の可否（#388 Driver capability への委譲） | **委譲のまま未解決** | #388 gate は OPEN。本 PR は Native Dock PASS を主張しない |
 | 両 Consumer 非回帰 | **NotRun** | Consumer repo は本 worktree 外（scope 外） |
 
 Issue #389 は本 PR で close しない（上記未達項目を follow-up として残す）。
+
+## 改訂 2: verification-status reconcile（2026-11-15・dock-test session-lifecycle slice）
+
+`ruviform-plugin-dock-test` へ実バイナリ session lifecycle case を
+追加した slice（`docs/tasks/issue-389-session-lifecycle.md`）に伴い、
+本書の stale 記述を現行コードの事実へ reconcile した。D1〜D8・
+R1〜R6 の決定履歴は維持し、以下が現行の真実である。
+
+### S1: parent 語彙（`GuiParentToken` → `ParentLease`）
+
+- `GuiParentToken` は **完全削除済み**（`crates/**/*.rs` で 0 hit）。
+  移行 commit: `66fcce0b feat(plugin): migrate GUI parent vocabulary
+  to typed ParentLease`。
+- 現行 seam: session 面 `ParentSlotLease(u64)`（opaque・発行側のみ
+  mint）→ issuer 側 `LeaseRedeemer` が検証・redeem → adapter 内部で
+  `ParentLease{generation: u32, payload: u64}` を mint
+  （`ParentLease::new` は `#[doc(hidden)]`）→ `HostCommand::OpenGui
+  { handle, parent: ParentLease }`。
+- `WIRE_VERSION` 現行値は **5**（`crates/ruviform-plugin-core/src/
+  wire.rs`）。`Hello.capabilities` は reserved u32 で非 0 は
+  `Malformed` — negotiation は依然設計のみ。
+- これに伴い D1・D5・D8・R2・R4・R6 の `GuiParentToken` 言及を
+  上記現状へ更新済み。
+
+### S2: L0 capability matrix 訂正
+
+- **VST3**: `open_gui`/`close_gui` は実装済み
+  （`ruviform-plugin-vst3/src/host.rs` L2614/L2675・Windows
+  `kPlatformTypeHWND`・`createView("editor")`）。実外部 VST3 module
+  の HWND attach 証拠は `evidence/rf389-vst3-editor/`（task
+  `issue-389-vst3-l0-editor-attach` completed）。R5 の「実 attach
+  の証拠は #388 記録（NotRun）」は stale だったため訂正。
+- **CLAP**: `open_gui`/`close_gui` は `clack-extensions` `gui` ext
+  （`PluginGui`）経由で実装済み（`ruviform-plugin-clap/src/host.rs`
+  L1092/L1150・task `issue-389-clap-l0-editor-attach` done・
+  `evidence/rf389-clap-editor/`）。`clap.gui` ext を持たない
+  plugin/fixture への応答は honest `Unsupported`
+  （`open_gui_without_gui_extension_is_unsupported`）。R5 の
+  「`Plugin` 既定 Unsupported」は stale だったため訂正。
+- 未実装 verb（resize/hide-show/reparent/IME/popup 等）は L0 ops が
+  `EditorOpError::Unsupported` を返す現状のまま — Supported へは
+  書き換えない。L0 `AttachMode::Floating` も `InProcessEditorOps`
+  が明示拒否（L0 command surface は plain open のみ）。
+- **dock-test 実バイナリ証拠（本 slice）**: `test_gain` VST3 binary
+  に対し `session-lifecycle`/`host-terminate`/`open-or-degrade`
+  が `Pass`（`environment_kind=real-abi-test-plugin`）。ただし
+  test_gain は `createView` null で editor surface を持たないため
+  open は honest `Unsupported` — session registry 契約
+  （`SessionBusy`・refused-open converge・`Terminated{HostLost}`
+  exactly-once・degrade 非発火）の実走証拠であり、実 editor attach
+  や Native Dock の証拠ではない（`evidence/rf389-dock/`）。
+
+### S3: DoD 状況の更新
+
+- Floating/Recovery fallback: session 面に `open_or_degrade`
+  （`OpenOutcome::Degraded` + `Degraded` event）と mode 指定の
+  `recover` が実装済み（session-hardening）。L0 Floating attach
+  自体は依然 `Unsupported`。実 editor への degrade attach は NotRun。
+- raw native handle 公開 API 非露出: `GuiParentToken` 除去により
+  session 面の gap は解消（`ParentLease` は adapter-internal seam
+  に限定）。
+- Issue #389 は依然 OPEN — L2/L3 実 GUI（`test_editor` fixture・
+  実 Window/Dock）・consumer gates は後続 slice の scope。

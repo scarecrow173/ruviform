@@ -7,10 +7,10 @@
 //!   artifact-dependent case into `NotRun` — never a silent skip or
 //!   fabricated `Pass`;
 //! - **honest verdicts**: with the real `test_gain` cdylib present
-//!   (the dev-dep edge builds it into `deps/`), load/discover/hash
-//!   and the host lifecycle pass while editor attach stays
-//!   `Unsupported` (the fixture ships no editor) and dock pixels stay
-//!   `NotRun`.
+//!   (the dev-dep edge builds it into `deps/`), load/discover/hash,
+//!   the host lifecycle and the session-lifecycle cases pass while
+//!   editor attach stays `Unsupported` (the fixture ships no editor)
+//!   and dock pixels stay `NotRun`.
 
 use std::path::PathBuf;
 
@@ -37,14 +37,22 @@ fn missing_artifact_fails_closed_as_not_run() {
         plugin_path: Some(PathBuf::from("definitely/not/a/real/plugin.dll")),
     };
     let reports = run_all(&environment);
-    assert_eq!(reports.len(), 5, "five plugin-dock cases");
+    assert_eq!(reports.len(), 8, "eight plugin-dock cases");
 
     assert_eq!(
         verdict_of(&reports, "view-mount").verdict,
         ScenarioVerdict::Pass,
         "semantic mount does not depend on the artifact"
     );
-    for case in ["artifact", "host-lifecycle", "editor-attach", "dock-pixels"] {
+    for case in [
+        "artifact",
+        "host-lifecycle",
+        "editor-attach",
+        "session-lifecycle",
+        "host-terminate",
+        "open-or-degrade",
+        "dock-pixels",
+    ] {
         let report = verdict_of(&reports, case);
         assert_eq!(
             report.verdict,
@@ -68,13 +76,19 @@ fn missing_artifact_fails_closed_as_not_run() {
 #[test]
 fn fixture_run_reports_honest_verdicts() {
     let reports = run_all(&LaneEnvironment::default());
-    assert_eq!(reports.len(), 5);
+    assert_eq!(reports.len(), 8);
 
     let artifact = verdict_of(&reports, "artifact");
     if artifact.verdict == ScenarioVerdict::NotRun {
         // cdylib absent in this environment — dependents must be
         // NotRun too (covered by the fail-closed test as well).
-        for case in ["host-lifecycle", "editor-attach"] {
+        for case in [
+            "host-lifecycle",
+            "editor-attach",
+            "session-lifecycle",
+            "host-terminate",
+            "open-or-degrade",
+        ] {
             assert_eq!(verdict_of(&reports, case).verdict, ScenarioVerdict::NotRun);
         }
         return;
@@ -120,6 +134,27 @@ fn fixture_run_reports_honest_verdicts() {
         assert!(
             detail.contains("createView") || detail.contains("Unsupported"),
             "detail must name the honest refusal: {detail}"
+        );
+    }
+
+    // The session-lifecycle cases ran the real binary end-to-end —
+    // `Pass` is honest here because every asserted step executed.
+    for case in ["session-lifecycle", "host-terminate", "open-or-degrade"] {
+        let report = verdict_of(&reports, case);
+        assert_eq!(
+            report.verdict,
+            ScenarioVerdict::Pass,
+            "case `{case}` must pass on the real binary: {:?}",
+            report.detail
+        );
+        let kind = report
+            .environment
+            .as_ref()
+            .and_then(|env| env["environment_kind"].as_str());
+        assert_eq!(
+            kind,
+            Some("real-abi-test-plugin"),
+            "case `{case}` claims the real ABI kind only because it ran"
         );
     }
 
