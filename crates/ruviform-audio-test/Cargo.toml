@@ -1,0 +1,33 @@
+[package]
+name = "ruviform-audio-test"
+description = "Test-only deterministic Audio/MIDI test runtime core (Issue #628 first slice): VirtualClock, deterministic PCM fixtures, MIDI trace via production TransportScheduler, independent oracles, run metadata"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - ruviform-audio-core: PCM fixture が生成する planar f32 buffer を
+#   production の `AudioBufferViewMut`/`SampleRate` 契約で受け取るため。
+#   device ポート trait・buffer view の公開 API のみ消費し、本番
+#   クレートは本クレートに依存しない（isolation by DAG）。
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+# - ruviform-media-core: MIDI trace が production の `MidiEvent`/`MidiKind`/
+#   `TransportScheduler`/`TransportPlan`/`SpanSink`/`MediaTime`/`TimeBase`
+#   契約をそのまま駆動するため。独自 scheduler/MIDI 型を定義しない。
+ruviform-media-core = { path = "../ruviform-media-core" }
+# - ruviform-rt: VirtualClock が production の `MasterClock`（atomic
+#   wait-free read/write・rational timebase 検証）を内包して再利用するため。
+ruviform-rt = { path = "../ruviform-rt" }
+
+[dev-dependencies]
+# - assert_no_alloc: `rt_` prefix RT contract テストで clock-read /
+#   generator-fill / trace-capture 経路の allocation-free を検証する
+#   （先例: crates/ruviform-audio-device/tests/mock_input_backend.rs）。
+#   test-only crate の dev-dependency で本番 graph に波及しない。
+assert_no_alloc = "1.1"
+
+[lints]
+workspace = true
