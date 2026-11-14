@@ -189,6 +189,7 @@ Directory: `docs/specs`
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034XEUi9KFfbJmIcNkynUU | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
+| SPEC-oY0DT4RkgQbMmPjZfQUKr0 | Issue #650 bench-smoke lane coverage 拡張（numeric / io-e2e）+ dev-env residual 同期 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
