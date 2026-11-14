@@ -54,6 +54,16 @@ ruviform-media-io = { path = "../ruviform-media-io" }
 ruviform-media-core = { path = "../ruviform-media-core" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 serde = { version = "1", features = ["derive"] }
+# Issue #306 G05 性能 baseline lane（benches/io_composition.rs）。
+# ruviform-rt と同一 pin 方針: caret 指定・追跡済み Cargo.lock を
+# 再現性の錨とし、default-features = false で dev-dep の
+# コンパイルコストを抑える。dev-dep 限定 — [dependencies] には
+# 昇格しない（本クレートは test-only で production 依存を持たない）。
+criterion = { version = "0.8.2", default-features = false }
+
+[[bench]]
+name = "io_composition"
+harness = false
 
 [lints]
 workspace = true

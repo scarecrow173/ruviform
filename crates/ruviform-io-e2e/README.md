@@ -61,6 +61,26 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
   deadline budget を検証する（`corpus_replay.rs`）。`#[ignore]`
   付きの opt-in で、`mise run test-io-e2e-corpus` 経由でのみ
   実行される（seed/case/budget/形式別除外はファイル冒頭に明記）。
+- 実 4 GiB 境界 lane（Issue #306 G01）: `#[ignore]` 付き opt-in
+  で、実ファイルシステム上の公開 API のみを使い 4GiB−1 / 4GiB /
+  4GiB+1 の `CreateNew`/`Replace` publish round-trip（write →
+  seal → readback checksum → publish → reopen checksum）・
+  `CreateNew` 競合→`RecoveryHandle` cleanup・途中 `StorageFull`
+  fault→abort・post-seal temp delete→recovery を逐次検証する
+  （`large_staged.rs`）。chunked FNV-1a（std のみ）で payload を
+  照合し、temp drive の preflight probe（`set_len`+tail write+
+  `sync_data`）で容量を実測する。容量不足は `StorageFull` 相当の
+  観測として残り case を `NotRun` で停止し、Pass/Fail に偽装
+  しない — skip 理由は stdout と `evidence/rf306/` に記録する。
+  通常 `test-io-e2e` lane には載らない。
+- 性能 baseline lane（Issue #306 G05）: criterion bench
+  `benches/io_composition.rs` が staged write/seal/publish/
+  readback と TAR→`gzip`/`zstd`→`StagedFile` 合成の代表経路を
+  8 MiB 入力で計測する。Format/入力サイズ/Profile/閾値
+  （同一環境 ±25% 目安・`peak_alloc` 1 GiB 上限）は bench 冒頭に
+  事前定義し、`mise run bench`（`cargo bench --workspace`）で
+  実走する。baseline 実測値と環境 metadata は
+  `evidence/rf306/large-bench-report.md` に記録する。
 
 ## 依存方向
 
@@ -68,7 +88,9 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 `ruviform-io-structured`・`ruviform-io-compression`・
 `ruviform-io-archive`・`ruviform-io-wav`・`ruviform-io-symphonia`・
 `ruviform-media-io`・`ruviform-media-core`・`ruviform-audio-core`
-を参照する。production クレートは本クレートに依存しない
+を参照する。G05 bench のため `criterion 0.8.2`
+（`default-features = false`、dev-dep 限定）も dev-dependencies
+に加える。production クレートは本クレートに依存しない
 （`ruviform-ui-test` と同型の opt-in 試験クレート）。
 
 ## RT 制約
@@ -80,6 +102,10 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
 ```sh
 mise run test-io-e2e          # cargo test -p ruviform-io-e2e
 mise run test-io-e2e-corpus   # opt-in: bounded corpus replay（G08、#[ignore] 試験）
+mise run test ruviform-io-e2e --test large_staged -- --ignored --nocapture
+                           # opt-in: 実 4 GiB 境界 lane（G01、#[ignore] 試験。
+                           #  temp drive に ~4.3 GiB の空きが必要）
+mise run bench               # workspace 全 bench（G05 io_composition を含む）
 mise run test-io-msrv  # MSRV 1.89 toolchain で IO 系 6 crate を test
                        # （io-file/io-archive/io-structured/io-compression/
                        #  io-wav/io-e2e。Issue #306。io-e2e の dev-deps 経由で
@@ -95,5 +121,10 @@ G08 corpus replay）および `evidence/rf305/wav-golden-fault-report.md`
 （WAV golden/fault fixture）を正本とする。adapter 系 fault matrix
 （Applied/NotApplied/Unknown・DirSync 後失敗・Indeterminate・Temp
 残留）は `ruviform-io-file` の `#[cfg(test)]` MockFileOps
-ユニット試験と `fault_seam.rs` の opt-in 契約試験が正本。macOS/Linux 実 OS・Network/Cloud FS・性能・実 4 GiB
-ファイルの publish は未実測（NotRun/Unsupported）。
+ユニット試験と `fault_seam.rs` の opt-in 契約試験が正本。
+実 4 GiB 境界（G01）と性能 baseline（G05）の実測値は
+`evidence/rf306/large-bench-report.md` を正本とする。実ファイル
+WAV 4 GiB variant・macOS/Linux 実 OS・Network/Cloud FS・
+consumer 固有の性能閾値は未実測のまま（NotRun/Unsupported —
+WAV RIFF 4 GiB 境界自体は `wav_golden.rs` の discard sink 検証が
+正本）。

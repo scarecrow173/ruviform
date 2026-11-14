@@ -254,6 +254,7 @@ Directory: `docs/tasks`
 | TASK-034UtEeCVQCg44aM7iUrV3 | F2 正規検証・evidence・CI handoff 記録 | done | [issue-306-f2-verification-handoff.md](./issue-306-f2-verification-handoff.md) |
 | TASK-034WXSB8zGVc9NKQicjOEp | Issue #306 G07 fault seam 判定・契約試験 + G08 corpus replay | done | [issue-306-fault-seam-fuzz-task.md](./issue-306-fault-seam-fuzz-task.md) |
 | TASK-pL5wE8rT1yU4iO7pA2sD6f | Issue #306 OS-L1 既存 CI 証拠検査・不足 Case 補完 (Slice V+T) | done | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
+| TASK-034XCTbpfF11KBmNQiiynY | Issue #306 G01/G05 実装タスク | done | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | TASK-nHtJqA3vzK6uhK4D7A0FhO | T1 ruviform-io-e2e クレート scaffold (Issue #306) | done | [issue-306-t1-crate-scaffold.md](./issue-306-t1-crate-scaffold.md) |
 | TASK-laPtj98NpzxI9OnVwLg5y4 | T2 File・Structured 境界試験 (Issue #306) | done | [issue-306-t2-file-structured-boundary.md](./issue-306-t2-file-structured-boundary.md) |
 | TASK-MzTtn00zwhx1kzvEGUUep1 | T3 Archive・Compression 境界試験 (Issue #306) | done | [issue-306-t3-archive-compression-boundary.md](./issue-306-t3-archive-compression-boundary.md) |
