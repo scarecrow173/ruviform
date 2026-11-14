@@ -198,6 +198,7 @@ Directory: `docs/designs`
 | DESIGN-034WZDs4eeCII39QySEoEq | Issue #532 DComp 監査文書チェーン設計 | approved | [issue-532-dcomp-audit-design.md](./issue-532-dcomp-audit-design.md) |
 | DESIGN-034WZDvbXaGkQVl6nT6jRx | Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計 | approved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| DESIGN-sh006tWu0ht5WmSqG0V85w | Consumer-neutral Workflow/CLI orchestration契約設計（Issue #553 RF-AUTX-01） | approved | [issue-553-workflow-orchestration-design.md](./issue-553-workflow-orchestration-design.md) |
 | DESIGN-034XeaFjxZePL0m6LYuEeS | Multi-backend Script/Analyzer言語非依存契約設計（Issue #558 RF-SCRIPT-00） | approved | [issue-558-script-contract-design.md](./issue-558-script-contract-design.md) |
 | DESIGN-034XeideNx6BpCgSGgEuQF | Issue #562 — Generic Alternate Evaluation Context headless PoC 設計（RF-CB-01） | approved | [issue-562-cb-poc-design.md](./issue-562-cb-poc-design.md) |
 | DESIGN-5Zp45sCRwv11kYwJ4MGJBX | Issue #565 WASAPI-native input path 設計 — per-packet device_position を frame_position に写す | approved | [issue-565-wasapi-input-frame-position-design.md](./issue-565-wasapi-input-frame-position-design.md) |

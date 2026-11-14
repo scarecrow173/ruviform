@@ -214,6 +214,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Uh5vBGP1ASyRB9MdhY8 | Issue #478 Fader/Knob 縦寸法契約 — grow+min_h slot 実装 | completed | [issue-478-fader-knob-grow-min-h-slot.md](./issue-478-fader-knob-grow-min-h-slot.md) |
 | IMPL-034WZFUVrjVFDc3zOgWJHp | Issue 532 DComp audit doc chain | completed | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | IMPL-034VeXFI5DET4CkhWJrBln | Issue #552 SendInput preflight（注入→実効 read-back で environment_blocked を区別） | completed | [issue-552-sendinput-preflight-read-back-environment-blocked.md](./issue-552-sendinput-preflight-read-back-environment-blocked.md) |
+| IMPL-0J35geTVP3p5cuN80AKQMT | Issue #553 Workflow/CLI orchestration契約 文書チェーン実装記録 | completed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | IMPL-034XegYdJwFzsQhPajRIAg | Issue #558 Script/Analyzer契約 文書チェーン実装記録 | completed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
