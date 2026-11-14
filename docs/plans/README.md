@@ -172,6 +172,7 @@ Directory: `docs/plans`
 | PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |
 | PLAN-034Wv7IN094RjMqLSM1Bzx | Issue #583 実施計画 — mr_boxington 失敗の原因確定・検証・記録 | approved | [issue-583-consumer-verify-mise-plan.md](./issue-583-consumer-verify-mise-plan.md) |
 | PLAN-8R4q0cr04yTyNYSk6Y5f3B | Issue #586 実施計画 — ir front matter 是正と ir/exp index 再生成 | approved | [issue-586-impl-index-generation-plan.md](./issue-586-impl-index-generation-plan.md) |
+| PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

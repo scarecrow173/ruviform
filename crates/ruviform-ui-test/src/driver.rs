@@ -174,6 +174,11 @@ impl TestDriver {
                     std::thread::sleep(Duration::from_millis(10));
                 }
                 Err(e) => {
+                    if child.try_wait()?.is_some() {
+                        return Err(DriverError::Handshake(
+                            "app exited before TCP handshake".to_string(),
+                        ));
+                    }
                     let _ = child.kill();
                     return Err(e.into());
                 }
@@ -192,7 +197,7 @@ impl TestDriver {
 
     /// Handshake: `test.hello` → `Welcome` (or `Handshake` error).
     fn handshake(
-        child: Option<Child>,
+        mut child: Option<Child>,
         mut reader: Box<dyn BufRead + Send>,
         mut writer: Box<dyn Write + Send>,
         secret: Option<&str>,
@@ -205,9 +210,9 @@ impl TestDriver {
         let intent = Intent::new("d1", ops::HELLO, params);
         let body = serde_json::to_string(&intent)
             .map_err(|e| DriverError::Handshake(format!("intent serialize: {e}")))?;
-        write_frame(&mut writer, &body)?;
+        write_frame(&mut writer, &body).map_err(|e| hello_io(child.as_mut(), e))?;
         let welcome: Welcome = loop {
-            match read_frame(&mut reader)? {
+            match read_frame(&mut reader).map_err(|e| hello_io(child.as_mut(), e))? {
                 FrameRead::Frame(body) => {
                     let v: Value = serde_json::from_str(&body)
                         .map_err(|e| DriverError::Handshake(format!("bad welcome json: {e}")))?;
@@ -526,5 +531,172 @@ impl Drop for TestDriver {
             }
             let _ = child.wait();
         }
+    }
+}
+
+/// Maps a transport failure during the `test.hello` exchange.
+///
+/// "The peer closed the control channel before welcome" is a single
+/// condition with several OS-level manifestations — a clean read EOF
+/// ([`FrameRead::Eof`]), a write-side `EPIPE`, a TCP reset, or a
+/// mid-frame truncation — and which one fires first depends on OS and
+/// timing. Channel-death kinds classify as [`DriverError::Handshake`];
+/// any other error kind still classifies as `Handshake` when the child
+/// is confirmed exited (covering errno mappings `std::io::ErrorKind`
+/// does not name). Everything else stays [`DriverError::Io`] so a
+/// genuine transport anomaly is never hidden.
+fn hello_io(child: Option<&mut Child>, e: std::io::Error) -> DriverError {
+    let channel_closed = matches!(
+        e.kind(),
+        std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::UnexpectedEof
+    ) || child.and_then(|c| c.try_wait().ok().flatten()).is_some();
+    if channel_closed {
+        DriverError::Handshake(format!("control channel closed before welcome: {e}"))
+    } else {
+        DriverError::Io(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{self, Read};
+
+    /// Writer whose every write fails with `kind`.
+    struct FailWriter(io::ErrorKind);
+
+    impl Write for FailWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(self.0, "injected channel failure"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Reader whose every read fails with `kind`.
+    struct FailReader(io::ErrorKind);
+
+    impl Read for FailReader {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(self.0, "injected channel failure"))
+        }
+    }
+
+    fn assert_closed_before_welcome(err: DriverError) {
+        match err {
+            DriverError::Handshake(m) => {
+                assert!(m.contains("closed before welcome"), "{m}");
+            }
+            other => panic!("expected Handshake refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hello_write_broken_pipe_is_handshake_refusal() {
+        // The observed CI failure: the AUT exits before the hello
+        // write lands, so the pipe reports EPIPE instead of a read EOF.
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(io::empty())),
+            Box::new(FailWriter(io::ErrorKind::BrokenPipe)),
+            None,
+        )
+        .expect_err("broken pipe during hello must refuse");
+        assert_closed_before_welcome(err);
+    }
+
+    #[test]
+    fn hello_write_connection_reset_is_handshake_refusal() {
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(io::empty())),
+            Box::new(FailWriter(io::ErrorKind::ConnectionReset)),
+            None,
+        )
+        .expect_err("reset during hello write must refuse");
+        assert_closed_before_welcome(err);
+    }
+
+    #[test]
+    fn hello_read_connection_reset_is_handshake_refusal() {
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(FailReader(io::ErrorKind::ConnectionReset))),
+            Box::new(io::sink()),
+            None,
+        )
+        .expect_err("reset during hello read must refuse");
+        assert_closed_before_welcome(err);
+    }
+
+    #[test]
+    fn hello_read_truncated_frame_is_handshake_refusal() {
+        // A declared 10-byte body with only 3 bytes delivered — the
+        // channel died mid-frame, still "closed before welcome".
+        let mut bytes = 10u32.to_le_bytes().to_vec();
+        bytes.extend_from_slice(b"abc");
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(io::Cursor::new(bytes))),
+            Box::new(io::sink()),
+            None,
+        )
+        .expect_err("truncated welcome frame must refuse");
+        assert_closed_before_welcome(err);
+    }
+
+    #[test]
+    fn hello_read_clean_eof_is_handshake_refusal() {
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(io::empty())),
+            Box::new(io::sink()),
+            None,
+        )
+        .expect_err("clean EOF before welcome must refuse");
+        assert_closed_before_welcome(err);
+    }
+
+    #[test]
+    fn hello_non_channel_error_stays_io() {
+        // An error kind that does not mean "channel closed" and no
+        // exited child must remain Io — the normalization must not
+        // hide genuine transport anomalies.
+        let err = TestDriver::handshake(
+            None,
+            Box::new(BufReader::new(io::empty())),
+            Box::new(FailWriter(io::ErrorKind::InvalidData)),
+            None,
+        )
+        .expect_err("non-channel error must surface");
+        assert!(
+            matches!(err, DriverError::Io(_)),
+            "expected Io, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn hello_error_after_child_exit_is_handshake_refusal() {
+        // errno mappings io::ErrorKind does not name (here: Other) are
+        // still "closed before welcome" once the child is confirmed
+        // exited.
+        let mut child = Command::new(std::env::current_exe().expect("test exe"))
+            .arg("--help")
+            .spawn()
+            .expect("spawn exited-child fixture");
+        child.wait().expect("fixture exit");
+        let err = TestDriver::handshake(
+            Some(child),
+            Box::new(BufReader::new(io::empty())),
+            Box::new(FailWriter(io::ErrorKind::Other)),
+            None,
+        )
+        .expect_err("error after child exit must refuse");
+        assert_closed_before_welcome(err);
     }
 }
