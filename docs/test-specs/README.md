@@ -69,6 +69,7 @@ Directory: `docs/test-specs`
 | TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
+| TSPEC-034XzvJurlMbzQjoWxrwvu | GPUI Native First採用Gate verdict評価検証（Issue #262） | proposed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |
 | TSPEC-Zub5EkBZ2Fg4lBUvyXezm4 | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付けの検証規則 | approved | [issue-275-obs-owner-map.md](./issue-275-obs-owner-map.md) |
 | TSPEC-sFT08b6Qp306TbonlKfL28 | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | TSPEC-034RoYjtRWwL5tpZsCCp6T | Issue #276 generic logging adapter test specification | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
