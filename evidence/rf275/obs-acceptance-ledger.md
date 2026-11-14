@@ -29,6 +29,7 @@
 | E-LOCAL-2 | ローカル実行 | 同上 | `mise run test ruviform-plugin-host`（= `cargo test --locked -p ruviform-plugin-host`）— lib 226・tests 各 binary 計 254 件 Pass。初回 `l1_proxy_e2e` の 2 件失敗は `ruviform-plugin-l1-runner` bin 未 build の環境起因で、`cargo build -p ruviform-plugin-export --bins` 後の再実行で Pass（OBS-04 とは無関係の runner_bin fixture） |
 | E-DIFF | git diff | `365c74ac..20d8e7c2` | `ruviform-observability`/`ruviform-rt`/`ruviform-media-core`/`ruviform-audio-core`/`ruviform-video-core` は diff ゼロ。`ruviform-plugin-host`/`ruviform-plugin-core` は diff あり（OBS-04 の plugin-host 側証拠は `365c74ac` 時点で stale） |
 | E-NONE | — | `20d8e7c2` | `gh run list --commit 20d8e7c2` で run 0 件。daily-ci 最終 run は `3692c6fa`（2026-11-13）。対象 Revision の CI・consumer-verify 証拠は未発生（次回 daily-ci が対象 SHA を dispatch するまで `NotRun`） |
+| E-LOCAL-3 | ローカル実行 | branch `feat/281-obs-feature-matrix`・Windows 11 x64・rust dev toolchain（§6 追記時点） | `mise run check-observability` / `lint-observability` / `test-observability` 全て exit 0。6 組合せ（default・`logging`・`tracing-export`・`allocation-probe`・`integration`・`--all-features`）の `cargo check/clippy --all-targets`/`cargo test` が Pass。`--all-features` では lib 298・integration.rs 15・logging.rs 28・rt_boundary.rs 3・doctest 15+1 ignored。crate の Rust コードは `20d8e7c2` から diff ゼロ（lane 定義のみの追加）。ローカル補助証拠であり CI 証拠ではない |
 
 ## 1. OBS-01〜11 受入照合表
 
@@ -100,7 +101,7 @@ L2/L3 条件付き必須）に基づく割当。`状態 @20d8e7c2` は
 | AL Logging/Privacy/f64 独立 Consumer Gate | OBS-LOG（Logging parity: 既定 OFF/`AL_LOG`/stderr・json/inspect stdout/daily 7 世代/失敗 degrade）・OBS-PRIV（機密漏出）・OBS-AL（f64/NaN/gap/PTS/長尺/Dataset/CLI/Export 精度） | #281（gate 判定・PASS 証跡書式）・#294（candidate tuple 集約・fail-closed summary）・#219（Cross-Repo 運用契約） | AL #127（継続追従 Owner。AL #138 は CLOSED 履歴で再 Open しない） | consumer-verify `verify-audiolens` lanes: `check-ruviform-lock`/`check-full`/`smoke`/`check-cli-headless`/`test-full`/`sync-ui-deps`/`setup-ui`/`check-ui`/`test-ui`/`extra tasks`/GUI-CONTRACT/GUI-SEMANTIC + AL repo 側独立 Oracle（f64/CLI/Job/Dataset/GUI semantic） | `NotRun`（最終 tuple 証拠 E-CI-2 @`3692c6fa` は job-level pass だが stale。AL #127 側の OBS 固有 Oracle 実施記録は consumer repo が正本） |
 | SV RT/DAW/GUI 独立 Consumer Gate | OBS-RT（callback noalloc/no block/no unexpected drop）・OBS-SV（Record/Plugin/Project/Undo/Save/RT）・GUI（DAW 画面・利用機能の L2） | 同上（#281/#294/#219） | SV #28（継続追従 Owner。SV #81 は CLOSED 履歴で再 Open しない） | consumer-verify `verify-synvelis` lanes: `check-ruviform-rev`/`check-full`/`test-full`/`test-rt`/`check-headless-deps`/`sync-ui-deps`/`setup-ui`/`check-ui`/`test-ui`/`build-ui`/GUI-CONTRACT/GUI-SEMANTIC/extra + SV repo 側独立 Oracle（Project/PCM/RT/Gateway/Plugin） | `NotRun`（E-CI-2 @`3692c6fa` stale。SV #28 側の OBS 固有 Oracle 実施記録は consumer repo が正本） |
 | Windows 利用機能 L2/L3 故障・RT/Privacy Gate | OBS-LOG/OBS-PRIV/OBS-RT のうち Windows で**実際に提供・利用する**機能に限定（Logging/Tracing/Privacy/RT 非干渉・故障後継続） | #281/#294（集約・判定）・#293（Host 統合/API 境界）・#313/#314 系 real-window/real-scenario lane 設計 | AL #127・SV #28（各製品機能の Owner Issue） | 各 Consumer repo の Windows L2/L3 Case（実 Window/実 Plugin/実 Device 結合時）+ RF real-window lanes。headless RT/Privacy は必須だが実 Host 受入の代用にしない | `NotRun`/`Deferred`（利用機能が確定するまで Required にしない。POLICIES: Windows 利用機能のみ Required、macOS/Linux L2/L3 は Deferred） |
-| Feature compile matrix（`--no-default-features`・各 feature 単独・full consumer 組合せ） | G-1/G-0 | #281 G0 | — | 既存 lane なし（`msrv-verify --all-features` は全 feature 同時有効であり分離検証ではない） | `NotRun`（Required のまま維持。Deferred ではない） |
+| Feature compile matrix（`--no-default-features`・各 feature 単独・full consumer 組合せ） | G-1/G-0 | #281 G0 | — | `mise run check/lint/test-observability`（6 組合せ）+ CI `observability-verify`/`observability-verify-macos`（branch `feat/281-obs-feature-matrix` で追加、§6） | `NotRun` @`20d8e7c2`（監査時点では lane なし — §6 で lane 追加を追記。target-SHA CI 実走は依然 `NotRun`。Required のまま維持。Deferred ではない） |
 | Cross-repo tuple 集約 | 全 Case 組の candidate SHA 照合 | #294（tuple/Result/Owner routing）・#219（runbook） | 両 Consumer repo | consumer-verify `summary`（fail-closed: not_run/unsupported を pass にしない）+ Daily/手動 dispatch | `NotRun` @HEAD（E-CI-2 @`3692c6fa` が直近証拠） |
 
 補足:
@@ -139,8 +140,8 @@ L2/L3 条件付き必須）に基づく割当。`状態 @20d8e7c2` は
 | 対象 Revision での CI 実走（verify/rt-verify/msrv-verify/test-full 全 lane） | Required | Daily/手動 Full CI（#294 dispatch 経路） | `NotRun` — E-NONE。次回 daily-ci が `20d8e7c2` 以降の main SHA を対象に dispatch |
 | 対象 Revision での consumer-verify tuple 実走 | Required | #294/#219 | `NotRun` — 直近 E-CI-2 @`3692c6fa` は stale |
 | OBS-04 plugin-host の HEAD CI 証拠 | Required | Daily/手動 Full CI | `NotRun` — crate diff ありで `365c74ac` 証拠は stale。ローカル E-LOCAL-2 のみ |
-| Feature compile matrix（`--no-default-features`・各 feature 単独・full consumer 組合せ） | Required | #281 G0 | `NotRun` — 既存 lane なし |
-| Win/macOS native の feature 付き build/link/test（`logging`/`tracing-export`/`allocation-probe`） | Required（OS-L1: feature 有効時） | #281 G0 + CI lane 補完 | `NotRun` — CI lane なし。Windows ローカル `--all-features`（E-LOCAL-1）は補助証拠であって CI 証拠ではない |
+| Feature compile matrix（`--no-default-features`・各 feature 単独・full consumer 組合せ） | Required | #281 G0 | `NotRun` — 監査時点では既存 lane なし。§6 で `check/lint/test-observability` + `observability-verify`/`observability-verify-macos` の追加を追記（lane 定義済み・target-SHA CI 未実走） |
+| Win/macOS native の feature 付き build/link/test（`logging`/`tracing-export`/`allocation-probe`） | Required（OS-L1: feature 有効時） | #281 G0 + CI lane 補完 | `NotRun` — 監査時点では CI lane なし。§6 で 3 OS lane 追加を追記。Windows ローカル matrix 実行（E-LOCAL-3）は補助証拠であって CI 証拠ではない |
 | AL Logging/Privacy/f64 独立 Oracle | Required | AL #127（#281/#294 経由） | `NotRun` — consumer repo 側実施記録が正本 |
 | SV RT/DAW/GUI 独立 Oracle | Required | SV #28（#281/#294 経由） | `NotRun` — 同上 |
 | Windows 利用機能 L2/L3（故障・RT/Privacy） | Deferred→利用決定時 Required | AL #127・SV #28・RF #293/#313/#314 | `NotRun`/`Deferred` — 利用機能未確定 |
@@ -168,3 +169,40 @@ L2/L3 条件付き必須）に基づく割当。`状態 @20d8e7c2` は
   （`docs/designs/issue-2NN-*.md`・`docs/test-specs/
   issue-2NN-*.md`）が所有し、本台帳は索引・照合・状態
   記録のみを所有する。
+
+## 6. 追記: G0 feature matrix lane 追加（Issue #281 slice、2026-11-14）
+
+branch `feat/281-obs-feature-matrix`（PR 未 merge）で G0 の
+feature compile matrix lane を新設した。本節は §1〜§5 の
+`20d8e7c2` 監査記録を改変せず、lane の現況のみを追記する。
+
+- 追加物: `mise.toml` の `check-observability`/
+  `lint-observability`/`test-observability`（default・
+  `logging`・`tracing-export`・`allocation-probe`・
+  `integration`・`--all-features` の 6 組合せを `&&` 連結）、
+  `.github/workflows/ci.yml` の `observability-verify`
+  （ubuntu-latest/windows-latest matrix・`fail-fast: false`）と
+  `observability-verify-macos`（macos-latest 別 job）。
+  両 job は checkout SHA 証跡・`ci-summary` `needs` 登録を
+  既存 lane と同一規約で実装し、`ci/summary/summary.mjs` の
+  `REQUIRED_JOBS`（15→17）/`REQUIRED_CHECKOUT_LEGS`（19→22）を
+  同期更新した。`docs/development-environment.md` の lane
+  inventory も更新済み。正本文書:
+  `docs/specs|designs|plans|tasks|test-specs|
+  impl/ir/issue-281-obs-feature-matrix.md`。
+- ローカル実行（E-LOCAL-3）: Windows 11 x64・dev toolchain で
+  3 タスク全て exit 0。6 組合せの check/lint/test が Pass。
+  これは lane 定義のローカル補助証拠であり、CI lane の Pass・
+  統合受入の Pass を意味しない。
+- CI 実走: `NotRun`。ci.yml は `workflow_dispatch` 専用のため
+  push/PR では起動しない。対象 SHA（merge 後 main）での
+  `observability-verify`/`observability-verify-macos` の実走と
+  `ci-summary` verdict が G0 の CI 証拠となる。それまでは
+  §3「Feature compile matrix」行・§4.2 の 2 行は `NotRun`
+  のまま維持する（lane 定義の存在は `Pass` の根拠にしない）。
+- 範囲外（本 slice で扱わない）: pairwise 2 feature 組合せ、
+  `--no-default-features` 明示（`default = []` で default と
+  等価のため省略）、AL #127/SV #28 の独立 Oracle、#294 tuple
+  への結果投入、Windows 利用機能 L2/L3、実機・実 Provider。
+  これらは §3 の各 Gate 行・§4.2 の棚卸しどおり `NotRun`/
+  `Deferred` のまま。

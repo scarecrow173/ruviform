@@ -87,6 +87,7 @@ Directory: `docs/plans`
 | PLAN-034WZJtam1qsAaVqT64TYw | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け計画 | approved | [issue-275-obs-owner-map-plan.md](./issue-275-obs-owner-map-plan.md) |
 | PLAN-H6keHUx9U3sTwtH2ngWKyQ | Issue #275 Observability統合設計正本 — 単一クレート・OBS-01〜11・両Consumer 設計 | approved | [issue-275-observability-integration-design.md](./issue-275-observability-integration-design.md) |
 | PLAN-034RoY5EwSBQJwEF1k5arE | Issue #276 generic logging adapter implementation plan | approved | [issue-276-generic-logging-adapter.md](./issue-276-generic-logging-adapter.md) |
+| PLAN-034XzFeciUWKQZJGHhBzaK | Issue #281 OBS G0 feature matrix lane 実装計画 | approved | [issue-281-obs-feature-matrix.md](./issue-281-obs-feature-matrix.md) |
 | PLAN-034UyQfNa0aSYqwNDMIZn9 | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | PLAN-LwPSJRNM4HAuPalTuxW7pu | Issue #285 IO-03 Compression 契約試験棚卸し 実装計画 | approved | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | PLAN-YgAwqghg3ANT8uWJE1Y1t2 | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
