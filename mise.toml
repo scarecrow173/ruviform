@@ -149,8 +149,8 @@ description = "Run workspace benchmarks with `cargo bench --workspace` (bench pr
 run = "cargo bench --workspace"
 
 [tasks.bench-smoke]
-description = "Smoke-test the ruviform-math, ruviform-rt and ruviform-viz benchmarks with `cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
-run = "cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -- --test"
+description = "Smoke-test the ruviform-math, ruviform-rt, ruviform-viz, ruviform-numeric and ruviform-io-e2e benchmarks with `cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -p ruviform-numeric -p ruviform-io-e2e -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
+run = "cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -p ruviform-numeric -p ruviform-io-e2e -- --test"
 
 # Workspace scope (-full) is independent of execution profile. MISE_ENV=ci
 # selects the existing Cargo ci profile and disables incremental compilation;
