@@ -108,6 +108,7 @@ Ruviform ワークスペースのメンバークレート索引（計39クレー
 | [`ruviform-ui-gpui`](ruviform-ui-gpui/README.md) | GPUI 0.2.2 の標準 Driver adapter（feature `gpui` で driver-neutral Window/Host 実装・最小 Window fixture — Issue #386） |
 | [`ruviform-ui-theme`](ruviform-ui-theme/README.md) | Driver 非依存 DTCG design-token interpreter（`rvf-dtcg-profile.v1` の parse/validate/alias/mode/override → 型付き不変 `ResolvedTheme`。serde/serde_json のみ依存 — Issue #385） |
 | [`ruviform-ui-test`](ruviform-ui-test/README.md) | テスト専用 GUI Host 制御基盤（`rvf.uitest.v1` 制御ポート・stdio/loopback TCP・FakeHost・fixture/clock/fault/観測 — Issue #312。本番クレートは本クレートに依存しない） |
+| [`ruviform-audio-test`](ruviform-audio-test/README.md) | テスト専用決定論的 Audio/MIDI test runtime core（VirtualClock・PCM fixture・MIDI trace・独立 oracle・run metadata — Issue #628 first slice。本番クレートは本クレートに依存しない） |
 | [`ruviform-io-e2e`](ruviform-io-e2e/README.md) | 汎用 I/O 合成 E2E 試験専用クレート（StagedFile/Structured/Compression/Archive/WAV の層横断境界試験 — Issue #306 / IO-IMP-12。公開 API なし・本番クレートは本クレートに依存しない） |
 | [`ruviform-cli-sample`](ruviform-cli-sample/README.md) | Issue #155 headless CLI 利用例 — 共有実行サービスの外側アダプタ（probe + オフライン run・JSON/JSONL・Ctrl-C cancel） |
 | [`ruviform-viz`](ruviform-viz/README.md) | 汎用インタラクティブ可視化プリミティブ（波形 LOD・STFT スペクトログラム・タイムライン座標変換・表示 quantization・RVBW/RVST binary transfer — Issue #157。GUI/WebView 非依存） |
