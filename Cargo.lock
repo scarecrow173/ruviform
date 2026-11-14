@@ -6896,6 +6896,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-plugin-test-vst3"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+ "ruviform-audio-core",
+ "ruviform-plugin-core",
+ "ruviform-plugin-vst3",
+ "vst3",
+]
+
+[[package]]
 name = "ruviform-plugin-vst3"
 version = "0.1.0"
 dependencies = [
