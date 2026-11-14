@@ -499,6 +499,19 @@ run = "cargo run -p ruviform-poc-native-dock --features gpui"
 description = "Run the native-dock PoC against a real external VST3 module (manual lane — set RVF_POC_VST3_PATH; Windows only)"
 run = "cargo run -p ruviform-poc-native-dock --features gpui,vst3"
 
+# RF389 real-external-CLAP manual lane: the same harness loads the
+# module given by RVF_POC_CLAP_PATH through the `host` bridge and
+# drives the plugin's own `clap.ext.gui` embedded editor. Example:
+#   RVF_POC_CLAP_PATH='C:/path/to/plugin.clap' \
+#     mise run poc-clap-editor
+# Optional RVF_POC_CLAP_PLUGIN_ID selects a class when the module
+# ships several. A module without `clap.ext.gui` surfaces
+# `open=fail error=…Unsupported` — load/editor unavailability must be
+# classified NotRun/Unsupported/Fail in evidence, never fabricated.
+[tasks.poc-clap-editor]
+description = "Run the native-dock PoC against a real external CLAP module (manual lane — set RVF_POC_CLAP_PATH; Windows only)"
+run = "cargo run -p ruviform-poc-native-dock --features gpui,clap"
+
 # RF388 Dock layout lane: the editor slot is a NativeSlot inside a GPUI
 # Panel/Tab layout. Tab switch, resize and focus are checked; each check
 # is a `[poc] check=… result=pass|fail` line. Set RVF_POC_VST3_PATH for the

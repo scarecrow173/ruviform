@@ -16,6 +16,10 @@ gpui = ["ruviform-ui-gpui/gpui"]
 # set, the harness loads that module through the `host` bridge and
 # drives its real `IPlugView` editor instead of the in-process probe.
 vst3 = ["dep:ruviform-plugin-vst3"]
+# `clap` is the same lane for a real external CLAP module:
+# `RVF_POC_CLAP_PATH` selects it and the adapter's `clap.ext.gui`
+# `PluginGui` calls drive the plugin's own editor window.
+clap = ["dep:ruviform-plugin-clap"]
 
 [dependencies]
 # Consumer layer: this crate is the composition root allowed to see
@@ -29,6 +33,9 @@ ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 # Real external VST3 loading — only in the manual `vst3` lane; the
 # `host` bridge feature is what performs `LoadLibrary` + factory scan.
 ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"], optional = true }
+# Real external CLAP loading — only in the manual `clap` lane;
+# `host` enables the `clack-host` bridge (`ClapLibrary::load`).
+ruviform-plugin-clap = { path = "../ruviform-plugin-clap", features = ["host"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # The probe editor is a real native child HWND — same Win32 surface a
