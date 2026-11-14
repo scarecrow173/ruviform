@@ -883,65 +883,122 @@ fn make_ops(
     )
 }
 
-/// Registers the plugin half and returns `(plugin_id, vst3_mode)`.
+/// Registers the plugin half and returns `(plugin_id, external_mode)`.
 ///
-/// With `--features vst3` and `RVF_POC_VST3_PATH` set, loads the real
-/// external VST3 module through the `host` bridge and registers every
-/// scanned class — the in-process probe stays the deterministic
-/// default for every other configuration. `RVF_POC_VST3_PLUGIN_ID`
-/// selects one class when the module ships several; otherwise the
-/// first scanned descriptor is driven.
-#[cfg(feature = "vst3")]
+/// External-module mode is env-selected per enabled backend:
+/// `--features vst3` + `RVF_POC_VST3_PATH` loads a real VST3 module,
+/// `--features clap` + `RVF_POC_CLAP_PATH` loads a real CLAP module —
+/// each through its `host` bridge. `RVF_POC_*_PLUGIN_ID` selects one
+/// class when the module ships several; otherwise the first scanned
+/// descriptor is driven. The in-process probe stays the deterministic
+/// default for every other configuration.
 fn register_plugin(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (String, bool) {
-    use ruviform_plugin_vst3::host::Vst3Library;
-    if let Some(path) = std::env::var_os("RVF_POC_VST3_PATH") {
-        let path = std::path::PathBuf::from(path);
-        let size = std::fs::metadata(&path).map_or(0, |m| m.len());
-        ev(&format!("vst3_path={}", path.display()));
-        ev(&format!("vst3_size={size}"));
-        match Vst3Library::load(&path) {
-            Ok(library) => {
-                let descriptors = library.descriptors().to_vec();
-                ev(&format!("vst3_descriptors={}", descriptors.len()));
-                for factory in library.factories() {
-                    host.register_factory(Box::new(factory));
-                }
-                let wanted = std::env::var("RVF_POC_VST3_PLUGIN_ID").ok();
-                let id = match wanted {
-                    Some(w) if descriptors.iter().any(|d| d.id == w) => w,
-                    _ => descriptors
-                        .first()
-                        .map(|d| d.id.to_string())
-                        .unwrap_or_default(),
-                };
-                if let Some(d) = descriptors.iter().find(|d| d.id == id) {
-                    ev(&format!(
-                        "vst3_plugin id={} name={} vendor={} version={}",
-                        d.id, d.name, d.vendor, d.version
-                    ));
-                }
-                return (id, true);
-            }
-            Err(e) => {
-                ev(&format!("vst3_load=fail error={e:?}"));
-                std::process::exit(3);
-            }
+    #[cfg(feature = "vst3")]
+    {
+        if let Some(registered) = register_vst3(host) {
+            return registered;
         }
     }
-    ev("vst3_path=unset mode=probe");
+    #[cfg(feature = "clap")]
+    {
+        if let Some(registered) = register_clap(host) {
+            return registered;
+        }
+    }
+    ev("external_path=unset mode=probe");
     host.register_factory(Box::new(ProbeFactory {
         shared: shared.clone(),
     }));
     (PROBE_ID.to_string(), false)
 }
 
-/// Probe-only registration for non-`vst3` builds.
-#[cfg(not(feature = "vst3"))]
-fn register_plugin(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (String, bool) {
-    host.register_factory(Box::new(ProbeFactory {
-        shared: shared.clone(),
-    }));
-    (PROBE_ID.to_string(), false)
+/// `vst3` lane — `RVF_POC_VST3_PATH` selects a real external VST3
+/// module loaded through the `host` bridge; `None` when the env is
+/// unset so the caller falls through to the next backend/probe.
+/// `RVF_POC_VST3_PLUGIN_ID` selects one class when the module ships
+/// several; a load failure exits 3 (honest Fail classification).
+#[cfg(feature = "vst3")]
+fn register_vst3(host: &mut InProcessHost) -> Option<(String, bool)> {
+    use ruviform_plugin_vst3::host::Vst3Library;
+    let path = std::env::var_os("RVF_POC_VST3_PATH")?;
+    let path = std::path::PathBuf::from(path);
+    let size = std::fs::metadata(&path).map_or(0, |m| m.len());
+    ev(&format!("vst3_path={}", path.display()));
+    ev(&format!("vst3_size={size}"));
+    match Vst3Library::load(&path) {
+        Ok(library) => {
+            let descriptors = library.descriptors().to_vec();
+            ev(&format!("vst3_descriptors={}", descriptors.len()));
+            for factory in library.factories() {
+                host.register_factory(Box::new(factory));
+            }
+            let wanted = std::env::var("RVF_POC_VST3_PLUGIN_ID").ok();
+            let id = match wanted {
+                Some(w) if descriptors.iter().any(|d| d.id == w) => w,
+                _ => descriptors
+                    .first()
+                    .map(|d| d.id.to_string())
+                    .unwrap_or_default(),
+            };
+            if let Some(d) = descriptors.iter().find(|d| d.id == id) {
+                ev(&format!(
+                    "vst3_plugin id={} name={} vendor={} version={}",
+                    d.id, d.name, d.vendor, d.version
+                ));
+            }
+            Some((id, true))
+        }
+        Err(e) => {
+            ev(&format!("vst3_load=fail error={e:?}"));
+            std::process::exit(3);
+        }
+    }
+}
+
+/// `clap` lane — `RVF_POC_CLAP_PATH` selects a real external CLAP
+/// module loaded through the `host` bridge; `None` when the env is
+/// unset. `RVF_POC_CLAP_PLUGIN_ID` selects one class when the module
+/// ships several; a load failure exits 3 (honest Fail
+/// classification). The adapter's `clap.ext.gui` `PluginGui` calls
+/// drive the plugin's own embedded editor window — a module without
+/// the extension surfaces `open=fail error=…Unsupported`, never a
+/// fabricated attach.
+#[cfg(feature = "clap")]
+fn register_clap(host: &mut InProcessHost) -> Option<(String, bool)> {
+    use ruviform_plugin_clap::host::ClapLibrary;
+    let path = std::env::var_os("RVF_POC_CLAP_PATH")?;
+    let path = std::path::PathBuf::from(path);
+    let size = std::fs::metadata(&path).map_or(0, |m| m.len());
+    ev(&format!("clap_path={}", path.display()));
+    ev(&format!("clap_size={size}"));
+    match ClapLibrary::load(&path) {
+        Ok(library) => {
+            let descriptors = library.descriptors().to_vec();
+            ev(&format!("clap_descriptors={}", descriptors.len()));
+            for factory in library.factories() {
+                host.register_factory(Box::new(factory));
+            }
+            let wanted = std::env::var("RVF_POC_CLAP_PLUGIN_ID").ok();
+            let id = match wanted {
+                Some(w) if descriptors.iter().any(|d| d.id == w) => w,
+                _ => descriptors
+                    .first()
+                    .map(|d| d.id.to_string())
+                    .unwrap_or_default(),
+            };
+            if let Some(d) = descriptors.iter().find(|d| d.id == id) {
+                ev(&format!(
+                    "clap_plugin id={} name={} vendor={} version={}",
+                    d.id, d.name, d.vendor, d.version
+                ));
+            }
+            Some((id, true))
+        }
+        Err(e) => {
+            ev(&format!("clap_load=fail error={e:?}"));
+            std::process::exit(3);
+        }
+    }
 }
 
 // ---- the PoC state machine -------------------------------------------
@@ -970,9 +1027,9 @@ struct Poc {
     slot: Option<SurfaceSlotId>,
     slot_lease: Option<SlotLease>,
     probe: Rc<ProbeShared>,
-    /// Real-external-VST3 mode — the editor HWND is discovered via
-    /// `EnumChildWindows` instead of plugin-reported.
-    vst3_mode: bool,
+    /// Real-external-module mode (VST3 or CLAP) — the editor HWND is
+    /// discovered via `EnumChildWindows` instead of plugin-reported.
+    external_mode: bool,
     stage: Stage,
     /// Child rect snapshot before the move (for delta verification).
     rect_before_move: Option<(i32, i32, i32, i32)>,
@@ -1039,7 +1096,7 @@ impl Poc {
         };
         match open_result {
             Ok(caps) => {
-                if self.vst3_mode {
+                if self.external_mode {
                     // The external plugin does not report its editor
                     // HWND — observe the container's children directly
                     // and pin the parent token for the parenting check.
@@ -1214,10 +1271,10 @@ impl Poc {
 }
 
 /// Registers the plugin, then instantiates and initializes one
-/// instance. Returns `(instance, vst3_mode)`.
+/// instance. Returns `(instance, external_mode)`.
 fn instantiate(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (PluginHandle, bool) {
-    let (plugin_id, vst3_mode) = register_plugin(host, shared);
-    eprintln!("[poc] plugin_id={plugin_id} vst3_mode={vst3_mode}");
+    let (plugin_id, external_mode) = register_plugin(host, shared);
+    eprintln!("[poc] plugin_id={plugin_id} external_mode={external_mode}");
     let instance = match host.execute(HostCommand::Instantiate {
         plugin_id: plugin_id.clone(),
     }) {
@@ -1231,7 +1288,7 @@ fn instantiate(host: &mut InProcessHost, shared: &Rc<ProbeShared>) -> (PluginHan
         Ok(_) => eprintln!("[poc] initialize=ok"),
         Err(e) => eprintln!("[poc] initialize=fail error={e:?}"),
     }
-    (instance, vst3_mode)
+    (instance, external_mode)
 }
 
 /// Entry point — builds the driver, window, host and session, then
@@ -1265,7 +1322,7 @@ pub fn run() {
         closes: Cell::new(0),
     });
     let mut host = InProcessHost::new();
-    let (instance, vst3_mode) = instantiate(&mut host, &probe);
+    let (instance, external_mode) = instantiate(&mut host, &probe);
 
     let mut sessions = PluginEditorSessions::new();
     let session = sessions.begin_session(instance).expect("begin_session");
@@ -1280,7 +1337,7 @@ pub fn run() {
         slot: None,
         slot_lease: None,
         probe,
-        vst3_mode,
+        external_mode,
         stage: Stage::WaitReady,
         rect_before_move: None,
     };

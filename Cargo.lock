@@ -6913,6 +6913,7 @@ dependencies = [
 name = "ruviform-poc-native-dock"
 version = "0.1.0"
 dependencies = [
+ "ruviform-plugin-clap",
  "ruviform-plugin-core",
  "ruviform-plugin-host",
  "ruviform-plugin-vst3",

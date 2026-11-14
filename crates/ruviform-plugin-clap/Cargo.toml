@@ -35,6 +35,10 @@ host = [
     "dep:clack-host",
     "dep:ruviform-plugin-export",
     "clack-extensions/clack-host",
+    # `gui` — `PluginGui` host calls (`open_gui`/`close_gui`, Issue #389
+    # CLAP L0 editor-attach slice). Kept behind `host` so the default
+    # feature set stays minimal.
+    "clack-extensions/gui",
 ]
 
 [dependencies]
