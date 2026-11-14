@@ -861,3 +861,24 @@ run = "cargo clippy -p ruviform-audio-device --all-targets --features real-devic
 [tasks.test-midi-real-device]
 description = "Run the `#[ignore]`-gated real-device MIDI E2Es (`-p ruviform-midi-device -p ruviform-audio-plugin-bridge -- --ignored`) — Windows WinMM backend only; requires a MIDI input device and exits honestly without one (never fabricates measurements); manual lane, never CI"
 run = "cargo test -p ruviform-midi-device -p ruviform-audio-plugin-bridge -- --ignored --test-threads=1"
+
+# RF-SCRIPT-01 PoC（Issue #559）— poc/script-coexist は `[workspace]` を持つ
+# 独立 workspace のため、ルートの `check`/`lint`/`test`（`-p <package>`）
+# では対象にできない。poc/ui・poc/plugin-gui と同じ隔離 PoC 先例に従い、
+# 専用タスクを poc ディレクトリで実行する。vendored Luau C++ の build を
+# ルート workspace/CI の対象から隔離する意図的な分離。
+[tasks.poc-script-coexist-check]
+description = "Type-check the RF-SCRIPT-01 coexist PoC (poc/script-coexist, isolated workspace): cargo check --locked --all-targets"
+run = "cd poc/script-coexist && cargo check --locked --all-targets"
+
+[tasks.poc-script-coexist-lint]
+description = "Lint the RF-SCRIPT-01 coexist PoC at `-D warnings`: cargo clippy --locked --all-targets -- -D warnings"
+run = "cd poc/script-coexist && cargo clippy --locked --all-targets -- -D warnings"
+
+[tasks.poc-script-coexist-test]
+description = "Run the RF-SCRIPT-01 coexist PoC fixture suite (FX-P/FX-N): cargo test --locked --all-targets"
+run = "cd poc/script-coexist && cargo test --locked --all-targets"
+
+[tasks.poc-script-coexist-run]
+description = "Run the RF-SCRIPT-01 coexist PoC demo binary (single-binary Luau+Rhai registry selection, alternating eval, same-digest proof, fail-closed demo)"
+run = "cd poc/script-coexist && cargo run --locked --bin script-coexist-poc"

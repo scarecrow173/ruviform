@@ -1,0 +1,33 @@
+# RF-SCRIPT-01 PoC — Luau+Rhai 単一バイナリ共存・Backend Registry/Typed Port。
+# `[workspace]` テーブルを持つため poc/script-coexist 自身がワークスペース
+# ルートとなり、リポジトリルートのワークスペース（明示 members リスト）には
+# 吸収されない。poc/ui・poc/plugin-gui と同じ隔離 PoC 先例に従う。
+# 重い native 依存（vendored Luau C++）をルート workspace/CI の
+# --workspace build 対象から隔離するための意図的な分離。
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "script-coexist-poc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+rust-version = "1.89"
+
+# 依存は PoC ワークスペース内に限定。
+# - mlua (luau): Luau VM。`luau` feature が vendored `luau0-src` を引き、
+#   C++ Luau を mlua-sys 経由で build する（MSVC/clang/gcc）。MIT。
+# - rhai: Rhai VM（pure Rust）。MIT OR Apache-2.0。
+# - serde_json: 証拠 JSONL / canonical string escape。MIT OR Apache-2.0。
+# - sha2: SourceDigest/DefinitionDigest（"sha256:v1:" 形式）。MIT OR Apache-2.0。
+[dependencies]
+mlua = { version = "0.12.2", features = ["luau", "send"] }
+rhai = { version = "1.27.0", features = ["sync"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[lints.rust]
+# unsafe_code を warn に立て、vendored 依存の build 経路とは独立に
+# PoC 自身の unsafe 使用を検出可能にする（呼出箇所があれば局所許可）。
+unsafe_code = "warn"
