@@ -327,12 +327,16 @@ jobs:
             reason="checkout failed (ref/SHA fetch 不可または rev-parse 失敗)"
             [ ! -d "$CONSUMER_DIR" ] && reason="checkout never attempted (上流 step 失敗で clone 未実行)"
             node "$EV" lane --file "$LANES_FILE" \
+              --case-id "${CONSUMER_NAME}-tuple-clone" --level "OS-L1" \
+              --environment-kind "deterministic-backend" --requirement "Required" \
               --name "consumer clone + rev-parse" --command "git fetch --depth 1 + checkout FETCH_HEAD" \
               --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
               --reason "$reason"
             echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
           elif [ -n "$EXPECTED_SHA" ] && [ "$resolved" != "$EXPECTED_SHA" ]; then
             node "$EV" lane --file "$LANES_FILE" \
+              --case-id "${CONSUMER_NAME}-tuple-guard" --level "OS-L1" \
+              --environment-kind "deterministic-backend" --requirement "Required" \
               --name "tuple guard" --command "resolved SHA vs expected SHA 照合" \
               --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
               --reason "tuple_mismatch: expected $EXPECTED_SHA, resolved $resolved"
@@ -541,10 +545,14 @@ jobs:
             [ -z "$t" ] && continue
             if mise run "$t"; then
               node "$EV" lane --file "$LANES_FILE" \
+                --case-id "${CONSUMER_NAME}-extra-task" --level "OS-L1" \
+                --environment-kind "deterministic-backend" --requirement "Required" \
                 --name "extra: mise run $t" --command "mise run $t" \
                 --feature "extra dispatch input" --os "ubuntu-latest" --outcome pass
             else
               node "$EV" lane --file "$LANES_FILE" \
+                --case-id "${CONSUMER_NAME}-extra-task" --level "OS-L1" \
+                --environment-kind "deterministic-backend" --requirement "Required" \
                 --name "extra: mise run $t" --command "mise run $t" \
                 --feature "extra dispatch input" --os "ubuntu-latest" --outcome fail \
                 --reason "exit code $?"
@@ -570,65 +578,79 @@ jobs:
           set -uo pipefail
           EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
           command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
+          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>]"
+          # 残り引数は従来どおり name command feature outcome [reason]。
+          # 既定分類: headless/infra lane = OS-L1 deterministic-backend Required。
+          # 実 window / plugin / 実 OS の非既定分類は各行で literal 指定する。
+          DEF="OS-L1|deterministic-backend|Required"
           rec() {
+            local spec="$1"; shift
+            local case_id level env_kind requirement rsha
+            IFS='|' read -r case_id level env_kind requirement rsha <<< "$spec"
+            local rf=()
+            [ -n "${rsha:-}" ] && rf=(--resolved-ruviform-sha "$rsha")
             if [ -n "${5:-}" ]; then
-              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
+              node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
             else
-              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
+              node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
             fi
           }
           o() { case "$1" in success) echo pass;; failure|cancelled) echo fail;; skipped) echo skipped;; *) echo not_run;; esac }
           if [ "$GATE" = "blocked" ]; then
-            rec "preflight" "-" "-" "fail" "preflight failed"
+            rec "${CONSUMER_NAME}-preflight|$DEF" "preflight" "-" "-" "fail" "preflight failed"
           elif [ "$GATE" = "run" ]; then
-            rec "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
-            rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
-            rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
-            rec "mise run check-ruviform-lock" "mise run check-ruviform-lock" "workspace" "$(o '${{ steps.lock.outcome }}')"
-            rec "mise run check-full (legacy check-ci fallback)" "mise run check-full || mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
-            rec "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
-            rec "mise run check-cli-headless (smoke)" "mise run check-cli-headless" "al-cli headless" "$(o '${{ steps.smoke.outcome }}')"
-            rec "mise run test-full (legacy test-ci fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test-ci)" "workspace" "$(o '${{ steps.test.outcome }}')"
-            rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
-            rec "check-ruviform-rev --require-vendor (lock+REV)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_vendor.outcome }}')"
-            rec "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
-            rec "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
-            rec "mise run test-ui (happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
-            rec "extra tasks (aggregate)" "mise run <audiolens_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            rec "${CONSUMER_NAME}-dep-access|$DEF" "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "${CONSUMER_NAME}-lock-check|$DEF" "mise run check-ruviform-lock" "mise run check-ruviform-lock" "workspace" "$(o '${{ steps.lock.outcome }}')"
+            rec "${CONSUMER_NAME}-check-full|$DEF" "mise run check-full (legacy check-ci fallback)" "mise run check-full || mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "${CONSUMER_NAME}-cli-smoke-build|$DEF" "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
+            rec "${CONSUMER_NAME}-cli-headless|$DEF" "mise run check-cli-headless (smoke)" "mise run check-cli-headless" "al-cli headless" "$(o '${{ steps.smoke.outcome }}')"
+            rec "${CONSUMER_NAME}-test-full|$DEF" "mise run test-full (legacy test-ci fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test-ci)" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-vendor-sync|$DEF" "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-rev-vendor|$DEF" "check-ruviform-rev --require-vendor (lock+REV)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_vendor.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-setup|$DEF" "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-check|$DEF" "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-test|$DEF" "mise run test-ui (happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-extra-aggregate|$DEF" "extra tasks (aggregate)" "mise run <audiolens_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
             # GUI contract lane — ruviform 候補 tree（RUVIFORM_REV）上の実行結果を
             # 別行で記録。候補に task がない場合は owner 付き not_run（dispatch ref
             # checkout の task では代用しない）。checkout/probe/toolchain/依存取得 未完了はその
             # outcome をそのまま写す。
             if [ "${{ steps.gui_candidate.outputs.boundary }}" = "1" ]; then
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.boundary }}" = "0" ]; then
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             if [ "${{ steps.gui_candidate.outputs.contract }}" = "1" ]; then
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.contract }}" = "0" ]; then
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）
-            rec "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "AL #166/#127 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "AL #166/#127 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
-            rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "${CONSUMER_NAME}-macos-os|OS-L1|physical-device|Required" "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
             drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
             if [ -n "$RESOLVED_SHA" ] && [ "$drift" != "$RESOLVED_SHA" ]; then
-              rec "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
+              rec "${CONSUMER_NAME}-head-drift|$DEF" "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
             fi
           fi
           if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
             --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
             # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
-            printf '{"schemaVersion":1,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"audiolens"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
+            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"audiolens"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -777,12 +799,16 @@ jobs:
             reason="checkout failed (ref/SHA fetch 不可または rev-parse 失敗)"
             [ ! -d "$CONSUMER_DIR" ] && reason="checkout never attempted (上流 step 失敗で clone 未実行)"
             node "$EV" lane --file "$LANES_FILE" \
+              --case-id "${CONSUMER_NAME}-tuple-clone" --level "OS-L1" \
+              --environment-kind "deterministic-backend" --requirement "Required" \
               --name "consumer clone + rev-parse" --command "git fetch --depth 1 + checkout FETCH_HEAD" \
               --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
               --reason "$reason"
             echo "tuple_ok=false" >> "$GITHUB_OUTPUT"
           elif [ -n "$EXPECTED_SHA" ] && [ "$resolved" != "$EXPECTED_SHA" ]; then
             node "$EV" lane --file "$LANES_FILE" \
+              --case-id "${CONSUMER_NAME}-tuple-guard" --level "OS-L1" \
+              --environment-kind "deterministic-backend" --requirement "Required" \
               --name "tuple guard" --command "resolved SHA vs expected SHA 照合" \
               --feature "candidate tuple" --os "ubuntu-latest" --outcome fail \
               --reason "tuple_mismatch: expected $EXPECTED_SHA, resolved $resolved"
@@ -995,10 +1021,14 @@ jobs:
             [ -z "$t" ] && continue
             if mise run "$t"; then
               node "$EV" lane --file "$LANES_FILE" \
+                --case-id "${CONSUMER_NAME}-extra-task" --level "OS-L1" \
+                --environment-kind "deterministic-backend" --requirement "Required" \
                 --name "extra: mise run $t" --command "mise run $t" \
                 --feature "extra dispatch input" --os "ubuntu-latest" --outcome pass
             else
               node "$EV" lane --file "$LANES_FILE" \
+                --case-id "${CONSUMER_NAME}-extra-task" --level "OS-L1" \
+                --environment-kind "deterministic-backend" --requirement "Required" \
                 --name "extra: mise run $t" --command "mise run $t" \
                 --feature "extra dispatch input" --os "ubuntu-latest" --outcome fail \
                 --reason "exit code $?"
@@ -1024,69 +1054,83 @@ jobs:
           set -uo pipefail
           EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
           command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
+          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>]"
+          # 残り引数は従来どおり name command feature outcome [reason]。
+          # 既定分類: headless/infra lane = OS-L1 deterministic-backend Required。
+          # 実 window / plugin / 実 OS の非既定分類は各行で literal 指定する。
+          DEF="OS-L1|deterministic-backend|Required"
           rec() {
+            local spec="$1"; shift
+            local case_id level env_kind requirement rsha
+            IFS='|' read -r case_id level env_kind requirement rsha <<< "$spec"
+            local rf=()
+            [ -n "${rsha:-}" ] && rf=(--resolved-ruviform-sha "$rsha")
             if [ -n "${5:-}" ]; then
-              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
+              node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
             else
-              node "$EV" lane --file "$LANES_FILE" --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
+              node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
             fi
           }
           o() { case "$1" in success) echo pass;; failure|cancelled) echo fail;; skipped) echo skipped;; *) echo not_run;; esac }
           if [ "$GATE" = "blocked" ]; then
-            rec "preflight" "-" "-" "fail" "preflight failed"
+            rec "${CONSUMER_NAME}-preflight|$DEF" "preflight" "-" "-" "fail" "preflight failed"
           elif [ "${{ steps.presence.outputs.presence }}" = "absent" ]; then
-            rec "workspace presence (Cargo.toml)" "-" "-" "not_run" "no buildable workspace"
+            rec "${CONSUMER_NAME}-workspace-presence|$DEF" "workspace presence (Cargo.toml)" "-" "-" "not_run" "no buildable workspace"
           elif [ "$GATE" = "run" ]; then
-            rec "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
-            rec "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
-            rec "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
-            rec "mise run check-ruviform-rev (lock 単一 SHA)" "mise run check-ruviform-rev" "workspace" "$(o '${{ steps.rev.outcome }}')"
-            rec "mise run check-full (legacy check fallback)" "mise run check-full || legacy mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
-            rec "mise run test-full (legacy test fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test)" "workspace" "$(o '${{ steps.test.outcome }}')"
-            rec "mise run test-rt (RT no-alloc)" "mise run test-rt" "rt" "$(o '${{ steps.test_rt.outcome }}')"
-            rec "mise run check-headless-deps" "mise run check-headless-deps" "headless" "$(o '${{ steps.headless_deps.outcome }}')"
-            rec "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
-            rec "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
-            rec "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
-            rec "mise run test-ui (vitest/happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
-            rec "mise run build-ui (vite+manifest)" "mise run build-ui" "ui headless" "$(o '${{ steps.build_ui.outcome }}')"
-            rec "check-ruviform-rev --require-vendor (lock+REV+manifest)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_full.outcome }}')"
-            rec "extra tasks (aggregate)" "mise run <synvelis_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
+            rec "${CONSUMER_NAME}-dep-access|$DEF" "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "${CONSUMER_NAME}-rev-check|$DEF" "mise run check-ruviform-rev (lock 単一 SHA)" "mise run check-ruviform-rev" "workspace" "$(o '${{ steps.rev.outcome }}')"
+            rec "${CONSUMER_NAME}-check-full|$DEF" "mise run check-full (legacy check fallback)" "mise run check-full || legacy mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
+            rec "${CONSUMER_NAME}-test-full|$DEF" "mise run test-full (legacy test fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test)" "workspace" "$(o '${{ steps.test.outcome }}')"
+            rec "${CONSUMER_NAME}-test-rt|$DEF" "mise run test-rt (RT no-alloc)" "mise run test-rt" "rt" "$(o '${{ steps.test_rt.outcome }}')"
+            rec "${CONSUMER_NAME}-headless-deps|$DEF" "mise run check-headless-deps" "mise run check-headless-deps" "headless" "$(o '${{ steps.headless_deps.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-vendor-sync|$DEF" "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-setup|$DEF" "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-check|$DEF" "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-test|$DEF" "mise run test-ui (vitest/happy-dom)" "mise run test-ui" "ui headless" "$(o '${{ steps.test_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-ui-build|$DEF" "mise run build-ui (vite+manifest)" "mise run build-ui" "ui headless" "$(o '${{ steps.build_ui.outcome }}')"
+            rec "${CONSUMER_NAME}-rev-full|$DEF" "check-ruviform-rev --require-vendor (lock+REV+manifest)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_full.outcome }}')"
+            rec "${CONSUMER_NAME}-extra-aggregate|$DEF" "extra tasks (aggregate)" "mise run <synvelis_extra_tasks>" "extra dispatch input" "$(o '${{ steps.extra.outcome }}')"
             # GUI contract lane — ruviform 候補 tree（RUVIFORM_REV）上の実行結果を
             # 別行で記録。候補に task がない場合は owner 付き not_run（dispatch ref
             # checkout の task では代用しない）。checkout/probe/toolchain/依存取得 未完了はその
             # outcome をそのまま写す。
             if [ "${{ steps.gui_candidate.outputs.boundary }}" = "1" ]; then
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_boundary.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.boundary }}" = "0" ]; then
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
+              rec "${CONSUMER_NAME}-gui-boundary|$DEF|$RUVIFORM_REV" "GUI-CONTRACT boundary guard @ ruviform $RUVIFORM_REV" "mise run check-ui-driver-boundary" "ui contract" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             if [ "${{ steps.gui_candidate.outputs.contract }}" = "1" ]; then
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_semantic.outcome }}')"
             elif [ "${{ steps.gui_candidate.outputs.contract }}" = "0" ]; then
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "not_run" "candidate に task 未定義（RF #390 Owner — task を含む候補 SHA で再実行。dispatch ref 代用の偽 pass 禁止）"
             else
-              rec "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
+              rec "${CONSUMER_NAME}-gui-semantic|$DEF|$RUVIFORM_REV" "GUI-SEMANTIC fake driver contract @ ruviform $RUVIFORM_REV" "mise run test-ui-driver-contract" "ui semantic" "$(o '${{ steps.gui_candidate.outcome }}')" "candidate checkout/probe/toolchain/依存取得 未完了"
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）
-            rec "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "SV #175-177 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "SV #175-177 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
-            rec "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
-            rec "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
+            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "${CONSUMER_NAME}-plugin-native-dock|EXT-L3|test-plugin|Required" "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
+            rec "${CONSUMER_NAME}-macos-os|OS-L1|physical-device|Required" "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
             drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
             if [ -n "$RESOLVED_SHA" ] && [ "$drift" != "$RESOLVED_SHA" ]; then
-              rec "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
+              rec "${CONSUMER_NAME}-head-drift|$DEF" "post-lane HEAD drift check" "git rev-parse HEAD" "candidate tuple" "fail" "HEAD drift: recorded $RESOLVED_SHA, now ${drift:-gone} — tuple 不整合"
             fi
           fi
           if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
             --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
             # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
-            printf '{"schemaVersion":1,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"synvelis"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
+            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"synvelis"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi

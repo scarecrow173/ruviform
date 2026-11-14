@@ -20,6 +20,9 @@ import {
   coverage,
   CONTRACT,
   SCHEMA_VERSION,
+  LEVELS,
+  ENVIRONMENT_KINDS,
+  REQUIREMENTS,
 } from "../evidence.mjs";
 
 const SCRIPT = fileURLToPath(new URL("../evidence.mjs", import.meta.url));
@@ -40,8 +43,15 @@ function baseEnv(overrides = {}) {
   };
 }
 
+const CASE = {
+  caseId: "test-case",
+  level: "OS-L1",
+  environmentKind: "deterministic-backend",
+  requirement: "Required",
+};
+
 const lane = (outcome, extra = {}) =>
-  makeLaneRecord({ name: `lane-${outcome}`, outcome, ...extra });
+  makeLaneRecord({ name: `lane-${outcome}`, outcome, ...CASE, ...extra });
 
 // ---------------------------------------------------------------------------
 // classify-ref
@@ -84,12 +94,140 @@ test("classify-ref: rejects invalid refs", () => {
 // ---------------------------------------------------------------------------
 
 test("lane record: requires name and a known outcome", () => {
-  assert.throws(() => makeLaneRecord({ name: "", outcome: "pass" }), /name/);
-  assert.throws(() => makeLaneRecord({ name: "x", outcome: "green" }), /outcome/);
-  const rec = makeLaneRecord({ name: "x", outcome: "unsupported", reason: "real-window host" });
+  assert.throws(() => makeLaneRecord({ name: "", outcome: "pass", ...CASE }), /name/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "green", ...CASE }), /outcome/);
+  const rec = makeLaneRecord({ name: "x", outcome: "unsupported", reason: "real-window host", ...CASE });
   assert.equal(rec.outcome, "unsupported");
   assert.equal(rec.reason, "real-window host");
   assert.equal(rec.command, "-");
+});
+
+// ---------------------------------------------------------------------------
+// Case schema v2 (Issue #294 first slice — #627 contract §2)
+// ---------------------------------------------------------------------------
+
+test("schema v2: SCHEMA_VERSION=2 while CONTRACT stays consumer-verify-tuple/v1", () => {
+  assert.equal(SCHEMA_VERSION, 2);
+  assert.equal(CONTRACT, "consumer-verify-tuple/v1");
+});
+
+test("case schema: required fields land as snake_case record keys", () => {
+  const rec = makeLaneRecord({
+    name: "x",
+    outcome: "pass",
+    caseId: "al-check",
+    level: "GUI-L2",
+    environmentKind: "real-window",
+    requirement: "Deferred",
+  });
+  assert.equal(rec.case_id, "al-check");
+  assert.equal(rec.level, "GUI-L2");
+  assert.equal(rec.environment_kind, "real-window");
+  assert.equal(rec.requirement, "Deferred");
+  assert.equal(rec.outcome, "pass");
+});
+
+test("case schema: missing required case fields fail closed", () => {
+  for (const [field, pattern] of [
+    ["caseId", /case-id/],
+    ["level", /level/],
+    ["environmentKind", /environment-kind/],
+    ["requirement", /requirement/],
+  ]) {
+    const input = { name: "x", outcome: "pass", ...CASE };
+    delete input[field];
+    assert.throws(() => makeLaneRecord(input), pattern, field);
+  }
+});
+
+test("case schema: closed vocabularies reject unknown values", () => {
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, level: "L9" }), /level/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, environmentKind: "vm" }), /environment-kind/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, requirement: "optional" }), /requirement/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, requirement: "NotRequired" }), /requirement/);
+  // exported vocabularies match the #627 contract exactly
+  assert.deepEqual(LEVELS, ["OS-L1", "GUI-L2", "EXT-L3"]);
+  assert.deepEqual(ENVIRONMENT_KINDS, [
+    "deterministic-backend",
+    "virtual-os-endpoint",
+    "test-plugin",
+    "real-window",
+    "physical-device",
+  ]);
+  assert.deepEqual(REQUIREMENTS, ["Required", "Deferred", "NotApplicable"]);
+});
+
+test("case schema: requirement is orthogonal to outcome", () => {
+  // Deferred + pass and NotApplicable + fail are legal combinations —
+  // requirement never launders or blocks the result axis.
+  for (const [requirement, outcome] of [
+    ["Required", "pass"],
+    ["Deferred", "pass"],
+    ["NotApplicable", "fail"],
+    ["NotApplicable", "not_run"],
+  ]) {
+    const rec = makeLaneRecord({ name: "x", outcome, ...CASE, requirement });
+    assert.equal(rec.requirement, requirement);
+    assert.equal(rec.outcome, outcome);
+  }
+});
+
+test("case schema: optional fields are string-or-null and snake_cased", () => {
+  const rec = makeLaneRecord({
+    name: "x",
+    outcome: "pass",
+    ...CASE,
+    oracle: "independent-snapshot",
+    fixtureVersion: "fx-2026-11",
+    expected: "exp",
+    observed: "obs",
+    device: "dev",
+    endpoint: "ep",
+    plugin: "pl",
+    abi: "abi",
+    sdk: "sdk",
+    arch: "x86_64",
+    osVer: "Windows-11",
+  });
+  assert.equal(rec.oracle, "independent-snapshot");
+  assert.equal(rec.fixture_version, "fx-2026-11");
+  assert.equal(rec.expected, "exp");
+  assert.equal(rec.observed, "obs");
+  assert.equal(rec.device, "dev");
+  assert.equal(rec.endpoint, "ep");
+  assert.equal(rec.plugin, "pl");
+  assert.equal(rec.abi, "abi");
+  assert.equal(rec.sdk, "sdk");
+  assert.equal(rec.arch, "x86_64");
+  assert.equal(rec.os_ver, "Windows-11");
+  // omitted optionals serialize as null, never undefined
+  const bare = makeLaneRecord({ name: "x", outcome: "pass", ...CASE });
+  assert.equal(bare.oracle, null);
+  assert.equal(bare.resolved_ruviform_sha, null);
+});
+
+test("case schema: optional fields reject non-string values", () => {
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, oracle: 42 }), /oracle/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, device: {} }), /device/);
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, arch: true }), /arch/);
+});
+
+test("case schema: resolved_ruviform_sha must be a 40-hex SHA or null", () => {
+  const ok = makeLaneRecord({ name: "x", outcome: "pass", ...CASE, resolvedRuviformSha: SHA_A });
+  assert.equal(ok.resolved_ruviform_sha, SHA_A);
+  const empty = makeLaneRecord({ name: "x", outcome: "pass", ...CASE, resolvedRuviformSha: "" });
+  assert.equal(empty.resolved_ruviform_sha, null);
+  for (const bad of ["abc", SHA_A.toUpperCase(), "g".repeat(40), "main"]) {
+    assert.throws(
+      () => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, resolvedRuviformSha: bad }),
+      /resolved-ruviform-sha/,
+      bad,
+    );
+  }
+});
+
+test("case schema: unknown lane options are rejected", () => {
+  assert.throws(() => makeLaneRecord({ name: "x", outcome: "pass", ...CASE, bogusField: "x" }), /unknown option/);
 });
 
 // ---------------------------------------------------------------------------
@@ -271,10 +409,15 @@ test("cli: lane appends JSONL and finalize emits JSON/summary/status", () => {
     execFileSync(process.execPath, [
       SCRIPT, "lane", "--file", lanesFile, "--name", "mise run check",
       "--command", "mise run check", "--os", "ubuntu-latest", "--outcome", "pass",
+      "--case-id", "synvelis-check", "--level", "OS-L1",
+      "--environment-kind", "deterministic-backend", "--requirement", "Required",
+      "--resolved-ruviform-sha", SHA_A, "--oracle", "fixture-diff",
     ]);
     execFileSync(process.execPath, [
       SCRIPT, "lane", "--file", lanesFile, "--name", "webview lanes",
       "--outcome", "unsupported", "--reason", "real-window host",
+      "--case-id", "synvelis-gui-real-window", "--level", "GUI-L2",
+      "--environment-kind", "real-window", "--requirement", "Required",
     ]);
     execFileSync(process.execPath, [
       SCRIPT, "finalize", "--file", lanesFile, "--out", out,
@@ -287,7 +430,17 @@ test("cli: lane appends JSONL and finalize emits JSON/summary/status", () => {
     });
     const ev = JSON.parse(readFileSync(out, "utf8"));
     assert.equal(ev.status, "pass");
+    assert.equal(ev.schemaVersion, 2);
+    assert.equal(ev.contract, "consumer-verify-tuple/v1");
     assert.equal(ev.lanes.length, 2);
+    assert.equal(ev.lanes[0].case_id, "synvelis-check");
+    assert.equal(ev.lanes[0].level, "OS-L1");
+    assert.equal(ev.lanes[0].environment_kind, "deterministic-backend");
+    assert.equal(ev.lanes[0].requirement, "Required");
+    assert.equal(ev.lanes[0].resolved_ruviform_sha, SHA_A);
+    assert.equal(ev.lanes[0].oracle, "fixture-diff");
+    assert.equal(ev.lanes[1].level, "GUI-L2");
+    assert.equal(ev.lanes[1].environment_kind, "real-window");
     assert.equal(readFileSync(statusOut, "utf8").trim(), "status=pass");
     const md = readFileSync(summary, "utf8");
     assert.match(md, /mise run check/);
@@ -336,6 +489,75 @@ test("cli: finalize rejects forged lane rows (unknown outcome/schema)", () => {
         ], { env: { ...process.env, ...baseEnv() } }),
       /schema/,
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("cli: finalize rejects schema-v1 lane rows missing case fields", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cv-evidence-"));
+  try {
+    const lanesFile = join(dir, "lanes.jsonl");
+    const out = join(dir, "e.json");
+    const env = { ...process.env, ...baseEnv() };
+    // v1 row: valid name/outcome but no case_id/level/environment_kind/requirement
+    writeFileSync(lanesFile, JSON.stringify({ name: "x", outcome: "pass" }) + "\n");
+    assert.throws(
+      () => execFileSync(process.execPath, [SCRIPT, "finalize", "--file", lanesFile, "--out", out], { env }),
+      /case_id/,
+    );
+    // unknown enum value must not count toward status
+    writeFileSync(
+      lanesFile,
+      JSON.stringify({ name: "x", outcome: "pass", case_id: "c", level: "OS-L9", environment_kind: "deterministic-backend", requirement: "Required" }) + "\n",
+    );
+    assert.throws(
+      () => execFileSync(process.execPath, [SCRIPT, "finalize", "--file", lanesFile, "--out", out], { env }),
+      /level/,
+    );
+    // malformed resolved_ruviform_sha on a hand-written row
+    writeFileSync(
+      lanesFile,
+      JSON.stringify({ name: "x", outcome: "pass", case_id: "c", level: "OS-L1", environment_kind: "deterministic-backend", requirement: "Required", resolved_ruviform_sha: "notasha" }) + "\n",
+    );
+    assert.throws(
+      () => execFileSync(process.execPath, [SCRIPT, "finalize", "--file", lanesFile, "--out", out], { env }),
+      /resolved_ruviform_sha/,
+    );
+    // non-string optional field
+    writeFileSync(
+      lanesFile,
+      JSON.stringify({ name: "x", outcome: "pass", case_id: "c", level: "OS-L1", environment_kind: "deterministic-backend", requirement: "Required", oracle: 7 }) + "\n",
+    );
+    assert.throws(
+      () => execFileSync(process.execPath, [SCRIPT, "finalize", "--file", lanesFile, "--out", out], { env }),
+      /oracle/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("cli: lane rejects missing case flags and bad enums before appending", () => {
+  const dir = mkdtempSync(join(tmpdir(), "cv-evidence-"));
+  try {
+    const lanesFile = join(dir, "lanes.jsonl");
+    assert.throws(() =>
+      execFileSync(process.execPath, [
+        SCRIPT, "lane", "--file", lanesFile, "--name", "x", "--outcome", "pass",
+      ]), /case-id/);
+    assert.throws(() =>
+      execFileSync(process.execPath, [
+        SCRIPT, "lane", "--file", lanesFile, "--name", "x", "--outcome", "pass",
+        "--case-id", "c", "--level", "OS-L1", "--environment-kind", "deterministic-backend",
+        "--requirement", "bogus",
+      ]), /requirement/);
+    assert.throws(() =>
+      execFileSync(process.execPath, [
+        SCRIPT, "lane", "--file", lanesFile, "--name", "x", "--outcome", "pass",
+        "--case-id", "c", "--level", "OS-L1", "--environment-kind", "deterministic-backend",
+        "--requirement", "Required", "--resolved-ruviform-sha", "xyz",
+      ]), /resolved-ruviform-sha/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
