@@ -102,6 +102,11 @@ members = [
     # 非既定 `gpui` feature で real GPUI window 上の実 native editor attach
     # を実行する手動検証入口）
     "crates/ruviform-poc-native-dock",
+    # RF-SCRIPT-02 隔離 PoC（Issue #560 — Luau.Analysis native bridge。
+    # ffi-poc/ 配下の実験 crate。契約ミラー型 + FFI shim + vendored Luau
+    # 0.740 Analysis（mlua vendored VM と同一 revision）。
+    # 本番採用は #558/#559 の統合 Gate で別判断）
+    "ffi-poc",
 ]
 
 [workspace.package]

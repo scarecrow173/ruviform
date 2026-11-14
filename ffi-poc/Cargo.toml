@@ -1,0 +1,27 @@
+# RF-SCRIPT-02 / Issue #560 — Luau.Analysis native bridge PoC.
+# 隔離 PoC crate。契約型のミラー実装と FFI Shim のみを持ち、
+# 本番公開 crate ではない（採否は #558/#559 側の統合 Gate で判断）。
+[package]
+name = "ruviform-ffi-poc"
+description = "RF-SCRIPT-02 PoC: Luau.Analysis native bridge (isolated experiment crate, not for production)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = "1"
+# mlua の vendored Luau VM (luau0-src 0.22.0+luau740 = Luau 0.740) を
+# Analysis と同一バイナリへリンクする PoC 証明用。VM 側の本番採用判断は #559。
+mlua = { version = "0.12.2", default-features = false, features = ["luau"] }
+
+[build-dependencies]
+cc = "1"
+# Windows MSVC 環境（vcvars 未初期化の shell からの build でも
+# cl.exe が CRT/SDK ヘッダを解決できるよう INCLUDE/LIB/PATH を補う）
+find-msvc-tools = "0.1"
