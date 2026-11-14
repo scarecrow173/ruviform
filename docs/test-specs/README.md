@@ -78,6 +78,7 @@ Directory: `docs/test-specs`
 | TSPEC-034RTrq34tAM6KDpPaC83H | Issue #279 OBS-04 plugin-host 4 Counter Source登録・寿命・degraded試験 | approved | [issue-279-plugin-host-counter-source-tests.md](./issue-279-plugin-host-counter-source-tests.md) |
 | TSPEC-034JfAS5pKzR24eQWPln8d | Issue #28 UI PoC 検証仕様 | approved | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | TSPEC-iF1sER54cUJ1FKmvvSy6W2 | Issue #280 OBS-05 RT record bridge・record vocabulary tests | approved | [issue-280-rt-record-bridge-tests.md](./issue-280-rt-record-bridge-tests.md) |
+| TSPEC-034XzBqngp0Gx0FdDaHhyc | Issue #281 OBS G0 feature matrix lane テスト仕様 | approved | [issue-281-obs-feature-matrix.md](./issue-281-obs-feature-matrix.md) |
 | TSPEC-034UyJjriooXu9EsvaMpgj | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | TSPEC-icPRYUQjj1ahQHHkGcK8vZ | Issue #285 IO-03 Compression 契約試験棚卸し テスト仕様 | approved | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | TSPEC-ZpVwcAYhu5UaIR5HfPUNAb | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |

@@ -62,6 +62,7 @@ Directory: `docs/specs`
 | SPEC-034UpqR38pxxqJjjHLaFBG | Issue #278 OBS-03 tracing_export — ObservationBatch Exporter + FindingSink adapter slice | approved | [issue-278-observability-tracing-export.md](./issue-278-observability-tracing-export.md) |
 | SPEC-034RToefGzxcXIANSfMf7U | Issue #279 OBS-04 Plugin Host既存4 CounterのSource登録・統合 | approved | [issue-279-plugin-host-counter-source-registration.md](./issue-279-plugin-host-counter-source-registration.md) |
 | SPEC-ML6zMi4szNWY33LanXM0JL | Issue #280 OBS-05 RT固定長Record Bridge・Clock・欠落・Correlation統合 | approved | [issue-280-rt-record-bridge-clock-correlation.md](./issue-280-rt-record-bridge-clock-correlation.md) |
+| SPEC-034XzzKfK6lkw9tuLNCGSv | Issue #281 OBS G0 — ruviform-observability feature compile matrix lane | approved | [issue-281-obs-feature-matrix.md](./issue-281-obs-feature-matrix.md) |
 | SPEC-034Uyb75wxxSWrPfyvFEgh | Issue #284 IO-02 Structured Formats — Serde境界・Format別契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-284-io-02-structured-formats-serde-boundary.md](./issue-284-io-02-structured-formats-serde-boundary.md) |
 | SPEC-7TCHVfCUzxmF7YWrv1aS4M | Issue #285 IO-03 Compression — 設計正本照合・契約試験棚卸し slice | approved | [issue-285-io-03-compression-contract-audit.md](./issue-285-io-03-compression-contract-audit.md) |
 | SPEC-7BYANBc86b8qnIn77CPmoE | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
