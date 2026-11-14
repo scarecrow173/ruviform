@@ -203,6 +203,7 @@ Directory: `docs/impl/ir`
 | IMPL-rf388DockLayoutPoc01 | Issue #388 GPUI Panel/Tab レイアウト内 VST3 Editor 埋め込み PoC 実装記録（Windows / L0） | completed | [issue-388-native-dock-layout-poc-implementation.md](./issue-388-native-dock-layout-poc-implementation.md) |
 | IMPL-rf388DockWindowingSlice301 | Issue #388 GPUI native dock slice 3 — ancestor clip / keyboard・focus routing / 2-phase re-dock 実装記録（Windows / VST3 / L0） | completed | [issue-388-native-dock-windowing-slice3-implementation.md](./issue-388-native-dock-windowing-slice3-implementation.md) |
 | IMPL-034WSQTRYaDQlCGdESELFh | Issue 388 OS L1 CI evidence | completed | [issue-388-os-l1-ci-evidence.md](./issue-388-os-l1-ci-evidence.md) |
+| IMPL-034XBBr5HDcEsujT6coC8S | Issue #389 CLAP/L0 実外部 Editor attach 実装記録 | completed | [issue-389-clap-l0-editor-attach.md](./issue-389-clap-l0-editor-attach.md) |
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
 | IMPL-034WYcEVkJHFgwJtp10GaL | Issue #389 Parent Lease 移行 IR | completed | [issue-389-parent-lease-ir.md](./issue-389-parent-lease-ir.md) |

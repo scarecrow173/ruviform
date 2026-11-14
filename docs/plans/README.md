@@ -47,6 +47,7 @@ Directory: `docs/plans`
 | PLAN-034T6RWSw6Tv9Mz2qJ5eL8 | Issue #387 Component/View Specs + Headless Behavior + GPUI Renderer 実装計画 | proposed | [implement-issue-387-component-renderer.md](./implement-issue-387-component-renderer.md) |
 | PLAN-kHnSXCzzcxyo5rlkMiqQWx | Issue #388/#389 Native Dock 契約の実装計画（neutral slot/lease/session + fake 検証 + L0-L1 写像） | approved | [implement-issue-388-389-native-dock-contract.md](./implement-issue-388-389-native-dock-contract.md) |
 | PLAN-rf388DockWindowing01 | Issue #388 slice 3 実装計画 — clip 修正 + windowing PoC + 証拠 | approved | [implement-issue-388-native-dock-windowing-slice3.md](./implement-issue-388-native-dock-windowing-slice3.md) |
+| PLAN-034XB0UGHRPYuncbgF7bB6 | Issue #389 CLAP/L0 実外部 Editor attach の実装計画（adapter open_gui/close_gui + PoC clap lane） | approved | [implement-issue-389-clap-l0-editor-attach.md](./implement-issue-389-clap-l0-editor-attach.md) |
 | PLAN-KtWrNWuBuOq3OuF5yJ0x9o | Issue #389 Plugin Editor Session headless fixture slice 実装計画（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | approved | [implement-issue-389-editor-session-headless.md](./implement-issue-389-editor-session-headless.md) |
 | PLAN-HDjvE9BDnWUjWa0unFqU0g | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture slice 実装計画 | approved | [implement-issue-389-editor-session-statemachine.md](./implement-issue-389-editor-session-statemachine.md) |
 | PLAN-034UnzhplY5WerbCeab8un | Implement Issue #389 Plugin Editor Session hardening | approved | [implement-issue-389-session-hardening.md](./implement-issue-389-session-hardening.md) |
