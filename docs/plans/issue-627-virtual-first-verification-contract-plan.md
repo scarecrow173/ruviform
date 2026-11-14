@@ -123,7 +123,7 @@ Issue #627 の docs-only slice として、仮想優先3repo検証契約（Case 
 - [x] T7: docs index 再生成（`doc_maintenance.js index apply`、触れた全 dir）
 - [x] T8: `evidence/rf627/verification.md` への検証 ledger 記録
 - [x] T9: `mise exec -- prek run --all-files` による衛生チェック
-- [ ] T10: コミット・push・PR 作成・worker_done 報告
+- [x] T10: コミット・push・PR 作成・worker_done 報告（PR #635）
 
 ## Dependencies and Risks
 
