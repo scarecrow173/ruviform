@@ -182,6 +182,7 @@ Directory: `docs/plans`
 | PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
+| PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |

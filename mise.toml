@@ -116,6 +116,16 @@ description = "Issue #464 scenario contract + #314 slice 2 visual/golden path, G
 run = "cargo test -p ruviform-ui-gpui --features gpui-test --test scenario_contract"
 hide = true
 
+[tasks.test-ui-plugin-dock]
+description = "Issue #631 plugin-dock scenario lane (manual/opt-in — NOT a CI-required gate): builds the real test_gain VST3 cdylib, runs crates/ruviform-plugin-dock-test's rf631.plugin-dock cases through the driver-neutral scenario contract, and writes JSONL evidence to evidence/rf631/plugin-dock-scenario.jsonl. Honest verdicts only — editor attach/dock/pixels stay Unsupported/NotRun until a real editor fixture exists (writes only target/ + evidence/rf631/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --locked -p ruviform-plugin-test-vst3
+mkdir -p evidence/rf631
+cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-scenario -- --out evidence/rf631/plugin-dock-scenario.jsonl
+'''
+
 [tasks.build]
 description = "Verify one Cargo package: mise run build <package> [cargo flags] (required package)"
 raw_args = true

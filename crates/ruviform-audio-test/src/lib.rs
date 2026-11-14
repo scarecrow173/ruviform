@@ -43,3 +43,7 @@ pub mod metadata;
 pub mod midi;
 pub mod oracle;
 pub mod pcm;
+
+pub use metadata::{
+    CaseRequirement, CaseResult, EnvironmentKind, RunMetadata, RunParameters, VerificationLevel,
+};

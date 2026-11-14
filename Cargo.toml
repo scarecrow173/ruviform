@@ -97,6 +97,12 @@ members = [
     # 独立 oracle・run metadata。audio-core/media-core/rt の公開契約のみ
     # 消費し、本番クレートからは誰も依存しない）
     "crates/ruviform-audio-test",
+    # 利用側層 テスト共有基盤（Issue #631 first slice — test-only plugin-dock
+    # scenario harness: 実 test_gain VST3 cdylib の artifact digest/version
+    # evidence + driver-neutral scenario contract 経由の正直な verdict。
+    # plugin↔ui 相互依存禁止のため consumer 層で両側を結線。本番クレートからは
+    # 誰も依存しない）
+    "crates/ruviform-plugin-dock-test",
     # 利用側層サンプル（Issue #155 — GUI 非依存 CLI/headless 利用例。共有 headless サービスの外側アダプタ）
     "crates/ruviform-cli-sample",
     # 利用側層 可視化基盤（Issue #157 — 波形 LOD・スペクトログラム STFT・

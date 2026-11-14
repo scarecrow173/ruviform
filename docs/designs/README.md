@@ -219,6 +219,7 @@ Directory: `docs/designs`
 | DESIGN-034XBGBV0qexwf6VzGt77S | Issue #628 設計 — deterministic core（VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata） | approved | [issue-628-deterministic-test-runtime-design.md](./issue-628-deterministic-test-runtime-design.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
+| DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034XEUiEWDih8GYy2D0ytt | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |

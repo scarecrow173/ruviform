@@ -73,6 +73,10 @@ pub use proto::{
     ReceiptPage, Screenshot, ServeOutcome, ShutdownMode, Welcome, WindowMeta, ops, test_codes,
 };
 pub use scenario::fake::FakeGuiTest;
+pub use scenario::plugin_dock::{
+    PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_spec,
+    plugin_dock_view_spec,
+};
 pub use scenario::runner::{
     ScenarioOutcome, ScenarioSpec, ScenarioTimeout, run_scenario, settle_until,
 };

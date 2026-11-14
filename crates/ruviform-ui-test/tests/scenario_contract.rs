@@ -568,3 +568,61 @@ fn lab_story_golden_check_records_story_key_as_unsupported() {
         assert!(evidence.contains("/idle/"), "{evidence}");
     }
 }
+
+/// Issue #631 plugin-dock contract pieces: the declarative
+/// `NativeSlot` view spec mounts and resolves on the Fake adapter,
+/// `plugin_dock_spec` declares the `NativePluginDock` +
+/// `VisualCapture` requirement set, and `PluginArtifactEvidence`
+/// serializes the binary identity a case ran against.
+#[test]
+fn plugin_dock_spec_declares_native_slot_and_required_capabilities() {
+    use ruviform_ui_test::{
+        PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_spec,
+        plugin_dock_view_spec,
+    };
+
+    // The view spec mounts and its NativeSlot component resolves —
+    // semantic conformance only, not dock evidence.
+    let mut gui = FakeGuiTest::new();
+    let window = gui.open_window();
+    let view = ViewInstanceId::new(631).expect("nonzero");
+    gui.mount_view(window, view, plugin_dock_view_spec())
+        .expect("plugin-dock view mounts");
+    let mut query = TargetQuery::new(window, view);
+    query.component = Some(key(PLUGIN_DOCK_SLOT_KEY));
+    let target = gui.resolve_target(&query).expect("slot resolves");
+    let snapshot = gui.observe(&target, &key(PLUGIN_DOCK_SLOT_KEY));
+    assert!(snapshot.is_ok(), "slot component is observable");
+
+    // The scenario spec requires the two evidence levels a real dock
+    // needs and records artifact identity under environment.
+    let artifact = PluginArtifactEvidence {
+        path: "target/debug/deps/libtest.dll".to_string(),
+        sha256: "ab".repeat(32),
+        plugin_id: "pid".to_string(),
+        name: "test_gain".to_string(),
+        vendor: "Ruviform Test".to_string(),
+        version: "0.0.0".to_string(),
+    };
+    let spec = plugin_dock_spec(
+        RunId::new("run-631"),
+        ruviform_ui_test::CaseId::new("dock-pixels"),
+        Some(&artifact),
+    );
+    assert_eq!(spec.scenario.as_str(), PLUGIN_DOCK_SCENARIO);
+    assert_eq!(
+        spec.case.as_ref().map(ruviform_ui_test::CaseId::as_str),
+        Some("dock-pixels")
+    );
+    assert!(
+        spec.required
+            .contains(&ScenarioCapability::NativePluginDock)
+    );
+    assert!(spec.required.contains(&ScenarioCapability::VisualCapture));
+    let environment = spec.environment.expect("artifact environment recorded");
+    assert_eq!(environment["plugin_artifact"]["name"], "test_gain");
+    assert_eq!(
+        environment["plugin_artifact"]["sha256"], artifact.sha256,
+        "digest lands verbatim"
+    );
+}

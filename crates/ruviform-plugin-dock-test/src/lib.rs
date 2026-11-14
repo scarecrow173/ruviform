@@ -1,0 +1,39 @@
+//! `ruviform-plugin-dock-test` — test-only plugin-dock scenario
+//! harness (Issue #631 first slice, RF-VTEST-04).
+//!
+//! This crate is the consumer-layer composition root the plugin↔UI
+//! dependency rule requires: `ruviform-plugin-*` and `ruviform-ui-*`
+//! crates may not depend on each other, so only a consumer can see
+//! both sides (precedent: `ruviform-poc-native-dock`). It drives the
+//! **real** `test_gain` VST3 cdylib (`ruviform-plugin-test-vst3`)
+//! through the production host path (`Vst3Library` → `InProcessHost`
+//! → `PluginEditorSessions`/`InProcessEditorOps`) and reports every
+//! case through the driver-neutral `ruviform-ui-test` scenario
+//! contract (`ScenarioSpec` → `run_scenario` → `ScenarioReport`).
+//!
+//! ## Verdict honesty (the point of the slice)
+//!
+//! - `load`/`discover`/`hash`/host-lifecycle steps that really
+//!   executed against the binary report `Pass`.
+//! - Editor attach goes through the real session/ops path; the
+//!   current `test_gain` fixture has no editor (`createView` → null →
+//!   `HostError::Unsupported`), so attach reports `Unsupported` with
+//!   that detail — never `Pass`.
+//! - Dock pixel checks report `NotRun`: no editor surface exists to
+//!   capture and no `VisualCapture` driver is present.
+//! - A missing artifact fails closed: every artifact-dependent case
+//!   reports `NotRun`, never a silent skip or fake `Pass`.
+//!
+//! Fake slot / semantic view-mount success is contract conformance
+//! only — it is never promoted to Native Dock or GUI-L2 evidence.
+//!
+//! **RT contract:** non-RT only. **Test-only:** no production crate
+//! may depend on this crate; nothing here ships.
+
+pub mod artifact;
+pub mod probe;
+pub mod scenario;
+
+pub use artifact::{PLUGIN_PATH_ENV, fixture_lib_name, resolve_artifact, sha256_hex};
+pub use probe::PluginHostProbe;
+pub use scenario::{LaneEnvironment, run_all};
