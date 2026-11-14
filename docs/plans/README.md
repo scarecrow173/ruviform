@@ -83,6 +83,7 @@ Directory: `docs/plans`
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
 | PLAN-034QxdNzPfzn5oye9cCzne | Issue #244 media-reader prefetch contract wart fixes implementation plan | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | PLAN-yYLB0HDhiCqmnfV65T7mNu | Issue #251 Stage W closeout 実施 plan | approved | [issue-251-stage-w-real-device-closeout-plan.md](./issue-251-stage-w-real-device-closeout-plan.md) |
+| PLAN-034XCS9A8Ud1dQix6Eu3sX | Issue #253 MIDI event contract fixes — implementation plan | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | PLAN-034VERRPegu2dLBq0VqYol | Implement Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-plan.md](./issue-253-unsupported-transparency-plan.md) |
 | PLAN-034UjQKJduyKqWBrTakfn1 | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | PLAN-034WZJtam1qsAaVqT64TYw | Issue #275 OBS-01〜11 Owner/API/Feature Matrix 対応付け計画 | approved | [issue-275-obs-owner-map-plan.md](./issue-275-obs-owner-map-plan.md) |

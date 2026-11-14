@@ -65,6 +65,7 @@ Directory: `docs/test-specs`
 | TSPEC-034QxdOanEeX8da72nWdYo | Issue #244 prefetch boundary-first/dead-generation/End commit-once test specification | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | TSPEC-O0zY9nWrOb2qwg92Z8nFZb | Issue #251 Stage W closeout test spec — 実機 lane 検証項目 | approved | [issue-251-stage-w-real-device-closeout.md](./issue-251-stage-w-real-device-closeout.md) |
 | TSPEC-034Vj5N4I9PzPBumQHnxgK | Issue #253 host-graph report consumer テスト仕様 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
+| TSPEC-034XCNB0kMuKY2YL0umBJp | Issue #253 MIDI event contract fixes テスト仕様 | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | TESTSPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend test specification | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |

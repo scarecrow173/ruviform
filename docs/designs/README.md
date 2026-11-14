@@ -68,6 +68,7 @@ Directory: `docs/designs`
 | DESIGN-034QxcnAfFWswZmwSKPbKH | Issue #244 prefetch contract wart fixes — boundary-first emission, dead-generation sequence, End commit-once, seeded-fault coverage | approved | [issue-244-media-reader-prefetch-warts.md](./issue-244-media-reader-prefetch-warts.md) |
 | DESIGN-cJ0I0j6o66AAfUm2eE5q8y | Issue #251 Stage W closeout 設計 — 実機 lane 拡張と証拠 matrix | approved | [issue-251-stage-w-real-device-closeout-design.md](./issue-251-stage-w-real-device-closeout-design.md) |
 | DESIGN-034Vj33PXgAsLoeNPU9c8f | Issue #253 plugin→host report の host-graph consumer 配線 | approved | [issue-253-hostgraph-reports.md](./issue-253-hostgraph-reports.md) |
+| DESIGN-034XCQnVGvNjCrIO3C5trY | Issue #253 MIDI event contract fixes — merge truncation / ledger 一本化 / anchor republish | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |

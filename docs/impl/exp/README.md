@@ -54,6 +54,7 @@ Directory: `docs/impl/exp`
 | [ac7-adr-finalize.jsonl](./ac7-adr-finalize.jsonl) |
 | [device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl](./device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl) |
 | [dsp-simd-poc-benchmark-comparison.jsonl](./dsp-simd-poc-benchmark-comparison.jsonl) |
+| [issue-253-midi-event-contract.jsonl](./issue-253-midi-event-contract.jsonl) |
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
 | [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
