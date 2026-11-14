@@ -621,6 +621,168 @@ jobs:
       - name: Lint io-structured feature matrix (mise run lint-io-structured)
         run: mise run lint-io-structured
 
+  # Observability lane (Issue #281 G0): logging/tracing-export/
+  # allocation-probe/integration are non-default features so
+  # `cargo test --workspace` and the `test-full` lanes never compile
+  # most feature-gated targets; this job runs the feature matrix
+  # (default + each feature + all-features) via the Issue #281 mise
+  # tasks — same `&&`-chained single-string task shape as
+  # io-compression because dead code under a reduced feature set only
+  # fails `-D warnings` at that exact combination. POLICIES OS-L1
+  # requires native build/link/test on Windows and macOS too, so the
+  # lane is a ubuntu+windows matrix plus a separate `*-macos` job
+  # (Issue #333/#326 split convention: macOS runner starvation must
+  # not queue-cancel the Linux/Windows legs, and ci-summary consumes
+  # a per-OS result from `needs` directly).
+  observability-verify:
+    name: observability-verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Keep sibling OS jobs running so a manual verification run
+      # reports the result for every platform even if one fails.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: observability-verify-${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check observability feature matrix (mise run check-observability)
+        run: mise run check-observability
+
+      - name: Test observability feature matrix (mise run test-observability)
+        run: mise run test-observability
+
+      - name: Lint observability feature matrix (mise run lint-observability)
+        run: mise run lint-observability
+
+  # macOS leg of the observability feature-matrix lane (Issue #281 G0):
+  # same verification scope as `observability-verify`, kept as a
+  # physically separate job per the Issue #333/#326 `*-macos` split
+  # convention. No Linux-only dependency install step is needed — the
+  # lane only builds/tests ruviform-observability and its deps.
+  observability-verify-macos:
+    name: observability-verify-macos
+    runs-on: macos-latest
+    env:
+      CARGO_INCREMENTAL: "0"
+      # checkout-sha artifact leg name (Issue #366 sha evidence)
+      CHECKOUT_LEG: observability-verify-macos
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          # Issue #366 sha evidence: pin every lane to the trigger snapshot —
+          # lane jobs start at different times and could otherwise float to a
+          # newer ref head between their checkouts.
+          ref: ${{ github.sha }}
+
+      # Issue #366 sha evidence: measure what this leg actually checked out
+      # and ship it to ci-summary — the leg name comes from the job-level
+      # CHECKOUT_LEG env (matrix lanes expand matrix.os there, where the
+      # context is valid), keeping these two steps identical across lanes.
+      - name: Record actual checkout SHA
+        shell: bash
+        env:
+          CHECKOUT_SHA_FILE: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+        run: git rev-parse HEAD > "$CHECKOUT_SHA_FILE"
+
+      - name: Upload checkout SHA evidence
+        # Artifact names are unique per workflow run under
+        # upload-artifact v4, so the run attempt is part of the name:
+        # re-running all or failed jobs uploads a fresh artifact instead
+        # of failing with a name conflict or overwriting the earlier
+        # attempt's evidence. ci-summary selects the latest attempt per
+        # leg (matching `needs.<job>.result` latest-attempt semantics).
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}
+          path: checkout-sha-${{ env.CHECKOUT_LEG }}-attempt-${{ github.run_attempt }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore CI-required tools from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust prek
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Check observability feature matrix (mise run check-observability)
+        run: mise run check-observability
+
+      - name: Test observability feature matrix (mise run test-observability)
+        run: mise run test-observability
+
+      - name: Lint observability feature matrix (mise run lint-observability)
+        run: mise run lint-observability
+
   # UI webview lane (Issue #156): the adapter's `webview` feature is
   # non-default so the main workspace lanes stay headless; this job
   # type-checks, lints and tests the feature-enabled surface
@@ -1917,7 +2079,7 @@ jobs:
   # `main-protect` ruleset's PR requirement plus human review.
   ci-summary:
     name: ci-summary
-    needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, ui-verify, ui-verify-macos, ui-gpui-verify, ui-gpui-verify-macos, ui-gpui-offscreen-verify, bench, l1-real-verify, l1-real-verify-macos, msrv-verify]
+    needs: [verify, verify-macos, rt-verify, icc-verify, compression-verify, io-structured-verify, observability-verify, observability-verify-macos, ui-verify, ui-verify-macos, ui-gpui-verify, ui-gpui-verify-macos, ui-gpui-offscreen-verify, bench, l1-real-verify, l1-real-verify-macos, msrv-verify]
     if: always()
     runs-on: ubuntu-latest
     env:

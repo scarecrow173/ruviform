@@ -280,6 +280,27 @@ run = "cargo test -p ruviform-io-e2e"
 description = "Run the opt-in bounded corpus replay for io-e2e readers (fixed seed, 48 cases/format, byte+time budgets; Issue #306 G08)"
 run = "cargo test -p ruviform-io-e2e --test corpus_replay -- --ignored --nocapture"
 
+# Observability lane (Issue #281 G0): logging/tracing-export/
+# allocation-probe/integration are non-default features and
+# `cargo test --workspace`/`test-full` never compile most
+# feature-gated targets (tests/logging.rs, tests/integration.rs,
+# tests/rt_boundary.rs, examples/logging_host.rs, src/profiling/*).
+# Same `&&`-chained single-string form as io-compression: dead code
+# under a reduced feature set only fails `-D warnings` at that exact
+# combination. The matrix pins default (= --no-default-features, since
+# `default = []`), each feature alone, and --all-features (full
+# unify). Stable toolchain — `test-observability-msrv` is the
+# separate MSRV 1.89 lane.
+[tasks.check-observability]
+description = "Type-check ruviform-observability across its feature matrix (default plus each optional feature and all features; Issue #281 G0)"
+run = "cargo check -p ruviform-observability --all-targets && cargo check -p ruviform-observability --all-targets --features logging && cargo check -p ruviform-observability --all-targets --features tracing-export && cargo check -p ruviform-observability --all-targets --features allocation-probe && cargo check -p ruviform-observability --all-targets --features integration && cargo check -p ruviform-observability --all-targets --all-features"
+[tasks.lint-observability]
+description = "Lint ruviform-observability and its test targets across the feature matrix"
+run = "cargo clippy -p ruviform-observability --all-targets -- -D warnings && cargo clippy -p ruviform-observability --all-targets --features logging -- -D warnings && cargo clippy -p ruviform-observability --all-targets --features tracing-export -- -D warnings && cargo clippy -p ruviform-observability --all-targets --features allocation-probe -- -D warnings && cargo clippy -p ruviform-observability --all-targets --features integration -- -D warnings && cargo clippy -p ruviform-observability --all-targets --all-features -- -D warnings"
+[tasks.test-observability]
+description = "Run ruviform-observability tests across the feature matrix (unit/integration/doc tests per combination)"
+run = "cargo test -p ruviform-observability && cargo test -p ruviform-observability --features logging && cargo test -p ruviform-observability --features tracing-export && cargo test -p ruviform-observability --features allocation-probe && cargo test -p ruviform-observability --features integration && cargo test -p ruviform-observability --all-features"
+
 # IO file/archive lane (Issue #409): the rooted-read capability and the
 # shared vfs backend (unix/windows/unsupported) live in io-file; io-archive
 # is the direct consumer that must not regress. Dedicated lane so rooted
