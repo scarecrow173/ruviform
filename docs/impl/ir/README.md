@@ -179,6 +179,7 @@ Directory: `docs/impl/ir`
 | IMPL-mK9jH2gF5dS8aQ1wE4rT7y | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実装記録 | completed | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | IMPL-034UudZrMUImnIREPB6lU1 | Issue #306 IO 合成 E2E slice-2 — Fault/Fuzz fixture・OS/FS probe・Rooted boundary | completed | [issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md](./issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md) |
 | IMPL-034V8l54mhl7RUcgflLUyv | Issue #306 IO 合成 E2E slice-4 feature-matrix lane 実測証拠 | completed | [issue-306-io-e2e-slice-4-feature-matrix-lane.md](./issue-306-io-e2e-slice-4-feature-matrix-lane.md) |
+| IMPL-034XDuyLngwg5QXatIDUUO | Issue #306 G01 実4GiB opt-in lane + G05 性能 baseline lane | completed | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | IMPL-euXEIcDb4J5tm1vO1GDkHH | Issue #306 IO 合成 E2E slice-3 — IO MSRV lane・DAG/RT 境界 audit 証跡 | completed | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | IMPL-RrIh5XTCXgmjRS7m6giD6V | Issue #307: attach 時 frame_base 検証 context（accessors + typed mismatch 拒否） | completed | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | IMPL-034UiuvjiiksJVjjkxtT5W | Issue #308 — Generation切替時のProbe再Binding全件整合・部分失敗契約 | completed | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |

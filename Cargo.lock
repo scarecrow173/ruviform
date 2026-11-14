@@ -6712,6 +6712,7 @@ dependencies = [
 name = "ruviform-io-e2e"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "ruviform-audio-core",
  "ruviform-io-archive",
  "ruviform-io-compression",

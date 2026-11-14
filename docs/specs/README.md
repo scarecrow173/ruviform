@@ -233,6 +233,7 @@ Directory: `docs/specs`
 | SPEC-034V4nfv1RJmI8TqYPEWcY | Issue #243 — Windows 実 OS multiwindow smoke（部分スコープ・後続スライス） | implemented | [issue-243-windows-multiwindow-smoke.md](./issue-243-windows-multiwindow-smoke.md) |
 | SPEC-034Jc9BJlI7ULEBWoIlMP2 | Issue #28 UI 技術検証 PoC（wry・描画バックエンド・フロントエンド FW・配布） | implemented | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | SPEC-034WXOCYjbhvL8XtAwcQYk | Issue #306 G07/G08 — fault seam 判定・契約試験 + bounded corpus-replay 入口 | implemented | [issue-306-fault-seam-fuzz.md](./issue-306-fault-seam-fuzz.md) |
+| SPEC-034XCP64zCIaWAnqXYkbFt | Issue #306 G01/G05 — 実4GiB opt-in lane + 性能 baseline lane | implemented | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | SPEC-0kIy1SFw7ffSK1AAi4BXHu | Issue #400 借用 sealed readback を独立 decoder へ bounded に接続する共通API | implemented | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | SPEC-034Tnjp8f4gexhi9BsQuq1 | Issue #409 Rooted capability の再 root 化と停止可能な bounded directory 列挙 | implemented | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | SPEC-Lk3RvQ8mTxWn5HcZb2GdYu | Issue #435 — Label/Table ViewSpec kind と Fake/GPUI parity | implemented | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
