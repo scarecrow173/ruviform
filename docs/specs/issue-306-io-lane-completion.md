@@ -1,7 +1,7 @@
 ---
 id: "SPEC-034XCP64zCIaWAnqXYkbFt"
 type: "spec"
-status: "proposed"
+status: "implemented"
 title: "Issue #306 G01/G05 — 実4GiB opt-in lane + 性能 baseline lane"
 created: "2026-11-15"
 updated: "2026-11-15"

@@ -1,7 +1,7 @@
 ---
 id: "PLAN-034XCT9Qm6U9QcMldwvZAH"
 type: "plan"
-status: "approved"
+status: "completed"
 title: "Issue #306 G01/G05 実装計画"
 created: "2026-11-15"
 updated: "2026-11-15"

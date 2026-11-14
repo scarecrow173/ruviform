@@ -113,7 +113,6 @@ Directory: `docs/plans`
 | PLAN-W0d5X9GIZLFMnSGqu9OlBg | Issue #306 汎用 I/O 合成 E2E 実装計画 (IO-IMP-12) | approved | [issue-306-io-composition-e2e.md](./issue-306-io-composition-e2e.md) |
 | PLAN-dS6gH1jK4lM9nB2vC8xZ3q | Issue #306 IO E2E — OS-L1 既存 CI 証拠検査と不足 Case 補完 実施計画 | approved | [issue-306-io-e2e-cases.md](./issue-306-io-e2e-cases.md) |
 | PLAN-034UtCUZnaLUCtLUqb8nYz | Issue #306 IO E2E slice 2 実装計画 | approved | [issue-306-io-e2e-fault-fuzz.md](./issue-306-io-e2e-fault-fuzz.md) |
-| PLAN-034XCT9Qm6U9QcMldwvZAH | Issue #306 G01/G05 実装計画 | approved | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | PLAN-eShTb4vnZSc0gaiPtChnIU | Issue #306 IO E2E slice 3 実装計画 | approved | [issue-306-io-msrv-dag-rt-audit.md](./issue-306-io-msrv-dag-rt-audit.md) |
 | PLAN-vK3u33xgmjJerBC8LrUewZ | Issue #307 attach 時 frame_base 検証 context — 実装計画 | approved | [issue-307-attach-frame-base-verified-context.md](./issue-307-attach-frame-base-verified-context.md) |
 | PLAN-034Ui3RAJGJJ1dJAlUW9N0 | Issue #308 — Probe再Binding全件整合の実装計画 | approved | [issue-308-probe-rebind-atomic.md](./issue-308-probe-rebind-atomic.md) |
@@ -229,6 +228,7 @@ Directory: `docs/plans`
 | PLAN-J2SBIDqNyZcnFDIJmvppYM | Issue #294 consumer-verify → ci-issue-tracker 配線実装計画 — scope 別 job・reconcile 全 scope 化・contract test | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | PLAN-034Ulf4tsZJz5CatpaE7hG | Issue #294 daily candidate-tuple trigger 実装計画 — decide.mjs tuple モード・daily-ci job・契約 test | completed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | PLAN-034WXSiTHXNyUkkb6VasRN | Issue #306 G07/G08 fault seam・corpus replay 実装計画 | completed | [issue-306-fault-seam-fuzz-plan.md](./issue-306-fault-seam-fuzz-plan.md) |
+| PLAN-034XCT9Qm6U9QcMldwvZAH | Issue #306 G01/G05 実装計画 | completed | [issue-306-io-lane-completion.md](./issue-306-io-lane-completion.md) |
 | PLAN-034TaI5Vr6iNYJxjNosslA | Issue #390 Driver Contract/Lab 実装計画 | completed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |
 | PLAN-7KK3Fpy2WfrNghFE2UJHF8 | Issue #400 実施計画 — 借用 readback → demuxer bounded 接続 | completed | [issue-400-borrowed-readback-decoder-bridge.md](./issue-400-borrowed-readback-decoder-bridge.md) |
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | completed | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |

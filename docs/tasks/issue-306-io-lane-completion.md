@@ -1,7 +1,7 @@
 ---
 id: "TASK-034XCTbpfF11KBmNQiiynY"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #306 G01/G05 実装タスク"
 created: "2026-11-15"
 updated: "2026-11-15"

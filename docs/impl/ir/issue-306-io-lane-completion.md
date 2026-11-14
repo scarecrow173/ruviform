@@ -1,10 +1,10 @@
 ---
 id: "IMPL-034XDuyLngwg5QXatIDUUO"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #306 G01 実4GiB opt-in lane + G05 性能 baseline lane"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: []
 relations:
   source:
@@ -225,7 +225,30 @@ main 統合済みで、残件は G01（実 4GiB 境界）と G05（性能 baseli
 
 ## Validation
 
-<!-- G01/G05 実走結果を evidence/rf306/large-bench-report.md に記録後に確定 -->
+正本証拠: `evidence/rf306/large-bench-report.md`。
+
+- G01（canonical `mise run test ruviform-io-e2e --test
+  large_staged -- --ignored --nocapture`）: **Pass — 15/15 case**
+  （4GiB−1/4GiB/4GiB+1 × 5 scenario）、1008.22s、preflight probe
+  OK（required=4,563,402,753 bytes、NTFS temp_dir）。容量不足の
+  NotRun は発生せず。
+- G05（canonical `mise run bench` = `cargo bench --workspace`）:
+  **Fail exit 101 — 本 slice 範囲外の既存破損**
+  （`ruviform-numeric` lib test が bench profile でコンパイル不能。
+  `cargo test -p ruviform-numeric --lib` は 116 tests pass で
+  bench-profile 固有と確認。lease 外のため未修正、evidence/PR に
+  記録）。
+- G05 補助（`cargo bench -p ruviform-io-e2e --bench
+  io_composition`、merge 後 tree で再実走）: **Pass — 全 6 cell
+  完走**、panic/peak 違反なし。peak_delta 最大 ≈1.34 MiB
+  （1 GiB bound 内）。数値は evidence に転記。
+- 非回帰: `cargo check --locked`/`clippy -D warnings`/`fmt --check`/
+  `cargo test -p ruviform-io-e2e`/`corpus_replay --ignored` 全て
+  Pass（merge 後に check 再確認済み）。
+- review-protocol self-review: `staged_publish` cell の destination
+  不整合（bound dest `publish.bin` vs remove 対象 `published-N.bin`
+  の不一致で初回 iteration panic する潜在 bug）を 1 件 CONFIRMED・
+  修正済み — bench 実走で再検証。その他 P0/P1 なし。
 
 ## Risks
 
