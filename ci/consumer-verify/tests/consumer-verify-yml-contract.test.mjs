@@ -230,8 +230,11 @@ for (const [name, job] of [
     // Consumer 側通常 View/Domain headless は未接続のまま owner 付き not_run
     assert.ok(/GUI-CONTRACT consumer-side[^\n]*"not_run" "[^"]*#1(66|75)/.test(job),
       "consumer-side GUI contract must stay a not_run row with owners");
-    // capability-absent 固定行は維持
-    const visual = job.match(/rec "GUI visual\/OS \+ 実 window lanes" "[^"]*" "[^"]*" "(\w+)"/);
+    // capability-absent 固定行は維持 — Case schema v2 では実 window capability
+    // を GUI-L2|real-window|Required と正直に分類する（outcome は unsupported のまま）
+    const visual = job.match(
+      /rec "\$\{CONSUMER_NAME\}-gui-real-window\|GUI-L2\|real-window\|Required" "GUI visual\/OS \+ 実 window lanes" "[^"]*" "[^"]*" "(\w+)"/,
+    );
     assert.ok(visual && visual[1] === "unsupported", "visual/OS real-window must stay unsupported");
     // 混同していた旧行名が残っていないこと
     assert.ok(!job.includes("contract/semantic/visual-OS/dock"), "conflated capability row must be removed");
@@ -362,4 +365,76 @@ test("contract: evidence.mjs checkout is the dispatch ref (no candidate ref)", (
   assert.ok(checkouts.length >= 3, "preflight + both verify jobs need ruviform checkout");
   assert.ok(!/with:\s*\n\s+ref: \$RUVIFORM_REV/.test(src) && !/ref: \$\{\{ env\.RUVIFORM_REV \}\}/.test(src),
     "script source must be the dispatch ref, not the candidate SHA");
+});
+
+// ---------------------------------------------------------------------------
+// Case schema v2 (Issue #294 first slice — #627 contract §2)
+// ---------------------------------------------------------------------------
+
+// Every rec() first argument must be a Case spec:
+//   "${CONSUMER_NAME}-<slug>|<level>|<environment_kind>|<requirement>[|<resolved_sha>]"
+// where the classification tail is either the shared $DEF default
+// (OS-L1|deterministic-backend|Required) or an explicit honest literal for
+// non-default depths. Old-style `rec "<name>" ...` calls (no spec) are a
+// contract violation — evidence.mjs lane would reject them at runtime.
+const CASE_SPEC_RE =
+  /^"\$\{CONSUMER_NAME\}-[a-z0-9-]+\|(?:\$DEF|OS-L1\|deterministic-backend\|Required|GUI-L2\|real-window\|Required|EXT-L3\|test-plugin\|Required|OS-L1\|physical-device\|Required)(?:\|\$RUVIFORM_REV)?"$/;
+
+for (const [name, job] of [
+  ["verify-audiolens", audiolens],
+  ["verify-synvelis", synvelis],
+]) {
+  test(`contract: ${name} every rec() call carries a Case schema spec`, () => {
+    const specs = [...job.matchAll(/rec "([^"]+)"/g)].map((m) => `"${m[1]}"`);
+    assert.ok(specs.length >= 15, `expected >=15 lane rows, got ${specs.length}`);
+    for (const spec of specs) {
+      assert.ok(CASE_SPEC_RE.test(spec), `rec spec must be a Case declaration: ${spec}`);
+    }
+    // default classification constant exists and is the headless/infra default
+    assert.ok(/DEF="OS-L1\|deterministic-backend\|Required"/.test(job), "DEF default classification missing");
+    // resolved_ruviform_sha is bound only on candidate-tree GUI rows
+    const rshaRows = specs.filter((s) => s.includes("$RUVIFORM_REV"));
+    assert.ok(rshaRows.length === 6, `expected 6 candidate-bound rows (boundary+semantic x3), got ${rshaRows.length}`);
+    for (const s of rshaRows) {
+      assert.ok(/-gui-(boundary|semantic)\|/.test(s), `resolved sha only on gui rows: ${s}`);
+    }
+  });
+
+  test(`contract: ${name} direct lane calls declare all required Case fields`, () => {
+    // lane invocations outside rec() (resolution tuple rows, extra-task loop)
+    // must pass the same required flags — a row missing them fails finalize.
+    // every `lane --file` call site inside this job must contain the flags
+    const segments = job.split('node "$EV" lane --file "$LANES_FILE"').slice(1);
+    for (const seg of segments) {
+      const head = seg.slice(0, 600);
+      for (const flag of ["--case-id", "--level", "--environment-kind", "--requirement"]) {
+        assert.ok(head.includes(flag), `direct lane call missing ${flag}: ${head.slice(0, 120)}`);
+      }
+    }
+    assert.ok(segments.length >= 5, `expected >=5 direct lane call sites, got ${segments.length}`);
+  });
+
+  test(`contract: ${name} fallback evidence uses schemaVersion 2 + contract v1`, () => {
+    assert.ok(/"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple\/v1"/.test(job),
+      "finalize-failure fallback must emit schemaVersion 2 with contract v1");
+    assert.ok(!/"schemaVersion":1/.test(job), "stale schemaVersion 1 fallback remains");
+  });
+}
+
+test("contract: non-default Case classifications are honest (no new pass)", () => {
+  // GUI-L2 real-window rows stay `unsupported`; EXT-L3 test-plugin stays
+  // `unsupported`; macOS real-OS stays `unsupported`. None may gain a pass.
+  for (const [name, job] of [
+    ["verify-audiolens", audiolens],
+    ["verify-synvelis", synvelis],
+  ]) {
+    assert.ok(/gui-real-window\|GUI-L2\|real-window\|Required" "GUI visual\/OS \+ 実 window lanes" "-" "real-window host" "unsupported"/.test(job),
+      `${name}: real-window row must stay unsupported`);
+    assert.ok(/macos-os\|OS-L1\|physical-device\|Required" "macOS\/実 OS lanes" "-" "os-specific" "unsupported"/.test(job),
+      `${name}: macOS real-OS row must stay unsupported`);
+  }
+  // synvelis plugin dock is the only EXT-L3 row and stays unsupported
+  assert.ok(/plugin-native-dock\|EXT-L3\|test-plugin\|Required" "PLUGIN-NATIVE-DOCK \(実 plugin binary\)" "-" "real-plugin" "unsupported"/.test(synvelis),
+    "synvelis plugin-native-dock must stay unsupported");
+  assert.ok(!/EXT-L3/.test(audiolens), "audiolens has no plugin-dock lane — no EXT-L3 row expected");
 });
