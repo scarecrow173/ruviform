@@ -114,3 +114,4 @@ Ruviform ワークスペースのメンバークレート索引（計39クレー
 | [`ruviform-viz`](ruviform-viz/README.md) | 汎用インタラクティブ可視化プリミティブ（波形 LOD・STFT スペクトログラム・タイムライン座標変換・表示 quantization・RVBW/RVST binary transfer — Issue #157。GUI/WebView 非依存） |
 | [`ruviform-audio-plugin-bridge`](ruviform-audio-plugin-bridge/README.md) | ホストプラグイン → typed multi-bus グラフのアダプタ（bus→port 射影・logical span→physical call 分割・process-start 相対 EventList・`PluginNodeControl`/`PluginNodeFactory` — Issue #196 / Migration M4） |
 | [`ruviform-poc-native-dock`](ruviform-poc-native-dock/README.md) | Native Dock PoC harness（`GpuiSurfaceAdapter`↔`PluginEditorSession` 結線の composition root・probe plugin 実 native editor を real GPUI window へ attach — Issue #388/#389。手動検証入口、本番 API なし） |
+| [`ruviform-plugin-test-vst3`](ruviform-plugin-test-vst3/README.md) | テスト専用 VST3 test_gain プラグイン（実 VST3 バイナリを生成し本番 host path `Vst3Library::load` で検証 — Issue #630 first slice。本番クレートは本クレートに依存しない） |
