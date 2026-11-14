@@ -1,0 +1,25 @@
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v1.0.69
+   Compiling thiserror-impl v1.0.69
+   Compiling thiserror v2.0.21
+   Compiling quick-error v2.0.1
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling proc-macro-error2 v2.0.1
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+[poc] start os=windows
+[poc] capabilities=WindowCapabilities { resize: Supported, focus: Supported, scale_factor: Supported, multi_window: Supported, ime: Unsupported, native_surface_slot: Supported }
+[poc] window=w1
+[poc] clap_path=G:/orca/workspaces/ruviform/rf389-clap-editor/target/debug/ruviform_plugin_clap.dll
+[poc] clap_size=486400
+[poc] clap_descriptors=1
+[poc] clap_plugin id=org.ruviform.clap-gain-poc name=Ruviform Gain PoC vendor=Ruviform version=0.1.0
+[poc] plugin_id=org.ruviform.clap-gain-poc external_mode=true
+[poc] instance=PluginHandle { slot: 0, generation: 0 }
+[poc] initialize=ok
+[poc] ready
+[poc] declare_slot=ok index=0
+[poc] lease_parent=ok container_hwnd=0xb60faa
+[poc] open=fail error=Ops(Unsupported)
+[poc] done state=Some(Failed { cause: Unsupported })
+[poc] done state=Some(Failed { cause: Unsupported })
+[poc] exited

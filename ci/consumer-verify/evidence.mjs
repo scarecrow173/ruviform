@@ -61,7 +61,36 @@ export const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 export const REF_REJECT_RE = /(\.\.|^\/|\/$|\.lock$)/;
 export const OUTCOMES = ["pass", "fail", "not_run", "unsupported", "skipped"];
 export const CONTRACT = "consumer-verify-tuple/v1";
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+// Case schema v2 (Issue #294 first slice / #627 contract §2): the result
+// axis stays `outcome` (requirement is orthogonal — never folded into one
+// field). `skipped` remains a lane-vocabulary-only derived outcome.
+export const LEVELS = ["OS-L1", "GUI-L2", "EXT-L3"];
+export const ENVIRONMENT_KINDS = [
+  "deterministic-backend",
+  "virtual-os-endpoint",
+  "test-plugin",
+  "real-window",
+  "physical-device",
+];
+export const REQUIREMENTS = ["Required", "Deferred", "NotApplicable"];
+// Optional case-record fields (camelCase option keys; serialized snake_case):
+// string-or-null; resolved_ruviform_sha must be a real 40-hex SHA when
+// present (resolved value, not a declared one).
+export const OPTIONAL_LANE_FIELDS = [
+  "oracle",
+  "fixtureVersion",
+  "resolvedRuviformSha",
+  "expected",
+  "observed",
+  "device",
+  "endpoint",
+  "plugin",
+  "abi",
+  "sdk",
+  "arch",
+  "osVer",
+];
 
 // ---------------------------------------------------------------------------
 // classify-ref (pure)
@@ -78,21 +107,72 @@ export function classifyRef(input) {
 // lane record (pure validation + JSONL append in cmd)
 // ---------------------------------------------------------------------------
 
-export function makeLaneRecord({ name, command, feature, os, outcome, reason }) {
+function requireEnum(value, allowed, flag) {
+  if (!allowed.includes(value)) {
+    throw new Error(`${flag} must be one of ${allowed.join("/")} (got: ${value})`);
+  }
+}
+
+function optionalString(value, key) {
+  if (value == null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`lane ${key} must be a string or null (got: ${typeof value})`);
+  }
+  return value;
+}
+
+export function makeLaneRecord({
+  name,
+  command,
+  feature,
+  os,
+  outcome,
+  reason,
+  caseId,
+  level,
+  environmentKind,
+  requirement,
+  ...optional
+}) {
   if (typeof name !== "string" || name.length === 0) {
     throw new Error("lane --name is required");
   }
   if (!OUTCOMES.includes(outcome)) {
     throw new Error(`lane --outcome must be one of ${OUTCOMES.join("/")} (got: ${outcome})`);
   }
-  return {
+  if (typeof caseId !== "string" || caseId.length === 0) {
+    throw new Error("lane --case-id is required");
+  }
+  requireEnum(level, LEVELS, "lane --level");
+  requireEnum(environmentKind, ENVIRONMENT_KINDS, "lane --environment-kind");
+  requireEnum(requirement, REQUIREMENTS, "lane --requirement");
+  const rec = {
     name,
     command: command ?? "-",
     feature: feature ?? "-",
     os: os ?? "-",
     outcome,
     reason: reason ?? null,
+    case_id: caseId,
+    level,
+    environment_kind: environmentKind,
+    requirement,
   };
+  for (const key of OPTIONAL_LANE_FIELDS) {
+    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    let value = optionalString(optional[key], `--${snake.replace(/_/g, "-")}`);
+    if (value === "") value = null;
+    if (snake === "resolved_ruviform_sha" && value !== null && !SHA_RE.test(value)) {
+      throw new Error(`lane --resolved-ruviform-sha must be a 40-hex SHA or empty (got: ${value})`);
+    }
+    rec[snake] = value;
+  }
+  for (const key of Object.keys(optional)) {
+    if (!OPTIONAL_LANE_FIELDS.includes(key)) {
+      throw new Error(`lane: unknown option --${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`);
+    }
+  }
+  return rec;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +343,31 @@ function parseArgs(argv) {
   return args;
 }
 
+// Fail-closed lane-record schema check shared by readLanes: rows written
+// outside the `lane` command must satisfy the same vocabulary — a
+// forged/unknown value must not count toward status.
+function assertLaneRecord(rec, ctx) {
+  const bad = (what) => {
+    throw new Error(`lanes file ${ctx} fails lane record schema (${what})`);
+  };
+  if (rec === null || typeof rec !== "object" || Array.isArray(rec)) bad("not an object");
+  if (typeof rec.name !== "string" || rec.name.length === 0) bad("name");
+  if (!OUTCOMES.includes(rec.outcome)) bad("outcome");
+  if (typeof rec.case_id !== "string" || rec.case_id.length === 0) bad("case_id");
+  if (!LEVELS.includes(rec.level)) bad("level");
+  if (!ENVIRONMENT_KINDS.includes(rec.environment_kind)) bad("environment_kind");
+  if (!REQUIREMENTS.includes(rec.requirement)) bad("requirement");
+  for (const snake of OPTIONAL_LANE_FIELDS.map((k) =>
+    k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`),
+  )) {
+    const v = rec[snake];
+    if (v !== undefined && v !== null && typeof v !== "string") bad(snake);
+    if (snake === "resolved_ruviform_sha" && typeof v === "string" && !SHA_RE.test(v)) {
+      bad("resolved_ruviform_sha");
+    }
+  }
+}
+
 function readLanes(file) {
   if (!existsSync(file)) return [];
   return readFileSync(file, "utf8")
@@ -275,14 +380,10 @@ function readLanes(file) {
       } catch {
         throw new Error(`lanes file ${file} line ${i + 1} is not valid JSON`);
       }
-      // Rows written outside the `lane` command must satisfy the same
-      // vocabulary — a forged/unknown outcome must not count toward status.
-      if (
-        rec === null || typeof rec !== "object" ||
-        typeof rec.name !== "string" || rec.name.length === 0 ||
-        !OUTCOMES.includes(rec.outcome)
-      ) {
-        throw new Error(`lanes file ${file} line ${i + 1} fails lane record schema (name/outcome)`);
+      try {
+        assertLaneRecord(rec, `${file} line ${i + 1}`);
+      } catch (e) {
+        throw e;
       }
       return rec;
     });
@@ -311,6 +412,22 @@ async function main() {
         os: args.os,
         outcome: args.outcome,
         reason: args.reason,
+        caseId: args["case-id"],
+        level: args.level,
+        environmentKind: args["environment-kind"],
+        requirement: args.requirement,
+        oracle: args.oracle,
+        fixtureVersion: args["fixture-version"],
+        resolvedRuviformSha: args["resolved-ruviform-sha"],
+        expected: args.expected,
+        observed: args.observed,
+        device: args.device,
+        endpoint: args.endpoint,
+        plugin: args.plugin,
+        abi: args.abi,
+        sdk: args.sdk,
+        arch: args.arch,
+        osVer: args["os-ver"],
       });
       if (!args.file) {
         console.error("usage: lane --file <jsonl> --name <n> --outcome <o>");

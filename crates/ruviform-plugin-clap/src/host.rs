@@ -13,6 +13,8 @@
 //! | [`Plugin::start_processing`] | `start_processing` (`Stopped` → `Started`) |
 //! | [`PluginProcessor::process`] | `StartedPluginAudioProcessor::process` |
 //! | [`Plugin::stop_processing`] | `stop_processing` (`Started` → `Stopped`) |
+//! | [`Plugin::open_gui`] | `clap.ext.gui`: `is_api_supported` → `create` → `set_parent` → `show` |
+//! | [`Plugin::close_gui`]/`Drop` | `clap.ext.gui`: `hide` (best-effort) → `destroy`, before instance teardown |
 //! | `Drop` | best-effort `stop_processing` → `deactivate` → `plugin.destroy` |
 //!
 //! Teardown is `Drop`-driven: the neutral `Plugin` surface has no
@@ -82,9 +84,17 @@
 //! - Load/scan/instantiate/lifecycle failures converge to
 //!   `Err(ClapHostError)`/`Err(HostError)`/`Err(PrepareError)` — never
 //!   a panic.
-//! - `save_state`/`restore_state`/`open_gui`/`close_gui` keep the
-//!   [`Plugin`] defaults (`Err(HostError::Unsupported)`) — the bridge
-//!   never calls a standard state or GUI verb.
+//! - `save_state`/`restore_state` keep the [`Plugin`] defaults
+//!   (`Err(HostError::Unsupported)`) — the `state` extension is
+//!   unimplemented in v1.
+//! - `open_gui`/`close_gui` drive the plugin's `clap.ext.gui`
+//!   extension through the `PluginGui` host calls (design
+//!   `docs/designs/issue-389-clap-l0-editor-attach.md`): Windows
+//!   `win32` embedded attach only. A plugin without the extension,
+//!   or without `win32` embedded support, answers `Unsupported`;
+//!   lifecycle misuse (pre-`init` open, double open) answers
+//!   `PluginFailed`; hook declines answer `PluginFailed` after a
+//!   symmetric `destroy` rollback.
 //! - `create_sendable` keeps its `None` default — `PluginInstance` is
 //!   `!Send`/`!Sync` (`PhantomData<*const ()>`), so no `Send` instance
 //!   can be honestly produced.
@@ -102,7 +112,7 @@
 //!   ports, per-port channels) are clamped to `MAX_SCAN_*` caps before
 //!   they can size an allocation or a scan loop.
 
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 use std::fmt;
 use std::path::Path;
 
@@ -112,6 +122,7 @@ use clack_common::events::io::{EventBuffer, OutputEvents};
 use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::ClapId;
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
+use clack_extensions::gui::{GuiApiType, GuiConfiguration, PluginGui, Window};
 use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
 use clack_host::entry::{PluginEntry, PluginEntryError};
 use clack_host::host::{HostExtensions, HostHandlers, HostInfo, SharedHandler};
@@ -125,9 +136,10 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, HostError, ParamFlags, ParamId,
-    ParamInfo, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
-    ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, HostError,
+    ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory,
+    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
+    TransportInfo, erase,
 };
 
 /// Upper bound of param events forwarded per block — the same scale as
@@ -609,6 +621,14 @@ struct ClapPlugin {
     /// and a plugin cannot force a host `Vec` past capacity on the RT
     /// path.
     input_events: EventBuffer,
+    /// The plugin's `clap.ext.gui` extension handle — `Some` only
+    /// while a GUI created by `open_gui` is alive. GUI teardown
+    /// (`hide` best-effort + `destroy`) runs in `close_gui` and at
+    /// the head of `Drop`, before the instance descent (design D3).
+    gui: Option<PluginGui>,
+    /// Instance-local mint counter for [`GuiHandle`] tokens — the
+    /// same `gui_seq` convention the VST3 adapter uses.
+    gui_seq: u32,
 }
 
 impl ClapPlugin {
@@ -636,12 +656,39 @@ impl ClapPlugin {
             input_ports: AudioPorts::with_capacity(0, 0),
             output_ports: AudioPorts::with_capacity(0, 0),
             input_events: EventBuffer::new(),
+            gui: None,
+            gui_seq: 0,
         }
+    }
+
+    /// Tears down an open `clap.ext.gui` GUI: `hide` best-effort,
+    /// then `destroy` — the symmetric pair `close_gui` runs and
+    /// `Drop` repeats before the instance descent. `destroy` frees
+    /// the plugin's GUI resources and is infallible; a declined
+    /// `hide` must not skip it.
+    fn teardown_gui(&mut self, gui: PluginGui) {
+        let Some(instance) = self.instance.as_mut() else {
+            // `gui` is only ever set while `instance` is `Some` — an
+            // absent instance here would be a broken invariant, and
+            // without a live plugin the extension calls cannot run.
+            return;
+        };
+        let handle = instance.plugin_handle();
+        let _ = gui.hide(&handle);
+        gui.destroy(&handle);
     }
 }
 
 impl Drop for ClapPlugin {
     fn drop(&mut self) {
+        // GUI teardown precedes the instance descent: `gui.destroy`
+        // frees the plugin's window resources while the instance's
+        // main-thread handle is still alive — CLAP requires GUI
+        // destruction before `plugin.destroy` (design D3). A
+        // `close_gui` that already ran makes this a defined no-op.
+        if let Some(gui) = self.gui.take() {
+            self.teardown_gui(gui);
+        }
         // Symmetric teardown, best-effort: the neutral surface has no
         // deactivate/destroy hook, so they run here. A still-started
         // processor is stopped first (CLAP requires stop before
@@ -1021,7 +1068,109 @@ impl Plugin for ClapPlugin {
             .map(|_| ())
             .map_err(|_| HostError::PluginFailed)
     }
+
+    /// `open_gui` → `clap.ext.gui` negotiation → `create` →
+    /// `set_parent` → `show` — Windows `win32` embedded attach only
+    /// (design `docs/designs/issue-389-clap-l0-editor-attach.md`
+    /// D1/D4/D6).
+    ///
+    /// **Thread contract:** non-RT — must run on the thread owning
+    /// the parent HWND's message pump (the L0 caller's UI thread,
+    /// the same thread `init` ran on); the adapter owns no pump and
+    /// spawns no thread. All `PluginGui` calls go through
+    /// [`PluginMainThreadHandle`], never the shared handle.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] when the instance is not yet
+    /// initialized, a GUI is already open, or a `create`/`set_parent`/
+    /// `show` call declines (a `create`-success failure is rolled back
+    /// with `destroy` before returning); [`HostError::Unsupported`]
+    /// when this OS has no implemented GUI API, the plugin ships no
+    /// `clap.ext.gui` extension, or `win32` embedded is unsupported.
+    #[expect(unsafe_code)]
+    fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError> {
+        let Some(instance) = self.instance.as_mut() else {
+            // `open_gui` before `init` — the same bad-state convention
+            // as `prepare`/`start_processing` misuse.
+            return Err(HostError::PluginFailed);
+        };
+        if self.gui.is_some() {
+            // One live GUI per instance — the session contract's 1:1
+            // rule; a second `open_gui` is a misuse, not a capability
+            // answer.
+            return Err(HostError::PluginFailed);
+        }
+        let Some(api_type) = EDITOR_GUI_API else {
+            return Err(HostError::Unsupported);
+        };
+        let handle = instance.plugin_handle();
+        let Some(gui) = handle.get_extension::<PluginGui>() else {
+            // The plugin ships no `clap.ext.gui` extension.
+            return Err(HostError::Unsupported);
+        };
+        // Embedded only — `is_floating = false` (design D7: floating
+        // windows, `set_transient`, `suggest_title` stay out of scope).
+        let configuration = GuiConfiguration {
+            api_type,
+            is_floating: false,
+        };
+        if !gui.is_api_supported(&handle, configuration) {
+            return Err(HostError::Unsupported);
+        }
+        gui.create(&handle, configuration)
+            .map_err(|_| HostError::PluginFailed)?;
+        // `parent.payload()` is the redeemed raw platform handle —
+        // re-widened inside the OS adapter boundary only;
+        // `generation` is issuer metadata the OS layer never
+        // interprets. SAFETY: the payload is the session-redeemed
+        // parent HWND the caller keeps alive for the GUI's lifetime —
+        // the `set_parent` contract requires the window to outlive
+        // `destroy`, which the lease's session teardown guarantees.
+        let window = unsafe { Window::from_win32_hwnd(parent.payload() as *mut c_void) };
+        if unsafe { gui.set_parent(&handle, window) }.is_err() {
+            gui.destroy(&handle);
+            return Err(HostError::PluginFailed);
+        }
+        if gui.show(&handle).is_err() {
+            gui.destroy(&handle);
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_seq = self.gui_seq.wrapping_add(1);
+        self.gui = Some(gui);
+        Ok(GuiHandle::new(self.gui_seq))
+    }
+
+    /// `close_gui` → `hide` (best-effort) → `destroy`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open — closing an
+    /// unopened GUI is not a no-op success.
+    fn close_gui(&mut self) -> Result<(), HostError> {
+        let Some(gui) = self.gui.take() else {
+            return Err(HostError::Unsupported);
+        };
+        self.teardown_gui(gui);
+        Ok(())
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Editor GUI platform API
+// ---------------------------------------------------------------------------
+
+/// The CLAP GUI API type this OS offers for embedded attach —
+/// `Some(GuiApiType::WIN32)` only on Windows; other platforms hold
+/// `None` so `open_gui` answers the honest `Unsupported` instead of
+/// claiming an unverified Cocoa/X11/Wayland embed (design
+/// `docs/designs/issue-389-clap-l0-editor-attach.md` D4).
+#[cfg(target_os = "windows")]
+const EDITOR_GUI_API: Option<GuiApiType<'static>> = Some(GuiApiType::WIN32);
+
+/// Non-Windows attach is not implemented — see the Windows arm.
+#[cfg(not(target_os = "windows"))]
+const EDITOR_GUI_API: Option<GuiApiType<'static>> = None;
 
 // ---------------------------------------------------------------------------
 // Fixture resolution helper (shared with the Task-3 runner / Task-4 E2E)
@@ -1359,7 +1508,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_state_and_gui_verbs_are_defaults() {
+    fn unsupported_state_verbs_are_defaults() {
         let library = load_fixture();
         let factories = library.factories();
         let mut plugin = factories[0].create();
@@ -1368,10 +1517,40 @@ mod tests {
             plugin.restore_state(&[1, 2, 3]),
             Err(HostError::Unsupported)
         );
+    }
+
+    #[test]
+    fn open_gui_before_init_is_plugin_failed() {
+        // `instance=None` — `open_gui` before `init` is the same
+        // bad-state refusal as `prepare`/`start_processing` misuse
+        // (`PluginFailed`), not a capability answer (test-spec CA-01).
+        let library = load_fixture();
+        let factories = library.factories();
+        let mut plugin = factories[0].create();
         assert_eq!(
-            plugin.open_gui(ruviform_plugin_core::ParentLease::new(0, 0)),
+            plugin.open_gui(ParentLease::new(0, 0)),
+            Err(HostError::PluginFailed)
+        );
+        // close with nothing open is the honest refusal (CA-03).
+        assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+    }
+
+    #[test]
+    fn open_gui_without_gui_extension_is_unsupported() {
+        // The workspace fixture ships no `clap.ext.gui` extension —
+        // the adapter maps that to the honest `Unsupported`, never a
+        // fabricated success (test-spec CA-02). The failed open
+        // leaves no GUI: close is the same refusal (CA-03).
+        let library = load_fixture();
+        let factories = library.factories();
+        let mut plugin = factories[0].create();
+        plugin.init().expect("init");
+        assert_eq!(
+            plugin.open_gui(ParentLease::new(0, 0)),
             Err(HostError::Unsupported)
         );
         assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+        // `drop` then runs `close_gui`-equivalent teardown — a defined
+        // no-op here — before the pinned instance descent.
     }
 }

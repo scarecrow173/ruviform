@@ -23,6 +23,7 @@ Directory: `docs/discovery`
 | DISC-034JbXZSba3SvOavRFfs66 | Issue #28 UI 技術検証 PoC の事前調査 | draft | [issue-28-ui-poc.md](./issue-28-ui-poc.md) |
 | DISCOVERY-034T6RWRk7Pj3Qm9vN0xF4 | Issue #387 Driver-neutral Component/View Specs + Headless Behavior + GPUI Renderer 棚卸 | proposed | [issue-387-component-view-inventory.md](./issue-387-component-view-inventory.md) |
 | DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | final | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
+| DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -48,6 +49,7 @@ Directory: `docs/discovery`
 | DISC-034Qohljm0FMrizvY86YLe | Issue #233 media-reader Prefetch/Seek/Pump contract doc & feature improvement candidates — inventory, option analysis | resolved | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | DISC-034Qx5mnsXSbsrFmJqSCM1 | Issue #244 media-reader prefetch contract residual warts — boundary-first fault emission, reopen-failure dead generation, End commit-once | resolved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
 | DISC-034S9kMn2pQ7rT4vX8yB1w | Issue #294 Cross-Consumer候補Gate — consumer-verify.yml 現状監査と要件ギャップ | resolved | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
+| DISC-034XBVWijUovcdqO2rYXzx | Issue #294 virtual-first evidence schema — consumer-verify Case schema v2 現状監査 | resolved | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |
 | DISC-UsHnmyyijB53IvR586RquN | Issue #311 RF-GT-02 IPC schema conformance / deterministic record-replay / fault matrix — contract inventory | resolved | [issue-311-ipc-conformance-inventory.md](./issue-311-ipc-conformance-inventory.md) |
 | DISC-034S312gtUiTestDiscAA11 | Issue #312 test-only GUI host lifecycle / secure control adapter — inventory and option survey | resolved | [issue-312-test-gui-host-lifecycle.md](./issue-312-test-gui-host-lifecycle.md) |
 | DISC-034RBJK2HlLAlKCKmHP5Au | Issue #327 3リポジトリ横断CI計測Baseline 前提棚卸し | resolved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
