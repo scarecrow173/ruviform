@@ -4,7 +4,7 @@ type: "discovery"
 status: "resolved"
 title: "Issue #532 GPUI DComp topmost 合成制約 — 現行 L1 証拠照合・再開条件・方式 A/B/C 調査手順監査"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -50,6 +50,7 @@ relations:
     - "docs/test-specs/issue-532-dcomp-audit.md"
     - "docs/impl/ir/issue-532-dcomp-audit.md"
     - "docs/impl/exp/issue-532-dcomp-audit.md"
+    - "docs/discovery/issue-532-gpui-dcomp-surface.md"
     - "docs/discovery/issue-388-389-native-dock-current-state.md"
     - "docs/designs/issue-388-native-dock-windowing-slice3.md"
     - "docs/test-specs/issue-388-389-native-dock-contract.md"
@@ -64,6 +65,7 @@ relations:
   derived-by:
     - "docs/specs/issue-532-dcomp-audit.md"
     - "docs/designs/issue-532-dcomp-native-dock.md"
+    - "docs/discovery/issue-532-gpui-dcomp-surface.md"
   verifies: []
   verified-by:
     - "docs/test-specs/issue-532-dcomp-audit.md"
@@ -199,10 +201,10 @@ Issue #532 の未チェック受入項目のうち headless に可能な 3 件 �
 
 ## Open Questions
 
-- `topmost=false`（方式 A の最小変更候補）は child HWND を GPUI visual の背面に描画するか、それとも単に DComp target の stacking を変えるだけで child が引き続き覆われるか — **未検証**。Step 1 の再現 fixture で確かめる必要がある。
-- `GPUI_DISABLE_DIRECT_COMPOSITION=1` の非 DComp 経路が scenario 途中で exit 127 になった原因（GPUI 側の別経路の問題か、環境要因か）— ログ artifact なし・未切り分け。
-- 方式 B で DComp visual tree と HWND の合成順序を private に制御する際、upstream gpui の `directx_renderer.rs` が必要とする private API/内部状態にアクセス可能か — upstream の公開面の調査が必要。
-- 実 plugin が offscreen surface（D3D texture 等）を提供する方式の普遍性 — 実 plugin binary での検証が必要。
+- `topmost=false`（方式 A の最小変更候補）は child HWND を GPUI visual の背面に描画するか、それとも単に DComp target の stacking を変えるだけで child が引き続き覆われるか — **未検証**。Step 1 の再現 fixture で確かめる必要がある。→ **2026-11-15 更新**: upstream public-surface 監査（`docs/discovery/issue-532-gpui-dcomp-surface.md`）で patch 面積を確定（`directx_renderer.rs:793` の `true` literal 1 語のみ・crate 全体で `CreateTargetForHwnd` は同 1 箇所）。`topmost=false` の実画素・z-order 効果は依然 open。
+- `GPUI_DISABLE_DIRECT_COMPOSITION=1` の非 DComp 経路が scenario 途中で exit 127 になった原因（GPUI 側の別経路の問題か、環境要因か）— ログ artifact なし・未切り分け。→ **2026-11-15 更新**: 監査で非 DComp 経路の全差分をコード確認（`CreateSwapChainForHwnd`・`WS_EX_NOREDIRECTIONBITMAP` なし・`DXGI_SCALING_NONE`/`ALPHA_MODE_IGNORE`）し、gpui Windows 経路に `process::exit`/`abort` の明示呼び出しがないことを確認。exit-127 の原因はコードパスから一意に特定不能で、仮説 H1-H5 を `docs/discovery/issue-532-gpui-dcomp-surface.md` F5 に記録。**依然 open**（実 OS での stderr/exit code 捕捉再現が必要）。
+- ~~方式 B で DComp visual tree と HWND の合成順序を private に制御する際、upstream gpui の `directx_renderer.rs` が必要とする private API/内部状態にアクセス可能か — upstream の公開面の調査が必要。~~ → **2026-11-15 解消**: 監査で gpui の DComp/DXGI/renderer/window internals が全て `pub(crate)` 以下で downstream から到達不能と確定。Option B の実質的設計空間は OS 公開 API interposition（env var/`SetWindowRgn`/第二 DComp target）に限定される。詳細は `docs/discovery/issue-532-gpui-dcomp-surface.md` F3・F7。
+- 実 plugin が offscreen surface（D3D texture 等）を提供する方式の普遍性 — 実 plugin binary での検証が必要（依然 open・本 slice 範囲外）。
 
 ## Promotion Candidates
 

@@ -170,6 +170,7 @@ Directory: `docs/specs`
 | SPEC-034UiRf9jEzvH2FbreqPsA | Issue #480 — Tabs strip の FocusHandle unmount 解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
+| SPEC-034XAXSMzbLxf6doTfUBYY | Issue #532 GPUI DComp public-surface 監査スライス | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-thW5o4Z4OMp1n1quFRk4uh | Consumer-neutral Workflow/CLI orchestration契約・両Consumer適用性レビュー（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | SPEC-034Xe8fKEL6vpFX9pkgPU0 | Multi-backend Script/Analyzer言語非依存契約（Issue #558） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
