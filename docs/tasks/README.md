@@ -319,6 +319,7 @@ Directory: `docs/tasks`
 | TASK-rQRQ2bkMVhq40SWTKL1zXd | Issue #586 T1 — ir front matter 是正・ir/exp index 再生成・audit 検証 | done | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TASK-034WuW3rqyBgYH8WlRZH2D | Issue #590 T1 — ir missing-section 本文補完・audit/index 検証 | done | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | TASK-034XqAHZThxH8yUF9OOG3k | Issue #625 T1 — handshake 分類正規化・doc-chain・lane 検証 | done | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
+| TASK-034XAUE4Ki5ftJQfWI15b1 | Issue #627 T1 — 仮想優先3repo検証契約・POLICIES照合・移管台帳の文書化 | done | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

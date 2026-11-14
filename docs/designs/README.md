@@ -210,6 +210,8 @@ Directory: `docs/designs`
 | DESIGN-MnDOJoPVmxmAz1hdgVs3T3 | Issue #586 設計 — ir front matter 是正分類・index marker 配置・検証手順 | approved | [issue-586-impl-index-generation-design.md](./issue-586-impl-index-generation-design.md) |
 | DESIGN-034WuVTmYfKSkp3sJ8biu2 | Issue #590 設計 — ir missing-section 補完方針・セクション記述規約・検証手順 | approved | [issue-590-ir-missing-sections-design.md](./issue-590-ir-missing-sections-design.md) |
 | DESIGN-034XqAh1OycqOAK35pzCLQ | Issue #625 設計 — handshake hello 交換の transport error を Handshake 分類へ正規化 | approved | [issue-625-ci-e2e-handshake-race-design.md](./issue-625-ci-e2e-handshake-race-design.md) |
+| DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
+| DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
