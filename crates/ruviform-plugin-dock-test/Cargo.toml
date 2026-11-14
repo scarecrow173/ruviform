@@ -1,0 +1,58 @@
+[package]
+name = "ruviform-plugin-dock-test"
+description = "Test-only plugin-dock scenario harness (Issue #631 slice): resolves the real test_gain VST3 cdylib, records artifact digest/version evidence, and reports honest Pass/Fail/NotRun/Unsupported verdicts through the driver-neutral ruviform-ui-test scenario contract. Not a shipping product — no production crate may depend on this crate."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - ruviform-ui-test: the driver-neutral scenario contract this
+#   harness reports through (ScenarioSpec/run_scenario/ScenarioReport,
+#   FakeGuiTest semantic view-mount, FakeNativeSlot lease ledger).
+#   Consumer-layer composition only — production crates never depend
+#   on this crate (isolation by DAG, same shape as
+#   ruviform-poc-native-dock).
+ruviform-ui-test = { path = "../ruviform-ui-test" }
+# - ruviform-ui: driver-neutral view/native-slot vocabulary the
+#   scenario declares (ViewSpec/NativeSlotSpec via ui-test helpers,
+#   SlotSpec/SlotLease/NativeSurfaceSlot for the fake-slot lease
+#   redemption seam). No GPUI types anywhere in this crate.
+ruviform-ui = { path = "../ruviform-ui" }
+# - ruviform-plugin-vst3 (`host` feature): the production host bridge
+#   (`Vst3Library::load`/`descriptors()`/`factories()`) that dlopens
+#   the real test_gain cdylib — the same path the L1 runner uses.
+ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"] }
+# - ruviform-plugin-host: InProcessHost command surface
+#   (Scan/Instantiate/Initialize/Activate/Destroy), PluginEditorSessions
+#   + InProcessEditorOps for the honest editor-attach attempt.
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
+# - ruviform-plugin-core: ProcessConfig (Activate), PluginFactory
+#   (factory registration), ParentLease/ParentSlotLease boundary
+#   vocabulary.
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# - ruviform-audio-core: SampleRate for the Activate ProcessConfig.
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+# - ruviform-audio-test: EnvironmentKind vocabulary
+#   (real-abi-test-plugin is claimed only by cases that actually
+#   executed the real binary).
+ruviform-audio-test = { path = "../ruviform-audio-test" }
+# - serde_json: ScenarioSpec.environment / report environment +
+#   observed/expected evidence payloads (same set ui-test uses).
+serde_json = "1"
+# - sha2 0.10: SHA-256 of the plugin binary for artifact evidence.
+#   Already in Cargo.lock as a transitive dep (0.10.9); pinned to the
+#   same major line, no new tree.
+sha2 = "0.10"
+
+[dev-dependencies]
+# Builds the test_gain cdylib into deps/ when this crate's tests run
+# (dev-dep edge only — the fixture crate never enters this crate's
+# production dependency graph; precedent: ruviform-plugin-test-vst3's
+# own host_path.rs dev-dep on ruviform-plugin-vst3).
+ruviform-plugin-test-vst3 = { path = "../ruviform-plugin-test-vst3" }
+
+[lints]
+workspace = true
