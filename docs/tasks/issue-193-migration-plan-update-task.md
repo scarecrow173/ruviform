@@ -1,7 +1,7 @@
 ---
 id: "TASK-034WZ7YMSR5UKu8AhtpOgk"
 type: "task"
-status: "todo"
+status: "done"
 title: "Issue #193 Migration Plan Update Snapshot 文書化"
 created: "2026-11-14"
 updated: "2026-11-14"
@@ -154,12 +154,15 @@ census 証拠を作成する。文書のみの変更であり、コード・
 ## Verification
 
 - [x] `gh issue list/view` による Issue 状態 census
-  （2026-11-14 実測、補助証拠）。
-- [ ] `mise run fmt-check`（文書のみ変更のため必須軽量
+  （2026-11-14 実測、補助証拠。同日再実測で #243・
+  #313 の CLOSED 遷移を反映済み）。
+- [x] `mise run fmt-check`（文書のみ変更のため必須軽量
   チェック）。
-- [ ] `mise exec -- prek run --files <変更ファイル>`。
-- [ ] `doc-maintenance` の index plan/apply（specs/
-  designs/tasks/test-specs）と rescan。
-- [ ] `docs/impl/ir`・`docs/impl/exp` の README 手動追記。
-- [ ] review-protocol によるレビュー（blocker なし）。
-- [ ] `git status`/`git diff` で編集範囲の確認。
+- [x] `mise exec -- prek run --files <変更ファイル>`。
+- [x] `doc-maintenance` の index plan/apply（specs/
+  designs/tasks/test-specs/impl-ir）と rescan。
+- [x] `docs/impl/ir`・`docs/impl/exp` の README 手動追記
+  （exp の .md 一覧は生成 index 対象外）。
+- [x] review-protocol によるレビュー（blocker なし —
+  PR #615 で実施済み、follow-up 変更も同手順で確認）。
+- [x] `git status`/`git diff` で編集範囲の確認。
