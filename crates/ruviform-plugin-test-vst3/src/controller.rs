@@ -138,9 +138,7 @@ impl IEditControllerTrait for TestGainController {
         copy_wstring(GAIN_PARAM.name, &mut info.shortTitle);
         copy_wstring(GAIN_PARAM.unit, &mut info.units);
         info.stepCount = 0;
-        info.defaultNormalizedValue = GAIN_PARAM
-            .default_normalized()
-            .map_or(0.5, ParamValue::get);
+        info.defaultNormalizedValue = GAIN_PARAM.default_normalized().map_or(0.5, ParamValue::get);
         info.unitId = 0;
         info.flags = ParameterFlags_::kCanAutomate;
         kResultOk
