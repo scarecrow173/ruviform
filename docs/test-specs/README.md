@@ -188,6 +188,7 @@ Directory: `docs/test-specs`
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | TSPEC-034WZEsNYIpYAIB3snCErj | Issue #532 DComp 監査文書チェーン検証 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| TSPEC-cFTjIZpnYGLaA5BcC74ahh | Consumer-neutral Workflow/CLI orchestration契約検証（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | TSPEC-034XecRP3Wpuq0BscTS283 | Multi-backend Script/Analyzer契約検証（Issue #558 RF-SCRIPT-00） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
 | TSPEC-034XeilXUvNJ8cB4hX1e45 | Issue #562 — Alternate Evaluation Context headless PoC テスト仕様 | approved | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | TSPEC-TnJfu6sTEzaQgA5YPfDd7e | Issue #565 WASAPI input frame_position test spec | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |

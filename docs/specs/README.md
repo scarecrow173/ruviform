@@ -169,6 +169,7 @@ Directory: `docs/specs`
 | SPEC-1ZxAql6tPbxsqXhvmGvphr | Issue #490 oracle late-create query epoch 整合 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
+| SPEC-thW5o4Z4OMp1n1quFRk4uh | Consumer-neutral Workflow/CLI orchestration契約・両Consumer適用性レビュー（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | SPEC-034Xe8fKEL6vpFX9pkgPU0 | Multi-backend Script/Analyzer言語非依存契約（Issue #558） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
 | SPEC-034Xei1fO0DkKhCsfrRdzI | Issue #562 — Generic Alternate Evaluation Context headless 2候補比較 PoC（RF-CB-01） | approved | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | SPEC-4LwDFLWjvbGeZQSqW0Y93X | Issue #565 WASAPI input frame_position: IAudioClock::GetPosition の device position を port に乗せる | approved | [issue-565-wasapi-input-frame-position.md](./issue-565-wasapi-input-frame-position.md) |

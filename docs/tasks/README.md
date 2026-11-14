@@ -308,6 +308,7 @@ Directory: `docs/tasks`
 | TASK-034UiUpK8eTff8QiCEtGrP | Issue #480 — tab_focus op 駆動解放の実装と恒久テスト | done | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TASK-DBfsqONthDwUwmD4GpGXzq | Issue #490 T1 oracle addQuery epoch 整合 | done | [issue-490-t1-oracle-addquery-epoch.md](./issue-490-t1-oracle-addquery-epoch.md) |
 | TASK-034WZGjTqfOXG0HuO24s2c | Issue 532 DComp audit doc chain task | done | [issue-532-dcomp-audit-task.md](./issue-532-dcomp-audit-task.md) |
+| TASK-tKTEtLLPQU3PUXYcRGkiMF | Issue #553 Workflow/CLI orchestration契約 文書チェーン完成・検証 | done | [issue-553-workflow-orchestration-task.md](./issue-553-workflow-orchestration-task.md) |
 | TASK-034XegnqNA9Eq3THKwvpVO | Issue #558 Script/Analyzer契約 文書チェーン完成・検証 | done | [issue-558-script-contract-task.md](./issue-558-script-contract-task.md) |
 | TASK-9cTXJ0IYeniJ7ZmRBuYibG | Issue #565-T1: WASAPI-native input path — frame_position 供給 | done | [issue-565-task1-wasapi-input-frame-position.md](./issue-565-task1-wasapi-input-frame-position.md) |
 | TASK-vioQrXcHCVk7TkuPqAIPKc | Issue #582 T1 — ci 3 lane 失敗の修正・doc-chain・workflow_dispatch 検証 | done | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
