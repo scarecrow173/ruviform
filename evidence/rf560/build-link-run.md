@@ -42,10 +42,11 @@
 | コマンド | 結果 |
 | --- | --- |
 | `cargo test -p ruviform-ffi-poc`（補助証拠） | **22/22 Pass**（lib unit 8 + bridge integration 13 + faults 1） |
-| `mise run check ruviform-ffi-poc` | Pass（`cargo check --locked --all-targets`） |
-| `mise run lint ruviform-ffi-poc` | 本ファイル作成時点で clippy `-D warnings` 実行中 — 結果は PR 本文に記録 |
-| `mise run test ruviform-ffi-poc` | 同上 |
-| `mise run fmt-check`（`cargo fmt --all -- --check`） | Pass（fmt 適用後） |
+| `mise run check ruviform-ffi-poc` | Pass（`cargo check --locked --all-targets`、exit 0） |
+| `mise run lint ruviform-ffi-poc` | Pass（`cargo clippy --locked --all-targets -D warnings`、exit 0） |
+| `mise run test ruviform-ffi-poc` | Pass（`cargo test --locked`、22/22 tests） |
+| `mise run fmt-check`（`cargo fmt --all -- --check`） | Pass |
+| `node .agents/skills/doc-status/scripts/doc_status.js lint` | 本スライスの文書に finding なし（repo 全体の既存 finding 751 件は main 由来で本タスク範囲外） |
 
 ### fixture 別結果（tests/bridge.rs, ffi_boundary_tests.rs, tests/faults.rs）
 
@@ -87,3 +88,11 @@
    `license-ledger.md` 参照）。
 4. **OS 範囲**: Windows のみ実測。macOS/Linux は toolchain 不在のため
    NotRun（`platform-matrix.md`）。
+5. **review-protocol 所見（P3・非 blocking）**: completion 要求時に
+   shim が `frontend.check` を diagnostics 用と autocomplete 用で
+   2 回実行する（`retainFullTypeGraphs` 付き再 check）。結果は正しいが
+   計算コストは約 2 倍。`load_definition` の unfreeze/freeze は
+   `loadDefinitionFile` が例外を投げた場合に凍結状態へ戻らない
+   （debug の `LUAU_ENABLE_ASSERT` 下での影響は未検証、PoC 範囲）。
+   `completion_context` は JSON 文字列として出力される（Rust 側は
+   未使用のため影響なし）。
