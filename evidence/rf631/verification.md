@@ -6,8 +6,10 @@ skeleton）のローカル検証記録。canonical = `mise` lane。
 - Date: 2026-11-15
 - OS: Windows (x86_64)
 - Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
-- Repo SHA at run: `d512334ad533c924e8e35c0c02a7f5b2ce13a676`
-  （`origin/main` 取り込み前の branch HEAD — merge 後に再採取）
+- Repo SHA: lane は merge 前 `d512334ad533c924e8e35c0c02a7f5b2ce13a676`
+  と merge 後 `810ceac5563ec505f623c9a8fd90ad453fe40d49` の両方で実走。
+  `plugin-dock-scenario.jsonl` は merge 後 HEAD の記録（verdict・
+  artifact digest は同一）。
 
 ## Lane results
 
