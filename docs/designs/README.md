@@ -199,6 +199,7 @@ Directory: `docs/designs`
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | DESIGN-034WZDs4eeCII39QySEoEq | Issue #532 DComp 監査文書チェーン設計 | approved | [issue-532-dcomp-audit-design.md](./issue-532-dcomp-audit-design.md) |
 | DESIGN-034WZDvbXaGkQVl6nT6jRx | Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計 | approved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
+| DESIGN-034XAYbSgNZPA0pCsrkqfy | Issue #532 GPUI DComp 監査 — 方式A/B/C 技術入力設計 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-sh006tWu0ht5WmSqG0V85w | Consumer-neutral Workflow/CLI orchestration契約設計（Issue #553 RF-AUTX-01） | approved | [issue-553-workflow-orchestration-design.md](./issue-553-workflow-orchestration-design.md) |
 | DESIGN-034XeaFjxZePL0m6LYuEeS | Multi-backend Script/Analyzer言語非依存契約設計（Issue #558 RF-SCRIPT-00） | approved | [issue-558-script-contract-design.md](./issue-558-script-contract-design.md) |

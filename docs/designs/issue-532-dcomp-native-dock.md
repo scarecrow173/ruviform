@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -29,6 +29,8 @@ relations:
   superseded-by: []
   related:
     - "docs/discovery/issue-532-dcomp-native-dock.md"
+    - "docs/discovery/issue-532-gpui-dcomp-surface.md"
+    - "docs/designs/issue-532-gpui-dcomp-surface.md"
     - "docs/designs/issue-388-native-dock-windowing-slice3.md"
     - "docs/test-specs/issue-388-389-native-dock-contract.md"
     - "evidence/rf388-native-dock-windowing/report.md"
@@ -136,5 +138,5 @@ Issue #532 の DComp topmost 制約は実機で再現・記録済み（`evidence
 ## Risks and Mitigations
 
 - **方式 A の z-order 逆転**: `topmost=false` が child を背面に描く場合、plugin 画素が GPUI UI の下に隠れて実用上の Dock として成立しない可能性。Step 1 の fixture で早期に確認。
-- **upstream 依存**: 方式 B が upstream gpui の private API/内部状態を必要とする場合、fork/patch が必要になり保守コストが増大。upstream の公開面を先に調査。
+- **upstream 依存**: 方式 B が upstream gpui の private API/内部状態を必要とする場合、fork/patch が必要になり保守コストが増大。upstream の公開面を先に調査。→ **2026-11-15 更新**: upstream public-surface 監査（`docs/discovery/issue-532-gpui-dcomp-surface.md`・`docs/designs/issue-532-gpui-dcomp-surface.md`）で確定 — gpui の DComp/DXGI/renderer/window internals は全て `pub(crate)` 以下で downstream から到達不能。`topmost` literal は `directx_renderer.rs:793` の `true` 1 語のみ（Option A の patch 面積は最小だが `[patch]`/fork が前提）。`GPUI_DISABLE_DIRECT_COMPOSITION` env var は patch 不要の zero-code 代替経路（A'）として比較対象に追加可能だが、exit-127 が未解明の blocker。方式 B の実質的設計空間は OS 公開 API interposition（env var/`SetWindowRgn`/第二 DComp target）に限定される。
 - **証拠の過大評価**: fake/headless/Float/Generic/overlay の成功を実 plugin 画素の証拠にしない。各 Case を Pass/Fail/NotRun で正直に記録。
