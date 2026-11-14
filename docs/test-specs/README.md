@@ -194,6 +194,7 @@ Directory: `docs/test-specs`
 | TSPEC-qGTnI0yoN6l104dWZX2Oqx | Issue #586 テスト仕様 — index 生成可能性・front matter 不変性・audit 非回帰 | approved | [issue-586-impl-index-generation.md](./issue-586-impl-index-generation.md) |
 | TSPEC-034WuVVSQeKKcnzXki6miZ | Issue #590 テスト仕様 — missing-section 0・本文品質・front matter/filename 不変・audit 非回帰 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
+| TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
 | TSPEC-034IdHt7P0ega4N0bbNANg | 手動ディスパッチ専用の CI ワークフロー | proposed | [manual-ci-workflow.md](./manual-ci-workflow.md) |
 | TSPEC-034J5K0lC6EBv1PrsliYd2 | メディアデータモデル API の契約保証 | approved | [media-data-model-api.md](./media-data-model-api.md) |

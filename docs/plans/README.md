@@ -228,4 +228,5 @@ Directory: `docs/plans`
 | PLAN-034U0ARdtPkZR0btUirc6D | Issue #463 — Spectrogram cell intensity 修正計画 | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | PLAN-VM42GIDhiqjgeTP4U1EbJM | Issue #464 slice — Scenario Runner・Report 組み立て契約の実装計画 | completed | [issue-464-scenario-runner.md](./issue-464-scenario-runner.md) |
 | PLAN-034WuW2Nawrc0pCehmfMcn | Issue #590 実施計画 — ir missing-section 本文補完と検証 | completed | [issue-590-ir-missing-sections-plan.md](./issue-590-ir-missing-sections-plan.md) |
+| PLAN-034X9Vq34lcX0EODzIuD9u | Linux 配布設計 CI 照合の実施計画（Issue #127） | completed | [linux-distribution-plan.md](./linux-distribution-plan.md) |
 | PLAN-Y2emYF0VFlVKTxwsGWm4Ev | ruviform-io-file Rooted Read Capability 実装計画 | completed | [rooted-read-capability.md](./rooted-read-capability.md) |

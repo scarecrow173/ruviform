@@ -234,6 +234,7 @@ Directory: `docs/impl/ir`
 | IMPL-034LJ7kQmXwNpVtRhYsZdF | Issue #99 ToneMapSdr kernel — Task 3 implementation | completed | [issue-99-tone-map-sdr-task-3-implementation.md](./issue-99-tone-map-sdr-task-3-implementation.md) |
 | IMPL-034LINnXPOUOZEuD5lHPdy | Issue #99 working-space kernels — Task 2 implementation | completed | [issue-99-working-space-kernels-task-2-implementation.md](./issue-99-working-space-kernels-task-2-implementation.md) |
 | IMPL-034QqITmjWC8LcEQVGkeAe | Layout persistence and window position | completed | [layout-persistence-and-window-position.md](./layout-persistence-and-window-position.md) |
+| IMPL-034X9OsAFWEhAZF1OWqG4R | Linux distribution CI cross-check and doc finalization | completed | [linux-distribution.md](./linux-distribution.md) |
 | IMPL-034IdUNIqDaqtMaA6rRfEx | Pin Rust toolchain and lockfile | completed | [pin-rust-toolchain-and-lockfile.md](./pin-rust-toolchain-and-lockfile.md) |
 | IMPL-034JEE2YEByoDOnrH2M0XT | PoC 採否 ADR 確定（エビデンス集約と confirm/revise） | completed | [poc-adr-finalize.md](./poc-adr-finalize.md) |
 | IMPL-3hbuFUHk736RlMIuzIoXne | CLAP binding PoC with clack | completed | [poc-clap-binding-adapter.md](./poc-clap-binding-adapter.md) |
