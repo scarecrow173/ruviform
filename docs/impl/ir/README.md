@@ -14,6 +14,7 @@ Directory: `docs/impl/ir`
 | IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | IMPL-034XqUtbQR6b9Xie900zZv | Issue #625 ci e2e handshake race implementation record | draft | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
