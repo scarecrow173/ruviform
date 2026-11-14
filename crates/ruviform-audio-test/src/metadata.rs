@@ -65,13 +65,41 @@ pub enum VerificationLevel {
 /// Environment kind from Case Schema v1 — what produced the evidence.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
-/// policy. This slice only emits [`Self::DeterministicBackend`]; real
-/// endpoint/plugin/GUI kinds arrive with their own slices.
+/// policy. `DeterministicBackend` remains the only kind this crate's
+/// own runtime emits; the real kinds below are vocabulary for
+/// consumer harnesses (e.g. `ruviform-plugin-dock-test`) that actually
+/// execute the named environment — a run may claim a real kind only
+/// when it really ran there (POLICIES.md 2026-11-15 virtual-first
+/// terms; a mock/headless success never promotes to a real kind).
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EnvironmentKind {
     /// Deterministic virtual backend (this crate's domain).
     DeterministicBackend,
+    /// A real plugin-ABI binary was resolved, loaded and driven
+    /// through the production host path (e.g. the Ruviform Test
+    /// Plugin suite via `Vst3Library`/`InProcessHost`). Only a run
+    /// that actually executed the binary may claim this — mock or
+    /// headless plugin success stays `DeterministicBackend`.
+    RealAbiTestPlugin,
+    /// A real OS window / GUI session produced the evidence (GUI-L2
+    /// lanes). Reserved for real-window driver runs — a headless or
+    /// simulated run must not claim it.
+    RealWindow,
+}
+
+impl EnvironmentKind {
+    /// The Case Schema v1 wire spelling (`kebab-case`).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::DeterministicBackend => "deterministic-backend",
+            Self::RealAbiTestPlugin => "real-abi-test-plugin",
+            Self::RealWindow => "real-window",
+        }
+    }
 }
 
 /// Reproducibility parameters of a scenario run — the minimal set that
