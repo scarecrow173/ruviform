@@ -66,3 +66,139 @@ fn identical_parameters_reproduce_identical_metadata() {
     let c = RunMetadata::deterministic("c", "o", p2, "r", "s");
     assert_ne!(a.parameters.clock_config, c.parameters.clock_config);
 }
+
+// --- JSON serialization (Issue #628 close-out) ---
+
+fn full_metadata() -> RunMetadata {
+    RunMetadata::deterministic(
+        "rf628.pcm.sine.48k",
+        "oracle::pcm_reference_block",
+        params(),
+        "scarecrow173/ruviform",
+        "deadbeef",
+    )
+    .with_result(CaseResult::Pass, "max_abs_diff=0")
+    .with_expected("sha256:abc")
+    .with_platform("windows", "x86_64")
+    .with_evidence("evidence/rf628/ac-inventory.md")
+}
+
+#[test]
+fn json_string_round_trip_preserves_all_fields() {
+    let m = full_metadata();
+    let json = m.to_json().unwrap();
+    let back = RunMetadata::from_json(&json).unwrap();
+    assert_eq!(m, back);
+}
+
+#[test]
+fn json_file_save_load_round_trip() {
+    let m = full_metadata();
+    let path = std::env::temp_dir().join(format!(
+        "rf628-metadata-{}-save-load.json",
+        std::process::id()
+    ));
+    m.save_json(&path).unwrap();
+    let back = RunMetadata::load_json(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(m, back);
+}
+
+#[test]
+fn json_wire_uses_case_schema_v1_kebab_case() {
+    let m = full_metadata();
+    let v: serde_json::Value = serde_json::from_str(&m.to_json().unwrap()).unwrap();
+    // Struct fields stay snake_case; enum values use the kebab-case
+    // Case Schema v1 vocabulary.
+    assert_eq!(v["case_id"], "rf628.pcm.sine.48k");
+    assert_eq!(v["requirement"], "required");
+    assert_eq!(v["result"], "pass");
+    assert_eq!(v["level"], "os-l1");
+    assert_eq!(v["environment_kind"], "deterministic-backend");
+    assert_eq!(v["parameters"]["seed"], 0x00C0_FFEEu64);
+    assert_eq!(v["parameters"]["fixture_version"], 1);
+    assert_eq!(v["parameters"]["clock_config"]["sample_rate"], 48_000);
+    assert_eq!(
+        v["parameters"]["clock_config"]["jitter"]["period_frames"],
+        128
+    );
+}
+
+#[test]
+fn enum_wire_spellings_match_case_schema_v1() {
+    use serde_json::Value;
+
+    let cases: &[(Value, &str)] = &[
+        (
+            serde_json::to_value(CaseRequirement::Required).unwrap(),
+            "required",
+        ),
+        (
+            serde_json::to_value(CaseRequirement::Deferred).unwrap(),
+            "deferred",
+        ),
+        (
+            serde_json::to_value(CaseRequirement::NotApplicable).unwrap(),
+            "not-applicable",
+        ),
+        (serde_json::to_value(CaseResult::Pass).unwrap(), "pass"),
+        (serde_json::to_value(CaseResult::Fail).unwrap(), "fail"),
+        (serde_json::to_value(CaseResult::NotRun).unwrap(), "not-run"),
+        (
+            serde_json::to_value(CaseResult::Unsupported).unwrap(),
+            "unsupported",
+        ),
+        (
+            serde_json::to_value(VerificationLevel::OsL1).unwrap(),
+            "os-l1",
+        ),
+        (
+            serde_json::to_value(VerificationLevel::GuiL2).unwrap(),
+            "gui-l2",
+        ),
+        (
+            serde_json::to_value(VerificationLevel::ExtL3).unwrap(),
+            "ext-l3",
+        ),
+    ];
+    for (value, expected) in cases {
+        assert_eq!(*value, Value::String((*expected).to_owned()));
+    }
+}
+
+#[test]
+fn environment_kind_serde_matches_as_str() {
+    for kind in [
+        EnvironmentKind::DeterministicBackend,
+        EnvironmentKind::RealAbiTestPlugin,
+        EnvironmentKind::RealWindow,
+    ] {
+        let json = serde_json::to_string(&kind).unwrap();
+        assert_eq!(json, format!("\"{}\"", kind.as_str()));
+        let back: EnvironmentKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, kind);
+    }
+}
+
+#[test]
+fn json_rejects_unknown_vocabulary_and_malformed_input() {
+    // camelCase / unknown spellings must not deserialize.
+    let bad = full_metadata()
+        .to_json()
+        .unwrap()
+        .replace("\"deterministic-backend\"", "\"DeterministicBackend\"");
+    assert!(RunMetadata::from_json(&bad).is_err());
+    assert!(RunMetadata::from_json("not json").is_err());
+    // Missing required field.
+    assert!(RunMetadata::from_json("{}").is_err());
+}
+
+#[test]
+fn load_json_reports_io_error_for_missing_file() {
+    let path = std::env::temp_dir().join(format!(
+        "rf628-metadata-{}-missing.json",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    assert!(RunMetadata::load_json(&path).is_err());
+}

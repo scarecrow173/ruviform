@@ -209,6 +209,7 @@ Directory: `docs/test-specs`
 | TSPEC-034WuVVSQeKKcnzXki6miZ | Issue #590 テスト仕様 — missing-section 0・本文品質・front matter/filename 不変・audit 非回帰 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | TSPEC-034XqAxz6XasjXM9geCdT7 | Issue #625 テスト仕様 — handshake channel-closed 分類の決定性と既存 refusal 契約の維持 | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TSPEC-034XAEUQyTZ4N0vdNcRAlI | Issue #627 仮想優先検証契約のテスト仕様 | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| TSPEC-034Y3hpBGEGO5mhH5d4wsG | Issue #628 close-out — test specification | approved | [issue-628-close-out.md](./issue-628-close-out.md) |
 | TSPEC-034XBMh4pr5313Dan0adpY | Issue #628 テスト仕様 — deterministic core の決定性・RT contract・独立 Oracle | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TESTSPEC-RF628pwpipeline00001 | Issue #628 pipeline wiring — test specification | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |

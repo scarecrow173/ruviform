@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use ruviform_media_core::{Error, Result};
 use ruviform_rt::MasterClock;
+use serde::{Deserialize, Serialize};
 
 /// Deterministic jitter specification.
 ///
@@ -29,8 +30,10 @@ use ruviform_rt::MasterClock;
 /// from `seed` — it models per-callback clock jitter without any
 /// entropy source. `period_frames == 0` disables jitter.
 ///
-/// **RT contract:** RT-suitable — `Copy` value type.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+/// **RT contract:** RT-suitable — `Copy` value type. `Serialize`/
+/// `Deserialize` are derived for run-metadata JSON only; they are
+/// never invoked on RT paths.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JitterSpec {
     /// Mix seed for the deterministic per-period jitter value.
     pub seed: u64,
@@ -65,8 +68,10 @@ impl JitterSpec {
 /// value per `period_frames` window (see [`JitterSpec`]). All math is
 /// `i128`/`u128` integer — no floating point, no libm.
 ///
-/// **RT contract:** RT-suitable — `Copy` value type.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// **RT contract:** RT-suitable — `Copy` value type. `Serialize`/
+/// `Deserialize` are derived for run-metadata JSON only; they are
+/// never invoked on RT paths.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VirtualClockConfig {
     /// Sample rate in Hz; one tick is `1/sample_rate` seconds.
     pub sample_rate: u32,
