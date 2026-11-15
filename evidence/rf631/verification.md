@@ -370,3 +370,91 @@ canonical = `mise` lane。cargo 直実行は補助証拠として区別する。
 - 3OS・`*-msrv`・`*-full` 系: 対象外。
 - `mise.toml` `test-ui-plugin-dock-real` description の
   `test_gain` 前提文言: 本 Worker の lease 外 — 後続 hygiene slice。
+  → **#631 Test Lab slice で解消済み**（下記）。
+
+---
+
+# Issue #631 Test Lab slice — `plugin-dock-lab` GPUI Scenario Console 検証記録
+
+`plugin-dock-lab`（feature `lab-gui`）実装・mise lane 追加・
+`test-ui-plugin-dock-real` description 修正のローカル検証記録。
+canonical = `mise` lane。GUI dogfooding は interactive Windows
+session での実走（PostMessage click — 後述）。
+
+- Date: 2026-11-16
+- OS: Windows (x86_64) — interactive desktop session で実走
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA: `eafe0a08b71bd9a74566ae6678c3e0683fce1421` base の
+  working tree（変更は未 commit のため `repo_sha` は base HEAD を記録）
+
+## Lane results（canonical = mise / cargo）
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass (exit 0) |
+| `cargo check --locked --all-targets -p ruviform-plugin-dock-test --features lab-gui` | pass (exit 0) |
+| `cargo clippy --locked -p ruviform-plugin-dock-test --features lab-gui --all-targets --no-deps -- -D warnings` | pass (exit 0 — 本 crate の lint は clean) |
+| `mise run lint ruviform-plugin-dock-test --features lab-gui`（canonical・deps 込み） | **fail (exit 101) — scope 外の既存 issue**: path dep `ruviform-audio-test` の `src/backend/stream.rs:885` `pump_input` が `too_many_lines`（105/100）。`git diff HEAD` で同 crate 無変更・`cargo clippy -p ruviform-audio-test` 単独でも同一 error を再現 — base 由来の upstream drift（#671 系）で本 slice とは無関係。対処は scope 外のため未実施・PR で報告 |
+| `cargo test --locked -p ruviform-plugin-dock-test`（default） | pass (exit 0) |
+| `cargo test --locked -p ruviform-plugin-dock-test --features lab-gui` | pass (exit 0 — lab unit 7 + console 14 + plugin-dock 4) |
+| `cargo test --locked -p ruviform-plugin-dock-test --features real-dock` | pass (exit 0) |
+| `cargo check --locked --all-targets -p ruviform-plugin-dock-test --features real-dock` | pass (exit 0) |
+| `mise run test-ui-plugin-dock-console` | pass (exit 0 — `--list` projection + `--run` JSONL) |
+| `mise run test-ui-plugin-dock-lab` | pass (exit 0 — window 起動 → Quit で clean exit。dogfooding は上記 GUI 節) |
+| `mise run check-ui-driver-boundary` | pass (exit 0 — dep-graph/signature/allowlist。`lab-gui` feature 追加後も GPUI 型・driver 境界を漏らさない） |
+| `mise run test-ui-plugin-dock`（headless lane 非回帰） | verdict 不変（`plugin-dock-scenario.jsonl` 差分は repo_sha/ artifact path/sha256 の環境 field のみ — verdict 語彙は同一） |
+| workspace `cargo clippy --workspace -- -D warnings` | **fail — 同上の scope 外既存 issue**（`ruviform-audio-test` `stream.rs:885`）。scoped lint（`--no-deps`）は上記のとおり pass |
+| `mise exec -- prek run --all-files` | （結果は PR 本文に記録） |
+
+## GUI dogfooding（interactive Windows session・実 window）
+
+`plugin-dock-lab --out evidence/rf631/plugin-dock-lab.jsonl` を
+実 GPUI window（title `Ruviform Test Lab — plugin-dock scenario
+console`、1116×899 outer）で起動し、Win32 `PostMessage
+(WM_LBUTTONDOWN/UP)` で client 座標 click を送って操作した
+（GPUI content は UIA tree に出ないため accessibility 経路は
+使用不可 — 実測位置は screenshot 画素解析で同定）。
+
+| 操作 | 観測結果 |
+| --- | --- |
+| window 起動・描画 | catalog 12 row（headless 8 + real 4）・status/note/results/actions が `ruviform-ui` ViewSpec 語彙で描画。palette は `ViewPalette::fallback()` dark |
+| catalog row select | click → 該当 row が `surface_raised` で highlight（selection state が view に反映） |
+| Run all headless | +9 JSONL 行（run header `lane=plugin-dock-lab` + 8 case）。verdict: pass×6・`editor-attach` unsupported・`dock-pixels` not_run — catalog の正直な verdict をそのまま記録 |
+| Run selected（headless `artifact`） | +2 JSONL 行（run header + case `artifact` verdict pass） |
+| Run selected（real row `real-capture`） | **JSONL 増加なし・非実行** — real row は `test-ui-plugin-dock-real` 委譲の fail-closed 経路（Inform/reject）で evidence を捏造しない |
+| Quit | process clean exit |
+
+証拠 file: `evidence/rf631/plugin-dock-lab.jsonl`（2 つの run
+block — run-all 8 case + run-selected 1 case、いずれも実走）。
+
+### dogfooding で発見・修正した defect
+
+- run-all 完了後に results table が伸び actions panel が window
+  下端で clip され Quit へ到達不能 → `logical_size` を
+  (1100, 720) → (1100, 860) に修正（`resizable` 維持）。修正後は
+  全結果表示後も 3 button が viewport 内に残ることを再確認。
+
+## mise.toml lane 追加・修正
+
+- `test-ui-plugin-dock-console` 新設（canonical headless console）。
+- `test-ui-plugin-dock-lab` 新設（opt-in windowed — 対話 session
+  前提・CI-required gate ではない）。
+- `test-ui-plugin-dock-real` description を #670 後の実態へ修正
+  （`test_gain` 前提・editor attach unsupported 前提の stale 文言
+  → plugin-test-vst3 / `test_editor` 実 IPlugView / child HWND OS
+  観測）。run block は不変 — lane 実行系は前 slice の検証済みの
+  まま。
+
+## NotRun / Unsupported / Deferred（本 slice で claim しない）
+
+- `plugin-dock-lab` の headless/非対話 host での fail-closed
+  blocked 経路（`NotRun`+`environment_blocked`・exit 0）は
+  unit test で検証済みだが、実 headless host での lane 実走は
+  未実施（本検証環境は interactive session）。
+- lab GUI の pixel/golden 証拠・実 native dock・editor attach の
+  新規 claim なし — lab が生成するのは headless scenario の
+  verdict/evidence のみ。real row は委譲表示で実行しない。
+- PostMessage dogfooding は Windows 固有の手動経路 — CI lane・
+  他 OS での GUI 実走は対象外（opt-in manual lane の定義どおり）。
+- workspace 全体 clippy の `ruviform-audio-test` 既存
+  `too_many_lines` — scope 外・別 slice での対応要否を判断。

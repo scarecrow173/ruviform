@@ -228,6 +228,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TSPEC-034XVTsew8bdAg2cxa7FPJ | Issue #631 Plugin-dock scenario catalog + driver projection のテスト仕様 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TSPEC-034XWO2xGlAsmD12I1K5tl | Issue #631 Headless Scenario Console のテスト仕様 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
+| TSPEC-034YaYvGNtksNB54jY0Umq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 テスト仕様 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
