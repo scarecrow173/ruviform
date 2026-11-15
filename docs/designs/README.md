@@ -228,6 +228,7 @@ Directory: `docs/designs`
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| DESIGN-034Y11NzSzQKwkY0SHh8oe | Issue #630 test_editor slice — 設計 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | DESIGN-8g91MtjlYytEayPOtT2g3e | Issue #630 test_fault slice — 設計 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
