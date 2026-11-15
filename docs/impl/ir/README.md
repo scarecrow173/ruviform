@@ -232,6 +232,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
