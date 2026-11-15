@@ -233,6 +233,7 @@ Directory: `docs/impl/ir`
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034XEUw3tBbjwqbNReqULG | issue-646-numeric-bench-profile | completed | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |

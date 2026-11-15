@@ -62,6 +62,7 @@ Directory: `docs/impl/exp`
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |
+| [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-646-numeric-bench-profile.jsonl](./issue-646-numeric-bench-profile.jsonl) |
 | [issue-650-bench-smoke-coverage.jsonl](./issue-650-bench-smoke-coverage.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
