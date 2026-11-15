@@ -17,12 +17,13 @@
 use std::env;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
 use ruviform_plugin_dock_test::artifact::PLUGIN_PATH_ENV;
+use ruviform_plugin_dock_test::jsonl::{render_jsonl, repo_sha};
+use ruviform_plugin_dock_test::scenario::RUN_ID;
 use ruviform_plugin_dock_test::{LaneEnvironment, run_all};
-use ruviform_ui_test::{ScenarioReport, ScenarioVerdict};
-use serde_json::{Map, Value, json};
+use ruviform_ui_test::ScenarioVerdict;
 
 fn main() -> ExitCode {
     let mut out: Option<PathBuf> = None;
@@ -49,13 +50,12 @@ fn main() -> ExitCode {
         plugin_path: env::var_os(PLUGIN_PATH_ENV).map(PathBuf::from),
     };
     let reports = run_all(&environment);
-
-    let mut jsonl = String::new();
-    jsonl.push_str(&header_line(&environment));
-    for report in &reports {
-        jsonl.push_str(&case_line(report));
-        jsonl.push('\n');
-    }
+    let jsonl = render_jsonl(
+        RUN_ID,
+        "test-ui-plugin-dock",
+        environment.repo_sha.as_deref(),
+        &reports,
+    );
 
     let write_result = if let Some(path) = &out {
         std::fs::write(path, &jsonl).map_err(|e| format!("{}: {e}", path.display()))
@@ -76,100 +76,4 @@ fn main() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
-}
-
-/// The `run` header: lane identity + host facts + repo SHA.
-fn header_line(environment: &LaneEnvironment) -> String {
-    let header = json!({
-        "type": "run",
-        "run_id": ruviform_plugin_dock_test::scenario::RUN_ID,
-        "lane": "test-ui-plugin-dock",
-        "repo": {
-            "sha": environment.repo_sha,
-        },
-        "os": env::consts::OS,
-        "arch": env::consts::ARCH,
-        "plugin_path_env": PLUGIN_PATH_ENV,
-    });
-    format!(
-        "{}\n",
-        serde_json::to_string(&header).unwrap_or_else(|_| "{}".to_string())
-    )
-}
-
-/// One `case` line assembled from the report's public fields —
-/// `ScenarioReport` itself is deliberately not `Serialize` (driver
-/// types stay adapter-owned), so the JSONL shape lives here at the
-/// output boundary.
-fn case_line(report: &ScenarioReport) -> String {
-    let object = Map::from_iter([
-        ("type".to_string(), json!("case")),
-        ("run_id".to_string(), json!(report.run_id)),
-        ("scenario".to_string(), json!(report.scenario)),
-        (
-            "case".to_string(),
-            report.case.as_ref().map_or(Value::Null, |case| json!(case)),
-        ),
-        ("driver".to_string(), json!(report.driver)),
-        (
-            "capabilities".to_string(),
-            json!(report.capabilities.iter().collect::<Vec<_>>()),
-        ),
-        (
-            "required".to_string(),
-            json!(report.required.iter().collect::<Vec<_>>()),
-        ),
-        ("verdict".to_string(), json!(report.verdict)),
-        (
-            "expected".to_string(),
-            report.expected.clone().unwrap_or(Value::Null),
-        ),
-        (
-            "observed".to_string(),
-            report.observed.clone().unwrap_or(Value::Null),
-        ),
-        ("evidence".to_string(), json!(report.evidence)),
-        (
-            "environment".to_string(),
-            report.environment.clone().unwrap_or(Value::Null),
-        ),
-        (
-            "detail".to_string(),
-            report.detail.clone().map_or(Value::Null, Value::String),
-        ),
-        (
-            "timeout".to_string(),
-            report.timeout.map_or(Value::Null, |timeout| {
-                json!({
-                    "budget_ms": timeout.budget_ms,
-                    "elapsed_ms": timeout.elapsed_ms,
-                    "timed_out": timeout.timed_out,
-                })
-            }),
-        ),
-        (
-            "cleanup".to_string(),
-            report.cleanup.clone().unwrap_or(Value::Null),
-        ),
-    ]);
-    // `targets` carries adapter-internal ids — kept out of the JSONL
-    // evidence surface on purpose (they are WindowId/ViewInstanceId
-    // triples meaningful only inside one driver session).
-    serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "{}".to_string())
-}
-
-/// The repo commit: `GITHUB_SHA` (CI) → `git rev-parse HEAD` → `None`
-/// (recorded as honest `null`, never guessed).
-fn repo_sha() -> Option<String> {
-    if let Ok(sha) = env::var("GITHUB_SHA") {
-        return Some(sha);
-    }
-    Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .map(|sha| sha.trim().to_string())
-        .filter(|sha| !sha.is_empty())
 }
