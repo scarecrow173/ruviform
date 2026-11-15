@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #629 virtual endpoint probe design"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -71,14 +71,14 @@ Issue #629 first slice の設計。目的は「仮想 endpoint 候補の調査�
 ### In Scope
 
 - `endpoint_probe.rs`（audio）: `IMMDeviceEnumerator` による全 state endpoint 列挙、endpoint id/state、cpal port view との friendly-name join、`IAudioClient` の `GetMixFormat`/`IsFormatSupported`/`GetDevicePeriod`/`GetStreamLatency` query、virtual candidate name heuristic、provisioning verdict。
-- `midi_endpoint_probe.rs`（MIDI）: WinMM `midiInGetNumDevs`/`midiOutGetNumDevs` + caps 列挙、input 側 `DRV_QUERYDEVICEINTERFACE`、bidirectional name match による loopback candidate 検出、production `backend().input_ports()` view、provisioning verdict。
+- `midi_endpoint_probe.rs`（MIDI）: WinMM `midiInGetNumDevs`/`midiOutGetNumDevs` + caps 列挙、input 側 `DRV_QUERYDEVICEINTERFACE`、bidirectional name match による loopback candidate 検出、production `backend().input_ports()`/`output_ports()` view（3rd slice で双方向化）、Windows MIDI Services availability 検出（3rd slice 追加）、provisioning verdict。
 - discovery doc（候補比較・capability matrix・コードギャップ・provisioning runbook 方針）。
 - doc chain（spec/design/test-spec/plan/task/IR/exp）と `evidence/rf629/` の実行証拠。
 
 ### Out of Scope
 
 - `IAudioClient::Initialize`/`Start`・stream open・callback 駆動・signal/MIDI 生成（次 slice の runtime controller）
-- `midiOutOpen`/`midiOutShortMsg`/`midiOutLongMsg` 送信経路（crate に存在しない — ギャップとして記録のみ）
+- ~~`midiOutOpen`/`midiOutShortMsg`/`midiOutLongMsg` 送信経路（crate に存在しない — ギャップとして記録のみ）~~ → **2nd slice `scarecrow173/ruviform#658` で解消**（本 design の Out of Scope は 1st slice 時点の記録として残す。3rd slice の loopback verifier は `docs/designs/issue-629-midi-loopback.md`）
 - driver install/uninstall・provisioning 自動化・CI lane・workflow/mise 変更
 - SetupAPI/driver 署名の機械的検証（enabled feature 外 — gap として記録）
 - `src/` の変更・公開 API 追加・`Cargo.toml`/feature 変更
@@ -98,20 +98,21 @@ Issue #629 first slice の設計。目的は「仮想 endpoint 候補の調査�
 
 - 同構成。`enumerate_all()` が `midiIn*`/`midiOut*` の caps を列挙し、`pname`（packed struct の `szPname` copy → UTF-16 decode）、`interface_id_in`（`midiInMessage` + `DRV_QUERYDEVICEINTERFACE*`、adapter 先例と同一機構）、bidirectional name match で loopback candidate を立てる。
 - **`midiOutMessage` の `DRV_QUERYDEVICEINTERFACE*` は呼ばない** — 本ホストで size=2 + crash を実測（GS Wavetable Synth）。output 側は `interface_id: None` + note で `NotRun` を明示。
-- `print_port_view`: `backend().input_ports()` の `info()`（id/name/origin/capabilities）を表示 — `origin=Unknown` がそのまま見える（ギャップの可視化）。
-- verdict: port 数・candidate 数・`provisioning`・「midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual」。
+- `print_port_view`: `backend().input_ports()` の `info()`（id/name/origin/capabilities）を表示 — `origin=Unknown` がそのまま見える（ギャップの可視化）。**3rd slice refresh**: `backend().output_ports()` の同形式 view を追加（#658 の output enumerator — `provides_timestamps=false`/`clock_domain=None` の正直な宣言が input との対比で見える）。
+- **3rd slice 追加**: `print_wms_availability()` — `powershell.exe -NoProfile -NonInteractive -Command` で `Get-Command New-MidiLoopback` と `Get-Service midisrv` を照会し stdout を verbatim 記録。spawn 失敗・非ゼロ終了は `NotRun` note で probe を落とさない（`cmd /c ver` 先例、`#[cfg(windows)]` 内・新規 windows feature なし）。
+- verdict: port 数・candidate 数・`provisioning`・「midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual」。**3rd slice refresh**: 「send path は 2nd slice で実装済み、残 gap は provisioned loopback pair（verifier: `tests/loopback.rs`）」に更新 — 1st slice の「crate に send path がない」判定は stale だった。
 
 ### OS API 面の使い分け（private adapter 境界の記録）
 
 - Audio probe は cpal ではなく **`windows` crate の COM/WASAPI 面を直接**使う（`wasapi_input.rs` と同じ依存・同じ feature）。理由: endpoint state（not-present/unplugged を含む全 state）と `IMMDevice::GetId` の生 endpoint id は cpal port surface に出ないため。cpal view は join 用の補助。
-- MIDI probe は windows-sys の `midiIn*`/`midiOut*` caps/message を直接使う（adapter `os/windows.rs` と同じ機構）。`midiOut*` の open/send は行わない（crate に経路なし + 今回の crash 実測を踏まえ query のみに限定）。
+- MIDI probe は windows-sys の `midiIn*`/`midiOut*` caps/message を直接使う（adapter `os/windows.rs` と同じ機構）。~~`midiOut*` の open/send は行わない（crate に経路なし + 今回の crash 実測を踏まえ query のみに限定）~~ → 2nd slice で open/send 経路が実装され、3rd slice の verifier（`tests/loopback.rs`）が production port API 経由で使用する。probe 自体は引き続き query のみ（open/send しない）。
 - いずれも example 内に閉じ、`src/` の公開面・依存方向を変えない。後続 slice で provisioning/controller を実装する際は、これらの OS API 知見を private adapter（例: `ruviform-audio-device` 内の provisioning module、または別 private crate）へ移す判断を行う — 本 slice はその境界を「example = probe、src = production」のまま維持する。
 
 ## Data and Control Flow
 
 1. `main` → OS facts 出力（os/arch/family/build）。
 2. audio: COM init → enumerator → render/capture endpoint 列挙（全 state）→ per-endpoint describe（id/state/name-join/activate/format queries）→ verdict → port view。
-3. MIDI: `midiInGetNumDevs`/`midiOutGetNumDevs` → caps + input interface-id → bidirectional pair 検出 → verdict → production port view。
+3. MIDI: `midiInGetNumDevs`/`midiOutGetNumDevs` → caps + input interface-id → bidirectional pair 検出 → production port view（input+output）→ WMS availability → verdict（3rd slice で順序更新）。
 4. 出力は stdout テキスト。`evidence/rf629/` に保存して discovery/IR/exp から参照。
 
 ## Non-Functional Constraints

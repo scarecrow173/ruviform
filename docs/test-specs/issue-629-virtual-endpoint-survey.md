@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #629 virtual endpoint probe test spec"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -66,12 +66,13 @@ Windows 仮想 endpoint capability probe — OS API 面の列挙・format 交渉
 - **R-PROBE-06（evidence 非昇格）**: probe 出力は `environment_kind=virtual-os-endpoint` の Pass evidence として扱わない。列挙・format query の `observed` は「OS API 面が読めた」記録であり、endpoint 経由の streaming 証明ではない。
 - **R-PROBE-07（MIDI output query 制限）**: `midiOutMessage` の `DRV_QUERYDEVICEINTERFACE*` は呼ばない（driver 依存 crash を実測）。output port の `interface_id` は `None` + `NotRun` note で報告する。
 - **R-PROBE-08（IsFormatSupported 規約）**: `IsFormatSupported` には `ppclosestmatch` に有効な out-pointer を渡す（`NULL` は本ホスト build で `E_POINTER`）。closest format は `CoTaskMemFree` で解放する。
+- **R-PROBE-09（3rd slice 追記 — production output view と WMS 検出）**: `midi_endpoint_probe` の production port view は `input_ports()` と `output_ports()` の両方向を同形式（id/name/origin/capabilities）で表示する。verdict は「`midiOut*` send path は 2nd slice で実装済み、残 gap は provisioned loopback pair」と述べ、send path 不在を前提にしない。Windows MIDI Services availability（`New-MidiLoopback` cmdlet / `midisrv` service）は best-effort で報告し、失敗時は `NotRun` note で probe を落とさない。
 
 ## Examples
 
 - **Example 1（未 provisioning — 実測済み）**: Given Windows 11 10.0.26300.9974 で VB-CABLE/loopMIDI 未導入、When `endpoint_probe`/`midi_endpoint_probe` を実行、Then audio は 61 endpoint を列挙し virtual candidate 0 件・`provisioning: NOT_PROVISIONED`・全 virtual case `NotRun` を出力、MIDI は input 0/output 1 port・loopback candidate 0 件・`NOT_PROVISIONED` を出力する（`evidence/rf629/*-windows-local.txt`）。
 - **Example 2（仮想 endpoint 検出時 — 将来）**: Given VB-CABLE 導入済み runner、When `endpoint_probe` を実行、Then "CABLE Input"/"CABLE Output" が render/capture に `state=active` で列挙され name heuristic で `[virtual-candidate]` が付くが、verdict の virtual case は依然 `NotRun`（streaming 証明は次 slice）のままである。
-- **Example 3（loopback 検出時 — 将来）**: Given loopMIDI 稼働中、When `midi_endpoint_probe` を実行、Then 同名 port が midiIn/midiOut 双方に現れ `[loopback-candidate]` が付くが、send→receive round-trip は本 slice では `NotRun`。
+- **Example 3（loopback 検出時 — 将来）**: Given loopMIDI 稼働中、When `midi_endpoint_probe` を実行、Then 同名 port が midiIn/midiOut 双方に現れ `[loopback-candidate]` が付く。send→receive round-trip は 3rd slice の `tests/loopback.rs` verifier が担い、provisioned pair があれば独立期待値と照合して Pass、無ければ fail-closed `NotRun`（本 probe 自体は open/send しない）。
 - **Example 4（非 Windows）**: Given Linux/macOS、When 両 example を build/run、Then compile が通り `NotRun — requires Windows` を出力する。
 
 ## Guarantees
@@ -86,7 +87,7 @@ Windows 仮想 endpoint capability probe — OS API 面の列挙・format 交渉
 - 仮想 endpoint 経由の実 streaming・callback・format 交渉の成立確認（次 slice）。
 - `virtual-os-endpoint` の `environment_kind` evidence 生成。
 - driver install/uninstall・provisioning 自動化・CI lane。
-- `midiOut*` 送信経路の実装（crate に存在しない）。
+- ~~`midiOut*` 送信経路の実装（crate に存在しない）~~ → 2nd slice `scarecrow173/ruviform#658` で解消。3rd slice は round-trip verifier（`tests/loopback.rs`）を追加 — 実 provisioning・`virtual-os-endpoint` evidence は依然 non-goal。
 - SetupAPI/driver 署名の機械的検証。
 
 ## Risk

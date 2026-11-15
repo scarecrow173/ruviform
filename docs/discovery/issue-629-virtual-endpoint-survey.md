@@ -4,7 +4,7 @@ type: "discovery"
 status: "draft"
 title: "Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -44,6 +44,9 @@ relations:
     - "docs/designs/issue-627-virtual-first-verification-contract-design.md"
     - "docs/plans/issue-627-virtual-first-verification-contract-plan.md"
     - "docs/test-specs/issue-627-virtual-first-verification-contract.md"
+    - "docs/specs/issue-629-midi-loopback.md"
+    - "docs/designs/issue-629-midi-loopback.md"
+    - "docs/test-specs/issue-629-midi-loopback.md"
   refines: []
   refined-by: []
   derives-from:
@@ -103,7 +106,7 @@ Issue [#629](https://github.com/scarecrow173/ruviform/issues/629) は「Windows 
 - **`IsFormatSupported` の実測 quirk**: `ppclosestmatch=NULL` で呼ぶと本ホスト（Windows 11 build 26300.9974）では全 format が `0x80004003`（E_POINTER）を返した。`ppclosestmatch` に有効な out-param を渡すと正常に `S_OK`/`AUDCLNT_E_UNSUPPORTED_FORMAT` + closest format を返す。probe は closest-match を表示する形で対処済み — **後続 slice の format 交渉実装でも同じ引数規約が必要**。
 - **`GetStreamLatency` は `Initialize` 前に `AUDCLNT_E_NOT_INITIALIZED`（0x88890001）を返す** — probe は Initialize を呼ばない（query-only、audio session を作らない）ため latency は常に NotRun 相当。open/start/stream は次 slice。
 - **not-present endpoint の Activate は `0x88890004`（`E_NOTFOUND` 系）で拒否** — state=not-present の stale endpoint（本ホストで 61 endpoint 中大半）は列挙できても activate できないことを実測。hotplug 観測では `GetState` の遷移を見る必要がある。
-- **MIDI 列挙経路**: `ruviform_midi_device` は WinMM `midiInGetNumDevs`/`midiInGetDevCapsW`/`midiInMessage`（`DRV_QUERYDEVICEINTERFACE*`）を使用（`windows-sys = "0.61"`）。**input-only で `midiOut*` 送信経路は存在しない** — loopback の send→receive 検証には後続 slice で新規経路が必要（既知ギャップ）。
+- **MIDI 列挙経路**: `ruviform_midi_device` は WinMM `midiInGetNumDevs`/`midiInGetDevCapsW`/`midiInMessage`（`DRV_QUERYDEVICEINTERFACE*`）を使用（`windows-sys = "0.61"`）。~~**input-only で `midiOut*` 送信経路は存在しない**~~ → **2nd slice `scarecrow173/ruviform#658`（merge `7e7270f`）で解消**: `midi_output` port + WinMM `midiOut*` backend（open/send/send_sysex/close）が main に存在する。残る gap は provisioned loopback pair での round-trip 実証のみ（3rd slice `tests/loopback.rs` verifier、provisioning 確立までは `NotRun`）。
 - **`midiOutMessage` の `DRV_QUERYDEVICEINTERFACE*` は信用できない**: 本ホストの `Microsoft GS Wavetable Synth`（唯一の midiOut port）で size query が `MMSYSERR_NOERROR`+size=2 を返し、follow-up fetch が winmm 内で **segfault** した。probe は input-path のみ query し、output 側は `NotRun` として記録する形に修正済み — **interface-id ベースの仮想 port 識別は input 方向に限定される**。
 - **`MidiPortOrigin::Unknown`**: WinMM は仮想/物理の区別を公開しないため adapter は `Unknown` を報告（`midi_input.rs` の契約どおり正直）。仮想 port の識別には name/interface-id heuristic か MIDI Services metadata が必要。
 - **`MIDIINCAPSW` の windows-sys 定義は `szPname` で終端**（`wTechnology`/`wVoices`/`wNotes`/`wChannelMask`/`dwSupport` を含まない）— input caps の `dwSupport` 相当は取得不可。`MIDIOUTCAPSW` は full layout。
@@ -159,11 +162,11 @@ Issue [#629](https://github.com/scarecrow173/ruviform/issues/629) は「Windows 
 | **permission denial** | ⚠️（Windows の microphone privacy 設定で capture を拒否可能 — OS 標準機能で再現可） | 同左 | n/a | ✅ |
 | **xrun / latency** | ⚠️（VB-CABLE は内部バッファ 7168 frame・latency 調整可。決定的 xrun 注入は困難） | ⚠️（clock register で位置制御は可・xrun 強制は ❓） | n/a | ✅（driver で drop 注入可） |
 | **loopback latency**（signal→capture の往復遅延） | ✅（internal SR 48kHz・latency パラメータあり・実測可能） | ✅ | ✅（timestamp は WinMM ms domain — adapter が `MidiPortCapabilities.clock_domain` で報告） | ✅ |
-| **MIDI Note/CC/PitchBend/Timestamp/Order** | n/a | n/a | ✅（loopback pair 経由 — **ただし crate に midiOut 送信経路がないため後続 slice で新規実装が必要**） | n/a |
+| **MIDI Note/CC/PitchBend/Timestamp/Order** | n/a | n/a | ✅（loopback pair 経由 — send path は 2nd slice `scarecrow173/ruviform#658` で実装済み。round-trip verifier は 3rd slice `tests/loopback.rs`、provisioned pair 前提で未 provision 環境は `NotRun`） | n/a |
 
 ## Known Code Gaps（後続 slice への引き継ぎ事項）
 
-1. **`ruviform-midi-device` は INPUT-only** — `midiOut*` open/send/close 経路が存在しない。仮想 MIDI loopback の send→receive 検証（Issue AC「Note/CC/Pitch Bend/Timestamp/Order が入出力できる」）には、adapter に output subscription 経路を追加するか、probe/controller 側で WinMM `midiOutShortMsg`/`midiOutLongMsg` を private adapter として実装する必要がある。**本 slice では実装しない**。
+1. ~~**`ruviform-midi-device` は INPUT-only**~~ → **resolved（2nd slice `scarecrow173/ruviform#658`、merge `7e7270f`）**: `midi_output` port trait + WinMM `midiOut*` backend（`midiOutGetDevCapsW`/`midiOutOpen`/`midiOutShortMsg`/`midiOutLongMsg`+`MM_MOM_DONE` 待機/close）が main に存在し、`send`/`send_sysex`/`close` と `StreamInvalidated` 契約を `tests/output_ports.rs` が固定済み。残る gap は provisioned loopback pair での send→receive 実証で、3rd slice の `tests/loopback.rs` round-trip verifier が引き継ぐ（pair 未 provision 環境では fail-closed `NotRun`）。
 2. **`MidiPortOrigin::Unknown`** — WinMM は仮想/物理を区別しない。仮想 port の識別は (a) 同名 bidirectional pair heuristic（loopMIDI/WMS loopback）、(b) `DRV_QUERYDEVICEINTERFACE` の interface-id 接頭辞、(c) Windows MIDI Services metadata（`MidiEndpointDeviceInformation` — 別 API 面・windows feature 追加が要る）のいずれか。識別結果を `Virtual` に格上げするかは adapter 契約の変更を伴うため後続で判断。
 3. **`midiOutMessage` `DRV_QUERYDEVICEINTERFACE*` の不安定性** — input 側は実績あるが output 側は本ホストで crash を観測。interface-id ベース識別は input 方向のみ安全。
 4. **windows feature 不足（probe gap として記録）**: SetupAPI/driver-store 系（driver 署名・package 検証）と `Win32_System_SystemInformation`（`GetVersionEx`/`RtlGetVersion` による正確な OS build 取得）は enabled feature にない。probe は `cmd /c ver` で build 文字列を取得する workaround を取った。driver signature の機械的検証は provisioning runner 側の別手段（例: PowerShell `Get-AuthenticodeSignature`）が要検討。
