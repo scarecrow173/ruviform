@@ -38,6 +38,7 @@ Directory: `docs/specs`
 | SPEC-034QhrD80l0ZtpqNTqFvHa | Issue #191 PCM WAV encode/mux output backend | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | SPEC-034UBU16WQsh5QzC5ak17G | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | SPEC-034WYfwcdnbMdpGzQQzRKN | Issue #192 TA Invariant ↔ 現行API/Issue/L1テスト対応表 + 依存非循環性監査 | approved | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
+| SPEC-C2oZ7zQDj9Mj2XANYlamgo | Issue #192 TA DAG L2/L3 受入 Owner 欄の Virtual-first 再指向 | approved | [issue-192-virtual-first-owner-remap.md](./issue-192-virtual-first-owner-remap.md) |
 | SPEC-034UCI2A3NOXf96MhNKdmi | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 仕様 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | SPEC-034WZ7XezzT5NZf0iyG6Wn | Issue #193 Migration Plan Update — 版付き Snapshot・M0〜M7 Owner/Gate 確定 仕様 | approved | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
 | SPEC-034XJoQgBaxNYdomvY52Po | Issue #193 Migration M0〜M7 受入表の Virtual-first Owner 対応付け | approved | [issue-193-virtual-first-owner-remap.md](./issue-193-virtual-first-owner-remap.md) |

@@ -101,6 +101,7 @@ Directory: `docs/impl/ir`
 | IMPL-034QgS61F2OZZNh6JVUeV3 | Issue #190 T-3: plugin bridge + mock PoC | completed | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | IMPL-034QhS434AsmoWfCforctH | Issue 191: PCM WAV encode/mux backend with MediaSink + StagedOutput | completed | [issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md](./issue-191-pcm-wav-encode-mux-backend-with-mediasink-stagedoutput.md) |
 | IMPL-034WYgZmp0Qv3NLjgtu1jn | Issue #192 TA Invariant Map — 監査対応表・非循環性静的確認の実装記録 | completed | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
+| IMPL-034XJx7H1efFWsEqCixCGj | Issue #192 TA DAG L2/L3 受入 Owner 欄の Virtual-first 再指向 | completed | [issue-192-virtual-first-owner-remap.md](./issue-192-virtual-first-owner-remap.md) |
 | IMPL-034WZ8jEVUJPCfjc4NtvqF | Issue 193 migration plan update snapshot | completed | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
 | IMPL-034XJsLKXbwnTg5HsPc0e1 | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付け | completed | [issue-193-virtual-first-owner-remap.md](./issue-193-virtual-first-owner-remap.md) |
 | IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |

@@ -53,6 +53,7 @@ Directory: `docs/designs`
 | DESIGN-034Qhua2OtuBq26hwS8LpX | Issue #191 PCM WAV output backend design | approved | [issue-191-pcm-wav-output-backend.md](./issue-191-pcm-wav-output-backend.md) |
 | DESIGN-034UBX7Lbr3m4u4ZGzQpHA | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | DESIGN-034WYfShwch3ZurjTQp3Sp | Issue #192 TA Invariant Map — 監査設計 | approved | [issue-192-ta-invariant-map-design.md](./issue-192-ta-invariant-map-design.md) |
+| DESIGN-SIWa8Wf4wBd9hAQ0iI6kUE | Issue #192 Virtual-first 受入 Owner remap 設計 | approved | [issue-192-virtual-first-owner-remap-design.md](./issue-192-virtual-first-owner-remap-design.md) |
 | DESIGN-034UCMjL9ps9ffJkQqwDlR | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | DESIGN-034WZ7Y0r628xfq8Nhga00 | Issue #193 Migration Plan Update — 版付き Snapshot 設計 | approved | [issue-193-migration-plan-update-design.md](./issue-193-migration-plan-update-design.md) |
 | DESIGN-034XJpQL8GJGCAfS6f2zQK | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付け設計 | approved | [issue-193-virtual-first-owner-remap-design.md](./issue-193-virtual-first-owner-remap-design.md) |

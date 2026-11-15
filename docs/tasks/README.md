@@ -189,6 +189,7 @@ Directory: `docs/tasks`
 | TASK-034Qh7vBnMxZaSdFgH | Issue #190 T-3: plugin transport bridge + Mock Driver PoC | done | [issue-190-t-3-plugin-bridge-mock-poc.md](./issue-190-t-3-plugin-bridge-mock-poc.md) |
 | TASK-034UCcxDGa2UGOpkpXCbQJ | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | done | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | TASK-034WYgYyoC0JWYkg6gXlBK | Issue #192 TA Invariant Map — 監査対応表の作成と非循環性の静的確認 | done | [issue-192-ta-invariant-map-task.md](./issue-192-ta-invariant-map-task.md) |
+| TASK-0AkBucIA3R2J63ZuOHF6p1 | Issue #192 Virtual-first 受入 Owner remap タスク | done | [issue-192-virtual-first-owner-remap-task.md](./issue-192-virtual-first-owner-remap-task.md) |
 | TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-034WZ7YMSR5UKu8AhtpOgk | Issue #193 Migration Plan Update Snapshot 文書化 | done | [issue-193-migration-plan-update-task.md](./issue-193-migration-plan-update-task.md) |
 | TASK-034XJsrkSEZgpSXhxUbhXy | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付けタスク | done | [issue-193-virtual-first-owner-remap-task.md](./issue-193-virtual-first-owner-remap-task.md) |
