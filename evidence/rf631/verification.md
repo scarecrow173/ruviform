@@ -71,3 +71,56 @@ skeleton）のローカル検証記録。canonical = `mise` lane。
   `missing_artifact_fails_closed_as_not_run` が `NotRun`/`Fail` 系を
   確認（silent pass 無し）。
 - `fixture_run_reports_honest_verdicts` が上表 verdict を assert。
+
+---
+
+# Real-window dock lane（second slice — `rf631.plugin-dock-real`）
+
+`mise run test-ui-plugin-dock-real`（manual/opt-in — CI 必須でない）を
+interactive Windows session で実走。JSONL 正本:
+`evidence/rf631/plugin-dock-real-scenario.jsonl`。
+
+## 実走 verdict（2026-11-15, Windows x86_64, repo `5c38907b`）
+
+| case | verdict | evidence |
+| --- | --- | --- |
+| `real-window-mount` | pass | `plugin_dock_view_spec()` が実 OS window に mount、`plugin.editor` NativeSlot 解決・観測 |
+| `real-native-slot` | pass | declare → bind → renderer projection（Visible+実 geometry）→ `lease_parent`（実 container HWND）→ `validate_lease` → `container_token`=50269688 → release → released/stale/forged lease の validate/redeem 拒否 — 全 step 実走 |
+| `real-editor-attach` | unsupported | `test_gain` `createView` null → `HostError::Unsupported` → `EditorOpError::Unsupported`。slot/lease/redeem chain 自体は実 container lease 経由で実走済み（`failed_unsupported=true`） |
+| `real-capture` | pass | 1280×800 `win32-printwindow` 実画素 — window/slot 領域の画素であり plugin editor 画素ではない（detail 明記） |
+
+- chain 記録: `NativeSlot → GpuiSurfaceAdapter（実 container HWND）→
+  lease_parent → ParentSlotLease → InProcessEditorOps redeem →
+  session.open(Docked)` — `real-editor-attach` で `session.open` まで
+  実走し plugin 側 refuse を観測。
+- `environment_kind=real-window` は実走 case のみ。
+- plugin artifact: `test_gain` id `218a4f6d…` SHA-256
+  `9c3cfc6bb554a8439e190347b5f6144fe0e675a3f9b50fe84c59449729a530e7`。
+
+## NotRun / Unsupported / Deferred（後続）
+
+- dock-pixels・child HWND input/resize/focus/re-dock・DComp #532 判定:
+  `test_editor` 実物（#630 残存 scope）到着まで NotRun/Deferred。
+- `real-editor-attach` の Pass: 実 editor が `OpenGui` を実 container
+  lease で accept する fixture が必要。
+- headless/非対話 host では全 case が `NotRun` + environment_blocked
+  で fail-closed（exit 0）。
+- 3OS・`*-msrv`・`*-full` 系: 対象外。
+
+## 検証サマリ（canonical = mise）
+
+- `mise run fmt-check`: pass
+- `mise run check/lint/test ruviform-ui-gpui`（+`--features real-scenario`）: pass
+  （`tests/real_window.rs::real_os_input_scenario` は実 OS input の
+  timing flake で 1 度 fail → 単独再実行で pass。native-slot 変更と
+  無関係）
+- `mise run check/lint/test ruviform-plugin-dock-test`（default +
+  `--features real-dock`）: pass
+- `mise run test-ui-plugin-dock`: pass（headless lane 非回帰 —
+  verdict 不変）
+- `mise run test-ui-scenario-contract` / `-fake` / `-gpui`: pass
+- `mise run test-ui-gpui`: pass
+- `mise run check-ui-driver-boundary`: pass（`ruviform-plugin-dock-test`
+  を composition-root として boundary.json に登録 — Coordinator 承認済み）
+- `mise run test-ui-plugin-dock-real`: pass（上表 — 実走 evidence）
+- `mise exec -- prek run --all-files`: （結果は PR 本文に記録）

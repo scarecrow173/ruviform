@@ -1,0 +1,1 @@
+{"schema":"experiment_event.v1","experiment":"docs/impl/exp/issue-631-real-window-dock.jsonl","seq":1,"type":"start","ts":"2026-11-15T07:45:28.805Z","summary":"real_window.rs slot ops + plugin-dock-test real-dock lane implementation","task":"docs/tasks/issue-631-real-window-dock.md"}
