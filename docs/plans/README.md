@@ -194,6 +194,7 @@ Directory: `docs/plans`
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034XTP6V40ZLnW8sMLZK2N | Issue #631 Real-window native-slot dock lane 実装計画 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
+| PLAN-034XWO1EjjLigZP3nnak6l | Issue #631 Headless Scenario Console 実装計画 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

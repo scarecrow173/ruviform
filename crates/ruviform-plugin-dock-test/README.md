@@ -34,12 +34,16 @@ artifact fails closed as `NotRun`.
 The eight cases are declared once in `HEADLESS_MATRIX`
 (`scenario::HEADLESS_MATRIX`) — a driver-independent
 `ScenarioMatrix`/`ScenarioEntry` table from `ruviform-ui-test`'s
-`scenario::catalog` module. `run_all` is a thin projection over it
-(`run_matrix` sequences each entry's `run_scenario` call); the lane
-binary, the integration tests, and any future headless console read
-the same table. The `real-dock` lane keeps its own session-scoped
-catalog (`real_entries` in `real_dock`) consumed by both the live
-session path and the environment-blocked fail-closed path.
+`scenario::catalog` module. `run_all` is the select-all case of
+`run_selected`, which sequences each selected entry's `run_entry`
+call in catalog order; the lane binary, the integration tests, and
+the `plugin-dock-console` binary read the same table. The
+`real-dock` lane keeps its own session-scoped catalog
+(`real_entries` in `real_dock`) consumed by both the live session
+path and the environment-blocked fail-closed path; its metadata-only
+projection lives in `real_catalog` (GPUI-free, available in every
+build) so the console can name real selectors without compiling the
+lane.
 
 `ScenarioMatrix::project` answers "would `run_scenario` pre-flight
 pass this entry on this driver" from declared capabilities only — it
@@ -99,3 +103,44 @@ cargo run -p ruviform-plugin-dock-test --features real-dock \
 
 Manual/opt-in — not a CI-required gate; requires an interactive
 desktop session.
+
+## Headless scenario console (`plugin-dock-console`)
+
+`plugin-dock-console` is the headless consumer of the merged catalog —
+a CLI for enumerating and selectively running the headless cells. It
+is not a GUI and never executes real-window cases.
+
+```sh
+cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- --list
+cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
+  --run --case view-mount --out evidence/rf631/plugin-dock-console.jsonl
+```
+
+- `--list` — one JSON row per `HEADLESS_MATRIX.project()` cell
+  (`type:"catalog"`, `case`, `scenario`, `driver`, `required`,
+  `runnable`, `missing`). This is a **capability projection, not
+  evidence**: it carries no verdict vocabulary and claims no
+  execution.
+- `--list --include-real` — appends the four `rf631.plugin-dock-real`
+  rows from `real_catalog` with `session_required:true` and
+  `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
+  Requires the `real-dock` feature; without it the option is refused
+  with exit 2 rather than silently dropping the rows.
+- `--run [--case <id>]... [--scenario <id>]... [--driver <name>]...`
+  — filters `HEADLESS_MATRIX.cells()` (repeatable flags: OR within a
+  flag, AND across flags; `--driver` takes the kebab-case name
+  `fake`/`plugin-host-probe`) and executes the selection through
+  `scenario::run_selected` — the same `run_entry` catalog path as the
+  lane. JSONL output uses run id `rf631-plugin-dock` with lane
+  `plugin-dock-console`, so a filtered run is never mistaken for
+  full-lane evidence. `--out <path>` writes to a file (stdout
+  otherwise).
+
+Fail-closed semantics: unknown selector values, selector combinations
+matching zero headless cells, CLI misuse, and any attempt to run a
+real-lane case/scenario/driver all exit 2 with nothing executed (real
+execution stays with the opt-in `plugin-dock-real-scenario` lane — the
+console builds no second executor). A `Fail` verdict exits 1;
+`NotRun`/`Unsupported`/`Blocked` are recorded outcomes and exit 0. A
+selected case whose `artifact` prerequisite was not part of the same
+selection reports `NotRun` — prerequisites are never fabricated.

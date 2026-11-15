@@ -54,7 +54,7 @@ use ruviform_ui_test::scenario::plugin_dock::{
 use ruviform_ui_test::{
     DriverBinding, FakeGuiTest, FakeNativeSlot, RunId, ScenarioCapability, ScenarioDriver,
     ScenarioEntry, ScenarioMatrix, ScenarioOutcome, ScenarioReport, ScenarioSpec,
-    ScenarioSpecExtras, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, run_matrix,
+    ScenarioSpecExtras, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, run_entry,
     run_scenario,
 };
 use serde_json::{Map, Value, json};
@@ -79,21 +79,50 @@ pub struct LaneEnvironment {
 /// Runs every plugin-dock case and returns the reports in case order.
 ///
 /// The lane is a thin projection over [`HEADLESS_MATRIX`]: `run_all`
-/// only builds the lane context and lets `run_matrix` sequence the
-/// catalog's `run_scenario` calls — the same table the binary, the
-/// integration tests, and any future console consume. The artifact
-/// is resolved/hashed/loaded once by the `artifact` case and shared
-/// through the context: a load failure leaves `library` empty and
-/// dependents report `NotRun` (prerequisite absent), never a
-/// fabricated pass.
+/// is the select-all case of [`run_selected`] — it builds the lane
+/// context and lets the catalog sequence the `run_scenario` calls,
+/// the same table the binary, the integration tests, and the console
+/// consume. The artifact is resolved/hashed/loaded once by the
+/// `artifact` case and shared through the context: a load failure
+/// leaves `library` empty and dependents report `NotRun`
+/// (prerequisite absent), never a fabricated pass.
 #[must_use]
 pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
+    run_selected(env, |_, _| true)
+}
+
+/// Runs the [`HEADLESS_MATRIX`] cells `keep` selects, in catalog
+/// order, against one fresh lane context — the headless console's
+/// partial-run path (`plugin-dock-console --run`).
+///
+/// Both this and [`run_all`] build a fresh [`HeadlessContext`] and
+/// drive `run_entry` over `HEADLESS_MATRIX.cells()` in order, so a
+/// filtered run records exactly the verdicts the selected case
+/// bodies produce. An artifact-dependent case whose `artifact`
+/// prerequisite was not part of the selection reports `NotRun`
+/// (fail-closed — the prerequisite genuinely did not run), never a
+/// fabricated pass.
+///
+/// `pub` rather than `pub(crate)`: bin targets are separate crates
+/// and cannot see crate-private items. The predicate keeps
+/// [`HeadlessContext`] construction inside this module — callers
+/// select catalog cells, they cannot build lane state.
+#[must_use]
+pub fn run_selected(
+    env: &LaneEnvironment,
+    keep: impl Fn(&ScenarioEntry<HeadlessContext>, ScenarioDriver) -> bool,
+) -> Vec<ScenarioReport> {
     let mut ctx = HeadlessContext {
         env: env.clone(),
         library: None,
         artifact: None,
     };
-    run_matrix(&HEADLESS_MATRIX, &RunId::new(RUN_ID), &mut ctx)
+    let run_id = RunId::new(RUN_ID);
+    HEADLESS_MATRIX
+        .cells()
+        .filter(|cell| keep(cell.0, cell.1.driver))
+        .map(|(entry, _)| run_entry(entry, &run_id, &mut ctx))
+        .collect()
 }
 
 /// Lane state threaded through the headless catalog — owned so the
@@ -101,7 +130,7 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// `artifact` case fills `library`/`artifact`; later cases read them
 /// — empty means the prerequisite never landed and they fail closed
 /// to `NotRun`. Fields stay private: the matrix is the only
-/// execution path and `run_all` the only constructor.
+/// execution path and `run_all`/`run_selected` the only constructors.
 pub struct HeadlessContext {
     /// Lane environment snapshot (owned clone of the caller's).
     env: LaneEnvironment,

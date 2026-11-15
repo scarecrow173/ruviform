@@ -191,3 +191,82 @@ first slice 記録と同一 verdict:
   input/resize/focus/re-dock・DComp #532 判定: #630 残存 scope まで
   NotRun/Unsupported 維持。
 - 3OS・`*-msrv`・`*-full` 系: 対象外。
+
+---
+
+# rf631 plugin-dock console slice — verification record
+
+Issue `scarecrow173/ruviform#631` 後続 slice（headless Scenario
+Console — `plugin-dock-console` bin）のローカル検証記録。
+canonical = `mise` lane。cargo 直実行は補助証拠として区別する。
+
+- Date: 2026-11-16
+- OS: Windows (x86_64)
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA: `bff3603b` base の working tree（console 変更は未 commit
+  のため `repo_sha` は base HEAD を記録）
+
+## Lane results（canonical = mise）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass (exit 0) |
+| `mise run check ruviform-plugin-dock-test` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test` | pass (exit 0 — console integration 14 tests + 既存 4 tests) |
+| `mise run check/lint/test ruviform-plugin-dock-test --features real-dock` | pass (exit 0 — `real_catalog_matches_entries`・`list_include_real_appends_real_lane_rows` 含む） |
+| `mise run test-ui-plugin-dock` | pass (exit 0 — verdict 非回帰、下記） |
+| `mise run test-ui-scenario-contract`（fake + gpui） | pass (exit 0) |
+| `mise run check-ui-driver-boundary` | pass (exit 0 — dep-graph/signature/allowlist。console 経路は GPUI 型を漏らさない） |
+| `mise exec -- prek run --all-files` | pass (exit 0) |
+
+## `test-ui-plugin-dock` verdict 非回帰確認
+
+console 追加後に lane を再実行した `plugin-dock-scenario.jsonl` は
+pre-console 記録と同一 verdict（差分は repo_sha・worktree path・
+fixture DLL sha256 の provenance のみ — fixture は worktree 毎に
+再 build されるため digest が変わる。verdict 列は不変）:
+
+| case | driver | verdict |
+| --- | --- | --- |
+| `view-mount` | fake | pass |
+| `artifact` | plugin-host-probe | pass |
+| `host-lifecycle` | plugin-host-probe | pass |
+| `editor-attach` | plugin-host-probe | unsupported |
+| `session-lifecycle` | plugin-host-probe | pass |
+| `host-terminate` | plugin-host-probe | pass |
+| `open-or-degrade` | plugin-host-probe | pass |
+| `dock-pixels` | plugin-host-probe | not_run |
+
+- `scenario::run_selected` が `run_all` の select-all 投影として
+  `HEADLESS_MATRIX.cells()` → `run_entry` を catalog 順に実行。
+  `HeadlessContext` 構築は scenario module 内に留まり、console は
+  selector predicate のみを渡す。
+- `real_catalog` は `real-dock` feature 非依存の metadata table
+  （`RUN_ID`/`SCENARIO`/`LANE`/`DRIVER`/`REAL_CATALOG`）。
+  feature 付き build では `real_catalog_matches_entries` が
+  `real_entries()` との case/scenario/required 一致を検証し、
+  `real_dock` の lane 文字列リテラルは `real_catalog::LANE` を
+  共有する。
+
+## 補助証拠（cargo 直実行 — canonical ではない）
+
+| Command | Exit | Output |
+| --- | --- | --- |
+| `cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --list` | 0 | `plugin-dock-console-list.jsonl`（8 行 `type:"catalog"`、verdict 語彙なし） |
+| `cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-console -- --list --include-real` | 0 | `plugin-dock-console-list-include-real.jsonl`（12 行 — real 4 行は `session_required:true`/`lane:"real-window-dock"`/`runnable:null`） |
+| `cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --run --case view-mount --out evidence/rf631/plugin-dock-console.jsonl` | 0 | `plugin-dock-console.jsonl`（run header `lane:"plugin-dock-console"` + `view-mount` pass） |
+
+selector 拒否系（unknown case/scenario/driver・空 intersection・
+real-lane 指定・CLI misuse・default build の `--include-real`）は
+`tests/console.rs` の 14 test で exit 2 / 非実行を検証済み。
+
+## NotRun / Unsupported / Deferred（後続 — 変更なし）
+
+- GPUI 製 Scenario Console / Test Lab GUI 本体: 後続 slice。
+- `test_editor` 実物・実 Native Dock Pass・dock-pixels・child HWND
+  input/resize/focus/re-dock・DComp #532 判定: #630 残存 scope まで
+  NotRun/Unsupported 維持 — console 整備で「解消済み」にしない。
+- `mise.toml` への console lane task: 別 Worker 占有中のため本
+  slice では追加しない（後続 slice 向け）。
+- 3OS・`*-msrv`・`*-full` 系: 対象外。
