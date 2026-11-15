@@ -11,8 +11,9 @@
 //! | `real-native-slot`    | `RealOs`    | `Pass`/`Fail` — declare→bind→project→`lease_parent`→   |
 //! |                       |             | validate→`container_token`→release + stale/forged      |
 //! |                       |             | lease rejection, all real ops                          |
-//! | `real-editor-attach`  | `RealOs`    | `Unsupported` — `createView` null behind a REAL        |
-//! |                       |             | container-HWND lease (never `Pass` without an editor)  |
+//! | `real-editor-attach`  | `RealOs`    | `Pass`/`Fail`/`Unsupported` — `test_editor` real   |
+//! |                       |             | `IPlugView` child HWND under the real container     |
+//! |                       |             | lease, OS-observed attach → detach (`IsWindow==0`)  |
 //! | `real-capture`        | `RealOs`    | `Pass`/`Unsupported`/`NotRun` — window/slot-region     |
 //! |                       |             | pixels, explicitly NOT plugin editor pixels            |
 //!
@@ -34,9 +35,9 @@
 
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
-    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, HostCommand,
-    InProcessEditorOps, InProcessHost, ParentLease, ParentSlotLease, PluginEditorSessions,
-    PluginHandle,
+    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
+    HostCommand, InProcessEditorOps, InProcessHost, ParentLease, ParentSlotLease,
+    PluginEditorSession, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::dock::ViewInstanceId;
@@ -65,8 +66,9 @@ use crate::real_catalog::{LANE, SCENARIO};
 // re-exported so `real_dock::RUN_ID` keeps working for the lane.
 pub use crate::real_catalog::RUN_ID;
 use crate::scenario::{
-    activate_test_gain, editor_size, fail, finalize, host_error_outcome, not_run,
-    register_factories, rejecting_editor_ops, session_failed_unsupported, session_id_json,
+    activate_test_gain, editor_size, events_debug, fail, finalize, host_error_outcome, not_run,
+    register_factories, rejecting_editor_ops, session_closed_concluded, session_failed_unsupported,
+    session_id_json,
 };
 
 /// The resolved plugin binary + its evidence identity — only
@@ -256,10 +258,15 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 4] {
     ]
 }
 
-/// Resolves + hashes + loads the `test_gain` artifact once for the
-/// lane — only `real-editor-attach` consumes it. `Err` carries the
-/// honest unavailable reason plus whether the artifact was simply
-/// absent (`NotRun`) or present-but-broken (`Fail`).
+/// Resolves + hashes + loads the test-plugin cdylib once for the
+/// lane and selects its `test_editor` descriptor — only
+/// `real-editor-attach` consumes it. `Err` carries the honest
+/// unavailable reason plus whether the artifact was simply absent
+/// (`NotRun`) or present-but-broken (`Fail`). There is deliberately
+/// no fallback to another descriptor: an editor-less fixture
+/// (`test_gain`) would degrade the case back to `Unsupported` and
+/// fake the slice's intent — a missing `test_editor` is an honest
+/// `Fail`, not a silent retreat.
 fn load_plugin(env: &LaneEnvironment) -> Result<PluginPair, PluginUnavailable> {
     let unavailable = |detail: String, prerequisite: bool| PluginUnavailable {
         detail,
@@ -283,12 +290,13 @@ fn load_plugin(env: &LaneEnvironment) -> Result<PluginPair, PluginUnavailable> {
         let Some(descriptor) = library
             .descriptors()
             .iter()
-            .find(|d| d.name == "test_gain")
-            .or_else(|| library.descriptors().first())
+            .find(|d| d.name == "test_editor")
         else {
             return Err(unavailable(
                 format!(
-                    "loaded {} but no plugin descriptor was discovered",
+                    "loaded {} but no `test_editor` descriptor was discovered — \
+                     the real-editor-attach case requires the editor fixture \
+                     (Issue #630); refusing silent fallback to an editor-less class",
                     path.display()
                 ),
                 false,
@@ -773,6 +781,591 @@ fn real_native_slot_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
 }
 
 // ---------------------------------------------------------------------
+// OS child-HWND observation (real-editor-attach — query-only Win32)
+// ---------------------------------------------------------------------
+
+/// The attach-phase contract checks for one observed child HWND.
+#[derive(Debug)]
+struct ChildAttachFacts {
+    /// `GetParent(child) == container` — the plugin parented its
+    /// editor into the leased container, not elsewhere.
+    parent_matches: bool,
+    /// `IsWindowVisible(child) != 0` — visible through the whole
+    /// ancestor chain at observation time.
+    visible: bool,
+    /// `IsWindow(child) != 0` while attached.
+    alive: bool,
+}
+
+/// Facts recorded for one observed child HWND — plain integers and
+/// booleans so no Win32 type crosses into `observed`/evidence (the
+/// same `u64`-narrowed-handle convention as `container_token`).
+#[derive(Debug)]
+struct ChildWindowFacts {
+    /// The child HWND value as `u64`.
+    hwnd: u64,
+    /// `GetWindowThreadProcessId(child)` — the thread that created
+    /// the child (the thread `attached` ran on).
+    thread_id: u32,
+    /// The three attach-phase checks, taken while the lease is live.
+    attach: ChildAttachFacts,
+    /// `IsWindow(child) == 0` after `session.close` — the plugin's
+    /// `removed()` → `DestroyWindow` effect, observed post-detach.
+    destroyed: bool,
+}
+
+/// The phase-1 OS observation of the editor child — `supported` is
+/// `false` off-Windows where no HWND concept exists (the case then
+/// records `Unsupported` for the observation half honestly).
+#[derive(Debug)]
+struct ChildWindowObservation {
+    /// Every direct child `EnumChildWindows` found under the
+    /// container, in enumeration order.
+    children: Vec<ChildWindowFacts>,
+    /// `GetCurrentThreadId` — the scenario caller thread that drove
+    /// `session.open`/`attached` (the thread-affinity record).
+    caller_thread: u32,
+    /// `GetWindowThreadProcessId(container)` — the thread owning
+    /// the container HWND's message pump (the GPUI app thread).
+    container_thread: u32,
+    /// `false` off-Windows — no child-HWND observation exists there.
+    supported: bool,
+}
+
+/// Windows implementation — query-only Win32 (`poc.rs` precedent):
+/// enumeration and property reads only; this module never creates,
+/// destroys, moves, or messages a window.
+#[cfg(windows)]
+mod oschild {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumChildWindows, GetParent, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
+    };
+
+    use super::{ChildAttachFacts, ChildWindowFacts, ChildWindowObservation};
+
+    /// Collects `container`'s direct child HWNDs and their contract
+    /// facts, plus the caller/container owning thread ids.
+    /// `container` is the opaque `container_token` `u64` (= the
+    /// container HWND on Windows). Query-only — safe on any thread.
+    #[expect(unsafe_code)]
+    pub(super) fn observe(container: u64) -> ChildWindowObservation {
+        unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> i32 {
+            // SAFETY: `lparam` is the `*mut Vec<u64>` the caller
+            // passed; it outlives this synchronous enumeration.
+            unsafe { (*(lparam as *mut Vec<u64>)).push(hwnd as usize as u64) };
+            1
+        }
+        let mut found: Vec<u64> = Vec::new();
+        // SAFETY: query-only enumeration; `found` outlives the call.
+        unsafe {
+            EnumChildWindows(container as HWND, Some(collect), &raw mut found as LPARAM);
+        }
+        // SAFETY: query-only thread-id reads.
+        let (caller_thread, container_thread) = unsafe {
+            let mut pid = 0u32;
+            (
+                GetCurrentThreadId(),
+                GetWindowThreadProcessId(container as HWND, &raw mut pid),
+            )
+        };
+        let children = found
+            .into_iter()
+            .map(|hwnd| {
+                // SAFETY: query-only property reads on an HWND this
+                // enumeration just returned — still valid while the
+                // lease (and thus the container) is held.
+                unsafe {
+                    let mut pid = 0u32;
+                    ChildWindowFacts {
+                        hwnd,
+                        thread_id: GetWindowThreadProcessId(hwnd as HWND, &raw mut pid),
+                        attach: ChildAttachFacts {
+                            parent_matches: GetParent(hwnd as HWND) == container as HWND,
+                            visible: IsWindowVisible(hwnd as HWND) != 0,
+                            alive: IsWindow(hwnd as HWND) != 0,
+                        },
+                        destroyed: false,
+                    }
+                }
+            })
+            .collect();
+        ChildWindowObservation {
+            children,
+            caller_thread,
+            container_thread,
+            supported: true,
+        }
+    }
+
+    /// An observation for the no-container-token path — the platform
+    /// supports observation but there is nothing to enumerate, so
+    /// the child checks fail honestly downstream.
+    #[expect(unsafe_code)]
+    pub(super) fn empty() -> ChildWindowObservation {
+        // SAFETY: query-only.
+        let caller_thread = unsafe { GetCurrentThreadId() };
+        ChildWindowObservation {
+            children: Vec::new(),
+            caller_thread,
+            container_thread: 0,
+            supported: true,
+        }
+    }
+
+    /// Post-close verification — `IsWindow(child) == 0` for every
+    /// recorded child (the `removed()` → `DestroyWindow` effect).
+    #[expect(unsafe_code)]
+    pub(super) fn mark_destroyed(observation: &mut ChildWindowObservation) {
+        for child in &mut observation.children {
+            // SAFETY: query-only; `IsWindow` accepts any HWND value —
+            // a destroyed handle simply reports false.
+            child.destroyed = unsafe { IsWindow(child.hwnd as HWND) } == 0;
+        }
+    }
+}
+
+/// Non-Windows stub — the `NativePluginDock` capability (and thus
+/// this case body) is Windows-only, so this path is unreachable in
+/// practice; it exists so the crate compiles on every target and an
+/// accepted open would record `Unsupported`, never a fabricated
+/// observation.
+#[cfg(not(windows))]
+mod oschild {
+    use super::ChildWindowObservation;
+
+    fn unsupported() -> ChildWindowObservation {
+        ChildWindowObservation {
+            children: Vec::new(),
+            caller_thread: 0,
+            container_thread: 0,
+            supported: false,
+        }
+    }
+
+    /// Always the unsupported, empty observation off-Windows.
+    pub(super) fn observe(_container: u64) -> ChildWindowObservation {
+        unsupported()
+    }
+
+    /// Same unsupported answer for the no-container path.
+    pub(super) fn empty() -> ChildWindowObservation {
+        unsupported()
+    }
+
+    /// No-op off-Windows — there are never children to mark.
+    pub(super) fn mark_destroyed(_observation: &mut ChildWindowObservation) {}
+}
+
+/// Records a failed observation step and remembers the first
+/// failure for the verdict detail — a violated invariant is never
+/// hidden behind a later pass.
+fn record_obs_fail(
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+    name: &str,
+    detail: impl Into<String>,
+) {
+    let detail = detail.into();
+    if failure.is_none() {
+        *failure = Some(format!("{name}: {detail}"));
+    }
+    steps.push(json!({
+        "step": name,
+        "verdict": "fail",
+        "error": detail,
+    }));
+}
+
+/// The verdict-carrying result of the post-open child-HWND
+/// observation — `verified` gates `Pass`; `failure` names the first
+/// violated check for the `Fail` detail; `extras` merges into
+/// `observed`.
+struct ChildVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every contract check agreed: children exist under the
+    /// container, parented, visible, live; destroyed after close;
+    /// session concluded with `[Attached{Docked}, Closed]` events.
+    verified: bool,
+    /// First violated check (`name: detail`) for the `Fail` detail.
+    failure: Option<String>,
+    /// `observed` extras — container/child HWND ids, thread ids,
+    /// drained events.
+    extras: Value,
+}
+
+/// Phase-1 attach checks while the editor is still attached:
+/// `child_enumerated` (at least one real child HWND under the
+/// container), `child_contract` (every child parented into the
+/// container, visible, alive), and `thread_affinity` (owning thread
+/// ids recorded as observation — the Issue #389 D1 deviation is a
+/// documented fact, never a verdict input). Returns whether every
+/// check agreed.
+fn check_attached_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let mut ok = true;
+
+    // child_enumerated — at least one real child HWND under the
+    // container.
+    if observation.children.is_empty() {
+        record_obs_fail(
+            steps,
+            failure,
+            "child_enumerated",
+            "EnumChildWindows found no child under the container HWND",
+        );
+        ok = false;
+    } else {
+        let children: Vec<Value> = observation
+            .children
+            .iter()
+            .map(|child| {
+                json!({
+                    "hwnd": child.hwnd,
+                    "parent_matches": child.attach.parent_matches,
+                    "visible": child.attach.visible,
+                    "alive": child.attach.alive,
+                    "thread_id": child.thread_id,
+                })
+            })
+            .collect();
+        steps.push(json!({
+            "step": "child_enumerated",
+            "verdict": "pass",
+            "container": container,
+            "count": observation.children.len(),
+            "children": children,
+        }));
+    }
+
+    // child_contract — every observed child parented into the
+    // container, visible, and alive.
+    if observation.children.is_empty() {
+        record_obs_fail(steps, failure, "child_contract", "no children to check");
+        ok = false;
+    } else {
+        let violations: Vec<String> = observation
+            .children
+            .iter()
+            .enumerate()
+            .filter_map(|(index, child)| {
+                let mut problems = Vec::new();
+                if !child.attach.parent_matches {
+                    problems.push("parent-mismatch");
+                }
+                if !child.attach.visible {
+                    problems.push("invisible");
+                }
+                if !child.attach.alive {
+                    problems.push("not-alive");
+                }
+                (!problems.is_empty()).then(|| {
+                    format!(
+                        "child[{index}] hwnd={:#x}: {}",
+                        child.hwnd,
+                        problems.join("+")
+                    )
+                })
+            })
+            .collect();
+        if violations.is_empty() {
+            steps.push(json!({ "step": "child_contract", "verdict": "pass" }));
+        } else {
+            record_obs_fail(
+                steps,
+                failure,
+                "child_contract",
+                format!("child HWND contract violated: {}", violations.join("; ")),
+            );
+            ok = false;
+        }
+    }
+
+    // thread_affinity — recorded as `note`, never a verdict input:
+    // the Issue #389 D1 contract wants attach on the container
+    // HWND's pump-owning thread; the scenario drives `open` on its
+    // own caller thread. The ids are evidence and the deviation is
+    // a documented observation — not a Pass criterion, never
+    // hidden, and not dressed up as a passed check.
+    steps.push(json!({
+        "step": "thread_affinity",
+        "verdict": "note",
+        "caller_thread": observation.caller_thread,
+        "container_thread": observation.container_thread,
+        "child_threads": observation
+            .children
+            .iter()
+            .map(|child| child.thread_id)
+            .collect::<Vec<_>>(),
+        "note": "session.open/attached ran on the scenario caller \
+                 thread, not the container HWND's pump-owning \
+                 thread — Issue #389 D1 deviation recorded as \
+                 observation, not a Pass criterion",
+    }));
+    ok
+}
+
+/// Phase-2 close — `session.close` runs the production `close_gui`
+/// → `removed()` → `DestroyWindow` path. The rejecting redeemer is
+/// never consulted (close carries no lease).
+fn close_editor_session(
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    match sessions.session_mut(session_id).map(|session| {
+        let mut close_ops = rejecting_editor_ops(host, handle);
+        session.close(&mut close_ops)
+    }) {
+        Some(Ok(())) => {
+            steps.push(json!({ "step": "session.close", "verdict": "pass" }));
+            true
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, failure, "session.close", error.to_string());
+            false
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                failure,
+                "session.close",
+                "editor session vanished before close",
+            );
+            false
+        }
+    }
+}
+
+/// Phase-3 post-detach check — every recorded child must be dead
+/// (`IsWindow(child) == 0`, the `removed()` → `DestroyWindow`
+/// effect). Runs only on Windows; the caller skips it off-Windows
+/// where the `child_hwnd_observation` row already recorded
+/// `unsupported`.
+fn check_detached_children(
+    observation: &mut ChildWindowObservation,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    oschild::mark_destroyed(observation);
+    if observation.children.is_empty() {
+        record_obs_fail(
+            steps,
+            failure,
+            "child_hwnd_detached",
+            "no children recorded — nothing to verify destroyed",
+        );
+        return false;
+    }
+    let alive: Vec<String> = observation
+        .children
+        .iter()
+        .filter(|child| !child.destroyed)
+        .map(|child| format!("hwnd={:#x}", child.hwnd))
+        .collect();
+    if alive.is_empty() {
+        steps.push(json!({
+            "step": "child_hwnd_detached",
+            "verdict": "pass",
+            "children": observation
+                .children
+                .iter()
+                .map(|child| json!({
+                    "hwnd": child.hwnd,
+                    "destroyed": child.destroyed,
+                }))
+                .collect::<Vec<_>>(),
+        }));
+        true
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "child_hwnd_detached",
+            format!(
+                "child HWND(s) still alive after close: {}",
+                alive.join(", ")
+            ),
+        );
+        false
+    }
+}
+
+/// Phase-4 session convergence — `Closed`+`concluded` and the
+/// drained event stream must be exactly `[Attached{Docked},
+/// Closed]`; an unexpected event (degrade, failure, terminate) is
+/// a contract surprise, never a pass. Returns the checks' outcome
+/// plus the rendered event list for `observed`.
+fn check_session_converged(
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (bool, Vec<String>) {
+    let mut ok = true;
+    if session_closed_concluded(sessions, session_id) {
+        steps.push(json!({ "step": "session_concluded", "verdict": "pass" }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_concluded",
+            "session did not converge to Closed+concluded",
+        );
+        ok = false;
+    }
+
+    let events = sessions
+        .session_mut(session_id)
+        .map_or_else(Vec::new, PluginEditorSession::drain_events);
+    let rendered = events_debug(&events);
+    let events_ok = events.len() == 2
+        && events[0]
+            == EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            }
+        && events[1] == EditorSessionEvent::Closed;
+    if events_ok {
+        steps.push(json!({
+            "step": "session_events",
+            "verdict": "pass",
+            "events": rendered,
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_events",
+            format!("expected [Attached{{Docked}}, Closed], got {rendered:?}"),
+        );
+        ok = false;
+    }
+    (ok, rendered)
+}
+
+/// `observed` extras — container/child HWND ids, owning thread ids,
+/// and the drained event list.
+fn child_extras(
+    container: Option<u64>,
+    observation: &ChildWindowObservation,
+    events: &[String],
+) -> Map<String, Value> {
+    Map::from_iter([
+        ("container".to_string(), json!(container)),
+        (
+            "child_hwnds".to_string(),
+            json!(
+                observation
+                    .children
+                    .iter()
+                    .map(|child| child.hwnd)
+                    .collect::<Vec<_>>()
+            ),
+        ),
+        (
+            "caller_thread".to_string(),
+            json!(observation.caller_thread),
+        ),
+        (
+            "container_thread".to_string(),
+            json!(observation.container_thread),
+        ),
+        (
+            "child_threads".to_string(),
+            json!(
+                observation
+                    .children
+                    .iter()
+                    .map(|child| child.thread_id)
+                    .collect::<Vec<_>>()
+            ),
+        ),
+        ("events".to_string(), json!(events)),
+    ])
+}
+
+/// Post-open child-HWND observation + close convergence for an
+/// accepted `session.open(Docked)` — runs only when `open` returned
+/// `Ok`, i.e. the plugin claims an editor surface exists and every
+/// contract check below must agree for `Pass`.
+///
+/// Sequence: `EnumChildWindows(container)` while attached →
+/// `session.close` (production `close_gui` → `removed()` →
+/// `DestroyWindow`) → `IsWindow(child) == 0` per recorded child →
+/// `session_closed_concluded` → `drain_events`. Every check lands
+/// as a pass/fail row in `steps` (`unsupported` off-Windows);
+/// `verified` is the Pass gate and `failure` names the first
+/// violated check.
+fn observe_editor_child_lifecycle(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> ChildVerification {
+    let mut failure: Option<String> = None;
+
+    // Phase 1 — enumerate the container's children while the editor
+    // is still attached. `container` is the opaque `container_token`
+    // u64 (= the container HWND on Windows); `None` means the token
+    // observation already failed — the child checks then fail
+    // honestly downstream.
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    // The attach-phase checks run only where an HWND concept exists;
+    // off-Windows the observation half records `Unsupported` and the
+    // session still converges below.
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    // Phase 2 — `session.close` runs the production `close_gui` →
+    // `removed()` → `DestroyWindow` path.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
+
+    // Phase 3 — post-detach: every recorded child must be dead
+    // (`IsWindow(child) == 0`). Skipped off-Windows — the
+    // `child_hwnd_observation` row already recorded `unsupported`.
+    let detach_ok =
+        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
+
+    // Phase 4 — session convergence: `Closed`+`concluded` and the
+    // drained event stream must be exactly `[Attached{Docked},
+    // Closed]`.
+    let (converged_ok, rendered) =
+        check_session_converged(sessions, session_id, steps, &mut failure);
+
+    ChildVerification {
+        supported: observation.supported,
+        verified: attach_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+// ---------------------------------------------------------------------
 // case: real-editor-attach (session.open(Docked) through a real lease)
 // ---------------------------------------------------------------------
 
@@ -784,13 +1377,89 @@ enum RealAttachAttempt {
     Setup(String),
 }
 
+/// Observes the live container's opaque token while the lease is
+/// held — the same HWND `redeem` hands to `attached`. A missing or
+/// failed token is recorded honestly; the attach attempt still runs
+/// on the lease itself and the child checks then fail downstream.
+fn observe_container_token(
+    gui: &RealOsGuiTest,
+    slot: SurfaceSlotId,
+    steps: &mut Vec<Value>,
+) -> Option<u64> {
+    match gui.native_container_token(slot) {
+        Ok(Some(token)) => {
+            steps.push(json!({
+                "step": "container_token",
+                "verdict": "pass",
+                "token": token,
+            }));
+            Some(token)
+        }
+        Ok(None) => {
+            steps.push(json!({
+                "step": "container_token",
+                "verdict": "fail",
+                "error": "no live container after lease_parent",
+            }));
+            None
+        }
+        Err(error) => {
+            steps.push(json!({
+                "step": "container_token",
+                "verdict": "fail",
+                "error": error.to_string(),
+            }));
+            None
+        }
+    }
+}
+
+/// Drives `session.open(Docked)` through the real lease — the
+/// session-facing `ParentSlotLease` wraps the registry's opaque
+/// payload (never an OS handle) and the issuer-side redeem happens
+/// inside `InProcessEditorOps`: `ParentSlotLease.raw()` →
+/// `redeem_native_lease` (adapter validates against its live
+/// ledger) → `ParentLease::new(seq, container_token)`.
+fn open_session_docked(
+    gui: &RealOsGuiTest,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    parent_slot_lease: ParentSlotLease,
+) -> Option<Result<EditorCapabilities, EditorSessionError>> {
+    let gui_ref: &RealOsGuiTest = gui;
+    let mut ops = InProcessEditorOps::with_redeemer(
+        host,
+        handle,
+        Box::new(move |session_lease| {
+            gui_ref
+                .redeem_native_lease(session_lease.raw())
+                .map(|token| ParentLease::new(SlotLease::new(session_lease.raw()).seq(), token))
+                .map_err(|_| EditorOpError::LeaseRejected)
+        }),
+    );
+    sessions.session_mut(session_id).map(|session| {
+        session.open(
+            &mut ops,
+            &parent_slot_lease,
+            editor_size(),
+            AttachMode::Docked,
+        )
+    })
+}
+
 /// The real attach attempt — session begin, real-slot
 /// declare/bind/project/`lease_parent` (real container HWND),
-/// `ParentSlotLease` → `InProcessEditorOps` redeem through
+/// `container_token` observation, `ParentSlotLease` →
+/// `InProcessEditorOps` redeem through
 /// [`RealOsGuiTest::redeem_native_lease`], then `session.open(Docked)`.
-/// Always tears down (session close/end, slot/lease release, instance
-/// destroy). Returns the open outcome (or the setup failure) plus
-/// cleanup notes.
+/// An accepted open additionally runs the child-HWND observation +
+/// close convergence ([`observe_editor_child_lifecycle`]). Always
+/// tears down (session end, slot/lease release, instance destroy).
+/// Returns the open outcome (or the setup failure), cleanup notes,
+/// and — only when `open` returned `Ok` — the child verification
+/// that gates the verdict.
 fn attempt_real_attach(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -798,7 +1467,7 @@ fn attempt_real_attach(
     host: &mut InProcessHost,
     handle: PluginHandle,
     steps: &mut Vec<Value>,
-) -> (RealAttachAttempt, Vec<String>) {
+) -> (RealAttachAttempt, Vec<String>, Option<ChildVerification>) {
     let mut cleanup = Vec::new();
     let mut sessions = PluginEditorSessions::new();
 
@@ -807,10 +1476,12 @@ fn attempt_real_attach(
         Err(detail) => {
             let _ = host.execute(HostCommand::Destroy { handle });
             cleanup.push("slot-setup-failed/instance-destroyed".to_string());
-            return (RealAttachAttempt::Setup(detail), cleanup);
+            return (RealAttachAttempt::Setup(detail), cleanup, None);
         }
     };
     let key = slot_key();
+
+    let container_token = observe_container_token(gui, slot, steps);
 
     let session_id = match sessions.begin_session(handle) {
         Ok(id) => {
@@ -833,37 +1504,20 @@ fn attempt_real_attach(
             return (
                 RealAttachAttempt::Setup(format!("begin_session: {error}")),
                 cleanup,
+                None,
             );
         }
     };
 
-    // The session-facing lease wraps the registry's opaque payload —
-    // never an OS handle. The issuer-side redeem happens inside
-    // `InProcessEditorOps`: `ParentSlotLease.raw()` →
-    // `redeem_native_lease` (adapter validates against its live
-    // ledger) → `ParentLease::new(seq, container_token)`.
     let parent_slot_lease = ParentSlotLease::new(lease.raw());
-    let open_result = {
-        let gui_ref: &RealOsGuiTest = gui;
-        let mut ops = InProcessEditorOps::with_redeemer(
-            host,
-            handle,
-            Box::new(move |session_lease| {
-                gui_ref
-                    .redeem_native_lease(session_lease.raw())
-                    .map(|token| ParentLease::new(SlotLease::new(session_lease.raw()).seq(), token))
-                    .map_err(|_| EditorOpError::LeaseRejected)
-            }),
-        );
-        sessions.session_mut(session_id).map(|session| {
-            session.open(
-                &mut ops,
-                &parent_slot_lease,
-                editor_size(),
-                AttachMode::Docked,
-            )
-        })
-    };
+    let open_result = open_session_docked(
+        gui,
+        host,
+        handle,
+        &mut sessions,
+        session_id,
+        parent_slot_lease,
+    );
 
     // Session state at this point is the honest landing — a refused
     // open sits `Failed{Unsupported}`.
@@ -887,10 +1541,32 @@ fn attempt_real_attach(
         "failed_unsupported": failed_unsupported,
     }));
 
-    // Converge + teardown — `close` on a refused open is a no-op
-    // adapter call (`editor_live` stays false), so the rejecting
-    // redeemer is never consulted.
-    if let Some(session) = sessions.session_mut(session_id) {
+    // An accepted open means the plugin claims an editor surface —
+    // observe the real child HWND under the container, converge the
+    // session through `close` (production `removed()` →
+    // `DestroyWindow`), and verify detach + events. The observation
+    // decides Pass vs Fail; it runs while the lease is still live.
+    let child = match &open_result {
+        Some(Ok(_)) => Some(observe_editor_child_lifecycle(
+            container_token,
+            &mut sessions,
+            session_id,
+            host,
+            handle,
+            steps,
+        )),
+        _ => None,
+    };
+
+    // Converge + teardown — a refused/failed open never produced an
+    // adapter editor (`editor_live` stays false), so `close` is a
+    // no-op adapter call and the rejecting redeemer is never
+    // consulted. An accepted open was already closed inside the
+    // child observation — `close` is then a defined `InvalidState`
+    // no-op, skipped explicitly.
+    if child.is_none()
+        && let Some(session) = sessions.session_mut(session_id)
+    {
         let mut close_ops = rejecting_editor_ops(host, handle);
         let _ = session.close(&mut close_ops);
     }
@@ -903,17 +1579,19 @@ fn attempt_real_attach(
         Some(result) => RealAttachAttempt::Open(result),
         None => RealAttachAttempt::Setup("editor session vanished before open".to_string()),
     };
-    (attempt, cleanup)
+    (attempt, cleanup, child)
 }
 
 /// `real-editor-attach`: drives the real attach path —
 /// `PluginEditorSessions` → `InProcessEditorOps` → `OpenGui` —
 /// against a *real* container-HWND lease redeemed through
-/// [`RealOsGuiTest::redeem_native_lease`]. The current `test_gain`
-/// fixture has no editor (`createView` → null →
-/// `HostError::Unsupported` → `EditorOpError::Unsupported`), so the
-/// honest verdict stays `Unsupported` — the slot/lease/redeem chain
-/// itself is the real-window evidence this case records.
+/// [`RealOsGuiTest::redeem_native_lease`], now against the
+/// `test_editor` fixture whose `IPlugView` creates a real child
+/// HWND under the container. `Pass` requires `session.open(Docked)`
+/// → `Ok` AND every OS observation agreeing (child exists/parented/
+/// visible/live → destroyed after `close` → concluded →
+/// `[Attached{Docked}, Closed]` events); any mismatch is `Fail`, a
+/// defined refusal stays `Unsupported`.
 fn editor_attach_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -944,48 +1622,80 @@ fn editor_attach_body(
     };
 
     let mut steps = Vec::new();
-    let (attempt, cleanup) = attempt_real_attach(gui, window, view, &mut host, handle, &mut steps);
+    let (attempt, cleanup, child) =
+        attempt_real_attach(gui, window, view, &mut host, handle, &mut steps);
 
     let mut outcome = match attempt {
-        RealAttachAttempt::Open(Ok(_capabilities)) => {
-            // The plugin accepted OpenGui through the REAL
-            // container-HWND lease — a genuine dock attach on a real
-            // OS window. `Pass` is honest here: the child surface
-            // was parented into the leased container, not a fake.
-            let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
-            outcome.detail = Some(
-                "editor open accepted through a REAL container-HWND lease \
-                 (NativeSlot → lease_parent → ParentSlotLease → \
-                 InProcessEditorOps redeem → session.open(Docked))"
-                    .to_string(),
-            );
-            outcome
-                .evidence
-                .push("editor-attach:real-container-parent".to_string());
-            outcome
-        }
+        RealAttachAttempt::Open(Ok(_capabilities)) => match child.as_ref() {
+            Some(verification) if verification.supported && verification.verified => {
+                // The real `test_editor` IPlugView attached a real
+                // child HWND under the leased container and detached
+                // cleanly — every OS observation agreed.
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(
+                    "test_editor real IPlugView attached a real child HWND \
+                     under the leased container HWND and detached on close \
+                     (EnumChildWindows/GetParent/IsWindowVisible observed; \
+                     IsWindow(child)==0 after removed(); events \
+                     [Attached{Docked}, Closed])"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("editor-attach:real-child-hwnd-lifecycle".to_string());
+                outcome
+            }
+            Some(verification) if !verification.supported => {
+                // An accepted open off-Windows — the OS observation
+                // cannot verify the child contract there, so the
+                // case honestly stays `Unsupported` (unreachable
+                // today: `NativePluginDock` is Windows-only).
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     child-HWND observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 child-HWND observation failed: {}",
+                verification
+                    .failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            None => fail("editor opened but no child-HWND observation was recorded".to_string()),
+        },
         RealAttachAttempt::Open(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
             let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
             outcome.detail = Some(
                 "plugin declined OpenGui through the REAL container lease: \
-                 createView returned null → HostError::Unsupported → \
-                 EditorOpError::Unsupported (test_gain ships no editor \
-                 surface); the slot/lease/redeem chain itself executed \
-                 on a real OS window"
+                 createView/isPlatformTypeSupported/attached refused → \
+                 HostError::Unsupported → EditorOpError::Unsupported; \
+                 the slot/lease/redeem chain itself executed on a real \
+                 OS window"
                     .to_string(),
             );
             outcome
                 .evidence
-                .push("editor-attach:createView-null-real-lease".to_string());
+                .push("editor-attach:open-gui-declined-real-lease".to_string());
             outcome
         }
         RealAttachAttempt::Open(Err(error)) => fail(format!("session.open: {error}")),
         RealAttachAttempt::Setup(detail) => fail(detail),
     };
-    outcome.observed = Some(json!({
-        "steps": steps,
-        "cleanup": cleanup,
-    }));
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &child
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
     outcome
 }
 
@@ -1018,7 +1728,8 @@ fn real_editor_attach_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
 /// `real-capture`: `capture_frame` on the real window — the pixels
 /// are the window/slot region through the OS capture backend
 /// (`PrintWindow`/`BitBlt`), explicitly NOT plugin editor pixels:
-/// no editor surface exists (`createView` → null).
+/// this case never attaches an editor (attach is
+/// `real-editor-attach`'s job).
 fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
     let window = ctx.window;
     let view = ctx.view;
@@ -1031,7 +1742,7 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
                 outcome.detail = Some(format!(
                     "real OS window pixels captured ({}x{}, backend {backend:?}) — \
                      window/slot-region pixels, NOT plugin editor pixels: no \
-                     editor surface exists (test_gain createView returns null)",
+                     editor surface is attached in this case",
                     image.width(),
                     image.height(),
                 ));

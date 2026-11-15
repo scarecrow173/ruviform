@@ -234,6 +234,7 @@ Directory: `docs/designs`
 | DESIGN-8g91MtjlYytEayPOtT2g3e | Issue #630 test_fault slice — 設計 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| DESIGN-034Y3o3I0foDX68pAnpDEx | Issue #631 real-editor-attach 設計（test_editor descriptor 選択・child HWND OS 観測・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | DESIGN-034XTP681X6oGd0SwnvpbS | Issue #631 Real-window native-slot dock lane 設計 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | DESIGN-034XVTqsKVWAgXMI3CBA6o | Issue #631 Plugin-dock scenario catalog + driver projection 設計 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | DESIGN-034XWNVav0w3OewvNDtAcm | Issue #631 Headless Scenario Console 設計 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |

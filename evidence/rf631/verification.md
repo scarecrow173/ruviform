@@ -270,3 +270,103 @@ real-lane 指定・CLI misuse・default build の `--include-real`）は
 - `mise.toml` への console lane task: 別 Worker 占有中のため本
   slice では追加しない（後続 slice 向け）。
 - 3OS・`*-msrv`・`*-full` 系: 対象外。
+
+---
+
+# real-editor-attach slice — verification record（`test_editor` 実 IPlugView）
+
+Issue `scarecrow173/ruviform#631` 後続 slice（`real-editor-attach`
+を `test_editor` 実 `IPlugView` で `Unsupported` → `Pass` 化 +
+実 child HWND の OS 観測）のローカル検証記録。
+canonical = `mise` lane。cargo 直実行は補助証拠として区別する。
+
+- Date: 2026-11-16
+- OS: Windows (x86_64) — interactive desktop session で実走
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA: `a6d57355dcc44a732ee5352aa26aa33ef94473fd` base の
+  working tree（変更は未 commit のため `repo_sha` は base HEAD を記録）
+
+## Lane results（canonical = mise）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass (exit 0) |
+| `mise run check ruviform-plugin-dock-test` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test` | pass (exit 0 — integration 4 tests + console 14 tests 含む） |
+| `mise run check/lint/test ruviform-plugin-dock-test --features real-dock` | pass (exit 0 — `--locked` 整合確認済み） |
+| `mise run test-ui-plugin-dock` | pass (exit 0 — headless lane 非回帰、verdict 不変） |
+| `mise run check-ui-driver-boundary` | pass (exit 0 — dep-graph/signature/allowlist。`windows-sys` 追加後も GPUI 型・driver 境界を漏らさない） |
+| `mise run test-ui-plugin-dock-real` | pass (exit 0 — interactive Windows session で実走、下記 verdict) |
+| `mise exec -- prek run --all-files` | （結果は PR 本文に記録） |
+
+## `test-ui-plugin-dock-real` 実走 verdict（`plugin-dock-real-scenario.jsonl`）
+
+| case | verdict | evidence |
+| --- | --- | --- |
+| `real-window-mount` | pass | `plugin_dock_view_spec()` が実 OS window に mount、`plugin.editor` NativeSlot 解決・観測 |
+| `real-native-slot` | pass | declare → bind → renderer projection → `lease_parent` → validate → `container_token` → release + stale/forged 拒否 |
+| `real-editor-attach` | **pass** | `test_editor` 実 `IPlugView` が実 container lease 下に実 child HWND を生成・detach — 全 OS 観測 step 実走（下記） |
+| `real-capture` | pass | window/slot 領域の実画素 — plugin editor 画素ではない（detail 明記、不変） |
+
+### `real-editor-attach` の実測観測値（observed.steps — check 行は全て pass、`thread_affinity` は観測記録の `note`）
+
+- `container_token`: `53481548`（実 container HWND = leased container の OS parent token）
+- `session.open(Docked)` → `Ok(EditorCapabilities)`（`failed_unsupported=false`）
+- `child_enumerated`: `EnumChildWindows(container)` で **1 child** —
+  `hwnd=27398600`, `parent_matches=true`, `visible=true`, `alive=true`,
+  `thread_id=17592`
+- `child_contract`: 全 child が `GetParent(child)==container`・
+  `IsWindowVisible!=0`・`IsWindow!=0` — pass
+- `thread_affinity`（verdict `note` — 観測記録であり check ではない）:
+  `caller_thread=17592`（scenario caller）、
+  `container_thread=49084`（container HWND の pump 所有 thread =
+  GPUI app thread）、`child_threads=[17592]`（`attached` を実行した
+  thread が child を生成）。**caller ≠ container pump thread —
+  Issue #389 D1 の thread-affinity 契約からの逸脱を観測事実として
+  記録**（Pass 判定の根拠には使わない。production host では UI
+  thread 上での attach が前提）
+- `session.close` → pass（production `close_gui` → `removed()` →
+  `DestroyWindow` 経路）
+- `child_hwnd_detached`: `IsWindow(27398600)==0` — **detach 後に
+  child HWND が実際に破棄されたことを OS が確認**
+- `session_concluded`: `Closed`+`concluded` — pass
+- `session_events`: `["Attached { mode: Docked }", "Closed"]` — pass
+- `cleanup`: `session-ended/lease-released/slot-released/
+  instance-destroyed`
+
+### plugin artifact evidence（実測値）
+
+- path: `target/debug/deps/ruviform_plugin_test_vst3.dll`
+- plugin: **`test_editor`** / id `624c8a3f1e9d057ba6f348d9c2e75b81`
+  （`TestEditorComponent::CID` 0x3F8A4C62… の FUID 表現）/
+  vendor `Ruviform Test` / version `0.0.0`
+- SHA-256: `6ff44b49b97d74da55c0189a9ebf28719221463ad2ac5e743a95efa91d0ead97`
+- `environment_kind`: `real-window`（実走 case のみが名乗る — 不変）
+
+## headless lane 非回帰
+
+`mise run test-ui-plugin-dock` 再実行 — `plugin-dock-scenario.jsonl`
+の verdict は catalog slice 記録と同一（`editor-attach` は
+`test_gain` のまま `unsupported` — headless lane は本 slice で
+変更していない）:
+
+| case | verdict |
+| --- | --- |
+| `view-mount` / `artifact` / `host-lifecycle` / `session-lifecycle` / `host-terminate` / `open-or-degrade` | pass |
+| `editor-attach` | unsupported（test_gain は editor を持たない — 正しい verdict） |
+| `dock-pixels` | not_run |
+
+## NotRun / Unsupported / Deferred（後続 — 本 slice で claim しない）
+
+- dock-pixels / editor pixel・合成判定: `scarecrow173/ruviform#532`
+  DComp 未解決 — Pass を主張しない。
+- child HWND input/focus・resize negotiation・re-dock: 現行
+  Unsupported/NotRun 維持（本 slice の観測は存在・parent・
+  visibility・detach のみ）。
+- 非 Windows: capability pre-flight で `Unsupported`/`NotRun` の
+  まま（`oschild` stub は観測を捏造しない）。
+- headless/非対話 host: `environment_blocked` → `NotRun` 不変。
+- 3OS・`*-msrv`・`*-full` 系: 対象外。
+- `mise.toml` `test-ui-plugin-dock-real` description の
+  `test_gain` 前提文言: 本 Worker の lease 外 — 後続 hygiene slice。
