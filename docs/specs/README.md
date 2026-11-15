@@ -188,6 +188,7 @@ Directory: `docs/specs`
 | SPEC-034WuVytWK4glbu9CinZwq | Issue #590 docs/impl/ir の missing-section 本文補完 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | SPEC-034XqAdHQcP0noGrfdbRqY | Issue #625 verify(ubuntu-latest) test-full 失敗 — e2e_process handshake refusal の error 分類 race を修正する | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | SPEC-034XAreKCCKojmpwC7OvJR | Issue #627 仮想優先の3repo検証契約・物理Gate置換・POLICIES整合と独立Oracle | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| SPEC-034Y3ehWbCBEZwEl47ROsE | Issue #628 close-out — RunMetadata JSON・cancellation fault・docs 整合・AC 棚卸し | approved | [issue-628-close-out.md](./issue-628-close-out.md) |
 | SPEC-034XBGBcah0yYseU6Ypekr | Issue #628 Deterministic Audio/MIDI Test Runtime first slice — deterministic core | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | SPEC-RF628pwpipeline0000001 | Issue #628 pipeline wiring — scripted backend into production consumers | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | SPEC-RF628sBscripted0000001 | Issue #628 scripted port-trait backend — deterministic device boundary slice | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
