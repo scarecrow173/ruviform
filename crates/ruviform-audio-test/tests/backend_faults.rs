@@ -265,6 +265,262 @@ fn open_fault_persistent_and_once_on_input() {
     ));
 }
 
+// --- Cancellation fault (Issue #628 close-out) ---
+//
+// `StreamFault::Cancellation` maps the Issue fault-injector
+// "cancellation" onto existing production observables: the in-flight
+// callback is aborted (no data delivery), `Backend("cancelled")` is
+// reported on the error callback, and the stream terminates — the
+// same lifecycle as `Invalidate`.
+
+#[test]
+fn cancellation_aborts_output_delivery_and_terminates() {
+    let handle = output_fault_fixture(vec![StreamFault::Cancellation { at_callback: 1 }]);
+    let (errs, err_cb) = errors();
+    let deliveries = Arc::new(Mutex::new(0u32));
+    let stream = handle
+        .open_output_stream(
+            &out_config(),
+            Box::new({
+                let deliveries = Arc::clone(&deliveries);
+                move |_, _| *deliveries.lock().unwrap() += 1
+            }),
+            Box::new(err_cb),
+        )
+        .unwrap();
+    stream.start().unwrap();
+
+    // Index 0 delivers normally.
+    let r0 = handle.pump_output_next().unwrap();
+    assert_eq!(r0.frames, 256);
+    assert!(!r0.invalidated);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+
+    // Index 1: cancelled — no data callback, zero frames, Backend
+    // ("cancelled") on the error callback, stream terminated.
+    let r1 = handle.pump_output_next().unwrap();
+    assert_eq!(r1.callback_index, 1);
+    assert_eq!(r1.frames, 0);
+    assert!(r1.invalidated);
+    assert_eq!(r1.errors_fired, 1);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[DeviceError::Backend("cancelled")]
+    );
+    assert!(!handle.is_output_open());
+
+    // Dead stream refuses further pumps; the trait object agrees.
+    assert!(matches!(
+        handle.pump_output_next(),
+        Err(DeviceError::StreamInvalidated)
+    ));
+    assert_eq!(stream.start(), Err(DeviceError::StreamInvalidated));
+
+    // Reconnect: drop the dead stream, open a fresh one.
+    drop(stream);
+    let stream2 = handle
+        .open_output_stream(&out_config(), Box::new(|_, _| {}), Box::new(|_| {}))
+        .unwrap();
+    stream2.start().unwrap();
+    let r = handle.pump_output_next().unwrap();
+    assert_eq!(r.callback_index, 0);
+    assert!(r.frames > 0);
+}
+
+#[test]
+fn cancellation_aborts_input_delivery_and_terminates() {
+    let handle = input_fault_fixture(vec![StreamFault::Cancellation { at_callback: 1 }]);
+    let (errs, err_cb) = errors();
+    let deliveries = Arc::new(Mutex::new(0u32));
+    let stream = handle
+        .open_input_stream(
+            &in_config(),
+            Box::new({
+                let deliveries = Arc::clone(&deliveries);
+                move |_, _| *deliveries.lock().unwrap() += 1
+            }),
+            Box::new(err_cb),
+        )
+        .unwrap();
+    stream.start().unwrap();
+
+    // Index 0 delivers normally.
+    let r0 = handle.pump_input_next().unwrap();
+    assert_eq!(r0.frames, 256);
+    assert_eq!(r0.reported_frame_position, Some(0));
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+
+    // Index 1: cancelled — no data callback, no capture timestamp or
+    // frame position reported, position unchanged (zero frames
+    // consumed), Backend("cancelled"), stream terminated.
+    let r1 = handle.pump_input_next().unwrap();
+    assert_eq!(r1.callback_index, 1);
+    assert_eq!(r1.frames, 0);
+    assert_eq!(r1.position, 256);
+    assert_eq!(r1.reported_frame_position, None);
+    assert_eq!(r1.capture_nanos, None);
+    assert_eq!(r1.gap_frames, 0);
+    assert!(r1.invalidated);
+    assert_eq!(r1.errors_fired, 1);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[DeviceError::Backend("cancelled")]
+    );
+    assert!(!handle.is_input_open());
+    assert!(matches!(
+        handle.pump_input_next(),
+        Err(DeviceError::StreamInvalidated)
+    ));
+
+    // Reconnect after dropping the dead stream.
+    drop(stream);
+    let stream2 = handle
+        .open_input_stream(&in_config(), Box::new(|_, _| {}), Box::new(|_| {}))
+        .unwrap();
+    stream2.start().unwrap();
+    let r = handle.pump_input_next().unwrap();
+    assert_eq!(r.callback_index, 0);
+    assert!(r.frames > 0);
+}
+
+#[test]
+fn inject_cancellation_mid_stream_aborts_next_output_delivery() {
+    let handle = output_fault_fixture(vec![]);
+    let (errs, err_cb) = errors();
+    let deliveries = Arc::new(Mutex::new(0u32));
+    let stream = handle
+        .open_output_stream(
+            &out_config(),
+            Box::new({
+                let deliveries = Arc::clone(&deliveries);
+                move |_, _| *deliveries.lock().unwrap() += 1
+            }),
+            Box::new(err_cb),
+        )
+        .unwrap();
+    stream.start().unwrap();
+    handle.pump_output_next().unwrap();
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+
+    // Inject after open — reaches the live stream's fault list.
+    handle.inject_output_fault(StreamFault::Cancellation { at_callback: 1 });
+    let r1 = handle.pump_output_next().unwrap();
+    assert_eq!(r1.callback_index, 1);
+    assert_eq!(r1.frames, 0);
+    assert!(r1.invalidated);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[DeviceError::Backend("cancelled")]
+    );
+    assert!(!handle.is_output_open());
+}
+
+#[test]
+fn inject_cancellation_mid_stream_aborts_next_input_delivery() {
+    let handle = input_fault_fixture(vec![]);
+    let (errs, err_cb) = errors();
+    let deliveries = Arc::new(Mutex::new(0u32));
+    let stream = handle
+        .open_input_stream(
+            &in_config(),
+            Box::new({
+                let deliveries = Arc::clone(&deliveries);
+                move |_, _| *deliveries.lock().unwrap() += 1
+            }),
+            Box::new(err_cb),
+        )
+        .unwrap();
+    stream.start().unwrap();
+    handle.pump_input_next().unwrap();
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+
+    handle.inject_input_fault(StreamFault::Cancellation { at_callback: 1 });
+    let r1 = handle.pump_input_next().unwrap();
+    assert_eq!(r1.callback_index, 1);
+    assert_eq!(r1.frames, 0);
+    assert!(r1.invalidated);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[DeviceError::Backend("cancelled")]
+    );
+    assert!(!handle.is_input_open());
+}
+
+#[test]
+fn backend_cancelled_error_alone_does_not_terminate_stream() {
+    // Negative case: an ordinary `Error` fault carrying
+    // `Backend("cancelled")` is *not* cancellation — delivery
+    // continues and the stream stays alive. Only
+    // `StreamFault::Cancellation` aborts the callback and terminates.
+    let handle = output_fault_fixture(vec![StreamFault::Error {
+        at_callback: 0,
+        error: DeviceError::Backend("cancelled"),
+    }]);
+    let (errs, err_cb) = errors();
+    let deliveries = Arc::new(Mutex::new(0u32));
+    let stream = handle
+        .open_output_stream(
+            &out_config(),
+            Box::new({
+                let deliveries = Arc::clone(&deliveries);
+                move |_, _| *deliveries.lock().unwrap() += 1
+            }),
+            Box::new(err_cb),
+        )
+        .unwrap();
+    stream.start().unwrap();
+
+    let r0 = handle.pump_output_next().unwrap();
+    assert_eq!(r0.frames, 256);
+    assert!(!r0.invalidated);
+    assert_eq!(*deliveries.lock().unwrap(), 1);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[DeviceError::Backend("cancelled")]
+    );
+    assert!(handle.is_output_open());
+
+    let r1 = handle.pump_output_next().unwrap();
+    assert!(r1.frames > 0);
+    assert_eq!(*deliveries.lock().unwrap(), 2);
+}
+
+#[test]
+fn cancellation_with_invalidate_reports_ordered_errors() {
+    // Both faults scripted at the same index: Error faults first,
+    // then "cancelled", then StreamInvalidated.
+    let handle = output_fault_fixture(vec![
+        StreamFault::Error {
+            at_callback: 0,
+            error: DeviceError::Xrun,
+        },
+        StreamFault::Cancellation { at_callback: 0 },
+        StreamFault::Invalidate { at_callback: 0 },
+    ]);
+    let (errs, err_cb) = errors();
+    let stream = handle
+        .open_output_stream(&out_config(), Box::new(|_, _| {}), Box::new(err_cb))
+        .unwrap();
+    stream.start().unwrap();
+
+    let r0 = handle.pump_output_next().unwrap();
+    assert_eq!(r0.frames, 0);
+    assert!(r0.invalidated);
+    assert_eq!(r0.errors_fired, 3);
+    assert_eq!(
+        errs.lock().unwrap().as_slice(),
+        &[
+            DeviceError::Xrun,
+            DeviceError::Backend("cancelled"),
+            DeviceError::StreamInvalidated,
+        ]
+    );
+}
+
 #[test]
 fn clock_domain_and_per_device_clock() {
     // Two devices on different VirtualClocks → different domains.
