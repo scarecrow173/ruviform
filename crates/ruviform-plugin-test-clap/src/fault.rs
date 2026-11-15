@@ -579,7 +579,9 @@ impl<'a> PluginAudioProcessor<'a, TestFaultShared, TestFaultMainThread<'a>>
         self.processor
             .set_armed_plain(self.shared.fault_mirror.load());
         let event_list =
-            block::translate_events(events.input, &mut self.scratch, &FAULT_PARAM, frames_count)?;
+            block::translate_events(events.input, &mut self.scratch, frames_count, |unknown| {
+                block::translate_param_event(unknown, &FAULT_PARAM)
+            })?;
         let inputs = [input_view];
         let mut outputs = [output_view];
         let result =

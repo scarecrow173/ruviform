@@ -1,7 +1,7 @@
 //! The VST3 plugin factory: `IPluginFactory` + `IPluginFactory2` +
-//! `IPluginFactory3` describing and instantiating the eight classes
+//! `IPluginFactory3` describing and instantiating the ten classes
 //! the module ships (`test_gain`/`test_fault`/`test_editor`/
-//! `test_stateful` component + controller pairs).
+//! `test_stateful`/`test_instrument` component + controller pairs).
 
 use std::ffi::c_void;
 
@@ -14,11 +14,13 @@ use vst3::{Class, ComWrapper};
 
 use crate::component::TestGainComponent;
 use crate::controller::{
-    EDITOR_CONTROLLER_CID, GAIN_CONTROLLER_CID, ParamController, TestEditorController,
+    EDITOR_CONTROLLER_CID, GAIN_CONTROLLER_CID, INSTRUMENT_CONTROLLER_CID, ParamController,
+    TestEditorController,
 };
 use crate::editor::TestEditorComponent;
 use crate::fault::{FAULT_CONTROLLER_CID, FAULT_PARAM, FAULT_STEP_COUNT, TestFaultComponent};
 use crate::gain::GAIN_PARAM;
+use crate::instrument::TestInstrumentComponent;
 use crate::sdk_enum_i32;
 use crate::stateful::{STATEFUL_CONTROLLER_CID, TestStatefulComponent};
 use crate::strings::{copy_cstring, copy_wstring};
@@ -35,7 +37,94 @@ impl TestGainFactory {
     pub(crate) const fn new() -> Self {
         Self
     }
+
+    /// The class row for `index` — component + controller pairs in
+    /// suite order — or `None` out of range.
+    fn class_row(index: i32) -> Option<&'static ClassRow> {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| CLASS_ROWS.get(index))
+    }
 }
+
+/// One suite class row — the facts every `PClassInfo*` variant
+/// reports for the class.
+struct ClassRow {
+    cid: TUID,
+    /// `PClassInfo::category` — `"Audio Module Class"` or
+    /// `"Component Controller Class"`.
+    category: &'static str,
+    /// Display name (`"test_gain"`, `"test_gain Controller"`, ...).
+    name: &'static str,
+    /// `PClassInfo2::subCategories` — `""` for controllers.
+    sub_categories: &'static str,
+}
+
+/// Classes 0/1 = `test_gain`, 2/3 = `test_fault`, 4/5 =
+/// `test_editor`, 6/7 = `test_stateful`, 8/9 = `test_instrument` —
+/// component + controller pairs in suite order.
+const CLASS_ROWS: [ClassRow; 10] = [
+    ClassRow {
+        cid: TestGainComponent::CID,
+        category: "Audio Module Class",
+        name: "test_gain",
+        sub_categories: "Fx",
+    },
+    ClassRow {
+        cid: GAIN_CONTROLLER_CID,
+        category: "Component Controller Class",
+        name: "test_gain Controller",
+        sub_categories: "",
+    },
+    ClassRow {
+        cid: TestFaultComponent::CID,
+        category: "Audio Module Class",
+        name: "test_fault",
+        sub_categories: "Fx",
+    },
+    ClassRow {
+        cid: FAULT_CONTROLLER_CID,
+        category: "Component Controller Class",
+        name: "test_fault Controller",
+        sub_categories: "",
+    },
+    ClassRow {
+        cid: TestEditorComponent::CID,
+        category: "Audio Module Class",
+        name: "test_editor",
+        sub_categories: "Fx",
+    },
+    ClassRow {
+        cid: EDITOR_CONTROLLER_CID,
+        category: "Component Controller Class",
+        name: "test_editor Controller",
+        sub_categories: "",
+    },
+    ClassRow {
+        cid: TestStatefulComponent::CID,
+        category: "Audio Module Class",
+        name: "test_stateful",
+        sub_categories: "Fx",
+    },
+    ClassRow {
+        cid: STATEFUL_CONTROLLER_CID,
+        category: "Component Controller Class",
+        name: "test_stateful Controller",
+        sub_categories: "",
+    },
+    ClassRow {
+        cid: TestInstrumentComponent::CID,
+        category: "Audio Module Class",
+        name: "test_instrument",
+        sub_categories: "Instrument|Fx",
+    },
+    ClassRow {
+        cid: INSTRUMENT_CONTROLLER_CID,
+        category: "Component Controller Class",
+        name: "test_instrument Controller",
+        sub_categories: "",
+    },
+];
 
 impl IPluginFactoryTrait for TestGainFactory {
     #[expect(unsafe_code)]
@@ -54,70 +143,23 @@ impl IPluginFactoryTrait for TestGainFactory {
 
     #[expect(unsafe_code)]
     unsafe fn countClasses(&self) -> i32 {
-        8
+        10
     }
 
-    /// Classes 0/1 = `test_gain`, 2/3 = `test_fault`, 4/5 =
-    /// `test_editor`, 6/7 = `test_stateful` — component + controller
-    /// pairs in suite order.
     #[expect(unsafe_code)]
     unsafe fn getClassInfo(&self, index: i32, info: *mut PClassInfo) -> tresult {
         if info.is_null() {
             return kInvalidArgument;
         }
+        let Some(row) = Self::class_row(index) else {
+            return kInvalidArgument;
+        };
         // SAFETY: caller-provided out-param, checked non-null.
         let info = unsafe { &mut *info };
-        match index {
-            0 => {
-                info.cid = TestGainComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_gain", &mut info.name);
-            }
-            1 => {
-                info.cid = GAIN_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_gain Controller", &mut info.name);
-            }
-            2 => {
-                info.cid = TestFaultComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_fault", &mut info.name);
-            }
-            3 => {
-                info.cid = FAULT_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_fault Controller", &mut info.name);
-            }
-            4 => {
-                info.cid = TestEditorComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_editor", &mut info.name);
-            }
-            5 => {
-                info.cid = EDITOR_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_editor Controller", &mut info.name);
-            }
-            6 => {
-                info.cid = TestStatefulComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_stateful", &mut info.name);
-            }
-            7 => {
-                info.cid = STATEFUL_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_stateful Controller", &mut info.name);
-            }
-            _ => return kInvalidArgument,
-        }
+        info.cid = row.cid;
+        info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+        copy_cstring(row.category, &mut info.category);
+        copy_cstring(row.name, &mut info.name);
         kResultOk
     }
 
@@ -140,7 +182,7 @@ impl IPluginFactoryTrait for TestGainFactory {
             TestGainComponent::CID => {
                 ComWrapper::new(TestGainComponent::new()).to_com_ptr::<FUnknown>()
             }
-            GAIN_CONTROLLER_CID => {
+            GAIN_CONTROLLER_CID | INSTRUMENT_CONTROLLER_CID => {
                 ComWrapper::new(ParamController::new(&GAIN_PARAM, 0)).to_com_ptr::<FUnknown>()
             }
             TestFaultComponent::CID => {
@@ -160,6 +202,9 @@ impl IPluginFactoryTrait for TestGainFactory {
             STATEFUL_CONTROLLER_CID => {
                 ComWrapper::new(ParamController::new_stateful(&GAIN_PARAM, 0))
                     .to_com_ptr::<FUnknown>()
+            }
+            TestInstrumentComponent::CID => {
+                ComWrapper::new(TestInstrumentComponent::new()).to_com_ptr::<FUnknown>()
             }
             _ => None,
         };
@@ -183,99 +228,20 @@ impl IPluginFactory2Trait for TestGainFactory {
         if info.is_null() {
             return kInvalidArgument;
         }
+        let Some(row) = Self::class_row(index) else {
+            return kInvalidArgument;
+        };
         // SAFETY: caller-provided out-param, checked non-null.
         let info = unsafe { &mut *info };
-        match index {
-            0 => {
-                info.cid = TestGainComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_gain", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            1 => {
-                info.cid = GAIN_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_gain Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            2 => {
-                info.cid = TestFaultComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_fault", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            3 => {
-                info.cid = FAULT_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_fault Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            4 => {
-                info.cid = TestEditorComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_editor", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            5 => {
-                info.cid = EDITOR_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_editor Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            6 => {
-                info.cid = TestStatefulComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_cstring("test_stateful", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            7 => {
-                info.cid = STATEFUL_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_cstring("test_stateful Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_cstring("Ruviform Test", &mut info.vendor);
-                copy_cstring("0.0.0", &mut info.version);
-                copy_cstring("VST 3.x", &mut info.sdkVersion);
-            }
-            _ => return kInvalidArgument,
-        }
+        info.cid = row.cid;
+        info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+        copy_cstring(row.category, &mut info.category);
+        copy_cstring(row.name, &mut info.name);
+        info.classFlags = 0;
+        copy_cstring(row.sub_categories, &mut info.subCategories);
+        copy_cstring("Ruviform Test", &mut info.vendor);
+        copy_cstring("0.0.0", &mut info.version);
+        copy_cstring("VST 3.x", &mut info.sdkVersion);
         kResultOk
     }
 }
@@ -288,99 +254,20 @@ impl IPluginFactory3Trait for TestGainFactory {
         if info.is_null() {
             return kInvalidArgument;
         }
+        let Some(row) = Self::class_row(index) else {
+            return kInvalidArgument;
+        };
         // SAFETY: caller-provided out-param, checked non-null.
         let info = unsafe { &mut *info };
-        match index {
-            0 => {
-                info.cid = TestGainComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_wstring("test_gain", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            1 => {
-                info.cid = GAIN_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_wstring("test_gain Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            2 => {
-                info.cid = TestFaultComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_wstring("test_fault", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            3 => {
-                info.cid = FAULT_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_wstring("test_fault Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            4 => {
-                info.cid = TestEditorComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_wstring("test_editor", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            5 => {
-                info.cid = EDITOR_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_wstring("test_editor Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            6 => {
-                info.cid = TestStatefulComponent::CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Audio Module Class", &mut info.category);
-                copy_wstring("test_stateful", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("Fx", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            7 => {
-                info.cid = STATEFUL_CONTROLLER_CID;
-                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
-                copy_cstring("Component Controller Class", &mut info.category);
-                copy_wstring("test_stateful Controller", &mut info.name);
-                info.classFlags = 0;
-                copy_cstring("", &mut info.subCategories);
-                copy_wstring("Ruviform Test", &mut info.vendor);
-                copy_wstring("0.0.0", &mut info.version);
-                copy_wstring("VST 3.x", &mut info.sdkVersion);
-            }
-            _ => return kInvalidArgument,
-        }
+        info.cid = row.cid;
+        info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+        copy_cstring(row.category, &mut info.category);
+        copy_wstring(row.name, &mut info.name);
+        info.classFlags = 0;
+        copy_cstring(row.sub_categories, &mut info.subCategories);
+        copy_wstring("Ruviform Test", &mut info.vendor);
+        copy_wstring("0.0.0", &mut info.version);
+        copy_wstring("VST 3.x", &mut info.sdkVersion);
         kResultOk
     }
 

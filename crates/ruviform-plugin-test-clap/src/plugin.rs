@@ -425,7 +425,9 @@ impl<'a> PluginAudioProcessor<'a, TestGainShared, TestGainMainThread<'a>>
         self.processor
             .set_gain_plain(self.shared.gain_mirror.load());
         let event_list =
-            block::translate_events(events.input, &mut self.scratch, &GAIN_PARAM, frames_count)?;
+            block::translate_events(events.input, &mut self.scratch, frames_count, |unknown| {
+                block::translate_param_event(unknown, &GAIN_PARAM)
+            })?;
         let inputs = [input_view];
         let mut outputs = [output_view];
         let result =

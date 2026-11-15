@@ -48,6 +48,7 @@ clack-common = "=0.2.0"
 clack-extensions = { version = "=0.2.0", features = [
     "clack-plugin",
     "audio-ports",
+    "note-ports",
     "params",
     "state",
 ] }
@@ -56,6 +57,9 @@ clack-extensions = { version = "=0.2.0", features = [
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 # Zero-copy planar buffer views for the process path.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
+# Neutral MIDI/transport types for the `test_instrument` input
+# surface (MidiEvent/MidiKind/TransportInfo mapping).
+ruviform-media-core = { path = "../ruviform-media-core" }
 # Production host bridge for the L1 runner binary — optional regular
 # dep enabled only by `l1-runner` (`host` feature supplies
 # `ClapLibrary`/`factories`). The dev-dependency entry below keeps the
@@ -84,6 +88,19 @@ ruviform-plugin-clap = { path = "../ruviform-plugin-clap", features = ["host"] }
 # host) keeps the dependency DAG acyclic; `plugin-host` depends on no
 # adapter or test crate (same edge the adapter e2e suites use).
 ruviform-plugin-host = { path = "../ruviform-plugin-host" }
+# Issue #628 deferred leg (owned by Issue #630): the attach()
+# runtime-integration tests drive the real fixture through
+# `ruviform-audio-plugin-bridge::attach` → `PluginNode` →
+# `GraphRuntime`, fed by `ruviform-audio-test`'s scripted MIDI backend
+# (`MidiFeed`/`MidiScenario`). `ruviform-audio`/`ruviform-graph`/
+# `ruviform-rt` are the typed-runtime surface `PluginNode` implements
+# (`GraphProcessor`/`RtContext`) — path deps only, no new external
+# packages, `Cargo.lock` unchanged.
+ruviform-audio = { path = "../ruviform-audio" }
+ruviform-audio-plugin-bridge = { path = "../ruviform-audio-plugin-bridge" }
+ruviform-audio-test = { path = "../ruviform-audio-test" }
+ruviform-graph = { path = "../ruviform-graph" }
+ruviform-rt = { path = "../ruviform-rt" }
 
 [lints]
 workspace = true

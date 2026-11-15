@@ -268,8 +268,12 @@ pub mod shm {
     /// Byte offset of the slot `events` region.
     pub const EVENTS_OFF: usize = RESULT_OFF + RESULT_LEN;
     /// Byte length of one wire-encoded `Event` record under
-    /// `WIRE_VERSION` 4 (`u32` offset + `u8` kind + `u32` param id +
-    /// `f64` value + `u64` reserved ×2).
+    /// `WIRE_VERSION` 4 — the [`encode_event`] encoding zero-padded
+    /// to the fixed stride (`u32` offset, `u8` kind, kind payload,
+    /// two `u64` reserved fields, zero pad).
+    /// [`encode_event_record`] / [`decode_event_record`] are the
+    /// record codec; kinds whose encoding exceeds this size are
+    /// unrepresentable in a slot.
     pub const EVENT_WIRE_SIZE: usize = 33;
     /// Byte offset of the slot `samples` region.
     pub const SAMPLES_OFF: usize = EVENTS_OFF + EVENT_WIRE_SIZE * WIRE_MAX_EVENTS as usize;
@@ -2298,6 +2302,41 @@ pub fn encode_event(event: &Event, out: &mut Vec<u8>) {
     for reserved in event.reserved() {
         push_u64(out, reserved);
     }
+}
+
+/// Appends an [`Event`] as one fixed [`shm::EVENT_WIRE_SIZE`]-byte
+/// record for the shm slot layout — the [`encode_event`] encoding
+/// zero-padded to the record stride. Slot records are addressed by
+/// index (`record * EVENT_WIRE_SIZE`), so every kind occupies the
+/// same stride regardless of its payload length; [`decode_event_record`]
+/// is the matching reader and rejects non-zero padding.
+pub fn encode_event_record(event: &Event, out: &mut Vec<u8>) {
+    let start = out.len();
+    encode_event(event, out);
+    debug_assert!(out.len() - start <= shm::EVENT_WIRE_SIZE);
+    out.resize(start + shm::EVENT_WIRE_SIZE, 0);
+}
+
+/// Reads one fixed-size [`shm::EVENT_WIRE_SIZE`] slot record — the
+/// [`encode_event_record`] encoding plus zero padding. A record of
+/// any other length, a malformed event, or non-zero padding is
+/// rejected.
+///
+/// # Errors
+///
+/// [`WireError::Malformed`] — wrong record length, truncated or
+/// malformed event body, or non-zero pad bytes.
+pub fn decode_event_record(record: &[u8]) -> Result<Event, WireError> {
+    if record.len() != shm::EVENT_WIRE_SIZE {
+        return Err(WireError::Malformed);
+    }
+    let mut reader = Reader::new(record);
+    let event = decode_event(&mut reader)?;
+    let rest = reader.remaining();
+    if reader.take(rest)?.iter().any(|&b| b != 0) {
+        return Err(WireError::Malformed);
+    }
+    Ok(event)
 }
 
 /// Appends a [`MidiEvent`] body: routing byte, message sub-tag and

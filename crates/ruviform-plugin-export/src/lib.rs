@@ -751,9 +751,10 @@ impl InstanceEntry {
                 None
             };
             events_scratch.clear();
-            let mut reader = wire::Reader::new(slot.events);
-            for _ in 0..slot.event_count {
-                events_scratch.push(wire::decode_event(&mut reader).map_err(|_| HostError::Ipc)?);
+            for record in 0..slot.event_count as usize {
+                let base = record * wire::shm::EVENT_WIRE_SIZE;
+                let bytes = &slot.events[base..base + wire::shm::EVENT_WIRE_SIZE];
+                events_scratch.push(wire::decode_event_record(bytes).map_err(|_| HostError::Ipc)?);
             }
             let frames = slot.frames as usize;
             let channels = slot.channels as usize;

@@ -222,6 +222,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TSPEC-034Y13OOyL62lZ84qd2ILq | Issue #630 test_editor slice — test specification | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TSPEC-1jGomS13d3GgO1MNrOleAi | Issue #630 test_fault slice — test specification | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
+| TSPEC-034Z9qCx7vBnM3rTsWfXyE | Issue #630 test_instrument slice — test specification | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034Y4fXVmWB9YKK3r9ty7n | Issue #630 test_stateful slice — test specification | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

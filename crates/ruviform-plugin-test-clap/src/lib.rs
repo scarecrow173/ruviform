@@ -1,6 +1,6 @@
 //! `ruviform-plugin-test-clap` — the Ruviform **test-only** CLAP test
 //! plugin suite (Issue #630: `test_gain` + `test_fault` +
-//! `test_stateful`).
+//! `test_stateful` + `test_instrument`).
 //!
 //! ## Test-only declaration
 //!
@@ -42,6 +42,12 @@
 //!   verbs the production host bridge's `save_state`/`restore_state`
 //!   drive — activation preserves the persisted gain (unlike
 //!   `test_gain`'s per-activation default reset).
+//! - `test_instrument` — a generative polyphonic instrument (8
+//!   triangle voices, velocity/CC7 volume/CC1 tremolo, gain
+//!   parameter) plus a transport-clock click oracle: note on/off,
+//!   MIDI CC and `Process::transport` snapshots drive deterministic
+//!   PCM — the real-ABI counterpart of the VST3 `test_instrument`
+//!   fixture.
 //!
 //! All `clack`/`clap-sys` binding types stay private — the crate
 //! exports no public Rust API; hosts reach the plugins purely through
@@ -53,8 +59,8 @@
 //! | --- | --- |
 //! | `clap_entry` | required by the CLAP module spec — a custom
 //!   `Entry` + `PluginFactoryImpl` exposing `test_gain`,
-//!   `test_fault` and `test_stateful` through one factory
-//!   (`plugin_count() == 3`) |
+//!   `test_fault`, `test_stateful` and `test_instrument` through one
+//!   factory (`plugin_count() == 4`) |
 //!
 //! ## Process path (RT)
 //!
@@ -75,6 +81,8 @@
 mod block;
 mod fault;
 mod gain;
+mod instrument;
+mod instrument_core;
 mod plugin;
 mod stateful;
 
@@ -88,6 +96,7 @@ use clack_plugin::entry::prelude::{
 use clack_plugin::prelude::clack_export_entry;
 
 use fault::TestFaultClapPlugin;
+use instrument::TestInstrumentClapPlugin;
 use plugin::TestGainClapPlugin;
 use stateful::TestStatefulClapPlugin;
 
@@ -119,6 +128,7 @@ struct TestSuiteFactory {
     gain: PluginDescriptor,
     fault: PluginDescriptor,
     stateful: PluginDescriptor,
+    instrument: PluginDescriptor,
 }
 
 impl TestSuiteFactory {
@@ -127,13 +137,14 @@ impl TestSuiteFactory {
             gain: TestGainClapPlugin::get_descriptor(),
             fault: TestFaultClapPlugin::get_descriptor(),
             stateful: TestStatefulClapPlugin::get_descriptor(),
+            instrument: TestInstrumentClapPlugin::get_descriptor(),
         }
     }
 }
 
 impl PluginFactoryImpl for TestSuiteFactory {
     fn plugin_count(&self) -> u32 {
-        3
+        4
     }
 
     fn plugin_descriptor(&self, index: u32) -> Option<&PluginDescriptor> {
@@ -141,6 +152,7 @@ impl PluginFactoryImpl for TestSuiteFactory {
             0 => Some(&self.gain),
             1 => Some(&self.fault),
             2 => Some(&self.stateful),
+            3 => Some(&self.instrument),
             _ => None,
         }
     }
@@ -170,6 +182,13 @@ impl PluginFactoryImpl for TestSuiteFactory {
                 &self.stateful,
                 TestStatefulClapPlugin::new_shared,
                 TestStatefulClapPlugin::new_main_thread,
+            ))
+        } else if plugin_id == self.instrument.id().unwrap_or_default() {
+            Some(PluginInstance::new::<TestInstrumentClapPlugin>(
+                host_info,
+                &self.instrument,
+                TestInstrumentClapPlugin::new_shared,
+                TestInstrumentClapPlugin::new_main_thread,
             ))
         } else {
             None

@@ -63,6 +63,11 @@ pub(crate) const GAIN_CONTROLLER_CID: TUID =
 pub(crate) const EDITOR_CONTROLLER_CID: TUID =
     uid(0x5E7A_9C31, 0x2D8F_4B67, 0xE1A3_59D4, 0x8C6B_2F07);
 
+/// `test_instrument`'s controller class ID — a fresh `uid` for the
+/// test suite, distinct from every other fixture CID.
+pub(crate) const INSTRUMENT_CONTROLLER_CID: TUID =
+    uid(0x9C4D_2F81, 0x7E3A_5B96, 0xD8F1_4A62, 0x3B7E_9C05);
+
 /// A VST3 edit controller bound to one declared parameter.
 ///
 /// `step_count` is the VST3 `ParameterInfo::stepCount` — `0` for a

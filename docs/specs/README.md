@@ -201,6 +201,7 @@ Directory: `docs/specs`
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | SPEC-034Y10F0GbD81g2dJSmyyY | Issue #630 test_editor slice — VST3 plugin-side IPlugView (AC-4 real child HWND fixture) | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | SPEC-GhY5geFlPWhmRfRdTwHkzA | Issue #630 test_fault slice — in-band armed fault plugin + L1 Crash/Hang/Timeout/Isolation E2E | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
+| SPEC-034Z9kQm4xVtW2sLpNbRcA | Issue #630 test_instrument slice — deterministic MIDI/transport synth fixture + L1 real-ABI oracle | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

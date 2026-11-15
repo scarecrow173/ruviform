@@ -1,6 +1,6 @@
 //! `ruviform-plugin-test-vst3` — the Ruviform **test-only** VST3 test
 //! plugin suite (Issue #630: `test_gain`, `test_fault`, `test_editor`,
-//! `test_stateful`).
+//! `test_stateful`, `test_instrument`).
 //!
 //! ## Test-only declaration
 //!
@@ -47,6 +47,12 @@
 //!   `setComponentState`/`setState`/`getState` round-trip through a
 //!   deterministic 16-byte blob — the L1 save → mutate → restore →
 //!   save oracle.
+//! - `test_instrument` — a generative deterministic instrument: up to
+//!   8 triangle-wave voices driven by `IEventList` note/CC events at
+//!   frame offsets, plus a transport-clock click oracle (single-frame
+//!   impulses at `ppqn` boundaries while playing with musical time)
+//!   fed by `ProcessContext`. The suite's only `MidiTransport` input
+//!   surface.
 //!
 //! All `vst3`-crate binding types stay private — the crate exports
 //! no public Rust API; hosts reach the plugin purely through the ABI
@@ -78,9 +84,11 @@ mod component;
 mod controller;
 mod editor;
 mod editor_view;
+mod events;
 mod factory;
 mod fault;
 mod gain;
+mod instrument;
 mod stateful;
 mod strings;
 

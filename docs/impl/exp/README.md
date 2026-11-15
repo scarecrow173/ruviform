@@ -73,6 +73,7 @@ Directory: `docs/impl/exp`
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
 | [issue-630-test-editor-slice.jsonl](./issue-630-test-editor-slice.jsonl) |
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |
+| [issue-630-test-instrument.jsonl](./issue-630-test-instrument.jsonl) |
 | [issue-630-test-stateful.jsonl](./issue-630-test-stateful.jsonl) |
 | [issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl](./issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl) |
 | [issue-631-real-editor-attach.jsonl](./issue-631-real-editor-attach.jsonl) |

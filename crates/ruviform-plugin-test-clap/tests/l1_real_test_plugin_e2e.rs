@@ -21,9 +21,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_media_core::{
+    MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+    MidiKind, MusicalTimeInfo, NoteKey, TimeBase, TransportStatus,
+};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState,
     ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessResult,
+    TransportInfo,
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
@@ -57,6 +62,18 @@ const EXPECTED: PluginDescriptor = PluginDescriptor {
     vendor: "Ruviform Test",
     version: "0.0.0",
     features: &["audio-effect", "stereo"],
+};
+
+/// The `test_instrument` descriptor pin — same handshake rule as
+/// [`EXPECTED`]: the parent pins the fixture's declared values while
+/// the child synthesizes them from the real `clap_entry` scan
+/// (`instrument.rs` `TestInstrumentClapPlugin::get_descriptor`).
+const INSTRUMENT_EXPECTED: PluginDescriptor = PluginDescriptor {
+    id: "org.ruviform-test.clap-test-instrument",
+    name: "test_instrument",
+    vendor: "Ruviform Test",
+    version: "0.0.0",
+    features: &["instrument", "synthesizer", "stereo"],
 };
 
 /// How long tests poll for an asynchronous `Failed` notification —
@@ -176,6 +193,104 @@ fn host_block(
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
     host.process(handle, &inputs, &mut outputs, events, None)
+}
+
+/// One stereo block through `PluginHost::process` carrying a
+/// transport snapshot — the instrument oracle's entry point. The
+/// instrument ignores its input, so the input channels are silence.
+fn host_block_transport(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    out_left: &mut [f32],
+    out_right: &mut [f32],
+    events: EventList<'_>,
+    transport: Option<TransportInfo>,
+) -> Result<ProcessResult, HostError> {
+    let in_left = [0.0_f32; FRAMES];
+    let in_right = [0.0_f32; FRAMES];
+    let input = [&in_left[..], &in_right[..]];
+    let input_view = PlanarBufferView::new(&input[..]).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut *out_left, &mut *out_right];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    host.process(handle, &inputs, &mut outputs, events, transport)
+}
+
+/// Neutral MIDI event constructor for the instrument oracle —
+/// channel-agnostic fixture, channel `0`, group `ZERO`.
+fn midi_event(offset: u32, kind: MidiKind) -> Event {
+    Event::new(
+        offset,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind,
+        }),
+    )
+}
+
+fn note_on(offset: u32, key: u8, velocity: u32) -> Event {
+    midi_event(
+        offset,
+        MidiKind::NoteOn {
+            key: NoteKey::new(key).unwrap(),
+            velocity,
+        },
+    )
+}
+
+fn note_off(offset: u32, key: u8) -> Event {
+    midi_event(
+        offset,
+        MidiKind::NoteOff {
+            key: NoteKey::new(key).unwrap(),
+            velocity: 0,
+        },
+    )
+}
+
+fn cc(offset: u32, controller: u8, value: u32) -> Event {
+    midi_event(
+        offset,
+        MidiKind::ControlChange {
+            controller: MidiController::new(controller).unwrap(),
+            value,
+        },
+    )
+}
+
+/// Playing transport at 120 BPM / ppqn 960 — a beat is 24 000 frames
+/// at 48 kHz (25 frames per tick). `position_ticks` places the next
+/// `ppqn` boundary `delta` ticks ahead → click frame `25 * delta`.
+fn playing_transport(position_ticks: i64) -> TransportInfo {
+    TransportInfo::new(
+        TransportStatus::Playing,
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+    )
+    .with_musical(MusicalTimeInfo {
+        position_ticks,
+        bar_start_tick: 0,
+        bpm_milli: 120_000,
+        ppqn: 960,
+        sig_num: 4,
+        sig_den: 4,
+    })
+}
+
+/// Spawns the real child for `descriptor` and drives one instance
+/// to `Processing` — the instrument tests' shared setup.
+fn instrument_host() -> (PluginHost, PluginHandle) {
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(INSTRUMENT_EXPECTED, runner_program()))
+        .unwrap();
+    let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+        panic!("unexpected reply");
+    };
+    assert_eq!(descriptors, vec![INSTRUMENT_EXPECTED]);
+    let handle = instantiate(&mut host, INSTRUMENT_EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+    (host, handle)
 }
 
 /// Drive one instance through `Processing`.
@@ -489,4 +604,821 @@ fn real_test_plugin_l1_missing_runner_is_spawn_failed() {
         Ok(HostReply::Scanned(vec![EXPECTED]))
     );
     assert!(host.try_recv_notification().is_none());
+}
+
+// ---------------------------------------------------------------------------
+// test_instrument — real-ABI MIDI/transport oracle
+// ---------------------------------------------------------------------------
+
+/// `test_instrument` note lifecycle through the real ABI: a retriggered
+/// note-on every block makes every delivered block bit-identical —
+/// frame 0 is the triangle's `-1` extreme at full velocity/gain/volume,
+/// both channels carry the same mono sample, and the output is
+/// deterministic across calls (the L1 lookahead only delays delivery).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_note_lifecycle() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let events = [note_on(0, 69, u32::MAX)];
+    let list = EventList::new(&events, FRAMES_U32).unwrap();
+    let mut reference: Option<Vec<f32>> = None;
+    let mut delivered = 0_u32;
+    for _ in 0..12_u32 {
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        // The pipeline writes defined silence on underrun — an
+        // all-zero block is indistinguishable from silence, but a
+        // sounding block always has `out[0] == -1`, so all-zero ⇒
+        // underrun here.
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue;
+        }
+        delivered += 1;
+        // Frame 0: phase 0 → triangle −1 → −1 × vel 1 × gain 1 × vol 1.
+        assert_eq!(out_left[0].to_bits(), (-1.0_f32).to_bits());
+        // Dual mono — every output channel identical.
+        assert_eq!(out_left, out_right);
+        match &reference {
+            None => reference = Some(out_left.clone()),
+            Some(expected) => {
+                assert_eq!(
+                    &out_left, expected,
+                    "delivered blocks must be deterministic"
+                );
+            }
+        }
+    }
+    assert!(
+        delivered >= 4,
+        "the L1 pipeline barely delivered — {delivered} blocks"
+    );
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` release oracle: note-ons for the first calls,
+/// then note-offs — the fixed 2400-frame release decays linearly and
+/// the tail of the run is exact silence on every delivered block.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_note_off_releases_to_silence() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let on = [note_on(0, 69, u32::MAX)];
+    let on_list = EventList::new(&on, FRAMES_U32).unwrap();
+    let off = [note_off(0, 69)];
+    let off_list = EventList::new(&off, FRAMES_U32).unwrap();
+    let empty = EventList::empty(FRAMES_U32);
+    // 8 sounding blocks, ONE note-off, then empty blocks: the fixture
+    // law restarts the 2400-frame release on every NoteOff, so a
+    // repeated note-off would hold the voice in release forever. The
+    // release completes ~5 blocks (4096 frames) after the note-off
+    // block; delivered blocks lag their input call by
+    // `lookahead_blocks`, so the sounding proof only counts calls
+    // whose every possible source call is on-phase (retriggers →
+    // `out[0] == -1`), and the silence tail only asserts once every
+    // in-flight source call is many blocks past the completed release.
+    let mut sounding = 0_u32;
+    for call in 0..44_u32 {
+        let list = match call.cmp(&8) {
+            core::cmp::Ordering::Less => on_list,
+            core::cmp::Ordering::Equal => off_list,
+            core::cmp::Ordering::Greater => empty,
+        };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun or legitimately silent
+        }
+        // Calls 4..=8: for any lookahead in 1..=3 the source call is
+        // ≤7 — unambiguously on-phase, so a delivered block retriggered
+        // at frame 0.
+        if (4..=8).contains(&call) {
+            assert_eq!(
+                out_left[0].to_bits(),
+                (-1.0_f32).to_bits(),
+                "call {call}: sounding block must retrigger at frame 0"
+            );
+            sounding += 1;
+        }
+        // Calls 36..=43: every possible source call is ≥28 blocks past
+        // the first note-off — the release is complete, so a delivered
+        // (non-underrun) block must be exact silence.
+        if (36..=43).contains(&call) {
+            let bad = out_left
+                .iter()
+                .position(|&s| s != 0.0)
+                .unwrap_or(usize::MAX);
+            assert!(
+                bad == usize::MAX && out_right.iter().all(|&s| s == 0.0),
+                "call {call}: release tail must be exact silence, first nonzero at {bad}: {:?}",
+                &out_left[bad.min(FRAMES - 1)..(bad + 4).min(FRAMES)]
+            );
+        }
+    }
+    assert!(sounding >= 2, "the note never sounded through the ABI");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` controller oracle: CC7 = 0 silences voices; CC7 =
+/// max restores full level. The note-on offset gates the voice start —
+/// frames before the offset are silent, the offset frame itself
+/// sounds (block-boundary law through the real ABI).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_cc_and_offset_gating() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    // Phase 1: note-on at offset 100 + CC7 volume 0 → silence.
+    let muted = [cc(0, 7, 0), note_on(100, 69, u32::MAX)];
+    let muted_list = EventList::new(&muted, FRAMES_U32).unwrap();
+    // Phase 2: same note-on, CC7 max → offset gating visible.
+    let full = [cc(0, 7, u32::MAX), note_on(100, 69, u32::MAX)];
+    let full_list = EventList::new(&full, FRAMES_U32).unwrap();
+
+    // Phase 1 (calls 0..8): note-on at offset 100 + CC7 volume 0 →
+    // silence. Phase 2 (calls 8..16): same note-on, CC7 max → offset
+    // gating visible. Delivered blocks lag by `lookahead_blocks`, so
+    // assertions use latency-margin windows and the transition calls
+    // are left unasserted.
+    let mut verified = 0_u32;
+    let mut reference: Option<Vec<f32>> = None;
+    for call in 0..16_u32 {
+        let list = if call < 8 { muted_list } else { full_list };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        // Muted window: every possible source call is muted-phase —
+        // assert unconditionally (underrun zeros and the voice's
+        // `-0.0` both satisfy `== 0.0`; any real signal fails).
+        if (3..=7).contains(&call) {
+            assert!(
+                out_left.iter().all(|&s| s == 0.0) && out_right.iter().all(|&s| s == 0.0),
+                "call {call}: CC7=0 must silence"
+            );
+            continue;
+        }
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun or legitimately silent
+        }
+        if (12..=15).contains(&call) {
+            // Every possible source call is full-phase. The voice is
+            // stateful: retriggered at offset 100 every block, it
+            // sustains into the next block's frames 0..100 — so the
+            // oracle pins the retrigger frame itself (`-1` extreme)
+            // and bit-identical post-offset segments across delivered
+            // blocks (frames 100..511 restart from phase 0 each block).
+            assert_eq!(
+                out_left[100].to_bits(),
+                (-1.0_f32).to_bits(),
+                "call {call}: offset frame sounds"
+            );
+            assert_eq!(out_left, out_right);
+            match &reference {
+                None => reference = Some(out_left[100..].to_vec()),
+                Some(expected) => assert_eq!(
+                    &out_left[100..],
+                    expected.as_slice(),
+                    "call {call}: post-offset segment must be deterministic"
+                ),
+            }
+            verified += 1;
+        }
+    }
+    assert!(verified >= 2, "the full-volume phase never delivered");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` transport oracle: a playing snapshot with
+/// musical timing clicks at the `ppqn` boundary inside the block —
+/// `position_ticks = 956` puts the next boundary 4 ticks ahead →
+/// frame `4 × 25 = 100`, impulse `0.5`. Stopped transport is silent;
+/// a seek (position jump) moves the click; an active loop range does
+/// not disturb the per-block derivation (the fixture holds no loop
+/// state — chase/loop ride the delivered snapshot).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_transport_clicks() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let empty = EventList::empty(FRAMES_U32);
+    // pos 956 → boundary at tick 960 → delta 4 ticks → frame 100.
+    let click_at_100 = playing_transport(956);
+    // pos 940 → delta 20 ticks → frame 500.
+    let click_at_500 = playing_transport(940);
+    // pos 950 → delta 10 ticks → frame 250 — deliberately distinct
+    // from the other phases' click frames so a stale pass-through
+    // replay of an earlier click block cannot satisfy this phase.
+    let looped = playing_transport(950).with_loop_range(MediaRange::new(
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+        MediaDuration::new(48_000, TimeBase::sample_rate(48_000).unwrap()),
+    ));
+    let stopped = TransportInfo::new(
+        TransportStatus::Stopped,
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+    )
+    .with_musical(MusicalTimeInfo {
+        position_ticks: 956,
+        bar_start_tick: 0,
+        bpm_milli: 120_000,
+        ppqn: 960,
+        sig_num: 4,
+        sig_den: 4,
+    });
+
+    // Phases of 8 calls each: stopped → click@100 → seek click@500 →
+    // looped click@250. Delivered blocks lag their source call by
+    // `lookahead_blocks`, so each phase asserts only inside a window
+    // where every possible source call (lookahead 1..=3) is inside
+    // that phase; transition calls stay unasserted. An all-zero
+    // block is skipped: it is either defined silence or a
+    // pass-through replay whose `last_output` was itself silent —
+    // indistinguishable, and asserting on it would flake.
+    let mut verified = [0_u32; 4];
+    for call in 0..32_u32 {
+        let (transport, phase) = match call {
+            c if c < 8 => (Some(stopped), 0_usize),
+            c if c < 16 => (Some(click_at_100), 1),
+            c if c < 24 => (Some(click_at_500), 2),
+            _ => (Some(looped), 3),
+        };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(
+                &mut host,
+                handle,
+                &mut out_left,
+                &mut out_right,
+                empty,
+                transport
+            ),
+            Ok(ProcessResult::CONTINUE)
+        );
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun — or the stopped phase's defined silence
+        }
+        let (window, frame) = match phase {
+            0 => (3..=8, None),
+            1 => (11..=16, Some(100_usize)),
+            2 => (19..=24, Some(500_usize)),
+            _ => (27..=31, Some(250_usize)),
+        };
+        if !window.contains(&call) {
+            continue; // transition zone — source call ambiguous
+        }
+        match frame {
+            None => panic!("call {call}: stopped transport must be silent"),
+            Some(frame) => {
+                assert_eq!(
+                    out_left[frame].to_bits(),
+                    0.5_f32.to_bits(),
+                    "call {call}: click impulse at frame {frame}"
+                );
+                assert!(
+                    out_left
+                        .iter()
+                        .enumerate()
+                        .all(|(i, &s)| i == frame || s == 0.0),
+                    "call {call}: click block must be silent outside frame {frame}"
+                );
+                assert_eq!(out_left, out_right);
+                verified[phase] += 1;
+            }
+        }
+    }
+    assert!(
+        verified[1..].iter().all(|&n| n >= 2),
+        "click phases barely delivered — {verified:?}"
+    );
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+// ---------------------------------------------------------------------------
+// attach() runtime-integration leg — the Issue #628 deferred slice owned
+// by Issue #630: the audio-test runtime's scripted MIDI backend
+// (`MidiFeed` → `MockPort` → production `MidiInput`) drives the
+// production `InputTx::pump` → node `InputStage` → `PluginNode` →
+// `GraphRuntime` → L1 endpoint path into the real fixture ABI. This is
+// the first leg that combines an out-of-process plugin, the bridge
+// `attach()` input surface and the typed graph runtime — in-process
+// real plugins cannot attach (`create_sendable` is `None` for the
+// `!Send` bridge instances, so `prepare_endpoint` only succeeds on the
+// L1 route).
+// ---------------------------------------------------------------------------
+
+mod attach_integration {
+    use super::{FRAMES, FRAMES_U32, assert_fixture_present, config, instrument_host};
+    use ruviform_audio::typed::{
+        Compiler, CompilerConfig, DEFAULT_ALIGNMENT, GraphRuntime, RtRuntime,
+    };
+    use ruviform_audio_core::midi_input::mock::{MockBackend, MockPort};
+    use ruviform_audio_core::midi_input::{
+        MidiInput, MidiInputInfo, MidiInputPort, MidiPortCapabilities, MidiPortOrigin,
+    };
+    use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_audio_plugin_bridge::{
+        AttachConfig, InputConfig, InputTx, PluginNodeControl, PluginNodeFactory, attach,
+    };
+    use ruviform_audio_test::backend::MidiFeed;
+    use ruviform_audio_test::midi::{MidiCue, MidiScenario};
+    use ruviform_graph::{
+        Activation, Availability, ConnDef, Direction, EdgeDelay, GraphBuilder, Multiplicity,
+        NodeDef, NodeKind, PortDef, PortFormat, PortId, PortRef, Validator,
+    };
+    use ruviform_media_core::{
+        ClockAnchor, ClockDomainId, ClockEpochId, DeliveryPolicy, EngineFrame, MediaTime,
+        MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey,
+        ScheduleBudget, TimeBase, TimestampProvenance,
+    };
+    use ruviform_plugin_core::{BusDescriptor, BusDirection, BusRole};
+    use ruviform_plugin_host::{EndpointBounds, PluginHandle, PluginHost};
+    use ruviform_rt::RtContext;
+
+    /// The fixture declares one stereo main port pair (audio in +
+    /// audio out) — the consumer-declared bus table `attach` maps
+    /// onto typed graph ports (L1 reports `BusReport::Unavailable`,
+    /// so the declared table is the only checked surface).
+    const BUSES: [BusDescriptor; 2] = [
+        BusDescriptor {
+            direction: BusDirection::Input,
+            layout: ChannelLayout::Stereo,
+            name: "In",
+            role: BusRole::Main,
+            enabled: true,
+        },
+        BusDescriptor {
+            direction: BusDirection::Output,
+            layout: ChannelLayout::Stereo,
+            name: "Out",
+            role: BusRole::Main,
+            enabled: true,
+        },
+    ];
+
+    /// The scripted backend's stamp domain — arbitrary but fixed; the
+    /// published anchor maps it onto engine frame 0.
+    const MIDI_DOMAIN: ClockDomainId = ClockDomainId::new(7);
+
+    /// One attach leg block — equals the activated `max_frames`, so
+    /// each `rt.process` is exactly one physical plugin call.
+    const BLOCK: usize = FRAMES;
+
+    fn frame_base() -> TimeBase {
+        TimeBase::sample_rate(48_000).unwrap()
+    }
+
+    fn fmt() -> AudioFormat {
+        AudioFormat {
+            sample_rate: SampleRate::new(48_000).unwrap(),
+            layout: ChannelLayout::Stereo,
+            sample_format: SampleFormat::F32,
+        }
+    }
+
+    fn port(direction: Direction, format: PortFormat) -> PortDef {
+        PortDef {
+            direction,
+            role: ruviform_graph::PortRole::Main,
+            format,
+            multiplicity: Multiplicity::unbounded(0),
+            capabilities: Vec::new(),
+            availability: Availability::Always,
+            activation: Activation::Enabled,
+        }
+    }
+
+    /// `attach` config: the fixture's activated `ProcessConfig`
+    /// (48 kHz, 1..=512 frames), stereo bounds covering both buses,
+    /// and the opt-in live-MIDI input leg.
+    fn attach_config() -> AttachConfig {
+        AttachConfig {
+            buses: BUSES.to_vec(),
+            port_format: fmt(),
+            bounds: EndpointBounds {
+                max_frames: FRAMES_U32,
+                channels: 2,
+            },
+            process_config: config(),
+            frame_base: frame_base(),
+            policy: DeliveryPolicy::Exact,
+            budget: ScheduleBudget::default(),
+            input: Some(InputConfig::new(64)),
+        }
+    }
+
+    /// Identity anchor: stamp 0 in `frame_base` ticks on `MIDI_DOMAIN`
+    /// == engine frame 0 of epoch 0 — the epoch `attach` mints the
+    /// node's scheduler with. Cue positions are already frame ticks,
+    /// so `map_stamp_to_frame` reduces to identity and the expected
+    /// PCM offsets are computed independently of the mapping.
+    fn anchor() -> ClockAnchor {
+        ClockAnchor {
+            domain: MIDI_DOMAIN,
+            stamp_ticks: 0,
+            stamp_base: frame_base(),
+            frame: EngineFrame::new(ClockEpochId::new(0), 0),
+            calibration: TimestampProvenance::Carried,
+        }
+    }
+
+    /// The attached rig: L1-hosted `test_instrument` inside a
+    /// Source → plugin → Sink typed graph, plus the non-RT halves the
+    /// driver pumps per block.
+    struct AttachRig {
+        _host: PluginHost,
+        _runtime: GraphRuntime,
+        rt: RtRuntime,
+        control: PluginNodeControl,
+        input_tx: InputTx,
+        src_out: PortId,
+        sink_in: PortId,
+    }
+
+    /// Spawns the real child, drives `test_instrument` to `Processing`,
+    /// `attach`es it with the MIDI input leg, and compiles the graph.
+    fn build_rig() -> AttachRig {
+        assert_fixture_present();
+        let (mut host, handle): (PluginHost, PluginHandle) = instrument_host();
+        let cfg = attach_config();
+        let attached = attach(&mut host, handle, &cfg).expect("attach");
+        let input_tx = attached.input_tx.expect("input leg enabled");
+
+        let mut b = GraphBuilder::new();
+        let (src, sp) = b.add_node(&NodeDef {
+            kind: NodeKind::Source,
+            ports: vec![port(Direction::Output, PortFormat::Audio(fmt()))],
+        });
+        let (proc, pp) = b.add_node(&NodeDef {
+            kind: NodeKind::Processor,
+            ports: attached.ports.clone(),
+        });
+        let (sink, kp) = b.add_node(&NodeDef {
+            kind: NodeKind::Sink,
+            ports: vec![port(Direction::Input, PortFormat::Audio(fmt()))],
+        });
+        for (from_node, from_port, to_node, to_port) in
+            [(src, sp[0], proc, pp[0]), (proc, pp[1], sink, kp[0])]
+        {
+            b.connect(&ConnDef {
+                from: PortRef {
+                    node: from_node,
+                    port: from_port,
+                },
+                to: PortRef {
+                    node: to_node,
+                    port: to_port,
+                },
+                delay: EdgeDelay::Zero,
+                channel_map: None,
+            });
+        }
+        let g = Validator::validate(&b.build()).expect("graph validates");
+
+        let compiler_config = CompilerConfig {
+            max_frames: BLOCK,
+            alignment: DEFAULT_ALIGNMENT,
+            max_slots: 64,
+            max_channels: 8,
+            max_delay_lines: 16,
+            max_delay_frames: 4096,
+            max_processors: 16,
+        };
+        let mut factory = PluginNodeFactory::new();
+        factory.insert(proc, attached.node);
+        let (mut runtime, rt) = GraphRuntime::new(&compiler_config, 8, 8);
+        let compiled = Compiler::new(compiler_config)
+            .compile(
+                &g,
+                &mut factory,
+                runtime.registry(),
+                runtime.allocator(),
+                runtime.generation() + 1,
+            )
+            .expect("compiles");
+        runtime.publish(compiled).expect("publish");
+        AttachRig {
+            _host: host,
+            _runtime: runtime,
+            rt,
+            control: attached.control,
+            input_tx,
+            src_out: sp[0],
+            sink_in: kp[0],
+        }
+    }
+
+    /// Scripted MIDI leg: `MidiScenario` cues → `MidiFeed` →
+    /// `MockPort` subscription opened through the production
+    /// `MidiPort`/`MidiInput` traits — the same surface
+    /// `pipeline_midi.rs` exercises, here feeding `InputTx::pump`
+    /// instead of the leg's own `InputStage`.
+    struct MidiDriver {
+        port: MockPort,
+        input: Box<dyn MidiInput>,
+        feed: MidiFeed,
+    }
+
+    impl MidiDriver {
+        fn open(cues: Vec<MidiCue>) -> Self {
+            let mut backend = MockBackend::new();
+            let port = backend.add_port(MidiInputInfo::new(
+                "attach-midi-0".to_owned(),
+                "Attach MIDI".to_owned(),
+                MidiPortOrigin::Internal,
+                MidiPortCapabilities::stamped(false, MIDI_DOMAIN),
+            ));
+            let input = port.open().expect("mock port open");
+            let scenario = MidiScenario::new(frame_base(), cues);
+            let feed = MidiFeed::new(&scenario, MIDI_DOMAIN);
+            Self { port, input, feed }
+        }
+    }
+
+    fn note_on(key: u8) -> MidiEvent {
+        MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOn {
+                key: NoteKey::new(key).unwrap(),
+                velocity: MidiValue::from_u7(127),
+            },
+        }
+    }
+
+    fn note_off(key: u8) -> MidiEvent {
+        MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::NoteOff {
+                key: NoteKey::new(key).unwrap(),
+                velocity: 0,
+            },
+        }
+    }
+
+    fn cc(controller: u8, value: u8) -> MidiEvent {
+        MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind: MidiKind::ControlChange {
+                controller: MidiController::new(controller).unwrap(),
+                value: MidiValue::from_u7(value),
+            },
+        }
+    }
+
+    fn cue(ticks: i64, seq: u64, event: MidiEvent) -> MidiCue {
+        MidiCue {
+            position: MediaTime::new(ticks, frame_base()),
+            source_sequence: seq,
+            event,
+        }
+    }
+
+    /// Zero input into the graph's source port (the instrument
+    /// ignores it — the bus exists because the fixture declares a
+    /// stereo pair).
+    fn feed_source(rt: &mut RtRuntime, port: PortId) {
+        let zeros = [0.0f32; BLOCK];
+        let mut slot = rt.input_writer(port, BLOCK).expect("input bound");
+        for ch in 0..2 {
+            let plane = slot.data.channel_mut(ch).expect("channel");
+            plane[..BLOCK].copy_from_slice(&zeros);
+        }
+    }
+
+    /// Drains the sink's input boundary slot — `frames_valid`
+    /// samples per channel, exactly what this callback delivered.
+    fn drain_sink(rt: &mut RtRuntime, port: PortId) -> Vec<Vec<f32>> {
+        let view = rt.output_reader(port).expect("output bound");
+        let frames = view.frames_valid as usize;
+        (0..usize::from(view.channels))
+            .map(|ch| view.data.channel(ch).expect("channel")[..frames].to_vec())
+            .collect()
+    }
+
+    /// One leg block: feed cues due inside `[cursor, cursor+BLOCK)`
+    /// into the port, pump the production `InputTx` into the node's
+    /// handoff channel, drive the graph, drain the sink PCM.
+    ///
+    /// The L1 data plane is asynchronous — `rt.process` submits a
+    /// block and drains whatever results have landed (the defined
+    /// `lookahead_blocks` latency plus child scheduling). The e2e
+    /// precedent paces each call ~5 ms so the out-of-process child
+    /// keeps up; back-to-back calls overflow the slot depth and every
+    /// submit drops to pass-through silence. The first calls get a
+    /// wider window: the child's first `process` round-trip can
+    /// exceed the lookahead span, and a result observed after its
+    /// `expected` seq is *discarded* as stale — losing call 0's
+    /// output entirely rather than merely delaying it.
+    fn pump_block(rig: &mut AttachRig, midi: &mut MidiDriver, block_index: u64) -> Vec<Vec<f32>> {
+        let upto = (block_index + 1) * BLOCK as u64 - 1;
+        midi.feed.pump_into_port(&midi.port, upto);
+        rig.input_tx.pump(&mut *midi.input).expect("input pump");
+        feed_source(&mut rig.rt, rig.src_out);
+        let pace_ms = if block_index < 4 { 25 } else { 5 };
+        std::thread::sleep(std::time::Duration::from_millis(pace_ms));
+        rig.rt.process(BLOCK, &RtContext::mint()).expect("process");
+        drain_sink(&mut rig.rt, rig.sink_in)
+    }
+
+    fn is_silent(block: &[Vec<f32>]) -> bool {
+        block.iter().all(|ch| ch.iter().all(|&s| s == 0.0))
+    }
+
+    /// A `NoteOn` stamped at frame 100 reaches the fixture at call
+    /// offset 100 — the voice's frame 0 (`-1.0` at full velocity)
+    /// lands at PCM sample 100 of the delivered block, with exact
+    /// silence before it. This pins the whole chain: scenario stamp →
+    /// `MidiFeed`/`MockPort` → `InputTx` → node `InputStage` anchor
+    /// mapping → `PluginNode` event merge → L1 wire record → CLAP
+    /// `clap_event_input` → fixture voice start → sink PCM.
+    #[test]
+    #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+    fn attach_midi_note_on_lands_at_stamped_frame_offset() {
+        assert_fixture_present();
+        let mut rig = build_rig();
+        rig.control
+            .set_clock_anchor(Some(anchor()))
+            .expect("anchor");
+        let mut midi = MidiDriver::open(vec![cue(100, 0, note_on(69))]);
+
+        let mut drained: Vec<Vec<Vec<f32>>> = Vec::new();
+        for i in 0..10_u64 {
+            drained.push(pump_block(&mut rig, &mut midi, i));
+        }
+
+        // The stamped attack is the oracle: the first sounding
+        // delivered block must carry 100 silent frames then the
+        // voice's frame-0 `-1.0` — a whole-block-early or -late
+        // delivery, an offset-0 stamp, or a pass-through replay of
+        // unrelated audio cannot produce that shape. The L1
+        // lookahead only delays which drained index carries it.
+        let sounding = drained
+            .iter()
+            .position(|b| !is_silent(b))
+            .expect("the note must sound through the attach path");
+        for (i, block) in drained[..sounding].iter().enumerate() {
+            assert!(
+                is_silent(block),
+                "block {i} must be silent before first delivery"
+            );
+        }
+        let block = &drained[sounding];
+        let left = &block[0];
+        let right = &block[1];
+        assert!(
+            left[..100].iter().all(|&s| s == 0.0),
+            "voice must not start before the stamped offset — first samples: {:?}",
+            &left[..left.len().min(104)]
+        );
+        assert_eq!(
+            left[100].to_bits(),
+            (-1.0_f32).to_bits(),
+            "voice frame 0 = triangle -1 at full velocity/gain/volume"
+        );
+        assert_eq!(left, right, "dual mono");
+        // The voice keeps sounding — sustained delivery, not a
+        // one-off block.
+        assert!(
+            drained[sounding..].iter().filter(|b| !is_silent(b)).count() >= 2,
+            "sustained delivery expected after the first sounding block"
+        );
+
+        // The input leg really carried the event: one stamp mapped,
+        // one emitted into a delivered block list, nothing late,
+        // rejected, anchor-missed, or capacity/backend-dropped.
+        let input = rig.control.snapshot().input;
+        assert_eq!(input.mapped, 1, "the note-on stamp must map");
+        assert_eq!(input.delivered, 1, "the note-on must reach a block");
+        assert_eq!(input.late, 0);
+        assert_eq!(input.rejected, 0);
+        assert_eq!(input.anchor_rejected, 0);
+        assert_eq!(input.dropped_capacity, 0);
+        assert_eq!(input.dropped_backend, 0);
+    }
+
+    /// `NoteOff` traverses the same attach leg: one note-off (the
+    /// fixture law re-arms the 2400-frame release per `NoteOff`, so
+    /// exactly one is sent) decays to exact silence well inside the
+    /// run — the tail blocks are all-zero on both channels.
+    #[test]
+    #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+    fn attach_midi_note_off_releases_to_silence() {
+        assert_fixture_present();
+        let mut rig = build_rig();
+        rig.control
+            .set_clock_anchor(Some(anchor()))
+            .expect("anchor");
+        // note-on at frame 0 (voice frame 0 → `-1.0` at sample 0),
+        // ONE note-off at tick 1500 — release completes ~frame 3900,
+        // ~5 blocks later; 18 blocks leaves a wide delivered-silence
+        // margin past the 2-block L1 lookahead.
+        let mut midi = MidiDriver::open(vec![cue(0, 0, note_on(69)), cue(1500, 1, note_off(69))]);
+
+        let mut drained: Vec<Vec<Vec<f32>>> = Vec::new();
+        for i in 0..18_u64 {
+            drained.push(pump_block(&mut rig, &mut midi, i));
+        }
+
+        let sounding = drained
+            .iter()
+            .position(|b| !is_silent(b))
+            .expect("the note must sound through the attach path");
+        let first = &drained[sounding];
+        assert_eq!(
+            first[0][0].to_bits(),
+            (-1.0_f32).to_bits(),
+            "note-on at offset 0 → voice frame 0 at sample 0"
+        );
+        assert_eq!(first[0], first[1], "dual mono");
+
+        for (i, block) in drained[drained.len() - 5..].iter().enumerate() {
+            assert!(
+                is_silent(block),
+                "tail block {} must be exact silence after the release completed",
+                drained.len() - 5 + i
+            );
+        }
+
+        // Both events traversed the leg cleanly — the silence tail is
+        // a released voice, not an input path that never delivered.
+        let input = rig.control.snapshot().input;
+        assert_eq!(input.mapped, 2, "note-on + note-off must map");
+        assert_eq!(input.delivered, 2, "both events must reach blocks");
+        assert_eq!(input.late, 0);
+        assert_eq!(input.rejected, 0);
+        assert_eq!(input.dropped_capacity, 0);
+    }
+
+    /// `CC7` rides the same leg: volume 0 silences an otherwise
+    /// sounding voice — the controller event reaches the fixture
+    /// through `InputTx` → `InputStage` → wire → `clap_event_input`.
+    #[test]
+    #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+    fn attach_midi_cc7_mute_reaches_fixture() {
+        assert_fixture_present();
+        let mut rig = build_rig();
+        rig.control
+            .set_clock_anchor(Some(anchor()))
+            .expect("anchor");
+        // CC7 = 0 at frame 0 then note-on at frame 100 — the voice
+        // must stay silent for the whole run.
+        let mut midi = MidiDriver::open(vec![cue(0, 0, cc(7, 0)), cue(100, 1, note_on(69))]);
+
+        for i in 0..10_u64 {
+            let block = pump_block(&mut rig, &mut midi, i);
+            assert!(
+                is_silent(&block),
+                "block {i}: CC7=0 must silence the voice — got {:?}",
+                &block[0][..block[0].len().min(8)]
+            );
+        }
+
+        // Silence alone cannot distinguish "CC7 muted the voice" from
+        // "nothing ever arrived" — the stage counters prove both
+        // events were mapped and emitted into delivered block lists.
+        let input = rig.control.snapshot().input;
+        assert_eq!(input.mapped, 2, "CC + note-on must map");
+        assert_eq!(input.delivered, 2, "both events must reach blocks");
+        assert_eq!(input.late, 0);
+        assert_eq!(input.rejected, 0);
+        assert_eq!(input.dropped_capacity, 0);
+    }
 }

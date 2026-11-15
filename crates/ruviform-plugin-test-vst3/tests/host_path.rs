@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
     ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
     ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
@@ -57,11 +58,12 @@ fn load_library() -> Vst3Library {
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
-/// `1` = `test_fault`, `2` = `test_editor`, `3` = `test_stateful`).
+/// `1` = `test_fault`, `2` = `test_editor`, `3` = `test_stateful`,
+/// `4` = `test_instrument`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4, "the module ships four plugins");
+    assert_eq!(factories.len(), 5, "the module ships five plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -96,6 +98,13 @@ fn prepared_stateful_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(3)
 }
 
+/// `test_instrument`'s prepared instance — the instrument oracle's
+/// entry point (its `IEventList` MIDI and `ProcessContext` transport
+/// are exercised through `process_host` below).
+fn prepared_instrument_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(4)
+}
+
 /// Drives one 64-frame stereo block of golden PCM through the
 /// production path — deterministic input `0.5 / -0.25` — and returns
 /// the neutral `ProcessResult` plus the output channels.
@@ -125,16 +134,17 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 
 /// Discovery through the production path: `Vst3Library::load` scans
 /// the real binary's factory, finds the `test_gain`, `test_fault`,
-/// `test_editor`, and `test_stateful` component classes (the
-/// distributed controller classes are filtered out, as with every
-/// VST3 module), and reports each fixture's vendor/name.
+/// `test_editor`, `test_stateful`, and `test_instrument` component
+/// classes (the distributed controller classes are filtered out, as
+/// with every VST3 module), and reports each fixture's
+/// vendor/name/features.
 #[test]
 fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        4,
+        5,
         "only the audio component classes are plugin descriptors"
     );
     let gain = descriptors[0];
@@ -157,6 +167,12 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(stateful.vendor, "Ruviform Test");
     assert_eq!(stateful.version, "0.0.0");
     assert!(stateful.features.contains(&"Fx"));
+    let instrument = descriptors[4];
+    assert_eq!(instrument.name, "test_instrument");
+    assert_eq!(instrument.vendor, "Ruviform Test");
+    assert_eq!(instrument.version, "0.0.0");
+    assert!(instrument.features.contains(&"Instrument"));
+    assert!(instrument.features.contains(&"Fx"));
 }
 
 /// Parameter surface through the production path: the host instantiates
@@ -168,7 +184,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -187,7 +203,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -326,7 +342,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn editor_reports_no_params() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[2].create();
     assert!(
         plugin.params().is_empty(),
@@ -401,7 +417,7 @@ fn gain_and_fault_have_no_editor_view() {
 fn stateful_reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[3].create();
     let params = plugin.params();
     assert_eq!(
@@ -567,11 +583,79 @@ fn stateless_classes_decline_state_verbs() {
         prepared_plugin(),
         prepared_fault_plugin(),
         prepared_editor_plugin(),
+        prepared_instrument_plugin(),
     ] {
         assert_eq!(plugin.save_state(), Err(HostError::Unsupported));
         assert_eq!(
             plugin.restore_state(&[0xAA, 0xBB]),
             Err(HostError::Unsupported)
         );
+    }
+}
+
+fn midi(offset: u32, kind: MidiKind) -> Event {
+    Event::new(
+        offset,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind,
+        }),
+    )
+}
+
+fn note_on(offset: u32) -> Event {
+    midi(
+        offset,
+        MidiKind::NoteOn {
+            key: NoteKey::new(69).unwrap(),
+            velocity: u32::MAX,
+        },
+    )
+}
+
+fn note_off(offset: u32) -> Event {
+    midi(
+        offset,
+        MidiKind::NoteOff {
+            key: NoteKey::new(69).unwrap(),
+            velocity: 0,
+        },
+    )
+}
+
+/// `test_instrument` note lifecycle through the production host
+/// bridge in-process: a retriggered note-on makes every block's
+/// frame 0 the triangle's `-1` extreme; switching to note-off lets
+/// the fixed 2400-frame release decay to exact silence — the
+/// neutral→VST3 `IEventList`→fixture event path end to end, no L1
+/// pipeline.
+#[test]
+fn instrument_note_lifecycle_releases_to_silence() {
+    let mut plugin = prepared_instrument_plugin();
+
+    // Sounding phase: note-on retriggered at offset 0 every block.
+    let on = [note_on(0)];
+    for _ in 0..4 {
+        let (_result, [left, _right]) = drive_block(&mut *plugin, &on);
+        assert_eq!(left[0].to_bits(), (-1.0_f32).to_bits());
+    }
+
+    // Release phase: ONE note-off, then empty blocks — the fixture
+    // law restarts the 2400-frame release on every NoteOff, so a
+    // repeated note-off would hold the voice in release forever.
+    // 2400 frames ≈ 38 blocks of 64 — drive 48 and require the tail
+    // silent.
+    let off = [note_off(0)];
+    let empty: [Event; 0] = [];
+    for block in 0..48 {
+        let events: &[Event] = if block == 0 { &off } else { &empty };
+        let (_result, [left, right]) = drive_block(&mut *plugin, events);
+        if block >= 44 {
+            assert!(
+                left.iter().all(|&s| s == 0.0) && right.iter().all(|&s| s == 0.0),
+                "block {block}: release tail must be exact silence"
+            );
+        }
     }
 }

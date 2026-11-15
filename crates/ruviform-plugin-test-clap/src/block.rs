@@ -24,7 +24,11 @@
 use core::mem::size_of;
 use core::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
+use clack_common::events::Match;
 use clack_common::events::UnknownEvent;
+use clack_common::events::event_types::{
+    MidiEvent as ClapMidiEvent, TransportEvent, TransportFlags,
+};
 use clack_common::events::io::InputEvents;
 use clack_common::events::spaces::CoreEventSpace;
 use clack_plugin::plugin::PluginError;
@@ -32,9 +36,14 @@ use clack_plugin::process::audio::{BufferError, ChannelPair, PortPair, SampleTyp
 use clack_plugin::process::{PluginAudioConfiguration, ProcessStatus as ClapProcessStatus};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_media_core::{
+    MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+    MidiKind, MidiProgram, MidiValue, MusicalTimeInfo, NoteKey, TimeBase, TransportStatus,
+};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
-    ParamId, ParamInfo, ProcessConfig, ProcessResult, ProcessStatus, sort_events_by_frame_offset,
+    ParamId, ParamInfo, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    sort_events_by_frame_offset,
 };
 
 /// Channel capacity negotiated by this fixture: one stereo port pair.
@@ -566,8 +575,7 @@ pub(crate) fn build_block_views<'p>(
 // ---------------------------------------------------------------------------
 
 /// Translates one `UnknownEvent` into a neutral [`Event`] when it is
-/// a parameter-value event for `param` — the only event kind this
-/// fixture consumes.
+/// a parameter-value event for `param`.
 ///
 /// Defined skips (the event simply does not enter the list):
 /// non-`ParamValue` event kinds (notes/MIDI/transport — transport
@@ -594,9 +602,267 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
     ))
 }
 
+// ---------------------------------------------------------------------------
+// Instrument events (notes / raw MIDI) and transport
+// ---------------------------------------------------------------------------
+
+/// CLAP's PPQN is not carried on the wire — the `test_instrument`
+/// fixture fixes this resolution for its musical-time mapping
+/// (`position_ticks = round(song_pos_beats * CLAP_PPQN)`).
+pub(crate) const CLAP_PPQN: u16 = 960;
+
+/// Maps a CLAP `[0.0, 1.0]` velocity/pressure to the neutral
+/// canonical `u32` scale-to-max domain — `round(v * u32::MAX)` after
+/// clamping non-finite/out-of-range input to the defined endpoints.
+fn canonical_u32(unit: f64) -> u32 {
+    let clamped = if unit.is_finite() {
+        unit.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let scaled = (clamped * f64::from(u32::MAX)).round() as u32;
+    scaled
+}
+
+/// Builds the neutral [`MidiEvent`] routing for one CLAP event —
+/// group `ZERO` (MIDI 1.0 traffic), the concrete channel from the
+/// PCKN match or the MIDI status byte.
+fn midi_envelope(channel: u8) -> Option<(MidiGroup, MidiChannel)> {
+    let channel = MidiChannel::new(channel).ok()?;
+    Some((MidiGroup::ZERO, channel))
+}
+
+/// Extracts the concrete key from a [`Match`] — `Match::All` has no
+/// single key and is a defined skip.
+fn specific_u8(v: Match<u16>) -> Option<u8> {
+    match v {
+        Match::Specific(k) if k <= 127 => u8::try_from(k).ok(),
+        _ => None,
+    }
+}
+
+/// Translates one note/core event into a neutral [`Event`] carrying
+/// [`EventKind::Midi`] — used by `test_instrument`'s event surface.
+///
+/// Defined skips: `Match::All`/out-of-range PCKN fields (no concrete
+/// key/channel), non-finite velocities (mapped to `0`), event kinds
+/// the fixture does not consume (note choke/end, expression,
+/// note-specific controllers).
+fn translate_note_event(unknown: &UnknownEvent) -> Option<Event> {
+    let (kind, channel) = match unknown.as_core_event()? {
+        CoreEventSpace::NoteOn(note) => {
+            let key = specific_u8(note.key())?;
+            let channel = match note.channel() {
+                Match::Specific(c) if c <= 15 => u8::try_from(c).ok()?,
+                _ => return None,
+            };
+            (
+                MidiKind::NoteOn {
+                    key: NoteKey::new(key).ok()?,
+                    velocity: canonical_u32(note.velocity()),
+                },
+                channel,
+            )
+        }
+        CoreEventSpace::NoteOff(note) => {
+            let key = specific_u8(note.key())?;
+            let channel = match note.channel() {
+                Match::Specific(c) if c <= 15 => u8::try_from(c).ok()?,
+                _ => return None,
+            };
+            (
+                MidiKind::NoteOff {
+                    key: NoteKey::new(key).ok()?,
+                    velocity: canonical_u32(note.velocity()),
+                },
+                channel,
+            )
+        }
+        CoreEventSpace::Midi(midi) => return translate_raw_midi(midi, unknown.header().time()),
+        _ => return None,
+    };
+    let (group, channel) = midi_envelope(channel)?;
+    Some(Event::new(
+        unknown.header().time(),
+        EventKind::Midi(MidiEvent {
+            group,
+            channel,
+            kind,
+        }),
+    ))
+}
+
+/// Translates a raw MIDI 1.0 `clap_event_midi` (3 data bytes) into a
+/// neutral [`Event`]. Only channel-voice messages map; system
+/// messages and running-status continuations (status `< 0x80`) are
+/// defined skips.
+fn translate_raw_midi(midi: &ClapMidiEvent, time: u32) -> Option<Event> {
+    let [status, d1, d2] = midi.data();
+    // Every channel-voice status consumes `d1` as a 7-bit data byte;
+    // `d2` is data for all but program change / channel pressure
+    // (where it is ignored pad). Out-of-range bytes are malformed
+    // MIDI 1.0 — a defined skip, never a wrapped canonical value.
+    let d2_is_data = matches!(status & 0xF0, 0x80 | 0x90 | 0xA0 | 0xB0 | 0xE0);
+    if status < 0x80 || d1 > 0x7F || (d2_is_data && d2 > 0x7F) {
+        return None;
+    }
+    let kind = match status & 0xF0 {
+        0x80 => MidiKind::NoteOff {
+            key: NoteKey::new(d1).ok()?,
+            velocity: MidiValue::from_u7(d2),
+        },
+        0x90 => MidiKind::NoteOn {
+            key: NoteKey::new(d1).ok()?,
+            velocity: MidiValue::from_u7(d2),
+        },
+        0xA0 => MidiKind::PolyPressure {
+            key: NoteKey::new(d1).ok()?,
+            pressure: MidiValue::from_u7(d2),
+        },
+        0xB0 => MidiKind::ControlChange {
+            controller: MidiController::new(d1).ok()?,
+            value: MidiValue::from_u7(d2),
+        },
+        0xC0 => MidiKind::ProgramChange {
+            program: MidiProgram::new(d1).ok()?,
+        },
+        0xD0 => MidiKind::ChannelPressure {
+            pressure: MidiValue::from_u7(d1),
+        },
+        0xE0 => {
+            // 14-bit bend `0..=16383`, center `8192` → canonical
+            // signed scale-to-max via the neutral `MidiValue` law.
+            let raw = u16::from(d1) | (u16::from(d2) << 7);
+            MidiKind::PitchBend {
+                value: MidiValue::bend_from_u14(raw),
+            }
+        }
+        _ => return None,
+    };
+    let (group, channel) = midi_envelope(status & 0x0F)?;
+    Some(Event::new(
+        time,
+        EventKind::Midi(MidiEvent {
+            group,
+            channel,
+            kind,
+        }),
+    ))
+}
+
+/// Translates one `UnknownEvent` into a neutral [`Event`] for
+/// `test_instrument`'s input surface — parameter changes plus
+/// notes/raw MIDI. Transport arrives via `Process::transport`, not
+/// the event list.
+pub(crate) fn translate_instrument_event(
+    unknown: &UnknownEvent,
+    param: &ParamInfo,
+) -> Option<Event> {
+    translate_param_event(unknown, param).or_else(|| translate_note_event(unknown))
+}
+
+/// Maps the CLAP `Process::transport` snapshot to the neutral
+/// [`TransportInfo`]. `None` input → `None` output (no transport
+/// declared for the block).
+///
+/// Mapping law: `IS_PLAYING` → [`TransportStatus::Playing`],
+/// otherwise `Stopped` (CLAP has no paused state). Position is the
+/// seconds timeline projected onto the sample-rate [`TimeBase`];
+/// musical info is present only when the host supplies both the
+/// beats timeline and a positive tempo — `position_ticks =
+/// round(song_pos_beats * CLAP_PPQN)`, `bpm_milli = round(tempo *
+/// 1000)`. An active loop maps to a [`MediaRange`] over the seconds
+/// loop bounds. Missing/invalid fields degrade to `None` fields —
+/// the fixture's click oracle then stays silent, matching the VST3
+/// fixture's missing-musical-info law.
+///
+/// **RT contract:** RT-suitable — bounded arithmetic, no allocation.
+pub(crate) fn transport_info(
+    transport: Option<&TransportEvent>,
+    sample_rate: u32,
+) -> Option<TransportInfo> {
+    let event = transport?;
+    let flags = event.flags;
+    let status = if flags.contains(TransportFlags::IS_PLAYING) {
+        TransportStatus::Playing
+    } else {
+        TransportStatus::Stopped
+    };
+    let Ok(base) = TimeBase::sample_rate(sample_rate) else {
+        return None;
+    };
+    // song_pos_seconds → samples at the negotiated rate; a negative
+    // or non-finite position clamps to 0 (defined). `FixedPoint`
+    // converts through `to_float` — the CLAP fixed-point decimal.
+    let seconds = event.song_pos_seconds.to_float();
+    let seconds = if seconds.is_finite() {
+        seconds.max(0.0)
+    } else {
+        0.0
+    };
+    #[expect(clippy::cast_possible_truncation)]
+    let position_ticks = (seconds * f64::from(sample_rate)).round() as i64;
+    let position = MediaTime::new(position_ticks, base);
+
+    let mut info = TransportInfo::new(status, position);
+
+    if flags.contains(TransportFlags::IS_LOOP_ACTIVE)
+        && flags.contains(TransportFlags::HAS_SECONDS_TIMELINE)
+    {
+        let start = event.loop_start_seconds.to_float().max(0.0);
+        let end = event.loop_end_seconds.to_float().max(start);
+        #[expect(clippy::cast_possible_truncation)]
+        let start_ticks = (start * f64::from(sample_rate)).round() as i64;
+        #[expect(clippy::cast_possible_truncation)]
+        let len_ticks = ((end - start) * f64::from(sample_rate)).round() as i64;
+        if len_ticks > 0 {
+            info = info.with_loop_range(MediaRange::new(
+                MediaTime::new(start_ticks, base),
+                MediaDuration::new(len_ticks, base),
+            ));
+        }
+    }
+
+    if flags.contains(TransportFlags::HAS_BEATS_TIMELINE)
+        && flags.contains(TransportFlags::HAS_TEMPO)
+        && event.tempo.is_finite()
+        && event.tempo > 0.0
+    {
+        let beats = event.song_pos_beats.to_float();
+        let bar_start = event.bar_start.to_float();
+        #[expect(clippy::cast_possible_truncation)]
+        let position_ticks = (beats * f64::from(CLAP_PPQN)).round() as i64;
+        #[expect(clippy::cast_possible_truncation)]
+        let bar_start_tick = (bar_start * f64::from(CLAP_PPQN)).round() as i64;
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let bpm_milli = (event.tempo * 1000.0).round() as u32;
+        let (sig_num, sig_den) = if flags.contains(TransportFlags::HAS_TIME_SIGNATURE) {
+            (
+                u8::try_from(event.time_signature_numerator).unwrap_or(0),
+                u8::try_from(event.time_signature_denominator).unwrap_or(0),
+            )
+        } else {
+            (0, 0)
+        };
+        info = info.with_musical(MusicalTimeInfo {
+            position_ticks,
+            bar_start_tick,
+            bpm_milli,
+            ppqn: CLAP_PPQN,
+            sig_num,
+            sig_den,
+        });
+    }
+    Some(info)
+}
+
 /// Translates the input event list into a validated neutral
 /// [`EventList`] borrowing `scratch.events` — allocation-free (pushes
 /// stay within the pre-allocated capacity; bounds are checked first).
+/// `translate` is the fixture's event-kind policy: `test_gain`-family
+/// plugins pass [`translate_param_event`], `test_instrument` passes
+/// [`translate_instrument_event`].
 ///
 /// CLAP requires sorted input events; if a host still delivers
 /// unsorted ones, the list is re-ordered with
@@ -617,8 +883,8 @@ pub(crate) fn translate_param_event(unknown: &UnknownEvent, param: &ParamInfo) -
 pub(crate) fn translate_events<'a>(
     input: &InputEvents<'_>,
     scratch: &'a mut BlockScratch,
-    param: &ParamInfo,
     block_frames: u32,
+    translate: impl Fn(&UnknownEvent) -> Option<Event>,
 ) -> Result<EventList<'a>, PluginError> {
     if input.len() as usize > MAX_EVENTS_PER_BLOCK {
         return Err(PluginError::Message("event count exceeds per-block bound"));
@@ -628,7 +894,7 @@ pub(crate) fn translate_events<'a>(
     let mut sorted = true;
     let mut previous = 0_u32;
     for unknown in input.iter() {
-        let Some(event) = translate_param_event(unknown, param) else {
+        let Some(event) = translate(unknown) else {
             continue;
         };
         // Defined skip: an out-of-block offset drops just that event —
@@ -687,5 +953,60 @@ pub(crate) fn map_process_status(result: ProcessResult) -> Result<ClapProcessSta
         _ => Err(PluginError::Message(
             "processor returned an unmapped status",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clack_common::events::Pckn;
+    use clack_common::events::event_types::{NoteOffEvent, NoteOnEvent};
+    use clack_common::events::io::EventBuffer;
+
+    fn pckn() -> Pckn {
+        Pckn::new(
+            Match::All,
+            Match::Specific(0),
+            Match::Specific(69),
+            Match::All,
+        )
+    }
+
+    /// Structured CLAP note events must surface as neutral
+    /// `EventKind::Midi` — `test_instrument`'s only note input path.
+    #[test]
+    fn note_on_and_off_translate_to_neutral_midi() {
+        let mut buffer = EventBuffer::new();
+        buffer.push(&NoteOnEvent::new(0, pckn(), 1.0));
+        buffer.push(&NoteOffEvent::new(8, pckn(), 0.0));
+        let input = buffer.as_input();
+        let mut iter = input.iter();
+        let on = translate_note_event(iter.next().unwrap()).unwrap();
+        let off = translate_note_event(iter.next().unwrap()).unwrap();
+        assert!(matches!(
+            on.kind(),
+            EventKind::Midi(m) if matches!(m.kind, MidiKind::NoteOn { .. })
+        ));
+        assert!(matches!(
+            off.kind(),
+            EventKind::Midi(m) if matches!(m.kind, MidiKind::NoteOff { .. })
+        ));
+    }
+
+    /// Raw MIDI 1.0 bytes map channel-voice messages to the same
+    /// neutral kinds — CC7 included (`test_instrument`'s volume).
+    #[test]
+    fn raw_midi_bytes_translate_to_neutral_midi() {
+        let mut buffer = EventBuffer::new();
+        // CC7 = 0 on channel 0.
+        buffer.push(&ClapMidiEvent::new(0, 0, [0xB0, 7, 0]));
+        let input = buffer.as_input();
+        let event = translate_note_event(input.iter().next().unwrap()).unwrap();
+        assert!(matches!(
+            event.kind(),
+            EventKind::Midi(m)
+                if matches!(m.kind, MidiKind::ControlChange { controller, value }
+                    if controller.get() == 7 && value == 0)
+        ));
     }
 }
