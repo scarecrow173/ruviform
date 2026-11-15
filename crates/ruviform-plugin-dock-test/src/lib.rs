@@ -48,4 +48,4 @@ pub mod scenario;
 
 pub use artifact::{PLUGIN_PATH_ENV, fixture_lib_name, resolve_artifact, sha256_hex};
 pub use probe::PluginHostProbe;
-pub use scenario::{LaneEnvironment, run_all};
+pub use scenario::{HEADLESS_MATRIX, LaneEnvironment, run_all};

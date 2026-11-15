@@ -32,8 +32,6 @@
 //! **RT contract:** non-RT only — real OS window, dlopen,
 //! filesystem. **Test-only:** nothing here ships.
 
-use std::collections::BTreeSet;
-
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, HostCommand,
@@ -54,9 +52,9 @@ use ruviform_ui_test::scenario::plugin_dock::{
 };
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::{
-    CaseId, RunId, ScenarioCapability, ScenarioDriver, ScenarioError, ScenarioId, ScenarioOutcome,
-    ScenarioReport, ScenarioSpec, ScenarioVerdict, SemanticGuiTest, TargetQuery, run_scenario,
-    settle_until,
+    CaseId, RunId, ScenarioCapability, ScenarioDriver, ScenarioEntry, ScenarioError, ScenarioId,
+    ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioVerdict,
+    SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
 };
 use serde_json::{Map, Value, json};
 
@@ -91,8 +89,34 @@ struct PluginUnavailable {
     prerequisite: bool,
 }
 
+/// Session-scoped lane context for the real-window catalog — the
+/// live `RealOsGuiTest`, the mounted window/view, the lane
+/// environment, and the plugin pair/error/evidence resolved up
+/// front. Only `real-editor-attach` consumes the plugin fields; the
+/// window-only cases ignore them.
+struct RealDockContext<'a> {
+    /// The live session driver — `run_scenario`'s `G`.
+    gui: &'a mut RealOsGuiTest,
+    /// The mounted window id.
+    window: WindowId,
+    /// The mounted view instance id.
+    view: ViewInstanceId,
+    /// Lane environment snapshot (borrowed — the session is
+    /// short-lived).
+    env: &'a LaneEnvironment,
+    /// The resolved `(library, evidence)` pair, when the artifact
+    /// loaded.
+    plugin: Option<&'a PluginPair>,
+    /// Why the plugin is unavailable, when it is.
+    plugin_error: Option<&'a PluginUnavailable>,
+    /// The artifact evidence identity, when the artifact loaded.
+    artifact: Option<&'a PluginArtifactEvidence>,
+}
+
 /// Runs the four real-window cases inside one `RealOsGuiTest`
-/// session and returns their reports in case order.
+/// session and returns their reports in case order — a thin
+/// projection over [`real_entries`], the session-scoped catalog the
+/// blocked path also reads so case ids/required caps never drift.
 ///
 /// The plugin artifact is resolved/hashed/loaded once up front — a
 /// missing or unloadable binary degrades only `real-editor-attach`
@@ -134,20 +158,19 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
                     "real-window session reported no mounted window",
                 );
             };
-            vec![
-                run_window_mount(gui, window, view, env),
-                run_native_slot(gui, window, view, env),
-                run_editor_attach(
-                    gui,
-                    window,
-                    view,
-                    env,
-                    plugin.as_ref().ok(),
-                    plugin_error.as_ref(),
-                    plugin_evidence.as_ref(),
-                ),
-                run_capture(gui, window, view, env),
-            ]
+            // The session-scoped catalog — `real_entries` rows run
+            // through `run_entries` against the live context.
+            let entries = real_entries();
+            let mut ctx = RealDockContext {
+                gui,
+                window,
+                view,
+                env,
+                plugin: plugin.as_ref().ok(),
+                plugin_error: plugin_error.as_ref(),
+                artifact: plugin_evidence.as_ref(),
+            };
+            run_entries(&entries, &run_id, &mut ctx)
         },
     );
 
@@ -172,24 +195,68 @@ fn slot_key() -> ComponentKey {
     ComponentKey(PLUGIN_DOCK_SLOT_KEY.to_string())
 }
 
-/// The `rf631.plugin-dock-real` [`ScenarioSpec`] for `case` —
-/// `required` is the capability pre-flight set; `artifact` (when the
-/// plugin binary resolved) is recorded under
-/// `environment.plugin_artifact`.
-fn real_spec(
-    run_id: &RunId,
-    case: &str,
-    required: &[ScenarioCapability],
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioSpec {
+/// The `{"lane": "real-window-dock"}` spec extras shared by the
+/// window-only real cases — spec-level declaration only;
+/// `finalize` overwrites `report.environment` post-run.
+fn real_window_extras(_: &RealDockContext<'_>) -> ScenarioSpecExtras {
+    ScenarioSpecExtras {
+        environment: Some(json!({ "lane": "real-window-dock" })),
+        timeout_ms: None,
+    }
+}
+
+/// `real-editor-attach` spec extras — the lane marker plus the
+/// plugin artifact identity when the binary resolved (what
+/// `real_spec` used to stamp under `environment.plugin_artifact`).
+fn editor_attach_extras(ctx: &RealDockContext<'_>) -> ScenarioSpecExtras {
     let mut environment = Map::from_iter([("lane".to_string(), json!("real-window-dock"))]);
-    if let Some(artifact) = artifact {
+    if let Some(artifact) = ctx.artifact {
         environment.insert("plugin_artifact".to_string(), json!(artifact));
     }
-    ScenarioSpec::new(run_id.clone(), ScenarioId::new(SCENARIO))
-        .case(CaseId::new(case))
-        .required(required.iter().copied().collect::<BTreeSet<_>>())
-        .environment(Value::Object(environment))
+    ScenarioSpecExtras {
+        environment: Some(Value::Object(environment)),
+        timeout_ms: None,
+    }
+}
+
+/// The `rf631.plugin-dock-real` catalog rows — session-scoped: the
+/// entries' `run` needs the live `RealOsGuiTest`, so the table is
+/// produced per call (the entries themselves are `'static` fn items;
+/// only the context type carries the session borrow).
+/// `blocked_reports` reads the same rows for case ids and required
+/// capabilities, so the blocked path can never drift from the live
+/// catalog.
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 4] {
+    [
+        ScenarioEntry {
+            case: "real-window-mount",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::SemanticAction],
+            spec_extras: real_window_extras,
+            run: real_window_mount_case,
+        },
+        ScenarioEntry {
+            case: "real-native-slot",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: real_window_extras,
+            run: real_native_slot_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-attach",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_attach_case,
+        },
+        ScenarioEntry {
+            case: "real-capture",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::VisualCapture],
+            spec_extras: real_window_extras,
+            run: real_capture_case,
+        },
+    ]
 }
 
 /// Resolves + hashes + loads the `test_gain` artifact once for the
@@ -487,52 +554,43 @@ fn steps_outcome(
 /// `NotRun` + `observed.environment_blocked`, the
 /// `test-ui-real-scenario` precedent. `environment_kind` stays the
 /// honest "no real environment produced this" bucket; nothing
-/// executed, so `RealWindow` is never claimed here.
+/// executed, so `RealWindow` is never claimed here. Case ids and
+/// required capabilities come from [`real_entries`] — the same
+/// catalog rows the live path runs.
 fn blocked_reports(
     run_id: &RunId,
     env: &LaneEnvironment,
     artifact: Option<&PluginArtifactEvidence>,
     detail: &str,
 ) -> Vec<ScenarioReport> {
-    [
-        (
-            "real-window-mount",
-            vec![ScenarioCapability::SemanticAction],
-        ),
-        (
-            "real-native-slot",
-            vec![ScenarioCapability::NativePluginDock],
-        ),
-        (
-            "real-editor-attach",
-            vec![ScenarioCapability::NativePluginDock],
-        ),
-        ("real-capture", vec![ScenarioCapability::VisualCapture]),
-    ]
-    .into_iter()
-    .map(|(case, required)| {
-        let mut report = ScenarioReport::new(
-            run_id.clone(),
-            ScenarioId::new(SCENARIO),
-            Some(CaseId::new(case)),
-            ScenarioDriver::RealOs,
-        );
-        report.required = required.into_iter().collect();
-        report.verdict = ScenarioVerdict::NotRun;
-        report.detail = Some(detail.to_string());
-        report.observed = Some(json!({
-            "observed": "environment_blocked",
-            "detail": detail,
-        }));
-        finalize(
-            report,
-            env,
-            EnvironmentKind::DeterministicBackend,
-            artifact,
-            Map::new(),
-        )
-    })
-    .collect()
+    // `'static` context: only entry metadata is read here — no
+    // `RealDockContext` is ever constructed on this path.
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+    entries
+        .iter()
+        .map(|entry| {
+            let mut report = ScenarioReport::new(
+                run_id.clone(),
+                ScenarioId::new(entry.scenario),
+                Some(CaseId::new(entry.case)),
+                ScenarioDriver::RealOs,
+            );
+            report.required = entry.required.iter().copied().collect();
+            report.verdict = ScenarioVerdict::NotRun;
+            report.detail = Some(detail.to_string());
+            report.observed = Some(json!({
+                "observed": "environment_blocked",
+                "detail": detail,
+            }));
+            finalize(
+                report,
+                env,
+                EnvironmentKind::DeterministicBackend,
+                artifact,
+                Map::new(),
+            )
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------
@@ -543,20 +601,10 @@ fn blocked_reports(
 /// window and its `NativeSlot` component resolves + observes through
 /// the semantic port — contract evidence that the real window hosts
 /// the declared slot region (not yet dock evidence).
-fn run_window_mount(
-    gui: &mut RealOsGuiTest,
-    window: WindowId,
-    view: ViewInstanceId,
-    env: &LaneEnvironment,
-) -> ScenarioReport {
-    let run_id = RunId::new(RUN_ID);
-    let spec = real_spec(
-        &run_id,
-        "real-window-mount",
-        &[ScenarioCapability::SemanticAction],
-        None,
-    );
-    let report = run_scenario(gui, &spec, |gui| {
+fn real_window_mount_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let key = slot_key();
         let target = gui.resolve_target(&TargetQuery::new(window, view).component(key.clone()))?;
         let _snapshot = gui.observe(&target, &key)?;
@@ -574,7 +622,13 @@ fn run_window_mount(
             .push("real-window:semantic-mount:plugin.editor".to_string());
         Ok(outcome)
     });
-    finalize(report, env, EnvironmentKind::RealWindow, None, Map::new())
+    finalize(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
 }
 
 // ---------------------------------------------------------------------
@@ -687,20 +741,10 @@ fn native_slot_attempt(
 /// `container_token` observation → unbind/release → stale/forged
 /// lease rejection. Every executed step is a `pass`/`fail` row in
 /// `observed.steps`; the first failure halts the sequence honestly.
-fn run_native_slot(
-    gui: &mut RealOsGuiTest,
-    window: WindowId,
-    view: ViewInstanceId,
-    env: &LaneEnvironment,
-) -> ScenarioReport {
-    let run_id = RunId::new(RUN_ID);
-    let spec = real_spec(
-        &run_id,
-        "real-native-slot",
-        &[ScenarioCapability::NativePluginDock],
-        None,
-    );
-    let report = run_scenario(gui, &spec, |gui| {
+fn real_native_slot_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let mut steps = Vec::new();
         let attempt = native_slot_attempt(gui, window, view, &mut steps);
         Ok(steps_outcome(
@@ -722,7 +766,13 @@ fn run_native_slot(
             ],
         ))
     });
-    finalize(report, env, EnvironmentKind::RealWindow, None, Map::new())
+    finalize(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
 }
 
 // ---------------------------------------------------------------------
@@ -946,28 +996,18 @@ fn editor_attach_body(
 /// `NativePluginDock` (the adapter claims it only where the surface
 /// backend mints real container parents), then the body drives the
 /// attach chain — or reports the honest artifact/session failure.
-fn run_editor_attach(
-    gui: &mut RealOsGuiTest,
-    window: WindowId,
-    view: ViewInstanceId,
-    env: &LaneEnvironment,
-    plugin: Option<&PluginPair>,
-    plugin_error: Option<&PluginUnavailable>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
-    let run_id = RunId::new(RUN_ID);
-    let spec = real_spec(
-        &run_id,
-        "real-editor-attach",
-        &[ScenarioCapability::NativePluginDock],
-        artifact,
-    );
-    let report = run_scenario(gui, &spec, |gui| {
+fn real_editor_attach_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         Ok(editor_attach_body(gui, window, view, plugin, plugin_error))
     });
     finalize(
         report,
-        env,
+        ctx.env,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -982,20 +1022,10 @@ fn run_editor_attach(
 /// are the window/slot region through the OS capture backend
 /// (`PrintWindow`/`BitBlt`), explicitly NOT plugin editor pixels:
 /// no editor surface exists (`createView` → null).
-fn run_capture(
-    gui: &mut RealOsGuiTest,
-    window: WindowId,
-    view: ViewInstanceId,
-    env: &LaneEnvironment,
-) -> ScenarioReport {
-    let run_id = RunId::new(RUN_ID);
-    let spec = real_spec(
-        &run_id,
-        "real-capture",
-        &[ScenarioCapability::VisualCapture],
-        None,
-    );
-    let report = run_scenario(gui, &spec, |gui| {
+fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let target = gui.resolve_target(&TargetQuery::new(window, view))?;
         match gui.capture_frame(&target)? {
             CaptureOutcome::Captured(image) => {
@@ -1033,7 +1063,13 @@ fn run_capture(
             ))),
         }
     });
-    finalize(report, env, EnvironmentKind::RealWindow, None, Map::new())
+    finalize(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
 }
 
 #[cfg(test)]
@@ -1073,13 +1109,32 @@ mod tests {
 
     /// A session that never started must produce four `NotRun`
     /// reports tagged `environment_blocked` — fail-closed, never a
-    /// fabricated pass and never a `RealWindow` claim.
+    /// fabricated pass and never a `RealWindow` claim. Case ids and
+    /// required capabilities come from the same `real_entries`
+    /// catalog the live path runs, so they are asserted against it
+    /// directly — drift fails here.
     #[test]
     fn blocked_reports_fail_closed() {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
         assert_eq!(reports.len(), 4, "four real-dock cases");
+
+        // The blocked path reads the same catalog rows — case ids
+        // and required caps must match exactly.
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+        assert_eq!(reports.len(), entries.len());
+        for (entry, report) in entries.iter().zip(reports.iter()) {
+            assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
+            assert_eq!(report.scenario.as_str(), entry.scenario);
+            assert_eq!(
+                report.required,
+                entry.required.iter().copied().collect(),
+                "required-capability drift for `{}`",
+                entry.case
+            );
+        }
+
         for report in &reports {
             assert_eq!(report.verdict, ScenarioVerdict::NotRun);
             assert!(matches!(report.driver, ScenarioDriver::RealOs));
