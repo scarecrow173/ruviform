@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-test-clap"
-description = "Test-only CLAP test plugin (test_gain) for Ruviform host verification — not a shipping product"
+description = "Test-only CLAP test plugin suite (test_gain/test_fault/test_stateful) for Ruviform host verification — not a shipping product"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

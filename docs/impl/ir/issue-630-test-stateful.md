@@ -201,7 +201,7 @@ issue-630-test-stateful.md` + `docs/designs/issue-630-test-stateful.md`。
 - `mise run fmt-check` — pass
 - `mise run check`（両 crate）— pass
 - `mise run lint`（両 crate）— pass（`clippy -- -D warnings`）
-- `mise run test`（両 crate）— VST3 unit 69 pass / CLAP unit 35
+- `mise run test`（両 crate）— VST3 unit 70 pass / CLAP unit 35
   pass
 - `mise run test`（host_path）— VST3 15 pass / CLAP 10 pass
 - `mise run check-l1-real-plugin` — pass

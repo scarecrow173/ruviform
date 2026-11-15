@@ -47,7 +47,7 @@
 | `mise run fmt-check` | pass | 0 |
 | `mise run check ruviform-plugin-test-vst3` | pass | 0 |
 | `mise run lint ruviform-plugin-test-vst3` | pass（`clippy --all-targets -- -D warnings` 相当） | 0 |
-| `mise run test ruviform-plugin-test-vst3` | 69 unit + host_path 15 pass | 0 |
+| `mise run test ruviform-plugin-test-vst3` | 70 unit + host_path 15 pass | 0 |
 | `mise run check ruviform-plugin-test-clap` | pass | 0 |
 | `mise run lint ruviform-plugin-test-clap` | pass | 0 |
 | `mise run test ruviform-plugin-test-clap` | 35 unit + host_path 10 pass | 0 |
@@ -77,7 +77,7 @@ cargo 直接実行は補助証拠（canonical = mise）。`*-msrv`/`*-full` lane
 ## 境界遵守
 
 - production crate（`ruviform-plugin-{vst3,clap,host,export,core}`）zero-diff。
-- `unsafe` 新規なし（clack macro 生成 static のみ）。
+- `unsafe` は VST3 の `IBStream` FFI 境界に限定（`stream_read_all`/`stream_write_all` helper、`ComponentStateSurface` dispatch call site、COM-level `IBStream` test double — 全て `#[expect(unsafe_code)]` + SAFETY コメント付き）+ clack macro 生成 static のみ。state verb が `IBStream` を必要とするため不可避で、spec non-goal に carve-out として明記済み。
 - `rt_` test は state verb を踏まない。state verb は non-RT 面（VST3 component/controller、CLAP main-thread `PluginStateImpl`）にのみ存在。
 - `Cargo.lock` 差分なし（`clack-extensions` feature 追加のみ、新規依存なし）。
 - `F:` ドライブに中間生成物なし。

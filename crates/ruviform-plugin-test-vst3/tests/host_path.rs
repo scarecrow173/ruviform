@@ -540,6 +540,21 @@ fn stateful_restore_rejects_malformed_blob() {
     let mut corrupt = plugin.save_state().expect("save_state");
     corrupt[4] ^= 0xFF;
     assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
+    // A well-framed blob with one trailing byte → the adapter's
+    // `unframe_state` requires `ctrl_end == blob.len()` →
+    // `PluginFailed` before any plugin verb runs.
+    let mut trailing = plugin.save_state().expect("save_state");
+    trailing.push(0x00);
+    assert_eq!(
+        plugin.restore_state(&trailing),
+        Err(HostError::PluginFailed)
+    );
+    // A well-framed blob whose component payload carries a NaN
+    // gain → the codec's non-finite check → `kResultFalse` →
+    // `PluginFailed` at `component.setState`.
+    let mut nan = plugin.save_state().expect("save_state");
+    nan[12..20].copy_from_slice(&f64::NAN.to_le_bytes());
+    assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
     // The instance is still alive and its state surface intact.
     plugin.save_state().expect("save_state still works");
 }

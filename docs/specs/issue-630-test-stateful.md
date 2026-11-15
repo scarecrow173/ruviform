@@ -196,7 +196,12 @@ verifiable contract rather than an untested code path.
 
 - No production crate changes (`ruviform-plugin-{vst3,clap,host,
   export,core}` stay zero-diff); no new `unsafe` beyond the
-  clack-macro-generated entry statics.
+  clack-macro-generated entry statics and the VST3 `IBStream`
+  FFI-boundary surface the state verbs require (`stream_read_all`/
+  `stream_write_all` helpers, the `ComponentStateSurface` dispatch
+  call sites, and the COM-level `IBStream` test double — all
+  `#[expect(unsafe_code)]`-gated with SAFETY comments per
+  `workspace.lints`).
 - `test_gain`/`test_fault`/`test_editor` class, descriptor, CID and
   DSP contracts unchanged; their state declines stay honest.
 - No preset/bank management, no GUI state, no migration of foreign

@@ -72,7 +72,9 @@ use ruviform_plugin_core::{
     BufferView, BufferViewMut, EventKind, EventList, PluginProcessor, PrepareError, ProcessConfig,
     ProcessContext, ProcessResult, TransportInfo,
 };
-use vst3::Steinberg::{IBStream, IBStreamTrait, TUID, kInvalidArgument, kResultOk, tresult};
+use vst3::Steinberg::{
+    IBStream, IBStreamTrait, TUID, kInvalidArgument, kResultFalse, kResultOk, tresult,
+};
 use vst3::{ComRef, uid};
 
 use crate::component::{ComponentStateSurface, TestComponent};
@@ -223,7 +225,8 @@ pub(crate) unsafe fn stream_read_all(state: *mut IBStream) -> Result<Vec<u8>, tr
         if got <= 0 {
             return Ok(out);
         }
-        out.extend_from_slice(&buf[..usize::try_from(got).unwrap_or(0)]);
+        let count = usize::try_from(got).unwrap_or(0).min(buf.len());
+        out.extend_from_slice(&buf[..count]);
     }
 }
 
@@ -241,13 +244,23 @@ pub(crate) unsafe fn stream_write_all(state: *mut IBStream, bytes: &[u8]) -> tre
     let mut written = 0_i32;
     // SAFETY: `stream` is a valid `IBStream`; `bytes` is a live
     // readable slice of the reported length.
-    unsafe {
+    let result = unsafe {
         stream.write(
             bytes.as_ptr().cast::<c_void>().cast_mut(),
             i32::try_from(bytes.len()).unwrap_or(i32::MAX),
             &raw mut written,
         )
+    };
+    if result != kResultOk {
+        return result;
     }
+    // A short write would silently truncate `getState` output —
+    // treat it as the defined rejection the caller maps to
+    // `PluginFailed`.
+    if usize::try_from(written).unwrap_or(0) != bytes.len() {
+        return kResultFalse;
+    }
+    kResultOk
 }
 
 // ---------------------------------------------------------------------------
@@ -757,5 +770,37 @@ mod tests {
             assert_eq!(controller.setState(ptr.as_ptr()), kNotImplemented);
             assert_eq!(controller.getState(ptr.as_ptr()), kNotImplemented);
         }
+    }
+
+    /// RT-contract test (Issue #22 lane): the stateful processor's
+    /// `process` — the `test_gain` event loop over the atomic cell —
+    /// performs no allocation inside the `assert_no_alloc` window.
+    /// Fixture/buffer/event-list setup stays outside; only the
+    /// measured call is inside.
+    #[test]
+    fn rt_process_through_shared_cell_is_allocation_free() {
+        let cell = SharedGain::new(GAIN_PARAM.default_value);
+        let mut processor = TestStatefulProcessor::new(cell.clone());
+        let events = [Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: GAIN_PARAM.id,
+                value: ParamValue::new(0.375).unwrap(), // → plain 0.75
+            }),
+        )];
+        let input = [vec![0.5_f32; 64], vec![-0.25; 64]];
+        let mut output = [vec![0.0_f32; 64], vec![0.0; 64]];
+        let frames = 64_u32;
+        let in_views: Vec<_> = input.iter().map(|c| &c[..]).collect();
+        let inputs = [PlanarBufferView::new(&in_views).unwrap()];
+        let mut out_views: Vec<_> = output.iter_mut().map(|c| &mut c[..]).collect();
+        let mut outputs = [PlanarBufferViewMut::new(&mut out_views).unwrap()];
+        let list = EventList::new(&events, frames).unwrap();
+        let mut context = ProcessContext::new();
+        assert_no_alloc::assert_no_alloc(|| {
+            processor.process(&inputs, &mut outputs, list, None, &mut context);
+        });
+        assert_eq!(output[0], vec![0.375_f32; 64]);
+        assert_eq!(cell.load(), 0.75);
     }
 }

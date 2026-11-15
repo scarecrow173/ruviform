@@ -30,7 +30,9 @@
 //! input events are ignored in this slice (`test_instrument` is a
 //! later class); `IProcessContextRequirements` returns `0` and the
 //! processor receives no transport. State (de)serialization reports
-//! `kNotImplemented` honestly — this fixture has no preset surface.
+//! `kNotImplemented` honestly on classes without a
+//! [`ComponentStateSurface`] — `test_stateful` is the suite's only
+//! state surface.
 //!
 //! ## Interior mutability
 //!
