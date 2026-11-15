@@ -37,6 +37,7 @@ use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot, ViewError}
 use ruviform_ui::{UiError, WindowId};
 use serde::{Deserialize, Serialize};
 
+pub mod catalog;
 pub mod fake;
 pub mod plugin_dock;
 pub mod runner;

@@ -2,7 +2,10 @@
 //! session-lifecycle cases).
 //!
 //! [`run_all`] executes the eight cases of the `rf631.plugin-dock`
-//! scenario and returns one [`ScenarioReport`] per case:
+//! scenario — a thin projection over [`HEADLESS_MATRIX`], the
+//! driver-independent catalog table the lane binary, the integration
+//! tests, and any future console share — and returns one
+//! [`ScenarioReport`] per case:
 //!
 //! | case                | driver            | honest outcome today                        |
 //! |---------------------|-------------------|---------------------------------------------|
@@ -27,7 +30,6 @@
 //!
 //! **RT contract:** non-RT only — dlopen, host dispatch, filesystem.
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use ruviform_audio_core::SampleRate;
@@ -50,8 +52,9 @@ use ruviform_ui_test::scenario::plugin_dock::{
     PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_view_spec,
 };
 use ruviform_ui_test::{
-    CaseId, FakeGuiTest, FakeNativeSlot, RunId, ScenarioCapability, ScenarioId, ScenarioOutcome,
-    ScenarioReport, ScenarioSpec, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery,
+    DriverBinding, FakeGuiTest, FakeNativeSlot, RunId, ScenarioCapability, ScenarioDriver,
+    ScenarioEntry, ScenarioMatrix, ScenarioOutcome, ScenarioReport, ScenarioSpec,
+    ScenarioSpecExtras, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, run_matrix,
     run_scenario,
 };
 use serde_json::{Map, Value, json};
@@ -75,61 +78,152 @@ pub struct LaneEnvironment {
 
 /// Runs every plugin-dock case and returns the reports in case order.
 ///
-/// The artifact is resolved/hashed/loaded once and shared: the
-/// `artifact` case performs the load (its verdict covers
-/// resolve/hash/load/discover) and later cases reuse the library —
-/// a load failure leaves `library_slot` empty and dependents report
-/// `NotRun` (prerequisite absent), never a fabricated pass.
+/// The lane is a thin projection over [`HEADLESS_MATRIX`]: `run_all`
+/// only builds the lane context and lets `run_matrix` sequence the
+/// catalog's `run_scenario` calls — the same table the binary, the
+/// integration tests, and any future console consume. The artifact
+/// is resolved/hashed/loaded once by the `artifact` case and shared
+/// through the context: a load failure leaves `library` empty and
+/// dependents report `NotRun` (prerequisite absent), never a
+/// fabricated pass.
 #[must_use]
 pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
-    let run_id = RunId::new(RUN_ID);
-    let mut reports = Vec::with_capacity(8);
-
-    reports.push(run_view_mount(&run_id, env));
-
-    let mut library_slot = None;
-    let mut artifact_slot = None;
-    reports.push(run_artifact_case(
-        &run_id,
-        env,
-        &mut library_slot,
-        &mut artifact_slot,
-    ));
-
-    reports.push(run_host_lifecycle(
-        &run_id,
-        env,
-        library_slot.as_ref(),
-        artifact_slot.as_ref(),
-    ));
-    reports.push(run_editor_attach(
-        &run_id,
-        env,
-        library_slot.as_ref(),
-        artifact_slot.as_ref(),
-    ));
-    reports.push(run_session_lifecycle(
-        &run_id,
-        env,
-        library_slot.as_ref(),
-        artifact_slot.as_ref(),
-    ));
-    reports.push(run_host_terminate(
-        &run_id,
-        env,
-        library_slot.as_ref(),
-        artifact_slot.as_ref(),
-    ));
-    reports.push(run_open_or_degrade(
-        &run_id,
-        env,
-        library_slot.as_ref(),
-        artifact_slot.as_ref(),
-    ));
-    reports.push(run_dock_pixels(&run_id, env));
-
-    reports
+    let mut ctx = HeadlessContext {
+        env: env.clone(),
+        library: None,
+        artifact: None,
+    };
+    run_matrix(&HEADLESS_MATRIX, &RunId::new(RUN_ID), &mut ctx)
 }
+
+/// Lane state threaded through the headless catalog — owned so the
+/// `&'static` [`HEADLESS_MATRIX`] stays `'static`-compatible. The
+/// `artifact` case fills `library`/`artifact`; later cases read them
+/// — empty means the prerequisite never landed and they fail closed
+/// to `NotRun`. Fields stay private: the matrix is the only
+/// execution path and `run_all` the only constructor.
+pub struct HeadlessContext {
+    /// Lane environment snapshot (owned clone of the caller's).
+    env: LaneEnvironment,
+    /// The loaded `test_gain` library — filled by the `artifact` case.
+    library: Option<Vst3Library>,
+    /// Artifact identity evidence — filled by the `artifact` case.
+    artifact: Option<PluginArtifactEvidence>,
+}
+
+/// `view-mount` declares no spec extras — no environment facts, no
+/// budget.
+fn view_mount_extras(_: &HeadlessContext) -> ScenarioSpecExtras {
+    ScenarioSpecExtras::none()
+}
+
+/// `{"claim": ...}` spec extras for the probe-driver cases — one fn
+/// per claim string because fn pointers cannot capture. `environment`
+/// is the spec-level declaration only; `finalize` overwrites
+/// `report.environment` with the real lane facts post-run.
+macro_rules! claim_extras {
+    ($($name:ident => $claim:literal,)*) => {
+        $(
+            fn $name(_: &HeadlessContext) -> ScenarioSpecExtras {
+                ScenarioSpecExtras {
+                    environment: Some(json!({ "claim": $claim })),
+                    timeout_ms: None,
+                }
+            }
+        )*
+    };
+}
+
+claim_extras! {
+    artifact_extras => "real-abi-artifact-identity",
+    host_lifecycle_extras => "real-abi-host-lifecycle",
+    editor_attach_extras => "real-abi-editor-attach-attempt",
+    session_lifecycle_extras => "real-abi-session-lifecycle",
+    host_terminate_extras => "real-abi-host-terminate",
+    open_or_degrade_extras => "real-abi-open-or-degrade",
+    dock_pixels_extras => "real-window-pixels-not-applicable",
+}
+
+/// The headless `rf631.plugin-dock` catalog — the single source the
+/// lane binary, the integration tests, and any future console
+/// consume. Bindings are driver columns: `Fake` honestly provides
+/// `SemanticAction`/`MultiWindow` only; `PluginHostProbe` claims no
+/// capability (artifact presence gates inside each case body).
+/// Catalog membership is a declaration, never a verdict — `run_all`
+/// is a thin projection over this table.
+pub static HEADLESS_MATRIX: ScenarioMatrix<'static, HeadlessContext> = ScenarioMatrix {
+    bindings: &[
+        DriverBinding {
+            driver: ScenarioDriver::Fake,
+            capabilities: &[
+                ScenarioCapability::SemanticAction,
+                ScenarioCapability::MultiWindow,
+            ],
+            cases: &[ScenarioEntry {
+                case: "view-mount",
+                scenario: PLUGIN_DOCK_SCENARIO,
+                required: &[ScenarioCapability::SemanticAction],
+                spec_extras: view_mount_extras,
+                run: view_mount_case,
+            }],
+        },
+        DriverBinding {
+            driver: ScenarioDriver::PluginHostProbe,
+            capabilities: &[],
+            cases: &[
+                ScenarioEntry {
+                    case: "artifact",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: artifact_extras,
+                    run: artifact_case,
+                },
+                ScenarioEntry {
+                    case: "host-lifecycle",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: host_lifecycle_extras,
+                    run: host_lifecycle_case,
+                },
+                ScenarioEntry {
+                    case: "editor-attach",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: editor_attach_extras,
+                    run: editor_attach_case,
+                },
+                ScenarioEntry {
+                    case: "session-lifecycle",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: session_lifecycle_extras,
+                    run: session_lifecycle_case,
+                },
+                ScenarioEntry {
+                    case: "host-terminate",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: host_terminate_extras,
+                    run: host_terminate_case,
+                },
+                ScenarioEntry {
+                    case: "open-or-degrade",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: open_or_degrade_extras,
+                    run: open_or_degrade_case,
+                },
+                ScenarioEntry {
+                    case: "dock-pixels",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[],
+                    spec_extras: dock_pixels_extras,
+                    run: dock_pixels_case,
+                },
+            ],
+        },
+    ],
+};
 
 // ---------------------------------------------------------------------
 // shared helpers
@@ -207,18 +301,6 @@ pub(crate) fn host_error_outcome(step: &str, error: HostError) -> ScenarioOutcom
     let mut outcome = ScenarioOutcome::new(verdict);
     outcome.detail = Some(format!("host step `{step}`: {error}"));
     outcome
-}
-
-/// The plugin-dock [`ScenarioSpec`] for `case` on the probe driver —
-/// `required` stays empty because the probe honestly claims no
-/// capability; artifact presence gates inside the body. `claim`
-/// records what evidence level the case asserts.
-fn probe_spec(run_id: &RunId, case: &str, claim: &str) -> ScenarioSpec {
-    let mut spec = ScenarioSpec::new(run_id.clone(), ScenarioId::new(PLUGIN_DOCK_SCENARIO))
-        .case(CaseId::new(case))
-        .required(BTreeSet::new());
-    spec.environment = Some(json!({ "claim": claim }));
-    spec
 }
 
 /// The defined process configuration for `Activate`: 48 kHz, block
@@ -735,12 +817,9 @@ fn teardown_editor_case(
 /// component. `required = {SemanticAction}` only: this case proves
 /// the declarative spec mounts and is observable; it is *not* dock,
 /// window, input, or pixel evidence.
-fn run_view_mount(run_id: &RunId, env: &LaneEnvironment) -> ScenarioReport {
+fn view_mount_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut gui = FakeGuiTest::new();
-    let spec = ScenarioSpec::new(run_id.clone(), ScenarioId::new(PLUGIN_DOCK_SCENARIO))
-        .case(CaseId::new("view-mount"))
-        .required(BTreeSet::from([ScenarioCapability::SemanticAction]));
-    let report = run_scenario(&mut gui, &spec, |gui| {
+    let report = run_scenario(&mut gui, spec, |gui| {
         let window = gui.open_window();
         let view = ViewInstanceId::new(1).expect("view id 1 is non-zero");
         gui.mount_view(window, view, plugin_dock_view_spec())?;
@@ -763,7 +842,7 @@ fn run_view_mount(run_id: &RunId, env: &LaneEnvironment) -> ScenarioReport {
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         EnvironmentKind::DeterministicBackend,
         None,
         Map::from_iter([("claim".to_string(), json!("semantic-view-mount-only"))]),
@@ -780,17 +859,14 @@ fn run_view_mount(run_id: &RunId, env: &LaneEnvironment) -> ScenarioReport {
 /// path/digest/id/name/vendor/version land in evidence. A missing
 /// file is `NotRun` (fail-closed); hash/load/discover failures are
 /// `Fail`. On success the loaded library and artifact evidence are
-/// handed to the later cases through the out-params.
-fn run_artifact_case(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library_slot: &mut Option<Vst3Library>,
-    artifact_slot: &mut Option<PluginArtifactEvidence>,
-) -> ScenarioReport {
+/// written into the lane context for the later cases.
+fn artifact_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "artifact", "real-abi-artifact-identity");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
-        let path = match artifact::resolve_artifact(env.plugin_path.as_deref()) {
+    let plugin_path = &ctx.env.plugin_path;
+    let library_slot = &mut ctx.library;
+    let artifact_slot = &mut ctx.artifact;
+    let report = run_scenario(&mut probe, spec, |_gui| {
+        let path = match artifact::resolve_artifact(plugin_path.as_deref()) {
             Ok(path) => path,
             Err(reason) => return Ok(not_run(reason)),
         };
@@ -848,13 +924,13 @@ fn run_artifact_case(
     });
     finalize(
         report,
-        env,
-        if library_slot.is_some() {
+        &ctx.env,
+        if ctx.library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
             EnvironmentKind::DeterministicBackend
         },
-        artifact_slot.as_ref(),
+        ctx.artifact.as_ref(),
         Map::new(),
     )
 }
@@ -868,15 +944,11 @@ fn run_artifact_case(
 /// Instantiate, Initialize, Activate (48 kHz, block 1..=512), then
 /// Deactivate + Destroy teardown. Every step that ran is recorded in
 /// `observed`; the first error maps to `Unsupported`/`Fail` honestly.
-fn run_host_lifecycle(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library: Option<&Vst3Library>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
+fn host_lifecycle_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "host-lifecycle", "real-abi-host-lifecycle");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let library = ctx.library.as_ref();
+    let artifact = ctx.artifact.as_ref();
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let (Some(library), Some(artifact)) = (library, artifact) else {
             return Ok(not_run(
                 "plugin artifact unavailable — see the `artifact` case verdict",
@@ -969,7 +1041,7 @@ fn run_host_lifecycle(
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         if library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
@@ -1111,15 +1183,11 @@ fn attempt_editor_attach(
 /// `Unsupported` with that detail — never `Pass`. A future editor
 /// fixture flipping this to `Pass` is contract-path evidence only,
 /// still not a real-Dock claim (that stays `dock-pixels`).
-fn run_editor_attach(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library: Option<&Vst3Library>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
+fn editor_attach_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "editor-attach", "real-abi-editor-attach-attempt");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let library = ctx.library.as_ref();
+    let artifact = ctx.artifact.as_ref();
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let (Some(library), Some(artifact)) = (library, artifact) else {
             return Ok(not_run(
                 "plugin artifact unavailable — see the `artifact` case verdict",
@@ -1177,7 +1245,7 @@ fn run_editor_attach(
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         if library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
@@ -1269,15 +1337,11 @@ fn session_lifecycle_steps(
 /// release → slot/generation-bumped re-`begin_session` → `Destroy`.
 /// Every step that ran is recorded in `observed`; the first violated
 /// expectation maps to `Fail`.
-fn run_session_lifecycle(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library: Option<&Vst3Library>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
+fn session_lifecycle_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "session-lifecycle", "real-abi-session-lifecycle");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let library = ctx.library.as_ref();
+    let artifact = ctx.artifact.as_ref();
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let (Some(library), Some(artifact)) = (library, artifact) else {
             return Ok(not_run(
                 "plugin artifact unavailable — see the `artifact` case verdict",
@@ -1315,7 +1379,7 @@ fn run_session_lifecycle(
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         if library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
@@ -1427,15 +1491,11 @@ fn host_terminate_steps(
 /// notify_terminated(HostLost)` — asserts `Terminated{HostLost}`
 /// fires exactly once (a repeated notify is a no-op), the session
 /// converges to `Closed`, and the instance binding is released.
-fn run_host_terminate(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library: Option<&Vst3Library>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
+fn host_terminate_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "host-terminate", "real-abi-host-terminate");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let library = ctx.library.as_ref();
+    let artifact = ctx.artifact.as_ref();
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let (Some(library), Some(artifact)) = (library, artifact) else {
             return Ok(not_run(
                 "plugin artifact unavailable — see the `artifact` case verdict",
@@ -1473,7 +1533,7 @@ fn run_host_terminate(
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         if library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
@@ -1555,15 +1615,11 @@ fn open_or_degrade_steps(
 /// `Failed{Unsupported}` with zero `Degraded`/attach-family events
 /// (a degrade is never fabricated), then the same adapter-free close
 /// converge and registry teardown as `session-lifecycle`.
-fn run_open_or_degrade(
-    run_id: &RunId,
-    env: &LaneEnvironment,
-    library: Option<&Vst3Library>,
-    artifact: Option<&PluginArtifactEvidence>,
-) -> ScenarioReport {
+fn open_or_degrade_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "open-or-degrade", "real-abi-open-or-degrade");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let library = ctx.library.as_ref();
+    let artifact = ctx.artifact.as_ref();
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let (Some(library), Some(artifact)) = (library, artifact) else {
             return Ok(not_run(
                 "plugin artifact unavailable — see the `artifact` case verdict",
@@ -1601,7 +1657,7 @@ fn run_open_or_degrade(
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         if library.is_some() {
             EnvironmentKind::RealAbiTestPlugin
         } else {
@@ -1620,10 +1676,9 @@ fn run_open_or_degrade(
 /// attached editor surface (see `editor-attach`) and no
 /// `VisualCapture`-capable driver, the honest verdict is `NotRun` —
 /// pixels were never captured and nothing here claims they were.
-fn run_dock_pixels(run_id: &RunId, env: &LaneEnvironment) -> ScenarioReport {
+fn dock_pixels_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
     let mut probe = PluginHostProbe::new();
-    let spec = probe_spec(run_id, "dock-pixels", "real-window-pixels-not-applicable");
-    let report = run_scenario(&mut probe, &spec, |_gui| {
+    let report = run_scenario(&mut probe, spec, |_gui| {
         let mut outcome = not_run(
             "no docked editor surface exists (editor-attach: unsupported) and \
              no VisualCapture driver is present — pixel checks not executed",
@@ -1633,7 +1688,7 @@ fn run_dock_pixels(run_id: &RunId, env: &LaneEnvironment) -> ScenarioReport {
     });
     finalize(
         report,
-        env,
+        &ctx.env,
         EnvironmentKind::DeterministicBackend,
         None,
         Map::new(),

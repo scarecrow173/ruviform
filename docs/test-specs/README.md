@@ -210,6 +210,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XqAxz6XasjXM9geCdT7 | Issue #625 テスト仕様 — handshake channel-closed 分類の決定性と既存 refusal 契約の維持 | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TSPEC-034XAEUQyTZ4N0vdNcRAlI | Issue #627 仮想優先検証契約のテスト仕様 | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TSPEC-034XBMh4pr5313Dan0adpY | Issue #628 テスト仕様 — deterministic core の決定性・RT contract・独立 Oracle | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| TESTSPEC-RF628pwpipeline00001 | Issue #628 pipeline wiring — test specification | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
@@ -219,6 +220,7 @@ Directory: `docs/test-specs`
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
+| TSPEC-034XVTsew8bdAg2cxa7FPJ | Issue #631 Plugin-dock scenario catalog + driver projection のテスト仕様 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |

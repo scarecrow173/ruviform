@@ -221,6 +221,7 @@ Directory: `docs/designs`
 | DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
 | DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034XBGBV0qexwf6VzGt77S | Issue #628 設計 — deterministic core（VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata） | approved | [issue-628-deterministic-test-runtime-design.md](./issue-628-deterministic-test-runtime-design.md) |
+| DESIGN-RF628pwpipeline000001 | Issue #628 pipeline wiring — detailed design | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | DESIGN-RF628sBscripted0000002 | Issue #628 設計 — scripted port-trait backend（device 境界 fault/clock/PCM/MIDI 結線） | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
@@ -230,6 +231,7 @@ Directory: `docs/designs`
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034XTP681X6oGd0SwnvpbS | Issue #631 Real-window native-slot dock lane 設計 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
+| DESIGN-034XVTqsKVWAgXMI3CBA6o | Issue #631 Plugin-dock scenario catalog + driver projection 設計 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | DESIGN-034XEUiEWDih8GYy2D0ytt | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | DESIGN-EEySPRA3APW4bbQzAFGv0Y | Issue #650 bench-smoke lane coverage 拡張 — 設計 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |

@@ -62,12 +62,14 @@ Directory: `docs/impl/exp`
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |
+| [issue-628-pipeline-wiring.jsonl](./issue-628-pipeline-wiring.jsonl) |
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
 | [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |
+| [issue-631-scenario-catalog.jsonl](./issue-631-scenario-catalog.jsonl) |
 | [issue-646-numeric-bench-profile.jsonl](./issue-646-numeric-bench-profile.jsonl) |
 | [issue-650-bench-smoke-coverage.jsonl](./issue-650-bench-smoke-coverage.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |

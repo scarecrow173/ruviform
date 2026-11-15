@@ -183,6 +183,7 @@ Directory: `docs/plans`
 | PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
 | PLAN-034XATq1VmM49W1cv5EO0P | Issue #627 仮想優先検証契約 実装・ロールアウト計画 | approved | [issue-627-virtual-first-verification-contract-plan.md](./issue-627-virtual-first-verification-contract-plan.md) |
 | PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
+| PLAN-RF628pwpipeline0000001 | Issue #628 pipeline wiring — implementation plan | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | PLAN-RF628sBscripted0000003 | Issue #628 実装計画 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | PLAN-034XVm4OZxJqPqKqTqVqYq | Issue #629 MIDI loopback round-trip verifier plan | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
@@ -192,6 +193,7 @@ Directory: `docs/plans`
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034XTP6V40ZLnW8sMLZK2N | Issue #631 Real-window native-slot dock lane 実装計画 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
+| PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

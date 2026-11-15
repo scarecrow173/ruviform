@@ -124,3 +124,70 @@ interactive Windows session で実走。JSONL 正本:
   を composition-root として boundary.json に登録 — Coordinator 承認済み）
 - `mise run test-ui-plugin-dock-real`: pass（上表 — 実走 evidence）
 - `mise exec -- prek run --all-files`: （結果は PR 本文に記録）
+
+# Scenario catalog + driver projection lane（third slice — `rf631.plugin-dock` catalog 化）
+
+Issue `scarecrow173/ruviform#631` 第三 slice（plugin-dock scenario
+catalog + driver projection）のローカル検証記録。catalog 化は case
+列挙の表への移行であり verdict 権威を持たない — 本節は catalog 化前後で
+JSONL verdict が同一であることの確認記録。
+
+- Date: 2026-11-15
+- OS: Windows (x86_64)
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA: catalog 変更は `f03390d0` base の working tree で初回実走、
+  `origin/main`（`3ae35b85`、issue-630 L1 runner slice）merge 後の
+  `41857b5d` で全 canonical lane を再検証。`plugin-dock-scenario.jsonl`
+  は merge 後 HEAD の記録（verdict は初回実走と同一）。
+
+## Lane results（canonical = mise）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass (exit 0) |
+| `mise run check ruviform-ui-test` | pass (exit 0) |
+| `mise run lint ruviform-ui-test` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-ui-test` | pass (exit 0 — catalog unit test 4 件含む） |
+| `mise run check ruviform-plugin-dock-test` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test` | pass (exit 0 — integration 4 tests: catalog↔report 対応・projection 被覆・fail-closed・honest verdicts） |
+| `mise run check/lint/test ruviform-plugin-dock-test --features real-dock` | pass (exit 0 — real-dock unit test `blocked_reports_fail_closed` が catalog 導出を検証） |
+| `mise run test-ui-plugin-dock` | pass (exit 0) |
+| `mise run test-ui-scenario-contract`（fake 17 + gpui 7） | pass (exit 0) |
+| `mise run check-ui-driver-boundary` | pass (exit 0 — dep-graph/signature/allowlist。catalog は GPUI 非依存を維持） |
+| `mise exec -- prek run --all-files` | pass (exit 0) |
+
+## `test-ui-plugin-dock` verdict 非回帰確認
+
+catalog 化後の `plugin-dock-scenario.jsonl`（本 slice で再生成）は
+first slice 記録と同一 verdict:
+
+| case | driver | verdict |
+| --- | --- | --- |
+| `view-mount` | fake | pass |
+| `artifact` | plugin-host-probe | pass |
+| `host-lifecycle` | plugin-host-probe | pass |
+| `editor-attach` | plugin-host-probe | unsupported |
+| `session-lifecycle` | plugin-host-probe | pass |
+| `host-terminate` | plugin-host-probe | pass |
+| `open-or-degrade` | plugin-host-probe | pass |
+| `dock-pixels` | plugin-host-probe | not_run |
+
+- `HEADLESS_MATRIX`（`&'static ScenarioMatrix`、Fake/PluginHostProbe
+  2 binding・8 entry）が case id/scenario/driver/required/order の
+  単一ソース。`run_all` = `run_matrix` 投影。
+- `tests/plugin_dock.rs` の `catalog_matches_run_all_reports` が
+  cells↔report の 1:1 対応を、`catalog_projection_covers_every_
+  declared_requirement` が `project()` 全 runnable を検証。
+- real-dock lane は `real_entries()`（session-scoped 4 entry）を
+  live/blocked 両経路で共有。`blocked_reports_fail_closed` が
+  entries↔reports の一致 + 全件 `NotRun`/`environment_blocked`/
+  `real-window` 非主張を検証。
+
+## NotRun / Unsupported / Deferred（後続 — 変更なし）
+
+- Scenario Console / Test Lab GUI 本体: 後続 slice。
+- `test_editor` 実物・実 Native Dock Pass・dock-pixels・child HWND
+  input/resize/focus/re-dock・DComp #532 判定: #630 残存 scope まで
+  NotRun/Unsupported 維持。
+- 3OS・`*-msrv`・`*-full` 系: 対象外。
