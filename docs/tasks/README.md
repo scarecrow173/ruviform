@@ -64,6 +64,7 @@ Directory: `docs/tasks`
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-034Y13NY1bznQbU0TgCsEn | Issue #630 test_editor slice — task | completed | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
+| TASK-034Y3oeCjY3yeLsdZlZF32 | Issue #631 real-editor-attach — test_editor 実 IPlugView child HWND attach/detach 実走 | in-progress | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TASK-034XTPgAXjEOXFWn2Rv1Iy | Issue #631 T1 — Real-window native-slot dock lane | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TASK-034XVTrDLIayJZvRDYBcAb | Issue #631 T1 — Plugin-dock scenario catalog + driver projection | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TASK-034XWO3lADUXxGJf44pNX3 | Issue #631 T1 — Headless Scenario Console（plugin-dock-console bin） | in-progress | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |

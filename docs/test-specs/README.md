@@ -222,6 +222,7 @@ Directory: `docs/test-specs`
 | TSPEC-1jGomS13d3GgO1MNrOleAi | Issue #630 test_fault slice — test specification | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| TSPEC-034Y3opmTfAWO3534oKOoH | Issue #631 real-editor-attach テスト仕様（child HWND OS 観測・detach 収束・thread-affinity の判定） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TSPEC-034XVTsew8bdAg2cxa7FPJ | Issue #631 Plugin-dock scenario catalog + driver projection のテスト仕様 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TSPEC-034XWO2xGlAsmD12I1K5tl | Issue #631 Headless Scenario Console のテスト仕様 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
