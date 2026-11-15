@@ -53,6 +53,7 @@ Directory: `docs/test-specs`
 | TSPEC-034WYgclyB5Fcmkva75gsf | Issue #192 TA Invariant Map — 対応表・非循環監査の検証規約 | approved | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | TSPEC-034UCSrsj3GYcyfu8KYMB2 | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TSPEC-034WZ8iKotT2AuzW4LcRZy | Issue #193 Migration Plan Update Snapshot 検証 | approved | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
+| TSPEC-034XJskrV3geNvwTcsBdsH | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付けの検証規則 | approved | [issue-193-virtual-first-owner-remap.md](./issue-193-virtual-first-owner-remap.md) |
 | TSPEC-034QfqUJnhyPPfGZsl7kXW | Issue #195 M2 typed graph compiler/runtime: schedule, buffers, PDC, ownership, activation, faults, legacy coexistence | approved | [issue-195-m2-typed-graph-compiler-runtime-tests.md](./issue-195-m2-typed-graph-compiler-runtime-tests.md) |
 | TSPEC-7zOboSetinQdiV2b3AD6Yq | Issue #196 M4 Typed Graph Plugin Adapter テスト仕様 | approved | [issue-196-typed-graph-plugin-adapter-tests.md](./issue-196-typed-graph-plugin-adapter-tests.md) |
 | TSPEC-JSe276zDPhy5bjOFWJMtgn | Issue #197 media reader / prefetch / RT consumer test specification | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
