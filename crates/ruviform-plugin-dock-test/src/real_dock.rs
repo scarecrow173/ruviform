@@ -60,17 +60,14 @@ use serde_json::{Map, Value, json};
 
 use crate::LaneEnvironment;
 use crate::artifact;
+use crate::real_catalog::{LANE, SCENARIO};
+// The run id is shared with the console's catalog metadata —
+// re-exported so `real_dock::RUN_ID` keeps working for the lane.
+pub use crate::real_catalog::RUN_ID;
 use crate::scenario::{
     activate_test_gain, editor_size, fail, finalize, host_error_outcome, not_run,
     register_factories, rejecting_editor_ops, session_failed_unsupported, session_id_json,
 };
-
-/// The run id shared by every case of this lane.
-pub const RUN_ID: &str = "rf631-plugin-dock-real";
-
-/// Scenario id — distinct from the headless probe lane's
-/// `rf631.plugin-dock` so evidence never conflates the two drivers.
-const SCENARIO: &str = "rf631.plugin-dock-real";
 
 /// The resolved plugin binary + its evidence identity — only
 /// `real-editor-attach` consumes it.
@@ -195,12 +192,12 @@ fn slot_key() -> ComponentKey {
     ComponentKey(PLUGIN_DOCK_SLOT_KEY.to_string())
 }
 
-/// The `{"lane": "real-window-dock"}` spec extras shared by the
+/// The `{"lane": real_catalog::LANE}` spec extras shared by the
 /// window-only real cases — spec-level declaration only;
 /// `finalize` overwrites `report.environment` post-run.
 fn real_window_extras(_: &RealDockContext<'_>) -> ScenarioSpecExtras {
     ScenarioSpecExtras {
-        environment: Some(json!({ "lane": "real-window-dock" })),
+        environment: Some(json!({ "lane": LANE })),
         timeout_ms: None,
     }
 }
@@ -209,7 +206,7 @@ fn real_window_extras(_: &RealDockContext<'_>) -> ScenarioSpecExtras {
 /// plugin artifact identity when the binary resolved (what
 /// `real_spec` used to stamp under `environment.plugin_artifact`).
 fn editor_attach_extras(ctx: &RealDockContext<'_>) -> ScenarioSpecExtras {
-    let mut environment = Map::from_iter([("lane".to_string(), json!("real-window-dock"))]);
+    let mut environment = Map::from_iter([("lane".to_string(), json!(LANE))]);
     if let Some(artifact) = ctx.artifact {
         environment.insert("plugin_artifact".to_string(), json!(artifact));
     }
@@ -1075,6 +1072,7 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::real_catalog::REAL_CATALOG;
 
     /// The declared slot spec must never claim capabilities the
     /// Windows surface backend refuses — capability honesty is the
@@ -1145,6 +1143,26 @@ mod tests {
                 .as_ref()
                 .and_then(|env| env["environment_kind"].as_str());
             assert_ne!(kind, Some("real-window"), "nothing ran — no real claim");
+        }
+    }
+
+    /// The console's `real_catalog::REAL_CATALOG` metadata must agree
+    /// with the executable `real_entries` table — case id, scenario
+    /// id, and required capabilities are asserted pairwise so drift
+    /// between the listing projection and the live catalog fails
+    /// here, not in evidence review.
+    #[test]
+    fn real_catalog_matches_entries() {
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+        assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
+        for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
+            assert_eq!(entry.case, row.case, "case id drift");
+            assert_eq!(entry.scenario, row.scenario, "scenario id drift");
+            assert_eq!(
+                entry.required, row.required,
+                "required-capability drift for `{}`",
+                entry.case
+            );
         }
     }
 }

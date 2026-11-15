@@ -16,6 +16,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | IMPL-034XTPwYBlfr1MLwQV3IDe | Real-window native-slot dock lane (issue-631 second slice) | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | IMPL-034XVTsUl2EPLLP9JqeEGS | Plugin-dock scenario catalog + driver projection (issue-631 third slice) | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
+| IMPL-034XXbYaPK0skVnCFabuid | Headless scenario console plugin-dock-console (issue-631 console slice) | in-progress | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
