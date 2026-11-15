@@ -566,6 +566,148 @@ Pass）は**別の完了条件**である。前者を後者の Pass と
 - [x] `docs/` 以外に差分がないことを `git status`/
   `git diff` で確認（PR #615・本更新 PR で実施）。
 
+## Snapshot-2026-11-15 — Virtual-first owner 対応付け（版付き）
+
+**版識別子:** `Snapshot-2026-11-15`（Issue 状態を `gh` で
+実測した基準日版）。本節は Issue #193 本文 2026-11-15
+「Virtual-first正式受入Owner整理」に基づく受入 owner の
+対応付け記録であり、M0〜M7/G0〜G7/RB0〜RB6・GUI lane・
+Cross-Consumer 受入の定義を**変更しない**。`Snapshot-
+2026-11-14` 節を含む既存本文は履歴 snapshot として保持
+し、本節を 2026-11-15 以降の受入 owner 正本とする
+（append-only — 旧記述の書き換えではなく dated 節の
+追加で更新を表現する）。方針正本: `POLICIES.md` §2.1
+（2026-11-15 決定「仮想優先の受入と共通テスト基盤」）。
+先行 precedent: `docs/designs/issue-275-observability-
+integration-design.md` の 2026-11-15 追記（同型 remap
+— `92e40aea` で merge 済み）。文書チェーン:
+`docs/specs/issue-193-virtual-first-owner-remap.md` 他
+`issue-193-virtual-first-owner-remap*`。
+
+**状態語彙（POLICIES.md）:** 要求状態
+Required/Deferred/NotApplicable と実行結果
+Pass/Fail/NotRun/Unsupported は別軸。Issue の
+open/closed は実装 Blocked by と同義ではない。
+
+### Issue 状態照合の結果（2026-11-15 実測）
+
+- 方針基盤: [#627](https://github.com/scarecrow173/ruviform/issues/627)
+  **CLOSED** — 仮想優先の3repo検証契約・物理Gate置換・
+  POLICIES整合と独立Oracle（POLICIES §2.1 の契約正本。
+  本節は #627 の詳細設計と #628〜631 の実装を取り違え
+  ない）。
+- Harness（全て **OPEN**・未実装 — 受入 Case が未実走
+  なら `NotRun` と正直に記録する）:
+  - [#628](https://github.com/scarecrow173/ruviform/issues/628)
+    **OPEN** — [impl/test][RF-VTEST-01] Ruviform製
+    Deterministic Audio/MIDI Test Runtime・Virtual
+    Clock・Fault/Oracle（共通基盤）
+  - [#629](https://github.com/scarecrow173/ruviform/issues/629)
+    **OPEN** — [test/device][RF-VTEST-02] Windows実OS
+    仮想Audio/MIDI Endpoint・Provisioning・本番API
+    通過Gate
+  - [#630](https://github.com/scarecrow173/ruviform/issues/630)
+    **OPEN** — [test/plugin][RF-VTEST-03] Ruviform製
+    VST3/CLAP Test Plugin Suite・実ABI/State/RT/
+    Native Editor
+  - [#631](https://github.com/scarecrow173/ruviform/issues/631)
+    **OPEN** — [test/gui][RF-VTEST-04] Ruviform GPUI
+    実Window Scenario Runner・Test GUI Dogfooding・
+    Pixel/Receipt/Evidence
+- 残存 owner（全て **OPEN** — 実装・EXT-L3 mechanism・
+  製品 Owner として削除・格下げしない）: [#251](https://github.com/scarecrow173/ruviform/issues/251)
+  （real backend input plumbing・実機検証）、[#253](https://github.com/scarecrow173/ruviform/issues/253)
+  （OS MIDI backend・VST3 翻訳）、[#388](https://github.com/scarecrow173/ruviform/issues/388)
+  （NativeSurfaceSlot・GPUI Dock PoC）、[#389](https://github.com/scarecrow173/ruviform/issues/389)
+  （Plugin Editor Session・Native Dock Adapter）、
+  [#532](https://github.com/scarecrow173/ruviform/issues/532)
+  （GPUI DComp topmost 制約）。関連: [#294](https://github.com/scarecrow173/ruviform/issues/294)
+  （candidate tuple gate）OPEN、[#275](https://github.com/scarecrow173/ruviform/issues/275)
+  （OBS）OPEN、[AL #127](https://github.com/scarecrow173/audio-lens/issues/127)
+  ・[SV #28](https://github.com/scarecrow173/synvelis/issues/28)
+  （Consumer Oracle）OPEN。
+
+### Virtual-first 受入 owner 対応表（M0〜M7・GUI lane）
+
+`Snapshot-2026-11-14` 節の M0〜M7 受入表・`### Deferred/
+Activation 記録` 表・Integration Gate 行を基に、
+検証レベル別の受入 owner を対応付ける。OS-L1（3OS
+Native Build/Link・Headless/RT/CLI・必要 Feature・
+Consumer 独立 Oracle）は変更なし — 既存の変更検知付き
+Daily Full CI と手動 Full CI、#294 tuple、AL #127/
+SV #28 が担う。Windows で提供・利用する機能の
+GUI-L2/EXT-L3 は Required のまま維持し、受入 owner
+を #628〜631 Harness へ再割当する変更である。
+
+| Milestone/領域 | OS-L1 | GUI-L2/EXT-L3 受入 owner（2026-11-15〜） | 残存 owner（実装・mechanism・製品 — 格下げしない） |
+| --- | --- | --- | --- |
+| M0 Baseline | #219/#294 tuple・AL #127/SV #28 | なし（L2/L3 対象外） | — |
+| M1 Graph | SV #106・#294 | なし | — |
+| M2 Audio Runtime | SV #106/#109・SV #28/AL #127・#294（RT budget は L1 CI） | なし | — |
+| M3 Time/Event | #253 の OS 非依存部分は headless 継続 | EXT-L3（OS MIDI API・VST3 翻訳）: #629（実 OS 仮想 MIDI Endpoint・本番 API 通過）+ #630（VST3 ABI Test Plugin） | #253（mechanism Owner）、SV #126/#127（製品受入） |
+| M4 Plugin | plugin host L1 継続 | GUI-L2/EXT-L3（Native Dock・実 Plugin ABI）: #631（実 Window Scenario Runner）+ #630（ABI Test Plugin・Native Editor） | #388/#389/#532（mechanism Owner）、SV #176/#127（製品 Gate） |
+| M5 Device/Reader | Mock Input headless 継続 | EXT-L3（実 Audio Input Device）: #629（仮想 Audio Endpoint・本番 API 通過） | #251（real backend Owner）、SV #115/#117（製品録音受入） |
+| M6 Output/Offline | #306 合成 Gate | なし（OS/FS は OS-L1 範囲） | — |
+| M7 UI/Probe・GUI lane | headless/fake 継続 | GUI-L2: #631。Native Dock EXT-L3: #630 + #631 | #262/#388/#389/#419/#465/#532（採否・mechanism Owner）、SV #112/#114/#176/#177・AL #127/#189（製品 Owner） |
+
+共通基盤: #628（deterministic test runtime —
+VirtualClock/PCM/Fault、OPEN）は上表の全 Harness Case
+の土台。方針基盤: #627（CLOSED）は POLICIES §2.1
+の契約正本であり、本節はその詳細設計と #628〜631
+の実装を取り違えない。物理機材・市販 Plugin の一括
+Required 化は課さない（POLICIES §2.1 — 個別機材の
+正式サポート宣言・不具合調査時のみ物理 Case を定義
+する）。
+
+### 旧 owner 記述との関係（dated 上書き宣言）
+
+2026-11-15 以降、Windows で提供・利用する機能の
+GUI-L2/EXT-L3 の**受入 owner 正本は本節**とする。
+`Snapshot-2026-11-14` 節の `### Deferred/Activation
+記録（L2/L3 が必要な製品利用条件）` 表（「Windows
+実 Window/Dock/IME/DPI/Focus」「実 Plugin Native
+Dock（VST3/CLAP/AU）」「実 Audio Input Device 録音」
+「OS MIDI backend・VST3 翻訳」の Owner 列）・M3/
+M4/M5 Integration Gate 行・M7 Integration Gate/責務
+行・GUI lane・`### DAG と Owner の表` が指す #251/
+#253/#388/#389/#532 は、実装・EXT-L3 mechanism
+owner および製品 Owner（SV #115/#117/#126/#127/
+#176/#177・AL #127/#189 等）として**引き続き有効**
+であり、削除・格下げしない（issue-275 design doc
+の 2026-11-15 追記と同型の dated remap）。
+
+### 維持区分（本節が変更しないもの）
+
+- macOS/Linux の GUI-L2/EXT-L3 は利用要件発生まで
+  Deferred の既存分類を維持する。未実走 Case の
+  `NotRun` 正直記録を維持し、既存実装/CI に新たな
+  `Pass` を付与しない。未実装の仮想テスト（#628〜
+  631 の Harness Case）は `NotRun`、DComp 既知
+  Fail（#532 関連）は維持する。
+- Headless 実装 Slice の着手を L2/L3 `NotRun` で
+  止めず、製品提供の最終受入では `Fail`/`NotRun`
+  を維持する（POLICIES §4 の段階分離）。
+- `Snapshot-2026-11-14` 節を含む既存本文は履歴
+  snapshot として保持し、本節以降の状態変化は次回
+  dated Snapshot で再照合する。
+
+### Verification Notes（Snapshot 節の検証）
+
+- [x] M0〜M7 全 Milestone と GUI lane に OS-L1・
+  GUI-L2/EXT-L3 受入 owner・残存 owner を Issue
+  URL・役割・open/closed 状態付きで対応付けた。
+- [x] Issue 状態は 2026-11-15 の `gh issue view`
+  実測に基づく（#627 CLOSED、#628〜631・#251/#253/
+  #294/#388/#389/#532・AL #127・SV #28 OPEN）。
+- [x] Required→Deferred 格下げ・新規 `Pass` 付与・
+  `NotRun`→`Pass` 置換がなく、`Snapshot-2026-11-14`
+  節を含む既存本文に差分がない（append-only）。
+- [x] 両 canonical の本節が抽出 diff で完全一致する
+  ことを確認（drift 監査 — 検証記録は
+  `docs/impl/ir/issue-193-virtual-first-owner-remap.md`
+  ・`docs/impl/exp/issue-193-virtual-first-owner-
+  remap.md` と各 Verification Notes）。
+
 ## Implementation Handoff
 
 - Recommended mode: inline execution

@@ -103,6 +103,7 @@ Directory: `docs/impl/ir`
 | IMPL-034WYgZmp0Qv3NLjgtu1jn | Issue #192 TA Invariant Map — 監査対応表・非循環性静的確認の実装記録 | completed | [issue-192-ta-invariant-map.md](./issue-192-ta-invariant-map.md) |
 | IMPL-034XJx7H1efFWsEqCixCGj | Issue #192 TA DAG L2/L3 受入 Owner 欄の Virtual-first 再指向 | completed | [issue-192-virtual-first-owner-remap.md](./issue-192-virtual-first-owner-remap.md) |
 | IMPL-034WZ8jEVUJPCfjc4NtvqF | Issue 193 migration plan update snapshot | completed | [issue-193-migration-plan-update.md](./issue-193-migration-plan-update.md) |
+| IMPL-034XJsLKXbwnTg5HsPc0e1 | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付け | completed | [issue-193-virtual-first-owner-remap.md](./issue-193-virtual-first-owner-remap.md) |
 | IMPL-034QgTkRw195m2audIoRtXwQ | Issue #195 M2 typed graph audio compiler/runtime: schedule, bounded buffers, PDC, stateful RT ownership, plan activation | completed | [issue-195-m2-typed-graph-compiler-runtime.md](./issue-195-m2-typed-graph-compiler-runtime.md) |
 | IMPL-issue196-m4-adapter | Issue #196 — M4 typed graph plugin adapter (multi-bus / lifecycle / offset precision) | completed | [issue-196-typed-graph-plugin-adapter.md](./issue-196-typed-graph-plugin-adapter.md) |
 | IMPL-8FuQb4NPvHVC136oYJUME7 | Issue #197 Generic Media Reader implementation record | completed | [issue-197-media-reader-implementation-record.md](./issue-197-media-reader-implementation-record.md) |

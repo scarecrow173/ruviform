@@ -192,6 +192,7 @@ Directory: `docs/tasks`
 | TASK-0AkBucIA3R2J63ZuOHF6p1 | Issue #192 Virtual-first 受入 Owner remap タスク | done | [issue-192-virtual-first-owner-remap-task.md](./issue-192-virtual-first-owner-remap-task.md) |
 | TASK-034UCVp0kqovy1IEDp0LWy | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 設計正本 | done | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
 | TASK-034WZ7YMSR5UKu8AhtpOgk | Issue #193 Migration Plan Update Snapshot 文書化 | done | [issue-193-migration-plan-update-task.md](./issue-193-migration-plan-update-task.md) |
+| TASK-034XJsrkSEZgpSXhxUbhXy | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付けタスク | done | [issue-193-virtual-first-owner-remap-task.md](./issue-193-virtual-first-owner-remap-task.md) |
 | TASK-Awm44usEpigGUWYXNxfbWd | Issue #196 T-1: plugin-core bus role + enumeration contract | done | [issue-196-t-1-plugin-core-bus-enumeration.md](./issue-196-t-1-plugin-core-bus-enumeration.md) |
 | TASK-HfEXpjuOcYSGP35UqpabKo | Issue #196 T-2: media-core receipt/fault pop + host bus enumeration | done | [issue-196-t-2-host-media-bus-enumeration.md](./issue-196-t-2-host-media-bus-enumeration.md) |
 | TASK-mO3RtjrUoyUadajAWyCadp | Issue #196 T-3: ruviform-audio-plugin-bridge crate | done | [issue-196-t-3-bridge-crate.md](./issue-196-t-3-bridge-crate.md) |
