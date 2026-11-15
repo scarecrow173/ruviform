@@ -61,6 +61,7 @@ Directory: `docs/impl/exp`
 | [issue-389-session-lifecycle-exp.jsonl](./issue-389-session-lifecycle-exp.jsonl) |
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
+| [issue-628-close-out.jsonl](./issue-628-close-out.jsonl) |
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |
 | [issue-628-pipeline-wiring.jsonl](./issue-628-pipeline-wiring.jsonl) |
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
@@ -72,6 +73,7 @@ Directory: `docs/impl/exp`
 | [issue-630-test-editor-slice.jsonl](./issue-630-test-editor-slice.jsonl) |
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |
 | [issue-630-test-stateful.jsonl](./issue-630-test-stateful.jsonl) |
+| [issue-631-real-editor-attach.jsonl](./issue-631-real-editor-attach.jsonl) |
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |
 | [issue-631-scenario-catalog.jsonl](./issue-631-scenario-catalog.jsonl) |
 | [issue-631-scenario-console.jsonl](./issue-631-scenario-console.jsonl) |

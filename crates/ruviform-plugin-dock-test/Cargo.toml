@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-dock-test"
-description = "Test-only plugin-dock scenario harness (Issue #631 slice): resolves the real test_gain VST3 cdylib, records artifact digest/version evidence, and reports honest Pass/Fail/NotRun/Unsupported verdicts through the driver-neutral ruviform-ui-test scenario contract. Not a shipping product — no production crate may depend on this crate."
+description = "Test-only plugin-dock scenario harness (Issue #631 slices): resolves the real test-plugin VST3 cdylib (test_gain headless lane; test_editor real-window lane), records artifact digest/version evidence, and reports honest Pass/Fail/NotRun/Unsupported verdicts through the driver-neutral ruviform-ui-test scenario contract. Not a shipping product — no production crate may depend on this crate."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,11 @@ publish.workspace = true
 # default feature: it opens real OS windows and links the GPUI
 # backend, so the default/headless lane stays window-free; it is
 # never a CI-required gate.
-real-dock = ["dep:ruviform-ui-gpui", "ruviform-ui-gpui/real-scenario"]
+real-dock = [
+    "dep:ruviform-ui-gpui",
+    "ruviform-ui-gpui/real-scenario",
+    "dep:windows-sys",
+]
 
 [[bin]]
 name = "plugin-dock-real-scenario"
@@ -70,6 +74,25 @@ serde_json = "1"
 #   Already in Cargo.lock as a transitive dep (0.10.9); pinned to the
 #   same major line, no new tree.
 sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+# - windows-sys 0.61 (optional; `real-dock` feature only — Issue #631
+#   real-editor-attach slice): query-only Win32 observation for the
+#   `real-editor-attach` case — `EnumChildWindows`/`GetParent`/
+#   `IsWindow`/`IsWindowVisible`/`GetWindowThreadProcessId`/
+#   `GetCurrentThreadId` prove the `test_editor` plugin's real child
+#   HWND exists under the leased container HWND, is visible, and is
+#   destroyed on `session.close` (`removed()` → `DestroyWindow`).
+#   Observation only — this crate never creates, destroys, moves, or
+#   messages a window through it. Windows-targeted so the dep never
+#   enters non-Windows builds; optional so the default headless
+#   lane's dependency tree is unchanged. Same `windows-sys` 0.61
+#   line `ruviform-poc-native-dock` already uses.
+windows-sys = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 # Builds the test_gain cdylib into deps/ when this crate's tests run

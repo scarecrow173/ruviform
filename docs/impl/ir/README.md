@@ -14,6 +14,7 @@ Directory: `docs/impl/ir`
 | IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | IMPL-034XqUtbQR6b9Xie900zZv | Issue #625 ci e2e handshake race implementation record | draft | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| IMPL-034Y3oHi457Q1b3AfFnQ6T | Issue #631 real-editor-attach 実装記録 | in-progress | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | IMPL-034XTPwYBlfr1MLwQV3IDe | Real-window native-slot dock lane (issue-631 second slice) | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | IMPL-034XVTsUl2EPLLP9JqeEGS | Plugin-dock scenario catalog + driver projection (issue-631 third slice) | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | IMPL-034XXbYaPK0skVnCFabuid | Headless scenario console plugin-dock-console (issue-631 console slice) | in-progress | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
@@ -234,6 +235,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XegYdJwFzsQhPajRIAg | Issue #558 Script/Analyzer契約 文書チェーン実装記録 | completed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
+| IMPL-034Y3isAfsgJBhG7QwK2Jg | Issue #628 close-out slice | completed | [issue-628-close-out.md](./issue-628-close-out.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | IMPL-034XW6UqxoYIAHfogFzvj0 | Issue #628 pipeline wiring (3rd slice) | completed | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |

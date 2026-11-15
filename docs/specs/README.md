@@ -188,6 +188,7 @@ Directory: `docs/specs`
 | SPEC-034WuVytWK4glbu9CinZwq | Issue #590 docs/impl/ir の missing-section 本文補完 | approved | [issue-590-ir-missing-sections.md](./issue-590-ir-missing-sections.md) |
 | SPEC-034XqAdHQcP0noGrfdbRqY | Issue #625 verify(ubuntu-latest) test-full 失敗 — e2e_process handshake refusal の error 分類 race を修正する | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | SPEC-034XAreKCCKojmpwC7OvJR | Issue #627 仮想優先の3repo検証契約・物理Gate置換・POLICIES整合と独立Oracle | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
+| SPEC-034Y3ehWbCBEZwEl47ROsE | Issue #628 close-out — RunMetadata JSON・cancellation fault・docs 整合・AC 棚卸し | approved | [issue-628-close-out.md](./issue-628-close-out.md) |
 | SPEC-034XBGBcah0yYseU6Ypekr | Issue #628 Deterministic Audio/MIDI Test Runtime first slice — deterministic core | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | SPEC-RF628pwpipeline0000001 | Issue #628 pipeline wiring — scripted backend into production consumers | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | SPEC-RF628sBscripted0000001 | Issue #628 scripted port-trait backend — deterministic device boundary slice | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
@@ -202,6 +203,7 @@ Directory: `docs/specs`
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| SPEC-034Y3nW74RKYWUkLfv81MG | Issue #631 real-editor-attach（test_editor 実 IPlugView による real-editor-attach Pass 化 — 実 child HWND の OS 観測・detach 収束・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | SPEC-034XTOYvrNP8RQ01gP2AGt | Issue #631 Real-window native-slot dock lane（RealOsGuiTest 実 OS window 上の NativeSlot → container HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) 実走記録） | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | SPEC-034XVTiZqMMaDcOo7LyHws | Issue #631 Plugin-dock scenario catalog + driver projection（driver 非依存 ScenarioEntry カタログ + run_scenario projection） | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | SPEC-034XWNER8Uft0DiZcXZEtb | Issue #631 Headless Scenario Console（plugin-dock-console bin — merge 済 catalog の headless consumer） | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |

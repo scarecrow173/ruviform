@@ -32,7 +32,10 @@
 //! window through `RealOsGuiTest`, recording the `NativeSlot` →
 //! surface `lease_parent` → `ParentSlotLease` → `InProcessEditorOps`
 //! redeem → `session.open(Docked)` chain with `environment_kind`
-//! `real-window`. It opens real OS windows, so it is never a default
+//! `real-window`. Its `real-editor-attach` case drives the `test_editor`
+//! fixture's real `IPlugView` and OS-observes the child HWND lifecycle
+//! (existence/parent/visibility under the container, `IsWindow==0`
+//! after detach). It opens real OS windows, so it is never a default
 //! feature and never a CI-required gate; a headless host records
 //! `NotRun` + `environment_blocked`, never a fabricated pass.
 //!

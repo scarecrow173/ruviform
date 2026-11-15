@@ -2,24 +2,33 @@
 //! contract from `scarecrow173/ruviform#627` / POLICIES.md
 //! 2026-11-15 virtual-first terms).
 //!
-//! [`RunMetadata`] is a typed record — JSON serialization is deferred
-//! to a later slice. Every deterministic-backend run must be
-//! reproducible from `(seed, fixture_version, clock_config)` alone;
-//! these fields are what a consumer needs to re-run and compare.
+//! [`RunMetadata`] is a typed record with JSON serialization
+//! ([`RunMetadata::to_json`]/[`RunMetadata::from_json`]/
+//! [`RunMetadata::save_json`]/[`RunMetadata::load_json`]) — the
+//! non-RT test-driver API that persists the data needed to reproduce a
+//! run. Every deterministic-backend run must be reproducible from
+//! `(seed, fixture_version, clock_config)` alone; these fields are
+//! what a consumer needs to re-run and compare.
 //!
 //! **Honesty rule:** `environment_kind = DeterministicBackend` +
 //! `level = OsL1` records deterministic-core evidence only. It is never
 //! a claim of real OS API, GUI, or plugin ABI success — those live at
 //! EXT-L3 / GUI-L2 with their own `environment_kind`.
 
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
 use crate::clock::VirtualClockConfig;
 
 /// Whether a case is required for the current acceptance scope.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
-/// policy.
+/// policy. Serialized as the Case Schema v1 `kebab-case` vocabulary
+/// (`required`/`deferred`/`not-applicable`).
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum CaseRequirement {
     /// Must pass for acceptance at this level.
     Required,
@@ -33,9 +42,11 @@ pub enum CaseRequirement {
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy. Anything not actually executed must be `NotRun` — never
-/// inferred or claimed.
+/// inferred or claimed. Serialized as the Case Schema v1 `kebab-case`
+/// vocabulary (`pass`/`fail`/`not-run`/`unsupported`).
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum CaseResult {
     /// Executed and matched expectations.
     Pass,
@@ -50,9 +61,11 @@ pub enum CaseResult {
 /// Verification depth level from POLICIES.md.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
-/// policy.
+/// policy. Serialized as the Case Schema v1 `kebab-case` vocabulary
+/// (`os-l1`/`gui-l2`/`ext-l3`).
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum VerificationLevel {
     /// OS-L1: deterministic/virtual backends, native build+headless.
     OsL1,
@@ -71,8 +84,11 @@ pub enum VerificationLevel {
 /// execute the named environment — a run may claim a real kind only
 /// when it really ran there (POLICIES.md 2026-11-15 virtual-first
 /// terms; a mock/headless success never promotes to a real kind).
+/// Serialized as the Case Schema v1 `kebab-case` vocabulary — the
+/// same spelling [`EnvironmentKind::as_str`] returns.
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum EnvironmentKind {
     /// Deterministic virtual backend (this crate's domain).
     DeterministicBackend,
@@ -105,8 +121,10 @@ impl EnvironmentKind {
 /// Reproducibility parameters of a scenario run — the minimal set that
 /// must reproduce identical PCM/MIDI traces.
 ///
-/// **RT contract:** RT-suitable — `Copy` value type.
-#[derive(Copy, Clone, Debug, PartialEq)]
+/// **RT contract:** RT-suitable — `Copy` value type. `Serialize`/
+/// `Deserialize` are derived for run-metadata JSON only; they are
+/// never invoked on RT paths.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunParameters {
     /// Scenario seed.
     pub seed: u64,
@@ -121,8 +139,12 @@ pub struct RunParameters {
 /// reproducibility parameters needed to re-run it.
 ///
 /// All fields are public data — consumers serialize or extend as
-/// needed; this crate intentionally provides no JSON writer yet.
-#[derive(Clone, Debug, PartialEq)]
+/// needed. JSON persistence is provided by
+/// [`RunMetadata::to_json`]/[`RunMetadata::from_json`]/
+/// [`RunMetadata::save_json`]/[`RunMetadata::load_json`] — non-RT
+/// test-driver APIs (they allocate and perform I/O; never call them
+/// from an RT path).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunMetadata {
     /// Case identifier (free-form, e.g. `rf628.pcm.sine.48k`).
     pub case_id: String,
@@ -219,5 +241,60 @@ impl RunMetadata {
     #[must_use]
     pub fn reproducibility_key(&self) -> (u64, u32) {
         (self.parameters.seed, self.parameters.fixture_version)
+    }
+
+    /// Serializes this record to a JSON document — the Case Schema v1
+    /// `kebab-case` wire vocabulary.
+    ///
+    /// **Non-RT:** allocates; never call from an RT path.
+    ///
+    /// # Errors
+    ///
+    /// [`serde_json::Error`] when serialization fails (cannot happen for
+    /// this record's field types in practice).
+    pub fn to_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string(self)
+    }
+
+    /// Deserializes a [`RunMetadata`] from a JSON document produced by
+    /// [`Self::to_json`] (or an equivalent Case Schema v1 record).
+    ///
+    /// **Non-RT:** allocates; never call from an RT path.
+    ///
+    /// # Errors
+    ///
+    /// [`serde_json::Error`] on malformed JSON or a vocabulary value
+    /// outside the `kebab-case` enum spellings.
+    pub fn from_json(json: &str) -> serde_json::Result<Self> {
+        serde_json::from_str(json)
+    }
+
+    /// Writes this record as JSON to `path` (UTF-8, no trailing
+    /// newline added beyond the serialized document).
+    ///
+    /// **Non-RT:** performs file I/O; never call from an RT path.
+    ///
+    /// # Errors
+    ///
+    /// [`std::io::Error`] on serialization or write failure.
+    pub fn save_json(&self, path: impl AsRef<Path>) -> std::io::Result<()> {
+        let json = self
+            .to_json()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(path, json)
+    }
+
+    /// Reads a JSON document from `path` and deserializes it — the
+    /// counterpart of [`Self::save_json`].
+    ///
+    /// **Non-RT:** performs file I/O; never call from an RT path.
+    ///
+    /// # Errors
+    ///
+    /// [`std::io::Error`] on read failure, or `InvalidData` when the
+    /// file is not a valid [`RunMetadata`] JSON document.
+    pub fn load_json(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let json = std::fs::read_to_string(path)?;
+        Self::from_json(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 }

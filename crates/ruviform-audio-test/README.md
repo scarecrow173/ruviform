@@ -2,7 +2,8 @@
 
 Test-only deterministic Audio/MIDI test runtime (Issue #628 —
 first slice: deterministic core; second slice: scripted port-trait
-backend; third slice: pipeline wiring).
+backend; third slice: pipeline wiring; close-out slice: JSON run
+metadata + `Cancellation` fault class).
 
 ## Status: test-only
 
@@ -23,11 +24,13 @@ only:
   `MidiInputPort`/`InputStage` (pipeline MIDI leg only)
 - `ruviform-graph` / `ruviform-plugin-core` — graph build/validate and
   `Event`/`EventKind` contracts for the pipeline legs
+- `serde` / `serde_json` — `RunMetadata` JSON serialization only
+  (non-RT test-driver API; never on RT paths)
 
 `publish = false` is inherited from the workspace; `assert_no_alloc`
 is a dev-dependency only.
 
-## Responsibilities (this slice)
+## Responsibilities
 
 - `clock` — [`VirtualClock`] / [`VirtualClockDriver`] /
   [`VirtualClockConfig`] / [`JitterSpec`]: deterministic sample-frame
@@ -50,7 +53,10 @@ is a dev-dependency only.
 - `metadata` — [`RunMetadata`] / [`RunParameters`] with Case Schema v1
   vocabulary (`environment_kind = deterministic-backend`,
   `level = OS-L1`, Required/Deferred/NotApplicable ×
-  Pass/Fail/NotRun/Unsupported).
+  Pass/Fail/NotRun/Unsupported) and JSON persistence
+  (`to_json`/`from_json`/`save_json`/`load_json` — non-RT
+  test-driver API; wire format is the kebab-case Case Schema v1
+  vocabulary).
 - `backend` — [`ScriptedBackend`] / [`ScriptedDeviceHandle`] /
   [`DeviceSpec`] / [`StreamScript`] / [`StreamFault`] /
   [`PumpReport`] / [`MidiFeed`]: a deterministic implementation of the
@@ -61,7 +67,11 @@ is a dev-dependency only.
   frame-position jumps, capture suppression, hot-unplug/reappear,
   PCM scenario replay (input) and post-callback capture (output),
   virtual-clock timestamps with optional latency offsets, and a thin
-  `MidiScenario` → `TimedMidiInput` feed for `MockPort`.
+  `MidiScenario` → `TimedMidiInput` feed for `MockPort`. Fault classes
+  include `Cancellation` — the Issue fault-injector "cancellation"
+  mapped onto existing observables only (aborted delivery +
+  `Backend("cancelled")` + stream termination; no production contract
+  changes).
 - `pipeline` — three harness legs that drive the scripted backend
   through production consumer contracts (third slice):
   - `output` — [`PlaybackPipeline`]: `Session::open` +
@@ -84,12 +94,17 @@ is a dev-dependency only.
     `compare_planar`, `compare_pcm_block`). Expected values come from
     `pcm_reference_block`, never from the consumer under test.
 
-## Non-responsibilities (later slices)
+## Non-responsibilities (out of scope)
 
-Consumer oracles (AudioLens/Synvelis), CI lane additions, MIDI
-`attach()`/real endpoint wiring (the `InputStage`-direct leg stops at
-the public collect contract), Windows WASAPI/WinMM virtual endpoints
-and real VST3/CLAP ABI plugins (EXT-L3), JSON metadata serialization.
+MIDI `attach()`/real endpoint wiring (the `InputStage`-direct leg
+stops at the public collect contract — owned by the Issue #630
+runtime-integration slice), Windows WASAPI/WinMM virtual endpoints
+and real VST3/CLAP ABI plugins (EXT-L3, Issue #629 area), real
+OS/GUI/plugin-ABI evidence (GUI-L2/EXT-L3), and MIDI-side
+cancellation injection (deferred — audio streams only). Consumer
+oracles live in the consumer repos (AudioLens/Synvelis). No new CI
+lane is required: the crate's tests are collected by the existing
+`mise run test`/`mise run test-rt` tasks.
 
 ## Honest limits of `pipeline`
 
@@ -121,7 +136,10 @@ and real VST3/CLAP ABI plugins (EXT-L3), JSON metadata serialization.
 - **Honest fault mapping.** Permission denial maps to
   `Backend("permission_denied")`/`DeviceBusy`; queue-full to
   `Backend("queue_full")`/`Xrun` (audio) or `MockPort`
-  `inject_dropped`/`inject_unsupported` (MIDI).
+  `inject_dropped`/`inject_unsupported` (MIDI). Cancellation maps to
+  an aborted delivery + `Backend("cancelled")` + stream termination —
+  an `Error` fault carrying `Backend("cancelled")` alone does *not*
+  terminate the stream.
 
 ## Verification levels
 
@@ -134,7 +152,8 @@ three `pipeline` callback/processing legs are allocation-free/
 non-blocking/I/O-free — proven by `rt_`-prefixed `assert_no_alloc`
 tests collected by `mise run test-rt`.
 
-See `docs/specs|designs|plans|test-specs/issue-628-pipeline-wiring.md`
+See `docs/{specs,designs,plans,tasks,test-specs}/issue-628-close-out.md`
+(close-out slice); `docs/{specs,designs,plans,test-specs}/issue-628-pipeline-wiring.md`
 (third slice); `docs/{specs,designs,plans,test-specs}/issue-628-scripted-backend.md`
 (second slice);
 `docs/{specs,designs,plans,test-specs}/issue-628-deterministic-test-runtime.md`

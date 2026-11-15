@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-audio-test"
-description = "Test-only deterministic Audio/MIDI test runtime core (Issue #628 first slice): VirtualClock, deterministic PCM fixtures, MIDI trace via production TransportScheduler, independent oracles, run metadata"
+description = "Test-only deterministic Audio/MIDI test runtime (Issue #628): VirtualClock, deterministic PCM fixtures, MIDI trace via production TransportScheduler, scripted port-trait backend, pipeline wiring, independent oracles, JSON run metadata"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -39,6 +39,15 @@ ruviform-graph = { path = "../ruviform-graph" }
 # - ruviform-plugin-core: `Event`/`EventKind::Midi` observed from
 #   `InputStage::collect_block`.
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# - serde/serde_json: `RunMetadata`/`RunParameters`/Case Schema v1 enum・
+#   `VirtualClockConfig`/`JitterSpec` の JSON serialization（Issue #628
+#   close-out — AC「再現に使う Run metadata を保存する」）。wire format
+#   は Case Schema v1 語彙（kebab-case）に揃える。test-only crate の
+#   ため製品配布・本番 crate の依存 graph に波及しない。workspace 既使用
+#   （ruviform-io-structured / ruviform-ui-test / ruviform-observability /
+#   ruviform-plugin-dock-test）。
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
 # - assert_no_alloc: `rt_` prefix RT contract テストで clock-read /
