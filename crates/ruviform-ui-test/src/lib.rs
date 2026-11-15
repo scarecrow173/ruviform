@@ -72,6 +72,10 @@ pub use proto::{
     FaultKind, FixtureReceipt, FixtureSpec, Notice, PROTOCOL_VERSION, ReadyState, Receipt,
     ReceiptPage, Screenshot, ServeOutcome, ShutdownMode, Welcome, WindowMeta, ops, test_codes,
 };
+pub use scenario::catalog::{
+    DriverBinding, EntryProjection, ScenarioEntry, ScenarioMatrix, ScenarioSpecExtras, run_entries,
+    run_entry, run_matrix,
+};
 pub use scenario::fake::FakeGuiTest;
 pub use scenario::plugin_dock::{
     PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_spec,
