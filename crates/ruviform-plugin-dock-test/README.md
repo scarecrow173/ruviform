@@ -81,6 +81,7 @@ windows**:
 | `real-native-slot` | `Pass` only for steps that executed: declare → bind → renderer projection → `lease_parent` (real container HWND via `GpuiSurfaceAdapter`) → validate → `container_token` observation → stale/forged lease rejection → release |
 | `real-editor-attach` | `Pass` only when `test_editor`'s real `IPlugView` attaches a real child HWND under the leased container (OS-observed: `EnumChildWindows`/`GetParent`/`IsWindowVisible`) and `session.close` destroys it (`IsWindow(child)==0`, events `[Attached{Docked}, Closed]`); observation mismatch → `Fail`, defined refusal → `Unsupported` |
 | `real-capture` | window/slot-region pixels only — detail states the capture target is not plugin-editor pixels |
+| `real-dcomp-pixel` | `Pass` only when the docked `test_editor` child HWND's **screen-composited** pixels (screen-DC `BitBlt` of its `GetWindowRect` region — what the user sees) show `EDITOR_COLOR` green; lifecycle verified + no green → `Fail` (the known GPUI DComp topmost occlusion regression), pixels unevaluable → `NotRun`, defined refusal → `Unsupported`. `PrintWindow(child)` is recorded as a `note`-level diagnostic (the child's own raster, not the on-screen composition). `--pixel-artifacts <dir>` optionally writes the captured frames as PNG |
 
 The chain recorded is the production one:
 `NativeSlot → GpuiSurfaceAdapter (実 container HWND) → lease_parent →
@@ -91,14 +92,25 @@ is reported only when the surface backend can mint a real container
 (`surface::BACKEND_AVAILABLE && !gpui-test`).
 
 Headless/non-interactive hosts fail closed: every case records `NotRun`
-with an environment-blocked detail and exit code stays 0 (only `Fail`
-fails the process). GPUI types never cross this crate's API or evidence
-schema.
+with an environment-blocked detail and exit code stays 0 — except a
+`Fail` verdict exits 1 by design (e.g. `real-dcomp-pixel` under the
+known unresolved GPUI DComp topmost occlusion is the honest
+regression signal, not a lane defect). Every real-lane report's
+`environment` records the raw `GPUI_DISABLE_DIRECT_COMPOSITION`
+value (`null` when unset) so each run self-describes which
+compositor path GPUI took; the env var is read once by GPUI at
+process start, so set it on the lane invocation itself
+(`GPUI_DISABLE_DIRECT_COMPOSITION=1 mise run test-ui-plugin-dock-real`).
+GPUI types never cross this crate's API or evidence schema.
 
 ```sh
 mise run test-ui-plugin-dock-real   # builds test-plugin cdylib + runs the lane
 cargo run -p ruviform-plugin-dock-test --features real-dock \
   --bin plugin-dock-real-scenario -- --out evidence/rf631/plugin-dock-real-scenario.jsonl
+# opt-in pixel artifacts (auxiliary evidence, not the canonical lane):
+cargo run -p ruviform-plugin-dock-test --features real-dock \
+  --bin plugin-dock-real-scenario -- \
+  --pixel-artifacts evidence/rf631/dcomp-pixel --out /tmp/real-lane.jsonl
 ```
 
 Manual/opt-in — not a CI-required gate; requires an interactive
@@ -121,7 +133,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the four `rf631.plugin-dock-real`
+- `--list --include-real` — appends the five `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused

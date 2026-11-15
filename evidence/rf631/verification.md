@@ -458,3 +458,128 @@ block — run-all 8 case + run-selected 1 case、いずれも実走）。
   他 OS での GUI 実走は対象外（opt-in manual lane の定義どおり）。
 - workspace 全体 clippy の `ruviform-audio-test` 既存
   `too_many_lines` — scope 外・別 slice での対応要否を判断。
+
+---
+
+# Issue #532 dcomp-pixel slice — verification record（2026-11-15 追記）
+
+`scarecrow173/ruviform#532` 再現固定 slice: `real-dcomp-pixel` case
+追加 + `GPUI_DISABLE_DIRECT_COMPOSITION`（方式 A'）実機観測。
+
+- OS: Windows 11 (10.0.26300.9974) x86_64
+- GPU: NVIDIA GeForce RTX 4070 SUPER
+- Toolchain: rustc/cargo 1.99.1 (58cf8f9c3 2026-10-13)
+- Repo SHA: `de3ed4e81145674a635bacbe597d8d2a87a44b24`
+  （branch `feat/532-dcomp-pixel`、本 slice の変更は未コミット
+  diff として存在 — JSONL `environment.repo_sha` は HEAD を記録）
+- Session: interactive Windows desktop session（real-window lane
+  が実 window を生成・`environment_kind=real-window`）
+
+## Lane results（canonical = mise）
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `mise run fmt-check` | 0 | pass |
+| `mise run check ruviform-plugin-dock-test` | 0 | pass |
+| `mise run lint ruviform-plugin-dock-test` | 0 | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test` | 0 | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | 0 | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | 0 | pass |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | 0 | pass（unit 3 + console 14 + plugin_dock 4） |
+| `mise run test-ui-plugin-dock` | 0 | pass（headless verdict 非回帰） |
+| `mise run test-ui-plugin-dock-console` | 0 | pass（`--list --include-real` が 13 行に更新） |
+| `mise run test-ui-scenario-contract` | 0 | pass |
+| `mise run check-ui-driver-boundary` | 0 | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | 0 | pass |
+
+## `test-ui-plugin-dock-real` 実走（interactive session・実 window）
+
+canonical lane: `mise run test-ui-plugin-dock-real`（baseline・
+env 未設定）→ **exit 1**。`real-dcomp-pixel` verdict `fail` を含む
+5 case 全て実走（`NotRun`/`environment_blocked` ではない）。
+他 4 case（`real-window-mount`/`real-native-slot`/
+`real-editor-attach`/`real-capture`）は `pass`。
+
+| Run | env `GPUI_DISABLE_DIRECT_COMPOSITION` | JSONL | exit | `real-dcomp-pixel` verdict |
+| --- | --- | --- | --- | --- |
+| baseline canonical | 未設定（JSONL `null`） | `plugin-dock-real-scenario.jsonl` | 1 | fail |
+| baseline 補助（`--pixel-artifacts` 付） | 未設定 | `plugin-dock-real-scenario-baseline.jsonl` | 1 | fail |
+| baseline 第2サンプル | 未設定 | `plugin-dock-real-scenario-baseline2.jsonl` | 1 | fail |
+| env-on 補助 | `"1"`（JSONL 生値記録） | `plugin-dock-real-scenario-dcomp-disabled.jsonl` | 1 | fail |
+
+env-on run は canonical JSONL を上書きしないよう直接
+`cargo run`（補助証拠・canonical = mise）で別 `--out` に記録。
+`--pixel-artifacts` で PNG を `evidence/rf631/dcomp-pixel-*/`
+に保存（baseline 2 回分・env-on 1 回分、各 3 枚:
+screen/printwindow/windowdc）。
+
+注: baseline2 の初回試行は fixture dll 未再 build で
+`real-editor-attach`/`real-dcomp-pixel` が `not_run`
+（`plugin artifact unavailable`・fail-closed 正常動作）となった
+ため、`cargo build -p ruviform-plugin-test-vst3` 後に再実行して
+上表の結果を得た。改ざん・取り繕いなし。
+
+## `real-dcomp-pixel` 画素観測（child HWND 1278×798・1,019,844 px）
+
+| Oracle | 役割 | baseline | env-on `"1"` |
+| --- | --- | --- | --- |
+| `screen_pixels`（`win32-bitblt-screen`・screen DC `BitBlt` of `GetWindowRect`） | **主 oracle** — 画面合成結果 | green 0 / frac 0.0 | green 0 / frac 0.0 |
+| `printwindow_pixels`（`win32-printwindow`・`PW_CLIENTONLY|PW_RENDERFULLCONTENT`） | 診断 note | 0 / 0.0 | 0 / 0.0 |
+| `windowdc_pixels`（`win32-windowdc`・`GetDC`+`BitBlt` of client） | 診断 note | 0 / 0.0 | **1,019,844 / 1.0** |
+
+lifecycle steps（child 存在・parent 一致・visible/alive・
+`session.close`・HWND 破棄・`Closed+concluded`・events
+`[Attached{Docked}, Closed]`）は全 run で pass — attach 経路は
+`real-editor-attach` と同一で健全。verdict `fail` の detail:
+「editor lifecycle verified but 1 child screen capture(s) show no
+EDITOR_COLOR green — consistent with the known GPUI `DComp`
+topmost occlusion」。
+
+## 観測の解釈（正直な記録・断定しない）
+
+- **baseline**: 画面合成に緑が出ない = 既知 DComp topmost occlusion
+  の再現を固定。`windowdc=0.0` は child の backing surface にも
+  fill が観測されないことを示す（`DefWindowProcW` class brush の
+  paint が window-DC surface に現れない条件は未解明 — DComp 合成下
+  では child の GDI surface が提示経路に乗らない可能性）。
+- **env-on（`"1"`）**: `windowdc=1.0` — child の backing surface は
+  `EDITOR_COLOR` 緑で完全に満たされている（plugin は正しく描画
+  している）にもかかわらず **screen 合成には依然として出ない**。
+  `GPUI_DISABLE_DIRECT_COMPOSITION` は GPUI 0.2.2
+  `platform.rs` で `"1"`/`"true"` を受理し
+  `WindowsPlatform::new` で 1 回読むことを source 確認済みで、
+  JSONL の `environment` に生値 `"1"` を記録。exit 127 は
+  **未観測**（両 run とも exit 1 = `Fail` verdict による正常な
+  lane 失敗。H1-H5 の exit-127 仮説は本環境では非該当）。
+- 帰結（観測事実のみ）: 方式 A' 単独では本ホスト・GPUI 0.2.2・
+  `test_editor` fixture の組合せで画面画素は回復しなかった。
+  非 DComp 経路（`CreateSwapChainForHwnd`+`FLIP_SEQUENTIAL`）でも
+  child HWND 画素が画面に合成されない可能性を示唆するが、
+  env var が GPUI 初期化に実際に効いたかの内部確認手段は scenario
+  内に無く、機序の断定はしない — 方式採否は後続 slice。
+
+## Limitations
+
+- 単一ホスト・単一 GPU（RTX 4070 SUPER）・単一 scale 環境での
+  観測。`scale_factor` は JSONL で `null`。
+- `PrintWindow` は `DefWindowProcW` class の child に対し green を
+  返さない（実測 0.0）— child 自身の raster 証明としては機能
+  せず、診断 note に留め verdict gate に不使用。
+- screen `BitBlt` は観測時点のフレーム — DWM 合成タイミングの
+  競合は排除できないが、env-on 2 サンプルで安定して 0.0。
+- PNG artifact は opt-in（`--pixel-artifacts`）— canonical lane
+  実行では未指定のため `plugin-dock-real-scenario.jsonl` の
+  step row に `artifact` path は含まれない（補助 run の JSONL に
+  は含まれる）。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- headless host での `NotRun`+`environment_blocked` 経路は unit
+  test（`blocked_reports_fail_closed`）で検証済みだが、本検証
+  環境は interactive のため実 headless run は未実施。
+- 方式採否・本 fix（`directx_renderer.rs` patch / adapter 変更 /
+  env var 恒常化）は後続 slice — 本 slice は観測・証拠化のみ。
+- `test-ui-plugin-dock-lab` / `test-ui-native-slot` / `test-ui-gpui`
+  / `*-msrv` / 3OS 横断は本 slice の必須検証に含めず未実施
+  （`test-ui-native-slot`・`test-ui-gpui` は ui-gpui/native-slot
+  コード非接触のため任意 — 未実行）。

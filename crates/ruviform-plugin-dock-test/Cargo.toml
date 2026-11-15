@@ -99,19 +99,26 @@ sha2 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 # - windows-sys 0.61 (optional; `real-dock` feature only — Issue #631
-#   real-editor-attach slice): query-only Win32 observation for the
-#   `real-editor-attach` case — `EnumChildWindows`/`GetParent`/
-#   `IsWindow`/`IsWindowVisible`/`GetWindowThreadProcessId`/
-#   `GetCurrentThreadId` prove the `test_editor` plugin's real child
-#   HWND exists under the leased container HWND, is visible, and is
-#   destroyed on `session.close` (`removed()` → `DestroyWindow`).
+#   real-editor-attach slice + Issue #532 dcomp-pixel slice):
+#   query-only Win32 observation for the `real-editor-attach` case —
+#   `EnumChildWindows`/`GetParent`/`IsWindow`/`IsWindowVisible`/
+#   `GetWindowThreadProcessId`/`GetCurrentThreadId` prove the
+#   `test_editor` plugin's real child HWND exists under the leased
+#   container HWND, is visible, and is destroyed on `session.close`
+#   (`removed()` → `DestroyWindow`). The `real-dcomp-pixel` case adds
+#   read-only pixel capture (`GetWindowRect`/`GetAncestor`/`IsIconic`/
+#   `BitBlt`/`CreateDIBSection`/`PrintWindow` via local extern) to
+#   observe the screen-composited pixels of the docked editor child —
+#   `Win32_Graphics_Gdi` covers the DIB/BitBlt surface.
 #   Observation only — this crate never creates, destroys, moves, or
 #   messages a window through it. Windows-targeted so the dep never
 #   enters non-Windows builds; optional so the default headless
 #   lane's dependency tree is unchanged. Same `windows-sys` 0.61
-#   line `ruviform-poc-native-dock` already uses.
+#   line `ruviform-poc-native-dock` already uses; the Gdi feature is
+#   an extension of the existing optional edge (no new dependency).
 windows-sys = { version = "0.61", optional = true, features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
