@@ -75,22 +75,25 @@ impl IPluginBaseTrait for GainController {
 }
 
 impl IEditControllerTrait for GainController {
-    /// Component state streams are not implemented in the `PoC` (the
-    /// processor's `setState`/`getState` are also stubs — recorded as
-    /// a finding).
+    /// Component state streams are out of scope for the `PoC` —
+    /// `kNotImplemented` honestly reports that instead of a silent
+    /// `kResultOk` that would lose the host's state (the processor's
+    /// `setState`/`getState` stubs mirror this).
     #[expect(unsafe_code)]
     unsafe fn setComponentState(&self, _state: *mut IBStream) -> tresult {
         kNotImplemented
     }
 
+    /// State (de)serialization is out of scope — `kNotImplemented`,
+    /// never a silent success that writes nothing to the stream.
     #[expect(unsafe_code)]
     unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     #[expect(unsafe_code)]
     unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
-        kResultOk
+        kNotImplemented
     }
 
     #[expect(unsafe_code)]
@@ -324,6 +327,25 @@ mod tests {
             }
             // Never clobbered by a rejected parse.
             assert_eq!(out, 0.25);
+        }
+    }
+
+    /// State (de)serialization is out of scope — reported honestly as
+    /// `kNotImplemented` on every state verb, never a silent success
+    /// that would lose the host's state (mirrors the component's
+    /// `state_stream_reports_not_implemented`).
+    #[expect(unsafe_code)]
+    #[test]
+    fn state_stream_reports_not_implemented() {
+        let controller = GainController::new();
+        // SAFETY: null `IBStream` is unused by the stubs.
+        unsafe {
+            assert_eq!(
+                controller.setComponentState(ptr::null_mut()),
+                kNotImplemented
+            );
+            assert_eq!(controller.setState(ptr::null_mut()), kNotImplemented);
+            assert_eq!(controller.getState(ptr::null_mut()), kNotImplemented);
         }
     }
 }

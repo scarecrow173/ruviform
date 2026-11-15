@@ -39,6 +39,9 @@ host = [
     # CLAP L0 editor-attach slice). Kept behind `host` so the default
     # feature set stays minimal.
     "clack-extensions/gui",
+    # `state` — `PluginState` host calls (`save_state`/`restore_state`,
+    # Issue #630 adapter-state-bridge slice). Same additive gate.
+    "clack-extensions/state",
 ]
 
 [dependencies]

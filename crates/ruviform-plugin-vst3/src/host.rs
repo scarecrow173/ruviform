@@ -123,9 +123,23 @@
 //! - Load/scan/instantiate/lifecycle failures converge to
 //!   `Err(Vst3HostError)`/`Err(HostError)`/`Err(PrepareError)` — never
 //!   a panic.
-//! - `save_state`/`restore_state` keep the [`Plugin`] defaults
-//!   (`Err(HostError::Unsupported)`) — the bridge never calls
-//!   `setState`/`getState`/`setComponentState`.
+//! - `save_state`/`restore_state` drive the standard state verbs
+//!   through a bridge-owned `IBStream` (`BridgeStream`): save calls
+//!   `IComponent::getState` (+ `IEditController::getState` for
+//!   distributed plugins) and frames the two payloads as
+//!   `[u32 LE comp_len][comp][u32 LE ctrl_len][ctrl]`; restore runs
+//!   the VST3-documented sequence `component.setState` →
+//!   `component.getState` → `controller.setComponentState` →
+//!   `controller.setState`. A plugin answering `kNotImplemented`
+//!   maps to `Err(HostError::Unsupported)` (honest capability
+//!   decline); other failures and corrupt adapter frames map to
+//!   `Err(HostError::PluginFailed)`. Blobs shorter than the 8-byte
+//!   frame header cannot be this adapter's serialization, so they
+//!   are foreign state delegated to the plugin unchanged — the
+//!   plugin owns its state format and its decline still surfaces as
+//!   `Unsupported`. Single-component plugins skip the controller
+//!   calls (`ctrl_len = 0`). These are non-RT verbs — the stream's
+//!   `Vec`/`RefCell` state exists only inside the call.
 //! - `open_gui`/`close_gui` are implemented for Windows
 //!   (`kPlatformTypeHWND`): `createView("editor")` →
 //!   `isPlatformTypeSupported` → `setFrame(BridgePlugFrame)` →
@@ -171,13 +185,14 @@ use std::sync::Arc;
 
 use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
-use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
+use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, HostError,
     ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
     PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
     ProcessStatus, TransportInfo, erase,
 };
+use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
     Event as VstEvent, FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait,
@@ -190,11 +205,11 @@ use vst3::Steinberg::Vst::{
     ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_, TChar, ViewType,
 };
 use vst3::Steinberg::{
-    FUnknown, FUnknown_iid, IPlugFrame, IPlugFrameTrait, IPlugView, IPlugViewTrait,
-    IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait, IPluginFactory3,
-    IPluginFactory3Trait, IPluginFactoryTrait, PClassInfo, PClassInfo2, PClassInfoW, TUID,
-    ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk, kResultTrue,
-    tresult,
+    FUnknown, FUnknown_iid, IBStream, IBStreamTrait, IPlugFrame, IPlugFrameTrait, IPlugView,
+    IPlugViewTrait, IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait,
+    IPluginFactory3, IPluginFactory3Trait, IPluginFactoryTrait, PClassInfo, PClassInfo2,
+    PClassInfoW, TUID, ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk,
+    kResultTrue, tresult,
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
@@ -765,6 +780,212 @@ impl IComponentHandlerTrait for BridgeComponentHandler {
         // has no connection point in v1, so the honest answer is the
         // refusal.
         kNotImplemented
+    }
+}
+
+/// Mutable state behind [`BridgeStream`]'s `&self` trait methods —
+/// one `RefCell` so `read`/`write`/`seek` never hold split borrows.
+struct BridgeStreamState {
+    data: Vec<u8>,
+    /// Absolute position — `u64` because `tell`/`seek` speak `int64`;
+    /// positions are always non-negative (negative targets are
+    /// refused before they land here) and may exceed `data.len()`
+    /// (file-like: reads hit EOF, writes zero-fill the gap).
+    pos: u64,
+}
+
+/// Bridge-owned `IBStream` — the byte pipe the standard state verbs
+/// (`IComponent::setState`/`getState`,
+/// `IEditController::setComponentState`/`setState`/`getState`) read
+/// and write through. One instance exists only inside a
+/// `save_state`/`restore_state` call — a non-RT verb, so the `Vec`
+/// growth, `RefCell` borrows and allocation are confined to the
+/// call and never touch the `process` path. The borrow is released
+/// before each trait method returns, so a re-entrant FFI call meets
+/// `try_borrow`'s defined `kResultFalse`, never a panic across the
+/// ABI.
+///
+/// Writes are bounded by [`WIRE_MAX_STATE_BYTES`] — the same ceiling
+/// the wire protocol enforces on the neutral blob. A plugin seeking
+/// far forward then writing cannot force an unbounded allocation:
+/// the stream answers a defined short write / `kResultFalse`
+/// instead (design `docs/designs/issue-630-adapter-state-bridge.md`).
+struct BridgeStream {
+    state: RefCell<BridgeStreamState>,
+}
+
+impl BridgeStream {
+    /// An empty stream — the `getState` write target.
+    fn new() -> Self {
+        Self {
+            state: RefCell::new(BridgeStreamState {
+                data: Vec::new(),
+                pos: 0,
+            }),
+        }
+    }
+
+    /// A stream pre-filled with `bytes` at position 0 — the
+    /// `setState`/`setComponentState` read source.
+    fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self {
+            state: RefCell::new(BridgeStreamState {
+                data: bytes,
+                pos: 0,
+            }),
+        }
+    }
+
+    /// Drains the accumulated bytes — the stream is single-use
+    /// inside a state call, so taking (not cloning) is the honest
+    /// read-out once the plugin call has returned.
+    fn take_bytes(&self) -> Vec<u8> {
+        std::mem::take(&mut self.state.borrow_mut().data)
+    }
+}
+
+impl Default for BridgeStream {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Class for BridgeStream {
+    type Interfaces = (IBStream,);
+}
+
+#[expect(unsafe_code)]
+impl IBStreamTrait for BridgeStream {
+    unsafe fn read(
+        &self,
+        buffer: *mut c_void,
+        num_bytes: i32,
+        num_bytes_read: *mut i32,
+    ) -> tresult {
+        if num_bytes < 0 || (buffer.is_null() && num_bytes > 0) {
+            return kInvalidArgument;
+        }
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        let start = usize::try_from(state.pos).unwrap_or(usize::MAX);
+        // EOF is honest: fewer bytes than requested is reported
+        // through `num_bytes_read`, never fabricated.
+        let count = state
+            .data
+            .len()
+            .saturating_sub(start)
+            .min(usize::try_from(num_bytes).unwrap_or(0));
+        if count > 0 {
+            // SAFETY: `buffer` is a valid `num_bytes`-byte destination
+            // per the IBStream contract (non-null checked for
+            // `num_bytes > 0`); `count <= num_bytes` and the source
+            // slice is inside `state.data`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    state.data[start..start + count].as_ptr(),
+                    buffer.cast::<u8>(),
+                    count,
+                );
+            }
+        }
+        state.pos = state
+            .pos
+            .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
+        if !num_bytes_read.is_null() {
+            // SAFETY: `num_bytes_read` is the contract's out-ptr —
+            // `count <= i32::MAX` because `num_bytes` is an `i32`.
+            unsafe { *num_bytes_read = i32::try_from(count).unwrap_or(i32::MAX) };
+        }
+        kResultOk
+    }
+
+    unsafe fn write(
+        &self,
+        buffer: *mut c_void,
+        num_bytes: i32,
+        num_bytes_written: *mut i32,
+    ) -> tresult {
+        if num_bytes < 0 || (buffer.is_null() && num_bytes > 0) {
+            return kInvalidArgument;
+        }
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        let start = usize::try_from(state.pos).unwrap_or(usize::MAX);
+        // Bounded growth: a seek far past the end cannot size an
+        // unbounded `Vec` — the write is capped at the wire ceiling
+        // and the short count is reported honestly.
+        let ceiling = usize::try_from(WIRE_MAX_STATE_BYTES).unwrap_or(usize::MAX);
+        let room = ceiling.saturating_sub(start);
+        let count = room.min(usize::try_from(num_bytes).unwrap_or(0));
+        if count > 0 {
+            let end = start.saturating_add(count);
+            // Zero-fill any seek gap, then extend for the payload —
+            // file-like semantics for a forward-seeking plugin.
+            state.data.resize(end, 0);
+            // SAFETY: `buffer` points at `num_bytes` readable bytes
+            // per the IBStream contract (non-null checked); the
+            // destination was just sized to hold `count` bytes.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    buffer.cast::<u8>(),
+                    state.data[start..end].as_mut_ptr(),
+                    count,
+                );
+            }
+            state.pos = state
+                .pos
+                .saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
+        }
+        if !num_bytes_written.is_null() {
+            // SAFETY: contract out-ptr; `count <= i32::MAX`.
+            unsafe { *num_bytes_written = i32::try_from(count).unwrap_or(i32::MAX) };
+        }
+        if count < usize::try_from(num_bytes).unwrap_or(0) {
+            // Stream-full short write — defined refusal, the caller
+            // sees the honest partial count.
+            return kResultFalse;
+        }
+        kResultOk
+    }
+
+    unsafe fn seek(&self, pos: i64, mode: i32, result: *mut i64) -> tresult {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        let base = if mode == sdk_enum_i32(kIBSeekSet) {
+            0
+        } else if mode == sdk_enum_i32(kIBSeekCur) {
+            i64::try_from(state.pos).unwrap_or(i64::MAX)
+        } else if mode == sdk_enum_i32(kIBSeekEnd) {
+            i64::try_from(state.data.len()).unwrap_or(i64::MAX)
+        } else {
+            return kInvalidArgument;
+        };
+        let Some(target) = base.checked_add(pos) else {
+            return kResultFalse;
+        };
+        if target < 0 {
+            return kResultFalse;
+        }
+        state.pos = u64::try_from(target).unwrap_or(u64::MAX);
+        if !result.is_null() {
+            // SAFETY: `result` is the contract's out-ptr.
+            unsafe { *result = target };
+        }
+        kResultOk
+    }
+
+    unsafe fn tell(&self, pos: *mut i64) -> tresult {
+        let Ok(state) = self.state.try_borrow() else {
+            return kResultFalse;
+        };
+        if !pos.is_null() {
+            // SAFETY: `pos` is the contract's out-ptr.
+            unsafe { *pos = i64::try_from(state.pos).unwrap_or(i64::MAX) };
+        }
+        kResultOk
     }
 }
 
@@ -2414,6 +2635,163 @@ fn push_report(reports: &mut Vec<Event>, stats: &mut MidiBridgeStats, event: Eve
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standard state verbs (non-RT)
+// ---------------------------------------------------------------------------
+
+/// Maps a state-verb `tresult` onto the neutral error surface:
+/// `kResultOk` succeeds, `kNotImplemented` is the honest capability
+/// decline (`HostError::Unsupported` — the same answer the existing
+/// L1 e2e pins for the stateless fixture), every other failure is a
+/// plugin failure.
+fn state_result(result: tresult) -> Result<(), HostError> {
+    if result == kResultOk {
+        Ok(())
+    } else if result == kNotImplemented {
+        Err(HostError::Unsupported)
+    } else {
+        Err(HostError::PluginFailed)
+    }
+}
+
+/// Smallest blob [`frame_state`] can emit — the two `u32 LE`
+/// length headers with both payloads empty. Anything shorter cannot
+/// be this adapter's serialization and is foreign input.
+const FRAME_HEADER_BYTES: usize = 8;
+
+/// Frames the component/controller payloads into the neutral blob —
+/// `[u32 LE comp_len][comp][u32 LE ctrl_len][ctrl]`. Each payload is
+/// capped by [`WIRE_MAX_STATE_BYTES`] inside `BridgeStream`, so the
+/// `u32` lengths cannot truncate.
+fn frame_state(comp: &[u8], ctrl: &[u8]) -> Vec<u8> {
+    let mut blob = Vec::with_capacity(8 + comp.len() + ctrl.len());
+    blob.extend_from_slice(&u32::try_from(comp.len()).unwrap_or(u32::MAX).to_le_bytes());
+    blob.extend_from_slice(comp);
+    blob.extend_from_slice(&u32::try_from(ctrl.len()).unwrap_or(u32::MAX).to_le_bytes());
+    blob.extend_from_slice(ctrl);
+    blob
+}
+
+/// Parses the framed blob back into `(component, controller)`
+/// payloads — `None` on any malformed shape (short header, length
+/// mismatch, trailing bytes). Callers must only feed it blobs of at
+/// least [`FRAME_HEADER_BYTES`]; shorter input is foreign state, not
+/// a truncated frame.
+fn unframe_state(blob: &[u8]) -> Option<(&[u8], &[u8])> {
+    let comp_len = u32::from_le_bytes(blob.get(..4)?.try_into().ok()?) as usize;
+    let comp_end = 4usize.checked_add(comp_len)?;
+    let comp = blob.get(4..comp_end)?;
+    let ctrl_len_end = comp_end.checked_add(4)?;
+    let ctrl_len = u32::from_le_bytes(blob.get(comp_end..ctrl_len_end)?.try_into().ok()?) as usize;
+    let ctrl_end = ctrl_len_end.checked_add(ctrl_len)?;
+    let ctrl = blob.get(ctrl_len_end..ctrl_end)?;
+    (ctrl_end == blob.len()).then_some((comp, ctrl))
+}
+
+/// Runs the VST3 save sequence against the live COM objects:
+/// `component.getState` into a fresh `BridgeStream`, then — only for
+/// distributed plugins (`single_component == false`) —
+/// `controller.getState` into a second stream. Returns the two raw
+/// payloads; the caller frames them.
+#[expect(unsafe_code)]
+fn save_component_state(
+    component: &ComPtr<IComponent>,
+    controller: Option<&ComPtr<IEditController>>,
+    single_component: bool,
+) -> Result<(Vec<u8>, Vec<u8>), HostError> {
+    let comp_stream = ComWrapper::new(BridgeStream::new());
+    let Some(comp_ptr) = comp_stream.to_com_ptr::<IBStream>() else {
+        return Err(HostError::PluginFailed);
+    };
+    // SAFETY: `component` is a live `IComponent` owned by the caller;
+    // `comp_ptr` is a valid `IBStream` whose `ComWrapper` outlives
+    // the call.
+    state_result(unsafe { component.getState(comp_ptr.as_ptr()) })?;
+    let comp_bytes = comp_stream.take_bytes();
+
+    if single_component {
+        // The component *is* the controller — a second `getState`
+        // would re-serialize the same object.
+        return Ok((comp_bytes, Vec::new()));
+    }
+    let Some(controller) = controller else {
+        return Err(HostError::PluginFailed);
+    };
+    let ctrl_stream = ComWrapper::new(BridgeStream::new());
+    let Some(ctrl_ptr) = ctrl_stream.to_com_ptr::<IBStream>() else {
+        return Err(HostError::PluginFailed);
+    };
+    // SAFETY: same contract as the component call above.
+    state_result(unsafe { controller.getState(ctrl_ptr.as_ptr()) })?;
+    Ok((comp_bytes, ctrl_stream.take_bytes()))
+}
+
+/// Runs the VST3 restore sequence in the spec's order:
+/// `component.setState` → `component.getState` (re-serializes the
+/// normalized component state the controller consumes) →
+/// `controller.setComponentState` → `controller.setState`.
+/// Single-component plugins stop after the component pair — the
+/// controller calls have no separate object to drive.
+///
+/// Blobs of at least [`FRAME_HEADER_BYTES`] must parse as this
+/// adapter's framing — a corrupt frame is `PluginFailed`. Shorter
+/// blobs cannot be our serialization, so they are foreign state
+/// delegated to the plugin as the raw component payload: the plugin
+/// owns its state format and answers honestly (the stateless
+/// fixture's `kNotImplemented` still maps to `Unsupported`, the
+/// decline the L1 e2e pins).
+#[expect(unsafe_code)]
+fn restore_component_state(
+    component: &ComPtr<IComponent>,
+    controller: Option<&ComPtr<IEditController>>,
+    single_component: bool,
+    blob: &[u8],
+) -> Result<(), HostError> {
+    let (comp_bytes, ctrl_bytes) = if blob.len() < FRAME_HEADER_BYTES {
+        (blob, &[][..])
+    } else {
+        let Some((comp, ctrl)) = unframe_state(blob) else {
+            return Err(HostError::PluginFailed);
+        };
+        (comp, ctrl)
+    };
+    let comp_in = ComWrapper::new(BridgeStream::from_bytes(comp_bytes.to_vec()));
+    let Some(comp_in_ptr) = comp_in.to_com_ptr::<IBStream>() else {
+        return Err(HostError::PluginFailed);
+    };
+    // SAFETY: `component` is a live `IComponent`; `comp_in_ptr` is a
+    // valid `IBStream` positioned at 0 holding `comp_bytes`.
+    state_result(unsafe { component.setState(comp_in_ptr.as_ptr()) })?;
+
+    let norm = ComWrapper::new(BridgeStream::new());
+    let Some(norm_ptr) = norm.to_com_ptr::<IBStream>() else {
+        return Err(HostError::PluginFailed);
+    };
+    // SAFETY: same contract — `norm_ptr` is the `getState` target.
+    state_result(unsafe { component.getState(norm_ptr.as_ptr()) })?;
+    if single_component {
+        return Ok(());
+    }
+    let Some(controller) = controller else {
+        return Err(HostError::PluginFailed);
+    };
+    // Rewind the normalized stream — `getState` left the position at
+    // the end and `setComponentState` reads from the start.
+    // SAFETY: `norm_ptr` is a valid `IBStream`.
+    state_result(unsafe { norm_ptr.seek(0, sdk_enum_i32(kIBSeekSet), ptr::null_mut()) })?;
+    // SAFETY: `controller` is a live `IEditController`; `norm_ptr`
+    // is a valid `IBStream` at position 0.
+    state_result(unsafe { controller.setComponentState(norm_ptr.as_ptr()) })?;
+
+    let ctrl_in = ComWrapper::new(BridgeStream::from_bytes(ctrl_bytes.to_vec()));
+    let Some(ctrl_in_ptr) = ctrl_in.to_com_ptr::<IBStream>() else {
+        return Err(HostError::PluginFailed);
+    };
+    // SAFETY: `controller` is live; `ctrl_in_ptr` holds `ctrl_bytes`
+    // at position 0.
+    state_result(unsafe { controller.setState(ctrl_in_ptr.as_ptr()) })
+}
+
 impl Plugin for Vst3Plugin {
     fn descriptor(&self) -> PluginDescriptor {
         self.descriptor
@@ -2594,6 +2972,63 @@ impl Plugin for Vst3Plugin {
         }
     }
 
+    /// `save_state` → `IComponent::getState` (+ `IEditController::
+    /// getState` for distributed plugins) through bridge-owned
+    /// `IBStream`s, framed as `[u32 LE comp_len][comp][u32 LE
+    /// ctrl_len][ctrl]` (design
+    /// `docs/designs/issue-630-adapter-state-bridge.md`).
+    ///
+    /// **RT contract:** non-RT only — the stream `Vec`s allocate
+    /// inside this call and never touch the `process` path.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] before `init` or on a plugin
+    /// state failure; [`HostError::Unsupported`] when the plugin
+    /// answers `kNotImplemented` — the honest capability decline.
+    fn save_state(&mut self) -> Result<Vec<u8>, HostError> {
+        if self.phase < Phase::Initialized {
+            // Same bad-state convention as `open_gui` — the state
+            // verbs are only legal on an initialized component.
+            return Err(HostError::PluginFailed);
+        }
+        let Some(component) = self.component.as_ref() else {
+            return Err(HostError::PluginFailed);
+        };
+        let (comp, ctrl) =
+            save_component_state(component, self.controller.as_ref(), self.single_component)?;
+        Ok(frame_state(&comp, &ctrl))
+    }
+
+    /// `restore_state` → the VST3-documented sequence
+    /// `component.setState` → `component.getState` →
+    /// `controller.setComponentState` → `controller.setState`
+    /// (single-component plugins run the component pair only).
+    ///
+    /// **RT contract:** non-RT only — may allocate.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] before `init`, on a corrupt
+    /// adapter frame, or on a plugin state failure;
+    /// [`HostError::Unsupported`] on `kNotImplemented`. Blobs too
+    /// short to be this adapter's framing are foreign state and are
+    /// delegated to the plugin unchanged.
+    fn restore_state(&mut self, state: &[u8]) -> Result<(), HostError> {
+        if self.phase < Phase::Initialized {
+            return Err(HostError::PluginFailed);
+        }
+        let Some(component) = self.component.as_ref() else {
+            return Err(HostError::PluginFailed);
+        };
+        restore_component_state(
+            component,
+            self.controller.as_ref(),
+            self.single_component,
+            state,
+        )
+    }
+
     /// `open_gui` → `createView("editor")` →
     /// `isPlatformTypeSupported` → `setFrame(BridgePlugFrame)` →
     /// `attached(parent)` — Windows `HWND` only; other platforms and
@@ -2732,7 +3167,11 @@ mod tests {
     // named import shadows the `vst3` `f64` alias brought in by
     // `use super::*`.
     use ruviform_plugin_core::{Event, EventKind, HostInput, HostOutput, ParamEvent, ParamValue};
+    use std::cell::Cell;
     use std::path::PathBuf;
+    use std::rc::Rc;
+    use vst3::ComRef;
+    use vst3::Steinberg::Vst::RoutingInfo;
 
     const FRAMES: usize = 64;
     const FRAMES_U32: u32 = 64;
@@ -3017,15 +3456,37 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_state_verbs_are_defaults() {
+    fn state_verbs_gate_and_fixture_declines() {
         let library = load_fixture();
         let factories = library.factories();
         let mut plugin = factories[0].create();
+        // Pre-init — the bad-state refusal, same convention as
+        // `open_gui` (phase < Initialized → `PluginFailed`).
+        assert_eq!(plugin.save_state(), Err(HostError::PluginFailed));
+        assert_eq!(
+            plugin.restore_state(&[1, 2, 3]),
+            Err(HostError::PluginFailed)
+        );
+        plugin.init().expect("init");
+        // The workspace fixture's state verbs are honest
+        // `kNotImplemented` stubs → the defined capability decline
+        // (`Unsupported`), never a fabricated success — the answer
+        // the L1 e2e pins over the wire.
         assert_eq!(plugin.save_state(), Err(HostError::Unsupported));
+        // `[1, 2, 3]` is shorter than the 8-byte frame header, so it
+        // is foreign state delegated to the plugin — which declines
+        // `kNotImplemented` → `Unsupported`.
         assert_eq!(
             plugin.restore_state(&[1, 2, 3]),
             Err(HostError::Unsupported)
         );
+        // A blob long enough to be this adapter's framing but corrupt
+        // (`comp_len` exceeds the payload) is rejected before any
+        // plugin call → `PluginFailed`.
+        let mut corrupt = Vec::new();
+        corrupt.extend_from_slice(&100u32.to_le_bytes());
+        corrupt.extend_from_slice(b"short");
+        assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
     }
 
     #[test]
@@ -3242,5 +3703,638 @@ mod tests {
             panic!("second report must be the Midi echo");
         };
         assert!(matches!(midi.kind, MidiKind::NoteOn { .. }));
+    }
+
+    // -----------------------------------------------------------------
+    // Stateful COM doubles — the in-process oracle for the state
+    // bridge (design `issue-630-adapter-state-bridge`). These emulate
+    // a *stateful* plugin's verbs; they are not the real-ABI oracle —
+    // that arrives with the `test_stateful` fixture slice.
+    // -----------------------------------------------------------------
+
+    /// Ordered call log shared by the component/controller doubles —
+    /// pins the VST3 state-verb sequence across both objects.
+    type CallLog = Rc<RefCell<Vec<&'static str>>>;
+
+    /// Drains an `IBStream` into a `Vec` — the plugin-side read half.
+    #[expect(unsafe_code)]
+    unsafe fn stream_read_all(state: *mut IBStream) -> Result<Vec<u8>, tresult> {
+        let Some(stream) = (unsafe { ComRef::from_raw(state) }) else {
+            return Err(kInvalidArgument);
+        };
+        let mut out = Vec::new();
+        let mut buf = [0u8; 256];
+        loop {
+            let mut got = 0i32;
+            // SAFETY: `stream` is a valid `IBStream` for the call's
+            // duration; `buf` is a live 256-byte destination.
+            let result = unsafe {
+                stream.read(
+                    buf.as_mut_ptr().cast(),
+                    i32::try_from(buf.len()).unwrap_or(i32::MAX),
+                    &raw mut got,
+                )
+            };
+            if result != kResultOk {
+                return Err(result);
+            }
+            if got <= 0 {
+                return Ok(out);
+            }
+            out.extend_from_slice(&buf[..usize::try_from(got).unwrap_or(0)]);
+        }
+    }
+
+    /// Writes `bytes` into an `IBStream` — the plugin-side write half.
+    #[expect(unsafe_code)]
+    unsafe fn stream_write_all(state: *mut IBStream, bytes: &[u8]) -> tresult {
+        let Some(stream) = (unsafe { ComRef::from_raw(state) }) else {
+            return kInvalidArgument;
+        };
+        let mut written = 0i32;
+        // SAFETY: `stream` is a valid `IBStream`; `bytes` is a live
+        // readable slice of the reported length.
+        unsafe {
+            stream.write(
+                bytes.as_ptr() as *mut c_void,
+                i32::try_from(bytes.len()).unwrap_or(i32::MAX),
+                &raw mut written,
+            )
+        }
+    }
+
+    /// Test-only stateful `IComponent` — `setState` drains the stream
+    /// into `stored`, `getState` writes `stored` back, the way a real
+    /// plugin's state verbs behave. `state_result` overrides both
+    /// verbs' return for the decline/failure arms.
+    struct TestStatefulComponent {
+        stored: RefCell<Vec<u8>>,
+        state_result: Cell<tresult>,
+        log: CallLog,
+    }
+
+    impl TestStatefulComponent {
+        fn new(log: CallLog) -> Self {
+            Self {
+                stored: RefCell::new(Vec::new()),
+                state_result: Cell::new(kResultOk),
+                log,
+            }
+        }
+    }
+
+    impl Class for TestStatefulComponent {
+        type Interfaces = (IComponent,);
+    }
+
+    impl IPluginBaseTrait for TestStatefulComponent {
+        #[expect(unsafe_code)]
+        unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn terminate(&self) -> tresult {
+            kResultOk
+        }
+    }
+
+    #[expect(unsafe_code)]
+    impl IComponentTrait for TestStatefulComponent {
+        unsafe fn getControllerClassId(&self, class_id: *mut TUID) -> tresult {
+            if class_id.is_null() {
+                return kInvalidArgument;
+            }
+            // SAFETY: null-checked above; a CID distinct from any
+            // component CID — the distributed-plugin shape.
+            unsafe { class_id.write([0x5A; 16]) };
+            kResultOk
+        }
+
+        unsafe fn setIoMode(&self, _mode: i32) -> tresult {
+            kResultOk
+        }
+
+        unsafe fn getBusCount(&self, _media_type: i32, _dir: i32) -> i32 {
+            0
+        }
+
+        unsafe fn getBusInfo(
+            &self,
+            _media_type: i32,
+            _dir: i32,
+            _index: i32,
+            _bus: *mut BusInfo,
+        ) -> tresult {
+            kResultFalse
+        }
+
+        unsafe fn getRoutingInfo(
+            &self,
+            _in_info: *mut RoutingInfo,
+            _out_info: *mut RoutingInfo,
+        ) -> tresult {
+            kResultFalse
+        }
+
+        unsafe fn activateBus(
+            &self,
+            _media_type: i32,
+            _dir: i32,
+            _index: i32,
+            _state: u8,
+        ) -> tresult {
+            kResultOk
+        }
+
+        unsafe fn setActive(&self, _state: u8) -> tresult {
+            kResultOk
+        }
+
+        unsafe fn setState(&self, state: *mut IBStream) -> tresult {
+            self.log.borrow_mut().push("component.setState");
+            let override_result = self.state_result.get();
+            if override_result != kResultOk {
+                return override_result;
+            }
+            match unsafe { stream_read_all(state) } {
+                Ok(bytes) => {
+                    *self.stored.borrow_mut() = bytes;
+                    kResultOk
+                }
+                Err(result) => result,
+            }
+        }
+
+        unsafe fn getState(&self, state: *mut IBStream) -> tresult {
+            self.log.borrow_mut().push("component.getState");
+            let override_result = self.state_result.get();
+            if override_result != kResultOk {
+                return override_result;
+            }
+            unsafe { stream_write_all(state, &self.stored.borrow()) }
+        }
+    }
+
+    /// Test-only stateful `IEditController` — mirrors the component
+    /// double: `setComponentState` stores the normalized component
+    /// payload separately from `controller_state` so tests can prove
+    /// the hand-off content, and `log` records the call order.
+    struct TestStatefulController {
+        component_state: RefCell<Vec<u8>>,
+        controller_state: RefCell<Vec<u8>>,
+        state_result: Cell<tresult>,
+        log: CallLog,
+    }
+
+    impl TestStatefulController {
+        fn new(log: CallLog) -> Self {
+            Self {
+                component_state: RefCell::new(Vec::new()),
+                controller_state: RefCell::new(Vec::new()),
+                state_result: Cell::new(kResultOk),
+                log,
+            }
+        }
+    }
+
+    impl Class for TestStatefulController {
+        type Interfaces = (IEditController,);
+    }
+
+    impl IPluginBaseTrait for TestStatefulController {
+        #[expect(unsafe_code)]
+        unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn terminate(&self) -> tresult {
+            kResultOk
+        }
+    }
+
+    #[expect(unsafe_code)]
+    impl IEditControllerTrait for TestStatefulController {
+        unsafe fn setComponentState(&self, state: *mut IBStream) -> tresult {
+            self.log.borrow_mut().push("controller.setComponentState");
+            let override_result = self.state_result.get();
+            if override_result != kResultOk {
+                return override_result;
+            }
+            match unsafe { stream_read_all(state) } {
+                Ok(bytes) => {
+                    *self.component_state.borrow_mut() = bytes;
+                    kResultOk
+                }
+                Err(result) => result,
+            }
+        }
+
+        unsafe fn setState(&self, state: *mut IBStream) -> tresult {
+            self.log.borrow_mut().push("controller.setState");
+            let override_result = self.state_result.get();
+            if override_result != kResultOk {
+                return override_result;
+            }
+            match unsafe { stream_read_all(state) } {
+                Ok(bytes) => {
+                    *self.controller_state.borrow_mut() = bytes;
+                    kResultOk
+                }
+                Err(result) => result,
+            }
+        }
+
+        unsafe fn getState(&self, state: *mut IBStream) -> tresult {
+            self.log.borrow_mut().push("controller.getState");
+            let override_result = self.state_result.get();
+            if override_result != kResultOk {
+                return override_result;
+            }
+            unsafe { stream_write_all(state, &self.controller_state.borrow()) }
+        }
+
+        unsafe fn getParameterCount(&self) -> i32 {
+            0
+        }
+
+        unsafe fn getParameterInfo(&self, _param_index: i32, _info: *mut ParameterInfo) -> tresult {
+            kResultFalse
+        }
+
+        unsafe fn getParamStringByValue(
+            &self,
+            _id: ParamID,
+            _value_normalized: f64,
+            _string: *mut String128,
+        ) -> tresult {
+            kResultFalse
+        }
+
+        unsafe fn getParamValueByString(
+            &self,
+            _id: ParamID,
+            _string: *mut TChar,
+            _value_normalized: *mut f64,
+        ) -> tresult {
+            kResultFalse
+        }
+
+        unsafe fn normalizedParamToPlain(&self, _id: ParamID, value_normalized: f64) -> f64 {
+            value_normalized
+        }
+
+        unsafe fn plainParamToNormalized(&self, _id: ParamID, plain_value: f64) -> f64 {
+            plain_value
+        }
+
+        unsafe fn getParamNormalized(&self, _id: ParamID) -> f64 {
+            0.0
+        }
+
+        unsafe fn setParamNormalized(&self, _id: ParamID, _value: f64) -> tresult {
+            kResultOk
+        }
+
+        unsafe fn setComponentHandler(&self, _handler: *mut IComponentHandler) -> tresult {
+            kResultOk
+        }
+
+        unsafe fn createView(&self, _name: *const char8) -> *mut IPlugView {
+            ptr::null_mut()
+        }
+    }
+
+    /// Builds the distributed-plugin pair: a stateful component and
+    /// controller sharing one call log.
+    fn stateful_pair() -> (
+        ComWrapper<TestStatefulComponent>,
+        ComPtr<IComponent>,
+        ComWrapper<TestStatefulController>,
+        ComPtr<IEditController>,
+        CallLog,
+    ) {
+        let log: CallLog = Rc::new(RefCell::new(Vec::new()));
+        let comp_wrapper = ComWrapper::new(TestStatefulComponent::new(log.clone()));
+        let comp = comp_wrapper
+            .to_com_ptr::<IComponent>()
+            .expect("component exposes IComponent");
+        let ctrl_wrapper = ComWrapper::new(TestStatefulController::new(log.clone()));
+        let ctrl = ctrl_wrapper
+            .to_com_ptr::<IEditController>()
+            .expect("controller exposes IEditController");
+        (comp_wrapper, comp, ctrl_wrapper, ctrl, log)
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn bridge_stream_read_write_seek_tell_roundtrip() {
+        let wrapper = ComWrapper::new(BridgeStream::new());
+        let stream = wrapper
+            .to_com_ptr::<IBStream>()
+            .expect("stream exposes IBStream");
+        let bytes = b"hello";
+        // SAFETY: `stream` is a valid `IBStream` for the call's
+        // duration; `bytes` is a live readable slice.
+        unsafe {
+            let mut written = 0i32;
+            assert_eq!(
+                stream.write(bytes.as_ptr() as *mut c_void, 5, &raw mut written),
+                kResultOk
+            );
+            assert_eq!(written, 5);
+            let mut pos = 0i64;
+            assert_eq!(stream.tell(&raw mut pos), kResultOk);
+            assert_eq!(pos, 5);
+            // Rewind and read the payload back.
+            let mut result = 0i64;
+            assert_eq!(
+                stream.seek(0, sdk_enum_i32(kIBSeekSet), &raw mut result),
+                kResultOk
+            );
+            assert_eq!(result, 0);
+            let mut buf = [0u8; 16];
+            let mut got = 0i32;
+            assert_eq!(
+                stream.read(buf.as_mut_ptr().cast(), 16, &raw mut got),
+                kResultOk
+            );
+            // Honest partial read — only the 5 written bytes exist.
+            assert_eq!(got, 5);
+            assert_eq!(&buf[..5], b"hello");
+            // EOF: the next read reports 0 bytes, still `kResultOk`.
+            let mut got = -1i32;
+            assert_eq!(
+                stream.read(buf.as_mut_ptr().cast(), 16, &raw mut got),
+                kResultOk
+            );
+            assert_eq!(got, 0);
+        }
+        assert_eq!(wrapper.take_bytes(), b"hello");
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn bridge_stream_rejects_invalid_arguments() {
+        let wrapper = ComWrapper::new(BridgeStream::new());
+        let stream = wrapper
+            .to_com_ptr::<IBStream>()
+            .expect("stream exposes IBStream");
+        let mut buf = [0u8; 8];
+        let mut out = 0i32;
+        // SAFETY: all pointers are either valid or deliberately null
+        // to exercise the defined refusals.
+        unsafe {
+            // Null buffer with a positive count.
+            assert_eq!(
+                stream.read(ptr::null_mut(), 4, &raw mut out),
+                kInvalidArgument
+            );
+            // Negative byte count.
+            assert_eq!(
+                stream.read(buf.as_mut_ptr().cast(), -1, &raw mut out),
+                kInvalidArgument
+            );
+            assert_eq!(
+                stream.write(ptr::null_mut(), 4, &raw mut out),
+                kInvalidArgument
+            );
+            assert_eq!(
+                stream.write(buf.as_ptr() as *mut c_void, -1, &raw mut out),
+                kInvalidArgument
+            );
+            // Unknown seek mode.
+            assert_eq!(stream.seek(0, 99, ptr::null_mut()), kInvalidArgument);
+            // Negative target position.
+            assert_eq!(
+                stream.seek(-1, sdk_enum_i32(kIBSeekSet), ptr::null_mut()),
+                kResultFalse
+            );
+            // Overflowing target position — needs a nonzero base, so
+            // write a byte first (`kIBSeekEnd` bases on `data.len()`).
+            let mut written = 0i32;
+            assert_eq!(
+                stream.write(b"x".as_ptr() as *mut c_void, 1, &raw mut written),
+                kResultOk
+            );
+            assert_eq!(
+                stream.seek(i64::MAX, sdk_enum_i32(kIBSeekEnd), ptr::null_mut()),
+                kResultFalse
+            );
+            // Null out-pointers are tolerated — `tell`/`seek` still
+            // perform the operation.
+            assert_eq!(stream.tell(ptr::null_mut()), kResultOk);
+            assert_eq!(
+                stream.seek(0, sdk_enum_i32(kIBSeekSet), ptr::null_mut()),
+                kResultOk
+            );
+        }
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn bridge_stream_sparse_write_and_bounded_reads() {
+        let wrapper = ComWrapper::new(BridgeStream::new());
+        let stream = wrapper
+            .to_com_ptr::<IBStream>()
+            .expect("stream exposes IBStream");
+        // SAFETY: `stream` is a valid `IBStream` for the call's
+        // duration; buffers are live for their reported lengths.
+        unsafe {
+            let mut written = 0i32;
+            assert_eq!(
+                stream.write(b"hi".as_ptr() as *mut c_void, 2, &raw mut written),
+                kResultOk
+            );
+            // Forward seek past the end, then write — the gap is
+            // zero-filled, never fabricated content.
+            assert_eq!(
+                stream.seek(4, sdk_enum_i32(kIBSeekSet), ptr::null_mut()),
+                kResultOk
+            );
+            assert_eq!(
+                stream.write(b"yo".as_ptr() as *mut c_void, 2, &raw mut written),
+                kResultOk
+            );
+            assert_eq!(written, 2);
+            // Bounded read: ask for 3 of the 6 bytes.
+            assert_eq!(
+                stream.seek(0, sdk_enum_i32(kIBSeekSet), ptr::null_mut()),
+                kResultOk
+            );
+            let mut buf = [0xFFu8; 8];
+            let mut got = 0i32;
+            assert_eq!(
+                stream.read(buf.as_mut_ptr().cast(), 3, &raw mut got),
+                kResultOk
+            );
+            assert_eq!(got, 3);
+            assert_eq!(&buf[..3], b"hi\0");
+            // Seek beyond the end then read — honest zero-byte EOF.
+            assert_eq!(
+                stream.seek(99, sdk_enum_i32(kIBSeekSet), ptr::null_mut()),
+                kResultOk
+            );
+            let mut got = -1i32;
+            assert_eq!(
+                stream.read(buf.as_mut_ptr().cast(), 8, &raw mut got),
+                kResultOk
+            );
+            assert_eq!(got, 0);
+        }
+        assert_eq!(wrapper.take_bytes(), b"hi\0\0yo");
+    }
+
+    #[test]
+    fn frame_state_roundtrip_and_malformed_rejected() {
+        let blob = frame_state(b"component-payload", b"controller-payload");
+        let (comp, ctrl) = unframe_state(&blob).expect("well-formed frame parses");
+        assert_eq!(comp, b"component-payload");
+        assert_eq!(ctrl, b"controller-payload");
+        // Empty payloads still produce a parseable 8-byte frame.
+        let empty = frame_state(b"", b"");
+        let (comp, ctrl) = unframe_state(&empty).expect("empty frame parses");
+        assert!(comp.is_empty() && ctrl.is_empty());
+        // Corrupt shapes all decline.
+        let mut trailing = blob.clone();
+        trailing.push(0);
+        assert!(unframe_state(&trailing).is_none());
+        let mut oversized = Vec::new();
+        oversized.extend_from_slice(&u32::MAX.to_le_bytes());
+        oversized.extend_from_slice(b"x");
+        assert!(unframe_state(&oversized).is_none());
+        assert!(unframe_state(&blob[..blob.len() - 1]).is_none());
+    }
+
+    #[test]
+    fn state_roundtrip_distributed_order_and_payloads() {
+        let (comp_wrapper, comp, ctrl_wrapper, ctrl, log) = stateful_pair();
+        *comp_wrapper.stored.borrow_mut() = b"component-state".to_vec();
+        *ctrl_wrapper.controller_state.borrow_mut() = b"controller-state".to_vec();
+
+        let (comp_bytes, ctrl_bytes) =
+            save_component_state(&comp, Some(&ctrl), false).expect("save succeeds");
+        assert_eq!(comp_bytes, b"component-state");
+        assert_eq!(ctrl_bytes, b"controller-state");
+        assert_eq!(*log.borrow(), ["component.getState", "controller.getState"]);
+
+        // Dirty the live state, then restore the framed blob.
+        *comp_wrapper.stored.borrow_mut() = b"dirty".to_vec();
+        ctrl_wrapper.component_state.borrow_mut().clear();
+        ctrl_wrapper.controller_state.borrow_mut().clear();
+        log.borrow_mut().clear();
+
+        let blob = frame_state(&comp_bytes, &ctrl_bytes);
+        restore_component_state(&comp, Some(&ctrl), false, &blob).expect("restore succeeds");
+
+        assert_eq!(*comp_wrapper.stored.borrow(), b"component-state");
+        assert_eq!(*ctrl_wrapper.controller_state.borrow(), b"controller-state");
+        // `setComponentState` receives the *re-serialized* component
+        // state — the VST3 hand-off, not the raw input blob.
+        assert_eq!(*ctrl_wrapper.component_state.borrow(), b"component-state");
+        assert_eq!(
+            *log.borrow(),
+            [
+                "component.setState",
+                "component.getState",
+                "controller.setComponentState",
+                "controller.setState",
+            ]
+        );
+    }
+
+    #[test]
+    fn state_roundtrip_single_component_skips_controller() {
+        // `single_component == true` — the component *is* the
+        // controller: no controller verbs run and the framed ctrl
+        // payload is empty (a second `getState` would re-serialize
+        // the same object).
+        let (comp_wrapper, comp, _ctrl_wrapper, ctrl, log) = stateful_pair();
+        *comp_wrapper.stored.borrow_mut() = b"solo-state".to_vec();
+
+        let (comp_bytes, ctrl_bytes) =
+            save_component_state(&comp, Some(&ctrl), true).expect("save succeeds");
+        assert_eq!(comp_bytes, b"solo-state");
+        assert_eq!(ctrl_bytes.len(), 0);
+        assert_eq!(*log.borrow(), ["component.getState"]);
+
+        log.borrow_mut().clear();
+        let blob = frame_state(&comp_bytes, &ctrl_bytes);
+        restore_component_state(&comp, Some(&ctrl), true, &blob).expect("restore succeeds");
+        assert_eq!(*log.borrow(), ["component.setState", "component.getState"]);
+        assert_eq!(*comp_wrapper.stored.borrow(), b"solo-state");
+    }
+
+    #[test]
+    fn state_restore_rejects_corrupt_frame_before_plugin_calls() {
+        let (_comp_wrapper, comp, _ctrl_wrapper, ctrl, log) = stateful_pair();
+        // Trailing byte after a well-formed frame.
+        let mut blob = frame_state(b"c", b"t");
+        blob.push(0);
+        assert_eq!(
+            restore_component_state(&comp, Some(&ctrl), false, &blob),
+            Err(HostError::PluginFailed)
+        );
+        // `comp_len` larger than the payload.
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&100u32.to_le_bytes());
+        blob.extend_from_slice(b"short");
+        assert_eq!(
+            restore_component_state(&comp, Some(&ctrl), false, &blob),
+            Err(HostError::PluginFailed)
+        );
+        // No state verb ran — rejection happens at the boundary.
+        assert!(log.borrow().is_empty());
+    }
+
+    #[test]
+    fn state_restore_foreign_blob_delegates_to_plugin() {
+        // Shorter than `FRAME_HEADER_BYTES` — cannot be this
+        // adapter's serialization, so the raw blob becomes the
+        // component payload and the plugin owns validation (the L1
+        // e2e's `[0xAA, 0xBB]` case).
+        let (comp_wrapper, comp, ctrl_wrapper, ctrl, log) = stateful_pair();
+        let blob = [0xAA, 0xBB];
+        restore_component_state(&comp, Some(&ctrl), false, &blob).expect("restore succeeds");
+        assert_eq!(*comp_wrapper.stored.borrow(), blob.to_vec());
+        // The normalized component state reaches `setComponentState`;
+        // the empty ctrl payload reaches `setState`.
+        assert_eq!(*ctrl_wrapper.component_state.borrow(), blob.to_vec());
+        assert!(ctrl_wrapper.controller_state.borrow().is_empty());
+        assert_eq!(
+            *log.borrow(),
+            [
+                "component.setState",
+                "component.getState",
+                "controller.setComponentState",
+                "controller.setState",
+            ]
+        );
+    }
+
+    #[test]
+    fn state_knotimplemented_maps_to_unsupported() {
+        let (comp_wrapper, comp, ctrl_wrapper, ctrl, _log) = stateful_pair();
+        comp_wrapper.state_result.set(kNotImplemented);
+        ctrl_wrapper.state_result.set(kNotImplemented);
+        // Save declines at the first state verb.
+        assert_eq!(
+            save_component_state(&comp, Some(&ctrl), false),
+            Err(HostError::Unsupported)
+        );
+        // Restore declines at `component.setState`.
+        let blob = frame_state(b"x", b"y");
+        assert_eq!(
+            restore_component_state(&comp, Some(&ctrl), false, &blob),
+            Err(HostError::Unsupported)
+        );
+        // Any other failure is a plugin failure, not a capability
+        // answer.
+        comp_wrapper.state_result.set(kResultFalse);
+        assert_eq!(
+            save_component_state(&comp, Some(&ctrl), false),
+            Err(HostError::PluginFailed)
+        );
     }
 }

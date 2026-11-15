@@ -84,9 +84,16 @@
 //! - Load/scan/instantiate/lifecycle failures converge to
 //!   `Err(ClapHostError)`/`Err(HostError)`/`Err(PrepareError)` — never
 //!   a panic.
-//! - `save_state`/`restore_state` keep the [`Plugin`] defaults
-//!   (`Err(HostError::Unsupported)`) — the `state` extension is
-//!   unimplemented in v1.
+//! - `save_state`/`restore_state` drive the plugin's `clap.ext.state`
+//!   extension through the `PluginState` host calls (design
+//!   `docs/designs/issue-630-adapter-state-bridge.md`): the plugin's
+//!   bytes pass through unchanged in both directions — the neutral
+//!   blob is opaque. A plugin without the extension answers the
+//!   honest `Err(HostError::Unsupported)`; a declined `save`/`load`
+//!   call answers `Err(HostError::PluginFailed)`. These are non-RT
+//!   verbs — the `Vec`/`Cursor` buffers exist only inside the call.
+//!   The host-side `HostState`/`mark_dirty` notification path is not
+//!   registered (plugin-driven dirty notification is a later slice).
 //! - `open_gui`/`close_gui` drive the plugin's `clap.ext.gui`
 //!   extension through the `PluginGui` host calls (design
 //!   `docs/designs/issue-389-clap-l0-editor-attach.md`): Windows
@@ -124,6 +131,7 @@ use clack_common::utils::ClapId;
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
 use clack_extensions::gui::{GuiApiType, GuiConfiguration, PluginGui, Window};
 use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
+use clack_extensions::state::PluginState;
 use clack_host::entry::{PluginEntry, PluginEntryError};
 use clack_host::host::{HostExtensions, HostHandlers, HostInfo, SharedHandler};
 use clack_host::plugin::{
@@ -1069,6 +1077,61 @@ impl Plugin for ClapPlugin {
             .map_err(|_| HostError::PluginFailed)
     }
 
+    /// `save_state` → `clap.ext.state` `PluginState::save` into a
+    /// byte buffer — the plugin-defined bytes pass through unchanged
+    /// (design `docs/designs/issue-630-adapter-state-bridge.md`).
+    ///
+    /// **RT contract:** non-RT only — the `Vec` allocates inside this
+    /// call and never touches the `process` path.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] before `init` or when the plugin's
+    /// `save` declines; [`HostError::Unsupported`] when the plugin
+    /// ships no `clap.ext.state` extension — the honest capability
+    /// decline.
+    fn save_state(&mut self) -> Result<Vec<u8>, HostError> {
+        let Some(instance) = self.instance.as_mut() else {
+            // Same bad-state convention as `open_gui` — the state
+            // verbs are only legal on an initialized instance.
+            return Err(HostError::PluginFailed);
+        };
+        let handle = instance.plugin_handle();
+        let Some(state) = handle.get_extension::<PluginState>() else {
+            return Err(HostError::Unsupported);
+        };
+        let mut bytes = Vec::new();
+        state
+            .save(&handle, &mut bytes)
+            .map_err(|_| HostError::PluginFailed)?;
+        Ok(bytes)
+    }
+
+    /// `restore_state` → `clap.ext.state` `PluginState::load` from
+    /// the supplied bytes — the plugin owns state-format validation;
+    /// the adapter forwards the blob unchanged.
+    ///
+    /// **RT contract:** non-RT only — may allocate.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::PluginFailed`] before `init` or when the plugin's
+    /// `load` declines; [`HostError::Unsupported`] when the plugin
+    /// ships no `clap.ext.state` extension.
+    fn restore_state(&mut self, state_bytes: &[u8]) -> Result<(), HostError> {
+        let Some(instance) = self.instance.as_mut() else {
+            return Err(HostError::PluginFailed);
+        };
+        let handle = instance.plugin_handle();
+        let Some(state) = handle.get_extension::<PluginState>() else {
+            return Err(HostError::Unsupported);
+        };
+        let mut reader = std::io::Cursor::new(state_bytes);
+        state
+            .load(&handle, &mut reader)
+            .map_err(|_| HostError::PluginFailed)
+    }
+
     /// `open_gui` → `clap.ext.gui` negotiation → `create` →
     /// `set_parent` → `show` — Windows `win32` embedded attach only
     /// (design `docs/designs/issue-389-clap-l0-editor-attach.md`
@@ -1508,10 +1571,21 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_state_verbs_are_defaults() {
+    fn state_verbs_gate_and_fixture_declines() {
         let library = load_fixture();
         let factories = library.factories();
         let mut plugin = factories[0].create();
+        // Pre-init — `instance=None`, the same bad-state refusal as
+        // `open_gui` (`PluginFailed`), not a capability answer.
+        assert_eq!(plugin.save_state(), Err(HostError::PluginFailed));
+        assert_eq!(
+            plugin.restore_state(&[1, 2, 3]),
+            Err(HostError::PluginFailed)
+        );
+        plugin.init().expect("init");
+        // The workspace fixture declares no `clap.ext.state`
+        // extension → the honest capability decline (`Unsupported`),
+        // never a fabricated success — the answer the L1 e2e pins.
         assert_eq!(plugin.save_state(), Err(HostError::Unsupported));
         assert_eq!(
             plugin.restore_state(&[1, 2, 3]),

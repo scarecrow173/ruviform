@@ -340,6 +340,7 @@ Directory: `docs/tasks`
 | TASK-034XqAHZThxH8yUF9OOG3k | Issue #625 T1 — handshake 分類正規化・doc-chain・lane 検証 | done | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TASK-034XAUE4Ki5ftJQfWI15b1 | Issue #627 T1 — 仮想優先3repo検証契約・POLICIES照合・移管台帳の文書化 | done | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TASK-3bwAN8UwWS5HsnXVLLCAap | Issue #630 test_fault slice — task | done | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TASK-034XEbSIxHaIKblAZevx7R | Issue #631 T1 — Plugin-dock scenario skeleton（ruviform-plugin-dock-test） | done | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
