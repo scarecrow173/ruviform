@@ -66,6 +66,7 @@ Directory: `docs/impl/exp`
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |
+| [issue-631-scenario-catalog.jsonl](./issue-631-scenario-catalog.jsonl) |
 | [issue-646-numeric-bench-profile.jsonl](./issue-646-numeric-bench-profile.jsonl) |
 | [issue-650-bench-smoke-coverage.jsonl](./issue-650-bench-smoke-coverage.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
