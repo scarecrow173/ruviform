@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034Y3isAfsgJBhG7QwK2Jg"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #628 close-out slice"
 created: "2026-11-15"
 updated: "2026-11-15"
@@ -163,6 +163,15 @@ canonical 検証は `evidence/rf628/close-out-verification.md` に記録
   blocking・既存 convention）
 - 製品 crate src 差分なし（`git diff origin/main --name-only`
   で確認）
+- review-protocol — 協調/敵対 2 pass を分離実施（subagent 不使用・
+  worker 契約に従い同一 actor の分離 pass）。Issue Candidate は
+  いずれも `REJECTED`/非 blocking（`deliver_cancel_errors` の型
+  制約は compile+test で確認済み、cancel report の `None` field は
+  design 判断として test pin 済み、`cargo fmt --all` の範囲外変更
+  なしを `git status` で確認）。CONFIRMED P0/P1 なし →
+  verdict: ACCEPT（non-blocking notes は Risks に記録）。
+- `git fetch origin main && git merge origin/main` — Already up to
+  date（merge 不要）。
 
 ## Risks
 

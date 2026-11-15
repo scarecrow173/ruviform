@@ -1,7 +1,7 @@
 ---
 id: "TASK-034Y3hoX8z7w5ICx2KWLaP"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #628 close-out タスク — 残存小項目統合"
 created: "2026-11-15"
 updated: "2026-11-15"
@@ -102,7 +102,7 @@ relations:
 - [x] T6: `evidence/rf628/` AC 棚卸し表 + 検証記録
 - [x] T7: 検証実行（fmt-check/check/lint/test/test-rt/prek）
 - [x] T8: impl/ir + impl/exp 記録、review-protocol レビュー
-- [ ] T9: docs index 再生成・origin/main merge・commit/push/PR
+- [x] T9: docs index 再生成・origin/main merge・commit/push/PR
 
 ## Done When
 
