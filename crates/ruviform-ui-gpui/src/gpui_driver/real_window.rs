@@ -24,9 +24,28 @@
 //! - `driver()` reports [`ScenarioDriver::RealOs`];
 //!   `capabilities()` claims `SemanticAction` + `MultiWindow`
 //!   everywhere, `VisualCapture` on OSes with a capture backend
-//!   (Windows/Linux), and `RealOsPointerOrKeyboard` only where
+//!   (Windows/Linux), `RealOsPointerOrKeyboard` only where
 //!   [`os_input::supported`] reports an injection backend —
-//!   Windows-only in this slice (Issue #313).
+//!   Windows-only in this slice (Issue #313), and
+//!   `NativePluginDock` only where the surface backend can mint a
+//!   real native container parent — Windows `GpuiSurfaceAdapter`
+//!   child HWNDs, never under `gpui-test` (Issue #631).
+//! - The native-slot ops ([`declare_native_slot`](Self::declare_native_slot)
+//!   and friends) drive the driver's canonical
+//!   [`surface::SharedSurface`] through the same `UiJob` seam, so
+//!   declare/bind/lease/validate/release and `container_token`
+//!   observation all execute inside `App` context on the UI thread.
+//!   The vocabulary stays `ruviform-ui` ([`SlotSpec`],
+//!   [`SurfaceSlotId`], [`SlotLease`], [`LeaseInfo`],
+//!   [`SlotState`]) — no GPUI type crosses this boundary. Ledger
+//!   refusals ([`SlotError`]) surface as
+//!   [`ScenarioError::Driver`] with a "native slot" prefix naming
+//!   the refused operation — `ScenarioError` has no
+//!   slot-specific variant and a new public error enum cannot cross
+//!   the private `gpui_driver` module boundary without a `lib.rs`
+//!   re-export, so the driver variant is the honest carrier here —
+//!   the prefix keeps a slot refusal distinguishable from a session
+//!   failure in evidence.
 //! - `dispatch_input`/`select_*`/`invoke` are *semantic* dispatch
 //!   through `ViewHost` — they bypass hit-testing and are not
 //!   pointer/keyboard evidence. The `os_*` methods below are the
@@ -61,7 +80,8 @@ use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::ipc::Event;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot, ViewSpec};
 use ruviform_ui::{
-    DriverEvent, Intent, LogicalRect, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
+    DriverEvent, Intent, LeaseInfo, LogicalRect, SlotError, SlotLease, SlotSpec, SlotState,
+    SurfaceSlotId, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
 };
 use ruviform_ui_test::golden::RgbaImage;
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
@@ -74,6 +94,7 @@ use super::capture::OsWindowGeometry;
 use super::os_input::{
     self, OsInputOutcome, OsKey, PreflightCheck, PreflightReport, PreflightScope,
 };
+use super::surface;
 use super::{GpuiDriver, Inner, UiJob, ViewMount, minted_from_ipc};
 use crate::render::RvfView;
 
@@ -669,6 +690,9 @@ enum Aim {
 /// Windows only in this slice (Issue #313); the claim records backend
 /// *presence* — a blocked environment stays claimed and each `os_*`
 /// op reports `EnvironmentBlocked` through the preflight gate instead.
+/// `NativePluginDock` requires a surface backend that mints real
+/// native container parents — Windows child HWNDs only, never
+/// `gpui-test` (Issue #631).
 fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     let mut capabilities = BTreeSet::from([
         ScenarioCapability::SemanticAction,
@@ -679,6 +703,9 @@ fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     }
     if os_input::supported() {
         capabilities.insert(ScenarioCapability::RealOsPointerOrKeyboard);
+    }
+    if native_dock_backend_available() {
+        capabilities.insert(ScenarioCapability::NativePluginDock);
     }
     capabilities
 }
@@ -1199,6 +1226,221 @@ impl SemanticGuiTest for RealOsGuiTest {
     }
 }
 
+/// Runs one surface-ledger op on the driver's canonical
+/// [`surface::SharedSurface`] inside `App` context. Ledger/backend
+/// refusals surface as [`ScenarioError::Driver`] with a
+/// "native slot" prefix naming the refused operation so evidence can
+/// tell a slot refusal from a session failure; session/driver
+/// failures keep their own [`ScenarioError`] shape.
+impl RealOsGuiTest {
+    fn slot_call<T, F>(&self, op: &'static str, call: F) -> Result<T, ScenarioError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&surface::SharedSurface) -> Result<T, SlotError> + Send + 'static,
+    {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, _cx| {
+                let surface = driver.surface();
+                let result = call(&surface)
+                    .map_err(|error| ScenarioError::Driver(format!("native slot `{op}`: {error}")));
+                let _ = reply.send(Ok(result));
+            })
+        })?
+    }
+
+    /// Declares `spec` on the canonical surface ledger — see
+    /// [`surface::SharedSurface::declare_slot`]. `spec.window` must
+    /// name a live session window; once
+    /// [`bind_native_slot`](Self::bind_native_slot) ties a mounted
+    /// `NativeSlot` key to the returned id, the renderer projects
+    /// real geometry/clip/visibility onto it every frame.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the ledger/backend refuses
+    /// (non-Windows backend, unknown owner window); session/driver
+    /// failures keep their [`ScenarioError`] shape.
+    pub fn declare_native_slot(&self, spec: SlotSpec) -> Result<SurfaceSlotId, ScenarioError> {
+        self.slot_call("declare_slot", move |surface| surface.declare_slot(spec))
+    }
+
+    /// Binds `key`'s mounted `NativeSlot` component in `window` to a
+    /// live [`SurfaceSlotId`] — [`GpuiDriver::bind_native_slot`]
+    /// through the `UiJob` seam. After this the view projects its
+    /// laid-out bounds, ancestor clip, and painted/suppressed state
+    /// onto `slot` each frame.
+    ///
+    /// # Errors
+    /// [`ScenarioError`] when `window` is unknown, `key` is already
+    /// bound, or `slot` is not a live slot on the canonical adapter.
+    pub fn bind_native_slot(
+        &self,
+        window: WindowId,
+        key: ComponentKey,
+        slot: SurfaceSlotId,
+    ) -> Result<(), ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, cx| {
+                let mut driver_mut = driver.clone();
+                let result = driver_mut
+                    .bind_native_slot(window, key, slot)
+                    .map_err(ScenarioError::from);
+                if result.is_ok()
+                    && let Some(view) = driver.view_of(cx, window)
+                {
+                    // The bindings map is read live each frame, but
+                    // GPUI only repaints on invalidation — without
+                    // this notify a static view would never paint the
+                    // newly bound `NativeSlot`, so
+                    // `project_slot_frame` would never run and the
+                    // slot would stay `Hidden` forever.
+                    view.update(cx, |_, cx| cx.notify());
+                }
+                let _ = reply.send(Ok(result));
+            })
+        })?
+    }
+
+    /// Removes `key`'s slot binding — the next painted frame
+    /// suppresses the slot (`Hidden`); releasing the slot itself
+    /// stays the caller's [`release_native_slot`](Self::release_native_slot).
+    ///
+    /// # Errors
+    /// [`ScenarioError`] when `window` is unknown or `key` has no
+    /// binding.
+    pub fn unbind_native_slot(
+        &self,
+        window: WindowId,
+        key: ComponentKey,
+    ) -> Result<(), ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, cx| {
+                let mut driver_mut = driver.clone();
+                let result = driver_mut
+                    .unbind_native_slot(window, &key)
+                    .map_err(ScenarioError::from);
+                if result.is_ok()
+                    && let Some(view) = driver.view_of(cx, window)
+                {
+                    // Same invalidation as `bind_native_slot` — the
+                    // next painted frame must run
+                    // `suppress_unpainted_slots` to hide the slot.
+                    view.update(cx, |_, cx| cx.notify());
+                }
+                let _ = reply.send(Ok(result));
+            })
+        })?
+    }
+
+    /// Leases `slot`'s native parent — on Windows this mints the real
+    /// child-HWND container and applies the geometry/clip/visibility
+    /// the renderer last projected
+    /// ([`surface::SharedSurface::lease_parent`]).
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the slot is unknown/released/
+    /// already leased or the backend cannot create the container.
+    pub fn lease_native_slot(&self, slot: SurfaceSlotId) -> Result<SlotLease, ScenarioError> {
+        self.slot_call("lease_parent", move |surface| surface.lease_parent(slot))
+    }
+
+    /// Validates `lease` against the live ledger and returns its
+    /// [`LeaseInfo`] — the slot binding plus the issuer sequence a
+    /// `ParentLease` mint needs.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the lease payload is malformed,
+    /// stale, or already released.
+    pub fn validate_native_lease(&self, lease: SlotLease) -> Result<LeaseInfo, ScenarioError> {
+        self.slot_call("validate_lease", move |surface| {
+            surface.validate_lease(lease)
+        })
+    }
+
+    /// Releases a live lease — the container lease is revoked and the
+    /// slot returns to `Declared`.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the lease is unknown or already
+    /// released.
+    pub fn release_native_lease(&self, lease: SlotLease) -> Result<(), ScenarioError> {
+        self.slot_call("release_lease", move |surface| surface.release_lease(lease))
+    }
+
+    /// Releases `slot` — held leases die with it and the index may be
+    /// recycled under a bumped generation.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the slot is unknown or already
+    /// released.
+    pub fn release_native_slot(&self, slot: SurfaceSlotId) -> Result<(), ScenarioError> {
+        self.slot_call("release_slot", move |surface| surface.release_slot(slot))
+    }
+
+    /// Current lifecycle state of `slot` — `None` when the id names
+    /// no live or recycled slot.
+    ///
+    /// # Errors
+    /// [`ScenarioError`] on a surface borrow or session failure.
+    pub fn native_slot_state(
+        &self,
+        slot: SurfaceSlotId,
+    ) -> Result<Option<SlotState>, ScenarioError> {
+        self.slot_call("state", move |surface| surface.state(slot))
+    }
+
+    /// The declared [`SlotSpec`] of `slot` — the renderer-updated
+    /// geometry/visibility observation point (the projection writes
+    /// real layout bounds back through `set_geometry`/`set_clip`/
+    /// `set_visibility` each frame).
+    ///
+    /// # Errors
+    /// Same error surface as [`native_slot_state`](Self::native_slot_state).
+    pub fn native_slot_spec(&self, slot: SurfaceSlotId) -> Result<Option<SlotSpec>, ScenarioError> {
+        self.slot_call("spec", move |surface| surface.spec(slot))
+    }
+
+    /// The OS parent token of `slot`'s live container — the container
+    /// HWND on Windows, carried as an opaque `u64`. `None` while no
+    /// live lease exists.
+    ///
+    /// # Errors
+    /// Same error surface as [`native_slot_state`](Self::native_slot_state).
+    pub fn native_container_token(
+        &self,
+        slot: SurfaceSlotId,
+    ) -> Result<Option<u64>, ScenarioError> {
+        self.slot_call("container_token", move |surface| {
+            surface.container_token(slot)
+        })
+    }
+
+    /// Redeems a session-facing lease payload — the `u64` inside a
+    /// `ParentSlotLease` — into the raw OS parent token. This is the
+    /// issuer-side seam an `InProcessEditorOps` `LeaseRedeemer`
+    /// calls: the adapter validates the payload against its own live
+    /// ledger before returning the token, so a stale or forged lease
+    /// never resolves to a real HWND.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the payload does not name a
+    /// live lease; session failures keep their [`ScenarioError`]
+    /// shape. A consumer redeem seam maps any `Err` to its own
+    /// lease-rejection vocabulary.
+    pub fn redeem_native_lease(&self, payload: u64) -> Result<u64, ScenarioError> {
+        self.slot_call("redeem", move |surface| surface.redeem(payload))
+    }
+}
+
+/// `true` where the surface backend can mint a real native container
+/// parent — the only environment in which
+/// [`ScenarioCapability::NativePluginDock`] may be claimed. The
+/// Windows `GpuiSurfaceAdapter` creates a real child HWND per lease
+/// (`surface::BACKEND_AVAILABLE`); `gpui-test` builds stub parent
+/// capture, so no real container exists there even on Windows.
+fn native_dock_backend_available() -> bool {
+    surface::BACKEND_AVAILABLE && !cfg!(feature = "gpui-test")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1216,7 +1458,13 @@ mod tests {
         );
         assert!(!caps.contains(&ScenarioCapability::SimulatedPointerOrKeyboard));
         assert!(!caps.contains(&ScenarioCapability::Ime));
-        assert!(!caps.contains(&ScenarioCapability::NativePluginDock));
+        // NativePluginDock tracks the surface backend's ability to
+        // mint a real container parent — Windows child HWNDs only,
+        // never under `gpui-test` (Issue #631).
+        assert_eq!(
+            caps.contains(&ScenarioCapability::NativePluginDock),
+            native_dock_backend_available()
+        );
         // VisualCapture tracks the OS capture backend — Windows
         // (Win32) and Linux (X11) have one in this slice.
         assert_eq!(
