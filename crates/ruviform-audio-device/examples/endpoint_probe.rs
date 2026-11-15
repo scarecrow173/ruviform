@@ -1,5 +1,5 @@
-//! `endpoint_probe` — Issue #629 first-slice capability probe for
-//! Windows virtual audio endpoints.
+//! `endpoint_probe` — Issue #629 capability probe for Windows
+//! virtual audio endpoints (extended in the fourth slice).
 //!
 //! Manual diagnostic — never in CI. Run with
 //! `cargo run -p ruviform-audio-device --example endpoint_probe`
@@ -13,15 +13,22 @@
 //! endpoint with the friendly name the production port surface
 //! (`ruviform_audio_device` → cpal) reports, queries the activated
 //! `IAudioClient`'s mix format / `IsFormatSupported` spot-checks /
-//! device period / stream latency, and applies a clearly labelled
-//! name heuristic to flag *candidate* virtual endpoints.
+//! device period / stream latency, applies a clearly labelled
+//! name heuristic to flag *candidate* virtual endpoints, prints the
+//! render↔capture pair-candidate table the streaming verifier
+//! (`tests/virtual_endpoint.rs`) consumes, and makes best-effort
+//! driver-signature and microphone-permission observations through
+//! PowerShell/registry queries.
 //!
 //! What it never does: claim `virtual-os-endpoint` evidence. Per the
-//! Issue #627 boundary-A rule, enumeration and format queries are not
-//! endpoint streaming proof — the product backend must actually open
-//! and stream through the endpoint, which is the next slice. When no
-//! virtual endpoint is provisioned, every virtual-endpoint case this
-//! probe feeds is reported `NotRun` (fail-closed), never `Pass`.
+//! Issue #627 boundary-A rule, enumeration, format queries, name
+//! matches and pair candidates are not endpoint streaming proof —
+//! the product backend must actually open and stream through the
+//! endpoint, which is `tests/virtual_endpoint.rs`'s job (a
+//! `#[ignore]`-gated manual lane, fail-closed `NotRun` without a
+//! provisioned pair). When no virtual endpoint is provisioned, every
+//! virtual-endpoint case this probe feeds is reported `NotRun`
+//! (fail-closed), never `Pass`.
 
 use std::process::ExitCode;
 
@@ -38,6 +45,10 @@ fn main() -> ExitCode {
         println!("== verdict ==");
         println!("  wasapi enumeration: NotRun — this probe requires Windows");
         println!("  virtual-endpoint cases: NotRun — no Windows WASAPI on this host");
+        println!(
+            "  pair candidates / driver signature / permission observations: NotRun — Windows-only"
+        );
+        println!("  cleanup: no persistent state — the probe is read-only on every platform");
     }
     ExitCode::SUCCESS
 }
@@ -155,23 +166,50 @@ mod win {
     /// names to raw `IMMDevice` endpoints.
     type PortNames = Vec<(String, String, &'static str)>;
 
+    /// Direction words stripped before stem matching — kept in sync
+    /// with `tests/virtual_endpoint.rs` (`DIRECTION_TOKENS`) by hand:
+    /// test files cannot be imported into examples.
+    const DIRECTION_TOKENS: &[&str] = &["input", "output", "render", "capture", "in", "out"];
+
+    /// One production-port device reduced to what pair matching needs.
+    struct PortDevice {
+        name: String,
+        direction: &'static str,
+    }
+
     /// Runs the whole probe and prints the report.
     pub(super) fn run() {
         println!();
         println!("== WASAPI MMDevice enumeration ==");
-        match enumerate_all() {
+        let (rows, enumerated) = match enumerate_all() {
             Ok(rows) => {
                 for row in &rows {
                     print_endpoint(row);
                 }
-                println!();
-                print_verdict(&rows);
+                (rows, true)
             }
-            Err(error) => println!("  enumeration failed: {error}"),
-        }
+            Err(error) => {
+                println!("  enumeration failed: {error}");
+                (Vec::new(), false)
+            }
+        };
         println!();
         println!("== production port view (ruviform_audio_device) ==");
-        print_port_view();
+        let port_devices = print_port_view();
+        println!();
+        let pair_count = print_pair_candidates(&port_devices);
+        println!();
+        let driver_status = print_driver_signature();
+        println!();
+        let permission_status = print_capture_permission();
+        println!();
+        print_verdict(
+            &rows,
+            enumerated,
+            pair_count,
+            &driver_status,
+            &permission_status,
+        );
     }
 
     /// Prints the Windows version string via `cmd /c ver` — the raw
@@ -528,6 +566,77 @@ mod win {
         VIRTUAL_NAME_HINTS.iter().any(|hint| lower.contains(hint))
     }
 
+    /// Normalized product stem for pair matching — identical rule to
+    /// `tests/virtual_endpoint.rs`'s `virtual_stem`: lowercase,
+    /// non-alphanumeric split, direction tokens removed. `None` for
+    /// non-virtual names or an empty stem.
+    fn virtual_stem(name: &str) -> Option<String> {
+        if !is_virtual_name(name) {
+            return None;
+        }
+        let stem = name
+            .to_lowercase()
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|token| !token.is_empty())
+            .filter(|token| !DIRECTION_TOKENS.contains(token))
+            .collect::<Vec<_>>()
+            .join(" ");
+        if stem.is_empty() { None } else { Some(stem) }
+    }
+
+    /// Render↔capture pair candidates: each output-direction device
+    /// whose virtual stem matches an unclaimed input-direction
+    /// device's stem — the same selection rule
+    /// `tests/virtual_endpoint.rs` applies. A match is a *candidate*,
+    /// never proof of provisioning.
+    fn pair_candidates(devices: &[PortDevice]) -> Vec<(String, String, String)> {
+        let mut free: Vec<(&PortDevice, String)> = devices
+            .iter()
+            .filter(|device| device.direction == "input")
+            .filter_map(|device| virtual_stem(&device.name).map(|stem| (device, stem)))
+            .collect();
+        let mut pairs = Vec::new();
+        for render in devices.iter().filter(|device| device.direction == "output") {
+            let Some(stem) = virtual_stem(&render.name) else {
+                continue;
+            };
+            let Some(index) = free.iter().position(|(_, free_stem)| free_stem == &stem) else {
+                continue;
+            };
+            let (capture, _) = free.remove(index);
+            pairs.push((render.name.clone(), capture.name.clone(), stem));
+        }
+        pairs
+    }
+
+    /// Prints the pair-candidate table and returns the pair count
+    /// for the verdict. Unpaired virtual candidates are listed too —
+    /// they are the "half-provisioned" evidence a reviewer needs.
+    fn print_pair_candidates(devices: &[PortDevice]) -> usize {
+        println!("== pair candidates (virtual name-stem match) ==");
+        let pairs = pair_candidates(devices);
+        if pairs.is_empty() {
+            println!("  none — NOT_PROVISIONED");
+            return 0;
+        }
+        let mut paired_names: Vec<&str> = Vec::new();
+        for (render, capture, stem) in &pairs {
+            println!("  render \"{render}\" ↔ capture \"{capture}\"  stem=\"{stem}\"");
+            paired_names.push(render.as_str());
+            paired_names.push(capture.as_str());
+        }
+        for device in devices {
+            if virtual_stem(&device.name).is_some() && !paired_names.contains(&device.name.as_str())
+            {
+                println!(
+                    "  unpaired virtual candidate: {} \"{}\"",
+                    device.direction, device.name
+                );
+            }
+        }
+        pairs.len()
+    }
+
     fn state_name(state: DEVICE_STATE) -> &'static str {
         if state == Audio::DEVICE_STATE_ACTIVE {
             "active"
@@ -584,17 +693,25 @@ mod win {
 
     /// The fail-closed summary: what this run observed and which
     /// virtual-endpoint cases stay `NotRun`.
-    fn print_verdict(rows: &[EndpointRow]) {
+    fn print_verdict(
+        rows: &[EndpointRow],
+        enumerated: bool,
+        pair_count: usize,
+        driver_status: &str,
+        permission_status: &str,
+    ) {
         let candidates = rows.iter().filter(|row| row.is_virtual_candidate).count();
         println!("== verdict ==");
         println!("  endpoints enumerated: {}", rows.len());
         println!("  virtual-endpoint candidates (name heuristic, unconfirmed): {candidates}");
-        println!(
-            "  driver signature check: NotRun — driver/package signature query needs SetupAPI surfaces outside the enabled `windows` features (discovery doc gap)"
-        );
+        println!("  render↔capture pair candidates (name-stem match, unconfirmed): {pair_count}");
+        println!("  driver signature / driver metadata: {driver_status}");
+        println!("  microphone/capture permission (HKCU privacy keys): {permission_status}");
         println!(
             "  provisioning: {}",
-            if candidates == 0 {
+            if !enumerated {
+                "UNKNOWN — MMDevice enumeration failed"
+            } else if candidates == 0 {
                 "NOT_PROVISIONED"
             } else {
                 "CANDIDATES_OBSERVED"
@@ -606,20 +723,133 @@ mod win {
             "    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)"
         );
         println!(
+            "    pair candidate table + driver signature + permission observations: best-effort this slice (see sections above; failures are NotRun notes, never probe failures)"
+        );
+        println!(
+            "    streaming proof: tests/virtual_endpoint.rs — `cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1` (auxiliary lane; no mise task is registered yet)"
+        );
+        println!(
             "    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)"
         );
         println!(
-            "  audio virtual-endpoint cases: NotRun — enumeration is not `virtual-os-endpoint` evidence; open/stream proof is the next slice"
+            "  cleanup: no persistent state — COM references are dropped at scope end; `IAudioClient` is activated for queries only and never `Initialize()`d, so no audio session or stream is created; PowerShell/registry queries are read-only"
         );
+        println!(
+            "  audio virtual-endpoint cases: NotRun — enumeration/pairing is not `virtual-os-endpoint` evidence; the streaming verifier (`tests/virtual_endpoint.rs`) reports its own fail-closed verdict"
+        );
+    }
+
+    /// Best-effort driver signature/metadata observation: `PnP` signed
+    /// drivers whose device name matches the virtual-endpoint hints,
+    /// with an Authenticode check on the staged driver catalog
+    /// (`C:\Windows\INF\<inf>.cat`) when it exists. Every failure —
+    /// missing PowerShell, WMI refusal, absent catalog — becomes a
+    /// `NotRun` note; the probe never fails on this observation.
+    /// Returns the one-line status the verdict prints.
+    fn print_driver_signature() -> String {
+        println!("== driver signature observations (best-effort) ==");
+        // `$rx` is a deliberately broader superset of `VIRTUAL_NAME_HINTS`
+        // — driver records use product names ("NVIDIA Virtual Audio
+        // Device"), not endpoint names, so bare 'virtual audio'/'cable'
+        // also match. A hit is metadata evidence only, never a pairing.
+        let script = r"
+$rx = 'cable|voicemeeter|vb-?audio|virtual audio';
+$found = $false;
+Get-CimInstance Win32_PnPSignedDriver -ErrorAction SilentlyContinue |
+  Where-Object { $_.DeviceName -match $rx } |
+  ForEach-Object {
+    $found = $true;
+    $cat = 'C:\Windows\INF\' + ($_.InfName -replace '\.inf$','.cat');
+    $sig = 'catalog:absent';
+    if (Test-Path $cat) {
+      $s = Get-AuthenticodeSignature $cat -ErrorAction SilentlyContinue;
+      if ($s) { $sig = 'catalog:' + $s.Status.ToString() + ' signer=' + $s.SignerCertificate.Subject }
+    }
+    '{0} | provider={1} | version={2} | date={3} | inf={4} | {5}' -f $_.DeviceName, $_.DriverProviderName, $_.DriverVersion, $_.DriverDate, $_.InfName, $sig
+  };
+if (-not $found) { 'no PnP signed-driver records matched virtual-endpoint name hints' }
+";
+        match run_powershell(script) {
+            Ok(lines) => {
+                for line in &lines {
+                    println!("  {line}");
+                }
+                "observed".to_owned()
+            }
+            Err(reason) => {
+                println!("  driver signature check: NotRun — {reason}");
+                format!("NotRun — {reason}")
+            }
+        }
+    }
+
+    /// Best-effort microphone/capture permission observation: the
+    /// HKCU privacy keys Windows uses for "Microphone access" (the
+    /// per-capability `DeviceAccess` switch) and "Let apps access
+    /// your microphone" (`ConsentStore`). Missing keys are reported
+    /// as `absent`, query failures as `NotRun` — never fatal.
+    /// Returns the one-line status the verdict prints.
+    fn print_capture_permission() -> String {
+        println!("== microphone/capture permission (best-effort) ==");
+        let script = r"
+$keys = @(
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{2EEF81BE-33FA-4800-9670-1FEE788A9517}',
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone',
+  'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged'
+);
+foreach ($k in $keys) {
+  $p = Get-ItemProperty -Path $k -Name Value -ErrorAction SilentlyContinue;
+  if ($p) { '{0} => {1}' -f $k, $p.Value } else { '{0} => absent' -f $k }
+}
+";
+        match run_powershell(script) {
+            Ok(lines) => {
+                for line in &lines {
+                    println!("  {line}");
+                }
+                "observed".to_owned()
+            }
+            Err(reason) => {
+                println!("  permission check: NotRun — {reason}");
+                format!("NotRun — {reason}")
+            }
+        }
+    }
+
+    /// Runs a read-only PowerShell snippet and returns its trimmed
+    /// non-empty stdout lines. Spawn failure or a non-zero exit is an
+    /// `Err` reason — callers turn it into a `NotRun` note.
+    fn run_powershell(script: &str) -> Result<Vec<String>, String> {
+        match Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+        {
+            Ok(output) => {
+                if !output.status.success() {
+                    let err = String::from_utf8_lossy(&output.stderr);
+                    return Err(format!("powershell exit {}: {}", output.status, err.trim()));
+                }
+                let text = String::from_utf8_lossy(&output.stdout);
+                Ok(text
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_owned)
+                    .collect())
+            }
+            Err(error) => Err(format!("powershell failed: {error}")),
+        }
     }
 
     /// Prints the same devices through the production port surface
     /// (`ruviform_audio_device` → cpal) so the raw enumeration can be
-    /// cross-checked against what product code actually sees.
-    fn print_port_view() {
+    /// cross-checked against what product code actually sees. Returns
+    /// the `(name, direction)` rows the pair-candidate table consumes.
+    fn print_port_view() -> Vec<PortDevice> {
+        let mut port_devices = Vec::new();
         let Ok(host) = default_host() else {
             println!("  default_host() failed");
-            return;
+            return port_devices;
         };
         println!("  host: {}", host.name());
         for (result, label) in [
@@ -633,6 +863,10 @@ mod win {
                         let name = device.name().unwrap_or_else(|_| "?".to_owned());
                         let id = device.id().ok().flatten();
                         println!("    - {name}  id={id:?}");
+                        port_devices.push(PortDevice {
+                            name,
+                            direction: label,
+                        });
                     }
                 }
                 Err(error) => println!("  {label} devices: query failed: {error}"),
@@ -651,6 +885,7 @@ mod win {
                 Err(error) => println!("  {query}: query failed: {error}"),
             }
         }
+        port_devices
     }
 
     /// `CoTaskMem`-allocated `PWSTR` freed exactly once on drop — the

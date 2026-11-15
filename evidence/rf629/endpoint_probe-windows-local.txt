@@ -1,7 +1,7 @@
-   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-endpoint-survey\crates\ruviform-audio-device)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.37s
+   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-wasapi-endpoint\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s
      Running `mbx-launch 'target\debug\examples\endpoint_probe.exe'`
-mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[cache]: 0 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
 endpoint_probe — Issue #629 virtual-endpoint capability probe (WASAPI/MMDevice)
 manual diagnostic; the output is survey evidence, not a test verdict
 
@@ -45,6 +45,13 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{524a29f1-5b96-40b3-ac8b-34d9c906e3fe}
       note: IAudioClient activate failed: 0x88890004
+  [render] Analogue 1/2 (3- Audient iD4) state=active id={0.0.0.00000000}.{5256d0f1-d4bc-47fa-9ab3-8e72ac6205ee}
+      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
+      is_format_supported(shared): f32/2ch/48k: supported
+      is_format_supported(shared): f32/2ch/44.1k: supported
+      is_format_supported(shared): s16/2ch/48k: supported
+      device_period_100ns: default=100000 minimum=30000
+      note: GetStreamLatency failed: 0x88890001
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{55fbf3bb-f843-417a-89bb-e71591d41392}
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{5aa7a662-56c0-4554-b949-82ebb021dafd}
@@ -55,13 +62,8 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{80df61c7-4a6e-4df9-90f5-5bafc8d89fb2}
       note: IAudioClient activate failed: 0x88890004
-  [render] Analogue 1/2 (Audient iD4) state=active id={0.0.0.00000000}.{937d7519-acf5-477a-87a1-da93bcdcccae}
-      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
-      is_format_supported(shared): f32/2ch/48k: supported
-      is_format_supported(shared): f32/2ch/44.1k: supported
-      is_format_supported(shared): s16/2ch/48k: supported
-      device_period_100ns: default=100000 minimum=30000
-      note: GetStreamLatency failed: 0x88890001
+  [render] <unnamed> state=not-present id={0.0.0.00000000}.{937d7519-acf5-477a-87a1-da93bcdcccae}
+      note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{9cad9b16-9075-4c13-ae5a-cf0e56f9bb40}
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{a4789bd1-7ff3-4a48-82df-6d8fb8911f49}
@@ -70,13 +72,8 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{a6687b71-cf49-48b8-9cb6-6b6e6ad2e74a}
       note: IAudioClient activate failed: 0x88890004
-  [render] Loop-back 1/2 (Audient iD4) state=active id={0.0.0.00000000}.{a9a744a0-9b0c-454f-a3ed-60c0129be2f2}
-      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
-      is_format_supported(shared): f32/2ch/48k: supported
-      is_format_supported(shared): f32/2ch/44.1k: supported
-      is_format_supported(shared): s16/2ch/48k: supported
-      device_period_100ns: default=100000 minimum=30000
-      note: GetStreamLatency failed: 0x88890001
+  [render] <unnamed> state=not-present id={0.0.0.00000000}.{a9a744a0-9b0c-454f-a3ed-60c0129be2f2}
+      note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{ab01f15a-37a2-40ac-919e-ae773858f8a8}
       note: IAudioClient activate failed: 0x88890004
   [render] Digital Audio (S/PDIF) (High Definition Audio Device) state=active id={0.0.0.00000000}.{ae116706-1372-4743-8408-b3ba98b998e4}
@@ -111,6 +108,13 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{df990e91-0ce7-4c7e-b66e-54bd586092b0}
       note: IAudioClient activate failed: 0x88890004
+  [render] Loop-back 1/2 (3- Audient iD4) state=active id={0.0.0.00000000}.{e0748a00-46a6-4866-963f-e5896f040739}
+      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
+      is_format_supported(shared): f32/2ch/48k: supported
+      is_format_supported(shared): f32/2ch/44.1k: supported
+      is_format_supported(shared): s16/2ch/48k: supported
+      device_period_100ns: default=100000 minimum=30000
+      note: GetStreamLatency failed: 0x88890001
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{e1a78f04-1bfa-40a2-979d-4b827da6c66d}
       note: IAudioClient activate failed: 0x88890004
   [render] <unnamed> state=not-present id={0.0.0.00000000}.{e59cc098-2ae8-44f0-a2ef-4e67f3160dc1}
@@ -133,6 +137,20 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{6a1ac569-b495-4343-ae24-d048d4cefef4}
       note: IAudioClient activate failed: 0x88890004
+  [capture] Analogue 1/2 (3- Audient iD4) state=active id={0.0.1.00000000}.{71e8a8f0-a6a7-4d2c-aefc-74111752abce}
+      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
+      is_format_supported(shared): f32/2ch/48k: supported
+      is_format_supported(shared): f32/2ch/44.1k: supported
+      is_format_supported(shared): s16/2ch/48k: supported
+      device_period_100ns: default=100000 minimum=30000
+      note: GetStreamLatency failed: 0x88890001
+  [capture] Loop-back 1/2 (3- Audient iD4) state=active id={0.0.1.00000000}.{758252ce-a33f-424d-9f38-94b3609c4672}
+      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
+      is_format_supported(shared): f32/2ch/48k: supported
+      is_format_supported(shared): f32/2ch/44.1k: supported
+      is_format_supported(shared): s16/2ch/48k: supported
+      device_period_100ns: default=100000 minimum=30000
+      note: GetStreamLatency failed: 0x88890001
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{7a255f08-445b-4443-864f-ead8535edef3}
       note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{7d6debd2-f03c-4362-b9a5-c533e70315c2}
@@ -145,51 +163,57 @@ manual diagnostic; the output is survey evidence, not a test verdict
       note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{b488abbf-8263-4c2c-9963-e53188a9b1ec}
       note: IAudioClient activate failed: 0x88890004
-  [capture] Loop-back 1/2 (Audient iD4) state=active id={0.0.1.00000000}.{b7a1077a-23c6-48eb-a701-23e1bd8ea28a}
-      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
-      is_format_supported(shared): f32/2ch/48k: supported
-      is_format_supported(shared): f32/2ch/44.1k: supported
-      is_format_supported(shared): s16/2ch/48k: supported
-      device_period_100ns: default=100000 minimum=30000
-      note: GetStreamLatency failed: 0x88890001
+  [capture] <unnamed> state=not-present id={0.0.1.00000000}.{b7a1077a-23c6-48eb-a701-23e1bd8ea28a}
+      note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{c0a6d71a-3df0-4257-97eb-3103c0bff43a}
       note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{db95c576-36cf-45cd-9e0d-1314744b0ea7}
       note: IAudioClient activate failed: 0x88890004
-  [capture] Analogue 1/2 (Audient iD4) state=active id={0.0.1.00000000}.{e321b016-6f63-4154-9366-7db27a4a04d6}
-      mix_format: tag=65534(extensible) ch=2 rate=44100Hz bits=32 cbSize=22
-      is_format_supported(shared): f32/2ch/48k: supported
-      is_format_supported(shared): f32/2ch/44.1k: supported
-      is_format_supported(shared): s16/2ch/48k: supported
-      device_period_100ns: default=100000 minimum=30000
-      note: GetStreamLatency failed: 0x88890001
+  [capture] <unnamed> state=not-present id={0.0.1.00000000}.{e321b016-6f63-4154-9366-7db27a4a04d6}
+      note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{f47297bc-e723-4b1e-9b9d-b99c3800fe9a}
       note: IAudioClient activate failed: 0x88890004
   [capture] <unnamed> state=not-present id={0.0.1.00000000}.{fd3a9820-f8c2-439d-8e50-34f66eaeaa80}
       note: IAudioClient activate failed: 0x88890004
 
-== verdict ==
-  endpoints enumerated: 61
-  virtual-endpoint candidates (name heuristic, unconfirmed): 0
-  driver signature check: NotRun — driver/package signature query needs SetupAPI surfaces outside the enabled `windows` features (discovery doc gap)
-  provisioning: NOT_PROVISIONED
-  capability notes:
-    mmdevice enumeration (all states) + id/state: observed
-    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)
-    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)
-  audio virtual-endpoint cases: NotRun — enumeration is not `virtual-os-endpoint` evidence; open/stream proof is the next slice
-
 == production port view (ruviform_audio_device) ==
   host: WASAPI
   output devices: 5
     - LG FULL HD (NVIDIA High Definition Audio)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{4a72b7de-c799-47cf-a4e1-66facf3643cd}"))
-    - Analogue 1/2 (Audient iD4)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{937d7519-acf5-477a-87a1-da93bcdcccae}"))
-    - Loop-back 1/2 (Audient iD4)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{a9a744a0-9b0c-454f-a3ed-60c0129be2f2}"))
+    - Analogue 1/2 (3- Audient iD4)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{5256d0f1-d4bc-47fa-9ab3-8e72ac6205ee}"))
     - Digital Audio (S/PDIF) (High Definition Audio Device)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{ae116706-1372-4743-8408-b3ba98b998e4}"))
     - LG FULL HD (NVIDIA High Definition Audio)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{bfa59d7b-73e1-4688-92df-87511ee091b9}"))
+    - Loop-back 1/2 (3- Audient iD4)  id=Some(DeviceId("wasapi:{0.0.0.00000000}.{e0748a00-46a6-4866-963f-e5896f040739}"))
   input devices: 2
-    - Loop-back 1/2 (Audient iD4)  id=Some(DeviceId("wasapi:{0.0.1.00000000}.{b7a1077a-23c6-48eb-a701-23e1bd8ea28a}"))
-    - Analogue 1/2 (Audient iD4)  id=Some(DeviceId("wasapi:{0.0.1.00000000}.{e321b016-6f63-4154-9366-7db27a4a04d6}"))
-  default_output_device: Analogue 1/2 (Audient iD4)
-  default_input_device: Loop-back 1/2 (Audient iD4)
-mbx[savings]: 2.6 TiB logical of target/ was waiting for checkouts that are never coming back. it has stopped waiting.
+    - Analogue 1/2 (3- Audient iD4)  id=Some(DeviceId("wasapi:{0.0.1.00000000}.{71e8a8f0-a6a7-4d2c-aefc-74111752abce}"))
+    - Loop-back 1/2 (3- Audient iD4)  id=Some(DeviceId("wasapi:{0.0.1.00000000}.{758252ce-a33f-424d-9f38-94b3609c4672}"))
+  default_output_device: Analogue 1/2 (3- Audient iD4)
+  default_input_device: Loop-back 1/2 (3- Audient iD4)
+
+== pair candidates (virtual name-stem match) ==
+  none — NOT_PROVISIONED
+
+== driver signature observations (best-effort) ==
+  NVIDIA Virtual Audio Device (Wave Extensible) (WDM) | provider=NVIDIA | version=4.65.0.12 | date=2025/05/13 9:00:00 | inf=oem77.inf | catalog:absent
+
+== microphone/capture permission (best-effort) ==
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{2EEF81BE-33FA-4800-9670-1FEE788A9517} => absent
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone => Allow
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged => Allow
+
+== verdict ==
+  endpoints enumerated: 65
+  virtual-endpoint candidates (name heuristic, unconfirmed): 0
+  render↔capture pair candidates (name-stem match, unconfirmed): 0
+  driver signature / driver metadata: observed
+  microphone/capture permission (HKCU privacy keys): observed
+  provisioning: NOT_PROVISIONED
+  capability notes:
+    mmdevice enumeration (all states) + id/state: observed
+    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)
+    pair candidate table + driver signature + permission observations: best-effort this slice (see sections above; failures are NotRun notes, never probe failures)
+    streaming proof: tests/virtual_endpoint.rs — `cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1` (auxiliary lane; no mise task is registered yet)
+    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)
+  cleanup: no persistent state — COM references are dropped at scope end; `IAudioClient` is activated for queries only and never `Initialize()`d, so no audio session or stream is created; PowerShell/registry queries are read-only
+  audio virtual-endpoint cases: NotRun — enumeration/pairing is not `virtual-os-endpoint` evidence; the streaming verifier (`tests/virtual_endpoint.rs`) reports its own fail-closed verdict
+mbx[savings]: the running total stands at 2d 9h across 2803 builds. nobody is counting except the box.

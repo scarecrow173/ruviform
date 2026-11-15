@@ -1,0 +1,123 @@
+# Issue #629 4th slice — WASAPI streaming verifier + endpoint_probe
+# extension verification evidence
+
+- date: 2026-11-16
+- host: windows-local (DESKTOP-NH00KUI)
+- os: Microsoft Windows 11 Pro 10.0.26300.9974, x86_64
+- toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), mise-managed
+- branch: feat/629-wasapi-endpoint
+- environment_kind: os-l1 (host compile/test/probe evidence only —
+  NOT virtual-os-endpoint, NOT EXT-L3)
+
+Scope: `tests/virtual_endpoint.rs` (new `#[ignore]`-gated,
+`real-device`-feature verifier), `examples/endpoint_probe.rs`
+extension (pair-candidate table, best-effort driver-signature and
+microphone-permission observations, cleanup record, verdict
+update), doc chain
+(specs/designs/plans/tasks/test-specs/issue-629-wasapi-endpoint),
+discovery-doc gap updates, impl ir/exp records.
+
+## Verification matrix (canonical = mise tasks)
+
+| command | os | toolchain | exit | result |
+| --- | --- | --- | --- | --- |
+| mise run fmt-check | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run check ruviform-audio-device | windows-local | rustc 1.99.1 | 0 | Pass (`--locked --all-targets`) |
+| mise run lint ruviform-audio-device | windows-local | rustc 1.99.1 | 0 | Pass (-D warnings clippy) |
+| mise run test ruviform-audio-device | windows-local | rustc 1.99.1 | 0 | Pass — 75 unit tests; `virtual_endpoint` target compiles empty without `real-device` (0 tests collected, as designed) |
+| mise run lint-audio-real-input | windows-local | rustc 1.99.1 | 0 | Pass — `cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings` |
+| mise exec -- prek run --all-files | windows-local | prek (apm) | 0 | Pass |
+| endpoint_probe rerun (cargo run --example, auxiliary) | windows-local | rustc 1.99.1 | 0 | Pass — pair-candidate table + driver signature + permission observations + cleanup record; evidence/rf629/endpoint_probe-windows-local.txt |
+| virtual_endpoint direct run (cargo test --features real-device --test virtual_endpoint -- --ignored --test-threads=1 --nocapture, auxiliary) | windows-local | rustc 1.99.1 | 0 | `verdict: NotRun — NOT_PROVISIONED` (no virtual pair on this host) — verbatim below |
+
+## endpoint_probe rerun highlights (full output:
+evidence/rf629/endpoint_probe-windows-local.txt)
+
+- 65 MMDevice endpoints enumerated (all states); production port
+  view: 5 output / 2 input devices (Audient iD4 analogue + loopback,
+  NVIDIA HDA, HD Audio Device).
+- `== pair candidates (virtual name-stem match) ==` →
+  `none — NOT_PROVISIONED` (correct: no VB-CABLE/VAC/Voicemeeter
+  endpoints provisioned on this host).
+- `== driver signature observations (best-effort) ==` → observed:
+  one `Win32_PnPSignedDriver` record matched the name hints
+  ("NVIDIA Virtual Audio Device (Wave Extensible) (WDM)",
+  provider=NVIDIA, version=4.65.0.12, inf=oem77.inf,
+  catalog:absent). Informational record only — not a virtual
+  endpoint.
+- `== microphone/capture permission (best-effort) ==` → observed:
+  `ConsentStore\microphone => Allow`,
+  `ConsentStore\microphone\NonPackaged => Allow`,
+  `DeviceAccess\Global\{2EEF81BE-…} => absent` (key not present on
+  this host — recorded verbatim, not interpreted).
+- verdict: `provisioning: NOT_PROVISIONED`,
+  `audio virtual-endpoint cases: NotRun`, cleanup line records
+  "no persistent state".
+
+## virtual_endpoint verifier run (auxiliary, --nocapture)
+
+```
+running 1 test
+test render_capture_round_trip ... virtual_endpoint: WASAPI render→capture streaming verifier
+  capture 3s per pair, watchdog 60s
+  host: WASAPI
+verdict: NotRun — NOT_PROVISIONED (no render↔capture virtual name-stem pair; provision VB-CABLE/VAC-style endpoints first)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+```
+
+Fail-closed behaviour confirmed on a real Windows host with audio
+devices present but no virtual pair: honest `NotRun`, exit 0, no
+assertion, no `virtual-os-endpoint` claim. `--nocapture` is required
+to stream the verdict/evidence lines (libtest captures output of
+passing tests); the canonical invocation without it still exits 0.
+
+## NotRun (explicit, per task spec)
+
+- Provisioned virtual-endpoint Pass — no VB-CABLE/VAC/Voicemeeter
+  pair exists on this host; driver install on a dev machine is
+  forbidden by the task. The verifier's Pass path
+  (open→stream→oracle→lifecycle) is implemented but UNEXERCISED —
+  it remains for the provisioned runner.
+- `StreamInvalidated` / interactive device removal — deferred to
+  AC5/later slice by design.
+- xrun / permission-denial / reconnect reproduction — recorded-not-
+  gated counters exist; real reproduction needs provisioning.
+- MSRV lane — daily CI scope, not run by instruction.
+- `*-full` lanes — out of scope for this slice.
+- Dedicated mise lane registration (`test-audio-virtual-endpoint`)
+  — `mise.toml` is out of scope this slice; design recorded in
+  docs/designs/issue-629-wasapi-endpoint.md. Direct cargo invocation
+  is auxiliary evidence only.
+
+## What the Pass results actually prove (OS-L1 only)
+
+- The verifier compiles under `--features real-device` with
+  `-D warnings`, is collected only when the feature is on, uses
+  exclusively production `DeviceEnumerator`/`Device`/stream traits
+  (no Win32 FFI, no cpal-direct, no test-only endpoint logic), and
+  fails closed to `NotRun — NOT_PROVISIONED` without a pair.
+- The oracle is self-contained in the test file (deterministic
+  `signal_sample` generator + marker/level/Goertzel-tone checks) —
+  no `ruviform-audio-test` dev-dependency was added (coordinator
+  decision (A)); the #628 `PcmFixture`/`RunMetadata` handoff is
+  documented for a later slice.
+- `endpoint_probe` prints the pair-candidate table using the same
+  name-stem rule as the verifier, plus best-effort driver-signature
+  (`Win32_PnPSignedDriver` + `Get-AuthenticodeSignature` on staged
+  catalogs) and HKCU microphone-permission observations; every
+  optional-query failure degrades to a `NotRun` note with exit 0.
+- Cleanup is recorded: the probe creates no persistent state.
+
+## Explicitly NOT proven here
+
+- `virtual-os-endpoint` evidence — no virtual pair provisioned;
+  nothing in this slice claims it.
+- EXT-L3 provider/driver integration — driver signature output is
+  a best-effort observation record, not signed-driver proof for a
+  virtual endpoint.
+- Real round-trip signal correctness — the oracle path is
+  implemented but has never seen provisioned hardware; tolerances
+  (level band, tone share, marker interval) are provisional pending
+  provisioned-runner measurement.
