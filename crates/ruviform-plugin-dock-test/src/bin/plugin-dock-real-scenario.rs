@@ -8,10 +8,18 @@
 //! header line followed by one `case` line per [`ScenarioReport`].
 //! Output goes to `--out <path>` or stdout.
 //!
+//! `--pixel-artifacts <dir>` is opt-in: the `real-dcomp-pixel` case
+//! then writes each captured frame as a PNG under `<dir>` (created
+//! on demand). Without it the case records pixel statistics only —
+//! the canonical lane never writes artifacts.
+//!
 //! Exit code: `0` unless any case verdict is `Fail`; `NotRun`/
 //! `Unsupported` are honest recorded outcomes — a headless host
 //! records `NotRun` + `observed=environment_blocked` for every case
-//! (fail-closed), which must not red the lane.
+//! (fail-closed), which must not red the lane. A `Fail` verdict —
+//! e.g. `real-dcomp-pixel` under the known unresolved GPUI `DComp`
+//! topmost occlusion — exits `1` by design: that is the honest
+//! regression signal, not a lane defect.
 //!
 //! **RT contract:** non-RT only — opens real OS windows.
 
@@ -23,11 +31,12 @@ use std::process::ExitCode;
 use ruviform_plugin_dock_test::LaneEnvironment;
 use ruviform_plugin_dock_test::artifact::PLUGIN_PATH_ENV;
 use ruviform_plugin_dock_test::jsonl::{render_jsonl, repo_sha};
-use ruviform_plugin_dock_test::real_dock::{RUN_ID, run_all};
+use ruviform_plugin_dock_test::real_dock::{RUN_ID, run_all_with_pixel_artifacts};
 use ruviform_ui_test::ScenarioVerdict;
 
 fn main() -> ExitCode {
     let mut out: Option<PathBuf> = None;
+    let mut pixel_artifacts: Option<PathBuf> = None;
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -36,6 +45,14 @@ fn main() -> ExitCode {
                     out = Some(PathBuf::from(path));
                 } else {
                     eprintln!("plugin-dock-real-scenario: --out requires a path");
+                    return ExitCode::from(2);
+                }
+            }
+            "--pixel-artifacts" => {
+                if let Some(path) = args.next() {
+                    pixel_artifacts = Some(PathBuf::from(path));
+                } else {
+                    eprintln!("plugin-dock-real-scenario: --pixel-artifacts requires a path");
                     return ExitCode::from(2);
                 }
             }
@@ -50,7 +67,7 @@ fn main() -> ExitCode {
         repo_sha: repo_sha(),
         plugin_path: env::var_os(PLUGIN_PATH_ENV).map(PathBuf::from),
     };
-    let reports = run_all(&environment);
+    let reports = run_all_with_pixel_artifacts(&environment, pixel_artifacts.as_deref());
     let jsonl = render_jsonl(
         RUN_ID,
         "test-ui-plugin-dock-real",

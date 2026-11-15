@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The four real-window dock cases in run order — metadata only.
+/// The five real-window dock cases in run order — metadata only.
 pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-mount",
@@ -73,5 +73,13 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
         case: "real-capture",
         scenario: SCENARIO,
         required: &[ScenarioCapability::VisualCapture],
+    },
+    RealCatalogRow {
+        case: "real-dcomp-pixel",
+        scenario: SCENARIO,
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::VisualCapture,
+        ],
     },
 ];

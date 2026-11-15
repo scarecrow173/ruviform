@@ -35,15 +35,21 @@
 //! `real-window`. Its `real-editor-attach` case drives the `test_editor`
 //! fixture's real `IPlugView` and OS-observes the child HWND lifecycle
 //! (existence/parent/visibility under the container, `IsWindow==0`
-//! after detach). It opens real OS windows, so it is never a default
-//! feature and never a CI-required gate; a headless host records
-//! `NotRun` + `environment_blocked`, never a fabricated pass.
+//! after detach); `real-dcomp-pixel` (Issue #532) additionally
+//! captures the docked child's screen-composited pixels to pin the
+//! known GPUI `DComp` topmost occlusion as an honest `Fail` until a
+//! compositor fix lands. It opens real OS windows, so it is never a
+//! default feature and never a CI-required gate; a headless host
+//! records `NotRun` + `environment_blocked`, never a fabricated
+//! pass.
 //!
 //! **RT contract:** non-RT only. **Test-only:** no production crate
 //! may depend on this crate; nothing here ships.
 
 pub mod artifact;
 pub mod jsonl;
+#[cfg(feature = "real-dock")]
+mod ospix;
 pub mod probe;
 pub mod real_catalog;
 #[cfg(feature = "real-dock")]

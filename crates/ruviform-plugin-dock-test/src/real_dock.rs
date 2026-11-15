@@ -1,8 +1,9 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
-//! feature `real-dock`).
+//! feature `real-dock`; `real-dcomp-pixel` added by the Issue #532
+//! dcomp-pixel slice).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into a *real OS
-//! window* through [`RealOsGuiTest`] and records the four cases of
+//! window* through [`RealOsGuiTest`] and records the five cases of
 //! the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                  | driver      | honest outcome today                                  |
@@ -16,6 +17,11 @@
 //! |                       |             | lease, OS-observed attach → detach (`IsWindow==0`)  |
 //! | `real-capture`        | `RealOs`    | `Pass`/`Unsupported`/`NotRun` — window/slot-region     |
 //! |                       |             | pixels, explicitly NOT plugin editor pixels            |
+//! | `real-dcomp-pixel`    | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — docked         |
+//! |                       |             | `test_editor` child HWND の**画面合成画素**に         |
+//! |                       |             | `EDITOR_COLOR` 緑が出るか（screen `BitBlt` が主       |
+//! |                       |             | oracle、`PrintWindow(child)` は補助診断）。既知の      |
+//! |                       |             | GPUI `DComp` topmost occlusion 下では正直な `Fail` |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -57,10 +63,14 @@ use ruviform_ui_test::{
     ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioVerdict,
     SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
 };
+use std::path::{Path, PathBuf};
+
+use ruviform_ui_test::golden::RgbaImage;
 use serde_json::{Map, Value, json};
 
 use crate::LaneEnvironment;
 use crate::artifact;
+use crate::ospix;
 use crate::real_catalog::{LANE, SCENARIO};
 // The run id is shared with the console's catalog metadata —
 // re-exported so `real_dock::RUN_ID` keeps working for the lane.
@@ -71,8 +81,9 @@ use crate::scenario::{
     session_id_json,
 };
 
-/// The resolved plugin binary + its evidence identity — only
-/// `real-editor-attach` consumes it.
+/// The resolved plugin binary + its evidence identity — only the
+/// editor cases (`real-editor-attach`, `real-dcomp-pixel`) consume
+/// it.
 type PluginPair = (Vst3Library, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
@@ -90,9 +101,10 @@ struct PluginUnavailable {
 
 /// Session-scoped lane context for the real-window catalog — the
 /// live `RealOsGuiTest`, the mounted window/view, the lane
-/// environment, and the plugin pair/error/evidence resolved up
-/// front. Only `real-editor-attach` consumes the plugin fields; the
-/// window-only cases ignore them.
+/// environment, the plugin pair/error/evidence resolved up front,
+/// and the opt-in pixel-artifact directory. Only the editor cases
+/// consume the plugin/artifact fields; the window-only cases ignore
+/// them.
 struct RealDockContext<'a> {
     /// The live session driver — `run_scenario`'s `G`.
     gui: &'a mut RealOsGuiTest,
@@ -110,6 +122,9 @@ struct RealDockContext<'a> {
     plugin_error: Option<&'a PluginUnavailable>,
     /// The artifact evidence identity, when the artifact loaded.
     artifact: Option<&'a PluginArtifactEvidence>,
+    /// Opt-in pixel-artifact directory for `real-dcomp-pixel`
+    /// (`--pixel-artifacts`); `None` records stats only.
+    pixel_artifacts: Option<&'a Path>,
 }
 
 /// Runs the four real-window cases inside one `RealOsGuiTest`
@@ -118,7 +133,7 @@ struct RealDockContext<'a> {
 /// blocked path also reads so case ids/required caps never drift.
 ///
 /// The plugin artifact is resolved/hashed/loaded once up front — a
-/// missing or unloadable binary degrades only `real-editor-attach`
+/// missing or unloadable binary degrades only the editor cases
 /// (`NotRun`/`Fail` with the reason); the window-only cases still
 /// run. A session that cannot start (headless host, no interactive
 /// desktop) fails closed: every case reports `NotRun` with
@@ -130,6 +145,22 @@ struct RealDockContext<'a> {
 /// condition (environment failures are reported as `NotRun`).
 #[must_use]
 pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
+    run_all_with_pixel_artifacts(env, None)
+}
+
+/// [`run_all`] plus the opt-in pixel-artifact path: when `dir` is
+/// `Some`, `real-dcomp-pixel` writes each captured frame as a PNG
+/// under `dir` (created on demand). Artifact write failures land as
+/// step notes — they never change a verdict. The canonical lane
+/// calls [`run_all`], so no artifacts are written by default.
+///
+/// # Panics
+/// Same contract as [`run_all`].
+#[must_use]
+pub fn run_all_with_pixel_artifacts(
+    env: &LaneEnvironment,
+    pixel_artifacts: Option<&Path>,
+) -> Vec<ScenarioReport> {
     let run_id = RunId::new(RUN_ID);
     let plugin = load_plugin(env);
     let plugin_evidence = plugin.as_ref().ok().map(|(_, evidence)| evidence.clone());
@@ -168,6 +199,7 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
                 plugin: plugin.as_ref().ok(),
                 plugin_error: plugin_error.as_ref(),
                 artifact: plugin_evidence.as_ref(),
+                pixel_artifacts,
             };
             run_entries(&entries, &run_id, &mut ctx)
         },
@@ -204,9 +236,10 @@ fn real_window_extras(_: &RealDockContext<'_>) -> ScenarioSpecExtras {
     }
 }
 
-/// `real-editor-attach` spec extras — the lane marker plus the
-/// plugin artifact identity when the binary resolved (what
-/// `real_spec` used to stamp under `environment.plugin_artifact`).
+/// `real-editor-attach`/`real-dcomp-pixel` spec extras — the lane
+/// marker plus the plugin artifact identity when the binary
+/// resolved (what `real_spec` used to stamp under
+/// `environment.plugin_artifact`).
 fn editor_attach_extras(ctx: &RealDockContext<'_>) -> ScenarioSpecExtras {
     let mut environment = Map::from_iter([("lane".to_string(), json!(LANE))]);
     if let Some(artifact) = ctx.artifact {
@@ -218,6 +251,36 @@ fn editor_attach_extras(ctx: &RealDockContext<'_>) -> ScenarioSpecExtras {
     }
 }
 
+/// The raw `GPUI_DISABLE_DIRECT_COMPOSITION` value for evidence —
+/// `null` when unset. GPUI reads it once in `WindowsPlatform::new`
+/// at process start, so the recorded value is exactly what this run
+/// saw (方式 A' — the Issue #532 audit accepts only `"true"`/`"1"`;
+/// any other value is recorded verbatim, never interpreted here).
+fn dcomp_env_extra() -> Map<String, Value> {
+    Map::from_iter([(
+        "gpui_disable_direct_composition".to_string(),
+        std::env::var_os("GPUI_DISABLE_DIRECT_COMPOSITION").map_or(Value::Null, |value| {
+            Value::String(value.to_string_lossy().into_owned())
+        }),
+    )])
+}
+
+/// [`finalize`] for real-lane reports — merges the raw
+/// `GPUI_DISABLE_DIRECT_COMPOSITION` value into `environment` so
+/// every JSONL line self-describes which compositor path the
+/// process actually took (unset → `null`).
+fn finalize_real(
+    report: ScenarioReport,
+    env: &LaneEnvironment,
+    kind: EnvironmentKind,
+    artifact: Option<&PluginArtifactEvidence>,
+    extra: Map<String, Value>,
+) -> ScenarioReport {
+    let mut merged = dcomp_env_extra();
+    merged.extend(extra);
+    finalize(report, env, kind, artifact, merged)
+}
+
 /// The `rf631.plugin-dock-real` catalog rows — session-scoped: the
 /// entries' `run` needs the live `RealOsGuiTest`, so the table is
 /// produced per call (the entries themselves are `'static` fn items;
@@ -225,7 +288,7 @@ fn editor_attach_extras(ctx: &RealDockContext<'_>) -> ScenarioSpecExtras {
 /// `blocked_reports` reads the same rows for case ids and required
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 4] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 5] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -255,12 +318,22 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 4] {
             spec_extras: real_window_extras,
             run: real_capture_case,
         },
+        ScenarioEntry {
+            case: "real-dcomp-pixel",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_pixel_case,
+        },
     ]
 }
 
 /// Resolves + hashes + loads the test-plugin cdylib once for the
-/// lane and selects its `test_editor` descriptor — only
-/// `real-editor-attach` consumes it. `Err` carries the honest
+/// lane and selects its `test_editor` descriptor — only the editor
+/// cases consume it. `Err` carries the honest
 /// unavailable reason plus whether the artifact was simply absent
 /// (`NotRun`) or present-but-broken (`Fail`). There is deliberately
 /// no fallback to another descriptor: an editor-less fixture
@@ -570,7 +643,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -587,7 +660,7 @@ fn blocked_reports(
                 "observed": "environment_blocked",
                 "detail": detail,
             }));
-            finalize(
+            finalize_real(
                 report,
                 env,
                 EnvironmentKind::DeterministicBackend,
@@ -627,7 +700,7 @@ fn real_window_mount_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
             .push("real-window:semantic-mount:plugin.editor".to_string());
         Ok(outcome)
     });
-    finalize(
+    finalize_real(
         report,
         ctx.env,
         EnvironmentKind::RealWindow,
@@ -771,7 +844,7 @@ fn real_native_slot_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
             ],
         ))
     });
-    finalize(
+    finalize_real(
         report,
         ctx.env,
         EnvironmentKind::RealWindow,
@@ -1294,6 +1367,39 @@ fn child_extras(
     ])
 }
 
+/// Phases 2-4 shared by the attach and pixel lifecycles —
+/// `session.close` (production `close_gui` → `removed()` →
+/// `DestroyWindow`), the post-detach `IsWindow(child) == 0` check
+/// (skipped off-Windows where `child_hwnd_observation` already
+/// recorded `unsupported`), and session convergence
+/// (`Closed`+`concluded`, drained events exactly
+/// `[Attached{Docked}, Closed]`). Returns `(close_ok, detach_ok,
+/// converged_ok, rendered_events)`.
+fn conclude_editor_session(
+    observation: &mut ChildWindowObservation,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (bool, bool, bool, Vec<String>) {
+    // Phase 2 — `session.close` runs the production `close_gui` →
+    // `removed()` → `DestroyWindow` path.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, failure);
+
+    // Phase 3 — post-detach: every recorded child must be dead
+    // (`IsWindow(child) == 0`). Skipped off-Windows — the
+    // `child_hwnd_observation` row already recorded `unsupported`.
+    let detach_ok = !observation.supported || check_detached_children(observation, steps, failure);
+
+    // Phase 4 — session convergence: `Closed`+`concluded` and the
+    // drained event stream must be exactly `[Attached{Docked},
+    // Closed]`.
+    let (converged_ok, rendered) = check_session_converged(sessions, session_id, steps, failure);
+    (close_ok, detach_ok, converged_ok, rendered)
+}
+
 /// Post-open child-HWND observation + close convergence for an
 /// accepted `session.open(Docked)` — runs only when `open` returned
 /// `Ok`, i.e. the plugin claims an editor surface exists and every
@@ -1341,21 +1447,15 @@ fn observe_editor_child_lifecycle(
         false
     };
 
-    // Phase 2 — `session.close` runs the production `close_gui` →
-    // `removed()` → `DestroyWindow` path.
-    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
-
-    // Phase 3 — post-detach: every recorded child must be dead
-    // (`IsWindow(child) == 0`). Skipped off-Windows — the
-    // `child_hwnd_observation` row already recorded `unsupported`.
-    let detach_ok =
-        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
-
-    // Phase 4 — session convergence: `Closed`+`concluded` and the
-    // drained event stream must be exactly `[Attached{Docked},
-    // Closed]`.
-    let (converged_ok, rendered) =
-        check_session_converged(sessions, session_id, steps, &mut failure);
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+    );
 
     ChildVerification {
         supported: observation.supported,
@@ -1454,20 +1554,28 @@ fn open_session_docked(
 /// `container_token` observation, `ParentSlotLease` →
 /// `InProcessEditorOps` redeem through
 /// [`RealOsGuiTest::redeem_native_lease`], then `session.open(Docked)`.
-/// An accepted open additionally runs the child-HWND observation +
-/// close convergence ([`observe_editor_child_lifecycle`]). Always
-/// tears down (session end, slot/lease release, instance destroy).
-/// Returns the open outcome (or the setup failure), cleanup notes,
-/// and — only when `open` returned `Ok` — the child verification
-/// that gates the verdict.
-fn attempt_real_attach(
+/// An accepted open additionally runs `observe_open` — the case's
+/// post-open observation + close convergence — while the lease is
+/// still live. Always tears down (session end, slot/lease release,
+/// instance destroy). Returns the open outcome (or the setup
+/// failure), cleanup notes, and — only when `open` returned `Ok` —
+/// the observation result that gates the verdict.
+fn attempt_real_attach<V>(
     gui: &mut RealOsGuiTest,
     window: WindowId,
     view: ViewInstanceId,
     host: &mut InProcessHost,
     handle: PluginHandle,
     steps: &mut Vec<Value>,
-) -> (RealAttachAttempt, Vec<String>, Option<ChildVerification>) {
+    observe_open: impl FnOnce(
+        Option<u64>,
+        &mut PluginEditorSessions,
+        PluginEditorSessionId,
+        &mut InProcessHost,
+        PluginHandle,
+        &mut Vec<Value>,
+    ) -> V,
+) -> (RealAttachAttempt, Vec<String>, Option<V>) {
     let mut cleanup = Vec::new();
     let mut sessions = PluginEditorSessions::new();
 
@@ -1542,12 +1650,12 @@ fn attempt_real_attach(
     }));
 
     // An accepted open means the plugin claims an editor surface —
-    // observe the real child HWND under the container, converge the
-    // session through `close` (production `removed()` →
-    // `DestroyWindow`), and verify detach + events. The observation
-    // decides Pass vs Fail; it runs while the lease is still live.
-    let child = match &open_result {
-        Some(Ok(_)) => Some(observe_editor_child_lifecycle(
+    // run the case's post-open observation (child-HWND contract for
+    // `real-editor-attach`, screen pixels for `real-dcomp-pixel`)
+    // and close convergence. The observation decides Pass vs Fail;
+    // it runs while the lease is still live.
+    let observed = match &open_result {
+        Some(Ok(_)) => Some(observe_open(
             container_token,
             &mut sessions,
             session_id,
@@ -1562,9 +1670,9 @@ fn attempt_real_attach(
     // adapter editor (`editor_live` stays false), so `close` is a
     // no-op adapter call and the rejecting redeemer is never
     // consulted. An accepted open was already closed inside the
-    // child observation — `close` is then a defined `InvalidState`
+    // observation — `close` is then a defined `InvalidState`
     // no-op, skipped explicitly.
-    if child.is_none()
+    if observed.is_none()
         && let Some(session) = sessions.session_mut(session_id)
     {
         let mut close_ops = rejecting_editor_ops(host, handle);
@@ -1579,7 +1687,68 @@ fn attempt_real_attach(
         Some(result) => RealAttachAttempt::Open(result),
         None => RealAttachAttempt::Setup("editor session vanished before open".to_string()),
     };
-    (attempt, cleanup, child)
+    (attempt, cleanup, observed)
+}
+
+/// Shared preamble for the editor cases — resolve the plugin pair,
+/// build the host, activate the `test_editor` instance. Returns the
+/// honest early `ScenarioOutcome` (`NotRun` for an absent artifact,
+/// `Fail` for a present-but-broken one, the mapped host error)
+/// when any prerequisite fails. The outcome is boxed — it is large
+/// and only ever returned, never inspected.
+fn prepare_editor_host(
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> Result<(InProcessHost, PluginHandle), Box<ScenarioOutcome>> {
+    let Some((library, artifact)) = plugin else {
+        return Err(Box::new(match plugin_error {
+            Some(unavailable) if unavailable.prerequisite => not_run(format!(
+                "plugin artifact unavailable: {}",
+                unavailable.detail
+            )),
+            Some(unavailable) => fail(format!(
+                "plugin artifact failed to load: {}",
+                unavailable.detail
+            )),
+            None => not_run("plugin artifact unavailable".to_string()),
+        }));
+    };
+    let plugin_id = artifact.plugin_id.clone();
+    let mut host = InProcessHost::new();
+    register_factories(&mut host, library);
+
+    let handle = match activate_test_gain(&mut host, &plugin_id) {
+        Ok(handle) => handle,
+        Err(error) => return Err(Box::new(host_error_outcome("activate", error))),
+    };
+    Ok((host, handle))
+}
+
+/// The honest outcome for a refused/failed attach attempt — `None`
+/// when `open` returned `Ok` (the case's observation then decides).
+/// The defined `Unsupported` refusal stays `Unsupported`; everything
+/// else is `Fail`. Shared by the editor cases' verdict mapping.
+fn attach_attempt_failure(attempt: &RealAttachAttempt) -> Option<ScenarioOutcome> {
+    match attempt {
+        RealAttachAttempt::Open(Ok(_)) => None,
+        RealAttachAttempt::Open(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+            outcome.detail = Some(
+                "plugin declined OpenGui through the REAL container lease: \
+                 createView/isPlatformTypeSupported/attached refused → \
+                 HostError::Unsupported → EditorOpError::Unsupported; \
+                 the slot/lease/redeem chain itself executed on a real \
+                 OS window"
+                    .to_string(),
+            );
+            outcome
+                .evidence
+                .push("editor-attach:open-gui-declined-real-lease".to_string());
+            Some(outcome)
+        }
+        RealAttachAttempt::Open(Err(error)) => Some(fail(format!("session.open: {error}"))),
+        RealAttachAttempt::Setup(detail) => Some(fail(detail.clone())),
+    }
 }
 
 /// `real-editor-attach`: drives the real attach path —
@@ -1599,34 +1768,25 @@ fn editor_attach_body(
     plugin: Option<&PluginPair>,
     plugin_error: Option<&PluginUnavailable>,
 ) -> ScenarioOutcome {
-    let Some((library, artifact)) = plugin else {
-        return match plugin_error {
-            Some(unavailable) if unavailable.prerequisite => not_run(format!(
-                "plugin artifact unavailable: {}",
-                unavailable.detail
-            )),
-            Some(unavailable) => fail(format!(
-                "plugin artifact failed to load: {}",
-                unavailable.detail
-            )),
-            None => not_run("plugin artifact unavailable".to_string()),
-        };
-    };
-    let plugin_id = artifact.plugin_id.clone();
-    let mut host = InProcessHost::new();
-    register_factories(&mut host, library);
-
-    let handle = match activate_test_gain(&mut host, &plugin_id) {
-        Ok(handle) => handle,
-        Err(error) => return host_error_outcome("activate", error),
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
     };
 
     let mut steps = Vec::new();
-    let (attempt, cleanup, child) =
-        attempt_real_attach(gui, window, view, &mut host, handle, &mut steps);
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        observe_editor_child_lifecycle,
+    );
 
-    let mut outcome = match attempt {
-        RealAttachAttempt::Open(Ok(_capabilities)) => match child.as_ref() {
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
             Some(verification) if verification.supported && verification.verified => {
                 // The real `test_editor` IPlugView attached a real
                 // child HWND under the leased container and detached
@@ -1668,29 +1828,12 @@ fn editor_attach_body(
             )),
             None => fail("editor opened but no child-HWND observation was recorded".to_string()),
         },
-        RealAttachAttempt::Open(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
-            let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-            outcome.detail = Some(
-                "plugin declined OpenGui through the REAL container lease: \
-                 createView/isPlatformTypeSupported/attached refused → \
-                 HostError::Unsupported → EditorOpError::Unsupported; \
-                 the slot/lease/redeem chain itself executed on a real \
-                 OS window"
-                    .to_string(),
-            );
-            outcome
-                .evidence
-                .push("editor-attach:open-gui-declined-real-lease".to_string());
-            outcome
-        }
-        RealAttachAttempt::Open(Err(error)) => fail(format!("session.open: {error}")),
-        RealAttachAttempt::Setup(detail) => fail(detail),
     };
     let mut observed = Map::from_iter([
         ("steps".to_string(), json!(steps)),
         ("cleanup".to_string(), json!(cleanup)),
     ]);
-    if let Some(verification) = &child
+    if let Some(verification) = &verification
         && let Value::Object(fields) = &verification.extras
     {
         observed.extend(fields.clone());
@@ -1712,7 +1855,7 @@ fn real_editor_attach_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         Ok(editor_attach_body(gui, window, view, plugin, plugin_error))
     });
-    finalize(
+    finalize_real(
         report,
         ctx.env,
         EnvironmentKind::RealWindow,
@@ -1771,11 +1914,631 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
             ))),
         }
     });
-    finalize(
+    finalize_real(
         report,
         ctx.env,
         EnvironmentKind::RealWindow,
         None,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
+// case: real-dcomp-pixel (docked editor screen-composited pixels —
+// the Issue #532 DComp topmost occlusion regression)
+// ---------------------------------------------------------------------
+
+/// `EDITOR_COLOR` visibility threshold — the fraction of a child's
+/// screen-captured pixels that must match the `test_editor` green
+/// for the surface to count as "on screen". The fixture fills its
+/// whole client area with one solid brush, so a correctly composed
+/// surface lands near 1.0 and a fully occluded one near 0.0; 0.5
+/// separates the two unambiguously. The measured fraction is always
+/// recorded in the step rows, so the threshold stays reviewable.
+const GREEN_VISIBLE_FRACTION: f64 = 0.5;
+
+/// `EDITOR_COLOR` (`0x00_00_FF_00` = RGB(0,255,0)) tolerance box —
+/// a solid-brush fill survives compositing unchanged, so any pixel
+/// inside this box counts as editor green.
+fn is_editor_green(r: u8, g: u8, b: u8) -> bool {
+    g >= 200 && r <= 80 && b <= 80
+}
+
+/// `(green_pixels, total_pixels)` over an RGBA8 frame.
+fn green_stats(rgba: &[u8]) -> (u64, u64) {
+    let mut green = 0u64;
+    let mut total = 0u64;
+    for px in rgba.as_chunks::<4>().0 {
+        total += 1;
+        if is_editor_green(px[0], px[1], px[2]) {
+            green += 1;
+        }
+    }
+    (green, total)
+}
+
+/// `green/total` as `f64` — counts saturate at `u32::MAX` before the
+/// (exact) `u32`→`f64` conversion so no lossy `u64` cast is needed;
+/// real captures are far below that bound. `total == 0` reports 0.0.
+fn green_fraction(green: u64, total: u64) -> f64 {
+    let g = u32::try_from(green).unwrap_or(u32::MAX);
+    let t = u32::try_from(total).unwrap_or(u32::MAX).max(1);
+    f64::from(g) / f64::from(t)
+}
+
+/// Writes one captured frame as PNG under `dir` — opt-in artifact
+/// evidence for `real-dcomp-pixel`. The directory is created on
+/// demand; the returned path lands in the step row. A write failure
+/// is returned to the caller, which records it as a note — it never
+/// changes a verdict.
+fn save_pixel_artifact(
+    dir: &Path,
+    name: &str,
+    capture: &ospix::PixelCapture,
+) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let image = RgbaImage::new(capture.width, capture.height, capture.rgba.clone())
+        .map_err(|e| format!("RgbaImage::new: {e}"))?;
+    let png = image.to_png().map_err(|e| format!("to_png: {e}"))?;
+    let path = dir.join(format!("{name}.png"));
+    std::fs::write(&path, png).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
+/// The aggregated screen-pixel outcome — this case's verdict input
+/// on top of the shared lifecycle gate.
+enum PixelObservation {
+    /// At least one child's screen-composited pixels met the green
+    /// threshold — the editor surface is actually on screen.
+    GreenSeen,
+    /// Every evaluable child was captured and none met the
+    /// threshold — the honest `DComp`-occlusion input. Carries the
+    /// best observed fraction/backend for the `Fail` detail.
+    NoGreen {
+        /// Highest `green_fraction` observed across children.
+        best_fraction: f64,
+        /// Backend that produced the best frame.
+        best_backend: &'static str,
+        /// How many children produced a screen capture.
+        evaluated: usize,
+    },
+    /// Screen pixels could not be evaluated at all (window not
+    /// presented, no container token, every capture failed) — the
+    /// honest `NotRun` input, never a fabricated `Fail`.
+    NotEvaluable(String),
+}
+
+/// The verdict-carrying result of the post-open pixel observation —
+/// `lifecycle_ok` is the same gate `real-editor-attach` applies;
+/// `pixels` is this case's additional oracle.
+struct PixelVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence) — the same checks as
+    /// `real-editor-attach`.
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated screen-pixel outcome.
+    pixels: PixelObservation,
+    /// `observed` extras — container/child ids, threads, events,
+    /// pixel summary (an `Object`, like `ChildVerification`).
+    extras: Value,
+}
+
+/// Per-child screen-pixel observation while the editor is still
+/// attached — the Issue #532 regression oracle. For each observed
+/// child HWND: `GetWindowRect` → screen-DC `BitBlt` of the screen
+/// rectangle (the composited result the user sees — the primary
+/// oracle) → `PrintWindow(child)` and `GetDC`+`BitBlt` of the
+/// child's own surface (two `note`-level diagnostics that separate
+/// "the plugin painted green" from "the screen shows green").
+/// Every capture lands as a step row with backend + green stats;
+/// opt-in PNG artifacts are written when `artifacts` is `Some`.
+fn observe_child_pixels(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> PixelObservation {
+    // Evaluability — the top-level window must be presented or the
+    // screen says nothing about the editor (minimized/hidden →
+    // honest `not_run`, never a fabricated Fail).
+    fn not_evaluable(steps: &mut Vec<Value>, reason: &str) -> PixelObservation {
+        steps.push(json!({
+            "step": "screen_pixels",
+            "verdict": "not_run",
+            "reason": reason,
+        }));
+        PixelObservation::NotEvaluable(reason.to_string())
+    }
+    let Some(token) = container else {
+        return not_evaluable(
+            steps,
+            "no container token — children cannot be located on screen",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return not_evaluable(
+                steps,
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => return not_evaluable(steps, "top-level presentation query failed"),
+    }
+
+    let mut scan = PixelScan::default();
+    for (index, child) in observation.children.iter().enumerate() {
+        observe_one_child_pixels(index, child, artifacts, steps, &mut scan);
+    }
+
+    if scan.evaluated == 0 {
+        PixelObservation::NotEvaluable(format!(
+            "no child produced a screen capture{}",
+            scan.first_error
+                .map_or_else(String::new, |e| format!(" — {e}"))
+        ))
+    } else if scan.any_green {
+        PixelObservation::GreenSeen
+    } else {
+        let (best_fraction, best_backend) = scan.best.unwrap_or((0.0, "none"));
+        PixelObservation::NoGreen {
+            best_fraction,
+            best_backend,
+            evaluated: scan.evaluated,
+        }
+    }
+}
+
+/// Running totals for [`observe_child_pixels`] — how many children
+/// produced a screen capture, whether any met the green threshold,
+/// the best fraction/backend seen, and the first capture error.
+#[derive(Default)]
+struct PixelScan {
+    /// Children whose screen capture succeeded.
+    evaluated: usize,
+    /// Any child met [`GREEN_VISIBLE_FRACTION`].
+    any_green: bool,
+    /// Best `(green_fraction, backend)` across children.
+    best: Option<(f64, &'static str)>,
+    /// First screen-capture error, for the `NotEvaluable` detail.
+    first_error: Option<String>,
+}
+
+/// Records the opt-in PNG artifact for one capture into its step
+/// row — `artifact` on success, `artifact_error` on failure; a write
+/// failure never changes a verdict.
+fn record_pixel_artifact(
+    row: &mut Value,
+    dir: Option<&Path>,
+    name: &str,
+    capture: &ospix::PixelCapture,
+) {
+    let Some(dir) = dir else { return };
+    match save_pixel_artifact(dir, name, capture) {
+        Ok(path) => row["artifact"] = json!(path.display().to_string()),
+        Err(error) => row["artifact_error"] = json!(error),
+    }
+}
+
+/// One child's pixel observation while attached: `GetWindowRect` →
+/// screen-DC `BitBlt` of the screen rectangle (primary oracle —
+/// what the user sees) → `PrintWindow(child)` (diagnostic — the
+/// child's own raster, `note` level only).
+fn observe_one_child_pixels(
+    index: usize,
+    child: &ChildWindowFacts,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+    scan: &mut PixelScan,
+) {
+    let hwnd = child.hwnd;
+
+    // screen_rect — GetWindowRect in virtual-screen coordinates.
+    let rect = ospix::window_screen_rect(hwnd);
+    match &rect {
+        Ok(r) => steps.push(json!({
+            "step": "screen_rect",
+            "verdict": "pass",
+            "hwnd": hwnd,
+            "left": r.left,
+            "top": r.top,
+            "width": r.width,
+            "height": r.height,
+        })),
+        Err(error) => steps.push(json!({
+            "step": "screen_rect",
+            "verdict": "not_run",
+            "hwnd": hwnd,
+            "error": error,
+        })),
+    }
+
+    // Primary oracle — screen-DC BitBlt of the child's screen
+    // rectangle: what the user actually sees (DComp visual,
+    // other HWNDs, cursor included).
+    let screen = match rect {
+        Ok(r) => ospix::capture_screen_rect(r),
+        Err(error) => Err(error),
+    };
+    match &screen {
+        Ok(capture) => {
+            scan.evaluated += 1;
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            if fraction >= GREEN_VISIBLE_FRACTION {
+                scan.any_green = true;
+            }
+            if scan.best.is_none_or(|(f, _)| fraction > f) {
+                scan.best = Some((fraction, capture.backend));
+            }
+            let mut row = json!({
+                "step": "screen_pixels",
+                "verdict": if fraction >= GREEN_VISIBLE_FRACTION {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                "hwnd": hwnd,
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+                "threshold": GREEN_VISIBLE_FRACTION,
+            });
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                &format!("real-dcomp-pixel-screen-{index}"),
+                capture,
+            );
+            steps.push(row);
+        }
+        Err(error) => {
+            if scan.first_error.is_none() {
+                scan.first_error = Some(format!("hwnd={hwnd:#x}: {error}"));
+            }
+            steps.push(json!({
+                "step": "screen_pixels",
+                "verdict": "not_run",
+                "hwnd": hwnd,
+                "error": error,
+            }));
+        }
+    }
+
+    record_printwindow_pixels(index, hwnd, artifacts, steps);
+    record_windowdc_pixels(index, hwnd, artifacts, steps);
+}
+
+/// The `GetDC`+`BitBlt` diagnostic — the child HWND's own backing
+/// surface as GDI last painted it, read without screen composition
+/// or `WM_PRINT`. `note` level only, like [`record_printwindow_pixels`]:
+/// together the two diagnostics separate "child painted green but
+/// the compositor hides it" from "the child surface never received
+/// the fill".
+fn record_windowdc_pixels(
+    index: usize,
+    hwnd: u64,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) {
+    match ospix::capture_window_dc(hwnd) {
+        Ok(capture) => {
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            let mut row = json!({
+                "step": "windowdc_pixels",
+                "verdict": "note",
+                "hwnd": hwnd,
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+                "note": "child's own window-DC surface via GetDC+BitBlt — \
+                        NOT the on-screen composition; diagnostic only",
+            });
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                &format!("real-dcomp-pixel-windowdc-{index}"),
+                &capture,
+            );
+            steps.push(row);
+        }
+        Err(error) => steps.push(json!({
+            "step": "windowdc_pixels",
+            "verdict": "note",
+            "hwnd": hwnd,
+            "error": error,
+        })),
+    }
+}
+
+/// The `PrintWindow(child)` diagnostic — the child's own raster,
+/// NOT the on-screen composition. `note` level only: it can prove
+/// the plugin painted green even when the screen never shows it
+/// (the `DComp` occlusion signature).
+fn record_printwindow_pixels(
+    index: usize,
+    hwnd: u64,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) {
+    match ospix::capture_print_window(hwnd) {
+        Ok(capture) => {
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            let mut row = json!({
+                "step": "printwindow_pixels",
+                "verdict": "note",
+                "hwnd": hwnd,
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+                "note": "child's own raster via PrintWindow — NOT \
+                        the on-screen composition; diagnostic only",
+            });
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                &format!("real-dcomp-pixel-printwindow-{index}"),
+                &capture,
+            );
+            steps.push(row);
+        }
+        Err(error) => steps.push(json!({
+            "step": "printwindow_pixels",
+            "verdict": "note",
+            "hwnd": hwnd,
+            "error": error,
+        })),
+    }
+}
+
+/// `observed` extras for the pixel case — the shared child/session
+/// fields plus the aggregated pixel outcome.
+fn pixel_extras(
+    container: Option<u64>,
+    observation: &ChildWindowObservation,
+    events: &[String],
+    pixels: &PixelObservation,
+) -> Map<String, Value> {
+    let mut extras = child_extras(container, observation, events);
+    let summary = match pixels {
+        PixelObservation::GreenSeen => json!({ "green_observed": true }),
+        PixelObservation::NoGreen {
+            best_fraction,
+            best_backend,
+            evaluated,
+        } => json!({
+            "green_observed": false,
+            "best_green_fraction": best_fraction,
+            "best_backend": best_backend,
+            "evaluated_children": evaluated,
+        }),
+        PixelObservation::NotEvaluable(reason) => json!({
+            "green_observed": Value::Null,
+            "not_evaluable": reason,
+        }),
+    };
+    extras.insert("screen_pixels".to_string(), summary);
+    extras
+}
+
+/// Post-open pixel observation + close convergence for an accepted
+/// `session.open(Docked)` — the `real-dcomp-pixel` counterpart of
+/// [`observe_editor_child_lifecycle`]. Same attach contract checks,
+/// then — while still attached — the screen-composited pixel
+/// observation ([`observe_child_pixels`]), then the shared close →
+/// detach → convergence tail ([`conclude_editor_session`]).
+fn observe_editor_pixel_lifecycle(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> PixelVerification {
+    let mut failure: Option<String> = None;
+
+    // Phase 1 — enumerate the container's children while the editor
+    // is still attached (same observation as `real-editor-attach`).
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    // Phase 1b — screen-composited pixels while still attached (the
+    // Issue #532 oracle). Off-Windows there is no pixel concept
+    // either — recorded as not evaluable, never fabricated.
+    let pixels = if observation.supported {
+        observe_child_pixels(&observation, container, artifacts, steps)
+    } else {
+        steps.push(json!({
+            "step": "screen_pixels",
+            "verdict": "unsupported",
+            "detail": "OS pixel observation is Windows-only",
+        }));
+        PixelObservation::NotEvaluable("OS pixel observation is Windows-only".to_string())
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+    );
+
+    PixelVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(pixel_extras(container, &observation, &rendered, &pixels)),
+        pixels,
+    }
+}
+
+/// `real-dcomp-pixel`: the same real attach path as
+/// `real-editor-attach`, plus the screen-composited pixel oracle —
+/// does `EDITOR_COLOR` green actually appear in the pixels the user
+/// sees? Under the known GPUI `DComp` topmost occlusion the honest
+/// answer is `Fail` (the regression this case pins); `Pass` is only
+/// claimed when green is really observed on screen, and an
+/// unevaluable environment reports `NotRun`, never a fabricated
+/// verdict.
+fn editor_pixel_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        |container, sessions, session_id, host, handle, steps| {
+            observe_editor_pixel_lifecycle(
+                container, sessions, session_id, host, handle, artifacts, steps,
+            )
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                // An accepted open off-Windows — neither the child
+                // contract nor the pixels can be observed there, so
+                // the case honestly stays `Unsupported` (unreachable
+                // today: `NativePluginDock` is Windows-only).
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     pixel observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) => match &verification.pixels {
+                PixelObservation::GreenSeen => {
+                    let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                    outcome.detail = Some(
+                        "docked test_editor child HWND's screen-composited \
+                         pixels show EDITOR_COLOR green — the editor \
+                         surface is actually visible on screen"
+                            .to_string(),
+                    );
+                    outcome
+                        .evidence
+                        .push("dcomp-pixel:editor-green-on-screen".to_string());
+                    outcome
+                }
+                PixelObservation::NoGreen {
+                    best_fraction,
+                    best_backend,
+                    evaluated,
+                } => fail(format!(
+                    "editor lifecycle verified but {evaluated} child screen \
+                     capture(s) show no EDITOR_COLOR green (best \
+                     green_fraction={best_fraction:.3} via {best_backend}) — \
+                     consistent with the known GPUI DComp topmost occlusion"
+                )),
+                PixelObservation::NotEvaluable(reason) => not_run(format!(
+                    "editor lifecycle verified but screen pixels are not \
+                     evaluable: {reason}"
+                )),
+            },
+            None => fail("editor opened but no pixel observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-pixel` case: pre-flight requires `NativePluginDock`
+/// and `VisualCapture` (the adapter claims the former only where
+/// the surface backend mints real container parents; the latter
+/// marks the pixel oracle), then the body drives the attach chain
+/// plus the screen-pixel observation — or reports the honest
+/// artifact/session/environment outcome.
+fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_pixel_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
         Map::new(),
     )
 }
@@ -1816,7 +2579,7 @@ mod tests {
         }
     }
 
-    /// A session that never started must produce four `NotRun`
+    /// A session that never started must produce five `NotRun`
     /// reports tagged `environment_blocked` — fail-closed, never a
     /// fabricated pass and never a `RealWindow` claim. Case ids and
     /// required capabilities come from the same `real_entries`
@@ -1827,11 +2590,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 4, "four real-dock cases");
+        assert_eq!(reports.len(), 5, "five real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -1864,7 +2627,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 4] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");
