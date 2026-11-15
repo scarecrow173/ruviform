@@ -55,6 +55,7 @@ Directory: `docs/tasks`
 | TASK-034TXoGba4bLlZ1oiI3L2z | Issue #461 — canvas painter paint batch の実装タスク | in-progress | [issue-461-canvas-paint-layer.md](./issue-461-canvas-paint-layer.md) |
 | TASK-034U1MMRtRon6XPgSgK7gD | Issue #461 残課題 — TimeAxis label canvas 描画の実装タスク | in-progress | [issue-461-timeaxis-label-cost.md](./issue-461-timeaxis-label-cost.md) |
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
+| TASK-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel slice — real-dcomp-pixel case + A' 実機観測 | in-progress | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XVm2WqXrYsZaBcDeFgH | Issue #629 MIDI loopback round-trip verifier implementation task | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |

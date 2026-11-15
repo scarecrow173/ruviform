@@ -11,6 +11,7 @@ Directory: `docs/impl/ir`
 | IMPL-Nq2aV7kR4tYc9XwL3ZsH8D | Issue #386 Backend-neutral GUI Host 契約・GPUI Driver・Window/Dock 移行 — 第 2 PR 実装記録 | in-progress | [issue-386-driver-neutral-gui-host.md](./issue-386-driver-neutral-gui-host.md) |
 | IMPL-Rt5Bv8wKm2NcXd7PqLe4Yg | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証 — 実装記録 | in-progress | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界・Consumer 検査 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
+| IMPL-034YfD7Ww0GzDhsIAOEu4H | issue-532-dcomp-pixel | in-progress | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | IMPL-034XqUtbQR6b9Xie900zZv | Issue #625 ci e2e handshake race implementation record | draft | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |

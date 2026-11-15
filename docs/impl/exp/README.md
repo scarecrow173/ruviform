@@ -59,6 +59,7 @@ Directory: `docs/impl/exp`
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
 | [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
 | [issue-389-session-lifecycle-exp.jsonl](./issue-389-session-lifecycle-exp.jsonl) |
+| [issue-532-dcomp-pixel.jsonl](./issue-532-dcomp-pixel.jsonl) |
 | [issue-558-script-contract.jsonl](./issue-558-script-contract.jsonl) |
 | [issue-57-high-load-webgpu-multi-webview.jsonl](./issue-57-high-load-webgpu-multi-webview.jsonl) |
 | [issue-628-close-out.jsonl](./issue-628-close-out.jsonl) |
