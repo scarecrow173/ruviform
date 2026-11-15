@@ -216,6 +216,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | TSPEC-034Y14780zESXWkqYxDVNj | Issue #630 adapter-state-bridge slice — test specification | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |

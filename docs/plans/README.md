@@ -189,6 +189,7 @@ Directory: `docs/plans`
 | PLAN-034XVm4OZxJqPqKqTqVqYq | Issue #629 MIDI loopback round-trip verifier plan | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| PLAN-034YbbuRqN5VUqXuQfKKHB | Issue #629 WASAPI streaming verifier implementation plan | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | PLAN-034Y14eOip1VTyZMiRueNr | Issue #630 adapter-state-bridge slice — 実装計画 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | PLAN-034XTBbXfYIHXWJ12juqo7 | Issue #630 CLAP test_gain 実装計画 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | PLAN-034XVsD1tGn1Q9zdYY4pHW | Issue #630 L1 runner slice 実装計画 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |

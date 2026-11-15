@@ -227,6 +227,7 @@ Directory: `docs/designs`
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | DESIGN-P7XCcqW3rGHPzKfQJ6SUA | Issue #630 adapter-state-bridge slice — 設計 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |

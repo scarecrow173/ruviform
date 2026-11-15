@@ -67,6 +67,7 @@ Directory: `docs/impl/exp`
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
 | [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
+| [issue-629-wasapi-endpoint-exp.jsonl](./issue-629-wasapi-endpoint-exp.jsonl) |
 | [issue-630-adapter-state-bridge.jsonl](./issue-630-adapter-state-bridge.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
