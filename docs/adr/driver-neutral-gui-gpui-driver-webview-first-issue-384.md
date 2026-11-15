@@ -4,7 +4,7 @@ type: "adr"
 status: "proposed"
 title: "Driver-neutral GUIアーキテクチャ — GPUI標準Driver方針（仮決定）とWebView-first後継（Issue #384）"
 created: "2026-11-07"
-updated: "2026-11-07"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -64,6 +64,8 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/389"
     - "https://github.com/scarecrow173/ruviform/issues/390"
     - "https://github.com/scarecrow173/ruviform/issues/294"
+    - "https://github.com/scarecrow173/ruviform/issues/419"
+    - "https://github.com/scarecrow173/ruviform/issues/532"
     - "https://github.com/scarecrow173/synvelis/issues/175"
     - "https://github.com/scarecrow173/synvelis/issues/176"
     - "https://github.com/scarecrow173/synvelis/issues/177"
@@ -230,6 +232,7 @@ Offscreen/screenshot の Fake 列は `Unsupported`（未実装）。根拠: `cra
 
 * 本 ADR の「契約設計開始」は、独立レビュー（review-protocol）で blocker が残っていないこと、および本節の依存方向・移行表・Gate が #385〜#390 の各 Owner Issue と整合することをもって確認する。
 * 「GPUI 技術採用の最終承認」は本 ADR では行わない。#262 が #386 最小 Host fixture・#388/#389 Native Dock PoC・#390 境界/parity fixture の OS/format 別証拠を以て採否判定し、その結果（採用範囲・制限・代替方針）を本 ADR の More Information へ逆反映する。**この逆反映まで、本 ADR は GPUI の無条件採用を宣言しない。**
+* 2026-11-15: #262 の採否判定（Coordinator 決裁済み verdict、outcome = CONDITIONAL — 条件付き）を本 ADR の More Information 末尾「GPUI 最終採用判定の逆反映欄」へ記録した。判定根拠の正本は `evidence/rf262-gpui-verdict/verdict-matrix.md`・`report.md`・`handoff-419.md`。本記録は決裁済み判定結果の逆反映であり、ADR の正式 status 決裁・Issue #419 の受入判定・Issue への投稿は design authority / Coordinator が別途行う。**逆反映後も本 ADR は GPUI の無条件採用を宣言せず、status は `proposed` のままとする。**
 * 機械的確認: #390 の依存境界 guard（cargo metadata + source import）が共通契約層と Consumer 通常画面からの GPUI 漏出を検出すること。#385 が GPUI なしで build/test できること。
 
 ## Implementation Plan
@@ -282,4 +285,8 @@ Offscreen/screenshot の Fake 列は `Unsupported`（未実装）。根拠: `cra
 * frontmatter `relations` の参照先（`docs/designs/issue-384-driver-neutral-gui-contract.md`、`docs/specs/issue-384-driver-neutral-gui-architecture.md`、`docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md`、`docs/tasks/implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md`）は `origin/main` に存在することを確認済み。これらは本 ADR の差分（`67fc51c4` の 1 コミット）には含まれず、先行 PR で取り込み済み。
 * 旧 ADR（superseded、証拠保持）: [ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)、[ui-tech-selection-poc.md](ui-tech-selection-poc.md)。Synvelis 側の旧 SolidJS 採用 ADR は [Synvelis #175](https://github.com/scarecrow173/synvelis/issues/175) で後継化（別 repo/別 Owner）。Synvelis の製品 Theme・Workspace・GPUI Design Review は [Synvelis #177](https://github.com/scarecrow173/synvelis/issues/177)、AudioLens の Consumer 受入は [AudioLens #166](https://github.com/scarecrow173/audio-lens/issues/166) が所有する。
 * 関連 ADR: [プラグインアーキテクチャ](plugin-architecture-clap-vst3.md)、[plugin-gui-embedding](plugin-gui-embedding.md)（旧方針の Plugin GUI 節は本 ADR の NativeSurfaceSlot/Session 契約に読替え）、[issue-181](issue-181-multi-window-contract-placement-close-decision-ipc-routing.md) / [issue-182](issue-182-dock-tree-placement-move-contract-and-persistence.md)（維持する論理契約）。
-* **GPUI 最終採用判定の逆反映欄（未記入）**: #262 verdict が確定したら、採用範囲・OS/format 制限・代替方針をここに追記する。現在は判定前であり、GPUI は「標準 Driver 候補として契約設計を開始する仮決定」の位置づけ。
+* **GPUI 最終採用判定の逆反映（2026-11-15 記録）**: #262 の採否判定 outcome は **CONDITIONAL（条件付き）**。Issue #262 の Verdict 規則「全必須 OS/format で D・E が未達なら GPUI 標準 Driver 方針維持、Native Dock の無条件本番採用不可と明記し #419 を accepted にしない」に該当する（Gate D Fail: GPUI 0.2.2 DComp `CreateTargetForHwnd`（`topmost=true`）が child HWND を覆い plugin 画素が非合成。`#532` open Blocker。Gate E: NotRun）。判定の決裁は Coordinator が行い、本欄はその結果の記録である。判定根拠の正本: [verdict-matrix.md](../../evidence/rf262-gpui-verdict/verdict-matrix.md)（個別 Case の expected/observed/verdict/証拠 URL）、[report.md](../../evidence/rf262-gpui-verdict/report.md)（評価 report・既知 gap）、[handoff-419.md](../../evidence/rf262-gpui-verdict/handoff-419.md)（#419/#465 引き渡し文面）。
+  * **評価範囲の限定**: **L1 のみ評価済み、L2/L3 非保証**。OS-L1（3 OS Native Build/Link・Headless UI Scenario/Theme/Driver boundary・必要 Feature・RT 非干渉）は ancestor SHA の CI 証拠で Pass。Windows L2（実 Window/Input/Focus 等の利用能力）は能力別に部分実証。Windows L3 / Gate D（実 Native Dock）は未達。macOS/Linux L2/L3 は Deferred（`NotRun` を `Pass` にしない）。Gate C 性能次元・Gate E 両 Consumer Oracle は `NotRun`。
+  * **採用範囲**: GPUI Native First を標準 Driver とする設計方針は維持する（Driver-neutral 公開契約は Gate A で裏付け済み）。**Native Dock の無条件本番採用は不可**であり、条件付き/未受入として記録する。本 ADR の status は `proposed` のまま変更しない（正式 status 決裁は Issue #419 の残 DoD として design authority が別途行う）。
+  * **OS 別 Capability 記録（宣言値。宣言と実測 Pass を混同しない）**: `native_surface_slot` = Windows `Supported` / macOS・Linux `Unsupported`（宣言。Capability 欠落として追跡）、`ime` = 全 OS `Unsupported`（宣言）、focus release = `Err(Unsupported)`（宣言）。
+  * **既知制約・将来 Owner（非 Blocking）**: `#388`/`#389`/`#532` の Windows DComp/Native Dock 未成立（Gate D 画素 Fail は `#532` が open Blocker として所有）と `#243`/`#313` の実 GUI 残件は既知制約として記録する。`#465` の Legacy WebView 撤去は独立判断であり、本 ADR の L1 採用記録だけで製品 GUI 機能や実 Plugin 表示を保証しない。仮想優先 Gate（`#630`/`#631`）の証拠深度記載・本 ADR の正式 status 決裁は Issue #419 の残 DoD として後続へ残す。
