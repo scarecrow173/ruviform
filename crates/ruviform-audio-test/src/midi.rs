@@ -5,9 +5,13 @@
 //! [`TransportPlanBuilder`], then [`run_midi_trace`] drives a
 //! production [`TransportScheduler`] block-by-block. Delivery is
 //! captured through the production [`SpanSink`] contract — the same
-//! boundary a real host adapter would observe. There is no production
-//! MIDI *output* port in the repo today, so the sink capture is the
-//! outgoing-trace record point (recorded in the design doc).
+//! boundary a real host adapter would observe. A production MIDI
+//! *output* port exists (`ruviform-midi-device`, WinMM `midiOut*`),
+//! but `run_midi_trace` drives the scheduler rather than device
+//! ports, so the sink capture remains the outgoing-trace record point
+//! for scheduler-level traces (recorded in the design doc; the
+//! OS-level loopback round-trip verifier is
+//! `ruviform-midi-device/tests/loopback.rs`).
 //!
 //! **RT contract:** [`TraceSink`] implements [`SpanSink`] and is
 //! allocation-free once its entry vec is preallocated — proven by

@@ -1,0 +1,97 @@
+# Issue #629 3rd slice — probe refresh + loopback verifier verification evidence
+
+- date: 2026-11-15
+- host: windows-local (DESKTOP-NH00KUI)
+- os: Microsoft Windows 11 Pro 10.0.26300.9974, x86_64
+- toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), mise-managed
+- branch: feat/629-midi-loopback
+- environment_kind: os-l1 (host compile/test evidence only — NOT
+  virtual-os-endpoint, NOT EXT-L3)
+
+Scope: `midi_endpoint_probe` refresh (production output port view,
+verdict update, Windows MIDI Services availability detection),
+`tests/loopback.rs` provisioned-pair round-trip verifier +
+GS Wavetable silent-send smoke, `ruviform-audio-test` midi.rs doc
+comment fix, survey doc updates.
+
+## Verification matrix (canonical = mise tasks)
+
+| command | os | toolchain | exit | result |
+| --- | --- | --- | --- | --- |
+| mise run fmt-check | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run check ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run lint ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass (-D warnings clippy) |
+| mise run test ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass — 24 unit (2 ignored), loopback 0 run/2 ignored, output_ports 2+1 ignored, ports 2+1 ignored, doctest 1 |
+| mise run check ruviform-audio-test | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run lint ruviform-audio-test | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run test ruviform-audio-test | windows-local | rustc 1.99.1 | 0 | Pass — 66 tests (backend 15, faults 9, clock 9, metadata 3, midi 7, pcm 14, rt_contract 6, doctests 3) |
+| mise exec -- prek run --all-files | windows-local | prek (apm) | 0 | Pass |
+| midi_endpoint_probe rerun (cargo run --example, auxiliary) | windows-local | rustc 1.99.1 | 0 | Pass — output view + WMS availability + refreshed verdict; evidence/rf629/midi_endpoint_probe-windows-local.txt |
+
+## Real-device lane (test-midi-real-device) — FAILED, root cause outside slice scope
+
+`mise run test-midi-real-device` — exit 101.
+
+- `ruviform-midi-device --lib` unit test
+  `os::windows_output::tests::real_device_send_smoke` FAILED:
+  `winmm midiOutOpen failed` at
+  `crates/ruviform-midi-device/src/os/windows_output.rs:513`.
+- Root cause (measured, auxiliary PowerShell P/Invoke):
+  `midiOutOpen(CALLBACK_FUNCTION|MIDI_IO_STATUS=0x30040)` on
+  "Microsoft GS Wavetable Synth" returns `MMSYSERR_INVALFLAG` (10);
+  `CALLBACK_FUNCTION` alone returns 0. The #658 backend
+  unconditionally passes `MIDI_IO_STATUS` (needed for `MM_MOM_DONE`
+  SysEx completion), so every real-device output open fails on this
+  host. Latent since 2nd slice — that slice recorded the lane as
+  NotRun and never executed it.
+- `src/os/windows_output.rs` is outside this slice's declared edit
+  scope; escalated to coordinator (ask msg_8221753a9939, pending at
+  evidence time).
+- Because cargo stops at the first failing test target, the lane did
+  not reach `tests/loopback.rs` / `tests/output_ports.rs` /
+  `tests/ports.rs` integration binaries on this run.
+
+## Auxiliary direct run of the new verifier (cargo, supplementary evidence)
+
+`cargo test -p ruviform-midi-device --test loopback -- --ignored
+--nocapture` — exit 101:
+
+- `loopback_round_trip` — PASS (early return): enumerated 0 input /
+  1 output ports, no bidirectional name match, printed
+  `verdict: NotRun — NOT_PROVISIONED`. Fail-closed path verified.
+- `real_device_silent_output_smoke` — FAILED: found "Microsoft GS
+  Wavetable Synth" output, `open()` returned
+  `Backend("winmm midiOutOpen failed")` — same `MIDI_IO_STATUS`
+  root cause as above. Honest failure (device present but unusable),
+  not converted to skip.
+
+## NotRun (explicit, per task spec)
+
+- MSRV lane — daily CI scope, not run by instruction.
+- loopback round-trip on a provisioned pair — no loopMIDI /
+  Windows MIDI Services loopback pair exists on this host
+  (probe: `New-MidiLoopback` absent, `midisrv` Running,
+  0 input ports). `loopback_round_trip` correctly reports
+  `NotRun — NOT_PROVISIONED`; no `virtual-os-endpoint` claim.
+- *-full lanes — out of scope for this slice.
+
+## What the Pass results actually prove (OS-L1 only)
+
+- Probe now shows production input AND output ports in identical
+  field format; verdict no longer claims the `midiOut*` send path is
+  absent; WMS availability detection is best-effort `NotRun` on
+  spawn/exit failure.
+- `tests/loopback.rs` compiles, is collected by the existing
+  `test-midi-real-device` lane (`--ignored` auto-collect, no
+  mise.toml change), uses only production port traits (no Win32 FFI
+  in the test), builds its expected sequence as independent
+  literals, and fails closed to `NotRun` without a pair.
+- audio-test `midi.rs` doc comment now matches the #658 reality.
+
+## Explicitly NOT proven here
+
+- virtual-os-endpoint behavior — no loopback pair provisioned;
+  `environment_kind=virtual-os-endpoint` is NOT claimed anywhere.
+- EXT-L3 real-device round-trip evidence — blocked by the
+  `MIDI_IO_STATUS` backend defect above plus missing pair.
+- Timestamp/latency assertions — untested until a pair exists.
