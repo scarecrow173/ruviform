@@ -30,8 +30,8 @@
 | `mise run check-l1-real-plugin` | pass（`--features l1-runner` 全 target） | 0 |
 | `mise run lint-l1-real-plugin` | pass | 0 |
 | `mise run test-l1-real-plugin` | pass — adapter e2e 3+3、test-plugin e2e 3+3、**fault e2e 8+8 = 16 case 全 pass**（実 cdylib + runner spawn、test 名: `descriptor_and_clean_block`/`abort_fails_instance`/`voluntary_exit_reports_code`/`exit_zero_is_failure`/`hang_converges_on_timeout`/`bundled_crash_fans_out_to_co_resident`/`dedicated_isolation_keeps_other_instance`/`error_is_defined_rejection` × VST3・CLAP） | 0 |
-| `mise run test-rt` | rt_ テスト — inert arm-apply/pass-through 経路のみ対象。abort/hang/exit は in-process で**実行しない**（process 死亡回避） | （最終結果は本ファイル末尾の追記参照） |
-| `mise exec -- prek run --all-files` | pass | （PR 前に最終値を記録） |
+| `mise run test-rt` | pass — workspace `rt_` filter 全 pass（exit 0）。fault の inert arm-apply/pass-through 経路を含む。abort/hang/exit は in-process で**実行しない**（process 死亡回避） | 0 |
+| `mise exec -- prek run --all-files` | pass | 0 |
 
 cargo 直接実行は補助証拠（canonical = mise）。`*-msrv`/`*-full` lane はユーザー指定により未実行。
 
