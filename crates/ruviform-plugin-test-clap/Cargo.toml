@@ -49,6 +49,7 @@ clack-extensions = { version = "=0.2.0", features = [
     "clack-plugin",
     "audio-ports",
     "params",
+    "state",
 ] }
 # Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
 # Lifecycle/BufferView) — the plugin-side implementation target.

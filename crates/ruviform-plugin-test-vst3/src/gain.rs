@@ -63,7 +63,9 @@ pub(crate) const GAIN_PARAM: ParamInfo = ParamInfo {
 /// Applies `gain` over frames `[start, end)` on every shared channel.
 /// `end` is additionally clamped to each channel slice's length —
 /// views guarantee uniform lengths, so this is only defensive.
-fn apply_gain<I: BufferView, O: BufferViewMut>(
+/// `pub(crate)` so the `test_stateful` fixture's identical gain law
+/// reuses the one implementation.
+pub(crate) fn apply_gain<I: BufferView, O: BufferViewMut>(
     inputs: &[I],
     outputs: &mut [O],
     start: usize,

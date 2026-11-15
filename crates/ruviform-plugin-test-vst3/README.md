@@ -11,7 +11,7 @@ consumers (Issue #630).
 A single VST3 module binary exporting `GetPluginFactory` plus the
 platform module hooks (`InitDll`/`ExitDll` on Windows,
 `ModuleEntry`/`ModuleExit` on Linux, `bundleEntry`/`bundleExit` on
-macOS) that hosts three classes:
+macOS) that hosts four plugins (eight classes):
 
 | Class | CID role | Surface |
 | --- | --- | --- |
@@ -21,6 +21,8 @@ macOS) that hosts three classes:
 | `test_fault Controller` ("Component Controller Class") | controller | `IEditController` |
 | `test_editor` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` |
 | `test_editor Controller` ("Component Controller Class") | controller | `IEditController` + `createView("editor")` → `IPlugView` |
+| `test_stateful` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` + `IComponent::setState`/`getState` |
+| `test_stateful Controller` ("Component Controller Class") | controller | `IEditController` + `setComponentState`/`setState`/`getState` |
 
 Vendor is `"Ruviform Test"` and the class IDs are fresh `uid`s,
 distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
@@ -70,6 +72,24 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
   attach is a defined rejection. `removed()` destroys the child and
   always reports `kResultOk`.
 
+## `test_stateful` semantics
+
+- Same bus shape, gain parameter (plain `[0.0, 2.0]`, default
+  `1.0`) and DSP law as `test_gain` — the class exists to carry real
+  state, not new DSP.
+- Component and controller each persist a 16-byte payload
+  `[u32 LE "RFST"][u32 LE version=1][f64 LE]` through `IBStream`:
+  the component stores the **plain** gain, the controller stores the
+  **normalized** gain, and `setComponentState` converts between the
+  two domains. Wrong length, magic, version or a non-finite value is
+  a defined rejection; finite out-of-range values clamp to the
+  parameter range.
+- Unlike `test_gain`, activation does **not** reset the gain — a
+  restored state survives `setActive`, which is what makes the
+  save → mutate → restore → save round-trip meaningful.
+- The stateless classes keep `kNotImplemented` on the state verbs;
+  `test_stateful` is the suite's real-ABI state oracle.
+
 ## Independence boundary
 
 The plugin-side implementation (DSP law, lifecycle mapping, bus and
@@ -100,12 +120,11 @@ validated or bounded at the boundary. Verified by the `rt_`
 
 ## Scope
 
-This slice ships `test_gain`, `test_fault`, and `test_editor`.
-State (de)serialization reports `kNotImplemented` honestly —
-preset/state coverage is a later plugin class (`test_stateful`).
-CLAP `test_editor`, the `test_instrument` class, out-of-process
-editor attach, and the `ruviform-audio-test` runtime integration
-are subsequent slices of the same suite. A real-HWND
+This slice ships `test_gain`, `test_fault`, `test_editor`, and
+`test_stateful`. The stateless classes report `kNotImplemented` on
+the state verbs honestly. CLAP `test_editor`, the `test_instrument`
+class, out-of-process editor attach, and the `ruviform-audio-test`
+runtime integration are subsequent slices of the same suite. A real-HWND
 `open_gui` attach's Pass evidence belongs to the Issue `scarecrow173/ruviform#631`
 real-dock lane; this crate's default test suite pins only the
 defined-rejection paths headlessly.

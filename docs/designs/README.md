@@ -232,6 +232,7 @@ Directory: `docs/designs`
 | DESIGN-034Y11NzSzQKwkY0SHh8oe | Issue #630 test_editor slice — 設計 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | DESIGN-8g91MtjlYytEayPOtT2g3e | Issue #630 test_fault slice — 設計 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
+| DESIGN-034Y4dCo7zV1IwCz9gEIi0 | Issue #630 test_stateful slice — 設計 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034XTP681X6oGd0SwnvpbS | Issue #631 Real-window native-slot dock lane 設計 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | DESIGN-034XVTqsKVWAgXMI3CBA6o | Issue #631 Plugin-dock scenario catalog + driver projection 設計 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |

@@ -8,15 +8,18 @@ ships to consumers (Issue #630, CLAP slice).
 
 ## What it provides
 
-A single CLAP plugin binary exporting `clap_entry` — a
-`SinglePluginEntry` factory exposing exactly one plugin:
+A single CLAP plugin binary exporting `clap_entry` — a custom
+`Entry` + `PluginFactoryImpl` exposing three plugins through one
+factory:
 
 | Plugin | CLAP id | Surface |
 | --- | --- | --- |
 | `test_gain` | `org.ruviform-test.clap-test-gain` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
+| `test_fault` | `org.ruviform-test.clap-test-fault` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
+| `test_stateful` | `org.ruviform-test.clap-test-stateful` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` + `clap.ext.state` |
 
-Vendor is `"Ruviform Test"`, name `test_gain`, version `0.0.0`,
-features `audio-effect` + `stereo` — distinct from the
+Vendor is `"Ruviform Test"`, version `0.0.0`, features
+`audio-effect` + `stereo` — distinct from the
 `ruviform-plugin-clap` adapter fixture's `org.ruviform.clap-gain-poc`
 / `"Ruviform"` descriptor, so both modules coexist in one host scan.
 
@@ -42,6 +45,33 @@ features `audio-effect` + `stereo` — distinct from the
   offset-0 events into the persisted gain for the next block.
 - Activation resets gain to the parameter default — deterministic
   per-activation state, the same law the VST3 slice declares.
+
+## `test_fault` semantics
+
+- Same port shape as `test_gain`; one stepped `Fault` parameter
+  (plain `[0.0, 4.0]`, default `0.0` = `none`).
+- Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
+  event arms `abort`/`exit`/`hang`/`error` dispatch inside the
+  arming block's `process()` — the L1 out-of-process
+  crash/hang/timeout/isolation oracle. `error` returns
+  `CLAP_PROCESS_ERROR` (a defined rejection, not a crash);
+  `abort`/`exit`/`hang` are L1-only faults.
+
+## `test_stateful` semantics
+
+- Same port shape, gain parameter and DSP law as `test_gain` — the
+  class exists to carry real state, not new DSP.
+- `clap.ext.state` `save` writes one plugin-defined 16-byte stream
+  `[u32 LE "RFST"][u32 LE version=1][f64 LE plain gain]`; `load`
+  accepts exactly that length — wrong length, magic, version or a
+  non-finite value is a defined rejection, and finite out-of-range
+  values clamp to the parameter range.
+- Unlike `test_gain`, activation does **not** reset the gain — a
+  restored state survives `activate`, which is what makes the
+  save → mutate → restore → save round-trip meaningful.
+- The stateless classes ship no `clap.ext.state` extension, so the
+  host bridge reports `HostError::Unsupported` honestly;
+  `test_stateful` is the suite's real-ABI state oracle.
 
 ## Independence boundary
 
@@ -77,10 +107,7 @@ boundary. Verified by the `rt_` `assert_no_alloc` tests
 
 ## Scope
 
-This slice ships `test_gain` only. State (de)serialization is not
-implemented — preset/state coverage is a later plugin class
-(`test_stateful`, currently blocked on the production host bridges'
-`save_state`/`restore_state` gap). `test_instrument` /
-`test_fault` / `test_editor`, out-of-process runner paths, external
-SDK validators, and the `ruviform-audio-test` runtime integration
+This slice ships `test_gain`, `test_fault`, and `test_stateful`.
+CLAP `test_editor`, the `test_instrument` class, out-of-process
+editor attach, and the `ruviform-audio-test` runtime integration
 are subsequent slices of the same suite.
