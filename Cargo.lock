@@ -6939,6 +6939,8 @@ dependencies = [
  "ruviform-audio-core",
  "ruviform-plugin-clap",
  "ruviform-plugin-core",
+ "ruviform-plugin-export",
+ "ruviform-plugin-host",
 ]
 
 [[package]]
@@ -6948,6 +6950,8 @@ dependencies = [
  "assert_no_alloc",
  "ruviform-audio-core",
  "ruviform-plugin-core",
+ "ruviform-plugin-export",
+ "ruviform-plugin-host",
  "ruviform-plugin-vst3",
  "vst3",
 ]

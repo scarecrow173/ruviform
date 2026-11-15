@@ -14,6 +14,27 @@ publish.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The test-fixture L1 child-process runner (Issue #630 L1 slice):
+# dlopens this crate's own cdylib through the production
+# `ruviform-plugin-vst3` `host` bridge and hands the scanned
+# factories to `ruviform_plugin_export::run` — the same shape as the
+# adapter's `ruviform-plugin-vst3-l1-runner`, kept inside the test
+# crate so the adapter's compile-time-fixed fixture name and sources
+# stay untouched. `required-features` keeps the binary out of the
+# default build — it exists only under `--features l1-runner`.
+[[bin]]
+name = "ruviform-plugin-test-vst3-l1-runner"
+path = "src/bin/ruviform-plugin-test-vst3-l1-runner.rs"
+required-features = ["l1-runner"]
+
+[features]
+# `l1-runner` — the out-of-process L1 path: the runner binary plus the
+# production host bridge (`host` feature of `ruviform-plugin-vst3`) and
+# the wire runtime (`ruviform-plugin-export`) it serves. Optional dep
+# edges keep the default build and the plugin-side cdylib unchanged;
+# the dev-dependency entries below union the same crates for tests.
+l1-runner = ["dep:ruviform-plugin-vst3", "dep:ruviform-plugin-export"]
+
 [dependencies]
 # SDK-equivalent binding layer — the same `vst3` crate version the
 # production adapter uses; shared as the "SDK layer" only (see
@@ -24,6 +45,16 @@ vst3 = "0.3.0"
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 # Zero-copy planar buffer views for the process path.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
+# Production host bridge for the L1 runner binary — optional regular
+# dep enabled only by `l1-runner` (`host` feature supplies
+# `Vst3Library`/`factories`). The dev-dependency entry below keeps the
+# same crate available to `tests/` without the feature; the two
+# entries union features (the `clack-host` precedent in
+# `ruviform-plugin-clap`).
+ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"], optional = true }
+# The L1 wire runtime (`run()`) consumed by the runner binary —
+# optional so the plugin-side cdylib's dep tree is unchanged.
+ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 
 [dev-dependencies]
 # RT non-allocation proof for the process path (Issue #22 lane
@@ -33,6 +64,11 @@ assert_no_alloc = "1.1"
 # edge only; the adapter itself stays pristine and this crate never
 # appears in its dependency tree.
 ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"] }
+# `tests/l1_real_test_plugin_e2e.rs` drives the spawned runner through
+# `PluginHost`/`OutOfProcessSpec` — dev-dep direction (test crate →
+# host) keeps the dependency DAG acyclic; `plugin-host` depends on no
+# adapter or test crate (same edge the adapter e2e suites use).
+ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 
 [lints]
 workspace = true
