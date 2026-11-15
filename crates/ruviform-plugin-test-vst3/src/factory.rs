@@ -1,6 +1,7 @@
 //! The VST3 plugin factory: `IPluginFactory` + `IPluginFactory2` +
-//! `IPluginFactory3` describing and instantiating the two classes the
-//! module ships (component + controller).
+//! `IPluginFactory3` describing and instantiating the four classes
+//! the module ships (`test_gain`/`test_fault` component + controller
+//! pairs).
 
 use std::ffi::c_void;
 
@@ -12,11 +13,13 @@ use vst3::Steinberg::{
 use vst3::{Class, ComWrapper};
 
 use crate::component::TestGainComponent;
-use crate::controller::TestGainController;
+use crate::controller::{GAIN_CONTROLLER_CID, ParamController};
+use crate::fault::{FAULT_CONTROLLER_CID, FAULT_PARAM, FAULT_STEP_COUNT, TestFaultComponent};
+use crate::gain::GAIN_PARAM;
 use crate::sdk_enum_i32;
 use crate::strings::{copy_cstring, copy_wstring};
 
-/// The VST3 plugin factory for the `test_gain` test module.
+/// The VST3 plugin factory for the test-suite module.
 pub(crate) struct TestGainFactory;
 
 impl Class for TestGainFactory {
@@ -47,10 +50,11 @@ impl IPluginFactoryTrait for TestGainFactory {
 
     #[expect(unsafe_code)]
     unsafe fn countClasses(&self) -> i32 {
-        2
+        4
     }
 
-    /// Class 0 = audio component, class 1 = edit controller.
+    /// Classes 0/1 = `test_gain` component + controller, classes
+    /// 2/3 = `test_fault` component + controller.
     #[expect(unsafe_code)]
     unsafe fn getClassInfo(&self, index: i32, info: *mut PClassInfo) -> tresult {
         if info.is_null() {
@@ -66,10 +70,22 @@ impl IPluginFactoryTrait for TestGainFactory {
                 copy_cstring("test_gain", &mut info.name);
             }
             1 => {
-                info.cid = TestGainController::CID;
+                info.cid = GAIN_CONTROLLER_CID;
                 info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_cstring("test_gain Controller", &mut info.name);
+            }
+            2 => {
+                info.cid = TestFaultComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_cstring("test_fault", &mut info.name);
+            }
+            3 => {
+                info.cid = FAULT_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_cstring("test_fault Controller", &mut info.name);
             }
             _ => return kInvalidArgument,
         }
@@ -95,8 +111,15 @@ impl IPluginFactoryTrait for TestGainFactory {
             TestGainComponent::CID => {
                 ComWrapper::new(TestGainComponent::new()).to_com_ptr::<FUnknown>()
             }
-            TestGainController::CID => {
-                ComWrapper::new(TestGainController::new()).to_com_ptr::<FUnknown>()
+            GAIN_CONTROLLER_CID => {
+                ComWrapper::new(ParamController::new(&GAIN_PARAM, 0)).to_com_ptr::<FUnknown>()
+            }
+            TestFaultComponent::CID => {
+                ComWrapper::new(TestFaultComponent::new()).to_com_ptr::<FUnknown>()
+            }
+            FAULT_CONTROLLER_CID => {
+                ComWrapper::new(ParamController::new(&FAULT_PARAM, FAULT_STEP_COUNT))
+                    .to_com_ptr::<FUnknown>()
             }
             _ => None,
         };
@@ -135,10 +158,32 @@ impl IPluginFactory2Trait for TestGainFactory {
                 copy_cstring("VST 3.x", &mut info.sdkVersion);
             }
             1 => {
-                info.cid = TestGainController::CID;
+                info.cid = GAIN_CONTROLLER_CID;
                 info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_cstring("test_gain Controller", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("", &mut info.subCategories);
+                copy_cstring("Ruviform Test", &mut info.vendor);
+                copy_cstring("0.0.0", &mut info.version);
+                copy_cstring("VST 3.x", &mut info.sdkVersion);
+            }
+            2 => {
+                info.cid = TestFaultComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_cstring("test_fault", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("Fx", &mut info.subCategories);
+                copy_cstring("Ruviform Test", &mut info.vendor);
+                copy_cstring("0.0.0", &mut info.version);
+                copy_cstring("VST 3.x", &mut info.sdkVersion);
+            }
+            3 => {
+                info.cid = FAULT_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_cstring("test_fault Controller", &mut info.name);
                 info.classFlags = 0;
                 copy_cstring("", &mut info.subCategories);
                 copy_cstring("Ruviform Test", &mut info.vendor);
@@ -174,10 +219,32 @@ impl IPluginFactory3Trait for TestGainFactory {
                 copy_wstring("VST 3.x", &mut info.sdkVersion);
             }
             1 => {
-                info.cid = TestGainController::CID;
+                info.cid = GAIN_CONTROLLER_CID;
                 info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_wstring("test_gain Controller", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("", &mut info.subCategories);
+                copy_wstring("Ruviform Test", &mut info.vendor);
+                copy_wstring("0.0.0", &mut info.version);
+                copy_wstring("VST 3.x", &mut info.sdkVersion);
+            }
+            2 => {
+                info.cid = TestFaultComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_wstring("test_fault", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("Fx", &mut info.subCategories);
+                copy_wstring("Ruviform Test", &mut info.vendor);
+                copy_wstring("0.0.0", &mut info.version);
+                copy_wstring("VST 3.x", &mut info.sdkVersion);
+            }
+            3 => {
+                info.cid = FAULT_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_wstring("test_fault Controller", &mut info.name);
                 info.classFlags = 0;
                 copy_cstring("", &mut info.subCategories);
                 copy_wstring("Ruviform Test", &mut info.vendor);

@@ -57,11 +57,13 @@ fn load_library() -> ClapLibrary {
 /// `ClapLibrary::load` → `factories()` → `create()` → `init` →
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
-fn prepared_plugin() -> Box<dyn ErasedPlugin> {
+/// `index` selects the suite plugin (`0` = `test_gain`,
+/// `1` = `test_fault`).
+fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 1, "the module ships one factory");
-    let mut plugin = factories[0].create();
+    assert_eq!(factories.len(), 2, "the entry exposes two plugins");
+    let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
     plugin
@@ -69,6 +71,16 @@ fn prepared_plugin() -> Box<dyn ErasedPlugin> {
         .expect("prepare");
     plugin.start_processing().expect("start_processing");
     plugin
+}
+
+/// `test_gain`'s prepared instance — the gain oracle's entry point.
+fn prepared_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(0)
+}
+
+/// `test_fault`'s prepared instance — the fault oracle's entry point.
+fn prepared_fault_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(1)
 }
 
 /// Drives one 64-frame stereo block of golden PCM through the
@@ -99,22 +111,28 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 }
 
 /// Discovery through the production path: `ClapLibrary::load` scans
-/// the real binary's `clap_entry`, finds exactly the `test_gain`
-/// plugin descriptor, and reports the fixture's vendor/name/features.
+/// the real binary's `clap_entry`, finds the `test_gain` and
+/// `test_fault` plugin descriptors, and reports each fixture's
+/// vendor/name/features.
 #[test]
-fn discovers_test_gain_through_production_host() {
+fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        1,
-        "the entry exposes exactly one plugin descriptor"
+        2,
+        "the entry exposes exactly two plugin descriptors"
     );
-    let descriptor = descriptors[0];
-    assert_eq!(descriptor.name, "test_gain");
-    assert_eq!(descriptor.vendor, "Ruviform Test");
-    assert_eq!(descriptor.version, "0.0.0");
-    assert!(descriptor.features.contains(&"audio-effect"));
+    let gain = descriptors[0];
+    assert_eq!(gain.name, "test_gain");
+    assert_eq!(gain.vendor, "Ruviform Test");
+    assert_eq!(gain.version, "0.0.0");
+    assert!(gain.features.contains(&"audio-effect"));
+    let fault = descriptors[1];
+    assert_eq!(fault.name, "test_fault");
+    assert_eq!(fault.vendor, "Ruviform Test");
+    assert_eq!(fault.version, "0.0.0");
+    assert!(fault.features.contains(&"audio-effect"));
 }
 
 /// Parameter surface through the production path: the host
@@ -126,7 +144,7 @@ fn discovers_test_gain_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 1);
+    assert_eq!(factories.len(), 2);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -136,6 +154,25 @@ fn reports_gain_param_in_plain_domain() {
     assert_eq!(gain.min_value, 0.0);
     assert_eq!(gain.max_value, 2.0);
     assert_eq!(gain.default_value, 1.0);
+}
+
+/// The fault parameter surface through the production path: the
+/// `params` extension reports the stepped `Fault` parameter — plain
+/// range `[0.0, 4.0]`, default `0.0` (`none`).
+#[test]
+fn reports_fault_param_in_plain_domain() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 2);
+    let plugin = factories[1].create();
+    let params = plugin.params();
+    assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
+    let fault = params[0];
+    assert_eq!(fault.id.0, 0);
+    assert_eq!(fault.name, "Fault");
+    assert_eq!(fault.min_value, 0.0);
+    assert_eq!(fault.max_value, 4.0);
+    assert_eq!(fault.default_value, 0.0);
 }
 
 /// The core oracle: fixed PCM golden vectors plus a normalized
@@ -183,4 +220,78 @@ fn processes_audio_with_sample_accurate_gain_events() {
     let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
     assert_eq!(left, vec![0.75_f32; FRAMES]);
     assert_eq!(right, vec![-0.375_f32; FRAMES]);
+}
+
+/// `test_fault` unarmed: an event-free block is pure pass-through —
+/// `out == in` bitwise through the real ABI — and an explicit `none`
+/// arming event (normalized `0.0` → plain `0.0`) stays inert.
+/// (`abort`/`exit`/`hang` are never driven in-process — they would
+/// kill this test binary; they are L1-only faults.)
+#[test]
+fn fault_unarmed_and_none_mode_are_pass_through() {
+    let mut plugin = prepared_fault_plugin();
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+
+    // normalized 0.0 → plain 0.0 → mode `none` — still inert.
+    let none_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.0).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &none_events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_fault` `error` mode through the real ABI: normalized `1.0`
+/// → plain `4.0` → the plugin returns `CLAP_PROCESS_ERROR`, which
+/// the production bridge reports as `ProcessStatus::Error` — a
+/// defined rejection, not a crash. The instance stays alive: a
+/// follow-up `none` event (normalized `0.0`) restores pass-through.
+#[test]
+fn fault_error_mode_is_defined_rejection_not_crash() {
+    let mut plugin = prepared_fault_plugin();
+
+    let error_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(1.0).unwrap(),
+        }),
+    )];
+    let (result, _out) = drive_block(&mut *plugin, &error_events);
+    assert_eq!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Error,
+        "armed error mode must surface as a defined process error"
+    );
+
+    // Disarm: normalized 0.0 → plain 0.0 → mode `none`.
+    let none_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.0).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &none_events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }

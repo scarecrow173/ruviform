@@ -83,7 +83,6 @@ use vst3::Steinberg::{
 use vst3::{Class, ComRef, uid};
 
 use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
-use crate::controller::TestGainController;
 use crate::gain::{GAIN_PARAM, TestGainProcessor};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
@@ -111,10 +110,13 @@ const MAX_PARAM_SCAN_OPERATIONS: usize = 8 * MAX_BLOCK_EVENTS;
 
 /// Per-instance component state — everything the `&self` COM methods
 /// need to mutate, behind one `RefCell`.
-struct ComponentState {
+struct ComponentState<P: PluginProcessor> {
     lifecycle: Lifecycle,
-    processor: TestGainProcessor,
+    processor: P,
     context: ProcessContext,
+    /// The plugin's declared parameter id — `collect_param_events`
+    /// admits only this id's queue points into the bounded scratch.
+    param_id: ParamId,
     /// The negotiated `ProcessConfig` — `Some` after a successful
     /// `setupProcessing`; `setProcessing(true)` requires it.
     config: Option<ProcessConfig>,
@@ -126,12 +128,13 @@ struct ComponentState {
     bus_channels: usize,
 }
 
-impl ComponentState {
-    fn new() -> Self {
+impl<P: PluginProcessor> ComponentState<P> {
+    fn new(processor: P, param_id: ParamId) -> Self {
         Self {
             lifecycle: Lifecycle::new(),
-            processor: TestGainProcessor::new(),
+            processor,
             context: ProcessContext::new(),
+            param_id,
             config: None,
             channel_scratch: ChannelScratch::empty(),
             event_scratch: EventScratch::empty(),
@@ -140,66 +143,98 @@ impl ComponentState {
     }
 }
 
-/// The VST3 component for the `test_gain` test plugin.
+/// The VST3 component shell shared by every test-suite plugin class —
+/// `IComponent` + `IAudioProcessor` + `IProcessContextRequirements`
+/// over `ComWrapper`, driving the neutral [`PluginProcessor`] contract
+/// through the common [`Lifecycle`] machine. The DSP law and parameter
+/// surface are the type parameter's own (`TestGainProcessor` /
+/// `TestFaultProcessor`); the shell — lifecycle mapping, bus contract,
+/// boundary validation, bounded event collection and scratch — is
+/// identical for every class, so it lives here once.
 ///
 /// `Interfaces` is the COM query-interface list; VST3's `IComponent`
 /// and `IAudioProcessor` both derive from `IPluginBase`, so the
 /// `IPluginBase` trait impl supplies `initialize`/`terminate` for all
 /// of them.
-pub(crate) struct TestGainComponent {
-    state: RefCell<ComponentState>,
+pub(crate) struct TestComponent<P: PluginProcessor> {
+    state: RefCell<ComponentState<P>>,
     /// Latest tail length reported by the processor —
     /// `getTailSamples` may run on any thread, so it stays an atomic.
     tail: AtomicU32,
+    /// The distributed controller class ID this component reports
+    /// from `getControllerClassId` — each plugin class pairs with its
+    /// own controller CID.
+    controller_cid: TUID,
 }
 
-impl Class for TestGainComponent {
+/// `test_gain`'s component — the shared [`TestComponent`] shell over
+/// [`TestGainProcessor`]. The associated `CID`/`new` keep the
+/// pre-genericization surface (`TestGainComponent::CID`,
+/// `TestGainComponent::new()`) resolving through the alias.
+pub(crate) type TestGainComponent = TestComponent<TestGainProcessor>;
+
+impl<P: PluginProcessor> Class for TestComponent<P> {
     type Interfaces = (IComponent, IAudioProcessor, IProcessContextRequirements);
 }
 
-impl TestGainComponent {
+impl TestComponent<TestGainProcessor> {
     /// The component class ID — a fresh `uid` for the test suite,
     /// distinct from the adapter fixture's `GainComponent::CID` so the
     /// two modules coexist in one host scan.
     pub(crate) const CID: TUID = uid(0x6D4F_8A21, 0x3B7C_9E05, 0xF1A2_4C68, 0xB9D3_7E51);
 
     pub(crate) fn new() -> Self {
+        Self::with(
+            crate::controller::GAIN_CONTROLLER_CID,
+            GAIN_PARAM.id,
+            TestGainProcessor::new(),
+        )
+    }
+}
+
+impl<P: PluginProcessor> TestComponent<P> {
+    /// A component over `processor`, reporting `controller_cid` from
+    /// `getControllerClassId` and admitting `param_id`'s queue points.
+    pub(crate) fn with(controller_cid: TUID, param_id: ParamId, processor: P) -> Self {
         Self {
-            state: RefCell::new(ComponentState::new()),
+            state: RefCell::new(ComponentState::new(processor, param_id)),
             tail: AtomicU32::new(0),
+            controller_cid,
         }
     }
+}
 
-    /// Reads `IParameterChanges` into `event_scratch`: one
-    /// [`ParamEvent`] per gain queue point, out-of-block offsets and
-    /// non-finite values dropped. The caller sorts the scratch once
-    /// after the collector ran — param events are the only event
-    /// source in this slice. The scan is bounded: at most
-    /// `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS` points per
-    /// queue are visited, the scan stops as soon as the bounded
-    /// scratch fills, and the *total* inspection work is capped by
-    /// [`MAX_PARAM_SCAN_OPERATIONS`] (queue visits + point reads
-    /// combined), so a hostile host cannot multiply inspections to
-    /// `queues × points` while few events are accepted.
-    ///
-    /// On budget exhaustion the scan stops deterministically — events
-    /// already collected are retained and processed (the
-    /// earliest-scanned events survive; the rest are dropped).
-    ///
-    /// # Safety
-    ///
-    /// `changes` may be null; otherwise it must point to a valid
-    /// `IParameterChanges` object for the duration of the call (the
-    /// VST3 `process` contract guarantees it for
-    /// `data.inputParameterChanges`). Returned queues are borrowed
-    /// (`ComRef`) and never stored.
-    #[expect(unsafe_code)]
-    unsafe fn collect_param_events(
-        changes: *mut IParameterChanges,
-        frames: usize,
-        state: &mut ComponentState,
-    ) {
-        let events = &mut state.event_scratch;
+/// Reads `IParameterChanges` into `events`: one [`ParamEvent`] per
+/// queue point whose parameter id equals `wanted`, out-of-block
+/// offsets and non-finite values dropped. The caller sorts the
+/// scratch once after the collector ran — param events are the only
+/// event source in this slice. The scan is bounded: at most
+/// `MAX_BLOCK_EVENTS` queues and `MAX_BLOCK_EVENTS` points per queue
+/// are visited, the scan stops as soon as the bounded scratch fills,
+/// and the *total* inspection work is capped by
+/// [`MAX_PARAM_SCAN_OPERATIONS`] (queue visits + point reads
+/// combined), so a hostile host cannot multiply inspections to
+/// `queues × points` while few events are accepted.
+///
+/// On budget exhaustion the scan stops deterministically — events
+/// already collected are retained and processed (the
+/// earliest-scanned events survive; the rest are dropped).
+///
+/// # Safety
+///
+/// `changes` may be null; otherwise it must point to a valid
+/// `IParameterChanges` object for the duration of the call (the
+/// VST3 `process` contract guarantees it for
+/// `data.inputParameterChanges`). Returned queues are borrowed
+/// (`ComRef`) and never stored.
+#[expect(unsafe_code)]
+pub(crate) unsafe fn collect_param_events(
+    changes: *mut IParameterChanges,
+    frames: usize,
+    wanted: ParamId,
+    events: &mut EventScratch,
+) {
+    {
         events.clear();
         // SAFETY: caller guarantees `changes` is null or a valid
         // `IParameterChanges` for this call — `ComRef` borrows without
@@ -234,7 +269,7 @@ impl TestGainComponent {
             let param_id = ParamId(unsafe { queue.getParameterId() });
             // Foreign parameter ids never enter the scratch — they
             // cannot consume the bounded event budget.
-            if param_id != GAIN_PARAM.id {
+            if param_id != wanted {
                 continue;
             }
             // SAFETY: `queue` is a live `IParamValueQueue` for the call.
@@ -281,7 +316,7 @@ impl TestGainComponent {
     }
 }
 
-impl IPluginBaseTrait for TestGainComponent {
+impl<P: PluginProcessor> IPluginBaseTrait for TestComponent<P> {
     /// `Created → Initialized` on success; a double init is a defined
     /// `kResultFalse` rejection.
     #[expect(unsafe_code)]
@@ -309,7 +344,7 @@ impl IPluginBaseTrait for TestGainComponent {
     }
 }
 
-impl IComponentTrait for TestGainComponent {
+impl<P: PluginProcessor> IComponentTrait for TestComponent<P> {
     /// Reports the distributed controller class — the host
     /// instantiates `TestGainController` by this CID.
     #[expect(unsafe_code)]
@@ -318,7 +353,7 @@ impl IComponentTrait for TestGainComponent {
             return kInvalidArgument;
         }
         // SAFETY: caller-provided out-param, checked non-null.
-        unsafe { *class_id = TestGainController::CID };
+        unsafe { *class_id = self.controller_cid };
         kResultOk
     }
 
@@ -429,7 +464,7 @@ impl IComponentTrait for TestGainComponent {
     }
 }
 
-impl IAudioProcessorTrait for TestGainComponent {
+impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
     /// Accepts matching mono or stereo arrangements on the single bus
     /// pair — the declared stereo is the default; mono is a legal
     /// negotiation for the channel-agnostic gain law.
@@ -639,7 +674,14 @@ impl IAudioProcessorTrait for TestGainComponent {
 
         // SAFETY: `data.inputParameterChanges` is null or a valid
         // `IParameterChanges` for this call.
-        unsafe { Self::collect_param_events(data.inputParameterChanges, frames, state) };
+        unsafe {
+            collect_param_events(
+                data.inputParameterChanges,
+                frames,
+                state.param_id,
+                &mut state.event_scratch,
+            );
+        }
         // The scratch is sorted — the merge sort is allocation-free
         // over the pre-reserved buffer.
         state.event_scratch.sort();
@@ -745,7 +787,7 @@ impl IAudioProcessorTrait for TestGainComponent {
     }
 }
 
-impl IProcessContextRequirementsTrait for TestGainComponent {
+impl<P: PluginProcessor> IProcessContextRequirementsTrait for TestComponent<P> {
     /// The plugin consumes no conditionally-valid process-context
     /// fields — no transport, no musical time.
     #[expect(unsafe_code)]
