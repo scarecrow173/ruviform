@@ -83,6 +83,57 @@ pub(crate) fn decode_message(status: u8, data1: u8, data2: u8) -> Option<MidiEve
     })
 }
 
+/// Encodes one canonical [`MidiEvent`] into the packed
+/// `status + data1 + data2` triple [`decode_message`] consumes — the
+/// exact inverse mapping, for the `WinMM` `midiOutShortMsg` send path
+/// (Issue #629).
+///
+/// Returns `None` for events the MIDI 1.0 channel-voice vocabulary
+/// cannot represent on this port: non-zero UMP groups (a
+/// `supports_ump = false` port has no group field) and future
+/// [`MidiKind`] variants the encoder does not know. Callers must
+/// treat `None` as an honest refusal, never a silent drop.
+///
+/// Values narrow through [`MidiValue`] canonical scale-to-max
+/// conversions — the same math the decode direction widens with, so
+/// `decode_message(encode_message(event))` round-trips every
+/// representable MIDI 1.0 message.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free, no panics.
+#[must_use]
+pub(crate) fn encode_message(event: MidiEvent) -> Option<(u8, u8, u8)> {
+    // MIDI 1.0 byte-stream output has no group field — group ZERO is
+    // the only group a `midiOut*` port can carry.
+    if event.group != MidiGroup::ZERO {
+        return None;
+    }
+    let channel = event.channel.get();
+    let (status, data1, data2) = match event.kind {
+        MidiKind::NoteOff { key, velocity } => (0x80, key.get(), MidiValue::as_u7(velocity)),
+        MidiKind::NoteOn { key, velocity } => (0x90, key.get(), MidiValue::as_u7(velocity)),
+        MidiKind::PolyPressure { key, pressure } => (0xA0, key.get(), MidiValue::as_u7(pressure)),
+        MidiKind::ControlChange { controller, value } => {
+            (0xB0, controller.get(), MidiValue::as_u7(value))
+        }
+        MidiKind::ProgramChange { program } => (0xC0, program.get(), 0),
+        MidiKind::ChannelPressure { pressure } => (0xD0, MidiValue::as_u7(pressure), 0),
+        MidiKind::PitchBend { value } => {
+            // data1 = LSB, data2 = MSB of the raw 14-bit bend
+            // (0x2000 = center) — the exact inverse of the decode
+            // branch. `bend_as_u14` yields <= 0x3FFF by construction,
+            // so both byte extractions stay 7-bit.
+            let raw14 = MidiValue::bend_as_u14(value);
+            let lo = u8::try_from(raw14 & 0x7F).ok()?;
+            let hi = u8::try_from(raw14 >> 7).ok()?;
+            (0xE0, lo, hi)
+        }
+        // Future `MidiKind` variants (the enum is `#[non_exhaustive]`)
+        // are refused rather than guessed at.
+        _ => return None,
+    };
+    Some((status | channel, data1, data2))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +253,111 @@ mod tests {
         for cc in 0..=0x7Fu8 {
             assert!(decode_message(0xB0, cc, 0).is_some());
         }
+    }
+
+    fn ev(group: u8, channel: u8, kind: MidiKind) -> MidiEvent {
+        MidiEvent {
+            group: MidiGroup::new(group).unwrap(),
+            channel: MidiChannel::new(channel).unwrap(),
+            kind,
+        }
+    }
+
+    #[test]
+    fn encode_inverts_decode_for_channel_voice() {
+        // Every channel-voice status nibble, wire-representative data.
+        let cases: [(u8, u8, u8); 7] = [
+            (0x80, 60, 64),
+            (0x90, 60, 100),
+            (0xA0, 48, 33),
+            (0xB0, 7, 100),
+            (0xC0, 5, 0),
+            (0xD0, 90, 0),
+            (0xE0, 0x34, 0x12),
+        ];
+        for (status, d1, d2) in cases {
+            let decoded = event(status, d1, d2);
+            let (s, a, b) = encode_message(decoded).expect("channel-voice must encode");
+            assert_eq!((s, a, b), (status, d1, d2), "triple for {status:#04x}");
+            // And the full decode∘encode round-trip is the identity.
+            assert_eq!(decode_message(s, a, b), Some(decoded));
+        }
+    }
+
+    #[test]
+    fn encode_channel_voice_kinds() {
+        let note_on = ev(
+            0,
+            3,
+            MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        assert_eq!(encode_message(note_on), Some((0x93, 60, 100)));
+
+        let pc = ev(
+            0,
+            5,
+            MidiKind::ProgramChange {
+                program: MidiProgram::new(9).unwrap(),
+            },
+        );
+        // 2-byte message: data2 is zero on the wire.
+        assert_eq!(encode_message(pc), Some((0xC5, 9, 0)));
+
+        let chp = ev(
+            0,
+            2,
+            MidiKind::ChannelPressure {
+                pressure: MidiValue::from_u7(90),
+            },
+        );
+        assert_eq!(encode_message(chp), Some((0xD2, 90, 0)));
+    }
+
+    #[test]
+    fn encode_pitch_bend_min_center_max() {
+        for (value, d1, d2) in [
+            (i32::MIN, 0x00, 0x00),
+            (0, 0x00, 0x40),
+            (i32::MAX, 0x7F, 0x7F),
+        ] {
+            let bend = ev(0, 0, MidiKind::PitchBend { value });
+            assert_eq!(encode_message(bend), Some((0xE0, d1, d2)));
+            // decode∘encode is identity for wire-representable bends.
+            let decoded = decode_message(0xE0, d1, d2).unwrap();
+            assert_eq!(encode_message(decoded), Some((0xE0, d1, d2)));
+        }
+    }
+
+    #[test]
+    fn encode_rejects_nonzero_group() {
+        let note_on = ev(
+            1,
+            0,
+            MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: MidiValue::from_u7(100),
+            },
+        );
+        // A MIDI 1.0 byte-stream port cannot carry group != 0 —
+        // the encoder refuses rather than dropping the group field.
+        assert_eq!(encode_message(note_on), None);
+    }
+
+    #[test]
+    fn encode_narrows_canonical_values_to_7bit() {
+        // Canonical u32 values wider than 7-bit narrow through
+        // `MidiValue::as_u7` round-to-nearest — never a raw truncation.
+        let hot = ev(
+            0,
+            0,
+            MidiKind::NoteOn {
+                key: NoteKey::new(60).unwrap(),
+                velocity: u32::MAX,
+            },
+        );
+        assert_eq!(encode_message(hot), Some((0x90, 60, 0x7F)));
     }
 }
