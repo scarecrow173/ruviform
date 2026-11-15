@@ -154,7 +154,7 @@ tracking canonical
       impl 監査による軽量検証
 - [x] review-protocol レビュー（docs-only 小 slice —
       proportionate self-review）
-- [ ] `git fetch origin main && git merge origin/main` →
+- [x] `git fetch origin main && git merge origin/main` →
       index 再生成 → commit → push → PR
 
 ## Dependencies and Risks
