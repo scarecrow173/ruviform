@@ -84,7 +84,28 @@
   `CALLBACK_FUNCTION | MIDI_IO_STATUS` を無条件で渡すため、本
   ホストの唯一の output device では open が必ず失敗する。2nd
   slice はこの lane を実行していなかった（NotRun 記録）ため
-  潜在化していた。本 slice の編集範囲外（`src/`）のため
-  coordinator に scope 確認を送付。verifier 本体
-  （`loopback_round_trip`）は pair 未 provision で正しく
-  `NotRun` を記録し、この defect の影響を受けない。
+  潜在化していた。当初は編集範囲外として coordinator に scope
+  確認を送付 → **Option A 承認**（同ファイルを占有範囲に追加）
+  で本 slice 内に修正（試行 6）。
+
+## 試行 6: `midiOutOpen` flag fallback と `send_sysex` degrade
+
+- **目的**: coordinator 承認のもと `MIDI_IO_STATUS` 非対応
+  driver で output port が open できるようにし、SysEx 完了待ちの
+  意味論を正直に degrade する。
+- **観測**: fallback（`CALLBACK_FUNCTION` のみ）で open は成功
+  するが、`MM_MOM_DONE` は status message であり fallback では
+  一切届かない — `send_sysex` の condvar wait は永久ブロックに
+  なる。buffer を driver 参照中に unprepare することは unsound
+  なため、fire-and-forget への降格ではなく `Unsupported` 拒否が
+  唯一の正直な degrade（trait contract の「long-message path を
+  持たない backend は honest refusal」と同じ語彙）。
+- **結論**: `open_at_index` は `MMSYSERR_INVALFLAG` のときのみ
+  `CALLBACK_FUNCTION` で 1 回 retry（他エラーは retry しない）。
+  `Subscription.io_status` で経路を記録し、`send_sysex` は
+  `!io_status` で早期 `Unsupported`。`send`（`midiOutShortMsg`）
+  は completion 不要のため無影響 — module/`lib.rs`/API doc に
+  明記。実機 lane 再実行で lib smoke・`real_device_silent_
+  output_smoke`（GS Wavetable へ非可聴 send、`verdict: Pass`）・
+  `output_ports` smoke（`send_sysex: Unsupported` degrade を
+  観測）が全て Pass。

@@ -28,42 +28,55 @@ comment fix, survey doc updates.
 | mise exec -- prek run --all-files | windows-local | prek (apm) | 0 | Pass |
 | midi_endpoint_probe rerun (cargo run --example, auxiliary) | windows-local | rustc 1.99.1 | 0 | Pass — output view + WMS availability + refreshed verdict; evidence/rf629/midi_endpoint_probe-windows-local.txt |
 
-## Real-device lane (test-midi-real-device) — FAILED, root cause outside slice scope
+## Real-device lane (test-midi-real-device)
 
-`mise run test-midi-real-device` — exit 101.
+Initial run — FAILED, exit 101:
 
 - `ruviform-midi-device --lib` unit test
   `os::windows_output::tests::real_device_send_smoke` FAILED:
   `winmm midiOutOpen failed` at
-  `crates/ruviform-midi-device/src/os/windows_output.rs:513`.
+  `crates/ruviform-midi-device/src/os/windows_output.rs`.
 - Root cause (measured, auxiliary PowerShell P/Invoke):
   `midiOutOpen(CALLBACK_FUNCTION|MIDI_IO_STATUS=0x30040)` on
   "Microsoft GS Wavetable Synth" returns `MMSYSERR_INVALFLAG` (10);
   `CALLBACK_FUNCTION` alone returns 0. The #658 backend
-  unconditionally passes `MIDI_IO_STATUS` (needed for `MM_MOM_DONE`
-  SysEx completion), so every real-device output open fails on this
-  host. Latent since 2nd slice — that slice recorded the lane as
-  NotRun and never executed it.
-- `src/os/windows_output.rs` is outside this slice's declared edit
-  scope; escalated to coordinator (ask msg_8221753a9939, pending at
-  evidence time).
-- Because cargo stops at the first failing test target, the lane did
-  not reach `tests/loopback.rs` / `tests/output_ports.rs` /
-  `tests/ports.rs` integration binaries on this run.
+  unconditionally passed `MIDI_IO_STATUS` (needed for `MM_MOM_DONE`
+  SysEx completion), so every real-device output open failed on
+  this host. Latent since 2nd slice — that slice recorded the lane
+  as NotRun and never executed it. Coordinator approved scope
+  expansion (Option A) to fix `src/os/windows_output.rs`.
 
-## Auxiliary direct run of the new verifier (cargo, supplementary evidence)
+Fix (same slice, coordinator-approved scope extension):
 
-`cargo test -p ruviform-midi-device --test loopback -- --ignored
---nocapture` — exit 101:
+- `open_at_index` retries `midiOutOpen` with `CALLBACK_FUNCTION`
+  alone ONLY on `MMSYSERR_INVALFLAG`; all other errors are not
+  retried.
+- On the fallback path `MM_MOM_DONE` never arrives, so
+  `Subscription::send_sysex` reports `DeviceError::Unsupported`
+  (documented in module/API docs and `lib.rs`). `send`
+  (`midiOutShortMsg`) needs no completion signal and is unaffected
+  — verified on real hardware below.
 
-- `loopback_round_trip` — PASS (early return): enumerated 0 input /
-  1 output ports, no bidirectional name match, printed
-  `verdict: NotRun — NOT_PROVISIONED`. Fail-closed path verified.
-- `real_device_silent_output_smoke` — FAILED: found "Microsoft GS
-  Wavetable Synth" output, `open()` returned
-  `Backend("winmm midiOutOpen failed")` — same `MIDI_IO_STATUS`
-  root cause as above. Honest failure (device present but unusable),
-  not converted to skip.
+Re-run after fix — PASS, exit 0:
+
+- `os::windows_output::tests::real_device_send_smoke` — ok
+  (open via fallback, `send` accepted, `send_sysex` → documented
+  `Unsupported` degrade, close).
+- `tests/loopback.rs::loopback_round_trip` — ok, still
+  `verdict: NotRun — NOT_PROVISIONED` (no pair on this host).
+- `tests/loopback.rs::real_device_silent_output_smoke` — ok:
+  `verdict: Pass — silent messages accepted by real WinMM output
+  port` (GS Wavetable Synth opened via the fallback and accepted
+  PC/CC/NoteOff traffic — first real-device send evidence for the
+  output path).
+- `tests/output_ports.rs::real_device_send_smoke` — ok
+  (`send_sysex: Unsupported — driver rejected MIDI_IO_STATUS
+  (documented degrade)` observed in output).
+- `tests/ports.rs::real_device_open_read_observe_close` — ok.
+- Auxiliary direct run (cargo, supplementary):
+  `cargo test -p ruviform-midi-device --test loopback
+  --test output_ports -- --ignored --nocapture` reproduces the
+  verdicts above verbatim.
 
 ## NotRun (explicit, per task spec)
 
@@ -92,6 +105,12 @@ comment fix, survey doc updates.
 
 - virtual-os-endpoint behavior — no loopback pair provisioned;
   `environment_kind=virtual-os-endpoint` is NOT claimed anywhere.
-- EXT-L3 real-device round-trip evidence — blocked by the
-  `MIDI_IO_STATUS` backend defect above plus missing pair.
+- EXT-L3 real-device round-trip evidence — the `MIDI_IO_STATUS`
+  defect is fixed (open + short-message send now verified on real
+  hardware), but send→receive round-trip still requires a
+  provisioned pair.
+- `send_sysex` with `MM_MOM_DONE` completion on this host — GS
+  Wavetable Synth rejects `MIDI_IO_STATUS`, so only the documented
+  `Unsupported` degrade was exercised; the tracked path remains
+  verified by unit-level reasoning, not real hardware here.
 - Timestamp/latency assertions — untested until a pair exists.

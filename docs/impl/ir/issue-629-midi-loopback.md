@@ -34,6 +34,12 @@ relations:
       - type: "file"
         path: "crates/ruviform-midi-device/examples/midi_endpoint_probe.rs"
       - type: "file"
+        path: "crates/ruviform-midi-device/src/os/windows_output.rs"
+      - type: "file"
+        path: "crates/ruviform-midi-device/src/lib.rs"
+      - type: "file"
+        path: "crates/ruviform-midi-device/tests/output_ports.rs"
+      - type: "file"
         path: "crates/ruviform-audio-test/src/midi.rs"
       - type: "file"
         path: "docs/discovery/issue-629-virtual-endpoint-survey.md"
@@ -150,6 +156,18 @@ docs 3 件を #658 後の実装に合わせて修正した。
   「production MIDI output port は存在しない」を #658 後の実装に
   修正（sink capture が scheduler 駆動 trace の記録点である理由を
   明確化し、OS loopback verifier への参照を追加）。
+- `src/os/windows_output.rs`（coordinator 承認の scope 拡張 —
+  #658 latent defect の修正）: `open_at_index` が
+  `midiOutOpen` の `MMSYSERR_INVALFLAG` のみを契機に
+  `MIDI_IO_STATUS` なし `CALLBACK_FUNCTION` で 1 回 retry。
+  fallback 経路では `MM_MOM_DONE` が来ないため `send_sysex` は
+  `DeviceError::Unsupported` に正直 degrade（完了待ち不能時に
+  driver 参照中の buffer を unprepare する危険を回避）。
+  `send`（`midiOutShortMsg`）は completion 不要で無影響。
+  module/`lib.rs`/API doc に degrade を明記。
+- `tests/output_ports.rs` + `src/os/windows_output.rs` 内
+  `real_device_send_smoke`: `send_sysex` の `Ok`/`Unsupported`
+  両結果を contract-honest として受理し、観測結果を出力。
 - survey docs: discovery の Known Code Gap #1 を resolved
   （merge `7e7270f` 参照）に更新 + Evidence 追記、design/test-spec
   に probe 出力契約（output view・WMS 検出・verdict 文言）を追記。
@@ -195,13 +213,16 @@ docs 3 件を #658 後の実装に合わせて修正した。
 - Windows 実機 `midi_endpoint_probe` 再実行 — exit 0、
   `evidence/rf629/midi_endpoint_probe-windows-local.txt` 更新
   （production output view・WMS availability・refresh verdict を確認）
-- `mise run test-midi-real-device` — **FAILED（環境起因の既知 defect）**:
-  `src/os/windows_output.rs::open_at_index` が GS Wavetable Synth に
-  `midiOutOpen(CALLBACK_FUNCTION|MIDI_IO_STATUS)` を発行し
-  `MMSYSERR_INVALFLAG` で失敗（`CALLBACK_FUNCTION` 単独は成功を
-  PowerShell P/Invoke で実測）。2nd slice が lane 未実行だったため
-  潜在化。編集範囲外のため coordinator に scope 確認中。
-  `loopback_round_trip` は pair 未 provision で正しく `NotRun`。
+- `mise run test-midi-real-device` — 初回 FAILED（exit 101）:
+  `midiOutOpen(CALLBACK_FUNCTION|MIDI_IO_STATUS)` が GS Wavetable
+  Synth で `MMSYSERR_INVALFLAG`（#658 latent defect、PowerShell
+  P/Invoke で `CALLBACK_FUNCTION` 単独 rc=0 を実測）。
+  coordinator 承認の scope 拡張で `windows_output.rs` を修正後、
+  **再実行 PASS（exit 0）**: lib smoke・`loopback_round_trip`
+  （`NotRun — NOT_PROVISIONED`）・`real_device_silent_output_smoke`
+  （GS Wavetable へ非可聴 send が実 WinMM を通過 —
+  `verdict: Pass`）・`output_ports`/`ports` smoke 全て ok。
+  `send_sysex` は fallback 経路で `Unsupported` degrade を実機確認。
 
 ## Risks
 
@@ -210,17 +231,18 @@ docs 3 件を #658 後の実装に合わせて修正した。
   candidate は verdict に全列挙する。
 - loopback が event を変換する実装（UMP 翻訳等）では照合が Fail —
   観測列 dump が仕様相違の発見材料になる。
-- `midiOutOpen` の `MIDI_IO_STATUS` 非対応 device（GS Wavetable
-  Synth 実測）では output port が一切 open できない — #658 の
-  `src/` 側 defect であり本 slice 範囲外。verifier の silent smoke
-  も同じ壁に当たる。
+- `MIDI_IO_STATUS` 非対応 device（GS Wavetable Synth 実測）では
+  `send_sysex` が `Unsupported` に degrade する — `MM_MOM_DONE`
+  completion 付き SysEx はその device では利用不可。`send`
+  （short message）は無影響。IO_STATUS 対応 device では従来どおり
+  completion wait が動く。
 
 ## Follow-ups
 
-- `src/os/windows_output.rs` の `midiOutOpen` flag fallback
-  （`MIDI_IO_STATUS` 非対応 device への対処 — SysEx 完了通知の
-  代替設計を含む）: coordinator の scope 判断待ち。未対応なら
-  後続 slice / 別 Issue へ hand-off。
+- ~~`src/os/windows_output.rs` の `midiOutOpen` flag fallback~~ —
+  coordinator 承認（Option A）で本 slice 内に修正済み
+  （`MMSYSERR_INVALFLAG` のみ retry + `send_sysex` の
+  `Unsupported` degrade）。
 - loopMIDI/Windows MIDI Services の実 provisioning と
   `virtual-os-endpoint` evidence — 後続 slice。
 - 仮想 endpoint 経由の reconnect/xrun/permission（AC5）・WASAPI

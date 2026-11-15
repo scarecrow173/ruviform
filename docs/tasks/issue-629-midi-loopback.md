@@ -89,6 +89,11 @@ consumer 照合は後続 slice。
 
 - `crates/ruviform-midi-device/examples/midi_endpoint_probe.rs`（refresh）
 - `crates/ruviform-midi-device/tests/loopback.rs`（新設）
+- `crates/ruviform-midi-device/src/os/windows_output.rs`（coordinator
+  承認の scope 拡張 — #658 latent `midiOutOpen`/`MIDI_IO_STATUS`
+  defect 修正 + `send_sysex` の `Unsupported` degrade）
+- `crates/ruviform-midi-device/src/lib.rs`（degrade の doc 反映）
+- `crates/ruviform-midi-device/tests/output_ports.rs`（degrade 受理）
 - `crates/ruviform-audio-test/src/midi.rs`（doc comment のみ）
 - `docs/discovery/issue-629-virtual-endpoint-survey.md`
 - `docs/designs/issue-629-virtual-endpoint-survey.md`
