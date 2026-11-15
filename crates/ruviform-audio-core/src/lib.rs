@@ -72,6 +72,7 @@ pub mod device;
 mod format;
 mod layout;
 pub mod midi_input;
+pub mod midi_output;
 mod planar;
 mod sample;
 mod time;
