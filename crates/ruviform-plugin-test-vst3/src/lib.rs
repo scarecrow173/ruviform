@@ -1,5 +1,5 @@
 //! `ruviform-plugin-test-vst3` — the Ruviform **test-only** VST3 test
-//! plugin suite (Issue #630, first slice: `test_gain`).
+//! plugin suite (Issue #630: `test_gain`, `test_fault`, `test_editor`).
 //!
 //! ## Test-only declaration
 //!
@@ -35,6 +35,11 @@
 //!   in-band `ParamValue` event arms `abort`/`exit`/`hang`/`error`
 //!   dispatch inside the arming block's `process()` — the L1
 //!   out-of-process crash/hang/timeout/isolation oracle.
+//! - `test_editor` — a parameterless pass-through processor whose
+//!   controller answers `createView("editor")` with a real
+//!   `IPlugView`: on Windows `attached` creates a `WS_CHILD` HWND
+//!   under the host-provided parent (the AC-4 plugin-fixture half);
+//!   every other platform/parent combination is an honest rejection.
 //!
 //! All `vst3`-crate binding types stay private — the crate exports
 //! no public Rust API; hosts reach the plugin purely through the ABI
@@ -64,6 +69,8 @@
 mod block;
 mod component;
 mod controller;
+mod editor;
+mod editor_view;
 mod factory;
 mod fault;
 mod gain;

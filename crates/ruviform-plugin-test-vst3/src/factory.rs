@@ -1,7 +1,7 @@
 //! The VST3 plugin factory: `IPluginFactory` + `IPluginFactory2` +
-//! `IPluginFactory3` describing and instantiating the four classes
-//! the module ships (`test_gain`/`test_fault` component + controller
-//! pairs).
+//! `IPluginFactory3` describing and instantiating the six classes
+//! the module ships (`test_gain`/`test_fault`/`test_editor`
+//! component + controller pairs).
 
 use std::ffi::c_void;
 
@@ -13,7 +13,10 @@ use vst3::Steinberg::{
 use vst3::{Class, ComWrapper};
 
 use crate::component::TestGainComponent;
-use crate::controller::{GAIN_CONTROLLER_CID, ParamController};
+use crate::controller::{
+    EDITOR_CONTROLLER_CID, GAIN_CONTROLLER_CID, ParamController, TestEditorController,
+};
+use crate::editor::TestEditorComponent;
 use crate::fault::{FAULT_CONTROLLER_CID, FAULT_PARAM, FAULT_STEP_COUNT, TestFaultComponent};
 use crate::gain::GAIN_PARAM;
 use crate::sdk_enum_i32;
@@ -50,11 +53,11 @@ impl IPluginFactoryTrait for TestGainFactory {
 
     #[expect(unsafe_code)]
     unsafe fn countClasses(&self) -> i32 {
-        4
+        6
     }
 
-    /// Classes 0/1 = `test_gain` component + controller, classes
-    /// 2/3 = `test_fault` component + controller.
+    /// Classes 0/1 = `test_gain`, 2/3 = `test_fault`, 4/5 =
+    /// `test_editor` — component + controller pairs in suite order.
     #[expect(unsafe_code)]
     unsafe fn getClassInfo(&self, index: i32, info: *mut PClassInfo) -> tresult {
         if info.is_null() {
@@ -86,6 +89,18 @@ impl IPluginFactoryTrait for TestGainFactory {
                 info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_cstring("test_fault Controller", &mut info.name);
+            }
+            4 => {
+                info.cid = TestEditorComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_cstring("test_editor", &mut info.name);
+            }
+            5 => {
+                info.cid = EDITOR_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_cstring("test_editor Controller", &mut info.name);
             }
             _ => return kInvalidArgument,
         }
@@ -121,6 +136,10 @@ impl IPluginFactoryTrait for TestGainFactory {
                 ComWrapper::new(ParamController::new(&FAULT_PARAM, FAULT_STEP_COUNT))
                     .to_com_ptr::<FUnknown>()
             }
+            TestEditorComponent::CID => {
+                ComWrapper::new(TestEditorComponent::new()).to_com_ptr::<FUnknown>()
+            }
+            EDITOR_CONTROLLER_CID => ComWrapper::new(TestEditorController).to_com_ptr::<FUnknown>(),
             _ => None,
         };
         let Some(instance) = instance else {
@@ -190,6 +209,28 @@ impl IPluginFactory2Trait for TestGainFactory {
                 copy_cstring("0.0.0", &mut info.version);
                 copy_cstring("VST 3.x", &mut info.sdkVersion);
             }
+            4 => {
+                info.cid = TestEditorComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_cstring("test_editor", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("Fx", &mut info.subCategories);
+                copy_cstring("Ruviform Test", &mut info.vendor);
+                copy_cstring("0.0.0", &mut info.version);
+                copy_cstring("VST 3.x", &mut info.sdkVersion);
+            }
+            5 => {
+                info.cid = EDITOR_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_cstring("test_editor Controller", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("", &mut info.subCategories);
+                copy_cstring("Ruviform Test", &mut info.vendor);
+                copy_cstring("0.0.0", &mut info.version);
+                copy_cstring("VST 3.x", &mut info.sdkVersion);
+            }
             _ => return kInvalidArgument,
         }
         kResultOk
@@ -245,6 +286,28 @@ impl IPluginFactory3Trait for TestGainFactory {
                 info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
                 copy_cstring("Component Controller Class", &mut info.category);
                 copy_wstring("test_fault Controller", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("", &mut info.subCategories);
+                copy_wstring("Ruviform Test", &mut info.vendor);
+                copy_wstring("0.0.0", &mut info.version);
+                copy_wstring("VST 3.x", &mut info.sdkVersion);
+            }
+            4 => {
+                info.cid = TestEditorComponent::CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Audio Module Class", &mut info.category);
+                copy_wstring("test_editor", &mut info.name);
+                info.classFlags = 0;
+                copy_cstring("Fx", &mut info.subCategories);
+                copy_wstring("Ruviform Test", &mut info.vendor);
+                copy_wstring("0.0.0", &mut info.version);
+                copy_wstring("VST 3.x", &mut info.sdkVersion);
+            }
+            5 => {
+                info.cid = EDITOR_CONTROLLER_CID;
+                info.cardinality = sdk_enum_i32(PClassInfo_::ClassCardinality_::kManyInstances);
+                copy_cstring("Component Controller Class", &mut info.category);
+                copy_wstring("test_editor Controller", &mut info.name);
                 info.classFlags = 0;
                 copy_cstring("", &mut info.subCategories);
                 copy_wstring("Ruviform Test", &mut info.vendor);

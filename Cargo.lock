@@ -6954,6 +6954,7 @@ dependencies = [
  "ruviform-plugin-host",
  "ruviform-plugin-vst3",
  "vst3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
