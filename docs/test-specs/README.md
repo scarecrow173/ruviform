@@ -210,6 +210,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XqAxz6XasjXM9geCdT7 | Issue #625 テスト仕様 — handshake channel-closed 分類の決定性と既存 refusal 契約の維持 | approved | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TSPEC-034XAEUQyTZ4N0vdNcRAlI | Issue #627 仮想優先検証契約のテスト仕様 | approved | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TSPEC-034XBMh4pr5313Dan0adpY | Issue #628 テスト仕様 — deterministic core の決定性・RT contract・独立 Oracle | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

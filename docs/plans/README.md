@@ -183,6 +183,7 @@ Directory: `docs/plans`
 | PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
 | PLAN-034XATq1VmM49W1cv5EO0P | Issue #627 仮想優先検証契約 実装・ロールアウト計画 | approved | [issue-627-virtual-first-verification-contract-plan.md](./issue-627-virtual-first-verification-contract-plan.md) |
 | PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
+| PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
