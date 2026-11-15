@@ -57,6 +57,7 @@ Directory: `docs/tasks`
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | in-progress | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| TASK-RF628sBscripted0000004 | Issue #628 タスク — scripted port-trait backend 実装 | in-progress | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
@@ -334,6 +335,7 @@ Directory: `docs/tasks`
 | TASK-034XqAHZThxH8yUF9OOG3k | Issue #625 T1 — handshake 分類正規化・doc-chain・lane 検証 | done | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | TASK-034XAUE4Ki5ftJQfWI15b1 | Issue #627 T1 — 仮想優先3repo検証契約・POLICIES照合・移管台帳の文書化 | done | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TASK-034XEbSIxHaIKblAZevx7R | Issue #631 T1 — Plugin-dock scenario skeleton（ruviform-plugin-dock-test） | done | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TASK-aN7eM2gEouRJ8oS3WbU4Ee | Issue #650 bench-smoke lane coverage 拡張 — mise.toml/dev-env doc/evidence 是正 | done | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
