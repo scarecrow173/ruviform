@@ -215,6 +215,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
+| TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
