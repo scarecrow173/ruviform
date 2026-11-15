@@ -785,7 +785,13 @@ pub(crate) fn pump_output(slot: &Arc<OutputSlot>) -> DeviceResult<PumpReport> {
     let mut fault_errors = Vec::new();
     let effects = collect_faults(&core.faults, index, &mut fault_errors);
     if effects.cancel {
-        return Ok(cancelled_pump_output(core, slot, index, &effects, &fault_errors));
+        return Ok(cancelled_pump_output(
+            core,
+            slot,
+            index,
+            &effects,
+            &fault_errors,
+        ));
     }
     if let Some(p) = effects.position {
         core.position = p;
@@ -885,7 +891,13 @@ pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
     let mut fault_errors = Vec::new();
     let effects = collect_faults(&core.faults, index, &mut fault_errors);
     if effects.cancel {
-        return Ok(cancelled_pump_input(core, slot, index, &effects, &fault_errors));
+        return Ok(cancelled_pump_input(
+            core,
+            slot,
+            index,
+            &effects,
+            &fault_errors,
+        ));
     }
     if let Some(p) = effects.position {
         core.position = p;
