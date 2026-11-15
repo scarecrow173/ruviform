@@ -79,7 +79,7 @@ windows**:
 | --- | --- |
 | `real-window-mount` | `Pass` only when the `plugin_dock_view_spec()` mount and target resolution really ran on a live window |
 | `real-native-slot` | `Pass` only for steps that executed: declare → bind → renderer projection → `lease_parent` (real container HWND via `GpuiSurfaceAdapter`) → validate → `container_token` observation → stale/forged lease rejection → release |
-| `real-editor-attach` | `Unsupported` while `test_gain`'s `createView` returns null (`HostError::Unsupported`); `Pass` requires a real editor accepting `OpenGui` through the real container lease |
+| `real-editor-attach` | `Pass` only when `test_editor`'s real `IPlugView` attaches a real child HWND under the leased container (OS-observed: `EnumChildWindows`/`GetParent`/`IsWindowVisible`) and `session.close` destroys it (`IsWindow(child)==0`, events `[Attached{Docked}, Closed]`); observation mismatch → `Fail`, defined refusal → `Unsupported` |
 | `real-capture` | window/slot-region pixels only — detail states the capture target is not plugin-editor pixels |
 
 The chain recorded is the production one:
@@ -96,7 +96,7 @@ fails the process). GPUI types never cross this crate's API or evidence
 schema.
 
 ```sh
-mise run test-ui-plugin-dock-real   # builds test_gain cdylib + runs the lane
+mise run test-ui-plugin-dock-real   # builds test-plugin cdylib + runs the lane
 cargo run -p ruviform-plugin-dock-test --features real-dock \
   --bin plugin-dock-real-scenario -- --out evidence/rf631/plugin-dock-real-scenario.jsonl
 ```
