@@ -26,10 +26,13 @@
 //! output bus are declared (`getBusCount`/`getBusInfo`).
 //! `setBusArrangements` accepts matching mono or stereo arrangements
 //! and `process` accepts 1–2 channels per bus — the gain law is
-//! per-channel, so channel count is not part of the contract. MIDI
-//! input events are ignored in this slice (`test_instrument` is a
-//! later class); `IProcessContextRequirements` returns `0` and the
-//! processor receives no transport. State (de)serialization reports
+//! per-channel, so channel count is not part of the contract.
+//! `test_instrument` is the suite's only `MidiTransport` input
+//! surface: it additionally drains `IEventList` MIDI into the shared
+//! event scratch and maps `ProcessContext` to a transport snapshot
+//! (see [`InputSurface`]); every other class keeps `ParamsOnly` —
+//! `inputEvents`/`processContext` ignored, requirements `0`.
+//! State (de)serialization reports
 //! `kNotImplemented` honestly on classes without a
 //! [`ComponentStateSurface`] — `test_stateful` is the suite's only
 //! state surface.
@@ -70,14 +73,15 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, Lifecycle, LifecycleEvent, LifecycleState, ParamEvent, ParamId,
-    ParamValue, PluginProcessor, ProcessConfig, ProcessContext, ProcessStatus,
+    ParamValue, PluginProcessor, ProcessConfig, ProcessContext, ProcessStatus, TransportInfo,
 };
 use vst3::Steinberg::Vst::{
     BusDirection, BusDirections_, BusInfo, BusInfo_::BusFlags_, BusTypes_, IAudioProcessor,
-    IAudioProcessorTrait, IComponent, IComponentTrait, IParamValueQueueTrait, IParameterChanges,
-    IParameterChangesTrait, IProcessContextRequirements, IProcessContextRequirementsTrait, IoMode,
-    MediaType, MediaTypes_, ProcessData, ProcessSetup, RoutingInfo, SpeakerArr, SpeakerArrangement,
-    SymbolicSampleSizes_,
+    IAudioProcessorTrait, IComponent, IComponentTrait, IEventList, IParamValueQueueTrait,
+    IParameterChanges, IParameterChangesTrait, IProcessContextRequirements,
+    IProcessContextRequirementsTrait, IoMode, MediaType, MediaTypes_,
+    ProcessContext as VstProcessContext, ProcessContext_, ProcessData, ProcessSetup, RoutingInfo,
+    SpeakerArr, SpeakerArrangement, SymbolicSampleSizes_,
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPluginBaseTrait, TBool, TUID, kInvalidArgument, kNotImplemented,
@@ -162,6 +166,18 @@ pub(crate) trait ComponentStateSurface: Send + Sync {
     fn component_state_blob(&self) -> Vec<u8>;
 }
 
+/// What a class consumes beyond parameter events.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum InputSurface {
+    /// Parameter events only; `inputEvents`/`processContext` are
+    /// ignored and no process-context requirements are declared —
+    /// every class except `test_instrument`.
+    ParamsOnly,
+    /// Parameter events plus `IEventList` MIDI input and the
+    /// `ProcessContext` transport snapshot — `test_instrument` only.
+    MidiTransport,
+}
+
 /// The VST3 component shell shared by every test-suite plugin class —
 /// `IComponent` + `IAudioProcessor` + `IProcessContextRequirements`
 /// over `ComWrapper`, driving the neutral [`PluginProcessor`] contract
@@ -188,6 +204,9 @@ pub(crate) struct TestComponent<P: PluginProcessor> {
     /// `None` keeps `setState`/`getState` at the honest
     /// `kNotImplemented`.
     state_surface: Option<Arc<dyn ComponentStateSurface>>,
+    /// The class's input surface — `MidiTransport` only for
+    /// `test_instrument`.
+    input_surface: InputSurface,
 }
 
 /// `test_gain`'s component — the shared [`TestComponent`] shell over
@@ -225,6 +244,7 @@ impl<P: PluginProcessor> TestComponent<P> {
             tail: AtomicU32::new(0),
             controller_cid,
             state_surface: None,
+            input_surface: InputSurface::ParamsOnly,
         }
     }
 
@@ -245,7 +265,16 @@ impl<P: PluginProcessor> TestComponent<P> {
             tail: AtomicU32::new(0),
             controller_cid,
             state_surface: Some(Arc::new(surface)),
+            input_surface: InputSurface::ParamsOnly,
         }
+    }
+
+    /// Marks the component's input surface — `test_instrument` is the
+    /// only `MidiTransport` class; every other class keeps the
+    /// `ParamsOnly` default.
+    pub(crate) fn with_surface(mut self, surface: InputSurface) -> Self {
+        self.input_surface = surface;
+        self
     }
 }
 
@@ -359,6 +388,67 @@ pub(crate) unsafe fn collect_param_events(
             }
         }
     }
+}
+
+/// Collects one block's neutral event set into `scratch` — parameter
+/// queue points always, `IEventList` MIDI only when `midi` is set
+/// (the instrument surface) — then sorts and validates into an
+/// [`EventList`] borrowing `scratch`. The returned list keeps the
+/// `scratch` borrow alive; callers must not touch `scratch` until the
+/// list is dropped.
+///
+/// # Safety
+///
+/// `param_changes` and `input_events` must each be null or a valid
+/// object for the duration of the call — the VST3 `process` contract
+/// guarantees it for `data.inputParameterChanges`/`data.inputEvents`.
+#[expect(unsafe_code)]
+pub(crate) unsafe fn collect_block_events(
+    scratch: &mut EventScratch,
+    param_id: ParamId,
+    param_changes: *mut IParameterChanges,
+    input_events: *mut IEventList,
+    midi: bool,
+    frames: usize,
+) -> Result<EventList<'_>, ()> {
+    // SAFETY: caller upholds the `process`-contract validity of both
+    // pointers for this call.
+    unsafe {
+        collect_param_events(param_changes, frames, param_id, scratch);
+        if midi {
+            crate::events::collect_midi_events(input_events, frames, scratch);
+        }
+    }
+    // The scratch is sorted — the merge sort is allocation-free
+    // over the pre-reserved buffer.
+    scratch.sort();
+    let frame_count = u32::try_from(frames).unwrap_or(u32::MAX);
+    // The collectors drop out-of-block offsets and non-finite values
+    // and the scratch is sorted, so `EventList::new` cannot reject;
+    // a failure means that invariant broke.
+    EventList::new(scratch.as_slice(), frame_count).map_err(|_| ())
+}
+
+/// The block's neutral [`TransportInfo`] — only the instrument
+/// surface reads the VST3 `ProcessContext`; every other class
+/// reports `None`.
+///
+/// # Safety
+///
+/// `process_context` must be null or a valid `ProcessContext` for
+/// this call (the VST3 `process` contract).
+#[expect(unsafe_code)]
+fn block_transport(
+    surface: InputSurface,
+    process_context: *mut VstProcessContext,
+    sample_rate: u32,
+) -> Option<TransportInfo> {
+    if surface != InputSurface::MidiTransport {
+        return None;
+    }
+    // SAFETY: caller upholds the `process`-contract validity of the
+    // pointer for this call.
+    unsafe { crate::events::transport_from_context(process_context, sample_rate) }
 }
 
 impl<P: PluginProcessor> IPluginBaseTrait for TestComponent<P> {
@@ -738,25 +828,16 @@ impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
             return kResultFalse;
         }
 
-        // SAFETY: `data.inputParameterChanges` is null or a valid
-        // `IParameterChanges` for this call.
-        unsafe {
-            collect_param_events(
-                data.inputParameterChanges,
-                frames,
-                state.param_id,
+        let Ok(events) = (unsafe {
+            collect_block_events(
                 &mut state.event_scratch,
-            );
-        }
-        // The scratch is sorted — the merge sort is allocation-free
-        // over the pre-reserved buffer.
-        state.event_scratch.sort();
-        let frame_count = u32::try_from(frames).unwrap_or(u32::MAX);
-        // The collector drops out-of-block offsets and non-finite
-        // values and the scratch is sorted, so `EventList::new`
-        // cannot reject; a failure means that invariant broke — a
-        // defined reject, never a silently-empty event set.
-        let Ok(events) = EventList::new(state.event_scratch.as_slice(), frame_count) else {
+                state.param_id,
+                data.inputParameterChanges,
+                data.inputEvents,
+                self.input_surface == InputSurface::MidiTransport,
+                frames,
+            )
+        }) else {
             debug_assert!(false, "collected events must satisfy EventList");
             return kResultFalse;
         };
@@ -769,6 +850,9 @@ impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
             return kResultFalse;
         }
 
+        let rate = state.config.map_or(0, |config| config.sample_rate().get());
+        let transport = block_transport(self.input_surface, data.processContext, rate);
+
         let result = if frames == 0 || data.numInputs < 1 || data.numOutputs < 1 {
             // Event-only path: zero frames (the `EventList` flush —
             // offset-0 events apply immediately) or missing buses —
@@ -779,7 +863,7 @@ impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
                     &[],
                     &mut [],
                     events,
-                    None,
+                    transport,
                     &mut state.context,
                 )
         } else {
@@ -827,7 +911,7 @@ impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
                         &inputs,
                         &mut outputs,
                         events,
-                        None,
+                        transport,
                         &mut state.context,
                     );
                     // Views are dead after the call (NLL) → the scratch
@@ -854,11 +938,24 @@ impl<P: PluginProcessor> IAudioProcessorTrait for TestComponent<P> {
 }
 
 impl<P: PluginProcessor> IProcessContextRequirementsTrait for TestComponent<P> {
-    /// The plugin consumes no conditionally-valid process-context
-    /// fields — no transport, no musical time.
+    /// `ParamsOnly` classes consume no conditionally-valid
+    /// process-context fields — `0`. `test_instrument` requests the
+    /// musical-time fields its transport click oracle reads:
+    /// `kProjectTimeMusicValid`, `kTempoValid`, `kTimeSigValid` and
+    /// `kBarPositionValid` (`kPlaying`/`projectTimeSamples` are
+    /// unconditionally valid and need no flag).
     #[expect(unsafe_code)]
     unsafe fn getProcessContextRequirements(&self) -> u32 {
-        0
+        use ProcessContext_::StatesAndFlags_ as F;
+        match self.input_surface {
+            InputSurface::ParamsOnly => 0,
+            InputSurface::MidiTransport => {
+                F::kProjectTimeMusicValid as u32
+                    | F::kTempoValid as u32
+                    | F::kTimeSigValid as u32
+                    | F::kBarPositionValid as u32
+            }
+        }
     }
 }
 

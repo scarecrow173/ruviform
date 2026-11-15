@@ -6940,6 +6940,7 @@ dependencies = [
  "clack-host",
  "clack-plugin",
  "ruviform-audio-core",
+ "ruviform-media-core",
  "ruviform-plugin-clap",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
@@ -6952,6 +6953,7 @@ version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
  "ruviform-audio-core",
+ "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
  "ruviform-plugin-host",

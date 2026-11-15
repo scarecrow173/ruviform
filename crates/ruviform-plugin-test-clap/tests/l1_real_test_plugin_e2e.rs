@@ -21,9 +21,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_media_core::{
+    MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+    MidiKind, MusicalTimeInfo, NoteKey, TimeBase, TransportStatus,
+};
 use ruviform_plugin_core::{
     Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState,
     ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessResult,
+    TransportInfo,
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
@@ -57,6 +62,18 @@ const EXPECTED: PluginDescriptor = PluginDescriptor {
     vendor: "Ruviform Test",
     version: "0.0.0",
     features: &["audio-effect", "stereo"],
+};
+
+/// The `test_instrument` descriptor pin — same handshake rule as
+/// [`EXPECTED`]: the parent pins the fixture's declared values while
+/// the child synthesizes them from the real `clap_entry` scan
+/// (`instrument.rs` `TestInstrumentClapPlugin::get_descriptor`).
+const INSTRUMENT_EXPECTED: PluginDescriptor = PluginDescriptor {
+    id: "org.ruviform-test.clap-test-instrument",
+    name: "test_instrument",
+    vendor: "Ruviform Test",
+    version: "0.0.0",
+    features: &["instrument", "synthesizer", "stereo"],
 };
 
 /// How long tests poll for an asynchronous `Failed` notification —
@@ -176,6 +193,104 @@ fn host_block(
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
     host.process(handle, &inputs, &mut outputs, events, None)
+}
+
+/// One stereo block through `PluginHost::process` carrying a
+/// transport snapshot — the instrument oracle's entry point. The
+/// instrument ignores its input, so the input channels are silence.
+fn host_block_transport(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    out_left: &mut [f32],
+    out_right: &mut [f32],
+    events: EventList<'_>,
+    transport: Option<TransportInfo>,
+) -> Result<ProcessResult, HostError> {
+    let in_left = [0.0_f32; FRAMES];
+    let in_right = [0.0_f32; FRAMES];
+    let input = [&in_left[..], &in_right[..]];
+    let input_view = PlanarBufferView::new(&input[..]).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut *out_left, &mut *out_right];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    host.process(handle, &inputs, &mut outputs, events, transport)
+}
+
+/// Neutral MIDI event constructor for the instrument oracle —
+/// channel-agnostic fixture, channel `0`, group `ZERO`.
+fn midi_event(offset: u32, kind: MidiKind) -> Event {
+    Event::new(
+        offset,
+        EventKind::Midi(MidiEvent {
+            group: MidiGroup::ZERO,
+            channel: MidiChannel::new(0).unwrap(),
+            kind,
+        }),
+    )
+}
+
+fn note_on(offset: u32, key: u8, velocity: u32) -> Event {
+    midi_event(
+        offset,
+        MidiKind::NoteOn {
+            key: NoteKey::new(key).unwrap(),
+            velocity,
+        },
+    )
+}
+
+fn note_off(offset: u32, key: u8) -> Event {
+    midi_event(
+        offset,
+        MidiKind::NoteOff {
+            key: NoteKey::new(key).unwrap(),
+            velocity: 0,
+        },
+    )
+}
+
+fn cc(offset: u32, controller: u8, value: u32) -> Event {
+    midi_event(
+        offset,
+        MidiKind::ControlChange {
+            controller: MidiController::new(controller).unwrap(),
+            value,
+        },
+    )
+}
+
+/// Playing transport at 120 BPM / ppqn 960 — a beat is 24 000 frames
+/// at 48 kHz (25 frames per tick). `position_ticks` places the next
+/// `ppqn` boundary `delta` ticks ahead → click frame `25 * delta`.
+fn playing_transport(position_ticks: i64) -> TransportInfo {
+    TransportInfo::new(
+        TransportStatus::Playing,
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+    )
+    .with_musical(MusicalTimeInfo {
+        position_ticks,
+        bar_start_tick: 0,
+        bpm_milli: 120_000,
+        ppqn: 960,
+        sig_num: 4,
+        sig_den: 4,
+    })
+}
+
+/// Spawns the real child for `descriptor` and drives one instance
+/// to `Processing` — the instrument tests' shared setup.
+fn instrument_host() -> (PluginHost, PluginHandle) {
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(INSTRUMENT_EXPECTED, runner_program()))
+        .unwrap();
+    let HostReply::Scanned(descriptors) = host.execute(HostCommand::Scan).unwrap() else {
+        panic!("unexpected reply");
+    };
+    assert_eq!(descriptors, vec![INSTRUMENT_EXPECTED]);
+    let handle = instantiate(&mut host, INSTRUMENT_EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+    (host, handle)
 }
 
 /// Drive one instance through `Processing`.
@@ -489,4 +604,327 @@ fn real_test_plugin_l1_missing_runner_is_spawn_failed() {
         Ok(HostReply::Scanned(vec![EXPECTED]))
     );
     assert!(host.try_recv_notification().is_none());
+}
+
+// ---------------------------------------------------------------------------
+// test_instrument — real-ABI MIDI/transport oracle
+// ---------------------------------------------------------------------------
+
+/// `test_instrument` note lifecycle through the real ABI: a retriggered
+/// note-on every block makes every delivered block bit-identical —
+/// frame 0 is the triangle's `-1` extreme at full velocity/gain/volume,
+/// both channels carry the same mono sample, and the output is
+/// deterministic across calls (the L1 lookahead only delays delivery).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_note_lifecycle() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let events = [note_on(0, 69, u32::MAX)];
+    let list = EventList::new(&events, FRAMES_U32).unwrap();
+    let mut reference: Option<Vec<f32>> = None;
+    let mut delivered = 0_u32;
+    for _ in 0..12_u32 {
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        // The pipeline writes defined silence on underrun — an
+        // all-zero block is indistinguishable from silence, but a
+        // sounding block always has `out[0] == -1`, so all-zero ⇒
+        // underrun here.
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue;
+        }
+        delivered += 1;
+        // Frame 0: phase 0 → triangle −1 → −1 × vel 1 × gain 1 × vol 1.
+        assert_eq!(out_left[0].to_bits(), (-1.0_f32).to_bits());
+        // Dual mono — every output channel identical.
+        assert_eq!(out_left, out_right);
+        match &reference {
+            None => reference = Some(out_left.clone()),
+            Some(expected) => {
+                assert_eq!(
+                    &out_left, expected,
+                    "delivered blocks must be deterministic"
+                );
+            }
+        }
+    }
+    assert!(
+        delivered >= 4,
+        "the L1 pipeline barely delivered — {delivered} blocks"
+    );
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` release oracle: note-ons for the first calls,
+/// then note-offs — the fixed 2400-frame release decays linearly and
+/// the tail of the run is exact silence on every delivered block.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_note_off_releases_to_silence() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let on = [note_on(0, 69, u32::MAX)];
+    let on_list = EventList::new(&on, FRAMES_U32).unwrap();
+    let off = [note_off(0, 69)];
+    let off_list = EventList::new(&off, FRAMES_U32).unwrap();
+    let empty = EventList::empty(FRAMES_U32);
+    // 8 sounding blocks, ONE note-off, then empty blocks: the fixture
+    // law restarts the 2400-frame release on every NoteOff, so a
+    // repeated note-off would hold the voice in release forever. The
+    // release completes ~5 blocks (4096 frames) after the note-off
+    // block; delivered blocks lag their input call by
+    // `lookahead_blocks`, so the sounding proof only counts calls
+    // whose every possible source call is on-phase (retriggers →
+    // `out[0] == -1`), and the silence tail only asserts once every
+    // in-flight source call is many blocks past the completed release.
+    let mut sounding = 0_u32;
+    for call in 0..44_u32 {
+        let list = match call.cmp(&8) {
+            core::cmp::Ordering::Less => on_list,
+            core::cmp::Ordering::Equal => off_list,
+            core::cmp::Ordering::Greater => empty,
+        };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun or legitimately silent
+        }
+        // Calls 4..=8: for any lookahead in 1..=3 the source call is
+        // ≤7 — unambiguously on-phase, so a delivered block retriggered
+        // at frame 0.
+        if (4..=8).contains(&call) {
+            assert_eq!(
+                out_left[0].to_bits(),
+                (-1.0_f32).to_bits(),
+                "call {call}: sounding block must retrigger at frame 0"
+            );
+            sounding += 1;
+        }
+        // Calls 36..=43: every possible source call is ≥28 blocks past
+        // the first note-off — the release is complete, so a delivered
+        // (non-underrun) block must be exact silence.
+        if (36..=43).contains(&call) {
+            let bad = out_left
+                .iter()
+                .position(|&s| s != 0.0)
+                .unwrap_or(usize::MAX);
+            assert!(
+                bad == usize::MAX && out_right.iter().all(|&s| s == 0.0),
+                "call {call}: release tail must be exact silence, first nonzero at {bad}: {:?}",
+                &out_left[bad.min(FRAMES - 1)..(bad + 4).min(FRAMES)]
+            );
+        }
+    }
+    assert!(sounding >= 2, "the note never sounded through the ABI");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` controller oracle: CC7 = 0 silences voices; CC7 =
+/// max restores full level. The note-on offset gates the voice start —
+/// frames before the offset are silent, the offset frame itself
+/// sounds (block-boundary law through the real ABI).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_cc_and_offset_gating() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    // Phase 1: note-on at offset 100 + CC7 volume 0 → silence.
+    let muted = [cc(0, 7, 0), note_on(100, 69, u32::MAX)];
+    let muted_list = EventList::new(&muted, FRAMES_U32).unwrap();
+    // Phase 2: same note-on, CC7 max → offset gating visible.
+    let full = [cc(0, 7, u32::MAX), note_on(100, 69, u32::MAX)];
+    let full_list = EventList::new(&full, FRAMES_U32).unwrap();
+
+    // Phase 1 (calls 0..8): note-on at offset 100 + CC7 volume 0 →
+    // silence. Phase 2 (calls 8..16): same note-on, CC7 max → offset
+    // gating visible. Delivered blocks lag by `lookahead_blocks`, so
+    // assertions use latency-margin windows and the transition calls
+    // are left unasserted.
+    let mut verified = 0_u32;
+    let mut reference: Option<Vec<f32>> = None;
+    for call in 0..16_u32 {
+        let list = if call < 8 { muted_list } else { full_list };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
+            Ok(ProcessResult::CONTINUE)
+        );
+        // Muted window: every possible source call is muted-phase —
+        // assert unconditionally (underrun zeros and the voice's
+        // `-0.0` both satisfy `== 0.0`; any real signal fails).
+        if (3..=7).contains(&call) {
+            assert!(
+                out_left.iter().all(|&s| s == 0.0) && out_right.iter().all(|&s| s == 0.0),
+                "call {call}: CC7=0 must silence"
+            );
+            continue;
+        }
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun or legitimately silent
+        }
+        if (12..=15).contains(&call) {
+            // Every possible source call is full-phase. The voice is
+            // stateful: retriggered at offset 100 every block, it
+            // sustains into the next block's frames 0..100 — so the
+            // oracle pins the retrigger frame itself (`-1` extreme)
+            // and bit-identical post-offset segments across delivered
+            // blocks (frames 100..511 restart from phase 0 each block).
+            assert_eq!(
+                out_left[100].to_bits(),
+                (-1.0_f32).to_bits(),
+                "call {call}: offset frame sounds"
+            );
+            assert_eq!(out_left, out_right);
+            match &reference {
+                None => reference = Some(out_left[100..].to_vec()),
+                Some(expected) => assert_eq!(
+                    &out_left[100..],
+                    expected.as_slice(),
+                    "call {call}: post-offset segment must be deterministic"
+                ),
+            }
+            verified += 1;
+        }
+    }
+    assert!(verified >= 2, "the full-volume phase never delivered");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
+/// `test_instrument` transport oracle: a playing snapshot with
+/// musical timing clicks at the `ppqn` boundary inside the block —
+/// `position_ticks = 956` puts the next boundary 4 ticks ahead →
+/// frame `4 × 25 = 100`, impulse `0.5`. Stopped transport is silent;
+/// a seek (position jump) moves the click; an active loop range does
+/// not disturb the per-block derivation (the fixture holds no loop
+/// state — chase/loop ride the delivered snapshot).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_instrument_transport_clicks() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    let empty = EventList::empty(FRAMES_U32);
+    // pos 956 → boundary at tick 960 → delta 4 ticks → frame 100.
+    let click_at_100 = playing_transport(956);
+    // pos 940 → delta 20 ticks → frame 500.
+    let click_at_500 = playing_transport(940);
+    // pos 950 → delta 10 ticks → frame 250 — deliberately distinct
+    // from the other phases' click frames so a stale pass-through
+    // replay of an earlier click block cannot satisfy this phase.
+    let looped = playing_transport(950).with_loop_range(MediaRange::new(
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+        MediaDuration::new(48_000, TimeBase::sample_rate(48_000).unwrap()),
+    ));
+    let stopped = TransportInfo::new(
+        TransportStatus::Stopped,
+        MediaTime::new(0, TimeBase::sample_rate(48_000).unwrap()),
+    )
+    .with_musical(MusicalTimeInfo {
+        position_ticks: 956,
+        bar_start_tick: 0,
+        bpm_milli: 120_000,
+        ppqn: 960,
+        sig_num: 4,
+        sig_den: 4,
+    });
+
+    // Phases of 8 calls each: stopped → click@100 → seek click@500 →
+    // looped click@250. Delivered blocks lag their source call by
+    // `lookahead_blocks`, so each phase asserts only inside a window
+    // where every possible source call (lookahead 1..=3) is inside
+    // that phase; transition calls stay unasserted. An all-zero
+    // block is skipped: it is either defined silence or a
+    // pass-through replay whose `last_output` was itself silent —
+    // indistinguishable, and asserting on it would flake.
+    let mut verified = [0_u32; 4];
+    for call in 0..32_u32 {
+        let (transport, phase) = match call {
+            c if c < 8 => (Some(stopped), 0_usize),
+            c if c < 16 => (Some(click_at_100), 1),
+            c if c < 24 => (Some(click_at_500), 2),
+            _ => (Some(looped), 3),
+        };
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        thread::sleep(Duration::from_millis(5));
+        assert_eq!(
+            host_block_transport(
+                &mut host,
+                handle,
+                &mut out_left,
+                &mut out_right,
+                empty,
+                transport
+            ),
+            Ok(ProcessResult::CONTINUE)
+        );
+        if out_left.iter().all(|&s| s == 0.0) {
+            continue; // underrun — or the stopped phase's defined silence
+        }
+        let (window, frame) = match phase {
+            0 => (3..=8, None),
+            1 => (11..=16, Some(100_usize)),
+            2 => (19..=24, Some(500_usize)),
+            _ => (27..=31, Some(250_usize)),
+        };
+        if !window.contains(&call) {
+            continue; // transition zone — source call ambiguous
+        }
+        match frame {
+            None => panic!("call {call}: stopped transport must be silent"),
+            Some(frame) => {
+                assert_eq!(
+                    out_left[frame].to_bits(),
+                    0.5_f32.to_bits(),
+                    "call {call}: click impulse at frame {frame}"
+                );
+                assert!(
+                    out_left
+                        .iter()
+                        .enumerate()
+                        .all(|(i, &s)| i == frame || s == 0.0),
+                    "call {call}: click block must be silent outside frame {frame}"
+                );
+                assert_eq!(out_left, out_right);
+                verified[phase] += 1;
+            }
+        }
+    }
+    assert!(
+        verified[1..].iter().all(|&n| n >= 2),
+        "click phases barely delivered — {verified:?}"
+    );
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
 }

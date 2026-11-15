@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-test-vst3"
-description = "Test-only VST3 test plugin suite (test_gain/test_fault/test_editor/test_stateful) for Ruviform host verification — not a shipping product"
+description = "Test-only VST3 test plugin suite (test_gain/test_fault/test_editor/test_stateful/test_instrument) for Ruviform host verification — not a shipping product"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -43,6 +43,9 @@ vst3 = "0.3.0"
 # Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
 # Lifecycle/BufferView) — the plugin-side implementation target.
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# Neutral MIDI/transport vocabulary (MidiEvent/MidiKind/MusicalTimeInfo)
+# consumed by `test_instrument`'s event and transport translation.
+ruviform-media-core = { path = "../ruviform-media-core" }
 # Zero-copy planar buffer views for the process path.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 # Production host bridge for the L1 runner binary — optional regular

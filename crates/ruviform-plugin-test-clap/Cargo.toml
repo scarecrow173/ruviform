@@ -56,6 +56,9 @@ clack-extensions = { version = "=0.2.0", features = [
 ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 # Zero-copy planar buffer views for the process path.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
+# Neutral MIDI/transport types for the `test_instrument` input
+# surface (MidiEvent/MidiKind/TransportInfo mapping).
+ruviform-media-core = { path = "../ruviform-media-core" }
 # Production host bridge for the L1 runner binary — optional regular
 # dep enabled only by `l1-runner` (`host` feature supplies
 # `ClapLibrary`/`factories`). The dev-dependency entry below keeps the

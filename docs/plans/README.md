@@ -194,6 +194,7 @@ Directory: `docs/plans`
 | PLAN-034XVsD1tGn1Q9zdYY4pHW | Issue #630 L1 runner slice 実装計画 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | PLAN-034Y13aQ1WvmdD4BN426PS | Issue #630 test_editor slice — 実装計画 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | PLAN-DLESE2YF8AQ5RSEOnkUhaZ | Issue #630 test_fault slice — 実装計画 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
+| PLAN-034Z9nTs5uHkY4wMrPdVfC | Issue #630 test_instrument slice — 実装計画 | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034Y4f3N8mEveC8nUJLKFw | Issue #630 test_stateful slice — 実装計画 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

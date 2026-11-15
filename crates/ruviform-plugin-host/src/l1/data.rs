@@ -805,7 +805,7 @@ impl RtLeg {
         stage.channels.store(block.channels, Ordering::Relaxed);
         for (i, event) in block.events.iter().enumerate() {
             self.scratch.clear();
-            wire::encode_event(&event, &mut self.scratch);
+            wire::encode_event_record(&event, &mut self.scratch);
             debug_assert_eq!(self.scratch.len(), shm::EVENT_WIRE_SIZE);
             let base = i * shm::EVENT_WIRE_SIZE;
             for (j, &b) in self.scratch.iter().take(shm::EVENT_WIRE_SIZE).enumerate() {

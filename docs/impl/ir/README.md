@@ -247,6 +247,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | IMPL-034Y1GuSJhatlqbBsFEaYI | Issue #630 test_editor slice — 実装記録 | completed | [issue-630-test-editor-slice.md](./issue-630-test-editor-slice.md) |
 | IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |
+| IMPL-034Z9rDv8wCoN4sTuVgXzF | Issue #630 test_instrument slice — 実装記録 | completed | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034Y4g5Cx7ToOHTcgE2U9x | Issue #630 test_stateful slice — 実装記録 | completed | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
