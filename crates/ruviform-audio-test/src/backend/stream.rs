@@ -147,42 +147,58 @@ fn media_nanos(nanos: i64) -> MediaTime {
     MediaTime::new(nanos, DEVICE_CLOCK_TIMEBASE)
 }
 
-/// Applies the [`StreamFault`]s matching `index` — returns the
-/// `Frames`/`FramePosition`/`CaptureNone` mutations plus the ordered
-/// error list, the invalidate flag, and clears `errors` for reuse.
-/// `errors` is a caller-owned `Vec` kept across pumps so the
+/// Effects collected from the [`StreamFault`]s matching one callback
+/// index. `errors` is a caller-owned `Vec` kept across pumps so the
 /// steady-state path performs no allocation.
+#[derive(Default)]
+struct FaultEffects {
+    /// `Frames` override for this callback.
+    frames: Option<u32>,
+    /// `FramePosition` jump applied before this callback.
+    position: Option<u64>,
+    /// `CaptureNone` suppression (input only).
+    capture_none: bool,
+    /// `Invalidate` — terminate after error delivery.
+    invalidate: bool,
+    /// `Cancellation` — abort data delivery, report
+    /// `Backend("cancelled")`, terminate.
+    cancel: bool,
+}
+
+/// Applies the [`StreamFault`]s matching `index` — collects mutations,
+/// the ordered error list, and the invalidate/cancel flags, and clears
+/// `errors` for reuse.
 fn collect_faults(
     faults: &[StreamFault],
     index: u64,
     errors: &mut Vec<DeviceError>,
-) -> (Option<u32>, Option<u64>, bool, bool) {
+) -> FaultEffects {
     errors.clear();
-    let mut frames = None;
-    let mut position = None;
-    let mut capture_none = false;
-    let mut invalidate = false;
+    let mut effects = FaultEffects::default();
     for &fault in faults {
         match fault {
             StreamFault::Error { at_callback, error } if at_callback == index => errors.push(error),
             StreamFault::FramePosition {
                 at_callback,
                 position: p,
-            } if at_callback == index => position = Some(p),
+            } if at_callback == index => effects.position = Some(p),
             StreamFault::CaptureNone { at_callback } if at_callback == index => {
-                capture_none = true;
+                effects.capture_none = true;
             }
             StreamFault::Frames {
                 at_callback,
                 frames: f,
-            } if at_callback == index => frames = Some(f),
+            } if at_callback == index => effects.frames = Some(f),
             StreamFault::Invalidate { at_callback } if at_callback == index => {
-                invalidate = true;
+                effects.invalidate = true;
+            }
+            StreamFault::Cancellation { at_callback } if at_callback == index => {
+                effects.cancel = true;
             }
             _ => {}
         }
     }
-    (frames, position, capture_none, invalidate)
+    effects
 }
 
 /// Pump prologue shared by both directions: dead/invalidated →
@@ -661,6 +677,101 @@ fn play_scenario(
     covered
 }
 
+/// Shared body of the cancellation path: delivers the same-index
+/// `Error` faults, then `Backend("cancelled")`, then
+/// `StreamInvalidated` when `Invalidate` is also scripted there, and
+/// terminates the stream. `callback_index` advances — the cancelled
+/// firing consumed one callback — while `position`/`frames` do not
+/// advance (zero frames delivered).
+fn deliver_cancel_errors(
+    error_callback: &mut Option<impl FnMut(DeviceError)>,
+    fault_errors: &[DeviceError],
+    invalidate: bool,
+) -> u32 {
+    let mut errors_fired = 0u32;
+    for &error in fault_errors {
+        if let Some(cb) = error_callback.as_mut() {
+            cb(error);
+        }
+        errors_fired += 1;
+    }
+    if let Some(cb) = error_callback.as_mut() {
+        cb(DeviceError::Backend("cancelled"));
+    }
+    errors_fired += 1;
+    if invalidate {
+        if let Some(cb) = error_callback.as_mut() {
+            cb(DeviceError::StreamInvalidated);
+        }
+        errors_fired += 1;
+    }
+    errors_fired
+}
+
+/// Output-direction cancellation path — see
+/// [`StreamFault::Cancellation`]. Returns a zero-frame `PumpReport`
+/// with `invalidated: true`; the stream is dead afterwards.
+fn cancelled_pump_output(
+    core: &mut OutputCore,
+    slot: &OutputSlot,
+    index: u64,
+    effects: &FaultEffects,
+    fault_errors: &[DeviceError],
+) -> PumpReport {
+    let callback_nanos = clock_nanos(&core.clock);
+    let errors_fired =
+        deliver_cancel_errors(&mut core.error_callback, fault_errors, effects.invalidate);
+    core.invalidated = true;
+    slot.dead.store(true, Ordering::Release);
+    core.callback_index = index + 1;
+    PumpReport {
+        direction: StreamDirection::Output,
+        callback_index: index,
+        frames: 0,
+        position: core.position,
+        reported_frame_position: None,
+        clock_domain: core.clock_domain,
+        callback_nanos,
+        capture_nanos: None,
+        playback_nanos: None,
+        gap_frames: 0,
+        errors_fired,
+        invalidated: true,
+    }
+}
+
+/// Input-direction cancellation path — see [`StreamFault::Cancellation`].
+/// No capture timestamp or frame position is reported: the callback was
+/// aborted before data delivery.
+fn cancelled_pump_input(
+    core: &mut InputCore,
+    slot: &InputSlot,
+    index: u64,
+    effects: &FaultEffects,
+    fault_errors: &[DeviceError],
+) -> PumpReport {
+    let callback_nanos = clock_nanos(&core.clock);
+    let errors_fired =
+        deliver_cancel_errors(&mut core.error_callback, fault_errors, effects.invalidate);
+    core.invalidated = true;
+    slot.dead.store(true, Ordering::Release);
+    core.callback_index = index + 1;
+    PumpReport {
+        direction: StreamDirection::Input,
+        callback_index: index,
+        frames: 0,
+        position: core.position,
+        reported_frame_position: None,
+        clock_domain: core.clock_domain,
+        callback_nanos,
+        capture_nanos: None,
+        playback_nanos: None,
+        gap_frames: 0,
+        errors_fired,
+        invalidated: true,
+    }
+}
+
 /// Fires one output callback — see
 /// [`ScriptedDeviceHandle::pump_output_next`](super::ScriptedDeviceHandle::pump_output_next).
 pub(crate) fn pump_output(slot: &Arc<OutputSlot>) -> DeviceResult<PumpReport> {
@@ -672,14 +783,17 @@ pub(crate) fn pump_output(slot: &Arc<OutputSlot>) -> DeviceResult<PumpReport> {
     // Reused per-core fault scratch would be ideal; a fresh `Vec::new`
     // allocates only when a fault actually fires (steady state: none).
     let mut fault_errors = Vec::new();
-    let (fault_frames, fault_position, _capture_none, invalidate) =
-        collect_faults(&core.faults, index, &mut fault_errors);
-    if let Some(p) = fault_position {
+    let effects = collect_faults(&core.faults, index, &mut fault_errors);
+    if effects.cancel {
+        return Ok(cancelled_pump_output(core, slot, index, &effects, &fault_errors));
+    }
+    if let Some(p) = effects.position {
         core.position = p;
     }
     let position = core.position;
-    let frames =
-        fault_frames.unwrap_or_else(|| frames_at(&core.frames_cycle, core.resolved_frames, index));
+    let frames = effects
+        .frames
+        .unwrap_or_else(|| frames_at(&core.frames_cycle, core.resolved_frames, index));
     let channels = core.channels;
     let frames_usize = usize::try_from(frames).unwrap_or(usize::MAX);
     let sample_count = channels.saturating_mul(frames_usize);
@@ -721,7 +835,7 @@ pub(crate) fn pump_output(slot: &Arc<OutputSlot>) -> DeviceResult<PumpReport> {
         }
         errors_fired += 1;
     }
-    if invalidate {
+    if effects.invalidate {
         if let Some(cb) = core.error_callback.as_mut() {
             cb(DeviceError::StreamInvalidated);
         }
@@ -769,14 +883,17 @@ pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
     let index = core.callback_index;
 
     let mut fault_errors = Vec::new();
-    let (fault_frames, fault_position, capture_none, invalidate) =
-        collect_faults(&core.faults, index, &mut fault_errors);
-    if let Some(p) = fault_position {
+    let effects = collect_faults(&core.faults, index, &mut fault_errors);
+    if effects.cancel {
+        return Ok(cancelled_pump_input(core, slot, index, &effects, &fault_errors));
+    }
+    if let Some(p) = effects.position {
         core.position = p;
     }
     let position = core.position;
-    let frames =
-        fault_frames.unwrap_or_else(|| frames_at(&core.frames_cycle, core.resolved_frames, index));
+    let frames = effects
+        .frames
+        .unwrap_or_else(|| frames_at(&core.frames_cycle, core.resolved_frames, index));
     let channels = core.channels;
     let frames_usize = usize::try_from(frames).unwrap_or(usize::MAX);
     let sample_count = channels.saturating_mul(frames_usize);
@@ -801,7 +918,7 @@ pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
     let gap_frames = u64::from(frames).saturating_sub(covered);
 
     let callback_nanos = clock_nanos(&core.clock);
-    let capture_nanos = if core.capture_reporting && !capture_none {
+    let capture_nanos = if core.capture_reporting && !effects.capture_none {
         Some(callback_nanos.saturating_sub(core.latency_nanos))
     } else {
         None
@@ -844,7 +961,7 @@ pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
         }
         errors_fired += 1;
     }
-    if invalidate {
+    if effects.invalidate {
         if let Some(cb) = core.error_callback.as_mut() {
             cb(DeviceError::StreamInvalidated);
         }

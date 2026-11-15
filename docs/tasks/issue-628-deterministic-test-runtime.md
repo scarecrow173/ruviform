@@ -1,10 +1,10 @@
 ---
 id: "TASK-034XBNDF8ghODBVWqwPPlR"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #628 T1 — deterministic core crate 実装・検証・docs chain"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners:
   - "scarecrow173"
 relations:
@@ -87,29 +87,29 @@ production 配線・CI lane・consumer oracle・3 OS 実走は後続 slice。
 
 ## Done When
 
-- [ ] `crates/ruviform-audio-test` が workspace member として build でき、
+- [x] `crates/ruviform-audio-test` が workspace member として build でき、
   `mise run check|lint|test ruviform-audio-test` が Pass する。
-- [ ] 同一 seed/fixture version/clock 設定から PCM block・MIDI trace・
+- [x] 同一 seed/fixture version/clock 設定から PCM block・MIDI trace・
   run metadata が決定論的に生成され、再現テストが Pass する。
-- [ ] `rt_` prefix テストが `assert_no_alloc` で clock-read /
+- [x] `rt_` prefix テストが `assert_no_alloc` で clock-read /
   generator-fill の alloc-free を証明し、`mise run test-rt` で実際に
   収集・実行される（テスト名で確認）。
-- [ ] 独立 PCM 数値/byte Oracle・MIDI trace Oracle が独立 fixture/実装で
+- [x] 独立 PCM 数値/byte Oracle・MIDI trace Oracle が独立 fixture/実装で
   検証され、期待値を被試験コードから生成していない。
-- [ ] test-only の公開範囲が明文化され、production crate からの依存が
+- [x] test-only の公開範囲が明文化され、production crate からの依存が
   ないことを確認できる。
-- [ ] Issue #628 の残受入は本 slice 対象外として docs に明記されている。
+- [x] Issue #628 の残受入は本 slice 対象外として docs に明記されている。
 
 ## Verification
 
-- [ ] `mise run fmt-check` — Pass
-- [ ] `mise run check ruviform-audio-test` — Pass
-- [ ] `mise run lint ruviform-audio-test` — Pass
-- [ ] `mise run test ruviform-audio-test` — Pass
-- [ ] `mise run test-rt` — `rt_` prefix テストが実際に収集・実行される
-- [ ] PCM oracle: silence/impulse/ramp/square/noise/constant は Exact、
+- [x] `mise run fmt-check` — Pass
+- [x] `mise run check ruviform-audio-test` — Pass
+- [x] `mise run lint ruviform-audio-test` — Pass
+- [x] `mise run test ruviform-audio-test` — Pass
+- [x] `mise run test-rt` — `rt_` prefix テストが実際に収集・実行される
+- [x] PCM oracle: silence/impulse/ramp/square/noise/constant は Exact、
   sine/sweep は libm+tolerance で独立検証
-- [ ] MIDI oracle: play-through trace が期待列と一致、seek/loop で
+- [x] MIDI oracle: play-through trace が期待列と一致、seek/loop で
   receipt/fault ledger が production 契約通りに記録
-- [ ] run metadata が `environment_kind=deterministic-backend`・
+- [x] run metadata が `environment_kind=deterministic-backend`・
   `level=OS-L1`・seed/fixture_version/clock を保持

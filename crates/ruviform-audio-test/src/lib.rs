@@ -7,8 +7,9 @@
 //! a MIDI trace driver that exercises the production
 //! [`TransportScheduler`](ruviform_media_core::TransportScheduler) /
 //! [`SpanSink`](ruviform_media_core::SpanSink) contract, independent
-//! oracles ([`oracle`](oracle)), Case Schema v1 run metadata
-//! ([`RunMetadata`](metadata::RunMetadata)), and a scripted
+//! oracles ([`oracle`](oracle)), Case Schema v1 run metadata with
+//! JSON persistence ([`RunMetadata`](metadata::RunMetadata)), and a
+//! scripted
 //! port-trait backend ([`backend`](backend)) implementing the
 //! production `DeviceEnumerator`/`Device`/`InputStream`/
 //! `OutputStream` contracts with manual-pump deterministic delivery,
@@ -31,10 +32,11 @@
 //!
 //! # Scope
 //!
-//! Deterministic core + scripted device-boundary backend + pipeline
-//! wiring into production consumers. Consumer oracles, CI lane
-//! integration and real-OS evidence are later slices of Issue #628.
-//! Virtual-backend success
+//! Deterministic core + scripted device-boundary backend (including
+//! the `Cancellation` fault class) + pipeline wiring into production
+//! consumers + JSON run-metadata persistence (non-RT test-driver
+//! API). Real-OS/GUI/plugin-ABI evidence stays deferred (POLICIES.md
+//! levels GUI-L2/EXT-L3). Virtual-backend success
 //! here is OS-L1 deterministic evidence
 //! (`environment_kind = deterministic-backend`), never a claim of real
 //! OS API / GUI / plugin ABI success (POLICIES.md 2026-11-15

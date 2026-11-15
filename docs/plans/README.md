@@ -182,6 +182,7 @@ Directory: `docs/plans`
 | PLAN-8R4q0cr04yTyNYSk6Y5f3B | Issue #586 実施計画 — ir front matter 是正と ir/exp index 再生成 | approved | [issue-586-impl-index-generation-plan.md](./issue-586-impl-index-generation-plan.md) |
 | PLAN-034XqAH9JQDs0Ry1tvZOjh | Issue #625 実施計画 — handshake error 分類の正規化・決定的検証・lane 再検証 | approved | [issue-625-ci-e2e-handshake-race-plan.md](./issue-625-ci-e2e-handshake-race-plan.md) |
 | PLAN-034XATq1VmM49W1cv5EO0P | Issue #627 仮想優先検証契約 実装・ロールアウト計画 | approved | [issue-627-virtual-first-verification-contract-plan.md](./issue-627-virtual-first-verification-contract-plan.md) |
+| PLAN-034Y3gHUCoEkqu0kcIyuzx | Issue #628 close-out — implementation plan | approved | [issue-628-close-out.md](./issue-628-close-out.md) |
 | PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
 | PLAN-RF628pwpipeline0000001 | Issue #628 pipeline wiring — implementation plan | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | PLAN-RF628sBscripted0000003 | Issue #628 実装計画 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |

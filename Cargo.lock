@@ -6622,6 +6622,8 @@ dependencies = [
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-rt",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

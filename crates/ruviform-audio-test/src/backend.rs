@@ -31,6 +31,11 @@
 //! - **Queue-full** is scripted as [`DeviceError::Backend`]
 //!   `"queue_full"` / [`DeviceError::Xrun`] on the audio side, and via
 //!   `MockPort::inject_dropped`/`inject_unsupported` on the MIDI side.
+//! - **Cancellation** has no production contract — it is expressed
+//!   through existing observables only: the callback is aborted (no
+//!   data delivery), `Backend("cancelled")` is reported on the error
+//!   callback, and the stream terminates. See
+//!   [`StreamFault::Cancellation`].
 //!
 //! See `docs/designs/issue-628-scripted-backend.md` for the full
 //! design and `docs/test-specs/issue-628-scripted-backend.md` for the
@@ -128,6 +133,29 @@ pub enum StreamFault {
         /// 0-based callback index at which invalidation happens.
         at_callback: u64,
     },
+    /// Cancel the in-flight delivery at that callback: the data
+    /// callback does *not* fire for that index, the error callback
+    /// receives [`DeviceError::Backend`] `"cancelled"`, and the stream
+    /// terminates — the same lifecycle as [`StreamFault::Invalidate`]
+    /// (subsequent pumps fail `StreamInvalidated`; the direction may
+    /// re-open after the dead stream is dropped).
+    ///
+    /// **Mapping note:** the production device contract
+    /// (`DeviceError`/`OutputStream`/`InputStream`/error callbacks) has
+    /// no cancel concept, so cancellation is expressed only through
+    /// existing observables — an aborted delivery plus the `Backend`
+    /// classification name `"cancelled"` — without inventing new
+    /// production variants. `callback_index` still advances (the
+    /// cancelled firing consumed one callback); `position` and the
+    /// delivered frame count do not advance (zero frames delivered).
+    /// Other faults scripted at the same index still apply their
+    /// mutations and error deliveries; error-callback order is
+    /// `Error` faults (script order), then `"cancelled"`, then
+    /// `StreamInvalidated` (when `Invalidate` is also scripted there).
+    Cancellation {
+        /// 0-based callback index at which the delivery is aborted.
+        at_callback: u64,
+    },
 }
 
 /// Which stream direction a [`PumpReport`] / fault injection targets.
@@ -174,7 +202,8 @@ pub struct PumpReport {
     pub gap_frames: u64,
     /// Errors fired on the error callback during this pump.
     pub errors_fired: u32,
-    /// The stream was invalidated by this pump.
+    /// The stream was terminated by this pump — an `Invalidate` or
+    /// `Cancellation` fault (or device vanish).
     pub invalidated: bool,
 }
 
