@@ -42,10 +42,11 @@
 pub mod artifact;
 pub mod jsonl;
 pub mod probe;
+pub mod real_catalog;
 #[cfg(feature = "real-dock")]
 pub mod real_dock;
 pub mod scenario;
 
 pub use artifact::{PLUGIN_PATH_ENV, fixture_lib_name, resolve_artifact, sha256_hex};
 pub use probe::PluginHostProbe;
-pub use scenario::{HEADLESS_MATRIX, LaneEnvironment, run_all};
+pub use scenario::{HEADLESS_MATRIX, LaneEnvironment, run_all, run_selected};
