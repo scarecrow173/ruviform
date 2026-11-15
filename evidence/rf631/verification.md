@@ -135,8 +135,10 @@ JSONL verdict が同一であることの確認記録。
 - Date: 2026-11-15
 - OS: Windows (x86_64)
 - Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
-- Repo SHA: `f03390d046ebb640ca7e3366984afed174c6d9c2`（branch base、
-  catalog 変更は未 commit の working tree で実走）
+- Repo SHA: catalog 変更は `f03390d0` base の working tree で初回実走、
+  `origin/main`（`3ae35b85`、issue-630 L1 runner slice）merge 後の
+  `41857b5d` で全 canonical lane を再検証。`plugin-dock-scenario.jsonl`
+  は merge 後 HEAD の記録（verdict は初回実走と同一）。
 
 ## Lane results（canonical = mise）
 
