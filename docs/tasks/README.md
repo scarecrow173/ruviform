@@ -62,6 +62,7 @@ Directory: `docs/tasks`
 | TASK-034XVm2WqXrYsZaBcDeFgH | Issue #629 MIDI loopback round-trip verifier implementation task | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
+| TASK-034Y13NY1bznQbU0TgCsEn | Issue #630 test_editor slice — task | completed | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TASK-034XTPgAXjEOXFWn2Rv1Iy | Issue #631 T1 — Real-window native-slot dock lane | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TASK-034XVTrDLIayJZvRDYBcAb | Issue #631 T1 — Plugin-dock scenario catalog + driver projection | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |

@@ -129,10 +129,15 @@ pub(crate) fn decode_fault(plain: f64) -> (FaultMode, u32) {
 }
 
 /// Copies `input` to `output` channel-for-channel — the trivial
-/// pass-through DSP law. `frames` is bounded by the shorter side;
-/// missing channels are skipped (the views guarantee uniform lengths,
-/// so this is only defensive).
-fn pass_through<I: BufferView, O: BufferViewMut>(inputs: &[I], outputs: &mut [O], frames: usize) {
+/// pass-through DSP law shared by `test_fault` (unarmed/`none`) and
+/// `test_editor`. `frames` is bounded by the shorter side; missing
+/// channels are skipped (the views guarantee uniform lengths, so
+/// this is only defensive).
+pub(crate) fn pass_through<I: BufferView, O: BufferViewMut>(
+    inputs: &[I],
+    outputs: &mut [O],
+    frames: usize,
+) {
     let Some((input, output)) = inputs.first().zip(outputs.first_mut()) else {
         return;
     };

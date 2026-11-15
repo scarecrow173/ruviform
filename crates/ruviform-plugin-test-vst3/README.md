@@ -4,19 +4,23 @@
 exist solely as deterministic test fixtures for verifying the Ruviform
 production plugin host — they are never product distribution artifacts,
 no production crate depends on this crate, and nothing here ships to
-consumers (Issue #630, first slice).
+consumers (Issue #630).
 
 ## What it provides
 
 A single VST3 module binary exporting `GetPluginFactory` plus the
 platform module hooks (`InitDll`/`ExitDll` on Windows,
 `ModuleEntry`/`ModuleExit` on Linux, `bundleEntry`/`bundleExit` on
-macOS) that hosts two classes:
+macOS) that hosts three classes:
 
 | Class | CID role | Surface |
 | --- | --- | --- |
 | `test_gain` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` |
 | `test_gain Controller` ("Component Controller Class") | controller | `IEditController` |
+| `test_fault` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` |
+| `test_fault Controller` ("Component Controller Class") | controller | `IEditController` |
+| `test_editor` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` |
+| `test_editor Controller` ("Component Controller Class") | controller | `IEditController` + `createView("editor")` → `IPlugView` |
 
 Vendor is `"Ruviform Test"` and the class IDs are fresh `uid`s,
 distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
@@ -37,6 +41,34 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 - Parameter changes apply **sample-accurately** at the event's frame
   offset; same-offset events are last-wins; zero-frame blocks flush
   offset-0 events into the persisted gain for the next block.
+
+## `test_fault` semantics
+
+- Same bus shape as `test_gain`; one stepped `Fault` parameter
+  (plain `[0.0, 4.0]`, default `0.0` = `none`).
+- Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
+  event arms `abort`/`exit`/`hang`/`error` dispatch inside the
+  arming block's `process()` — the L1 out-of-process
+  crash/hang/timeout/isolation oracle. `error` returns `kResultFalse`
+  (a defined rejection, not a crash); `abort`/`exit`/`hang` are
+  L1-only faults.
+
+## `test_editor` semantics
+
+- Parameterless pass-through processor — the class exists to carry
+  the suite's `IPlugView` editor fixture, not to exercise DSP.
+- `createView("editor")` returns an owned `IPlugView`; every other
+  view name returns null. The view reports a fixed 640x480 size,
+  refuses resize (`canResize` → `kResultFalse`, symmetric with the
+  host bridge's `resizeView` refusal), and acknowledges the
+  notification verbs.
+- On Windows, `attached(parent, "HWND")` creates a real
+  `WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS` HWND under the
+  host-provided parent — the AC-4 plugin-fixture half. Null,
+  non-window, wrong-platform, repeated-attach, and creation-failure
+  inputs are honest `kResultFalse` rejections; off Windows every
+  attach is a defined rejection. `removed()` destroys the child and
+  always reports `kResultOk`.
 
 ## Independence boundary
 
@@ -68,9 +100,12 @@ validated or bounded at the boundary. Verified by the `rt_`
 
 ## Scope
 
-This slice ships `test_gain` only. State (de)serialization reports
-`kNotImplemented` honestly — preset/state coverage is a later plugin
-class (`test_stateful`). CLAP, the `test_instrument` / `test_fault` /
-`test_editor` classes, out-of-process runner paths, and the
-`ruviform-audio-test` runtime integration are subsequent slices of the
-same suite.
+This slice ships `test_gain`, `test_fault`, and `test_editor`.
+State (de)serialization reports `kNotImplemented` honestly —
+preset/state coverage is a later plugin class (`test_stateful`).
+CLAP `test_editor`, the `test_instrument` class, out-of-process
+editor attach, and the `ruviform-audio-test` runtime integration
+are subsequent slices of the same suite. A real-HWND
+`open_gui` attach's Pass evidence belongs to the Issue `scarecrow173/ruviform#631`
+real-dock lane; this crate's default test suite pins only the
+defined-rejection paths headlessly.

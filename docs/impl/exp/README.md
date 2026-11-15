@@ -69,6 +69,7 @@ Directory: `docs/impl/exp`
 | [issue-630-adapter-state-bridge.jsonl](./issue-630-adapter-state-bridge.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
+| [issue-630-test-editor-slice.jsonl](./issue-630-test-editor-slice.jsonl) |
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |
 | [issue-631-scenario-catalog.jsonl](./issue-631-scenario-catalog.jsonl) |

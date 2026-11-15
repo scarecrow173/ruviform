@@ -44,15 +44,21 @@ use vst3::Steinberg::{
     FUnknown, IBStream, IPlugView, IPluginBaseTrait, TUID, kInvalidArgument, kNotImplemented,
     kResultOk, tresult,
 };
-use vst3::{Class, uid};
+use vst3::{Class, ComWrapper, uid};
 
-use crate::strings::copy_wstring;
+use crate::editor_view::TestEditorView;
+use crate::strings::{copy_wstring, cstring_eq};
 use ruviform_plugin_core::{ParamInfo as NeutralParamInfo, ParamValue};
 
 /// `test_gain`'s controller class ID — a fresh `uid` for the test
 /// suite, distinct from the adapter fixture's `GainController::CID`.
 pub(crate) const GAIN_CONTROLLER_CID: TUID =
     uid(0x2E8B_5D94, 0xA1F6_7C38, 0x4D09_8B2E, 0xC6F4_3A17);
+
+/// `test_editor`'s controller class ID — a fresh `uid` for the test
+/// suite, distinct from `test_gain`/`test_fault` CIDs.
+pub(crate) const EDITOR_CONTROLLER_CID: TUID =
+    uid(0x5E7A_9C31, 0x2D8F_4B67, 0xE1A3_59D4, 0x8C6B_2F07);
 
 /// A VST3 edit controller bound to one declared parameter.
 ///
@@ -288,6 +294,132 @@ impl IEditControllerTrait for ParamController {
     }
 }
 
+/// `test_editor`'s edit controller — the suite's editor fixture
+/// (Issue #630 AC-4 plugin side). Unlike [`ParamController`] it
+/// declares **no parameters** (`getParameterCount` → `0`, every
+/// parameter verb an honest rejection) and its `createView` returns
+/// the owned [`IPlugView`] for `"editor"` only — the real
+/// child-HWND surface the production host's `open_gui` attaches.
+///
+/// State (de)serialization reports `kNotImplemented`, matching the
+/// other fixtures' no-preset-surface policy.
+pub(crate) struct TestEditorController;
+
+impl Class for TestEditorController {
+    type Interfaces = (IEditController,);
+}
+
+impl IPluginBaseTrait for TestEditorController {
+    #[expect(unsafe_code)]
+    unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+        kResultOk
+    }
+
+    #[expect(unsafe_code)]
+    unsafe fn terminate(&self) -> tresult {
+        kResultOk
+    }
+}
+
+impl IEditControllerTrait for TestEditorController {
+    /// No preset surface — reported honestly as `kNotImplemented`.
+    #[expect(unsafe_code)]
+    unsafe fn setComponentState(&self, _state: *mut IBStream) -> tresult {
+        kNotImplemented
+    }
+
+    #[expect(unsafe_code)]
+    unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
+        kNotImplemented
+    }
+
+    #[expect(unsafe_code)]
+    unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
+        kNotImplemented
+    }
+
+    /// `test_editor` declares no parameters.
+    #[expect(unsafe_code)]
+    unsafe fn getParameterCount(&self) -> i32 {
+        0
+    }
+
+    /// No parameters exist — every index is out of range.
+    #[expect(unsafe_code)]
+    unsafe fn getParameterInfo(&self, _param_index: i32, _info: *mut ParameterInfo) -> tresult {
+        kInvalidArgument
+    }
+
+    /// No parameters exist — no value can be formatted.
+    #[expect(unsafe_code)]
+    unsafe fn getParamStringByValue(
+        &self,
+        _id: u32,
+        _value_normalized: f64,
+        _string: *mut String128,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    /// No parameters exist — no string can be parsed.
+    #[expect(unsafe_code)]
+    unsafe fn getParamValueByString(
+        &self,
+        _id: u32,
+        _string: *mut TChar,
+        _value_normalized: *mut f64,
+    ) -> tresult {
+        kInvalidArgument
+    }
+
+    /// No parameters exist — the defined fallback `0.0`.
+    #[expect(unsafe_code)]
+    unsafe fn normalizedParamToPlain(&self, _id: u32, _value_normalized: f64) -> f64 {
+        0.0
+    }
+
+    /// No parameters exist — the defined fallback `0.0`.
+    #[expect(unsafe_code)]
+    unsafe fn plainParamToNormalized(&self, _id: u32, _plain_value: f64) -> f64 {
+        0.0
+    }
+
+    /// No parameters exist — the defined fallback `0.0`.
+    #[expect(unsafe_code)]
+    unsafe fn getParamNormalized(&self, _id: u32) -> f64 {
+        0.0
+    }
+
+    /// No parameters exist — every set is a defined rejection.
+    #[expect(unsafe_code)]
+    unsafe fn setParamNormalized(&self, _id: u32, _value: f64) -> tresult {
+        kInvalidArgument
+    }
+
+    /// The fixture does not retain the component handler — recorded.
+    #[expect(unsafe_code)]
+    unsafe fn setComponentHandler(&self, _handler: *mut IComponentHandler) -> tresult {
+        kResultOk
+    }
+
+    /// `"editor"` returns a fresh owned `IPlugView` (the host takes
+    /// ownership via `ComPtr::from_raw`); every other name — including
+    /// null — returns null per the VST3 contract.
+    #[expect(unsafe_code)]
+    unsafe fn createView(&self, name: *const c_char) -> *mut IPlugView {
+        // SAFETY: `name` is a VST3 view-type `FIDString` or null per
+        // contract.
+        if !unsafe { cstring_eq(name, "editor") } {
+            return ptr::null_mut();
+        }
+        let view = ComWrapper::new(TestEditorView::new());
+        match view.to_com_ptr::<IPlugView>() {
+            Some(ptr) => ptr.into_raw(),
+            None => ptr::null_mut(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,6 +586,56 @@ mod tests {
             );
             assert_eq!(controller.setState(ptr::null_mut()), kNotImplemented);
             assert_eq!(controller.getState(ptr::null_mut()), kNotImplemented);
+        }
+    }
+
+    /// `test_editor`'s controller declares zero parameters — the
+    /// surface the component's sentinel `param_id` mirrors.
+    #[expect(unsafe_code)]
+    #[test]
+    fn editor_controller_reports_zero_params() {
+        let controller = TestEditorController;
+        // SAFETY: no pointers involved / `info` unused on rejection.
+        unsafe {
+            assert_eq!(controller.getParameterCount(), 0);
+            assert_eq!(controller.getParamNormalized(0), 0.0);
+            assert_eq!(controller.setParamNormalized(0, 0.5), kInvalidArgument);
+            assert_eq!(controller.normalizedParamToPlain(0, 0.5), 0.0);
+            assert_eq!(controller.plainParamToNormalized(0, 1.0), 0.0);
+        }
+    }
+
+    /// `createView("editor")` returns a non-null **owned** `IPlugView`
+    /// — released here through `ComPtr::from_raw`, the same ownership
+    /// transfer the production host performs. Every other name —
+    /// including null — returns null.
+    #[expect(unsafe_code)]
+    #[test]
+    fn editor_controller_create_view_dispatches_on_name() {
+        use std::ffi::CString;
+
+        use vst3::ComPtr;
+        use vst3::Steinberg::Vst::ViewType;
+
+        let controller = TestEditorController;
+        let editor = CString::new("editor").unwrap();
+        let other = CString::new("other").unwrap();
+        // SAFETY: `editor`/`other` are live NUL-terminated strings;
+        // returned pointers are owned by the test and released via
+        // `ComPtr::from_raw` — never leaked, never double-freed.
+        unsafe {
+            let view = controller.createView(ViewType::kEditor);
+            assert!(!view.is_null(), "createView(\"editor\") must return a view");
+            drop(ComPtr::from_raw(view));
+
+            // The same dispatch through the literal bytes — proves
+            // the comparison is content-based, not pointer-based.
+            let view = controller.createView(editor.as_ptr());
+            assert!(!view.is_null());
+            drop(ComPtr::from_raw(view));
+
+            assert!(controller.createView(other.as_ptr()).is_null());
+            assert!(controller.createView(ptr::null()).is_null());
         }
     }
 }

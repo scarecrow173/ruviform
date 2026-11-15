@@ -218,6 +218,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Y14780zESXWkqYxDVNj | Issue #630 adapter-state-bridge slice — test specification | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| TSPEC-034Y13OOyL62lZ84qd2ILq | Issue #630 test_editor slice — test specification | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TSPEC-1jGomS13d3GgO1MNrOleAi | Issue #630 test_fault slice — test specification | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

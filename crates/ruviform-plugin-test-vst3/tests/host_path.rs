@@ -17,8 +17,8 @@ use std::path::PathBuf;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, HostInput, HostOutput, ParamEvent, ParamId,
-    ParamValue, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
+    ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 
@@ -57,11 +57,11 @@ fn load_library() -> Vst3Library {
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
-/// `1` = `test_fault`).
+/// `1` = `test_fault`, `2` = `test_editor`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2, "the module ships two plugins");
+    assert_eq!(factories.len(), 3, "the module ships three plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -80,6 +80,13 @@ fn prepared_plugin() -> Box<dyn ErasedPlugin> {
 /// `test_fault`'s prepared instance — the fault oracle's entry point.
 fn prepared_fault_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(1)
+}
+
+/// `test_editor`'s prepared instance — the editor oracle's entry
+/// point (its `IPlugView` is exercised through `open_gui` below and
+/// the in-crate COM-level tests).
+fn prepared_editor_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(2)
 }
 
 /// Drives one 64-frame stereo block of golden PCM through the
@@ -110,17 +117,17 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 }
 
 /// Discovery through the production path: `Vst3Library::load` scans
-/// the real binary's factory, finds the `test_gain` and `test_fault`
-/// component classes (the distributed controller classes are
-/// filtered out, as with every VST3 module), and reports each
-/// fixture's vendor/name.
+/// the real binary's factory, finds the `test_gain`, `test_fault`,
+/// and `test_editor` component classes (the distributed controller
+/// classes are filtered out, as with every VST3 module), and reports
+/// each fixture's vendor/name.
 #[test]
 fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        2,
+        3,
         "only the audio component classes are plugin descriptors"
     );
     let gain = descriptors[0];
@@ -133,6 +140,11 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(fault.vendor, "Ruviform Test");
     assert_eq!(fault.version, "0.0.0");
     assert!(fault.features.contains(&"Fx"));
+    let editor = descriptors[2];
+    assert_eq!(editor.name, "test_editor");
+    assert_eq!(editor.vendor, "Ruviform Test");
+    assert_eq!(editor.version, "0.0.0");
+    assert!(editor.features.contains(&"Fx"));
 }
 
 /// Parameter surface through the production path: the host instantiates
@@ -144,7 +156,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2);
+    assert_eq!(factories.len(), 3);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -163,7 +175,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2);
+    assert_eq!(factories.len(), 3);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -292,4 +304,79 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
     ));
     assert_eq!(left, vec![0.5_f32; FRAMES]);
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_editor`'s parameter surface through the production path:
+/// its distributed controller declares **zero** parameters — the
+/// surface the component's sentinel `param_id` mirrors by rejecting
+/// every `IParamValueQueue` point.
+#[test]
+fn editor_reports_no_params() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 3);
+    let plugin = factories[2].create();
+    assert!(
+        plugin.params().is_empty(),
+        "test_editor exposes no parameters"
+    );
+}
+
+/// `test_editor` audio through the production path: a parameterless
+/// pass-through — `out == in` bitwise — and a foreign `ParamValue`
+/// event (which the class cannot produce) is dropped by the
+/// component's queue filter, changing nothing.
+#[test]
+fn editor_processes_audio_as_pass_through() {
+    let mut plugin = prepared_editor_plugin();
+
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.75).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `open_gui` on `test_editor` through the production host bridge
+/// with an opaque lease payload (`ParentLease::new(0, 0)` — payload
+/// `0` is not a real HWND): on Windows the call chain reaches
+/// `attached`, whose `IsWindow` gate rejects the non-window parent
+/// with `kResultFalse` → `PluginFailed` (with the `setFrame(null)`
+/// rollback); on non-Windows `EDITOR_PLATFORM_TYPE` is `None` →
+/// `Unsupported` before `createView` is even reached. Both are
+/// defined rejections — a **real** HWND attach is the #631
+/// real-dock lane's evidence, not claimed here.
+#[test]
+fn editor_open_gui_rejects_opaque_parent_lease() {
+    let mut plugin = prepared_editor_plugin();
+    let Err(err) = plugin.open_gui(ParentLease::new(0, 0)) else {
+        panic!("an opaque lease payload must not produce a GUI handle");
+    };
+    #[cfg(target_os = "windows")]
+    assert_eq!(err, HostError::PluginFailed);
+    #[cfg(not(target_os = "windows"))]
+    assert_eq!(err, HostError::Unsupported);
+}
+
+/// `test_gain`/`test_fault` ship no editor: `createView` returns
+/// null on every platform, so `open_gui` converges to the honest
+/// `Unsupported` — the `test_editor` class is the suite's only GUI
+/// surface.
+#[test]
+fn gain_and_fault_have_no_editor_view() {
+    for mut plugin in [prepared_plugin(), prepared_fault_plugin()] {
+        let Err(err) = plugin.open_gui(ParentLease::new(0, 0)) else {
+            panic!("test_gain/test_fault ship no editor — open_gui must fail");
+        };
+        assert_eq!(err, HostError::Unsupported);
+    }
 }

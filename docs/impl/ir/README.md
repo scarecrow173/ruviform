@@ -243,6 +243,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| IMPL-034Y1GuSJhatlqbBsFEaYI | Issue #630 test_editor slice — 実装記録 | completed | [issue-630-test-editor-slice.md](./issue-630-test-editor-slice.md) |
 | IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
