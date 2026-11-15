@@ -64,6 +64,7 @@ members = [
     "crates/ruviform-plugin-clap",
     "crates/ruviform-plugin-vst3",
     "crates/ruviform-plugin-test-vst3",
+    "crates/ruviform-plugin-test-clap",
     # プラグイン側 L1 ランナー層（Issue #76 — 子プロセスエントリ run() + 参照 runner bin）
     "crates/ruviform-plugin-export",
     # Host 層（Issue #74 — L0 インプロセス・ハンドル/コマンド境界。Issue #76 で L1 アウトプロセス + `PluginHost` コンポジット追加）

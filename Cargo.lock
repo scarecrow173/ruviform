@@ -6923,6 +6923,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-plugin-test-clap"
+version = "0.1.0"
+dependencies = [
+ "assert_no_alloc",
+ "clack-common",
+ "clack-extensions",
+ "clack-host",
+ "clack-plugin",
+ "ruviform-audio-core",
+ "ruviform-plugin-clap",
+ "ruviform-plugin-core",
+]
+
+[[package]]
 name = "ruviform-plugin-test-vst3"
 version = "0.1.0"
 dependencies = [
