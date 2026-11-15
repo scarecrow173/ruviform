@@ -51,6 +51,10 @@ use clack_extensions::audio_ports::{
     AudioPortFlags, AudioPortInfo, AudioPortInfoWriter, AudioPortType, PluginAudioPorts,
     PluginAudioPortsImpl,
 };
+use clack_extensions::note_ports::{
+    NoteDialect, NoteDialects, NotePortInfo, NotePortInfoWriter, PluginNotePorts,
+    PluginNotePortsImpl,
+};
 use clack_extensions::params::{
     ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, PluginAudioProcessorParams,
     PluginMainThreadParams, PluginParams,
@@ -162,6 +166,7 @@ impl Plugin for TestInstrumentClapPlugin {
     ) {
         builder
             .register::<PluginAudioPorts>()
+            .register::<PluginNotePorts>()
             .register::<PluginParams>();
     }
 }
@@ -220,6 +225,30 @@ impl PluginAudioPortsImpl for TestInstrumentMainThread<'_> {
             flags: AudioPortFlags::IS_MAIN,
             port_type: Some(AudioPortType::STEREO),
             in_place_pair: Some(ClapId::new(0)),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Note ports extension (main thread)
+// ---------------------------------------------------------------------------
+
+impl PluginNotePortsImpl for TestInstrumentMainThread<'_> {
+    fn count(&self, is_input: bool) -> u32 {
+        // One MIDI note input, no note output — the instrument is
+        // generative and emits no note data.
+        u32::from(is_input)
+    }
+
+    fn get(&self, index: u32, is_input: bool, writer: &mut NotePortInfoWriter) {
+        if index != 0 || !is_input {
+            return;
+        }
+        writer.set(&NotePortInfo {
+            id: ClapId::new(0),
+            name: b"Notes",
+            supported_dialects: NoteDialects::CLAP | NoteDialects::MIDI,
+            preferred_dialect: Some(NoteDialect::Midi),
         });
     }
 }

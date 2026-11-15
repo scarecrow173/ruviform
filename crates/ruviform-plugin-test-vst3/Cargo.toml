@@ -86,6 +86,19 @@ ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"] }
 # host) keeps the dependency DAG acyclic; `plugin-host` depends on no
 # adapter or test crate (same edge the adapter e2e suites use).
 ruviform-plugin-host = { path = "../ruviform-plugin-host" }
+# Issue #628 deferred leg (owned by Issue #630): the attach()
+# runtime-integration tests drive the real fixture through
+# `ruviform-audio-plugin-bridge::attach` → `PluginNode` →
+# `GraphRuntime`, fed by `ruviform-audio-test`'s scripted MIDI backend
+# (`MidiFeed`/`MidiScenario`). `ruviform-audio`/`ruviform-graph`/
+# `ruviform-rt` are the typed-runtime surface `PluginNode` implements
+# (`GraphProcessor`/`RtContext`) — path deps only, no new external
+# packages, `Cargo.lock` unchanged.
+ruviform-audio = { path = "../ruviform-audio" }
+ruviform-audio-plugin-bridge = { path = "../ruviform-audio-plugin-bridge" }
+ruviform-audio-test = { path = "../ruviform-audio-test" }
+ruviform-graph = { path = "../ruviform-graph" }
+ruviform-rt = { path = "../ruviform-rt" }
 
 [lints]
 workspace = true

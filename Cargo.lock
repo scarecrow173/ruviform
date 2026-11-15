@@ -6939,12 +6939,17 @@ dependencies = [
  "clack-extensions",
  "clack-host",
  "clack-plugin",
+ "ruviform-audio",
  "ruviform-audio-core",
+ "ruviform-audio-plugin-bridge",
+ "ruviform-audio-test",
+ "ruviform-graph",
  "ruviform-media-core",
  "ruviform-plugin-clap",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
  "ruviform-plugin-host",
+ "ruviform-rt",
 ]
 
 [[package]]
@@ -6952,12 +6957,17 @@ name = "ruviform-plugin-test-vst3"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "ruviform-audio",
  "ruviform-audio-core",
+ "ruviform-audio-plugin-bridge",
+ "ruviform-audio-test",
+ "ruviform-graph",
  "ruviform-media-core",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
  "ruviform-plugin-host",
  "ruviform-plugin-vst3",
+ "ruviform-rt",
  "vst3",
  "windows-sys 0.61.2",
 ]
