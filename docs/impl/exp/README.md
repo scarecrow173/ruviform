@@ -64,6 +64,7 @@ Directory: `docs/impl/exp`
 | [issue-628-deterministic-test-runtime-core.jsonl](./issue-628-deterministic-test-runtime-core.jsonl) |
 | [issue-628-pipeline-wiring.jsonl](./issue-628-pipeline-wiring.jsonl) |
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
+| [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |

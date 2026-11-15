@@ -212,6 +212,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XBMh4pr5313Dan0adpY | Issue #628 テスト仕様 — deterministic core の決定性・RT contract・独立 Oracle | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TESTSPEC-RF628pwpipeline00001 | Issue #628 pipeline wiring — test specification | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |

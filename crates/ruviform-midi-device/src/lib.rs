@@ -21,9 +21,13 @@
 //!   untranslatable traffic (`unsupported`) through
 //!   [`MidiReadStats`](ruviform_audio_core::midi_input::MidiReadStats).
 //!   Output enumerates `midiOut*` devices, opens a
-//!   `CALLBACK_FUNCTION | MIDI_IO_STATUS` subscription, encodes
+//!   `CALLBACK_FUNCTION | MIDI_IO_STATUS` subscription (retried as
+//!   `CALLBACK_FUNCTION` alone when the driver rejects
+//!   `MIDI_IO_STATUS` with `MMSYSERR_INVALFLAG`), encodes
 //!   channel-voice events through `midiOutShortMsg` and `SysEx` through
-//!   `midiOutLongMsg` with `MM_MOM_DONE` completion.
+//!   `midiOutLongMsg` with `MM_MOM_DONE` completion — on the fallback
+//!   path `MM_MOM_DONE` never arrives, so `send_sysex` reports
+//!   `Unsupported` while `send` is unaffected.
 //! - **macOS / Linux**: not implemented in this slice — the same
 //!   [`SystemBackend`] type returns `DeviceError::Unsupported` so
 //!   consumers compile and fail honestly on every target.
@@ -35,7 +39,8 @@
 //!   `MidiOutputEnumerator::output_ports` → `…Port::open`.
 //! - Bounded callback→reader queue with observable loss accounting
 //!   (input); synchronous driver send with `MM_MOM_DONE` completion
-//!   for `SysEx` (output).
+//!   for `SysEx` (output — `Unsupported` on ports whose driver
+//!   rejected `MIDI_IO_STATUS`).
 //! - Honest capability declaration: MIDI 1.0 bytes only
 //!   (`supports_ump = false`); input preserves driver timestamps
 //!   (`provides_timestamps = true`), output declares none

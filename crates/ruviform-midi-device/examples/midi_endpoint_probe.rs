@@ -11,16 +11,19 @@
 //! What it does: reports OS facts, enumerates `WinMM` `midiIn*` and
 //! `midiOut*` port capabilities (name, ids, interface id, driver
 //! version, support flags), detects *loopback-style* pairs — the same
-//! port name visible in both directions — and cross-checks the ports
+//! port name visible in both directions — cross-checks the ports
 //! against the production surface (`ruviform_midi_device::backend()`
-//! input enumeration).
+//! input **and** output enumeration), and probes Windows MIDI
+//! Services availability for provisioning decisions.
 //!
 //! What it never does: claim `virtual-os-endpoint` evidence. `WinMM`
 //! cannot distinguish a virtual port from a physical one
 //! (`MidiPortOrigin::Unknown` is the honest answer), so every
 //! virtual-endpoint case this probe feeds stays `NotRun` unless a
-//! human confirms a provisioned loopback on the dedicated runner —
-//! and even then, streaming proof is the next slice.
+//! human confirms a provisioned loopback on the dedicated runner.
+//! The `midiOut*` send path exists since the second slice; the
+//! provisioned-pair round-trip verifier lives in
+//! `tests/loopback.rs` and reports `NotRun` without one.
 
 use std::process::ExitCode;
 
@@ -68,6 +71,7 @@ mod win {
     use std::process::Command;
 
     use ruviform_audio_core::midi_input::MidiInputEnumerator;
+    use ruviform_audio_core::midi_output::MidiOutputEnumerator;
     use ruviform_midi_device::backend;
     use windows_sys::Win32::Media::Audio::{self, HMIDIIN, MIDIINCAPSW, MIDIOUTCAPSW};
     use windows_sys::Win32::Media::MMSYSERR_NOERROR;
@@ -107,6 +111,8 @@ mod win {
         println!();
         println!("== production port view (ruviform_midi_device) ==");
         print_port_view();
+        println!();
+        print_wms_availability();
         println!();
         print_verdict(&inputs, &outputs);
     }
@@ -303,7 +309,8 @@ mod win {
     }
 
     /// Cross-checks the `WinMM` enumeration against the production port
-    /// surface (`ruviform_midi_device::backend()` → `WinMM` input).
+    /// surface (`ruviform_midi_device::backend()` → `WinMM` input **and**
+    /// output — the output view exists since the second slice).
     fn print_port_view() {
         match backend().input_ports() {
             Ok(ports) => {
@@ -322,6 +329,53 @@ mod win {
                 }
             }
             Err(error) => println!("  production input enumeration failed: {error}"),
+        }
+        match backend().output_ports() {
+            Ok(ports) => {
+                println!("  production output ports: {}", ports.len());
+                for port in ports {
+                    let info = port.info();
+                    println!(
+                        "    - {}  id={}  origin={:?}  ump={} timestamps={} domain={:?}",
+                        info.name,
+                        info.id,
+                        info.origin,
+                        info.capabilities.supports_ump,
+                        info.capabilities.provides_timestamps,
+                        info.capabilities.clock_domain,
+                    );
+                }
+            }
+            Err(error) => println!("  production output enumeration failed: {error}"),
+        }
+    }
+
+    /// Probes Windows MIDI Services (WMS) availability — the
+    /// `New-MidiLoopback` PowerShell cmdlet and the MIDI service are
+    /// the in-box virtual-loopback provisioning path on Windows 11
+    /// 25H2+ (loopMIDI is the third-party alternative). Both are
+    /// best-effort: spawn failure or a missing component is reported
+    /// as `NotRun`/absent and never fails the probe — same
+    /// feature-gap rationale as `print_os_build` (no new `windows`
+    /// features are added for a diagnostic).
+    fn print_wms_availability() {
+        println!("== Windows MIDI Services availability ==");
+        let command = "if (Get-Command New-MidiLoopback -ErrorAction SilentlyContinue) { 'New-MidiLoopback: present' } else { 'New-MidiLoopback: absent' }; $s = Get-Service midisrv -ErrorAction SilentlyContinue; if ($s) { \"midisrv: $($s.Status)\" } else { 'midisrv: absent' }";
+        match Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", command])
+            .output()
+        {
+            Ok(output) => {
+                let text = String::from_utf8_lossy(&output.stdout);
+                for line in text.lines() {
+                    println!("  {}", line.trim());
+                }
+                if !output.status.success() {
+                    let err = String::from_utf8_lossy(&output.stderr);
+                    println!("  powershell exit {}: {}", output.status, err.trim());
+                }
+            }
+            Err(error) => println!("  wms availability: NotRun — powershell failed: {error}"),
         }
     }
 
@@ -385,11 +439,11 @@ mod win {
             "    input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)"
         );
         println!(
-            "    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — needs a provisioned loopback plus the `midiOut*` send path the crate does not yet have (discovery doc gap)"
+            "    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — the `midiOut*` send path exists since the second slice; remaining gap is a provisioned loopback pair (verifier: tests/loopback.rs)"
         );
         println!("    virtual hotplug / device-loss / permission-denial: NotRun — same reason");
         println!(
-            "  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); open/stream proof is the next slice"
+            "  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); the round-trip verifier is fail-closed `NotRun` without a provisioned pair"
         );
     }
 }

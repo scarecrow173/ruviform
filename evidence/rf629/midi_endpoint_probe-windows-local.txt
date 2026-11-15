@@ -1,7 +1,5 @@
-   Compiling ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-endpoint-survey\crates\ruviform-midi-device)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.97s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
      Running `mbx-launch 'target\debug\examples\midi_endpoint_probe.exe'`
-mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
 midi_endpoint_probe — Issue #629 virtual-endpoint capability probe (WinMM)
 manual diagnostic; the output is survey evidence, not a test verdict
 
@@ -16,6 +14,12 @@ manual diagnostic; the output is survey evidence, not a test verdict
 
 == production port view (ruviform_midi_device) ==
   production input ports: 0
+  production output ports: 1
+    - Microsoft GS Wavetable Synth  id=winmm-out:0:Microsoft GS Wavetable Synth  origin=Unknown  ump=false timestamps=false domain=None
+
+== Windows MIDI Services availability ==
+  New-MidiLoopback: absent
+  midisrv: Running
 
 == verdict ==
   winmm input ports: 0, output ports: 1
@@ -25,7 +29,6 @@ manual diagnostic; the output is survey evidence, not a test verdict
   capability notes:
     winmm in/out capability enumeration: observed
     input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)
-    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — needs a provisioned loopback plus the `midiOut*` send path the crate does not yet have (discovery doc gap)
+    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — the `midiOut*` send path exists since the second slice; remaining gap is a provisioned loopback pair (verifier: tests/loopback.rs)
     virtual hotplug / device-loss / permission-denial: NotRun — same reason
-  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); open/stream proof is the next slice
-mbx[savings]: 13.8 GiB of outputs exist once and appear everywhere. do not tell the checkouts.
+  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); the round-trip verifier is fail-closed `NotRun` without a provisioned pair

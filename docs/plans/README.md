@@ -185,6 +185,7 @@ Directory: `docs/plans`
 | PLAN-034XBMgjefqA3NPS50TU74 | Issue #628 実施計画 — deterministic core crate 新設・検証・docs chain | approved | [issue-628-deterministic-test-runtime-plan.md](./issue-628-deterministic-test-runtime-plan.md) |
 | PLAN-RF628pwpipeline0000001 | Issue #628 pipeline wiring — implementation plan | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | PLAN-RF628sBscripted0000003 | Issue #628 実装計画 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| PLAN-034XVm4OZxJqPqKqTqVqYq | Issue #629 MIDI loopback round-trip verifier plan | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-034XTBbXfYIHXWJ12juqo7 | Issue #630 CLAP test_gain 実装計画 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |

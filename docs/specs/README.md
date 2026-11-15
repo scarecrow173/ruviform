@@ -191,6 +191,7 @@ Directory: `docs/specs`
 | SPEC-034XBGBcah0yYseU6Ypekr | Issue #628 Deterministic Audio/MIDI Test Runtime first slice — deterministic core | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | SPEC-RF628pwpipeline0000001 | Issue #628 pipeline wiring — scripted backend into production consumers | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | SPEC-RF628sBscripted0000001 | Issue #628 scripted port-trait backend — deterministic device boundary slice | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| SPEC-034XVlYdozn65zqMmYFFb5 | Issue #629 MIDI loopback round-trip verifier and probe refresh (3rd slice) | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | SPEC-034XTfa1sD2K4NXS4eKDfn | Issue #629 MIDI output path — WinMM midiOut* backend (2nd slice) | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |

@@ -132,9 +132,19 @@ fn real_device_send_smoke() {
     output.send(note_on).expect("send note on");
     output.send(bend).expect("send pitch bend center");
     output.send(note_off).expect("send note off");
-    output
-        .send_sysex(&[0xF0, 0x7E, 0x00, 0xF7])
-        .expect("send sysex");
+    // `send_sysex` waits on `MM_MOM_DONE`, which requires the driver
+    // to have accepted `MIDI_IO_STATUS` at open. Drivers that reject
+    // the flag (e.g. GS Wavetable Synth) degrade to the documented
+    // `Unsupported` — both outcomes are contract-honest.
+    match output.send_sysex(&[0xF0, 0x7E, 0x00, 0xF7]) {
+        Ok(()) => eprintln!("send_sysex: accepted (MM_MOM_DONE tracked)"),
+        Err(DeviceError::Unsupported) => {
+            eprintln!(
+                "send_sysex: Unsupported — driver rejected MIDI_IO_STATUS (documented degrade)"
+            );
+        }
+        Err(err) => panic!("send sysex failed unexpectedly: {err:?}"),
+    }
 
     output.close();
     // After close the subscription reports invalidation.
