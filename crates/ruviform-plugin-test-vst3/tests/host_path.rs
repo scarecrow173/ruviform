@@ -57,11 +57,11 @@ fn load_library() -> Vst3Library {
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
-/// `1` = `test_fault`, `2` = `test_editor`).
+/// `1` = `test_fault`, `2` = `test_editor`, `3` = `test_stateful`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 3, "the module ships three plugins");
+    assert_eq!(factories.len(), 4, "the module ships four plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -87,6 +87,13 @@ fn prepared_fault_plugin() -> Box<dyn ErasedPlugin> {
 /// the in-crate COM-level tests).
 fn prepared_editor_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(2)
+}
+
+/// `test_stateful`'s prepared instance — the state oracle's entry
+/// point (its `setState`/`getState` verbs are exercised through
+/// `save_state`/`restore_state` below).
+fn prepared_stateful_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(3)
 }
 
 /// Drives one 64-frame stereo block of golden PCM through the
@@ -118,16 +125,16 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 
 /// Discovery through the production path: `Vst3Library::load` scans
 /// the real binary's factory, finds the `test_gain`, `test_fault`,
-/// and `test_editor` component classes (the distributed controller
-/// classes are filtered out, as with every VST3 module), and reports
-/// each fixture's vendor/name.
+/// `test_editor`, and `test_stateful` component classes (the
+/// distributed controller classes are filtered out, as with every
+/// VST3 module), and reports each fixture's vendor/name.
 #[test]
 fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        3,
+        4,
         "only the audio component classes are plugin descriptors"
     );
     let gain = descriptors[0];
@@ -145,6 +152,11 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(editor.vendor, "Ruviform Test");
     assert_eq!(editor.version, "0.0.0");
     assert!(editor.features.contains(&"Fx"));
+    let stateful = descriptors[3];
+    assert_eq!(stateful.name, "test_stateful");
+    assert_eq!(stateful.vendor, "Ruviform Test");
+    assert_eq!(stateful.version, "0.0.0");
+    assert!(stateful.features.contains(&"Fx"));
 }
 
 /// Parameter surface through the production path: the host instantiates
@@ -156,7 +168,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 3);
+    assert_eq!(factories.len(), 4);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -175,7 +187,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 3);
+    assert_eq!(factories.len(), 4);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -314,7 +326,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn editor_reports_no_params() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 3);
+    assert_eq!(factories.len(), 4);
     let plugin = factories[2].create();
     assert!(
         plugin.params().is_empty(),
@@ -378,5 +390,188 @@ fn gain_and_fault_have_no_editor_view() {
             panic!("test_gain/test_fault ship no editor — open_gui must fail");
         };
         assert_eq!(err, HostError::Unsupported);
+    }
+}
+
+/// `test_stateful`'s parameter surface through the production path:
+/// the same `Gain` parameter `test_gain` declares — plain `[0.0, 2.0]`,
+/// default `1.0`, automatable — read back through the distributed
+/// controller's `IParameterInfo`.
+#[test]
+fn stateful_reports_gain_param_in_plain_domain() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 4);
+    let plugin = factories[3].create();
+    let params = plugin.params();
+    assert_eq!(
+        params.len(),
+        1,
+        "test_stateful exposes exactly one parameter"
+    );
+    let gain = params[0];
+    assert_eq!(gain.id.0, 0);
+    assert_eq!(gain.name, "Gain");
+    assert_eq!(gain.min_value, 0.0);
+    assert_eq!(gain.max_value, 2.0);
+    assert_eq!(gain.default_value, 1.0);
+}
+
+/// `test_stateful`'s audio law through the production path — the
+/// `test_gain` DSP verbatim: a normalized `0.75` event (→ plain
+/// `1.5`) at offset 8 switches frames 8–63, and the gain persists
+/// into the next block.
+#[test]
+fn stateful_processes_audio_with_sample_accurate_gain_events() {
+    let mut plugin = prepared_stateful_plugin();
+
+    let events = [Event::new(
+        8,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.75).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+
+    let mut expected_left = vec![0.5_f32; 8];
+    expected_left.extend(vec![0.75_f32; FRAMES - 8]);
+    let mut expected_right = vec![-0.25_f32; 8];
+    expected_right.extend(vec![-0.375_f32; FRAMES - 8]);
+    assert_eq!(left, expected_left);
+    assert_eq!(right, expected_right);
+
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.75_f32; FRAMES]);
+    assert_eq!(right, vec![-0.375_f32; FRAMES]);
+}
+
+/// The state oracle through the production VST3 bridge: `save_state`
+/// drives `IComponent::getState` + `IEditController::getState` and
+/// frames the two payloads; `restore_state` drives the documented
+/// `component.setState` → `component.getState` →
+/// `controller.setComponentState` → `controller.setState` sequence.
+/// The save → mutate → restore → save round-trip is byte-exact —
+/// the determinism the L1 e2e asserts out-of-process.
+#[test]
+fn stateful_save_mutate_restore_save_round_trips() {
+    let mut plugin = prepared_stateful_plugin();
+
+    // Initial save — default plain gain 1.0 / normalized 0.5.
+    // Framed blob: [u32 comp_len][comp][u32 ctrl_len][ctrl], each
+    // payload the fixture's 16-byte `["RFST"][ver=1][f64]` blob.
+    let initial = plugin.save_state().expect("save_state");
+    assert_eq!(initial.len(), 40, "two 16-byte payloads + two u32 lengths");
+    assert_eq!(&initial[0..4], &16_u32.to_le_bytes());
+    assert_eq!(&initial[4..8], b"RFST");
+    assert_eq!(
+        f64::from_le_bytes(initial[12..20].try_into().unwrap()),
+        1.0,
+        "component payload: plain gain"
+    );
+    assert_eq!(&initial[20..24], &16_u32.to_le_bytes());
+    assert_eq!(&initial[24..28], b"RFST");
+    assert_eq!(
+        f64::from_le_bytes(initial[32..40].try_into().unwrap()),
+        0.5,
+        "controller payload: normalized value"
+    );
+
+    // Deterministic: an immediate second save is byte-identical.
+    let again = plugin.save_state().expect("save_state");
+    assert_eq!(again, initial);
+
+    // Mutate through the real ABI: normalized 0.375 → plain 0.75 at
+    // offset 0 — the whole block runs at ×0.75 and the cell adopts it.
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    let (_result, [left, _right]) = drive_block(&mut *plugin, &events);
+    assert_eq!(left, vec![0.375_f32; FRAMES]);
+
+    // The mutated save differs — the component payload carries the
+    // new plain gain (the controller payload keeps its last-set
+    // normalized value: param events reach the component, not the
+    // controller mirror).
+    let mutated = plugin.save_state().expect("save_state");
+    assert_ne!(mutated, initial);
+    assert_eq!(
+        f64::from_le_bytes(mutated[12..20].try_into().unwrap()),
+        0.75
+    );
+
+    // Restore the initial blob — the documented verb sequence runs
+    // and the re-saved blob is byte-identical to the initial save.
+    plugin.restore_state(&initial).expect("restore_state");
+    let restored = plugin.save_state().expect("save_state");
+    assert_eq!(restored, initial, "save → restore → save is exact");
+
+    // Audio proves the restored gain drives the DSP again: ×1.0 —
+    // `out == in` through the real ABI.
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// A malformed state blob is a defined `PluginFailed`, never a
+/// silent accept — and the instance survives: `save_state` still
+/// works afterwards (fault isolation through the real verbs).
+#[test]
+fn stateful_restore_rejects_malformed_blob() {
+    let mut plugin = prepared_stateful_plugin();
+    plugin.save_state().expect("save_state");
+
+    // Too short to be the framed format → foreign passthrough → the
+    // component payload fails the codec → `PluginFailed`.
+    assert_eq!(
+        plugin.restore_state(&[0xAA, 0xBB]),
+        Err(HostError::PluginFailed)
+    );
+    // A well-framed blob with a corrupted component magic →
+    // `PluginFailed` at `component.setState`.
+    let mut corrupt = plugin.save_state().expect("save_state");
+    corrupt[4] ^= 0xFF;
+    assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
+    // A well-framed blob with one trailing byte → the adapter's
+    // `unframe_state` requires `ctrl_end == blob.len()` →
+    // `PluginFailed` before any plugin verb runs.
+    let mut trailing = plugin.save_state().expect("save_state");
+    trailing.push(0x00);
+    assert_eq!(
+        plugin.restore_state(&trailing),
+        Err(HostError::PluginFailed)
+    );
+    // A well-framed blob whose component payload carries a NaN
+    // gain → the codec's non-finite check → `kResultFalse` →
+    // `PluginFailed` at `component.setState`.
+    let mut nan = plugin.save_state().expect("save_state");
+    nan[12..20].copy_from_slice(&f64::NAN.to_le_bytes());
+    assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
+    // The instance is still alive and its state surface intact.
+    plugin.save_state().expect("save_state still works");
+}
+
+/// The stateless classes keep the honest `Unsupported` on both state
+/// verbs — `test_stateful` is the suite's only state surface.
+#[test]
+fn stateless_classes_decline_state_verbs() {
+    for mut plugin in [
+        prepared_plugin(),
+        prepared_fault_plugin(),
+        prepared_editor_plugin(),
+    ] {
+        assert_eq!(plugin.save_state(), Err(HostError::Unsupported));
+        assert_eq!(
+            plugin.restore_state(&[0xAA, 0xBB]),
+            Err(HostError::Unsupported)
+        );
     }
 }

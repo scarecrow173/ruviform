@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-test-clap"
-description = "Test-only CLAP test plugin (test_gain) for Ruviform host verification — not a shipping product"
+description = "Test-only CLAP test plugin suite (test_gain/test_fault/test_stateful) for Ruviform host verification — not a shipping product"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -49,6 +49,7 @@ clack-extensions = { version = "=0.2.0", features = [
     "clack-plugin",
     "audio-ports",
     "params",
+    "state",
 ] }
 # Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
 # Lifecycle/BufferView) — the plugin-side implementation target.

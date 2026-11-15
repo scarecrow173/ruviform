@@ -1,5 +1,6 @@
 //! `ruviform-plugin-test-clap` — the Ruviform **test-only** CLAP test
-//! plugin suite (Issue #630: `test_gain` + `test_fault`).
+//! plugin suite (Issue #630: `test_gain` + `test_fault` +
+//! `test_stateful`).
 //!
 //! ## Test-only declaration
 //!
@@ -35,6 +36,12 @@
 //!   in-band `ParamValue` event arms `abort`/`exit`/`hang`/`error`
 //!   dispatch inside the arming block's `process()` — the L1
 //!   out-of-process crash/hang/timeout/isolation oracle.
+//! - `test_stateful` — the gain port/parameter/DSP shape plus the
+//!   `clap.ext.state` extension: a real 16-byte plugin-defined state
+//!   stream (`["RFST"][ver=1][f64 plain gain]`) whose `save`/`load`
+//!   verbs the production host bridge's `save_state`/`restore_state`
+//!   drive — activation preserves the persisted gain (unlike
+//!   `test_gain`'s per-activation default reset).
 //!
 //! All `clack`/`clap-sys` binding types stay private — the crate
 //! exports no public Rust API; hosts reach the plugins purely through
@@ -45,8 +52,9 @@
 //! | Symbol | Status |
 //! | --- | --- |
 //! | `clap_entry` | required by the CLAP module spec — a custom
-//!   `Entry` + `PluginFactoryImpl` exposing both `test_gain` and
-//!   `test_fault` through one factory (`plugin_count() == 2`) |
+//!   `Entry` + `PluginFactoryImpl` exposing `test_gain`,
+//!   `test_fault` and `test_stateful` through one factory
+//!   (`plugin_count() == 3`) |
 //!
 //! ## Process path (RT)
 //!
@@ -68,6 +76,7 @@ mod block;
 mod fault;
 mod gain;
 mod plugin;
+mod stateful;
 
 use std::ffi::CStr;
 
@@ -80,8 +89,9 @@ use clack_plugin::prelude::clack_export_entry;
 
 use fault::TestFaultClapPlugin;
 use plugin::TestGainClapPlugin;
+use stateful::TestStatefulClapPlugin;
 
-/// The suite's CLAP entry — one factory exposing both test plugins.
+/// The suite's CLAP entry — one factory exposing all test plugins.
 ///
 /// `SinglePluginEntry` can only expose one plugin, so the suite uses
 /// the custom-entry form the `clack` docs prescribe: an [`Entry`]
@@ -103,11 +113,12 @@ impl Entry for TestSuiteEntry {
     }
 }
 
-/// The suite's plugin factory — holds both descriptors and dispatches
+/// The suite's plugin factory — holds all descriptors and dispatches
 /// instantiation by plugin id.
 struct TestSuiteFactory {
     gain: PluginDescriptor,
     fault: PluginDescriptor,
+    stateful: PluginDescriptor,
 }
 
 impl TestSuiteFactory {
@@ -115,19 +126,21 @@ impl TestSuiteFactory {
         Self {
             gain: TestGainClapPlugin::get_descriptor(),
             fault: TestFaultClapPlugin::get_descriptor(),
+            stateful: TestStatefulClapPlugin::get_descriptor(),
         }
     }
 }
 
 impl PluginFactoryImpl for TestSuiteFactory {
     fn plugin_count(&self) -> u32 {
-        2
+        3
     }
 
     fn plugin_descriptor(&self, index: u32) -> Option<&PluginDescriptor> {
         match index {
             0 => Some(&self.gain),
             1 => Some(&self.fault),
+            2 => Some(&self.stateful),
             _ => None,
         }
     }
@@ -150,6 +163,13 @@ impl PluginFactoryImpl for TestSuiteFactory {
                 &self.fault,
                 TestFaultClapPlugin::new_shared,
                 TestFaultClapPlugin::new_main_thread,
+            ))
+        } else if plugin_id == self.stateful.id().unwrap_or_default() {
+            Some(PluginInstance::new::<TestStatefulClapPlugin>(
+                host_info,
+                &self.stateful,
+                TestStatefulClapPlugin::new_shared,
+                TestStatefulClapPlugin::new_main_thread,
             ))
         } else {
             None

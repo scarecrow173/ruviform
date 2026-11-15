@@ -30,7 +30,9 @@
 //! input events are ignored in this slice (`test_instrument` is a
 //! later class); `IProcessContextRequirements` returns `0` and the
 //! processor receives no transport. State (de)serialization reports
-//! `kNotImplemented` honestly — this fixture has no preset surface.
+//! `kNotImplemented` honestly on classes without a
+//! [`ComponentStateSurface`] — `test_stateful` is the suite's only
+//! state surface.
 //!
 //! ## Interior mutability
 //!
@@ -62,6 +64,7 @@
 
 use std::cell::RefCell;
 use std::slice;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
@@ -85,6 +88,7 @@ use vst3::{Class, ComRef, uid};
 use crate::block::{self, ChannelScratch, EventScratch, MAX_BLOCK_EVENTS, PreparedBlock};
 use crate::gain::{GAIN_PARAM, TestGainProcessor};
 use crate::sdk_enum_i32;
+use crate::stateful::{stream_read_all, stream_write_all};
 use crate::strings::copy_wstring;
 
 /// Channel count declared for the single `kMain` bus pair — stereo.
@@ -143,6 +147,21 @@ impl<P: PluginProcessor> ComponentState<P> {
     }
 }
 
+/// A component state surface — the real `IComponent::setState`/
+/// `getState` payload contract. Implemented by the stateful
+/// fixture's shared gain cell ([`crate::stateful::SharedGain`]);
+/// classes without a state surface keep the honest
+/// `kNotImplemented` reject instead of a silent `kResultOk` that
+/// would lose the host's state.
+pub(crate) trait ComponentStateSurface: Send + Sync {
+    /// Decodes the component-payload blob into live state —
+    /// `false` is the defined rejection (→ `kResultFalse`).
+    fn set_component_state(&self, bytes: &[u8]) -> bool;
+    /// Serializes live state — deterministic component-payload
+    /// bytes for `getState`.
+    fn component_state_blob(&self) -> Vec<u8>;
+}
+
 /// The VST3 component shell shared by every test-suite plugin class —
 /// `IComponent` + `IAudioProcessor` + `IProcessContextRequirements`
 /// over `ComWrapper`, driving the neutral [`PluginProcessor`] contract
@@ -165,6 +184,10 @@ pub(crate) struct TestComponent<P: PluginProcessor> {
     /// from `getControllerClassId` — each plugin class pairs with its
     /// own controller CID.
     controller_cid: TUID,
+    /// The class's state surface — `Some` only for `test_stateful`;
+    /// `None` keeps `setState`/`getState` at the honest
+    /// `kNotImplemented`.
+    state_surface: Option<Arc<dyn ComponentStateSurface>>,
 }
 
 /// `test_gain`'s component — the shared [`TestComponent`] shell over
@@ -195,11 +218,33 @@ impl TestComponent<TestGainProcessor> {
 impl<P: PluginProcessor> TestComponent<P> {
     /// A component over `processor`, reporting `controller_cid` from
     /// `getControllerClassId` and admitting `param_id`'s queue points.
+    /// No state surface — `setState`/`getState` stay `kNotImplemented`.
     pub(crate) fn with(controller_cid: TUID, param_id: ParamId, processor: P) -> Self {
         Self {
             state: RefCell::new(ComponentState::new(processor, param_id)),
             tail: AtomicU32::new(0),
             controller_cid,
+            state_surface: None,
+        }
+    }
+
+    /// A component with a live state surface — `test_stateful`'s
+    /// constructor path. `surface` owns the persistent state the
+    /// processor and the state verbs share.
+    pub(crate) fn with_state<S>(
+        controller_cid: TUID,
+        param_id: ParamId,
+        processor: P,
+        surface: S,
+    ) -> Self
+    where
+        S: ComponentStateSurface + 'static,
+    {
+        Self {
+            state: RefCell::new(ComponentState::new(processor, param_id)),
+            tail: AtomicU32::new(0),
+            controller_cid,
+            state_surface: Some(Arc::new(surface)),
         }
     }
 }
@@ -450,17 +495,38 @@ impl<P: PluginProcessor> IComponentTrait for TestComponent<P> {
         }
     }
 
-    /// State (de)serialization is out of scope for this fixture —
-    /// `kNotImplemented` honestly reports that instead of a silent
-    /// `kResultOk` that would lose the host's state.
+    /// The stateful class's real state verbs — the component-payload
+    /// blob round-trips through the [`ComponentStateSurface`]. Every
+    /// other class keeps the honest `kNotImplemented`: a silent
+    /// `kResultOk` would lose the host's state.
     #[expect(unsafe_code)]
-    unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn setState(&self, state: *mut IBStream) -> tresult {
+        let Some(surface) = &self.state_surface else {
+            return kNotImplemented;
+        };
+        // SAFETY: `state` is a valid `IBStream` for the call's
+        // duration per the VST3 state-verb contract (null →
+        // `kInvalidArgument` inside the helper).
+        let bytes = match unsafe { stream_read_all(state) } {
+            Ok(bytes) => bytes,
+            Err(result) => return result,
+        };
+        if surface.set_component_state(&bytes) {
+            kResultOk
+        } else {
+            kResultFalse
+        }
     }
 
     #[expect(unsafe_code)]
-    unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn getState(&self, state: *mut IBStream) -> tresult {
+        let Some(surface) = &self.state_surface else {
+            return kNotImplemented;
+        };
+        let bytes = surface.component_state_blob();
+        // SAFETY: `state` is a valid `IBStream` for the call's
+        // duration per the VST3 state-verb contract.
+        unsafe { stream_write_all(state, &bytes) }
     }
 }
 

@@ -1,5 +1,6 @@
 //! `ruviform-plugin-test-vst3` — the Ruviform **test-only** VST3 test
-//! plugin suite (Issue #630: `test_gain`, `test_fault`, `test_editor`).
+//! plugin suite (Issue #630: `test_gain`, `test_fault`, `test_editor`,
+//! `test_stateful`).
 //!
 //! ## Test-only declaration
 //!
@@ -40,6 +41,12 @@
 //!   `IPlugView`: on Windows `attached` creates a `WS_CHILD` HWND
 //!   under the host-provided parent (the AC-4 plugin-fixture half);
 //!   every other platform/parent combination is an honest rejection.
+//! - `test_stateful` — the `test_gain` law with a real serialized
+//!   state surface: the gain lives in a shared atomic cell that
+//!   `IComponent::setState`/`getState` and the controller's
+//!   `setComponentState`/`setState`/`getState` round-trip through a
+//!   deterministic 16-byte blob — the L1 save → mutate → restore →
+//!   save oracle.
 //!
 //! All `vst3`-crate binding types stay private — the crate exports
 //! no public Rust API; hosts reach the plugin purely through the ABI
@@ -74,6 +81,7 @@ mod editor_view;
 mod factory;
 mod fault;
 mod gain;
+mod stateful;
 mod strings;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]

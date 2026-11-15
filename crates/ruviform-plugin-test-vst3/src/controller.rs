@@ -28,9 +28,11 @@
 //! normalized result (finite out-of-range plain input clamps per the
 //! `ParamInfo` law; non-finite input is rejected).
 //!
-//! State (de)serialization reports `kNotImplemented` — these fixtures
-//! have no preset surface (same honest-reject policy as the
-//! component).
+//! State (de)serialization is data-driven: classes built with
+//! [`ParamController::new`] (`test_gain`/`test_fault`) report
+//! `kNotImplemented` — the honest no-preset-surface answer — while
+//! [`ParamController::new_stateful`] (`test_stateful`) runs the real
+//! verbs over the shared [`crate::stateful`] blob codec.
 
 use std::ffi::c_char;
 use std::ptr;
@@ -42,11 +44,12 @@ use vst3::Steinberg::Vst::{
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPlugView, IPluginBaseTrait, TUID, kInvalidArgument, kNotImplemented,
-    kResultOk, tresult,
+    kResultFalse, kResultOk, tresult,
 };
 use vst3::{Class, ComWrapper, uid};
 
 use crate::editor_view::TestEditorView;
+use crate::stateful::{decode_state_blob, encode_state_blob, stream_read_all, stream_write_all};
 use crate::strings::{copy_wstring, cstring_eq};
 use ruviform_plugin_core::{ParamInfo as NeutralParamInfo, ParamValue};
 
@@ -72,6 +75,10 @@ pub(crate) struct ParamController {
     step_count: i32,
     /// The parameter's normalized value (`f64` bits).
     value: AtomicU64,
+    /// Whether the state verbs are live — `true` only for
+    /// `test_stateful`; `test_gain`/`test_fault` keep the honest
+    /// `kNotImplemented`.
+    stateful: bool,
 }
 
 impl Class for ParamController {
@@ -79,7 +86,8 @@ impl Class for ParamController {
 }
 
 impl ParamController {
-    /// A controller for `param` reporting `step_count`.
+    /// A controller for `param` reporting `step_count` — stateless:
+    /// the state verbs stay `kNotImplemented`.
     pub(crate) fn new(param: &'static NeutralParamInfo, step_count: i32) -> Self {
         Self {
             param,
@@ -90,7 +98,18 @@ impl ParamController {
                     .map_or(0.5, ParamValue::get)
                     .to_bits(),
             ),
+            stateful: false,
         }
+    }
+
+    /// A stateful controller — the same parameter surface as
+    /// [`ParamController::new`] but with live `setState`/`getState`/
+    /// `setComponentState` verbs over the [`crate::stateful`] blob
+    /// codec (`test_stateful` only).
+    pub(crate) fn new_stateful(param: &'static NeutralParamInfo, step_count: i32) -> Self {
+        let mut controller = Self::new(param, step_count);
+        controller.stateful = true;
+        controller
     }
 }
 
@@ -124,21 +143,76 @@ impl IPluginBaseTrait for ParamController {
 }
 
 impl IEditControllerTrait for ParamController {
-    /// Component state streams are not implemented in this fixture —
-    /// reported honestly as `kNotImplemented`.
+    /// `test_stateful`'s real state verbs over the shared
+    /// [`crate::stateful`] codec; every other class reports the
+    /// honest `kNotImplemented`.
+    ///
+    /// `setComponentState` receives the *component* payload (plain
+    /// gain domain) — the adapter re-serializes it through
+    /// `component.getState` before the hand-off — and folds it into
+    /// this controller's normalized mirror via the `ParamInfo` law.
+    /// `setState`/`getState` carry the *controller* payload
+    /// (normalized domain). Malformed blobs are the defined
+    /// `kResultFalse` rejection.
     #[expect(unsafe_code)]
-    unsafe fn setComponentState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn setComponentState(&self, state: *mut IBStream) -> tresult {
+        if !self.stateful {
+            return kNotImplemented;
+        }
+        // SAFETY: `state` is a valid `IBStream` for the call's
+        // duration per the VST3 state-verb contract.
+        let bytes = match unsafe { stream_read_all(state) } {
+            Ok(bytes) => bytes,
+            Err(result) => return result,
+        };
+        let Some(plain) = decode_state_blob(&bytes) else {
+            return kResultFalse;
+        };
+        // `normalize` clamps finite out-of-range plain values into
+        // the normalized domain; non-finite cannot reach here (the
+        // codec rejects it) — the `else` is the defined backstop.
+        let Ok(normalized) = self.param.normalize(plain) else {
+            return kResultFalse;
+        };
+        self.value
+            .store(normalized.get().to_bits(), Ordering::Release);
+        kResultOk
     }
 
     #[expect(unsafe_code)]
-    unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn setState(&self, state: *mut IBStream) -> tresult {
+        if !self.stateful {
+            return kNotImplemented;
+        }
+        // SAFETY: `state` is a valid `IBStream` for the call's
+        // duration per the VST3 state-verb contract.
+        let bytes = match unsafe { stream_read_all(state) } {
+            Ok(bytes) => bytes,
+            Err(result) => return result,
+        };
+        let Some(normalized) = decode_state_blob(&bytes) else {
+            return kResultFalse;
+        };
+        // `ParamValue::new` clamps finite out-of-range normalized
+        // values and rejects non-finite — the codec already rejects
+        // non-finite, so this accepts every well-formed blob.
+        let Ok(value) = ParamValue::new(normalized) else {
+            return kResultFalse;
+        };
+        self.value.store(value.get().to_bits(), Ordering::Release);
+        kResultOk
     }
 
     #[expect(unsafe_code)]
-    unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn getState(&self, state: *mut IBStream) -> tresult {
+        if !self.stateful {
+            return kNotImplemented;
+        }
+        let normalized = f64::from_bits(self.value.load(Ordering::Acquire));
+        let bytes = encode_state_blob(normalized);
+        // SAFETY: `state` is a valid `IBStream` for the call's
+        // duration per the VST3 state-verb contract.
+        unsafe { stream_write_all(state, &bytes) }
     }
 
     #[expect(unsafe_code)]

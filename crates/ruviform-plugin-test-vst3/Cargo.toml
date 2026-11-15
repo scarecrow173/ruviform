@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-test-vst3"
-description = "Test-only VST3 test plugin suite (test_gain/test_fault/test_editor) for Ruviform host verification — not a shipping product"
+description = "Test-only VST3 test plugin suite (test_gain/test_fault/test_editor/test_stateful) for Ruviform host verification — not a shipping product"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

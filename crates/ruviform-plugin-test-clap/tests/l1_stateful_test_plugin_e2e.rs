@@ -1,0 +1,426 @@
+//! Stateful-test-plugin L1 end-to-end tests — this crate's own
+//! `test_stateful` CLAP cdylib served out-of-process by
+//! `ruviform-plugin-test-clap-l1-runner` (Issue #630 `test_stateful`
+//! slice). Structural mirror of `l1_real_test_plugin_e2e.rs`.
+//!
+//! Every test is `#[ignore]`-gated: they require the fixture cdylib
+//! and the `l1-runner`-feature runner binary, which only
+//! `mise run test-l1-real-plugin` builds deterministically before
+//! selecting `--ignored`. The file-level `#![cfg(feature = "l1-runner")]`
+//! keeps the file empty — and `env!("CARGO_BIN_EXE_*")` undefined —
+//! without the feature, so `cargo test` default runs never see these
+//! tests. Missing artifacts are `assert!` failures, never silent
+//! skips.
+//!
+//! ## Ordering contract
+//!
+//! `SaveState`/`RestoreState` are synchronous wire commands — their
+//! `Ok` reply proves the child already applied the verb. Audio blocks
+//! are asynchronous (the L1 data plane's lookahead pipeline), so a
+//! state verb issued right after `process` could overtake the block
+//! carrying the mutation event. The tests therefore gate every state
+//! verb on *delivered audio*: the fixture's three gains (`1.0`,
+//! `0.75`, `1.75`) produce pairwise-distinct output on the constant
+//! `0.5 / -0.25` input, so observing a given gain's output proves the
+//! child processed every earlier block — including the event block —
+//! before the verb is sent.
+//!
+//! ## Blob shape
+//!
+//! CLAP `clap.ext.state` is one plugin-defined byte stream with no
+//! adapter framing: the fixture writes exactly
+//! `[u32 LE "RFST"][u32 LE version=1][f64 LE plain gain]` — 16 bytes.
+
+#![cfg(feature = "l1-runner")]
+
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
+
+use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
+use ruviform_plugin_core::{
+    Event, EventKind, EventList, HostError, HostInput, HostOutput, LifecycleState, ParamEvent,
+    ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult,
+};
+use ruviform_plugin_host::{
+    DiagnosticQuery, HostCommand, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
+};
+
+/// This crate's cdylib file name —
+/// `{DLL_PREFIX}ruviform_plugin_test_clap{DLL_SUFFIX}`. Local to the
+/// test crate: the adapter's `fixture_lib_name()` is compile-time
+/// fixed to the adapter fixture.
+fn fixture_lib_name() -> String {
+    format!(
+        "{}ruviform_plugin_test_clap{}",
+        std::env::consts::DLL_PREFIX,
+        std::env::consts::DLL_SUFFIX
+    )
+}
+
+/// The descriptor the child synthesizes from a real
+/// `clap_plugin_factory` scan — the `OutOfProcessSpec` oracle must
+/// field-match it (`id`/`name`/`vendor`/`version`/`features`,
+/// order-preserving — `Descriptor::matches`, wire.rs). The parent
+/// pins the fixture's known values as a const while the child
+/// computes them from the actual binary — the handshake is two
+/// independent sources agreeing, not the same scan on both sides
+/// (`stateful.rs` `TestStatefulClapPlugin::get_descriptor`;
+/// `version` is the fixture's declared `"0.0.0"`).
+const EXPECTED: PluginDescriptor = PluginDescriptor {
+    id: "org.ruviform-test.clap-test-stateful",
+    name: "test_stateful",
+    vendor: "Ruviform Test",
+    version: "0.0.0",
+    features: &["audio-effect", "stereo"],
+};
+
+/// Block shape — 512 max frames, so the defined L1 latency is
+/// `lookahead_blocks` (2) × 512 = 1024 frames (the
+/// `l1_real_test_plugin_e2e` precedent).
+const FRAMES: usize = 512;
+const FRAMES_U32: u32 = 512;
+
+/// How many follow-up blocks `wait_for_gain_output` submits before
+/// giving up — 24 × ~5 ms pacing is generous headroom for a loaded
+/// CI host (the existing suite's delivery bounds are looser still).
+const MAX_FOLLOW_UPS: u32 = 24;
+
+/// The runner executable — `CARGO_BIN_EXE_*` names it directly
+/// (defined only under `--features l1-runner`, which this file's
+/// `#![cfg]` guarantees). A missing binary is an `assert!` failure,
+/// never a silent skip.
+fn runner_program() -> OsString {
+    let path = PathBuf::from(env!("CARGO_BIN_EXE_ruviform-plugin-test-clap-l1-runner"));
+    assert!(
+        path.is_file(),
+        "L1 runner missing at {} — `mise run test-l1-real-plugin` builds it",
+        path.display()
+    );
+    path.into_os_string()
+}
+
+/// The fixture cdylib the runner will dlopen — resolved the way the
+/// runner resolves it with `RUVIFORM_L1_REAL_PLUGIN_DIR` unset: a
+/// sibling of the runner executable (cargo uplifts both the bin and
+/// the cdylib into `target/<profile>/`).
+fn fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_ruviform-plugin-test-clap-l1-runner"))
+        .parent()
+        .expect("the runner lives under target/<profile>/")
+        .join(fixture_lib_name())
+}
+
+/// Every test that spawns the real child asserts the fixture exists
+/// first — a missing artifact is a failure, not a skip.
+fn assert_fixture_present() {
+    let path = fixture_path();
+    assert!(
+        path.is_file(),
+        "fixture cdylib missing: {} — `mise run test-l1-real-plugin` builds it via \
+         `cargo build --features l1-runner`",
+        path.display()
+    );
+}
+
+fn config() -> ProcessConfig {
+    ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap()
+}
+
+/// Bit-exact sample comparison — the fixture gains (`0.75`, `1.75`,
+/// `1.0`) are exactly representable in `f32` and the constant input
+/// (`0.5`, `-0.25`) scales exactly, so defined values compare
+/// bit-for-bit.
+fn sample_eq(actual: f32, expected: f32) -> bool {
+    actual.to_bits() == expected.to_bits()
+}
+
+fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
+    match host.execute(HostCommand::Instantiate {
+        plugin_id: plugin_id.to_owned(),
+    }) {
+        Ok(HostReply::Instantiated { handle }) => handle,
+        // A pre-mint failure carries a retained diagnostics record —
+        // print it so CI logs show the frozen phase/cause/stderr at
+        // the failure point (Issue #207 diagnosis aid; harmless on
+        // the success path since this arm never runs there).
+        Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) => {
+            eprintln!("SpawnFailed: cause={cause:?} diagnostics_id={diagnostics_id}");
+            match host.diagnostics_query(diagnostics_id) {
+                DiagnosticQuery::Found(record) => {
+                    eprintln!("diagnostics record: {record:#?}");
+                    eprintln!(
+                        "child stderr (lossy): {}",
+                        String::from_utf8_lossy(&record.stderr.bytes)
+                    );
+                }
+                other => eprintln!("diagnostics query result: {other:?}"),
+            }
+            panic!("instantiate failed: SpawnFailed {cause:?}");
+        }
+        Ok(other) => panic!("unexpected reply: {other:?}"),
+        Err(error) => panic!("instantiate failed: {error:?}"),
+    }
+}
+
+/// One stereo block through `PluginHost::process` — the fixture
+/// declares a single stereo bus pair.
+fn host_block(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    input: &[&[f32]; 2],
+    out_left: &mut [f32],
+    out_right: &mut [f32],
+    events: EventList<'_>,
+) -> Result<ProcessResult, HostError> {
+    let input_view = PlanarBufferView::new(&input[..]).unwrap();
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut *out_left, &mut *out_right];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
+    let mut outputs = [HostOutput(&mut output_view)];
+    host.process(handle, &inputs, &mut outputs, events, None)
+}
+
+/// Submits one constant-input block (`0.5 / -0.25`) carrying `events`.
+fn submit_block(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    events: EventList<'_>,
+) -> ([f32; FRAMES], [f32; FRAMES]) {
+    let left = [0.5_f32; FRAMES];
+    let right = [-0.25_f32; FRAMES];
+    let input = [&left[..], &right[..]];
+    let mut out_left = [0.0_f32; FRAMES];
+    let mut out_right = [0.0_f32; FRAMES];
+    thread::sleep(Duration::from_millis(5));
+    assert_eq!(
+        host_block(host, handle, &input, &mut out_left, &mut out_right, events),
+        Ok(ProcessResult::CONTINUE)
+    );
+    (out_left, out_right)
+}
+
+/// Drive one instance through `Processing`.
+fn drive_to_processing(host: &mut PluginHost, handle: PluginHandle) {
+    host.execute(HostCommand::Initialize { handle }).unwrap();
+    host.execute(HostCommand::Activate {
+        handle,
+        config: config(),
+    })
+    .unwrap();
+    host.execute(HostCommand::StartProcessing { handle })
+        .unwrap();
+}
+
+/// `SaveState` → the state blob (`HostReply::State`) — the raw
+/// 16-byte `clap.ext.state` stream, no adapter framing.
+fn save_state(host: &mut PluginHost, handle: PluginHandle) -> Vec<u8> {
+    match host.execute(HostCommand::SaveState { handle }).unwrap() {
+        HostReply::State { bytes } => bytes,
+        other => panic!("unexpected reply: {other:?}"),
+    }
+}
+
+/// Submits event-free constant-input blocks until a delivered result
+/// shows `expected_left`/`expected_right` — the gain-scaled golden
+/// values for the constant `0.5 / -0.25` input — or `MAX_FOLLOW_UPS`
+/// elapse. Returns whether the expected output was observed.
+///
+/// This is the ordering gate described in the module docs: a matching
+/// output can only come from a *new* result the child produced after
+/// the gain reached `expected`, which proves every earlier block —
+/// including the mutation event block — was processed first.
+fn wait_for_gain_output(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    expected_left: f32,
+    expected_right: f32,
+) -> bool {
+    for _ in 0..MAX_FOLLOW_UPS {
+        let (out_left, out_right) = submit_block(host, handle, EventList::empty(FRAMES_U32));
+        if out_left.iter().all(|&s| sample_eq(s, expected_left))
+            && out_right.iter().all(|&s| sample_eq(s, expected_right))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Extracts the plain gain from the state blob —
+/// `[u32 LE "RFST"][u32 LE ver=1][f64 LE]`; the f64 sits at offset 8.
+fn blob_gain(blob: &[u8]) -> f64 {
+    assert_eq!(blob.len(), 16, "the CLAP state stream is one 16-byte blob");
+    assert_eq!(&blob[0..4], b"RFST");
+    assert_eq!(&blob[4..8], &1_u32.to_le_bytes());
+    f64::from_le_bytes(blob[8..16].try_into().unwrap())
+}
+
+/// The `test_stateful` L1 round-trip: real `clap.ext.state`
+/// `save`/`load` through the production host bridge, out-of-process.
+///
+/// save(initial, gain 1.0) → mutate to 0.75 via a `ParamValue` event
+/// → save(mutated) → mutate to 1.75 → save → restore(initial) →
+/// save == initial byte-exact → audio proves the restored gain drives
+/// the DSP. Every state verb is gated on delivered audio so the
+/// child's data plane has provably applied each mutation first.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_save_mutate_restore_save() {
+    assert_fixture_present();
+
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(EXPECTED, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing)
+    );
+
+    // --- save(initial): default plain gain 1.0 ---
+    let initial = save_state(&mut host, handle);
+    assert_eq!(blob_gain(&initial), 1.0);
+    // Deterministic: an immediate second save is byte-identical.
+    let again = save_state(&mut host, handle);
+    assert_eq!(again, initial, "save → save is byte-identical");
+
+    // --- mutate → 0.75: normalized 0.375 → plain 0.75 @ offset 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    submit_block(
+        &mut host,
+        handle,
+        EventList::new(&events, FRAMES_U32).unwrap(),
+    );
+    // Gate: delivered ×0.75 audio proves the child processed the
+    // event block before the next state verb.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.375, -0.1875),
+        "delivered audio never showed the ×0.75 mutation"
+    );
+    let mutated = save_state(&mut host, handle);
+    assert_ne!(mutated, initial, "the mutation must change the blob");
+    assert_eq!(blob_gain(&mutated), 0.75);
+
+    // --- mutate → 1.75: normalized 0.875 → plain 1.75 @ offset 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.875).unwrap(),
+        }),
+    )];
+    submit_block(
+        &mut host,
+        handle,
+        EventList::new(&events, FRAMES_U32).unwrap(),
+    );
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.875, -0.4375),
+        "delivered audio never showed the ×1.75 mutation"
+    );
+    let third = save_state(&mut host, handle);
+    assert_eq!(blob_gain(&third), 1.75);
+    assert_ne!(third, mutated);
+
+    // --- restore(initial) → save == initial, byte-exact ---
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: initial.clone(),
+    })
+    .unwrap();
+    let restored = save_state(&mut host, handle);
+    assert_eq!(
+        restored, initial,
+        "save → mutate → restore → save is byte-exact"
+    );
+
+    // Audio proves the restored gain drives the DSP: ×1.0 — `out`
+    // equals the constant input on both channels.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.5, -0.25),
+        "delivered audio never showed the restored ×1.0 gain"
+    );
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// Malformed state blobs are defined `PluginFailed` rejections —
+/// never silent accepts — and the instance survives: `SaveState`
+/// keeps working afterwards (the defined-rejection half of the
+/// state contract, out-of-process).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_rejects_malformed_state() {
+    assert_fixture_present();
+
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(EXPECTED, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+
+    let valid = save_state(&mut host, handle);
+    assert_eq!(blob_gain(&valid), 1.0);
+
+    // Truncated blob → `load`'s `read_exact` fails → `PluginFailed`.
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: valid[..8].to_vec(),
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // Trailing bytes → `PluginFailed` — the fixture's stream carries
+    // exactly one blob.
+    let mut trailing = valid.clone();
+    trailing.push(0);
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: trailing,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // A well-formed-length blob with a corrupted magic →
+    // `PluginFailed` at codec validation.
+    let mut corrupt = valid.clone();
+    corrupt[0] ^= 0xFF;
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: corrupt,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // The rejected writes left the instance alive and its state
+    // surface intact — `SaveState` still returns the valid blob.
+    let still = save_state(&mut host, handle);
+    assert_eq!(still, valid, "rejected restores must not corrupt state");
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}

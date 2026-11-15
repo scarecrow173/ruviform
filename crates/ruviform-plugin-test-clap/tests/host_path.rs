@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, HostInput, HostOutput, ParamEvent, ParamId,
-    ParamValue, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
+    ParamId, ParamValue, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
 };
 
 const FRAMES: usize = 64;
@@ -58,11 +58,11 @@ fn load_library() -> ClapLibrary {
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
-/// `1` = `test_fault`).
+/// `1` = `test_fault`, `2` = `test_stateful`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2, "the entry exposes two plugins");
+    assert_eq!(factories.len(), 3, "the entry exposes three plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -81,6 +81,12 @@ fn prepared_plugin() -> Box<dyn ErasedPlugin> {
 /// `test_fault`'s prepared instance — the fault oracle's entry point.
 fn prepared_fault_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(1)
+}
+
+/// `test_stateful`'s prepared instance — the state oracle's entry
+/// point.
+fn prepared_stateful_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(2)
 }
 
 /// Drives one 64-frame stereo block of golden PCM through the
@@ -111,17 +117,17 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 }
 
 /// Discovery through the production path: `ClapLibrary::load` scans
-/// the real binary's `clap_entry`, finds the `test_gain` and
-/// `test_fault` plugin descriptors, and reports each fixture's
-/// vendor/name/features.
+/// the real binary's `clap_entry`, finds the `test_gain`,
+/// `test_fault` and `test_stateful` plugin descriptors, and reports
+/// each fixture's vendor/name/features.
 #[test]
 fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        2,
-        "the entry exposes exactly two plugin descriptors"
+        3,
+        "the entry exposes exactly three plugin descriptors"
     );
     let gain = descriptors[0];
     assert_eq!(gain.name, "test_gain");
@@ -133,6 +139,11 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(fault.vendor, "Ruviform Test");
     assert_eq!(fault.version, "0.0.0");
     assert!(fault.features.contains(&"audio-effect"));
+    let stateful = descriptors[2];
+    assert_eq!(stateful.name, "test_stateful");
+    assert_eq!(stateful.vendor, "Ruviform Test");
+    assert_eq!(stateful.version, "0.0.0");
+    assert!(stateful.features.contains(&"audio-effect"));
 }
 
 /// Parameter surface through the production path: the host
@@ -144,7 +155,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2);
+    assert_eq!(factories.len(), 3);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -163,7 +174,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 2);
+    assert_eq!(factories.len(), 3);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -294,4 +305,155 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
     ));
     assert_eq!(left, vec![0.5_f32; FRAMES]);
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_stateful`'s parameter surface through the production path:
+/// the `params` extension reports the same gain contract as
+/// `test_gain` — plain range `[0.0, 2.0]`, default `1.0`.
+#[test]
+fn reports_stateful_param_in_plain_domain() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 3);
+    let plugin = factories[2].create();
+    let params = plugin.params();
+    assert_eq!(
+        params.len(),
+        1,
+        "test_stateful exposes exactly one parameter"
+    );
+    let gain = params[0];
+    assert_eq!(gain.id.0, 0);
+    assert_eq!(gain.name, "Gain");
+    assert_eq!(gain.min_value, 0.0);
+    assert_eq!(gain.max_value, 2.0);
+    assert_eq!(gain.default_value, 1.0);
+}
+
+/// Extracts the plain gain from the fixture's 16-byte state blob —
+/// `[u32 LE "RFST"][u32 LE version=1][f64 LE]`; the f64 sits at
+/// offset 8.
+fn blob_gain(blob: &[u8]) -> f64 {
+    assert_eq!(blob.len(), 16, "the CLAP state stream is one 16-byte blob");
+    assert_eq!(&blob[0..4], b"RFST");
+    assert_eq!(&blob[4..8], &1_u32.to_le_bytes());
+    f64::from_le_bytes(blob[8..16].try_into().unwrap())
+}
+
+/// The `test_stateful` host-path round-trip: real `clap.ext.state`
+/// `save`/`load` through the production `ClapLibrary` bridge —
+/// save(initial, gain 1.0) → mutate to 0.75 via a `ParamValue` event
+/// → save(mutated) → mutate to 1.75 → save → restore(initial) →
+/// save == initial byte-exact → audio proves the restored gain drives
+/// the DSP.
+#[test]
+fn stateful_save_mutate_restore_save_round_trips() {
+    let mut plugin = prepared_stateful_plugin();
+
+    // --- save(initial): default plain gain 1.0 ---
+    let initial = plugin.save_state().expect("save_state");
+    assert_eq!(blob_gain(&initial), 1.0);
+    // Deterministic: an immediate second save is byte-identical.
+    let again = plugin.save_state().expect("save_state");
+    assert_eq!(again, initial, "save → save is byte-identical");
+
+    // --- mutate → 0.75: normalized 0.375 → plain 0.75 @ frame 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.375_f32; FRAMES]);
+    assert_eq!(right, vec![-0.1875_f32; FRAMES]);
+    let mutated = plugin.save_state().expect("save_state");
+    assert_ne!(mutated, initial, "the mutation must change the blob");
+    assert_eq!(blob_gain(&mutated), 0.75);
+
+    // --- mutate → 1.75: normalized 0.875 → plain 1.75 @ frame 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.875).unwrap(),
+        }),
+    )];
+    let (_result, [left, right]) = drive_block(&mut *plugin, &events);
+    assert_eq!(left, vec![0.875_f32; FRAMES]);
+    assert_eq!(right, vec![-0.4375_f32; FRAMES]);
+    let third = plugin.save_state().expect("save_state");
+    assert_eq!(blob_gain(&third), 1.75);
+    assert_ne!(third, mutated);
+
+    // --- restore(initial) → save == initial, byte-exact ---
+    plugin.restore_state(&initial).expect("restore_state");
+    let restored = plugin.save_state().expect("save_state");
+    assert_eq!(
+        restored, initial,
+        "save → mutate → restore → save is byte-exact"
+    );
+
+    // Audio proves the restored gain drives the DSP: ×1.0 — `out`
+    // equals the constant input on both channels.
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// Malformed state blobs are defined `PluginFailed` rejections —
+/// never silent accepts — and the instance survives: `save_state`
+/// keeps working afterwards (the defined-rejection half of the
+/// state contract, in-process).
+#[test]
+fn stateful_restore_rejects_malformed_blob() {
+    let mut plugin = prepared_stateful_plugin();
+
+    let valid = plugin.save_state().expect("save_state");
+    assert_eq!(blob_gain(&valid), 1.0);
+
+    // Truncated blob → `PluginFailed`.
+    assert_eq!(
+        plugin.restore_state(&valid[..8]),
+        Err(HostError::PluginFailed)
+    );
+    // Trailing bytes → `PluginFailed`.
+    let mut trailing = valid.clone();
+    trailing.push(0);
+    assert_eq!(
+        plugin.restore_state(&trailing),
+        Err(HostError::PluginFailed)
+    );
+    // Corrupted magic → `PluginFailed`.
+    let mut corrupt = valid.clone();
+    corrupt[0] ^= 0xFF;
+    assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
+    // Non-finite payload → `PluginFailed`.
+    let mut nan = valid.clone();
+    nan[8..16].copy_from_slice(&f64::NAN.to_bits().to_le_bytes());
+    assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
+
+    // The rejected writes left the instance alive and its state
+    // surface intact — `save_state` still returns the valid blob.
+    let still = plugin.save_state().expect("save_state");
+    assert_eq!(still, valid, "rejected restores must not corrupt state");
+}
+
+/// The stateless fixtures keep their honest capability decline: no
+/// `clap.ext.state` extension → `save_state`/`restore_state` report
+/// `HostError::Unsupported`, never a fabricated blob.
+#[test]
+fn stateless_classes_decline_state_verbs() {
+    let mut gain = prepared_plugin();
+    assert_eq!(gain.save_state(), Err(HostError::Unsupported));
+    assert_eq!(gain.restore_state(&[1, 2, 3]), Err(HostError::Unsupported));
+
+    let mut fault = prepared_fault_plugin();
+    assert_eq!(fault.save_state(), Err(HostError::Unsupported));
+    assert_eq!(fault.restore_state(&[1, 2, 3]), Err(HostError::Unsupported));
 }
