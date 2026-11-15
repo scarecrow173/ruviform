@@ -7,7 +7,12 @@
 //! events encode through [`crate::midi::encode_message`] and go out
 //! via `midiOutShortMsg`; `SysEx` byte strings go out via a prepared
 //! `MIDIHDR` + `midiOutLongMsg`, waited on `MM_MOM_DONE` so the
-//! buffer is unprepared only after the driver released it.
+//! buffer is unprepared only after the driver released it. Ports are
+//! opened `CALLBACK_FUNCTION | MIDI_IO_STATUS`; drivers that reject
+//! `MIDI_IO_STATUS` (`MMSYSERR_INVALFLAG` — observed on Microsoft GS
+//! Wavetable Synth) are retried with `CALLBACK_FUNCTION` alone, and
+//! `send_sysex` on such ports reports `Unsupported` because
+//! `MM_MOM_DONE` never arrives (the short-message path is unaffected).
 //!
 //! Port identity is index + name only: `midiOutMessage` with
 //! `DRV_QUERYDEVICEINTERFACE` is deliberately never called — the
@@ -36,7 +41,8 @@ use windows_sys::Win32::Media::Audio::{
     self, CALLBACK_FUNCTION, HMIDIOUT, MIDI_IO_STATUS, MIDIHDR, MIDIOUTCAPSW,
 };
 use windows_sys::Win32::Media::{
-    MM_MOM_DONE, MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_NODRIVER, MMSYSERR_NOERROR,
+    MM_MOM_DONE, MMSYSERR_ALLOCATED, MMSYSERR_BADDEVICEID, MMSYSERR_INVALFLAG, MMSYSERR_NODRIVER,
+    MMSYSERR_NOERROR,
 };
 
 use crate::midi;
@@ -202,8 +208,26 @@ fn index_still_matches(index: u32, name: &str) -> bool {
     output_caps(index).is_ok_and(|caps| caps_name(&caps) == name)
 }
 
+/// Maps a `midiOutOpen` driver error onto `DeviceError`.
+fn open_error(rc: u32) -> DeviceError {
+    match rc {
+        MMSYSERR_BADDEVICEID | MMSYSERR_NODRIVER => DeviceError::DeviceNotFound,
+        MMSYSERR_ALLOCATED => DeviceError::DeviceBusy,
+        _ => DeviceError::Backend("winmm midiOutOpen failed"),
+    }
+}
+
 /// Opens a `CALLBACK_FUNCTION | MIDI_IO_STATUS` subscription on the
 /// device at `index`.
+///
+/// Some drivers reject `MIDI_IO_STATUS` with `MMSYSERR_INVALFLAG`
+/// (observed on Microsoft GS Wavetable Synth, Windows 11 10.0.26300).
+/// Only that error triggers a single retry with `CALLBACK_FUNCTION`
+/// alone; every other error is returned as-is. On the fallback path
+/// `MM_MOM_DONE` never arrives, so the returned subscription records
+/// `io_status = false` and `send_sysex` degrades to `Unsupported` —
+/// unpreparing a `MIDIHDR` the driver may still be reading would be
+/// unsound, so the long-message send is refused instead.
 fn open_at_index(index: u32) -> DeviceResult<Box<dyn MidiOutput>> {
     let shared = Arc::new(OutShared::new());
     let shared_ptr = Arc::as_ptr(&shared);
@@ -223,18 +247,35 @@ fn open_at_index(index: u32) -> DeviceResult<Box<dyn MidiOutput>> {
             CALLBACK_FUNCTION | MIDI_IO_STATUS,
         )
     };
-    if rc != MMSYSERR_NOERROR {
-        return Err(match rc {
-            MMSYSERR_BADDEVICEID | MMSYSERR_NODRIVER => DeviceError::DeviceNotFound,
-            MMSYSERR_ALLOCATED => DeviceError::DeviceBusy,
-            _ => DeviceError::Backend("winmm midiOutOpen failed"),
-        });
-    }
+    let io_status = match rc {
+        MMSYSERR_NOERROR => true,
+        MMSYSERR_INVALFLAG => {
+            handle = core::ptr::null_mut();
+            // SAFETY: same contract as the first call; only the
+            // callback flags differ (`MIDI_IO_STATUS` dropped).
+            let rc = unsafe {
+                Audio::midiOutOpen(
+                    &raw mut handle,
+                    index,
+                    midi_out_proc as extern "system" fn(HMIDIOUT, u32, usize, usize, usize)
+                        as usize,
+                    shared_ptr as usize,
+                    CALLBACK_FUNCTION,
+                )
+            };
+            if rc != MMSYSERR_NOERROR {
+                return Err(open_error(rc));
+            }
+            false
+        }
+        _ => return Err(open_error(rc)),
+    };
 
     Ok(Box::new(Subscription {
         shared,
         handle,
         closed: false,
+        io_status,
     }))
 }
 
@@ -281,6 +322,12 @@ struct Subscription {
     shared: Arc<OutShared>,
     handle: HMIDIOUT,
     closed: bool,
+    /// Whether the driver accepted `MIDI_IO_STATUS` at `open`. When
+    /// false the fallback `CALLBACK_FUNCTION`-only subscription never
+    /// receives `MM_MOM_DONE`, so `send_sysex` cannot wait for driver
+    /// release and reports `Unsupported`. `send` (`midiOutShortMsg`)
+    /// needs no completion and is unaffected.
+    io_status: bool,
 }
 
 impl Subscription {
@@ -361,13 +408,23 @@ impl MidiOutput for Subscription {
     /// # Errors
     ///
     /// [`DeviceError::Unsupported`] when `bytes` is not a complete
-    /// `SysEx` message or exceeds `u32` length; driver errors normalized
-    /// via [`send_error`]; [`DeviceError::StreamInvalidated`] after
-    /// close. A stalled device stalls this call — the control path
-    /// owns that risk, mirroring every synchronous driver send.
+    /// `SysEx` message or exceeds `u32` length — and also when the
+    /// port was opened without `MIDI_IO_STATUS` (the driver rejected
+    /// the flag at `open`): without status messages `MM_MOM_DONE`
+    /// never arrives, so the completion wait cannot be honored and
+    /// the send is refused rather than unpreparing a buffer the
+    /// driver may still be reading. `send` is unaffected —
+    /// `midiOutShortMsg` needs no completion signal. Driver errors
+    /// normalized via [`send_error`];
+    /// [`DeviceError::StreamInvalidated`] after close. A stalled
+    /// device stalls this call — the control path owns that risk,
+    /// mirroring every synchronous driver send.
     fn send_sysex(&mut self, bytes: &[u8]) -> DeviceResult<()> {
         if self.closed {
             return Err(DeviceError::StreamInvalidated);
+        }
+        if !self.io_status {
+            return Err(DeviceError::Unsupported);
         }
         // Boundary validation: the port contract requires a complete
         // SysEx (`0xF0` … `0xF7`); anything else cannot be carried.
@@ -520,7 +577,13 @@ mod tests {
             },
         };
         output.send(note_on).unwrap();
-        output.send_sysex(&[0xF0, 0x7E, 0x00, 0xF7]).unwrap();
+        // Drivers that reject `MIDI_IO_STATUS` (e.g. GS Wavetable
+        // Synth) get the documented `Unsupported` degrade — `MM_MOM_DONE`
+        // never arrives so the completion wait cannot run.
+        match output.send_sysex(&[0xF0, 0x7E, 0x00, 0xF7]) {
+            Ok(()) | Err(DeviceError::Unsupported) => {}
+            Err(err) => panic!("send_sysex failed unexpectedly: {err:?}"),
+        }
         output.close();
     }
 }
