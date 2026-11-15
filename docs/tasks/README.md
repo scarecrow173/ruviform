@@ -309,6 +309,7 @@ Directory: `docs/tasks`
 | TASK-034UmKPCkhRiRPGs873bWz | Issue #410 — view command ledger bounded retention & correlation semantics | done | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
 | TASK-hupw1aLckqDaLNAlnDrTMF | Issue #411 — cargo_metadata 0.19 系への依存選定修復 + MSRV 検証入口 | done | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | TASK-mV2zXwAeR5yNuIoL7pSt4G | Issue #414 — projection→controlled display 正規経路の実装 | done | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| TASK-034XPQF7BrLnw2ekZ4Q3r0 | Issue #419 後継ADR verdict逆反映 文書チェーン・検証タスク | done | [issue-419-adr-backreflection.md](./issue-419-adr-backreflection.md) |
 | TASK-Gy5KbQe2WnRt8LxVc3PmHo | Issue #435 — Label/Table ViewSpec kind の実装タスク | done | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | TASK-Xb2Qm5Ty7WzHf3Jn6RsPd1 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装タスク | done | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | TASK-Xk2Dv9LqNb7RtPm5WcFs8H | Issue #443 — Tile 列区間と count 契約の実装タスク | done | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |

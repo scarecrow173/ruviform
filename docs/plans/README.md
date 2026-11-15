@@ -240,6 +240,7 @@ Directory: `docs/plans`
 | PLAN-034TnojDZIYRnnvSTlTg34 | Issue #409 scoped re-root + bounded enumeration 実装計画 | completed | [issue-409-scoped-enumeration.md](./issue-409-scoped-enumeration.md) |
 | PLAN-XVTjRRZhCMBS0tmK8M7Nf5 | Issue #411 — cargo_metadata MSRV 修復 実装計画 | completed | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | PLAN-dS9xUtZcP4wLvYnK6nRt3F | Issue #414 — projection→controlled display 実装計画 | completed | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
+| PLAN-034XPQz5nuJOYW06YM1ygQ | Issue #419 後継ADR verdict逆反映 docs-only slice 実装計画 | completed | [issue-419-adr-backreflection.md](./issue-419-adr-backreflection.md) |
 | PLAN-Dz8GuKm3QpYv7RtWb4LoCs | Issue #435 — Label/Table ViewSpec kind の実装計画 | completed | [issue-435-label-table-kinds.md](./issue-435-label-table-kinds.md) |
 | PLAN-Vn6Pc1Rh4SxDa9Gt3KwLe8 | Issue #442 — 描画 plan への Spectrogram / Label / Table 追加の実装計画 | completed | [issue-442-observer-drawn-spectrogram-label-table.md](./issue-442-observer-drawn-spectrogram-label-table.md) |
 | PLAN-Ws6Tz1RbMn4QcKe9YhGx3D | Issue #443 — Tile 列区間と count 契約の実装計画 | completed | [issue-443-tile-column-contract.md](./issue-443-tile-column-contract.md) |

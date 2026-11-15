@@ -176,6 +176,7 @@ Directory: `docs/designs`
 | DESIGN-NS1HOEsCLKLDYdKMhuZOSf | Issue #411 — cargo_metadata 依存系列選定設計（MSRV 1.89 収束） | approved | [issue-411-msrv-cargo-metadata-pin.md](./issue-411-msrv-cargo-metadata-pin.md) |
 | DESIGN-pL8wRtYbN3xKcVhJ5mQs2E | Issue #414 — projection→controlled display 正規経路の設計 | approved | [issue-414-projection-controlled-display.md](./issue-414-projection-controlled-display.md) |
 | DESIGN-034Uoh91RxVTOnim395q6R | Issue #418 — theme-codegen 設計（manifest 駆動の ResolvedTheme 静的型生成） | approved | [issue-418-theme-codegen.md](./issue-418-theme-codegen.md) |
+| DESIGN-034XPQhsUWcCgjNEs31H4d | Issue #419 後継ADR verdict逆反映 設計（docs-only slice） | approved | [issue-419-adr-backreflection.md](./issue-419-adr-backreflection.md) |
 | DESIGN-Kt4NzBw9QxLr6VfGc1PuDo | Issue #421 — Meter/TimeAxis GPUI 描画と parity fixture の設計 | proposed | [issue-421-meter-timeaxis-gpui-parity.md](./issue-421-meter-timeaxis-gpui-parity.md) |
 | DESIGN-Z3hWk8NpR2tLq6VbYc4MdE | Issue #423 WebView 写像・focus capability 精緻化・GPUI 実窓検証の設計 | proposed | [issue-423-webview-dock-verify.md](./issue-423-webview-dock-verify.md) |
 | DESIGN-rO8ZT7WxqPYGw0e0jZJx_A | Issue #426 設計 — mechanism の test 実在検査・GPUI lab binding・story matrix | proposed | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
