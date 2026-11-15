@@ -240,6 +240,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |
