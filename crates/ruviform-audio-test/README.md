@@ -1,7 +1,8 @@
 # ruviform-audio-test
 
-Test-only deterministic Audio/MIDI test runtime core (Issue #628
-first slice).
+Test-only deterministic Audio/MIDI test runtime (Issue #628 —
+first slice: deterministic core; second slice: scripted port-trait
+backend).
 
 ## Status: test-only
 
@@ -44,15 +45,40 @@ is a dev-dependency only.
   vocabulary (`environment_kind = deterministic-backend`,
   `level = OS-L1`, Required/Deferred/NotApplicable ×
   Pass/Fail/NotRun/Unsupported).
+- `backend` — [`ScriptedBackend`] / [`ScriptedDeviceHandle`] /
+  [`DeviceSpec`] / [`StreamScript`] / [`StreamFault`] /
+  [`PumpReport`] / [`MidiFeed`]: a deterministic implementation of the
+  production `DeviceEnumerator`/`Device`/`InputStream`/`OutputStream`
+  port traits. Callbacks fire only through manual
+  `pump_*_next` calls on the test driver thread — no OS API, no
+  threads, no real hardware. Scripted open/start/stop/callback faults,
+  frame-position jumps, capture suppression, hot-unplug/reappear,
+  PCM scenario replay (input) and post-callback capture (output),
+  virtual-clock timestamps with optional latency offsets, and a thin
+  `MidiScenario` → `TimedMidiInput` feed for `MockPort`.
 
 ## Non-responsibilities (later slices)
 
-Scripted port-trait backends (`DeviceEnumerator`/`Device`/streams),
-fault injection (loss/xrun/disconnect/permission/queue-full),
-production pipeline wiring (Input→Recording, Output→Playback,
-MIDI→Timestamp/Host adapter), CI lane integration, consumer oracles
-(AudioLens/Synvelis), Windows WASAPI/WinMM virtual endpoints and real
+Production pipeline wiring (Input→Recording, Output→Playback,
+MIDI→Timestamp/Host adapter), consumer oracles (AudioLens/Synvelis),
+CI lane additions, Windows WASAPI/WinMM virtual endpoints and real
 VST3/CLAP ABI plugins (EXT-L3), JSON metadata serialization.
+
+## Honest limits of `backend`
+
+- **OS-L1 evidence only.** Passing tests prove the port *contract* is
+  implementable deterministically; they are not evidence about any
+  real OS audio path.
+- **Callback firing is manual.** `start()` only marks the stream
+  started — delivery happens on `pump_*_next`, on the caller's
+  thread. The `rt_` alloc-free proof covers the callback-firing
+  section, not RT-thread scheduling.
+- **No mid-stream format change.** The contract fixes `format()` at
+  open; rate/channel changes are `ClockDiscontinuity` + re-open.
+- **Honest fault mapping.** Permission denial maps to
+  `Backend("permission_denied")`/`DeviceBusy`; queue-full to
+  `Backend("queue_full")`/`Xrun` (audio) or `MockPort`
+  `inject_dropped`/`inject_unsupported` (MIDI).
 
 ## Verification levels
 
@@ -64,7 +90,9 @@ RT contract: clock reads, PCM `fill`, and the `TraceSink` path are
 allocation-free/non-blocking/I/O-free — proven by `rt_`-prefixed
 `assert_no_alloc` tests collected by `mise run test-rt`.
 
-See `docs/specs/issue-628-deterministic-test-runtime.md`,
-`docs/designs/issue-628-deterministic-test-runtime-design.md`,
-`docs/plans/issue-628-deterministic-test-runtime-plan.md`, and
-`docs/test-specs/issue-628-deterministic-test-runtime.md`.
+See `docs/specs/issue-628-scripted-backend.md`,
+`docs/designs/issue-628-scripted-backend.md`,
+`docs/plans/issue-628-scripted-backend.md`, and
+`docs/test-specs/issue-628-scripted-backend.md` (second slice);
+`docs/{specs,designs,plans,test-specs}/issue-628-deterministic-test-runtime.md`
+(first slice).

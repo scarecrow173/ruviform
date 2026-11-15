@@ -232,6 +232,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XeimTwfyibURJX60q4f | Issue #562 Alternate Evaluation Context PoC IR | completed | [issue-562-cb-poc.md](./issue-562-cb-poc.md) |
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |

@@ -165,3 +165,181 @@ fn rt_trace_sink_span_direct_does_not_alloc() {
     assert_eq!(sink.entries[0].frame.frame(), 0);
     assert_eq!(sink.undeliverable_spans, 0);
 }
+
+#[test]
+fn rt_scripted_backend_output_pump_does_not_alloc() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use ruviform_audio_core::device::{
+        BufferSize, Device, OutputStreamConfig, SupportedBufferSize, SupportedOutputFormat,
+    };
+    use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_audio_test::backend::{DeviceSpec, OutputSpec, ScriptedBackend, StreamScript};
+    use ruviform_audio_test::clock::{JitterSpec, VirtualClock, VirtualClockConfig};
+
+    // record_output = false: capture is a control-path feature and
+    // would (legitimately) allocate on first push — excluded from the
+    // measured callback-firing path.
+    let clock = Arc::new(
+        VirtualClock::new(VirtualClockConfig {
+            sample_rate: 48_000,
+            epoch: 7,
+            offset_ticks: 0,
+            drift_ppm: 0,
+            jitter: JitterSpec::DISABLED,
+        })
+        .unwrap(),
+    );
+    let mut backend = ScriptedBackend::new(clock);
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).unwrap(),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+    let spec = DeviceSpec {
+        name: "rt-out".to_owned(),
+        id: None,
+        clock: None,
+        output: Some(OutputSpec {
+            default_format: format,
+            supported_formats: vec![SupportedOutputFormat {
+                channels: 2,
+                min_sample_rate: 44_100,
+                max_sample_rate: 96_000,
+                buffer_size: SupportedBufferSize::Unknown,
+                sample_format: SampleFormat::F32,
+            }],
+            stream: StreamScript::new(256),
+            record_output: false,
+        }),
+        input: None,
+    };
+    let handle = backend.add_device(spec).unwrap();
+    let config = OutputStreamConfig {
+        format,
+        buffer_size: BufferSize::Default,
+    };
+    let fired = Arc::new(AtomicUsize::new(0));
+    let fired2 = Arc::clone(&fired);
+    let stream = handle
+        .open_output_stream(
+            &config,
+            Box::new(move |mut view, _info| {
+                // Bounded write into the preallocated slab — no alloc.
+                for sample in view.channel_mut(0).unwrap() {
+                    *sample = 0.1;
+                }
+                fired2.fetch_add(1, Ordering::Relaxed);
+            }),
+            Box::new(|_| {}),
+        )
+        .unwrap();
+    stream.start().unwrap();
+
+    // Steady-state pump: prologue, fault scan, scratch fill, view
+    // construction, timestamp build, callback, counters — measured.
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..8 {
+            let report = handle.pump_output_next().unwrap();
+            assert_eq!(report.frames, 256);
+        }
+    });
+    assert_eq!(fired.load(Ordering::Relaxed), 8);
+    // Capture was disabled — nothing recorded.
+    assert_eq!(handle.captured_output().len(), 0);
+}
+
+#[test]
+fn rt_scripted_backend_input_pump_does_not_alloc() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use ruviform_audio_core::device::{
+        BufferSize, Device, InputStreamConfig, SupportedBufferSize, SupportedInputFormat,
+    };
+    use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_audio_test::backend::{DeviceSpec, InputSpec, ScriptedBackend, StreamScript};
+    use ruviform_audio_test::clock::{JitterSpec, VirtualClock, VirtualClockConfig};
+    use ruviform_audio_test::pcm::{PcmFixture, PcmPattern, PcmScenario, PcmSegment};
+
+    let clock = Arc::new(
+        VirtualClock::new(VirtualClockConfig {
+            sample_rate: 48_000,
+            epoch: 7,
+            offset_ticks: 0,
+            drift_ppm: 0,
+            jitter: JitterSpec::DISABLED,
+        })
+        .unwrap(),
+    );
+    let mut backend = ScriptedBackend::new(clock);
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).unwrap(),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+    let fixture = PcmFixture::new(
+        SampleRate::new(48_000).unwrap(),
+        2,
+        PcmPattern::Sine {
+            freq_hz: 440.0,
+            amplitude: 0.5,
+        },
+    )
+    .unwrap();
+    // Scenario covers all pumped frames → no gap/Xrun path measured.
+    let pcm = PcmScenario::new(vec![PcmSegment {
+        frame_start: 0,
+        frame_len: 65_536,
+        fixture,
+    }])
+    .unwrap();
+    let spec = DeviceSpec {
+        name: "rt-in".to_owned(),
+        id: None,
+        clock: None,
+        output: None,
+        input: Some(InputSpec {
+            default_format: format,
+            supported_formats: vec![SupportedInputFormat {
+                channels: 2,
+                min_sample_rate: 44_100,
+                max_sample_rate: 96_000,
+                buffer_size: SupportedBufferSize::Unknown,
+                sample_format: SampleFormat::F32,
+            }],
+            pcm,
+            stream: StreamScript::new(256),
+            capture_reporting: true,
+        }),
+    };
+    let handle = backend.add_device(spec).unwrap();
+    let config = InputStreamConfig {
+        format,
+        buffer_size: BufferSize::Default,
+    };
+    let fired = Arc::new(AtomicUsize::new(0));
+    let fired2 = Arc::clone(&fired);
+    let stream = handle
+        .open_input_stream(
+            &config,
+            Box::new(move |view, _info| {
+                // Bounded read of the preallocated slab — no alloc.
+                assert_eq!(view.channels(), 2);
+                fired2.fetch_add(1, Ordering::Relaxed);
+            }),
+            Box::new(|_| {}),
+        )
+        .unwrap();
+    stream.start().unwrap();
+
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..8 {
+            let report = handle.pump_input_next().unwrap();
+            assert_eq!(report.frames, 256);
+            assert_eq!(report.gap_frames, 0);
+        }
+    });
+    assert_eq!(fired.load(Ordering::Relaxed), 8);
+}
