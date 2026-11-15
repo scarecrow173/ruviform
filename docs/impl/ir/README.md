@@ -14,7 +14,6 @@ Directory: `docs/impl/ir`
 | IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | IMPL-034XqUtbQR6b9Xie900zZv | Issue #625 ci e2e handshake race implementation record | draft | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |
-| IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTPwYBlfr1MLwQV3IDe | Real-window native-slot dock lane (issue-631 second slice) | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -235,6 +234,7 @@ Directory: `docs/impl/ir`
 | IMPL-034VxYJLKGGs9nLvyaDgHT | Issue #565 WASAPI-native input frame_position 供給 | completed | [issue-565-wasapi-input-frame-position-slice.md](./issue-565-wasapi-input-frame-position-slice.md) |
 | IMPL-034XCdra59tUm0jQNLqYQw | Issue #628 deterministic test runtime core | completed | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |

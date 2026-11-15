@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034XVmf1QyR2KtHQqfxoPa"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #629 MIDI loopback round-trip verifier"
 created: "2026-11-15"
 updated: "2026-11-15"
