@@ -29,6 +29,22 @@ the binary may `Pass`; editor attach/dock/pixels stay
 `Unsupported`/`NotRun` until a real editor fixture exists. A missing
 artifact fails closed as `NotRun`.
 
+## Scenario catalog
+
+The eight cases are declared once in `HEADLESS_MATRIX`
+(`scenario::HEADLESS_MATRIX`) — a driver-independent
+`ScenarioMatrix`/`ScenarioEntry` table from `ruviform-ui-test`'s
+`scenario::catalog` module. `run_all` is a thin projection over it
+(`run_matrix` sequences each entry's `run_scenario` call); the lane
+binary, the integration tests, and any future headless console read
+the same table. The `real-dock` lane keeps its own session-scoped
+catalog (`real_entries` in `real_dock`) consumed by both the live
+session path and the environment-blocked fail-closed path.
+
+`ScenarioMatrix::project` answers "would `run_scenario` pre-flight
+pass this entry on this driver" from declared capabilities only — it
+executes nothing and upgrades no verdict.
+
 ## Artifact resolution
 
 1. `RUVIFORM_PLUGIN_DOCK_TEST_VST3` — explicit file path (env only);
