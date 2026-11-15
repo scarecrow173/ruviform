@@ -880,6 +880,39 @@ pub(crate) fn pump_output(slot: &Arc<OutputSlot>) -> DeviceResult<PumpReport> {
     })
 }
 
+/// Error surface of a successful input callback — the same-index
+/// `Error` faults, the gap `Xrun`, and `StreamInvalidated` — counted
+/// whether or not an error callback is registered (a scripted error
+/// is observable in `PumpReport::errors_fired` either way). The
+/// caller owns the invalidation side effects.
+fn deliver_input_errors(
+    error_callback: &mut Option<impl FnMut(DeviceError)>,
+    fault_errors: &[DeviceError],
+    gap_frames: u64,
+    invalidate: bool,
+) -> u32 {
+    let mut errors_fired = 0u32;
+    for &error in fault_errors {
+        if let Some(cb) = error_callback.as_mut() {
+            cb(error);
+        }
+        errors_fired += 1;
+    }
+    if gap_frames > 0 {
+        if let Some(cb) = error_callback.as_mut() {
+            cb(DeviceError::Xrun);
+        }
+        errors_fired += 1;
+    }
+    if invalidate {
+        if let Some(cb) = error_callback.as_mut() {
+            cb(DeviceError::StreamInvalidated);
+        }
+        errors_fired += 1;
+    }
+    errors_fired
+}
+
 /// Fires one input callback — see
 /// [`ScriptedDeviceHandle::pump_input_next`](super::ScriptedDeviceHandle::pump_input_next).
 pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
@@ -960,24 +993,13 @@ pub(crate) fn pump_input(slot: &Arc<InputSlot>) -> DeviceResult<PumpReport> {
         }
     }
 
-    let mut errors_fired = 0u32;
-    for &error in &fault_errors {
-        if let Some(cb) = core.error_callback.as_mut() {
-            cb(error);
-        }
-        errors_fired += 1;
-    }
-    if gap_frames > 0 {
-        if let Some(cb) = core.error_callback.as_mut() {
-            cb(DeviceError::Xrun);
-        }
-        errors_fired += 1;
-    }
+    let errors_fired = deliver_input_errors(
+        &mut core.error_callback,
+        &fault_errors,
+        gap_frames,
+        effects.invalidate,
+    );
     if effects.invalidate {
-        if let Some(cb) = core.error_callback.as_mut() {
-            cb(DeviceError::StreamInvalidated);
-        }
-        errors_fired += 1;
         core.invalidated = true;
         slot.dead.store(true, Ordering::Release);
     }
