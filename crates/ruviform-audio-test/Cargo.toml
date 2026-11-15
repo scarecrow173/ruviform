@@ -21,6 +21,24 @@ ruviform-media-core = { path = "../ruviform-media-core" }
 # - ruviform-rt: VirtualClock が production の `MasterClock`（atomic
 #   wait-free read/write・rational timebase 検証）を内包して再利用するため。
 ruviform-rt = { path = "../ruviform-rt" }
+# - ruviform-audio: pipeline `output` leg drives the production
+#   `Session::open`/`GraphPlan` contract; pipeline `input` leg drives
+#   the production typed runtime (`GraphRuntime`/`RtRuntime`/
+#   `Compiler`/`GraphProcessor`). Public API only — the test crate
+#   consumes production contracts, never the reverse.
+ruviform-audio = { path = "../ruviform-audio" }
+# - ruviform-audio-plugin-bridge: pipeline `midi` leg drives the
+#   production `InputStage`/`InputStageCounters`/`PumpStats` contract
+#   (`InputTx` itself is `pub(crate)` — the leg mirrors its pump
+#   algorithm as `pipeline::InputPump`).
+ruviform-audio-plugin-bridge = { path = "../ruviform-audio-plugin-bridge" }
+# - ruviform-graph: the input leg builds/validates the
+#   Source→Processor→Sink `ValidatedGraph` the production `Compiler`
+#   consumes (`GraphBuilder`/`Validator`/`NodeDef`/`PortDef`).
+ruviform-graph = { path = "../ruviform-graph" }
+# - ruviform-plugin-core: `Event`/`EventKind::Midi` observed from
+#   `InputStage::collect_block`.
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 
 [dev-dependencies]
 # - assert_no_alloc: `rt_` prefix RT contract テストで clock-read /

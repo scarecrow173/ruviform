@@ -6615,8 +6615,12 @@ name = "ruviform-audio-test"
 version = "0.1.0"
 dependencies = [
  "assert_no_alloc",
+ "ruviform-audio",
  "ruviform-audio-core",
+ "ruviform-audio-plugin-bridge",
+ "ruviform-graph",
  "ruviform-media-core",
+ "ruviform-plugin-core",
  "ruviform-rt",
 ]
 

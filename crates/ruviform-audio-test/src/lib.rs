@@ -11,7 +11,11 @@
 //! ([`RunMetadata`](metadata::RunMetadata)), and a scripted
 //! port-trait backend ([`backend`](backend)) implementing the
 //! production `DeviceEnumerator`/`Device`/`InputStream`/
-//! `OutputStream` contracts with manual-pump deterministic delivery.
+//! `OutputStream` contracts with manual-pump deterministic delivery,
+//! and a [`pipeline`](pipeline) module that feeds those scripted
+//! devices into production consumers (`Session::open`, the typed
+//! `RtRuntime` boundary, and `InputStage`) for Expected/Observed
+//! comparison.
 //!
 //! # Test-only boundary
 //!
@@ -20,14 +24,17 @@
 //! and downstream consumer test harnesses (AudioLens/Synvelis); no
 //! production crate may depend on it — the dependency direction is
 //! consumer-of-production-contracts only (`ruviform-audio-core`,
-//! `ruviform-media-core`, `ruviform-rt`). `publish = false` is inherited
+//! `ruviform-media-core`, `ruviform-rt`, `ruviform-audio`,
+//! `ruviform-audio-plugin-bridge`, `ruviform-graph`,
+//! `ruviform-plugin-core`). `publish = false` is inherited
 //! from the workspace.
 //!
 //! # Scope
 //!
-//! Deterministic core + scripted device-boundary backend. Production
-//! pipeline wiring, consumer oracles, CI lane integration and real-OS
-//! evidence are later slices of Issue #628. Virtual-backend success
+//! Deterministic core + scripted device-boundary backend + pipeline
+//! wiring into production consumers. Consumer oracles, CI lane
+//! integration and real-OS evidence are later slices of Issue #628.
+//! Virtual-backend success
 //! here is OS-L1 deterministic evidence
 //! (`environment_kind = deterministic-backend`), never a claim of real
 //! OS API / GUI / plugin ABI success (POLICIES.md 2026-11-15
@@ -50,6 +57,7 @@ pub mod metadata;
 pub mod midi;
 pub mod oracle;
 pub mod pcm;
+pub mod pipeline;
 
 pub use metadata::{
     CaseRequirement, CaseResult, EnvironmentKind, RunMetadata, RunParameters, VerificationLevel,
