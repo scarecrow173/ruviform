@@ -57,6 +57,8 @@ Directory: `docs/tasks`
 | TASK-034U0zT7iVYoM99rNxQgBT | Issue #463 — Spectrogram cell intensity 修正タスク | completed | [issue-463-spectrogram-intensity.md](./issue-463-spectrogram-intensity.md) |
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | in-progress | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
+| TASK-RF628pwpipeline0000004 | Issue #628 タスク — pipeline wiring 実装 | in-progress | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
+| TASK-RF628sBscripted0000004 | Issue #628 タスク — scripted port-trait backend 実装 | in-progress | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
