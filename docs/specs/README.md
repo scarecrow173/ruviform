@@ -196,6 +196,7 @@ Directory: `docs/specs`
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| SPEC-GhY5geFlPWhmRfRdTwHkzA | Issue #630 test_fault slice — in-band armed fault plugin + L1 Crash/Hang/Timeout/Isolation E2E | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034XTOYvrNP8RQ01gP2AGt | Issue #631 Real-window native-slot dock lane（RealOsGuiTest 実 OS window 上の NativeSlot → container HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) 実走記録） | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |

@@ -25,11 +25,16 @@
 //! binding layer recorded in
 //! `docs/designs/issue-630-test-plugin-suite.md`.
 //!
-//! ## Module contents (this slice)
+//! ## Module contents
 //!
 //! - `test_gain` — one stereo main bus pair, one automatable gain
 //!   parameter; `out[c][n] = in[c][n] * gain(n)` with sample-accurate
 //!   parameter application at event frame offsets.
+//! - `test_fault` — the same bus shape with a stepped `Fault`
+//!   parameter; unarmed (`none`) it is pure pass-through, and an
+//!   in-band `ParamValue` event arms `abort`/`exit`/`hang`/`error`
+//!   dispatch inside the arming block's `process()` — the L1
+//!   out-of-process crash/hang/timeout/isolation oracle.
 //!
 //! All `vst3`-crate binding types stay private — the crate exports
 //! no public Rust API; hosts reach the plugin purely through the ABI
@@ -60,6 +65,7 @@ mod block;
 mod component;
 mod controller;
 mod factory;
+mod fault;
 mod gain;
 mod strings;
 

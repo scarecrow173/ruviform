@@ -242,6 +242,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034XEUw3tBbjwqbNReqULG | issue-646-numeric-bench-profile | completed | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
