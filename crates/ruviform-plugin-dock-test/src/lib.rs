@@ -27,11 +27,23 @@
 //! Fake slot / semantic view-mount success is contract conformance
 //! only — it is never promoted to Native Dock or GUI-L2 evidence.
 //!
+//! The opt-in `real-dock` feature adds the Issue #631 real-window
+//! lane (`real_dock`): the same dock spec mounted into a real OS
+//! window through `RealOsGuiTest`, recording the `NativeSlot` →
+//! surface `lease_parent` → `ParentSlotLease` → `InProcessEditorOps`
+//! redeem → `session.open(Docked)` chain with `environment_kind`
+//! `real-window`. It opens real OS windows, so it is never a default
+//! feature and never a CI-required gate; a headless host records
+//! `NotRun` + `environment_blocked`, never a fabricated pass.
+//!
 //! **RT contract:** non-RT only. **Test-only:** no production crate
 //! may depend on this crate; nothing here ships.
 
 pub mod artifact;
+pub mod jsonl;
 pub mod probe;
+#[cfg(feature = "real-dock")]
+pub mod real_dock;
 pub mod scenario;
 
 pub use artifact::{PLUGIN_PATH_ENV, fixture_lib_name, resolve_artifact, sha256_hex};

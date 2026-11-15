@@ -99,6 +99,14 @@
       "viaFeatures": [],
       "required": true,
       "reason": "Issue #388/#389 Native Dock PoC harness — adapter への依存と toolkit feature 起動自体が職務の実 binary composition root(利用側層)"
+    },
+    {
+      "package": "ruviform-plugin-dock-test",
+      "role": "composition-root",
+      "allowedDeps": [],
+      "viaFeatures": [],
+      "required": true,
+      "reason": "Issue #631 real-window dock lane — test-only harness whose real-dock feature composes the ruviform-ui-gpui real-scenario adapter to record the production NativeSlot → container-HWND lease → editor-session chain on real OS windows (consumer scenario evidence, never a product dependency)"
     }
   ]
 }

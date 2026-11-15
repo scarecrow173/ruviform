@@ -126,6 +126,31 @@ mkdir -p evidence/rf631
 cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-scenario -- --out evidence/rf631/plugin-dock-scenario.jsonl
 '''
 
+# Issue #631 real-window dock lane (manual/opt-in — NOT a CI-required
+# gate): builds the real test_gain VST3 cdylib, then runs
+# crates/ruviform-plugin-dock-test's `rf631.plugin-dock-real` cases
+# through `RealOsGuiTest` real OS windows — NativeSlot declare →
+# bind → renderer projection → `lease_parent` (real container HWND
+# via GpuiSurfaceAdapter) → `ParentSlotLease` → InProcessEditorOps
+# redeem → `session.open(Docked)` — and writes JSONL evidence to
+# evidence/rf631/plugin-dock-real-scenario.jsonl. Requires an
+# interactive desktop session; on a headless host every case records
+# NotRun + observed="environment_blocked" (fail-closed — never a
+# fake pass, exit code stays 0). Honest verdicts only: editor attach
+# stays Unsupported while test_gain's createView returns null, and
+# dock pixels/child-HWND input/resize/focus/re-dock stay NotRun until
+# a real `test_editor` fixture exists. Real OS windows — run
+# unattended (writes only target/ + evidence/rf631/).
+[tasks.test-ui-plugin-dock-real]
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real test_gain cdylib + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --locked -p ruviform-plugin-test-vst3
+mkdir -p evidence/rf631
+cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --out evidence/rf631/plugin-dock-real-scenario.jsonl
+'''
+
 [tasks.build]
 description = "Verify one Cargo package: mise run build <package> [cargo flags] (required package)"
 raw_args = true

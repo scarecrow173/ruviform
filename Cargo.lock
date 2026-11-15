@@ -6877,6 +6877,7 @@ dependencies = [
  "ruviform-plugin-test-vst3",
  "ruviform-plugin-vst3",
  "ruviform-ui",
+ "ruviform-ui-gpui",
  "ruviform-ui-test",
  "serde_json",
  "sha2 0.10.9",

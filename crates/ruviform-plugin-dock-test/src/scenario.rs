@@ -167,7 +167,7 @@ fn case_environment(
 }
 
 /// Post-run report finalization: environment + artifact evidence ref.
-fn finalize(
+pub(crate) fn finalize(
     mut report: ScenarioReport,
     env: &LaneEnvironment,
     kind: EnvironmentKind,
@@ -183,14 +183,14 @@ fn finalize(
 
 /// A `NotRun` outcome with `detail` — the fail-closed shape for
 /// absent prerequisites.
-fn not_run(detail: impl Into<String>) -> ScenarioOutcome {
+pub(crate) fn not_run(detail: impl Into<String>) -> ScenarioOutcome {
     let mut outcome = ScenarioOutcome::new(ScenarioVerdict::NotRun);
     outcome.detail = Some(detail.into());
     outcome
 }
 
 /// A `Fail` outcome carrying `detail`.
-fn fail(detail: impl Into<String>) -> ScenarioOutcome {
+pub(crate) fn fail(detail: impl Into<String>) -> ScenarioOutcome {
     let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Fail);
     outcome.detail = Some(detail.into());
     outcome
@@ -199,7 +199,7 @@ fn fail(detail: impl Into<String>) -> ScenarioOutcome {
 /// Maps a host-command error to an honest outcome: the defined
 /// `Unsupported` refusal stays `Unsupported`; everything else is a
 /// real `Fail`.
-fn host_error_outcome(step: &str, error: HostError) -> ScenarioOutcome {
+pub(crate) fn host_error_outcome(step: &str, error: HostError) -> ScenarioOutcome {
     let verdict = match error {
         HostError::Unsupported => ScenarioVerdict::Unsupported,
         _ => ScenarioVerdict::Fail,
@@ -232,7 +232,7 @@ fn test_gain_config() -> Option<ProcessConfig> {
 /// `plugin_id` — the defined process configuration. The caller owns
 /// Deactivate/Destroy teardown. Each step's error propagates as
 /// [`HostError`]; reply-shape violations map to `PluginFailed`.
-fn activate_test_gain(
+pub(crate) fn activate_test_gain(
     host: &mut InProcessHost,
     plugin_id: &str,
 ) -> Result<PluginHandle, HostError> {
@@ -257,7 +257,7 @@ fn activate_test_gain(
 }
 
 /// Registers every factory `library` scanned with `host`.
-fn register_factories(host: &mut InProcessHost, library: &Vst3Library) {
+pub(crate) fn register_factories(host: &mut InProcessHost, library: &Vst3Library) {
     for factory in library.factories() {
         host.register_factory(Box::new(factory) as Box<dyn PluginFactory>);
     }
@@ -265,7 +265,7 @@ fn register_factories(host: &mut InProcessHost, library: &Vst3Library) {
 
 /// The defined editor size every session case requests — matches the
 /// fake dock slot's 640×480 region.
-fn editor_size() -> EditorSize {
+pub(crate) fn editor_size() -> EditorSize {
     EditorSize {
         width: 640.0,
         height: 480.0,
@@ -297,7 +297,10 @@ fn editor_ops<'a>(
 
 /// `InProcessEditorOps` whose redeemer always refuses — for converge
 /// paths (`close`) where the lease must never be consulted.
-fn rejecting_editor_ops(host: &mut InProcessHost, handle: PluginHandle) -> InProcessEditorOps<'_> {
+pub(crate) fn rejecting_editor_ops(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+) -> InProcessEditorOps<'_> {
     InProcessEditorOps::with_redeemer(
         host,
         handle,
@@ -388,20 +391,23 @@ struct SessionCaseState {
 }
 
 /// JSON view of a `PluginEditorSessionId` — `{slot, generation}`.
-fn session_id_json(id: PluginEditorSessionId) -> Value {
+pub(crate) fn session_id_json(id: PluginEditorSessionId) -> Value {
     json!({ "slot": id.slot(), "generation": id.generation() })
 }
 
 /// Debug rendering of drained session events for `observed` — the
 /// event vocabulary is small and stable, so `Debug` is the honest
 /// record (the session types carry no serde impl).
-fn events_debug(events: &[EditorSessionEvent]) -> Vec<String> {
+pub(crate) fn events_debug(events: &[EditorSessionEvent]) -> Vec<String> {
     events.iter().map(|event| format!("{event:?}")).collect()
 }
 
 /// `true` when `id`'s session sits in `Failed{Unsupported}` — the
 /// honest refused-open landing for the editor-less `test_gain`.
-fn session_failed_unsupported(sessions: &PluginEditorSessions, id: PluginEditorSessionId) -> bool {
+pub(crate) fn session_failed_unsupported(
+    sessions: &PluginEditorSessions,
+    id: PluginEditorSessionId,
+) -> bool {
     sessions.session(id).is_some_and(|session| {
         matches!(
             session.state(),
@@ -413,7 +419,10 @@ fn session_failed_unsupported(sessions: &PluginEditorSessions, id: PluginEditorS
 }
 
 /// `true` when `id`'s session sits in `Closed` and concluded.
-fn session_closed_concluded(sessions: &PluginEditorSessions, id: PluginEditorSessionId) -> bool {
+pub(crate) fn session_closed_concluded(
+    sessions: &PluginEditorSessions,
+    id: PluginEditorSessionId,
+) -> bool {
     sessions.session(id).is_some_and(|session| {
         matches!(session.state(), EditorSessionState::Closed) && session.concluded()
     })

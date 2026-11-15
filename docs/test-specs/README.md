@@ -215,6 +215,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |

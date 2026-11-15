@@ -7,6 +7,21 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# `real-dock` (Issue #631 real-window slice): the opt-in/manual
+# real-window lane — `src/real_dock.rs` and the
+# `plugin-dock-real-scenario` bin drive `RealOsGuiTest` real OS
+# windows through ruviform-ui-gpui's `real-scenario` feature. NOT a
+# default feature: it opens real OS windows and links the GPUI
+# backend, so the default/headless lane stays window-free; it is
+# never a CI-required gate.
+real-dock = ["dep:ruviform-ui-gpui", "ruviform-ui-gpui/real-scenario"]
+
+[[bin]]
+name = "plugin-dock-real-scenario"
+path = "src/bin/plugin-dock-real-scenario.rs"
+required-features = ["real-dock"]
+
 [dependencies]
 # Dependency addition records (暫定規約「依存追加は理由を記録」):
 # - ruviform-ui-test: the driver-neutral scenario contract this
@@ -37,8 +52,17 @@ ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 # - ruviform-audio-test: EnvironmentKind vocabulary
 #   (real-abi-test-plugin is claimed only by cases that actually
-#   executed the real binary).
+#   executed the real binary; real-window only by the real-dock lane).
 ruviform-audio-test = { path = "../ruviform-audio-test" }
+# - ruviform-ui-gpui (optional; `real-dock` feature only): the
+#   real-window scenario adapter (`RealOsGuiTest` under
+#   `real-scenario`) that mounts the dock spec into a real OS window
+#   and exposes the canonical-surface native-slot ops
+#   (declare/bind/lease/validate/release + container_token/redeem).
+#   Optional so the default lane never links the GPUI backend;
+#   consumer-layer composition only — no GPUI type crosses this
+#   crate's API or evidence schema (driver boundary guard).
+ruviform-ui-gpui = { path = "../ruviform-ui-gpui", optional = true }
 # - serde_json: ScenarioSpec.environment / report environment +
 #   observed/expected evidence payloads (same set ui-test uses).
 serde_json = "1"
