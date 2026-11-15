@@ -78,6 +78,7 @@ Directory: `docs/plans`
 | PLAN-034UCajy65hNl8zISc6rvu | Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本 | approved | [issue-192-synvelis-driven-target-architecture-migration.md](./issue-192-synvelis-driven-target-architecture-migration.md) |
 | PLAN-034WYgMWpq7xkREpxpFnGt | Issue #192 TA Invariant Map — 監査・対応表作成計画 | approved | [issue-192-ta-invariant-map-plan.md](./issue-192-ta-invariant-map-plan.md) |
 | PLAN-034UCTG1MAGz2NU32GulcZ | Issue #193 Migration Execution Plan v1.0 — M0–M7・依存DAG・受入Gate・互換移行 計画 | approved | [issue-193-migration-execution-plan.md](./issue-193-migration-execution-plan.md) |
+| PLAN-034XJsqELLLLcAakLIA6YG | Issue #193 Migration M0〜M7 受入表 Virtual-first Owner 対応付け計画 | approved | [issue-193-virtual-first-owner-remap-plan.md](./issue-193-virtual-first-owner-remap-plan.md) |
 | PLAN-YNOz2WL10n4v4Avi6qlRE9 | Issue #197 media reader / prefetch / RT consumer implementation plan | approved | [issue-197-media-reader-prefetch-rt-consumer.md](./issue-197-media-reader-prefetch-rt-consumer.md) |
 | PLAN-034Qonvu2E5YQaWUHEcTeL | Issue #233 media-reader prefetch contract improvements implementation plan | approved | [issue-233-media-reader-prefetch-improvements.md](./issue-233-media-reader-prefetch-improvements.md) |
 | PLAN-cNIlZseMNfbfI0D3uYpFLK | Issue #238 実施計画 — l1_proxy_e2e 壁時計 sleep 同期を有界 barrier/poll 待機へ置換 | approved | [issue-238-l1-proxy-e2e-flake.md](./issue-238-l1-proxy-e2e-flake.md) |
