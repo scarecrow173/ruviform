@@ -1,0 +1,52 @@
+[package]
+name = "ruviform-plugin-test-clap"
+description = "Test-only CLAP test plugin (test_gain) for Ruviform host verification — not a shipping product"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# cdylib exports the CLAP entry point (`clap_entry`) so the built
+# artifact is a real `.clap` shared object a host can dlopen; rlib
+# keeps the crate unit-testable in-process (same shape as
+# `ruviform-plugin-clap` and `ruviform-plugin-test-vst3`).
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# SDK-equivalent binding layer — the same `clack` 0.2.0 crates the
+# production adapter pins; shared as the "SDK layer" only (see
+# docs/designs/issue-630-test-plugin-suite.md). `clack-extensions`
+# carries only the plugin-side features this fixture declares
+# (`audio-ports` + `params`); the adapter's `thread-check` feature is
+# deliberately not enabled — this fixture stores no host handle and
+# writes no `unsafe`.
+clack-plugin = "=0.2.0"
+clack-common = "=0.2.0"
+clack-extensions = { version = "=0.2.0", features = [
+    "clack-plugin",
+    "audio-ports",
+    "params",
+] }
+# Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
+# Lifecycle/BufferView) — the plugin-side implementation target.
+ruviform-plugin-core = { path = "../ruviform-plugin-core" }
+# Zero-copy planar buffer views for the process path.
+ruviform-audio-core = { path = "../ruviform-audio-core" }
+
+[dev-dependencies]
+# RT non-allocation proof for the process path (Issue #22 lane
+# precedent: `ruviform-plugin-clap` uses the same dev-dep).
+assert_no_alloc = "1.1"
+# clack-host's safe host-side fixtures (`AudioPorts`/`InputAudioBuffers`/
+# `EventBuffer`/`PluginInstance`) drive the plugin-side ABI in-process —
+# the same dev-dep shape the adapter's own tests use.
+clack-host = { version = "=0.2.0", features = ["clack-plugin"] }
+# Production host bridge for the real-file host-path test — dev-dep
+# edge only; the adapter itself stays pristine and this crate never
+# appears in its dependency tree.
+ruviform-plugin-clap = { path = "../ruviform-plugin-clap", features = ["host"] }
+
+[lints]
+workspace = true

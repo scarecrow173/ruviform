@@ -191,6 +191,7 @@ Directory: `docs/specs`
 | SPEC-034XBGBcah0yYseU6Ypekr | Issue #628 Deterministic Audio/MIDI Test Runtime first slice — deterministic core | approved | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | SPEC-034XTfa1sD2K4NXS4eKDfn | Issue #629 MIDI output path — WinMM midiOut* backend (2nd slice) | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034XEUi9KFfbJmIcNkynUU | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
