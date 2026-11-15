@@ -343,3 +343,229 @@ fn rt_scripted_backend_input_pump_does_not_alloc() {
     });
     assert_eq!(fired.load(Ordering::Relaxed), 8);
 }
+
+// ------------------------------------------------------------------
+// Issue #628, 3rd slice — pipeline legs. The measured windows cover
+// the production callback/processing path end-to-end: scripted pump
+// → production consumer (`Session` plan.drive / `RtRuntime::process`
+// / `InputStage::collect_block`). Driver-side diagnostic vectors are
+// preallocated (64-entry bound documented on the pipeline types);
+// warmup + measured calls stay well under it.
+// ------------------------------------------------------------------
+
+#[test]
+fn rt_pipeline_output_session_pump_does_not_alloc() {
+    use std::sync::Arc;
+
+    use ruviform_audio_core::device::{
+        BufferSize, OutputStreamConfig, SupportedBufferSize, SupportedOutputFormat,
+    };
+    use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_audio_test::backend::{DeviceSpec, OutputSpec, ScriptedBackend, StreamScript};
+    use ruviform_audio_test::clock::{JitterSpec, VirtualClock, VirtualClockConfig};
+    use ruviform_audio_test::pcm::{PcmFixture, PcmPattern};
+    use ruviform_audio_test::pipeline::{PlaybackPipeline, fixture_graph};
+
+    let clock = Arc::new(
+        VirtualClock::new(VirtualClockConfig {
+            sample_rate: 48_000,
+            epoch: 7,
+            offset_ticks: 0,
+            drift_ppm: 0,
+            jitter: JitterSpec::DISABLED,
+        })
+        .unwrap(),
+    );
+    let mut backend = ScriptedBackend::new(clock);
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).unwrap(),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+    let spec = DeviceSpec {
+        name: "rt-pipe-out".to_owned(),
+        id: None,
+        clock: None,
+        output: Some(OutputSpec {
+            default_format: format,
+            supported_formats: vec![SupportedOutputFormat {
+                channels: 2,
+                min_sample_rate: 44_100,
+                max_sample_rate: 96_000,
+                buffer_size: SupportedBufferSize::Unknown,
+                sample_format: SampleFormat::F32,
+            }],
+            stream: StreamScript::new(256),
+            // Capture off — recording is a diagnostic feature that
+            // legitimately allocates; excluded from the RT window.
+            record_output: false,
+        }),
+        input: None,
+    };
+    let handle = backend.add_device(spec).unwrap();
+    let fixture = PcmFixture::new(
+        SampleRate::new(48_000).unwrap(),
+        2,
+        PcmPattern::Impulse {
+            period_frames: 32,
+            amplitude: 0.5,
+        },
+    )
+    .unwrap();
+    let config = OutputStreamConfig {
+        format,
+        buffer_size: BufferSize::Default,
+    };
+    let mut pipeline =
+        PlaybackPipeline::open(&handle, config, fixture_graph(Arc::new(fixture))).unwrap();
+
+    // Warmup outside the measured window (report buffer + plan swap
+    // settle), then measure steady-state pumps: scripted pump →
+    // Session callback → GraphPlan::drive → node pull → capture-off.
+    for _ in 0..4 {
+        pipeline.pump().unwrap();
+    }
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..16 {
+            let report = pipeline.pump().unwrap();
+            assert_eq!(report.frames, 256);
+        }
+    });
+    assert_eq!(pipeline.reports().len(), 20);
+}
+
+#[test]
+fn rt_pipeline_input_capture_and_process_does_not_alloc() {
+    use std::sync::Arc;
+
+    use ruviform_audio_core::device::{
+        BufferSize, InputStreamConfig, SupportedBufferSize, SupportedInputFormat,
+    };
+    use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
+    use ruviform_audio_test::backend::{DeviceSpec, InputSpec, ScriptedBackend, StreamScript};
+    use ruviform_audio_test::clock::{JitterSpec, VirtualClock, VirtualClockConfig};
+    use ruviform_audio_test::pcm::{PcmFixture, PcmPattern, PcmScenario, PcmSegment};
+    use ruviform_audio_test::pipeline::{InputPipeline, pipeline_compiler_config};
+
+    let clock = Arc::new(
+        VirtualClock::new(VirtualClockConfig {
+            sample_rate: 48_000,
+            epoch: 7,
+            offset_ticks: 0,
+            drift_ppm: 0,
+            jitter: JitterSpec::DISABLED,
+        })
+        .unwrap(),
+    );
+    let mut backend = ScriptedBackend::new(clock);
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).unwrap(),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+    let fixture = PcmFixture::new(
+        SampleRate::new(48_000).unwrap(),
+        2,
+        PcmPattern::Impulse {
+            period_frames: 32,
+            amplitude: 0.5,
+        },
+    )
+    .unwrap();
+    let pcm = PcmScenario::new(vec![PcmSegment {
+        frame_start: 0,
+        frame_len: 65_536,
+        fixture,
+    }])
+    .unwrap();
+    let spec = DeviceSpec {
+        name: "rt-pipe-in".to_owned(),
+        id: None,
+        clock: None,
+        output: None,
+        input: Some(InputSpec {
+            default_format: format,
+            supported_formats: vec![SupportedInputFormat {
+                channels: 2,
+                min_sample_rate: 44_100,
+                max_sample_rate: 96_000,
+                buffer_size: SupportedBufferSize::Unknown,
+                sample_format: SampleFormat::F32,
+            }],
+            pcm,
+            stream: StreamScript::new(256),
+            capture_reporting: true,
+        }),
+    };
+    let handle = backend.add_device(spec).unwrap();
+    let config = InputStreamConfig {
+        format,
+        buffer_size: BufferSize::Default,
+    };
+    let mut pipeline =
+        InputPipeline::open(&handle, config, 0.5, pipeline_compiler_config(1024), 4).unwrap();
+
+    // Warmup outside the measured window, then measure steady-state
+    // pump_block: scripted pump → capture offer → drain →
+    // input_writer/process/output_reader → observed bookkeeping —
+    // all inside preallocated bounds (64-block diagnostic cap).
+    for _ in 0..4 {
+        pipeline.pump_block().unwrap();
+    }
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..16 {
+            pipeline.pump_block().unwrap();
+        }
+    });
+    assert_eq!(pipeline.observed_blocks().len(), 20);
+    assert_eq!(pipeline.capture_counters().delivered, 20);
+}
+
+#[test]
+fn rt_pipeline_midi_collect_does_not_alloc() {
+    use ruviform_audio_test::midi::MidiCue;
+    use ruviform_audio_test::pipeline::MidiLeg;
+    use ruviform_media_core::{
+        ClockDomainId, ClockEpochId, MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind,
+        MidiValue, NoteKey, TimeBase,
+    };
+
+    let base = TimeBase::sample_rate(48_000).unwrap();
+    let domain = ClockDomainId::new(7);
+    let event = MidiEvent {
+        group: MidiGroup::ZERO,
+        channel: MidiChannel::new(0).unwrap(),
+        kind: MidiKind::NoteOn {
+            key: NoteKey::new(60).unwrap(),
+            velocity: MidiValue::from_u7(100),
+        },
+    };
+    // One cue per 64-frame block out to frame ~12k — future-stamped
+    // events stay pending and are rescanned each call (bounded).
+    let cues: Vec<MidiCue> = (0..200u64)
+        .map(|i| MidiCue {
+            position: MediaTime::new(i64::try_from(i * 64 + 10).unwrap(), base),
+            source_sequence: i,
+            event,
+        })
+        .collect();
+    let scenario = ruviform_audio_test::midi::MidiScenario::new(base, cues);
+    let mut leg = MidiLeg::open(&scenario, domain, ClockEpochId::new(1), 512).unwrap();
+
+    // Non-RT feed: all cues → port → subscription → SPSC channel.
+    leg.pump_inputs(u64::MAX).unwrap();
+
+    // Measured: the RT-suitable half — InputStage::pump (channel→
+    // pending) + collect_block (map + emit into preallocated scratch).
+    // 32 blocks emit one event each; the remaining ~168 stay pending.
+    assert_no_alloc::assert_no_alloc(|| {
+        for _ in 0..32 {
+            let collected = leg.collect_block(64);
+            std::hint::black_box(collected.stats.emitted);
+            std::hint::black_box(collected.events.len());
+        }
+    });
+    let counters = leg.counters();
+    assert_eq!(counters.delivered, 32);
+    assert_eq!(leg.pending_count(), 168);
+}

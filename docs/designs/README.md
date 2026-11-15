@@ -221,6 +221,7 @@ Directory: `docs/designs`
 | DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
 | DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034XBGBV0qexwf6VzGt77S | Issue #628 設計 — deterministic core（VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata） | approved | [issue-628-deterministic-test-runtime-design.md](./issue-628-deterministic-test-runtime-design.md) |
+| DESIGN-RF628pwpipeline000001 | Issue #628 pipeline wiring — detailed design | approved | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | DESIGN-RF628sBscripted0000002 | Issue #628 設計 — scripted port-trait backend（device 境界 fault/clock/PCM/MIDI 結線） | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
