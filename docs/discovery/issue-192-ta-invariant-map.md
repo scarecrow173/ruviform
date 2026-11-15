@@ -4,7 +4,7 @@ type: "discovery"
 status: "active"
 title: "Issue #192 TA-001〜012 Invariant ↔ 現行API/Issue/L1テスト対応表 + 依存非循環性監査"
 created: "2026-11-14"
-updated: "2026-11-14"
+updated: "2026-11-15"
 owners: []
 relations:
   source:
@@ -271,6 +271,38 @@ DAG 循環を常設検査する CI lane は存在しない — これは違反�
 | Cross-Consumer 互換契約・OBS-06・tuple gate | #219 OPEN・#281 OPEN・#294 OPEN |
 | IO 合成 E2E・Consumer 受入 | #306 OPEN・SV #84 OPEN |
 | Consumer 側継続追従・実装 | SV #28/#106/#109/#176/#177 OPEN、AL #127 OPEN |
+
+（2026-11-15 追記）Issue #192 本文「2026-11-15
+Virtual-first正式受入Owner整理」と `POLICIES.md` §2.1
+（2026-11-15 決定「仮想優先の受入と共通テスト基盤」。
+方針基盤 Issue は RF #627 CLOSED）に基づき、上表の
+「Open Issue（Owner）」欄を**受入 Owner** として再指向
+した。実装 Owner は維持する。既存の 2026-11-14 snapshot
+表は履歴としてそのまま保持し、指定外の行（#262/#465・
+#219/#281/#294・#306/SV#84・Consumer 継続追従行）は本
+remap の対象外で変更しない。状態は 2026-11-15 `gh issue
+view` で照合した。
+
+| 領域 | 受入 Owner（再指向後） | 実装 Owner（維持） |
+| --- | --- | --- |
+| 実 Audio Input / duplex・実機 capture | RF #629 OS virtual endpoint survey/probe（OPEN — Windows 実 WASAPI/WinMM 本番 API を通す仮想 Endpoint） | #251 OPEN（`test-audio-real-input` manual lane・`evidence/rf251-audio-input/`） |
+| OS MIDI backend・VST3 翻訳 | RF #629（OPEN — 同上の仮想 Endpoint 経由 L3） | #253 OPEN（`test-midi-real-device` manual lane・`evidence/issue-253-real-midi-lane/`） |
+| 実 GUI（実 Window・入力・Focus・画素） | RF #631 real-GUI scenario runner（OPEN — 実 OS Window scenario・Pixel/Receipt/Evidence） | #243 CLOSED・#313 CLOSED（2026-11-14 snapshot ではいずれも OPEN — 陳腐化した旧受入参照。実 GUI 受入は #631 共通 Harness へ再指向） |
+| Plugin Editor / Native Dock（実 ABI L3） | RF #630 ABI Test Plugin suite（OPEN — 正規 ABI の実バイナリ Test Plugin・Native Editor 経路） | #388 OPEN・#389 OPEN（実装・Dock gate Owner として維持） |
+| OS-L1 / 両 Consumer 独立検証 | RF #294 consumer-verify 拡張（OPEN）・AL #127（OPEN）・SV #28（OPEN） | —（設計 Issue は実装・実走の Owner ではない） |
+| 共通基盤 | RF #628 deterministic test runtime（OPEN — VirtualClock/PCM/Fault）・RF #627（CLOSED — POLICIES §2.1 の設計正本） | — |
+
+本 remap は受入 Owner 欄の再指向であり、Windows で利用
+する機能の L2/L3 を Required から Deferred へ降格しない。
+「仮想 Endpoint の Pass は物理機材の Driver/ADC-DAC を
+保証しない」「未検証 Case は `NotRun` と正直に記録」
+「物理機材・市販 Plugin の一括 Required 化は課さない」
+「design-Close と impl 受入を分離」の原則を維持する。
+tracking canonical 側の記録は
+[`docs/designs/issue-192-synvelis-driven-target-architecture-migration.md`](../designs/issue-192-synvelis-driven-target-architecture-migration.md)
+末尾の 2026-11-15 追記、文書チェーンは
+[`issue-192-virtual-first-owner-remap`](../specs/issue-192-virtual-first-owner-remap.md)
+を参照。
 
 ## Key Issues and Assumptions
 

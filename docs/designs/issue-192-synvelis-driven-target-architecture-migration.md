@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #192 Synvelis-driven Target Architecture & Migration — umbrella migration 設計正本"
 created: "2026-11-09"
-updated: "2026-11-09"
+updated: "2026-11-15"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -549,3 +549,59 @@ umbrella 設計 §8 の ADR 表を現状へ更新した対応。umbrella
   （accepted/proposed/superseded）と一致すること。
 - [ ] 「設計合意と実装/検証の分離」と未実施項目の
   `NotRun` 記録方針が明記されていること。
+
+## 2026-11-15 追記 — TA DAG L2/L3 受入 Owner 欄の Virtual-first 再指向
+
+Issue #192 本文「2026-11-15 Virtual-first正式受入Owner整理」
+と `POLICIES.md` §2.1（2026-11-15 決定「仮想優先の受入と
+共通テスト基盤」。方針基盤 Issue は RF #627 CLOSED・
+`docs/specs/issue-627-virtual-first-verification-contract.md`
+が設計正本）に基づき、本書および対応表
+（[`docs/discovery/issue-192-ta-invariant-map.md`](../discovery/issue-192-ta-invariant-map.md)）
+が記録する設計 DAG の L2/L3 受入 Owner 欄を再指向した。
+既存の 2026-11-09 TA gate 表・3 者 Ownership 表・
+capability map は履歴 snapshot としてそのまま保持し、
+本文の書き換え・再構成は行わない（append-only）。
+本 slice の文書チェーンは
+[`issue-192-virtual-first-owner-remap`](../specs/issue-192-virtual-first-owner-remap.md)
+を参照。
+
+### remap の内容（2026-11-15 `gh issue view` 照合）
+
+| 受入対象 | 再指向後の受入 Owner（Issue 番号・役割・状態） |
+| --- | --- |
+| Windows 実 WASAPI/WinMM 仮想 Endpoint 経由の OS API L3（実 Audio Input・OS MIDI を含む） | RF #629 OS virtual endpoint survey/probe（OPEN — 本番 Audio/MIDI API を通す仮想 Endpoint の Provisioning・検証） |
+| 正規 Plugin ABI（VST3/CLAP Test Plugin・Native Editor/Plugin Dock の実 ABI L3） | RF #630 ABI Test Plugin suite（OPEN — 正規 ABI を備えた実バイナリ Test Plugin を本番 Host 経路で実行） |
+| Windows で実際に提供・利用する GUI（実 Window scenario・Pixel/Receipt/Evidence） | RF #631 real-GUI scenario runner（OPEN — 実 OS Window/入力/Focus/画素の検証と Test GUI Dogfooding） |
+| 決定的 test runtime（VirtualClock/PCM/Fault/Oracle — OS-L1 契約・精度試験の基盤） | RF #628 deterministic test runtime（OPEN — Ruviform 製 Test Backend） |
+| OS-L1 / 両 Consumer 独立検証（Synvelis・AudioLens の独立 Oracle・consumer-verify tuple gate） | RF #294 consumer-verify 拡張（OPEN）・AL #127（OPEN — AudioLens 継続追従・高精度解析/GUI/CLI Consumer 回帰）・SV #28（OPEN — Synvelis 継続追従・DAW Consumer 回帰） |
+| 方針基盤（POLICIES §2.1 仮想優先契約の設計正本） | RF #627（CLOSED — 3repo 検証契約・物理 Gate 置換・独立 Oracle。実装・実走の Owner ではない） |
+
+設計 Issue（#192 系・#627）は実装・実走の Owner ではない。
+OS-L1/両 Consumer 独立検証は上記のとおり #294・AL #127・
+SV #28 へ移管する。
+
+### 原則（Required→Deferred 降格の禁止・分離の維持）
+
+- 本 remap は受入 Owner 欄の再指向であり、Windows で利用
+  する機能の L2/L3 を Required から Deferred へ降格
+  しない（POLICIES §2・§3）。
+- 「仮想 Endpoint の Pass は物理機材の Driver/ADC-DAC を
+  保証しない」「未検証 Case は `NotRun` と正直に記録」
+  「物理機材・市販 Plugin の一括 Required 化は課さない」
+  「design-Close と impl 受入を分離」の原則を維持する。
+- #251（実 Audio Input・OPEN）・#253（OS MIDI/VST3
+  backend・OPEN）・#388/#389（Native Dock/Plugin Editor
+  session・OPEN）は実装 Owner および EXT-L3 mechanism の
+  Owner として維持する。#243/#313 は CLOSED となり、
+  実 GUI 受入経路は #631 共通 Harness へ再指向した
+  （2026-11-14 snapshot ではいずれも OPEN — 陳腐化した
+  旧参照の根拠として日付を明記）。
+- 既存実装/CI に追加の Pass を付与しない。未実装の仮想
+  テストは `NotRun`、DComp 既知 Fail 等の既存結果は維持
+  する。RF #627 の詳細設計と #628〜631 の実装を取り違え
+  ない。
+- 対応表側の remap 記録は
+  [`docs/discovery/issue-192-ta-invariant-map.md`](../discovery/issue-192-ta-invariant-map.md)
+  の「Headless Gap → Open Gate 接続一覧」節の 2026-11-15
+  追記を参照。
