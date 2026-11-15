@@ -221,7 +221,9 @@ Directory: `docs/designs`
 | DESIGN-034XAEEhHWzlfr8ZBpkhgL | Issue #627 POLICIES整合・着地済み改訂の照合記録 | approved | [issue-627-policies-revision-proposal.md](./issue-627-policies-revision-proposal.md) |
 | DESIGN-034XAEBuSiPGfciAlww2l3 | Issue #627 仮想優先の3repo検証契約 | approved | [issue-627-virtual-first-verification-contract-design.md](./issue-627-virtual-first-verification-contract-design.md) |
 | DESIGN-034XBGBV0qexwf6VzGt77S | Issue #628 設計 — deterministic core（VirtualClock/PCM fixture/MIDI trace/独立 Oracle/run metadata） | approved | [issue-628-deterministic-test-runtime-design.md](./issue-628-deterministic-test-runtime-design.md) |
+| DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034XTP681X6oGd0SwnvpbS | Issue #631 Real-window native-slot dock lane 設計 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |

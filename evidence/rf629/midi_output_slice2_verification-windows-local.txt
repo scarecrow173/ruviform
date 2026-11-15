@@ -1,0 +1,65 @@
+# Issue #629 2nd slice — MIDI output path verification evidence
+
+- date: 2026-11-15
+- host: windows-local (DESKTOP-NH00KUI)
+- os: Microsoft Windows 11 Pro 10.0.26300, x86_64
+- cpu: Intel Core i9-9900K @ 3.60GHz
+- toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), mise-managed
+- branch: feat/629-midi-output
+- environment_kind: os-l1 (host compile/test evidence only — NOT
+  virtual-os-endpoint, NOT EXT-L3)
+
+Scope: `midi_output` port + mock (ruviform-audio-core),
+`encode_message` codec, WinMM `midiOut*` backend
+(os/windows_output.rs), `SystemBackend::output_ports` wiring,
+tests/output_ports.rs contract + #[ignore] real-device smoke.
+
+## Verification matrix (canonical = mise tasks)
+
+| command | os | toolchain | exit | result |
+| --- | --- | --- | --- | --- |
+| mise run fmt-check | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run check ruviform-audio-core | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run check ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run lint ruviform-audio-core | windows-local | rustc 1.99.1 | 0 | Pass (-D warnings clippy) |
+| mise run lint ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass |
+| mise run test ruviform-audio-core | windows-local | rustc 1.99.1 | 0 | Pass — 64 unit + 37 doc + 2 compile-fail doctests |
+| mise run test ruviform-midi-device | windows-local | rustc 1.99.1 | 0 | Pass — 24 unit (2 ignored), output_ports 2 (1 ignored), ports 2 (1 ignored), doctest 1 |
+| mise run test-rt | windows-local | rustc 1.99.1 | 0 | Pass — workspace rt_ filter; no new rt_ tests added (control-path only) |
+| mise exec -- prek run --all-files | windows-local | prek (apm) | 0 | Pass |
+
+## NotRun (explicit, per task spec)
+
+- MSRV lane — daily CI scope, not run by instruction.
+- test-midi-real-device lane — requires real MIDI devices; the
+  #[ignore] smokes (real_device_send_smoke x2) are collected by that
+  lane but were NOT executed in this slice. No virtual loopback
+  endpoint was provisioned, so no send->receive round-trip evidence
+  exists yet — recorded as NotRun, not Pass.
+- *-full lanes — out of scope for this slice.
+
+## What the Pass results actually prove (OS-L1 only)
+
+- midi_output port contract compiles object-safe through
+  Box<dyn MidiOutputEnumerator/MidiOutputPort/MidiOutput>.
+- Mock Expected/Observed: scripted send order, one-shot
+  fail_next_open/fail_next_send, close->StreamInvalidated.
+- encode_message: decode/encode round-trip identity for all MIDI 1.0
+  channel-voice kinds incl. pitch bend min/center/max; non-zero group
+  and unknown-kind refusal.
+- WinMM output enumeration on this host succeeded (empty-or-more is
+  honest); enumerated ports declare origin=Unknown,
+  supports_ump=false, provides_timestamps=false, clock_domain=None.
+- Non-Windows path returns DeviceError::Unsupported (compile-gated;
+  verified by cfg structure, Windows host cannot execute it).
+
+## Explicitly NOT proven here
+
+- virtual-os-endpoint behavior (no loopMIDI/Windows MIDI Services
+  loopback was provisioned or driven).
+- EXT-L3 real-device send/receive evidence.
+- midiOutMessage+DRV_QUERYDEVICEINTERFACE was NOT called anywhere
+  (1st-slice E2 crash precedent honored; index+name fallback only).
+- examples/midi_endpoint_probe.rs output enumeration extension —
+  lease-external, deferred to a later slice (probe remains
+  input-focused; its output section already exists from slice 1).
