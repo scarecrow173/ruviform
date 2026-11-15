@@ -65,6 +65,7 @@ Directory: `docs/tasks`
 | TASK-034XTPgAXjEOXFWn2Rv1Iy | Issue #631 T1 — Real-window native-slot dock lane | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TASK-034XVTrDLIayJZvRDYBcAb | Issue #631 T1 — Plugin-dock scenario catalog + driver projection | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TASK-034XWO3lADUXxGJf44pNX3 | Issue #631 T1 — Headless Scenario Console（plugin-dock-console bin） | in-progress | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
+| TASK-034YaXXtkSHtOycwJibVwz | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | in-progress | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
