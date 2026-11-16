@@ -9,14 +9,16 @@ ships to consumers (Issue #630, CLAP slice).
 ## What it provides
 
 A single CLAP plugin binary exporting `clap_entry` — a custom
-`Entry` + `PluginFactoryImpl` exposing three plugins through one
-factory:
+`Entry` + `PluginFactoryImpl` exposing five plugins through one
+factory (`plugin_count() == 5`):
 
 | Plugin | CLAP id | Surface |
 | --- | --- | --- |
 | `test_gain` | `org.ruviform-test.clap-test-gain` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
 | `test_fault` | `org.ruviform-test.clap-test-fault` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
 | `test_stateful` | `org.ruviform-test.clap-test-stateful` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` + `clap.ext.state` |
+| `test_instrument` | `org.ruviform-test.clap-test-instrument` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.note-ports` + `clap.ext.params` |
+| `test_editor` | `org.ruviform-test.clap-test-editor` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.gui` |
 
 Vendor is `"Ruviform Test"`, version `0.0.0`, features
 `audio-effect` + `stereo` — distinct from the
@@ -73,6 +75,43 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
   host bridge reports `HostError::Unsupported` honestly;
   `test_stateful` is the suite's real-ABI state oracle.
 
+## `test_editor` semantics
+
+- Parameterless pass-through DSP (the `test_fault` unarmed law, no
+  parameters declared at all) plus the plugin side of
+  `clap.ext.gui` — the CLAP counterpart of the VST3 `test_editor`
+  fixture.
+- `is_api_supported`/`get_preferred_api` answer `win32` + embedded
+  only, and only on Windows builds; floating windows, other API
+  types, and non-Windows builds are honest `false`/`None`.
+- `create` → `set_parent` → `show`/`hide` → `destroy` follow the
+  production host bridge's `open_gui`/`close_gui` contract. On
+  Windows `set_parent` validates the supplied `Window` is a Win32
+  window whose handle passes `IsWindow`, then creates a real
+  `WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS` child HWND under the
+  host parent; `destroy` frees it. An opaque `ParentLease` payload
+  (e.g. `ParentLease::new(0, 0)`) is *not* a window and is rejected
+  — never treated as one.
+- Size verbs are honest: `get_size` reports the fixed 640x480,
+  `can_resize`/`adjust_size`/`get_resize_hints` decline resize,
+  `set_size` rejects, `set_scale` accepts only finite positive
+  factors, `set_transient` rejects (floating unsupported).
+- Win32 calls are confined to `src/editor.rs`'s
+  `#[cfg(target_os = "windows")]` `win32` module behind
+  `#[expect(unsafe_code)]` + SAFETY comments — the crate's only
+  `unsafe`. The window class registers once per module with
+  `lpfnWndProc = DefWindowProcW` (a cdylib-registered class outlives
+  the module — a module-local `wnd_proc` would dangle after
+  `FreeLibrary`), class name `"RuviformClapTestEditor"`, distinct
+  from the VST3 fixture's class. There is no message pump or thread
+  of our own — the host calls the gui verbs on the parent HWND's
+  thread.
+- A real parent-HWND `open_gui` **success** path is the
+  `scarecrow173/ruviform#631` real-attach lane's evidence, not
+  claimed by this fixture's default tests; the `#[ignore]`d
+  `set_parent_creates_real_child_hwnd` unit test is the manual
+  opt-in check.
+
 ## Independence boundary
 
 The plugin-side implementation (DSP law, lifecycle mapping, port and
@@ -107,7 +146,8 @@ boundary. Verified by the `rt_` `assert_no_alloc` tests
 
 ## Scope
 
-This slice ships `test_gain`, `test_fault`, and `test_stateful`.
-CLAP `test_editor`, the `test_instrument` class, out-of-process
-editor attach, and the `ruviform-audio-test` runtime integration
-are subsequent slices of the same suite.
+This slice ships `test_gain`, `test_fault`, `test_stateful`,
+`test_instrument` and `test_editor`. Out-of-process editor attach
+(L1 `OpenGui`/`CloseGui` is `HostError::Unsupported` by design), the
+CLAP real-attach lane leg, external SDK validators, and consumer
+oracle checks are subsequent slices of the same suite.
