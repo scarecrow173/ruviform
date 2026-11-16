@@ -86,6 +86,13 @@ pub enum VerificationLevel {
 /// terms; a mock/headless success never promotes to a real kind).
 /// Serialized as the Case Schema v1 `kebab-case` vocabulary — the
 /// same spelling [`EnvironmentKind::as_str`] returns.
+///
+/// Known vocabulary gap: `RealAbiTestPlugin` keeps its historical
+/// `real-abi-test-plugin` wire spelling, which differs from the Case
+/// Schema v1 `test-plugin` value. Aligning it is a breaking serde
+/// change (consumers already emit the current spelling in evidence)
+/// and is deferred to a later slice together with a serde migration
+/// decision.
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -102,6 +109,19 @@ pub enum EnvironmentKind {
     /// lanes). Reserved for real-window driver runs — a headless or
     /// simulated run must not claim it.
     RealWindow,
+    /// A virtual OS endpoint that the production OS audio/MIDI API
+    /// actually traversed (e.g. a provisioned WASAPI/WinMM virtual
+    /// render↔capture pair driven through the production backend).
+    /// Only a run that really streamed through the endpoint may claim
+    /// this — enumeration-only, mock, or headless success stays
+    /// `DeterministicBackend`, and the kind never implies
+    /// physical-device parity.
+    VirtualOsEndpoint,
+    /// A physical audio/MIDI device or commercial plugin produced the
+    /// evidence. Reserved for opt-in cases that formally declare
+    /// support for that specific device/plugin — never part of
+    /// first-pass acceptance.
+    PhysicalDevice,
 }
 
 impl EnvironmentKind {
@@ -114,6 +134,8 @@ impl EnvironmentKind {
             Self::DeterministicBackend => "deterministic-backend",
             Self::RealAbiTestPlugin => "real-abi-test-plugin",
             Self::RealWindow => "real-window",
+            Self::VirtualOsEndpoint => "virtual-os-endpoint",
+            Self::PhysicalDevice => "physical-device",
         }
     }
 }

@@ -172,12 +172,34 @@ fn environment_kind_serde_matches_as_str() {
         EnvironmentKind::DeterministicBackend,
         EnvironmentKind::RealAbiTestPlugin,
         EnvironmentKind::RealWindow,
+        EnvironmentKind::VirtualOsEndpoint,
+        EnvironmentKind::PhysicalDevice,
     ] {
         let json = serde_json::to_string(&kind).unwrap();
         assert_eq!(json, format!("\"{}\"", kind.as_str()));
         let back: EnvironmentKind = serde_json::from_str(&json).unwrap();
         assert_eq!(back, kind);
     }
+}
+
+#[test]
+fn environment_kind_wire_spellings_match_case_schema_v1() {
+    // Case Schema v1 closed-set spellings (issue-627 contract). The
+    // variants whose `as_str` spelling is part of that closed set are
+    // pinned literally; `RealAbiTestPlugin` keeps its historical
+    // `real-abi-test-plugin` spelling (schema says `test-plugin`) — a
+    // known vocabulary gap deferred to a later serde-migration
+    // decision, so it is deliberately absent here.
+    assert_eq!(
+        EnvironmentKind::DeterministicBackend.as_str(),
+        "deterministic-backend"
+    );
+    assert_eq!(
+        EnvironmentKind::VirtualOsEndpoint.as_str(),
+        "virtual-os-endpoint"
+    );
+    assert_eq!(EnvironmentKind::RealWindow.as_str(), "real-window");
+    assert_eq!(EnvironmentKind::PhysicalDevice.as_str(), "physical-device");
 }
 
 #[test]
