@@ -169,8 +169,11 @@
 
 ## 未検証・Deferred（正直な記録）
 
-- macOS/Linux 実機での build/link/run — **NotRun**
-  （`evidence/rf560/platform-matrix.md` の分類を継承）。
+- macOS/Linux の build/link/test — **Pass**（merge 後 `ci.yml`
+  run `43932614405` @ `06c6d664`: `verify-macos`・
+  `verify (ubuntu-latest)`・`verify (windows-latest)` success。
+  Luau C++ shim の macOS 初回 build も green）。実機固有の
+  環境差分は `evidence/rf560/platform-matrix.md` の分類を継承。
 - release-size / performance / memory 実測 — **NotRun**。
 - runtime `ScriptBackend`（eval/budget/artifact）— 別 slice。
 - Synvelis thin adapter（AC3）— consumer gate（synvelis#271〜274）。
