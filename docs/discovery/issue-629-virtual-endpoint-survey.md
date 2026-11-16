@@ -4,7 +4,7 @@ type: "discovery"
 status: "draft"
 title: "Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe"
 created: "2026-11-14"
-updated: "2026-11-15"
+updated: "2026-11-17"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -243,3 +243,15 @@ Issue [#629](https://github.com/scarecrow173/ruviform/issues/629) は「Windows 
 - `mise.toml` に `[tasks.test-audio-virtual-endpoint]` を登録 — `cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1`（4th slice design の AC6 lane 設計記録どおり）。provisioning 依存の manual opt-in lane で CI 対象外、未 provisioning では `verdict: NotRun`（fail-closed）。専用 lint lane は追加せず既存 `lint-audio-real-input`（`--all-targets --features real-device`）が本 test target をカバー（Coordinator 確定）。
 - 上記 2026-11-16 4th slice 記録の「canonical=mise lane 未登録」は本 slice で解消 — canonical 起動式は `mise run test-audio-virtual-endpoint`。証拠採取時の `--nocapture` 注意は変わらず有効（mise lane 経由でも libtest の capture は同じ — verdict 行を evidence に採る場合は lane の `run` に `--nocapture` を足すか、補助証拠として直接 cargo 実行する）。
 - `mise run test-audio-virtual-endpoint` self-run → exit 0、`test render_capture_round_trip ... ok`（1 passed）。canonical lane の `run` には `--nocapture` を含めないため verdict 行は libtest capture 内 — 補助証拠として `--nocapture` 付き直接実行を併記し `verdict: NotRun — no input devices on this host`（fail-closed・pair 未 provision と同じ NotRun 系。4th slice 時点の `NOT_PROVISIONED` とは理由文字列が異なるが判定は同じ）を確認。evidence は `evidence/rf629/virtual_endpoint_slice5_lane_selfrun-windows-local.txt`。Pass は主張しない（provisioned runner での実走は外部 gate として残る）。
+
+### 2026-11-17 — closeout-prep slice: MIDI 仮想 lane 分離 + provisioning runbook + capability matrix 確定 + AC7 照合（headless）
+
+環境: Windows 11 `10.0.26300.9974` x86_64（`DESKTOP-NH00KUI`）。仮想 endpoint 未 provisioning のまま実行。
+
+- `mise.toml` に `[tasks.test-midi-virtual-endpoint]` を登録 — `cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1`（`loopback_round_trip` 仮想 pair verifier + `real_device_silent_output_smoke` GS Wavetable smoke の 2 テストを target 全体で収集。feature gate なしのため `--features` 不要 — Coordinator 確定）。provisioning 依存の manual opt-in lane で CI 対象外、未 provisioning では `verdict: NotRun`（fail-closed）。専用 lint lane は追加せず既定 `lint ruviform-midi-device`（`--all-targets`）が `loopback` target をカバー。`test-midi-real-device` は run 不変の包括 lane とし description/注記で仮想 pair 専用 lane との関係を明記。`docs/development-environment.md` の lane 表に `test-midi-real-device`（従来未収録の doc gap）と本 lane を併記。
+- `crates/ruviform-midi-device/tests/loopback.rs` の module doc（「`test-midi-real-device` が `#[ignore]` を収集するので lane 登録不要」— stale）と `loopback_round_trip` doc comment の canonical lane 参照を `mise run test-midi-virtual-endpoint` に更新（挙動不変 — doc のみ）。
+- provisioning runbook を `docs/designs/issue-629-provisioning-runbook.md` に文書化 — 専用 Windows runner 要件（repo 外工程・開発 PC 無断 driver 導入禁止）・license 事前確認を必須ゲート化（VB-CABLE donationware/loopMIDI 私的非商用限定/VAC 商用 perpetual/WMS loopback OS 付属 — survey Open Question #4）・候補別 install/cleanup/probe 手順（Audio=VB-CABLE/Hi-Fi/VAC、MIDI=loopMIDI/loopBE/WMS loopback、例外=SysVAD）・capability probe 判定主導フロー・両 lane 検証手順・NotRun 解釈・driver 署名/権限/cleanup の記録責任分担（probe best-effort vs runner 残件: SetupAPI 面・privacy キー体系的収集）。
+- Capability Matrix 確定版を同 design に収録 — survey 暫定 matrix を引き継ぎ、❓/⚠️ 項目と Open Questions #1-#7 を「provisioning 実測待ち」として明記（確定済みとは主張しない）。
+- AC7 consumer 照合を同 design に記録 — `scarecrow173/synvelis#115`（仮想 WASAPI Endpoint→本番 Callback + 独立 Oracle、物理 iD4/USB 抜去/ADC-DAC は未保証明記済み）・`scarecrow173/synvelis#117`（物理 Direct Hardware Monitoring は仮想で未保証・通常必須にしない明記済み）・`scarecrow173/synvelis#126`（仮想 WinMM Port→timestamp→Host の L3、物理 MIDI 機材は通常必須でなく MIDI2 は `scarecrow173/ruviform#317` future）・`scarecrow173/audio-lens#127`（device boundary 非消費で #629/#630 は NotApplicable 方針）。機材固有未保証範囲（物理 USB 抜去・ADC/DAC bit-exact・機種固有 driver・物理 Direct Monitoring・UMP/MPE）を明記。
+- 本 slice で解消: AC6 MIDI lane 分離・AC4 runbook 文書化・AC5 headless matrix 確定・AC7 headless 照合。未解消（後続/外部 gate）: 実 provisioning・driver install・license 判断・実走 Pass（AC1/AC2/AC5 実測）・`.github/**` CI/runner 統合・AC3 typed 結線・consumer 側独立 Oracle での実受入判定・`real-abi-test-plugin`↔`test-plugin` 語彙 gap（#389 占有中）。
+- lane self-run（`test-midi-virtual-endpoint`/`test-midi-real-device`/`test-audio-virtual-endpoint`）の結果は `evidence/rf629/` に記録 — 未 provisioning のため `verdict: NotRun`（fail-closed）であり Pass を主張しない。
