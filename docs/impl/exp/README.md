@@ -74,8 +74,10 @@ Directory: `docs/impl/exp`
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
 | [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
+| [issue-629-provisioning-runbook-exp.jsonl](./issue-629-provisioning-runbook-exp.jsonl) |
 | [issue-629-virtual-endpoint-lane-exp.jsonl](./issue-629-virtual-endpoint-lane-exp.jsonl) |
 | [issue-629-wasapi-endpoint-exp.jsonl](./issue-629-wasapi-endpoint-exp.jsonl) |
+| [issue-630-abi-validator-exp.jsonl](./issue-630-abi-validator-exp.jsonl) |
 | [issue-630-adapter-state-bridge.jsonl](./issue-630-adapter-state-bridge.jsonl) |
 | [issue-630-clap-test-editor-exp.jsonl](./issue-630-clap-test-editor-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
@@ -90,10 +92,12 @@ Directory: `docs/impl/exp`
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |
 | [issue-631-scenario-catalog.jsonl](./issue-631-scenario-catalog.jsonl) |
 | [issue-631-scenario-console.jsonl](./issue-631-scenario-console.jsonl) |
+| [issue-631-window-surface-exp.jsonl](./issue-631-window-surface-exp.jsonl) |
 | [issue-646-numeric-bench-profile.jsonl](./issue-646-numeric-bench-profile.jsonl) |
 | [issue-650-bench-smoke-coverage.jsonl](./issue-650-bench-smoke-coverage.jsonl) |
 | [issue-692-luau-backend-exp.jsonl](./issue-692-luau-backend-exp.jsonl) |
 | [issue-692-script-port-exp.jsonl](./issue-692-script-port-exp.jsonl) |
+| [issue-707-midi-cancellation.jsonl](./issue-707-midi-cancellation.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |

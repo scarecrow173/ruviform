@@ -358,6 +358,7 @@ Directory: `docs/tasks`
 | TASK-034YnAFuBxhg3H6xRVBCKB | Issue #629 virtual endpoint lane registration tasks | done | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034YboiLqA86ymomdjc56s | Issue #629 WASAPI streaming verifier tasks | done | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| TASK-630abiValidator05 | Issue #630 外部 ABI validator slice — task | done | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TASK-3bwAN8UwWS5HsnXVLLCAap | Issue #630 test_fault slice — task | done | [issue-630-test-fault.md](./issue-630-test-fault.md) |

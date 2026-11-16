@@ -206,6 +206,7 @@ Directory: `docs/specs`
 | SPEC-034YnyKRDisxQAnJdC2wTj | Issue #629 virtual endpoint lane registration and Test Runtime wiring check (5th slice) | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034YaVh88vUiMap5dBbjln | Issue #629 WASAPI streaming verifier and endpoint probe extension (4th slice) | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| SPEC-630abiValidator02 | Issue #630 外部 ABI validator slice — clap-validator 実走 + VST3 SDK validator + opt-in runner | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | SPEC-034Y13Y73IFhhGtTmihC8f | Issue #630 adapter-state-bridge slice — VST3 IBStream + CLAP clap.state host bridge | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
