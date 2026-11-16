@@ -82,6 +82,7 @@ Directory: `docs/adr`
 | ADR-034JZVID00000000000002 | A/V 同期判定ポリシー（audio master + PTS 追従） | accepted | [video-av-sync-policy.md](./video-av-sync-policy.md) |
 | ADR-034JcidaiOOip5EhNPOnDI | video-proc カーネル API 形状と色変換・HDR 対応範囲 | accepted | [video-proc-kernel-api-and-color-hdr-scope.md](./video-proc-kernel-api-and-color-hdr-scope.md) |
 | ADR-034JNYt58J8NlUkn6RfJMs | workspace MSRV 引上げ（1.85 → 1.89）と fearless_simd 本番昇格の解禁 | accepted | [workspace-msrv-1-85-1-89-fearless-simd.md](./workspace-msrv-1-85-1-89-fearless-simd.md) |
+| ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

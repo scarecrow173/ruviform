@@ -71,3 +71,4 @@ Directory: `docs/discovery`
 | DISC-034ZkLmNpQrStUvWxYzKl6 | Issue #692 ruviform-script port crate — 調査記録 | resolved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
+| DISC-qxX0PvQy0Qu34AwzZ69G5e | Issue #692 s2 Luau analyzer backend — 調査記録 | resolved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
