@@ -3,7 +3,7 @@
 //! dcomp-pixel slice).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twelve cases
+//! windows* through [`RealOsGuiTest`] and records the thirteen cases
 //! of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -33,6 +33,9 @@
 //! |                         |             | 非画素 oracle（session 状態・event・HWND）で観測      |
 //! | `real-editor-redock`    | `RealOs`    | `Unsupported`/`Fail` — `reattach` の定義済み拒否 →    |
 //! |                         |             | `Failed` → close 収束を event 系列で観測             |
+//! | `real-session-terminate`| `RealOs`    | `Pass`/`Fail`/`Unsupported` — attach 中の            |
+//! |                         |             | `HostCommand::Destroy` → `Terminated{HostLost}`       |
+//! |                         |             | exactly-once → child HWND teardown → host 存続        |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -53,9 +56,9 @@
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionState, EditorSize, HostCommand, InProcessEditorOps, InProcessHost, ParentLease,
-    ParentSlotLease, PluginEditorSession, PluginEditorSessionId, PluginEditorSessions,
-    PluginHandle, SessionFailCause,
+    EditorSessionState, EditorSize, HostCommand, HostError, HostReply, InProcessEditorOps,
+    InProcessHost, ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId,
+    PluginEditorSessions, PluginHandle, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::dock::ViewInstanceId;
@@ -333,7 +336,7 @@ fn finalize_real(
 /// `blocked_reports` reads the same rows for case ids and required
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 12] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 13] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -421,6 +424,13 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 12] {
             required: &[ScenarioCapability::NativePluginDock],
             spec_extras: editor_attach_extras,
             run: real_editor_redock_case,
+        },
+        ScenarioEntry {
+            case: "real-session-terminate",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_terminate_case,
         },
     ]
 }
@@ -737,7 +747,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -791,7 +801,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -1910,22 +1920,41 @@ fn attach_attempt_failure(attempt: &RealAttachAttempt) -> Option<ScenarioOutcome
     }
 }
 
-/// `real-editor-attach`: drives the real attach path —
-/// `PluginEditorSessions` → `InProcessEditorOps` → `OpenGui` —
-/// against a *real* container-HWND lease redeemed through
-/// [`RealOsGuiTest::redeem_native_lease`], now against the
-/// `test_editor` fixture whose `IPlugView` creates a real child
-/// HWND under the container. `Pass` requires `session.open(Docked)`
-/// → `Ok` AND every OS observation agreeing (child exists/parented/
-/// visible/live → destroyed after `close` → concluded →
-/// `[Attached{Docked}, Closed]` events); any mismatch is `Fail`, a
-/// defined refusal stays `Unsupported`.
-fn editor_attach_body(
+/// Case identity for [`editor_child_body`] — the strings that name
+/// this lifecycle path in reports: the `Pass` detail, the evidence
+/// tag, and the observation label used in `Fail` details.
+struct ChildCaseIdentity<'a> {
+    /// `Pass` detail — names which lifecycle path ran (graceful
+    /// close vs host loss).
+    pass_detail: &'a str,
+    /// Evidence tag pushed onto `Pass` outcomes.
+    evidence: &'a str,
+    /// Observation label named in `Fail` details.
+    label: &'a str,
+}
+
+/// Shared body for the child-HWND lifecycle cases
+/// (`real-editor-attach`, `real-session-terminate`) — identical
+/// prerequisite/attempt mapping; the case-supplied `observe_open`
+/// drives the post-open observation and decides the verdict:
+/// verified → `Pass` (`pass_detail`/`evidence`), platform-unsupported
+/// observation → `Unsupported`, any contract mismatch → `Fail`.
+fn editor_child_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
     view: ViewInstanceId,
     plugin: Option<&PluginPair>,
     plugin_error: Option<&PluginUnavailable>,
+    observe_open: impl FnOnce(
+        Option<u64>,
+        u64,
+        &mut PluginEditorSessions,
+        PluginEditorSessionId,
+        &mut InProcessHost,
+        PluginHandle,
+        &mut Vec<Value>,
+    ) -> ChildVerification,
+    case: &ChildCaseIdentity<'_>,
 ) -> ScenarioOutcome {
     let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
         Ok(pair) => pair,
@@ -1940,7 +1969,7 @@ fn editor_attach_body(
         &mut host,
         handle,
         &mut steps,
-        observe_editor_child_lifecycle,
+        observe_open,
     );
 
     let mut outcome = match attach_attempt_failure(&attempt) {
@@ -1948,20 +1977,13 @@ fn editor_attach_body(
         None => match verification.as_ref() {
             Some(verification) if verification.supported && verification.verified => {
                 // The real `test_editor` IPlugView attached a real
-                // child HWND under the leased container and detached
-                // cleanly — every OS observation agreed.
+                // child HWND under the leased container and every OS
+                // observation agreed — the case's own detail names
+                // which lifecycle path ran (graceful close vs host
+                // loss).
                 let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
-                outcome.detail = Some(
-                    "test_editor real IPlugView attached a real child HWND \
-                     under the leased container HWND and detached on close \
-                     (EnumChildWindows/GetParent/IsWindowVisible observed; \
-                     IsWindow(child)==0 after removed(); events \
-                     [Attached{Docked}, Closed])"
-                        .to_string(),
-                );
-                outcome
-                    .evidence
-                    .push("editor-attach:real-child-hwnd-lifecycle".to_string());
+                outcome.detail = Some(case.pass_detail.to_string());
+                outcome.evidence.push(case.evidence.to_string());
                 outcome
             }
             Some(verification) if !verification.supported => {
@@ -1979,13 +2001,17 @@ fn editor_attach_body(
             }
             Some(verification) => fail(format!(
                 "editor opened through the REAL container lease but the \
-                 child-HWND observation failed: {}",
+                 {} observation failed: {}",
+                case.label,
                 verification
                     .failure
                     .as_deref()
                     .unwrap_or("unknown mismatch")
             )),
-            None => fail("editor opened but no child-HWND observation was recorded".to_string()),
+            None => fail(format!(
+                "editor opened but no {} observation was recorded",
+                case.label
+            )),
         },
     };
     let mut observed = Map::from_iter([
@@ -1999,6 +2025,34 @@ fn editor_attach_body(
     }
     outcome.observed = Some(Value::Object(observed));
     outcome
+}
+
+/// `real-editor-attach` body — the graceful-close child-HWND
+/// lifecycle through [`editor_child_body`].
+fn editor_attach_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_child_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        observe_editor_child_lifecycle,
+        &ChildCaseIdentity {
+            pass_detail: "test_editor real IPlugView attached a real child \
+                          HWND under the leased container HWND and detached \
+                          on close (EnumChildWindows/GetParent/IsWindowVisible \
+                          observed; IsWindow(child)==0 after removed(); events \
+                          [Attached{Docked}, Closed])",
+            evidence: "editor-attach:real-child-hwnd-lifecycle",
+            label: "child-HWND",
+        },
+    )
 }
 
 /// `real-editor-attach` case: pre-flight requires
@@ -4076,6 +4130,278 @@ fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
     )
 }
 
+// ---------------------------------------------------------------------
+// case: real-session-terminate (host loss → Terminated exactly-once)
+// ---------------------------------------------------------------------
+
+/// Host-loss phase — `Deactivate` then `Destroy` on the live
+/// instance (an `Activated` plugin must be deactivated before
+/// `Destroy`; the headless `host-terminate` case uses the same
+/// order). Each command lands as its own step row and both run
+/// independently: a failed `Deactivate` does not skip `Destroy` —
+/// a `Failed` landing makes `Destroy` legal, and the extra
+/// evidence never masks the first failure. The instance drop runs
+/// the adapter's `close_view` → `removed()` → `DestroyWindow`
+/// synchronously, so the child HWNDs are already dead when this
+/// returns. Returns whether both commands landed.
+fn destroy_editor_instance(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let mut ok = true;
+    for (name, command) in [
+        ("deactivate", HostCommand::Deactivate { handle }),
+        ("destroy", HostCommand::Destroy { handle }),
+    ] {
+        match host.execute(command) {
+            Ok(_) => steps.push(json!({ "step": name, "verdict": "pass" })),
+            Err(error) => {
+                record_obs_fail(steps, failure, name, error.to_string());
+                ok = false;
+            }
+        }
+    }
+    ok
+}
+
+/// Registry termination phase — `notify_terminated(HostLost)`
+/// converges the attached session: `Closed`+`concluded`, exactly one
+/// `Terminated{HostLost}` event (the `Closed` event is graceful-close
+/// only and never appears here), and a repeated notify is a no-op
+/// because the instance binding was already removed. Returns
+/// `(converged_ok, rendered_events)`.
+fn terminate_editor_session(
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (bool, Vec<String>) {
+    sessions.notify_terminated(handle, SessionFailCause::HostLost);
+    steps.push(json!({
+        "step": "notify_terminated",
+        "verdict": "pass",
+        "cause": "host-lost",
+    }));
+
+    let mut ok = true;
+    if session_closed_concluded(sessions, session_id) {
+        steps.push(json!({ "step": "session_concluded", "verdict": "pass" }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_concluded",
+            "session did not converge to Closed+concluded after Terminated",
+        );
+        ok = false;
+    }
+
+    let events = sessions
+        .session_mut(session_id)
+        .map_or_else(Vec::new, PluginEditorSession::drain_events);
+    let rendered = events_debug(&events);
+    let expected = [
+        EditorSessionEvent::Attached {
+            mode: AttachMode::Docked,
+        },
+        EditorSessionEvent::Terminated {
+            cause: SessionFailCause::HostLost,
+        },
+    ];
+    if events == expected {
+        steps.push(json!({
+            "step": "session_events",
+            "verdict": "pass",
+            "events": rendered,
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_events",
+            format!("expected [Attached{{Docked}}, Terminated{{HostLost}}], got {rendered:?}"),
+        );
+        ok = false;
+    }
+
+    // exactly-once — the first notify removed the instance binding,
+    // so a repeated notify (or any late callback) emits nothing.
+    sessions.notify_terminated(handle, SessionFailCause::HostLost);
+    let after = sessions
+        .session_mut(session_id)
+        .map_or_else(Vec::new, PluginEditorSession::drain_events);
+    if after.is_empty() {
+        steps.push(json!({
+            "step": "notify_terminated_again",
+            "verdict": "pass",
+            "result": "no-op",
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "notify_terminated_again",
+            format!(
+                "second notify_terminated produced events: {:?}",
+                events_debug(&after)
+            ),
+        );
+        ok = false;
+    }
+    (ok, rendered)
+}
+
+/// Host-survival phase — the host command surface still answers
+/// (`Scan` → `Scanned`) while the destroyed instance's handle is
+/// rejected with `InvalidHandle`: the containing host outlives the
+/// plugin instance, and the DSP/host lifecycle is not conflated
+/// with the editor-session lifecycle. Returns whether both checks
+/// agreed.
+fn check_host_survives(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let mut ok = true;
+    match host.execute(HostCommand::Scan) {
+        Ok(HostReply::Scanned(_)) => {
+            steps.push(json!({ "step": "host_survives", "verdict": "pass" }));
+        }
+        Ok(_) => {
+            record_obs_fail(
+                steps,
+                failure,
+                "host_survives",
+                "Scan returned an unexpected reply shape",
+            );
+            ok = false;
+        }
+        Err(error) => {
+            record_obs_fail(steps, failure, "host_survives", error.to_string());
+            ok = false;
+        }
+    }
+    match host.execute(HostCommand::Initialize { handle }) {
+        Err(HostError::InvalidHandle) => {
+            steps.push(json!({
+                "step": "destroyed_handle_rejected",
+                "verdict": "pass",
+            }));
+        }
+        other => {
+            record_obs_fail(
+                steps,
+                failure,
+                "destroyed_handle_rejected",
+                format!("expected HostError::InvalidHandle, got {other:?}"),
+            );
+            ok = false;
+        }
+    }
+    ok
+}
+
+/// `real-session-terminate` post-open observation: child-HWND
+/// attach contract → host loss (`Deactivate`+`Destroy` — the
+/// instance drop runs `close_view` → `removed()` → `DestroyWindow`
+/// synchronously) → registry `notify_terminated(HostLost)` →
+/// `Closed`+`concluded` with exactly `[Attached{Docked},
+/// Terminated{HostLost}]` → repeated notify no-op → every recorded
+/// child `IsWindow(child) == 0` → host survival (`Scan` succeeds,
+/// destroyed handle `InvalidHandle`). No graceful `session.close`
+/// runs — the terminal event is `Terminated`, never `Closed`, and
+/// the child teardown is observed at OS level, not inferred from
+/// the session state.
+fn observe_session_terminate_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> ChildVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+
+    let destroy_ok = destroy_editor_instance(host, handle, steps, &mut failure);
+    let (terminated_ok, rendered) =
+        terminate_editor_session(sessions, session_id, handle, steps, &mut failure);
+    let detach_ok =
+        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
+    let host_ok = check_host_survives(host, handle, steps, &mut failure);
+
+    ChildVerification {
+        supported: observation.supported,
+        verified: attach_ok && destroy_ok && terminated_ok && detach_ok && host_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-session-terminate` body — the host-loss child-HWND
+/// lifecycle through [`editor_child_body`].
+fn session_terminate_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_child_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        observe_session_terminate_lifecycle,
+        &ChildCaseIdentity {
+            pass_detail: "test_editor real IPlugView attached under the \
+                          leased container HWND; host Destroy converged the \
+                          session to Terminated{HostLost} exactly once \
+                          (repeated notify is a no-op), the child HWND tore \
+                          down (IsWindow(child)==0), and the host survived",
+            evidence: "session-terminate:host-loss-exactly-once",
+            label: "session-terminate",
+        },
+    )
+}
+
+/// `real-session-terminate` case: pre-flight requires
+/// `NativePluginDock`, then the body drives the real attach chain
+/// plus the host-loss lifecycle — judged by session events, child
+/// HWND teardown, and host survival only, never pixels.
+fn real_session_terminate_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(session_terminate_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4123,11 +4449,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 12, "twelve real-dock cases");
+        assert_eq!(reports.len(), 13, "thirteen real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -4160,7 +4486,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");
