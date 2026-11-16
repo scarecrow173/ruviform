@@ -251,9 +251,11 @@ Directory: `docs/impl/ir`
 | IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| IMPL-034YIlnrAlTVIKDGSVNxwW | Issue #629 provisioning runbook and MIDI virtual lane separation | completed | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | IMPL-034YnB8vZodK9rvl3LOMoQ | Issue #629 virtual endpoint lane registration | completed | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034YbQpZeewSk6QoG6ahZJ | Issue #629 WASAPI endpoint streaming verifier | completed | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| IMPL-630abiValidator07 | Issue #630 外部 ABI validator slice — 実装記録 | completed | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
@@ -264,10 +266,12 @@ Directory: `docs/impl/ir`
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034Y4g5Cx7ToOHTcgE2U9x | Issue #630 test_stateful slice — 実装記録 | completed | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| IMPL-034YJ5ZPjma7y6yufrmtYd | Issue #631 RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | IMPL-034XEUw3tBbjwqbNReqULG | issue-646-numeric-bench-profile | completed | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | IMPL-R0CaDUMXvtPvWlqdqmhwtT | issue-650-bench-smoke-coverage | completed | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | IMPL-692LuauBackend0001 | Issue #692 s2 ruviform-script-luau analyzer backend | completed | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | IMPL-692ScriptPort0001 | Issue #692 ruviform-script neutral contract port | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
+| IMPL-034YJnaTZDWSZddB4rqGfu | Issue #707 MIDI input cancellation fault slice | completed | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

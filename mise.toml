@@ -321,6 +321,14 @@ run = "cargo test -p ruviform-plugin-core"
 description = "Lint plugin-core and its test targets"
 run = "cargo clippy -p ruviform-plugin-core --all-targets -- -D warnings"
 
+# Issue #630: opt-in external ABI validator lane (clap-validator + VST3 SDK
+# validator against the test-plugin fixtures). NOT a CI-required gate —
+# external tools must be supplied via --clap-validator/--vst3-validator or
+# RUVIFORM_ABI_VALIDATOR_DIR; missing tools yield honest NotRun verdicts.
+[tasks.test-plugin-abi-validator]
+description = "Run external ABI validators (clap-validator + VST3 SDK validator) against the test-plugin suite — opt-in, NOT a CI-required gate (Issue #630; evidence/rf630/)"
+run = "node ci/plugin-abi-validator/run.mjs"
+
 # Feature lanes: `cargo test --workspace` only covers default features, so
 # feature-gated code paths get their own tasks and a separate CI job.
 [tasks.test-video-proc-icc]

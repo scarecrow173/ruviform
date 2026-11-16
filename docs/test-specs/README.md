@@ -227,6 +227,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| TSPEC-630abiValidator06 | Issue #630 外部 ABI validator slice — test specification | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TSPEC-034Y14780zESXWkqYxDVNj | Issue #630 adapter-state-bridge slice — test specification | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TSPEC-034ZCLAPED6ts6ceM3kQ2x | Issue #630 CLAP test_editor slice — test specification | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |

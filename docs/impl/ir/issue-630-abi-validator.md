@@ -45,6 +45,11 @@ relations:
   blocks: []
   supersedes: []
   superseded-by: []
+metadata:
+  experiments:
+    adopted:
+      - "docs/impl/exp/issue-630-abi-validator-exp.jsonl"
+    rejected: []
 ---
 
 # Issue #630 外部 ABI validator slice — 実装記録

@@ -238,6 +238,7 @@ Directory: `docs/designs`
 | DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| DESIGN-630abiValidator03 | Issue #630 外部 ABI validator slice — 設計 | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | DESIGN-P7XCcqW3rGHPzKfQJ6SUA | Issue #630 adapter-state-bridge slice — 設計 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
