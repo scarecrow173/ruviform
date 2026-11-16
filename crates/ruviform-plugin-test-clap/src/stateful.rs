@@ -25,7 +25,11 @@
 //! that length: wrong length, magic, version or a non-finite value
 //! is a defined `PluginError` rejection; a finite out-of-range value
 //! clamps to the `ParamInfo` plain range, matching
-//! `text_to_value`'s law.
+//! `text_to_value`'s law. A `load` that changes the mirrored value
+//! requests `clap_host_params.rescan(CLAP_PARAM_RESCAN_VALUES)` —
+//! the CLAP-required announcement for parameter changes made outside
+//! param events (the main thread stores the host handle for exactly
+//! this call).
 //!
 //! Unlike `test_gain` — whose activation deterministically resets
 //! the parameter to its default — `test_stateful`'s activation
@@ -51,8 +55,8 @@ use clack_extensions::audio_ports::{
     PluginAudioPortsImpl,
 };
 use clack_extensions::params::{
-    ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, PluginAudioProcessorParams,
-    PluginMainThreadParams, PluginParams,
+    HostParams, ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, ParamRescanFlags,
+    PluginAudioProcessorParams, PluginMainThreadParams, PluginParams,
 };
 use clack_extensions::state::{PluginState, PluginStateImpl};
 use clack_plugin::extensions::PluginExtensions;
@@ -171,6 +175,11 @@ impl Drop for TestStatefulShared {
 /// parameter metadata and the `clap.ext.state` surface live here.
 pub(crate) struct TestStatefulMainThread<'a> {
     shared: &'a TestStatefulShared,
+    /// The host handle `state.load` needs to request a params rescan
+    /// when a restored blob changes parameter values — `Some` on the
+    /// real factory path, `None` only in unit tests that construct
+    /// the main thread directly.
+    host: Option<HostMainThreadHandle<'a>>,
 }
 
 impl<'a> PluginMainThread<'a, TestStatefulShared> for TestStatefulMainThread<'a> {}
@@ -233,10 +242,13 @@ impl clack_plugin::entry::DefaultPluginFactory for TestStatefulClapPlugin {
     }
 
     fn new_main_thread<'a>(
-        _host: HostMainThreadHandle<'a>,
+        host: HostMainThreadHandle<'a>,
         shared: &'a TestStatefulShared,
     ) -> Result<TestStatefulMainThread<'a>, PluginError> {
-        Ok(TestStatefulMainThread { shared })
+        Ok(TestStatefulMainThread {
+            shared,
+            host: Some(host),
+        })
     }
 }
 
@@ -289,7 +301,7 @@ impl PluginMainThreadParams for TestStatefulMainThread<'_> {
             flags: ParamInfoFlags::IS_AUTOMATABLE | ParamInfoFlags::REQUIRES_PROCESS,
             cookie: Cookie::empty(),
             name: GAIN_PARAM.name.as_bytes(),
-            module: b"/",
+            module: b"",
             min_value: GAIN_PARAM.min_value,
             max_value: GAIN_PARAM.max_value,
             default_value: GAIN_PARAM.default_value,
@@ -416,7 +428,18 @@ impl PluginStateImpl for TestStatefulMainThread<'_> {
             return Err(PluginError::Message("state blob has trailing data"));
         }
         let gain = decode_state_blob(&blob).ok_or(PluginError::Message("malformed state blob"))?;
+        let previous = self.shared.gain_mirror.load();
         self.shared.gain_mirror.store(gain);
+        // CLAP contract: parameter values changed outside param events
+        // (a state restore) must be announced through
+        // `clap_host_params.rescan` so the host re-reads them — hosts
+        // without the params extension simply never see the request.
+        if previous.to_bits() != gain.to_bits()
+            && let Some(host) = self.host
+            && let Some(params) = host.get_extension::<HostParams>()
+        {
+            params.rescan(&host, ParamRescanFlags::VALUES);
+        }
         Ok(())
     }
 }
@@ -574,9 +597,20 @@ impl<'a> PluginAudioProcessor<'a, TestStatefulShared, TestStatefulMainThread<'a>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
     use clack_common::events::Pckn;
     use clack_common::events::event_types::ParamValueEvent;
     use clack_common::events::io::EventBuffer;
+    use clack_extensions::params::{
+        HostParams, HostParamsImplMainThread, HostParamsImplShared, ParamClearFlags,
+        ParamRescanFlags,
+    };
+    use clack_host::entry::PluginEntry;
+    use clack_host::host::{
+        HostExtensions, HostHandlers, HostInfo, MainThreadHandler, SharedHandler,
+    };
+    use clack_host::plugin::PluginInstance;
     use clack_host::process::audio_buffers::{
         AudioPortBuffer, AudioPortBufferType, AudioPorts, InputAudioBuffers, InputChannel,
         OutputAudioBuffers,
@@ -742,7 +776,10 @@ mod tests {
     fn state_extension_saves_and_loads_plain_gain() {
         let shared = TestStatefulShared::initialize().unwrap();
         shared.gain_mirror.store(0.75);
-        let main = TestStatefulMainThread { shared: &shared };
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
 
         let mut bytes = Vec::new();
         {
@@ -767,7 +804,10 @@ mod tests {
     fn state_extension_load_rejects_malformed_blobs() {
         let shared = TestStatefulShared::initialize().unwrap();
         shared.gain_mirror.store(1.0);
-        let main = TestStatefulMainThread { shared: &shared };
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
 
         let try_load = |bytes: &[u8]| {
             let mut reader = std::io::Cursor::new(bytes);
@@ -795,6 +835,96 @@ mod tests {
         assert_eq!(shared.gain_mirror.load(), 1.0);
     }
 
+    // -- Params rescan contract (state load) ---------------------------------
+
+    /// Recording host side: every `clap_host_params.rescan` the plugin
+    /// issues lands in `rescans` — the observable half of the CLAP
+    /// contract that a state `load` changing parameter values must
+    /// announce a values rescan.
+    struct RescanProbeShared {
+        rescans: Arc<Mutex<Vec<ParamRescanFlags>>>,
+    }
+
+    struct RescanProbeMainThread<'a> {
+        shared: &'a RescanProbeShared,
+    }
+
+    struct RescanProbeHost;
+
+    impl SharedHandler<'_> for RescanProbeShared {
+        fn request_restart(&self) {}
+        fn request_process(&self) {}
+        fn request_callback(&self) {}
+    }
+
+    impl HostParamsImplShared for RescanProbeShared {
+        fn request_flush(&self) {}
+    }
+
+    impl<'a> MainThreadHandler<'a> for RescanProbeMainThread<'a> {}
+
+    impl HostParamsImplMainThread for RescanProbeMainThread<'_> {
+        fn rescan(&self, flags: ParamRescanFlags) {
+            self.shared
+                .rescans
+                .lock()
+                .expect("rescan recorder poisoned")
+                .push(flags);
+        }
+
+        fn clear(&self, _param_id: ClapId, _flags: ParamClearFlags) {}
+    }
+
+    impl HostHandlers for RescanProbeHost {
+        type Shared<'a> = RescanProbeShared;
+        type MainThread<'a> = RescanProbeMainThread<'a>;
+        type AudioProcessor<'a> = ();
+
+        fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &Self::Shared<'_>) {
+            builder.register::<HostParams>();
+        }
+    }
+
+    /// `clap.ext.state` `load` runs the real ABI path — instantiate
+    /// `test_stateful` through the suite entry via clack-host, restore
+    /// a blob that changes the gain, and assert the plugin requested a
+    /// `VALUES` params rescan exactly once (and not again when the
+    /// restored value is already current).
+    #[test]
+    fn state_load_requests_params_values_rescan() {
+        let rescans = Arc::new(Mutex::new(Vec::new()));
+        let entry =
+            PluginEntry::load_from_clack::<crate::TestSuiteEntry>(c"stateful.clap").unwrap();
+        let host_info = HostInfo::new("test host", "ruviform", "", "0.0.1").unwrap();
+        let mut instance = PluginInstance::<RescanProbeHost>::new(
+            {
+                let rescans = Arc::clone(&rescans);
+                move |()| RescanProbeShared { rescans }
+            },
+            |shared| RescanProbeMainThread { shared },
+            &entry,
+            c"org.ruviform-test.clap-test-stateful",
+            &host_info,
+        )
+        .unwrap();
+
+        let handle = instance.plugin_handle();
+        let state = handle.get_extension::<PluginState>().unwrap();
+
+        // Restore gain 0.5 — different from the 1.0 default → rescan.
+        let mut reader = std::io::Cursor::new(encode_state_blob(0.5));
+        state.load(&handle, &mut reader).unwrap();
+        assert_eq!(
+            *rescans.lock().expect("rescan recorder poisoned"),
+            vec![ParamRescanFlags::VALUES]
+        );
+
+        // Re-load the identical value — nothing changed → no rescan.
+        let mut reader = std::io::Cursor::new(encode_state_blob(0.5));
+        state.load(&handle, &mut reader).unwrap();
+        assert_eq!(rescans.lock().expect("rescan recorder poisoned").len(), 1);
+    }
+
     // -- Activation preserves persisted state -------------------------------
 
     /// The stateful fixture's defining law: a `load`-written (or
@@ -803,7 +933,10 @@ mod tests {
     #[test]
     fn activation_preserves_loaded_gain() {
         let shared = TestStatefulShared::initialize().unwrap();
-        let main = TestStatefulMainThread { shared: &shared };
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
 
         // Restore gain 0.75 through the state surface before activation.
         let mut bytes = Vec::new();
@@ -913,7 +1046,10 @@ mod tests {
     #[test]
     fn params_extension_reports_and_flushes_gain() {
         let shared = TestStatefulShared::initialize().unwrap();
-        let main = TestStatefulMainThread { shared: &shared };
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
         assert_eq!(main.get_value(ClapId::new(0)), Some(1.0));
         assert_eq!(main.get_value(ClapId::new(7)), None);
 
@@ -950,7 +1086,10 @@ mod tests {
         ap.stop_processing();
         assert_eq!(shared.lifecycle.state(), LifecycleState::Activated);
 
-        let main = TestStatefulMainThread { shared: &shared };
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
         ap.deactivate(&main); // consumes the audio processor
         assert_eq!(shared.lifecycle.state(), LifecycleState::Initialized);
 

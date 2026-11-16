@@ -52,7 +52,10 @@ pub(crate) const MAX_CHANNELS: usize = 2;
 /// Maximum input events translated per block. Hosts may attach
 /// arbitrary event counts; the per-block scan must stay bounded, so
 /// oversized lists are a defined rejection rather than unbounded work.
-pub(crate) const MAX_EVENTS_PER_BLOCK: usize = 256;
+/// 1024 matches the VST3 fixture's `MAX_BLOCK_EVENTS` and covers the
+/// densest realistic host streams (the external `clap-validator`
+/// note generators emit several hundred events per 512-frame block).
+pub(crate) const MAX_EVENTS_PER_BLOCK: usize = 1_024;
 
 /// Retry bound for the atomic lifecycle CAS — two threads (audio and
 /// main) can contend, and contention beyond this cap means concurrent
@@ -253,9 +256,11 @@ impl ParamMirror {
 /// Maps the CLAP activation config to the neutral [`ProcessConfig`].
 ///
 /// Defined rejections (→ `Err`, which the plugin reports as
-/// `ActivateFailed`): non-finite or non-positive sample rate,
-/// fractional rate (the neutral `SampleRate` is integer Hz), rate
-/// above `u32::MAX`, zero `max_frames`, or `min > max`.
+/// `ActivateFailed`): non-finite or non-positive sample rate, rate
+/// above `u32::MAX`, zero `max_frames`, or `min > max`. A fractional
+/// rate negotiates the nearest integer Hz — CLAP delivers `f64`
+/// rates and the neutral [`SampleRate`] is integer Hz (the same law
+/// the VST3 fixture applies to `ProcessSetup.sampleRate`).
 ///
 /// **RT contract:** non-RT only — called from `activate`.
 pub(crate) fn to_process_config(
@@ -265,15 +270,13 @@ pub(crate) fn to_process_config(
     if !rate.is_finite()
         || rate <= 0.0
         || rate > f64::from(u32::MAX)
-        || rate.fract() != 0.0
         || audio_config.max_frames_count == 0
     {
         return Err(PluginError::Message("unsupported audio configuration"));
     }
-    // Range-checked above: the cast is a defined truncation of an
-    // integer-valued f64 inside u32 bounds.
+    // Range-checked above: rounding stays inside u32 bounds.
     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let sample_rate = SampleRate::new(rate as u32)
+    let sample_rate = SampleRate::new(rate.round() as u32)
         .map_err(|_| PluginError::Message("unsupported sample rate"))?;
     ProcessConfig::new(
         sample_rate,
@@ -1008,5 +1011,37 @@ mod tests {
                 if matches!(m.kind, MidiKind::ControlChange { controller, value }
                     if controller.get() == 7 && value == 0)
         ));
+    }
+
+    /// CLAP delivers `sample_rate` as `f64` — fractional rates are
+    /// legal host input (the external `clap-validator` exercises
+    /// 1234.5678 Hz). The neutral `SampleRate` is integer Hz, so the
+    /// config negotiates the nearest Hz — the same law the VST3
+    /// fixture applies to `ProcessSetup.sampleRate`.
+    #[test]
+    fn fractional_sample_rate_rounds_to_nearest_hz() {
+        let audio_config = PluginAudioConfiguration {
+            sample_rate: 1234.5678,
+            min_frames_count: 1,
+            max_frames_count: 512,
+        };
+        let config = to_process_config(&audio_config).unwrap();
+        assert_eq!(config.sample_rate().get(), 1235);
+    }
+
+    /// Dense note streams above the old 256-event bound must still
+    /// translate — `clap-validator`'s note generators emit several
+    /// hundred events per 512-frame block. The bound exists to keep
+    /// the RT scan finite, not to reject realistic host density.
+    #[test]
+    fn dense_event_stream_within_bound_translates() {
+        let mut buffer = EventBuffer::new();
+        for i in 0..300_u32 {
+            buffer.push(&NoteOnEvent::new(i % 512, pckn(), 1.0));
+        }
+        let input = buffer.as_input();
+        let mut scratch = BlockScratch::new(MAX_CHANNELS, MAX_EVENTS_PER_BLOCK);
+        let list = translate_events(&input, &mut scratch, 512, translate_note_event).unwrap();
+        assert_eq!(list.len(), 300);
     }
 }
