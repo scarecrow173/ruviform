@@ -36,9 +36,9 @@ ci/plugin-abi-validator/
   tests/run.test.mjs       # node:test contract test
 evidence/rf630/abi-validator/
   run.json                 # 構造化 run report（schema rf630-abi-validator-run/1）
-  clap-<plugin>.log        # 各 CLAP leg の生出力
-  clap-test_fault-unfiltered.log
-  vst3-validator.log
+  clap-<plugin>.txt        # 各 CLAP leg の生出力
+  clap-test_fault-unfiltered.txt
+  vst3-validator.txt
 ```
 
 runner は「tool 解決 → fixture build → leg 実行 → verdict 集約 →
@@ -116,7 +116,7 @@ plugin-abi-validator/`（`--validator-dir` 既定候補として
 version、tools.{clapValidator,vst3Validator}.{path,sha256}、
 artifacts.{clapDll,vst3Dll}.{path,sha256|missing}、build 結果、
 legs[]、evaluation{verdict,exitCode,summary}。生出力は
-`clap-*.log`/`vst3-validator.log` に分離し run.json は参照のみ
+`clap-*.txt`/`vst3-validator.txt` に分離し run.json は参照のみ
 保持（rawOutput は leg から除去して書き出し）。
 
 ## リスクと対応

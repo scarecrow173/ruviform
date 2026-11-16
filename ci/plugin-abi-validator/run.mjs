@@ -472,7 +472,7 @@ export function run(opts) {
       });
       if (plugin.exclude) leg.exclusion = { pattern: plugin.exclude, reason: plugin.excludeReason };
       legs.push(leg);
-      writeFileSync(join(evidenceDir, `clap-${plugin.name}.log`), leg.rawOutput || "");
+      writeFileSync(join(evidenceDir, `clap-${plugin.name}.txt`), leg.rawOutput || "");
       delete leg.rawOutput;
     }
     // Informational unfiltered fault run — records the intentional
@@ -485,7 +485,7 @@ export function run(opts) {
         `unfiltered run: ${leg.status} — ${leg.details || ""} ` +
         `(expected: fatal fault modes are armed by param-mutating cases)`;
       legs.push(leg);
-      writeFileSync(join(evidenceDir, `clap-${fault.name}-unfiltered.log`), leg.rawOutput || "");
+      writeFileSync(join(evidenceDir, `clap-${fault.name}-unfiltered.txt`), leg.rawOutput || "");
       delete leg.rawOutput;
     }
   }
@@ -528,7 +528,7 @@ export function run(opts) {
       leg.bundle = bundleDir;
       leg.innerBinary = innerPath;
       legs.push(leg);
-      writeFileSync(join(evidenceDir, "vst3-validator.log"), leg.rawOutput || "");
+      writeFileSync(join(evidenceDir, "vst3-validator.txt"), leg.rawOutput || "");
       delete leg.rawOutput;
     } finally {
       rmSync(stageRoot, { recursive: true, force: true });

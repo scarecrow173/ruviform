@@ -64,7 +64,7 @@ relations:
 - VST3 は DLL を spec layout の bundle に staging して validator 実行。
 - verdict は canonical leg のみで集約。Passed のみ exit 0。
 - evidence: `run.json`（schema `rf630-abi-validator-run/1`）+
-  `clap-*.log`/`vst3-validator.log`。
+  `clap-*.txt`/`vst3-validator.txt`。
 
 ### contract test（`ci/plugin-abi-validator/tests/run.test.mjs`）
 
@@ -100,5 +100,5 @@ spawn 失敗 → Failed）を固定。
 
 ## evidence
 
-`evidence/rf630/abi-validator/run.json` + `clap-*.log` +
-`vst3-validator.log`、`evidence/rf630/abi-validator-verification.md`。
+`evidence/rf630/abi-validator/run.json` + `clap-*.txt` +
+`vst3-validator.txt`、`evidence/rf630/abi-validator-verification.md`。

@@ -44,7 +44,7 @@ validator の実走で充足する。
 | artifact | SHA-256 |
 | --- | --- |
 | `target/debug/ruviform_plugin_test_clap.dll` | `b770d7dafed4f45010b5fece9e6cc0111d0cd383a3703e0012ba3ee9931af470` |
-| `target/debug/ruviform_plugin_test_vst3.dll` | `e7a2560e2b0d41ee1a0e6914ef823ed89e4df2359a44b705371ace6d8f8104e5` |
+| `target/debug/ruviform_plugin_test_vst3.dll` | `0f5e9e51e3bf2427502404d8ab6206442035e9f39f2b2920e0d39a8b2fb14688` |
 
 VST3 は DLL を spec layout
 `ruviform-plugin-test-vst3.vst3/Contents/x86_64-win/ruviform-plugin-test-vst3.vst3`
@@ -65,7 +65,7 @@ node ci/plugin-abi-validator/run.mjs \
 - exit code: **0** / verdict: **Passed**
 - 構造化結果: `evidence/rf630/abi-validator/run.json`
   （schema `rf630-abi-validator-run/1`）
-- 生出力: `clap-test_*.log`（6 本）・`vst3-validator.log`
+- 生出力: `clap-test_*.txt`（6 本）・`vst3-validator.txt`
 
 ### leg 別結果
 

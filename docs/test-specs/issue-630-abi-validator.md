@@ -68,7 +68,7 @@ command・exit code を保持し、生出力は別ファイルに分離する。
 
 - Example: `tools.clapValidator.sha256` と `artifacts.clapDll.sha256`
   が 64 hex で記録される。`legs[].rawOutput` は run.json に残さない
-  （`clap-*.log`/`vst3-validator.log` へ）。
+  （`clap-*.txt`/`vst3-validator.txt` へ）。
 
 ## 検証コマンド（canonical）
 
