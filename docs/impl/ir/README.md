@@ -14,7 +14,6 @@ Directory: `docs/impl/ir`
 | IMPL-_exo5tf9F8bfLQSN05ZaeA | Issue #426 実装記録 — GPUI lab binding・story matrix・mechanism 実在検査・Golden 境界・Consumer 検査 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | IMPL-034YfD7Ww0GzDhsIAOEu4H | issue-532-dcomp-pixel | in-progress | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | IMPL-034Yy34gIfucX5jGQYgsJ6 | Issue 532 foreground probe mutation slice | in-progress | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
-| IMPL-034YC0Zh82xIExSOVai1Rg | Issue 532 presentation probe slice | in-progress | [issue-532-presentation-probe-slice.md](./issue-532-presentation-probe-slice.md) |
 | IMPL-IVBg1yR3uF3Zq1zXqfrIYj | Issue #582 ci lane failures implementation record | draft | [issue-582-ci-lane-failures.md](./issue-582-ci-lane-failures.md) |
 | IMPL-034XqUtbQR6b9Xie900zZv | Issue #625 ci e2e handshake race implementation record | draft | [issue-625-ci-e2e-handshake-race.md](./issue-625-ci-e2e-handshake-race.md) |
 | IMPL-034XAVfCRzURaeZTUI61HZ | Issue #627 仮想優先3repo検証契約 implementation record | draft | [issue-627-virtual-first-verification-contract.md](./issue-627-virtual-first-verification-contract.md) |

@@ -213,7 +213,6 @@ Directory: `docs/designs`
 | DESIGN-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel 設計（real-dcomp-pixel case 構成・画素 oracle・env 記録・A' 実機観測手順） | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | DESIGN-034YxD6W7IXEfl432tYKlt | Issue #532 foreground-probe 設計（変異 module・段階・復元・verdict 意味論） | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
 | DESIGN-034XAYbSgNZPA0pCsrkqfy | Issue #532 GPUI DComp 監査 — 方式A/B/C 技術入力設計 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
-| DESIGN-RLPMudBgwjqSh9kxCAvNCq | Issue #532 presentation-probe 設計（cover inventory・capture path variant・fingerprint・verdict 意味論） | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-sh006tWu0ht5WmSqG0V85w | Consumer-neutral Workflow/CLI orchestration契約設計（Issue #553 RF-AUTX-01） | approved | [issue-553-workflow-orchestration-design.md](./issue-553-workflow-orchestration-design.md) |
 | DESIGN-034XeaFjxZePL0m6LYuEeS | Multi-backend Script/Analyzer言語非依存契約設計（Issue #558 RF-SCRIPT-00） | approved | [issue-558-script-contract-design.md](./issue-558-script-contract-design.md) |
