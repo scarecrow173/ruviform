@@ -243,6 +243,7 @@ Directory: `docs/impl/ir`
 | IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| IMPL-034YnB8vZodK9rvl3LOMoQ | Issue #629 virtual endpoint lane registration | completed | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034YbQpZeewSk6QoG6ahZJ | Issue #629 WASAPI endpoint streaming verifier | completed | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |

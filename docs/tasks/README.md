@@ -343,6 +343,7 @@ Directory: `docs/tasks`
 | TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | done | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TASK-RF628pwpipeline0000004 | Issue #628 タスク — pipeline wiring 実装 | done | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | TASK-RF628sBscripted0000004 | Issue #628 タスク — scripted port-trait backend 実装 | done | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| TASK-034YnAFuBxhg3H6xRVBCKB | Issue #629 virtual endpoint lane registration tasks | done | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034YboiLqA86ymomdjc56s | Issue #629 WASAPI streaming verifier tasks | done | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
