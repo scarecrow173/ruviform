@@ -115,7 +115,13 @@ sha2 = "0.10"
 #   `SetForegroundWindow`/`GetForegroundWindow`/`GW_HWNDPREV` move the
 #   GPUI root's z-order band and foreground inside `osmut`, always
 #   followed by a restore; this crate still never creates, destroys,
-#   or messages a window through it. Windows-targeted so the dep never
+#   or messages a window through it. The Issue #532
+#   presentation-probe slice adds query-only inventory/attribute
+#   observation (`EnumWindows`/`GetWindow`/`GetWindowLongPtrW`/
+#   `GetWindowRgn`/`GetRgnBox`/`GetUpdateRect`/
+#   `GetLayeredWindowAttributes`, plus `DwmGetWindowAttribute` via
+#   local extern) — no mutation, no new features. Windows-targeted
+#   so the dep never
 #   enters non-Windows builds; optional so the default headless
 #   lane's dependency tree is unchanged. Same `windows-sys` 0.61
 #   line `ruviform-poc-native-dock` already uses; the Gdi feature is

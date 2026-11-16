@@ -83,6 +83,7 @@ windows**:
 | `real-capture` | window/slot-region pixels only — detail states the capture target is not plugin-editor pixels |
 | `real-dcomp-pixel` | `Pass` only when the docked `test_editor` child HWND's **screen-composited** pixels (screen-DC `BitBlt` of its `GetWindowRect` region — what the user sees) show `EDITOR_COLOR` green; lifecycle verified + no green → `Fail` (the known GPUI DComp topmost occlusion regression), pixels unevaluable → `NotRun`, defined refusal → `Unsupported`. `PrintWindow(child)`/`GetDC`+`BitBlt` are recorded as `note`-level diagnostics (the child's own raster/surface, not the on-screen composition), plus query-only occlusion notes (`occlusion_exstyle`/`occlusion_zorder`/`occlusion_hit_test` — root/parent/child styles, sibling z-order, `WindowFromPoint` hit-test). `--pixel-artifacts <dir>` optionally writes the captured frames as PNG |
 | `real-dcomp-foreground` | `Pass`/`Fail`/`NotRun`/`Unsupported` — GPUI root の z-order/foreground を段階変異（raise → `SetForegroundWindow` → topmost → restore）し、各段階で hit-test + screen green を再観測して外部 HWND stacking と compositor 内部遮蔽を二分する probe。verdict は probe 実行+状態復元+lifecycle のみ — screen green 出現の有無は二分の結果データであって verdict 入力ではない。`SetForegroundWindow` の foreground-lock 拒否は記録のみ、`SetWindowPos` の拒否・復元検証失敗は `Fail` |
+| `real-dcomp-present` | `Pass`/`Fail`/`NotRun`/`Unsupported` — 変異なしの presentation probe（Issue #532 残余候補の判別）: `EnumWindows` top-level inventory（`WindowFromPoint` が skip する hidden/disabled/transparent/layered/cloaked cover を捕捉）・per-HWND presentation attributes（`DWMWA_CLOAKED`/window region/update region/layered）・`PrintWindow` flag 変種（`0`/`PW_CLIENTONLY`/`PW_RENDERFULLCONTENT`/複合）+ window DC・screen-vs-suspect 画素 fingerprint（quantized-bin match fraction）を child ごとに記録。verdict は probe 実行+lifecycle のみ — cover/fingerprint/green の観測値はすべて二分データで verdict 入力ではない |
 | `real-multiwindow-focus` | two real OS windows mounted; `Pass` only when `request_focus` → `window_focused` settles observe the A→B→A focus transfer. Focus release is recorded as observation only (the driver may honestly report `Unsupported`) |
 | `real-os-input` | `Pass` only when the injection-effect preflight proves effective AND pointer move (physical cursor read-back), click, and `Tab` keystroke all land `Injected` on the focused real window; `EnvironmentBlocked`/`NotRun`/`Unsupported` outcomes map to the same-named verdicts — never a fake pass |
 | `real-window-dpi` | `Unsupported` — `RealOsGuiTest` exposes no scale-factor/DPI observation or change API; recorded inside the real session so the gap is machine-visible |
@@ -153,7 +154,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the fourteen `rf631.plugin-dock-real`
+- `--list --include-real` — appends the fifteen `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused
