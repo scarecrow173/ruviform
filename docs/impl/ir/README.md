@@ -264,6 +264,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034XEUw3tBbjwqbNReqULG | issue-646-numeric-bench-profile | completed | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | IMPL-R0CaDUMXvtPvWlqdqmhwtT | issue-650-bench-smoke-coverage | completed | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| IMPL-692ScriptPort0001 | Issue #692 ruviform-script neutral contract port | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |
