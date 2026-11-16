@@ -58,6 +58,7 @@ Directory: `docs/impl/exp`
 | [issue-253-midi-event-contract.jsonl](./issue-253-midi-event-contract.jsonl) |
 | [issue-253-virtual-midi-e2e-exp.jsonl](./issue-253-virtual-midi-e2e-exp.jsonl) |
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
+| [issue-389-editor-session-exp.jsonl](./issue-389-editor-session-exp.jsonl) |
 | [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
 | [issue-389-session-lifecycle-exp.jsonl](./issue-389-session-lifecycle-exp.jsonl) |
 | [issue-532-dcomp-occlusion-exp.jsonl](./issue-532-dcomp-occlusion-exp.jsonl) |
