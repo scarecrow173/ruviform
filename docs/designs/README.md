@@ -207,7 +207,6 @@ Directory: `docs/designs`
 | DESIGN-eBMdc3IAyT8cNugckC1k2Q | Issue #490 oracle late-create query epoch 整合設計 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | DESIGN-034WZDs4eeCII39QySEoEq | Issue #532 DComp 監査文書チェーン設計 | approved | [issue-532-dcomp-audit-design.md](./issue-532-dcomp-audit-design.md) |
 | DESIGN-034WZDvbXaGkQVl6nT6jRx | Issue #532 DComp Native Dock 再開条件と方式 A/B/C 調査設計 | approved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
-| DESIGN-034YnzqSiMt4kOkhHo0CBy | Issue #532 dcomp-occlusion 設計（query-only 遮蔽層診断の構成・実走手順・二分解釈） | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | DESIGN-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel 設計（real-dcomp-pixel case 構成・画素 oracle・env 記録・A' 実機観測手順） | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | DESIGN-034XAYbSgNZPA0pCsrkqfy | Issue #532 GPUI DComp 監査 — 方式A/B/C 技術入力設計 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |

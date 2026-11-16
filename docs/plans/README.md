@@ -174,7 +174,6 @@ Directory: `docs/plans`
 | PLAN-034UiTo1gkl570hZTb2iU7 | Issue #480 実装計画 — tab_focus の op 駆動解放 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | PLAN-2uLb895SP6hIbAneuh5Pjs | Issue #490 oracle late-create query epoch 実装計画 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | PLAN-034WZEqWKThthcYF1frADG | Issue #532 DComp 監査文書チェーン計画 | approved | [issue-532-dcomp-audit-plan.md](./issue-532-dcomp-audit-plan.md) |
-| PLAN-034YnCJRmR1GQYwKErRZOn | Issue #532 dcomp-occlusion 実装計画 | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | PLAN-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel 実装計画 | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | PLAN-034XB2HkzXlDdkYzRd4gWv | Issue #532 GPUI DComp public-surface 監査計画 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
