@@ -67,7 +67,7 @@
 //! **RT contract:** non-RT only.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::sync::{Arc, Mutex};
@@ -80,8 +80,8 @@ use ruviform_ui::dock::ViewInstanceId;
 use ruviform_ui::ipc::Event;
 use ruviform_ui::view::{AttachEpoch, ComponentKey, ComponentSnapshot, ViewSpec};
 use ruviform_ui::{
-    DriverEvent, Intent, LeaseInfo, LogicalRect, SlotError, SlotLease, SlotSpec, SlotState,
-    SurfaceSlotId, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
+    CloseDecision, DriverEvent, Intent, LeaseInfo, LogicalRect, SlotError, SlotLease, SlotSpec,
+    SlotState, SurfaceSlotId, UiError, WindowDriver, WindowId, WindowLifecycle, WindowSpec,
 };
 use ruviform_ui_test::golden::RgbaImage;
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
@@ -115,6 +115,77 @@ pub struct CaptureMeta {
     /// `"win32-bitblt-screen"`) — `EnvironmentMeta::backend_detail`
     /// evidence.
     pub backend: &'static str,
+}
+
+/// Observation-facing copy of one `WindowLifecycle` transition —
+/// the record the app-thread event handler appends to the session
+/// log [`RealOsGuiTest::window_events`] reads (Issue #631
+/// window-close/DPI surface). `Copy` + `PartialEq` keep snapshot
+/// reads cheap and assertable; `Action` intents are not lifecycle
+/// transitions and stay on the [`drain_intents`](SemanticGuiTest::drain_intents)
+/// channel. Geometry variants carry the driver's physical-pixel
+/// values — the same unit `Resized`/`Moved` report and
+/// [`RealOsGuiTest::window_geometry`] measures.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WindowLifecycleEvent {
+    /// `WindowLifecycle::Created` — the driver accepted the window.
+    Created,
+    /// `WindowLifecycle::Ready` — first frame presented.
+    Ready,
+    /// `WindowLifecycle::Resized` — physical client size.
+    Resized {
+        /// Physical pixel width.
+        width: u32,
+        /// Physical pixel height.
+        height: u32,
+    },
+    /// `WindowLifecycle::Moved` — physical virtual-desktop position.
+    Moved {
+        /// Physical x position.
+        x: i32,
+        /// Physical y position.
+        y: i32,
+    },
+    /// `WindowLifecycle::Focused` — OS activation state.
+    Focused(bool),
+    /// `WindowLifecycle::ScaleFactorChanged` — new DPI scale factor.
+    ScaleFactorChanged {
+        /// New scale factor (for example `1.5` at 150%).
+        factor: f64,
+    },
+    /// `WindowLifecycle::CloseRequested` — veto-able close request;
+    /// answered through [`RealOsGuiTest::arm_close_response`] /
+    /// [`RealOsGuiTest::respond_close`].
+    CloseRequested,
+    /// `WindowLifecycle::Destroyed` — terminal; the id is retired
+    /// and never reused.
+    Destroyed,
+}
+
+impl WindowLifecycleEvent {
+    /// Maps a driver [`WindowLifecycle`] onto the observation record.
+    /// `Action` intents and any future `WindowLifecycle` variant the
+    /// adapter does not yet summarize return `None` — they are not
+    /// lifecycle transitions this surface claims to observe.
+    fn observe(event: &WindowLifecycle) -> Option<Self> {
+        Some(match event {
+            WindowLifecycle::Created => Self::Created,
+            WindowLifecycle::Ready => Self::Ready,
+            WindowLifecycle::Resized { width, height } => Self::Resized {
+                width: *width,
+                height: *height,
+            },
+            WindowLifecycle::Moved { x, y } => Self::Moved { x: *x, y: *y },
+            WindowLifecycle::Focused(active) => Self::Focused(*active),
+            WindowLifecycle::ScaleFactorChanged { factor } => {
+                Self::ScaleFactorChanged { factor: *factor }
+            }
+            WindowLifecycle::CloseRequested => Self::CloseRequested,
+            WindowLifecycle::Destroyed => Self::Destroyed,
+            _ => return None,
+        })
+    }
 }
 
 /// One real OS window to open for a [`RealOsGuiTest::run`] session —
@@ -174,6 +245,19 @@ pub struct RealOsGuiTest {
     /// [`WindowLifecycle::Focused`] events — the gate for the
     /// `os_*` ops that deliver input to the foreground window.
     focused: Arc<Mutex<BTreeMap<WindowId, bool>>>,
+    /// `(window, event)` lifecycle/geometry transitions the app
+    /// thread's event handler observed, in emission order — read
+    /// through [`window_events`](Self::window_events). `Action`
+    /// intents stay on the `intents` channel; the log is append-only
+    /// for the session's lifetime so a destroyed window's terminal
+    /// `Destroyed` remains observable.
+    events: Arc<Mutex<Vec<(WindowId, WindowLifecycleEvent)>>>,
+    /// Per-window queue of [`CloseDecision`]s the event handler
+    /// consumes inside the synchronous `CloseRequested` flush — the
+    /// only point a `Veto`/`Defer` can still beat the driver's
+    /// unanswered-`Approve` default. Fed by
+    /// [`arm_close_response`](Self::arm_close_response).
+    close_responses: Arc<Mutex<BTreeMap<WindowId, VecDeque<CloseDecision>>>>,
     /// Per-family session preflight cache (Issue #552) — each
     /// `os_*` op gates on its family's cached check so a measured
     /// ineffective backend reports `EnvironmentBlocked` instead of
@@ -222,12 +306,18 @@ impl RealOsGuiTest {
         let intents = Arc::new(Mutex::new(Vec::<Intent>::new()));
         let last_capture = Arc::new(Mutex::new(None::<CaptureMeta>));
         let focused = Arc::new(Mutex::new(BTreeMap::<WindowId, bool>::new()));
+        let events = Arc::new(Mutex::new(Vec::<(WindowId, WindowLifecycleEvent)>::new()));
+        let close_responses = Arc::new(Mutex::new(
+            BTreeMap::<WindowId, VecDeque<CloseDecision>>::new(),
+        ));
         let tick = options.tick;
         let settle_ticks = options.settle_ticks;
         let startup_settle_ticks = options.startup_settle_ticks;
 
         let thread_intents = Arc::clone(&intents);
         let thread_focused = Arc::clone(&focused);
+        let thread_events = Arc::clone(&events);
+        let thread_close_responses = Arc::clone(&close_responses);
         let app = thread::spawn(move || -> Result<(), UiError> {
             let mut driver = GpuiDriver::new();
             driver.set_ui_jobs(jobs_rx);
@@ -242,27 +332,15 @@ impl RealOsGuiTest {
             }
             // Setup complete — the platform loop takes over from here.
             let _ = ready_tx.send(Ok(()));
-            driver.run(tick, move |event, _drv| match event {
-                DriverEvent::Windowed {
-                    event: WindowLifecycle::Action(intent),
-                    ..
-                } => {
-                    thread_intents
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .push(intent);
-                }
-                DriverEvent::Windowed {
-                    window,
-                    event: WindowLifecycle::Focused(active),
-                } => {
-                    thread_focused
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .insert(window, active);
-                }
-                _ => {}
-            })
+            driver.run(
+                tick,
+                window_event_handler(
+                    thread_intents,
+                    thread_focused,
+                    thread_events,
+                    thread_close_responses,
+                ),
+            )
         });
 
         // The app thread reports setup completion (or the first
@@ -287,6 +365,8 @@ impl RealOsGuiTest {
             intents,
             last_capture,
             focused,
+            events,
+            close_responses,
             os_preflight: RefCell::new(BTreeMap::new()),
         };
 
@@ -669,6 +749,135 @@ impl RealOsGuiTest {
     }
 }
 
+// -----------------------------------------------------------------
+// Window lifecycle / DPI observation surface (Issue #631).
+//
+// These methods expose the driver-neutral close protocol
+// (`WindowDriver::request_close`/`respond_close` →
+// `WindowLifecycle::CloseRequested` → `Destroyed`) and the
+// physical-geometry/DPI reads the real OS window produces. Every
+// observation comes from the app thread's event handler or a
+// `UiJob` inside `App` context — nothing is synthesized caller-side.
+// -----------------------------------------------------------------
+
+impl RealOsGuiTest {
+    /// Lifecycle/geometry transitions the app thread observed for
+    /// `window`, in emission order — a non-destructive snapshot, so
+    /// it is safe inside [`settle_until`] predicates and repeatable
+    /// after the window's destruction (the log is append-only for
+    /// the session). `Action` intents are excluded — observe them
+    /// through [`drain_intents`](SemanticGuiTest::drain_intents).
+    /// `Resized`/`Moved`/`ScaleFactorChanged` carry the driver's
+    /// physical-pixel values; pair with
+    /// [`window_geometry`](Self::window_geometry) for the live
+    /// OS-measured frame.
+    #[must_use]
+    pub fn window_events(&self, window: WindowId) -> Vec<WindowLifecycleEvent> {
+        self.events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(id, _)| *id == window)
+            .map(|(_, event)| *event)
+            .collect()
+    }
+
+    /// Queues the veto-able close request — the real-window
+    /// counterpart of the OS close button
+    /// (`WindowDriver::request_close` → `Op::RequestClose`). The
+    /// request emits `WindowLifecycle::CloseRequested` at the next
+    /// drain; an *unanswered* request defaults to `Approve` for that
+    /// window only, so a `Veto`/`Defer` must already be armed through
+    /// [`arm_close_response`](Self::arm_close_response) — or, for a
+    /// `Defer`-parked request, answered later through
+    /// [`respond_close`](Self::respond_close). Unknown windows are
+    /// ignored per the trait contract.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when the session is gone.
+    pub fn request_close(&mut self, window: WindowId) -> Result<(), ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, _cx| {
+                WindowDriver::request_close(&mut driver.clone(), window);
+                let _ = reply.send(Ok(()));
+            })
+        })
+    }
+
+    /// Arms the [`CloseDecision`] the app thread's event handler
+    /// applies inside the synchronous `CloseRequested` flush — one
+    /// queued decision per expected request, consumed oldest-first
+    /// per `window`. This is the *only* timely `Veto`/`Defer` path
+    /// for [`request_close`](Self::request_close): the driver
+    /// defaults an unanswered request to `Approve` within the same
+    /// drain pass, before any caller-side [`respond_close`] job can
+    /// run. Arm before `request_close`; an exhausted queue leaves
+    /// later requests on the default-`Approve` path, and decisions
+    /// armed for a window that never emits `CloseRequested` stay
+    /// queued without leaking into other windows.
+    pub fn arm_close_response(&self, window: WindowId, decision: CloseDecision) {
+        self.close_responses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry(window)
+            .or_default()
+            .push_back(decision);
+    }
+
+    /// Answers a pending close — forwards
+    /// `WindowDriver::respond_close` through the `UiJob` seam.
+    /// `Approve` destroys the window (`Destroyed` follows at the
+    /// next drain); `Veto` cancels the close; `Defer` leaves the
+    /// request pending for a later answer. For a close whose
+    /// `CloseRequested` is flushing *right now* the armed queue in
+    /// [`arm_close_response`](Self::arm_close_response) is the only
+    /// timely answer — a caller-side response always lands after
+    /// the unanswered-`Approve` default.
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when `window` is unknown/destroyed
+    /// or has no pending close (mirrors `UiError::Host`), or the
+    /// session is gone.
+    pub fn respond_close(
+        &mut self,
+        window: WindowId,
+        decision: CloseDecision,
+    ) -> Result<(), ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, _cx| {
+                let _ = reply.send(
+                    WindowDriver::respond_close(&mut driver.clone(), window, decision)
+                        .map_err(ScenarioError::from),
+                );
+            })
+        })
+    }
+
+    /// The window's live client-area geometry in *physical* screen
+    /// pixels — origin, size, and the scale factor (logical →
+    /// physical) the OS reported — via
+    /// [`super::GpuiDriver::window_geometry`]. This is the DPI
+    /// observation point: `scale_factor` is the measured backend
+    /// factor and `width`/`height` are physical pixels, the same
+    /// unit [`WindowLifecycle::Resized`] reports. `ScaleFactorChanged`
+    /// transitions additionally surface through
+    /// [`window_events`](Self::window_events) when the OS reports a
+    /// factor change (for example a move across mixed-DPI monitors).
+    ///
+    /// # Errors
+    /// [`ScenarioError::Driver`] when `window` is unknown or not yet
+    /// open (`UiError::Host`), has no OS handle (`UiError::
+    /// Unsupported` — for example a `gpui-test` session), or the
+    /// session is gone.
+    pub fn window_geometry(&self, window: WindowId) -> Result<OsWindowGeometry, ScenarioError> {
+        self.call(move |reply| {
+            Box::new(move |_inner, driver, _cx| {
+                let _ = reply.send(driver.window_geometry(window).map_err(ScenarioError::from));
+            })
+        })
+    }
+}
+
 /// How long `os_pointer_move_to` waits before the cursor read-back —
 /// matches the smoke examples' measured budget for the OS to apply
 /// a queued absolute move.
@@ -708,6 +917,61 @@ fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
         capabilities.insert(ScenarioCapability::NativePluginDock);
     }
     capabilities
+}
+
+/// The app-thread [`DriverEvent`] handler [`RealOsGuiTest::run`]
+/// installs: records every `Windowed` lifecycle transition into the
+/// session's observation log, routes `Action` intents and focus state
+/// to their own channels, and answers `CloseRequested` from the
+/// per-window armed queue *inside the same synchronous flush* — the
+/// driver defaults an unanswered request to `Approve` when the flush
+/// returns, so a caller-side `respond_close` queued now would always
+/// lose the race.
+fn window_event_handler(
+    intents: Arc<Mutex<Vec<Intent>>>,
+    focused: Arc<Mutex<BTreeMap<WindowId, bool>>>,
+    events: Arc<Mutex<Vec<(WindowId, WindowLifecycleEvent)>>>,
+    close_responses: Arc<Mutex<BTreeMap<WindowId, VecDeque<CloseDecision>>>>,
+) -> impl FnMut(DriverEvent, &mut dyn WindowDriver) + 'static {
+    move |event, drv| {
+        let DriverEvent::Windowed { window, event } = event else {
+            return;
+        };
+        if let Some(observed) = WindowLifecycleEvent::observe(&event) {
+            events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((window, observed));
+        }
+        match event {
+            WindowLifecycle::Action(intent) => {
+                intents
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(intent);
+            }
+            WindowLifecycle::Focused(active) => {
+                focused
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(window, active);
+            }
+            WindowLifecycle::CloseRequested => {
+                let decision = close_responses
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_mut(&window)
+                    .and_then(VecDeque::pop_front);
+                if let Some(decision) = decision {
+                    // The window is close-pending by construction; a
+                    // refusal means driver state diverged — the event
+                    // log still records `CloseRequested` honestly.
+                    let _ = drv.respond_close(window, decision);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// One [`UiJob`] that counts `drain` boundaries before replying —

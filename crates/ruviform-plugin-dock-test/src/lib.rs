@@ -54,9 +54,18 @@
 //! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
 //! editor op rows (`real-editor-resize`/`real-editor-redock`, judged
 //! by session events/HWND contract only, never pixels) and the
-//! Issue #389 host-loss session lifecycle row
+//! Issue #389 session lifecycle rows
 //! (`real-session-terminate` — `Terminated{HostLost}` exactly-once,
-//! child HWND teardown, host survival).
+//! child HWND teardown, host survival; `real-session-degraded` —
+//! `open_or_degrade` `Degraded{Docked}` + `OpenOutcome::Degraded`;
+//! `real-session-recovery` — refused open `Failed{Unsupported}` →
+//! `recover(Docked)` `Recovered{Docked}`; `real-session-timeout` —
+//! ZERO deadline policy + `tick_all` → `Failed{Timeout}`;
+//! `real-editor-visibility` — the defined `set_visibility`
+//! `Unsupported` refusal with `Attached` preserved; and the honest
+//! `Unsupported` boundaries `real-session-crash`/`real-session-hang`
+//! — process-killing/wedging fault modes the in-process lane cannot
+//! survive).
 //! `plugin-dock-real-scenario --blocked-probe` deterministically
 //! proves the headless fail-closed mapping without opening a
 //! session. It opens real OS windows, so it is never a

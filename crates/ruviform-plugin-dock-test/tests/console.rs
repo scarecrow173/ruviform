@@ -102,7 +102,7 @@ fn list_emits_headless_projection_without_verdicts() {
     }
 }
 
-/// `--list --include-real` appends the fifteen real-lane rows marked
+/// `--list --include-real` appends the twenty-one real-lane rows marked
 /// `session_required`/`lane` — metadata only, `runnable`/`missing`
 /// null, no execution claim. Requires the `real-dock` feature; the
 /// refusal path is covered by `include_real_refused_without_feature`.
@@ -116,7 +116,7 @@ fn list_include_real_appends_real_lane_rows() {
         String::from_utf8_lossy(&output.stderr)
     );
     let rows = stdout_lines(&output);
-    assert_eq!(rows.len(), 23, "8 headless + 15 real rows");
+    assert_eq!(rows.len(), 29, "8 headless + 21 real rows");
     let real: Vec<&Value> = rows.iter().skip(8).collect();
     let expected = [
         "real-window-mount",
@@ -134,6 +134,12 @@ fn list_include_real_appends_real_lane_rows() {
         "real-editor-resize",
         "real-editor-redock",
         "real-session-terminate",
+        "real-session-degraded",
+        "real-session-recovery",
+        "real-session-timeout",
+        "real-editor-visibility",
+        "real-session-crash",
+        "real-session-hang",
     ];
     for (row, case) in real.iter().zip(expected.iter()) {
         assert_eq!(row["type"], "catalog");

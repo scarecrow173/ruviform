@@ -92,6 +92,12 @@ windows**:
 | `real-editor-resize` | non-pixel oracle only (session state/events/child-HWND contract, never pixels): `session.set_size` through the production `InProcessEditorOps`; the defined `EditorOpError::Unsupported` refusal → `Unsupported`, an accepted op with no effect oracle → `NotRun`, any contract mismatch → `Fail` |
 | `real-editor-redock` | non-pixel oracle only: `session.reattach` under the same real lease; defined refusal → session `Failed{Unsupported}` + event sequence `[Attached{Docked}, Detached, Failed{..}, Closed]` → `Unsupported`; accepted op → `NotRun` (no effect oracle yet) |
 | `real-session-terminate` | non-pixel oracle only: attach 中の `HostCommand::Deactivate`+`Destroy` → registry `notify_terminated(HostLost)`; `Pass` only when the session converges `Closed`+`concluded` with exactly `[Attached{Docked}, Terminated{HostLost}]`, a repeated notify is a no-op, every recorded child HWND reports `IsWindow(child)==0`, and the host survives (`Scan` ok + destroyed handle `InvalidHandle`); observation mismatch → `Fail`, defined refusal → `Unsupported` (Issue #389) |
+| `real-session-degraded` | non-pixel oracle only: `open_or_degrade(Floating→Docked)` — the preferred mode's defined `Unsupported` refusal falls back to a real `OpenGui` docked attach; `Pass` only when `OpenOutcome::Degraded{mode:Docked}` lands, events are exactly `[Degraded{Docked}, Closed]` (never `Attached`), and the child HWND contract + close convergence hold; mismatch → `Fail` (Issue #389) |
+| `real-session-recovery` | non-pixel oracle only: `open(Floating)` lands the defined `Failed{Unsupported}` (`editor_live=false`), then `recover(Docked)` attaches the real child HWND; `Pass` only when events are exactly `[Failed{Unsupported}, Recovered{Docked}, Closed]` and the child HWND contract + close convergence hold; mismatch → `Fail` (Issue #389) |
+| `real-session-timeout` | non-pixel oracle only: real docked attach → ZERO `SessionDeadlinePolicy` → `begin_detach` → `tick_all` expires the in-flight detach; `Pass` only when the session lands `Failed{Timeout}`, events are exactly `[Attached{Docked}, Failed{Timeout}, Closed]`, and the child HWND tears down on close; mismatch → `Fail` (Issue #389) |
+| `real-editor-visibility` | non-pixel oracle only: `session.set_visibility(false)` through the production `InProcessEditorOps`; the defined `EditorOpError::Unsupported` refusal → `Unsupported` with the session still `Attached{Docked}` and zero `Hidden`/`Shown` events; an accepted op with no effect oracle → `NotRun`; any contract mismatch → `Fail` (Issue #389) |
+| `real-session-crash` | `Unsupported` — the fixture's process-killing crash fault (`test_fault` abort/exit) shares the host process in this lane and no out-of-process plugin host exists; `L1EditorOps` refuses every editor op with the defined `Unsupported`. Recorded inside the real session — an architectural boundary, never a fabricated `NotRun`/`Pass` (Issue #389) |
+| `real-session-hang` | `Unsupported` — same boundary for the wedging hang fault (`test_fault` hang never returns); recorded inside the real session (Issue #389) |
 
 The chain recorded is the production one:
 `NativeSlot → GpuiSurfaceAdapter (実 container HWND) → lease_parent →
@@ -154,7 +160,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the fifteen `rf631.plugin-dock-real`
+- `--list --include-real` — appends the twenty-one `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused
