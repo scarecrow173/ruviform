@@ -1,6 +1,6 @@
 //! `ruviform-plugin-test-clap` — the Ruviform **test-only** CLAP test
 //! plugin suite (Issue #630: `test_gain` + `test_fault` +
-//! `test_stateful` + `test_instrument`).
+//! `test_stateful` + `test_instrument` + `test_editor`).
 //!
 //! ## Test-only declaration
 //!
@@ -48,6 +48,12 @@
 //!   MIDI CC and `Process::transport` snapshots drive deterministic
 //!   PCM — the real-ABI counterpart of the VST3 `test_instrument`
 //!   fixture.
+//! - `test_editor` — a parameterless pass-through plus the plugin
+//!   side of `clap.ext.gui`: on Windows `set_parent` creates a real
+//!   `WS_CHILD` HWND under the host-supplied parent and
+//!   `show`/`hide`/`destroy` manage it; opaque parent payloads are
+//!   rejected by an `IsWindow` gate. The CLAP counterpart of the
+//!   VST3 `test_editor` fixture.
 //!
 //! All `clack`/`clap-sys` binding types stay private — the crate
 //! exports no public Rust API; hosts reach the plugins purely through
@@ -59,8 +65,8 @@
 //! | --- | --- |
 //! | `clap_entry` | required by the CLAP module spec — a custom
 //!   `Entry` + `PluginFactoryImpl` exposing `test_gain`,
-//!   `test_fault`, `test_stateful` and `test_instrument` through one
-//!   factory (`plugin_count() == 4`) |
+//!   `test_fault`, `test_stateful`, `test_instrument` and
+//!   `test_editor` through one factory (`plugin_count() == 5`) |
 //!
 //! ## Process path (RT)
 //!
@@ -79,6 +85,7 @@
 //! child only.
 
 mod block;
+mod editor;
 mod fault;
 mod gain;
 mod instrument;
@@ -95,6 +102,7 @@ use clack_plugin::entry::prelude::{
 };
 use clack_plugin::prelude::clack_export_entry;
 
+use editor::TestEditorClapPlugin;
 use fault::TestFaultClapPlugin;
 use instrument::TestInstrumentClapPlugin;
 use plugin::TestGainClapPlugin;
@@ -129,6 +137,7 @@ struct TestSuiteFactory {
     fault: PluginDescriptor,
     stateful: PluginDescriptor,
     instrument: PluginDescriptor,
+    editor: PluginDescriptor,
 }
 
 impl TestSuiteFactory {
@@ -138,13 +147,14 @@ impl TestSuiteFactory {
             fault: TestFaultClapPlugin::get_descriptor(),
             stateful: TestStatefulClapPlugin::get_descriptor(),
             instrument: TestInstrumentClapPlugin::get_descriptor(),
+            editor: TestEditorClapPlugin::get_descriptor(),
         }
     }
 }
 
 impl PluginFactoryImpl for TestSuiteFactory {
     fn plugin_count(&self) -> u32 {
-        4
+        5
     }
 
     fn plugin_descriptor(&self, index: u32) -> Option<&PluginDescriptor> {
@@ -153,6 +163,7 @@ impl PluginFactoryImpl for TestSuiteFactory {
             1 => Some(&self.fault),
             2 => Some(&self.stateful),
             3 => Some(&self.instrument),
+            4 => Some(&self.editor),
             _ => None,
         }
     }
@@ -190,6 +201,13 @@ impl PluginFactoryImpl for TestSuiteFactory {
                 TestInstrumentClapPlugin::new_shared,
                 TestInstrumentClapPlugin::new_main_thread,
             ))
+        } else if plugin_id == self.editor.id().unwrap_or_default() {
+            Some(PluginInstance::new::<TestEditorClapPlugin>(
+                host_info,
+                &self.editor,
+                TestEditorClapPlugin::new_shared,
+                TestEditorClapPlugin::new_main_thread,
+            ))
         } else {
             None
         }
@@ -198,5 +216,8 @@ impl PluginFactoryImpl for TestSuiteFactory {
 
 // The CLAP standard entry point: `#[no_mangle] pub static clap_entry`.
 // The macro emits its own `#[allow(unsafe_code)]` for the generated
-// static; no unsafe code is written in this crate.
+// static. The only `unsafe` this crate writes is confined to
+// `editor.rs`'s `#[cfg(target_os = "windows")]` `win32` module —
+// `#[expect(unsafe_code)]` + SAFETY comments per call site (the
+// VST3 `test_editor` precedent).
 clack_export_entry!(TestSuiteEntry);

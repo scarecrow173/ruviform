@@ -1,6 +1,6 @@
 [package]
 name = "ruviform-plugin-test-clap"
-description = "Test-only CLAP test plugin suite (test_gain/test_fault/test_stateful) for Ruviform host verification — not a shipping product"
+description = "Test-only CLAP test plugin suite (test_gain/test_fault/test_stateful/test_instrument/test_editor) for Ruviform host verification — not a shipping product"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -40,9 +40,10 @@ l1-runner = ["dep:ruviform-plugin-clap", "dep:ruviform-plugin-export"]
 # production adapter pins; shared as the "SDK layer" only (see
 # docs/designs/issue-630-test-plugin-suite.md). `clack-extensions`
 # carries only the plugin-side features this fixture declares
-# (`audio-ports` + `params`); the adapter's `thread-check` feature is
-# deliberately not enabled — this fixture stores no host handle and
-# writes no `unsafe`.
+# (`audio-ports` + `params` + `state` + `gui` — `gui` added for
+# `test_editor`'s `clap.ext.gui` surface); the adapter's
+# `thread-check` feature is deliberately not enabled — this fixture
+# stores no host handle.
 clack-plugin = "=0.2.0"
 clack-common = "=0.2.0"
 clack-extensions = { version = "=0.2.0", features = [
@@ -51,6 +52,7 @@ clack-extensions = { version = "=0.2.0", features = [
     "note-ports",
     "params",
     "state",
+    "gui",
 ] }
 # Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
 # Lifecycle/BufferView) — the plugin-side implementation target.
@@ -70,6 +72,22 @@ ruviform-plugin-clap = { path = "../ruviform-plugin-clap", features = ["host"], 
 # The L1 wire runtime (`run()`) consumed by the runner binary —
 # optional so the plugin-side cdylib's dep tree is unchanged.
 ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
+
+# `test_editor`'s plugin-side `clap.ext.gui` implementation creates a
+# real `WS_CHILD` HWND on Windows — the same Win32 surface a plugin
+# binary would create under `open_gui` (Issue #630 AC-4 fixture
+# half, the CLAP counterpart of the VST3 `test_editor` precedent).
+# Feature set mirrors `ruviform-plugin-test-vst3`'s edge exactly;
+# off Windows the `win32` module is cfg'd out and this edge is
+# inert. `unsafe` stays confined to that module behind
+# `#[expect(unsafe_code)]` + SAFETY comments.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [dev-dependencies]
 # RT non-allocation proof for the process path (Issue #22 lane

@@ -21,7 +21,7 @@ use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
     ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
-    ParamId, ParamValue, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
 };
 
 const FRAMES: usize = 64;
@@ -59,11 +59,12 @@ fn load_library() -> ClapLibrary {
 /// `prepare` → `start_processing` — the same sequence the L1 runner
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
-/// `1` = `test_fault`, `2` = `test_stateful`, `3` = `test_instrument`).
+/// `1` = `test_fault`, `2` = `test_stateful`, `3` = `test_instrument`,
+/// `4` = `test_editor`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4, "the entry exposes four plugins");
+    assert_eq!(factories.len(), 5, "the entry exposes five plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -96,6 +97,12 @@ fn prepared_instrument_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(3)
 }
 
+/// `test_editor`'s prepared instance — the gui/pass-through oracle's
+/// entry point.
+fn prepared_editor_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(4)
+}
+
 /// Drives one 64-frame stereo block of golden PCM through the
 /// production path — deterministic input `0.5 / -0.25` — and returns
 /// the neutral `ProcessResult` plus the output channels.
@@ -125,16 +132,17 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 
 /// Discovery through the production path: `ClapLibrary::load` scans
 /// the real binary's `clap_entry`, finds the `test_gain`,
-/// `test_fault` and `test_stateful` plugin descriptors, and reports
-/// each fixture's vendor/name/features.
+/// `test_fault`, `test_stateful`, `test_instrument` and
+/// `test_editor` plugin descriptors, and reports each fixture's
+/// vendor/name/features.
 #[test]
 fn discovers_suite_plugins_through_production_host() {
     let library = load_library();
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        4,
-        "the entry exposes exactly four plugin descriptors"
+        5,
+        "the entry exposes exactly five plugin descriptors"
     );
     let gain = descriptors[0];
     assert_eq!(gain.name, "test_gain");
@@ -156,6 +164,11 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(instrument.vendor, "Ruviform Test");
     assert_eq!(instrument.version, "0.0.0");
     assert!(instrument.features.contains(&"instrument"));
+    let editor = descriptors[4];
+    assert_eq!(editor.name, "test_editor");
+    assert_eq!(editor.vendor, "Ruviform Test");
+    assert_eq!(editor.version, "0.0.0");
+    assert!(editor.features.contains(&"audio-effect"));
 }
 
 /// Parameter surface through the production path: the host
@@ -167,7 +180,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -186,7 +199,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -326,7 +339,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn reports_stateful_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 4);
+    assert_eq!(factories.len(), 5);
     let plugin = factories[2].create();
     let params = plugin.params();
     assert_eq!(
@@ -533,5 +546,107 @@ fn instrument_note_lifecycle_releases_to_silence() {
                 "block {block}: release tail must be exact silence"
             );
         }
+    }
+}
+
+/// `test_editor`'s parameter surface through the production path:
+/// the plugin declares no `clap.ext.params` extension, so the host
+/// reports an empty parameter table — an honest absence, not a
+/// fabricated empty-but-declared surface.
+#[test]
+fn editor_reports_no_params() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 5);
+    let plugin = factories[4].create();
+    assert!(
+        plugin.params().is_empty(),
+        "test_editor declares no parameters"
+    );
+}
+
+/// `test_editor` DSP law through the production host bridge: pure
+/// pass-through — `out == in` bitwise — and a `ParamValue` event for
+/// a parameter the fixture does not declare is dropped at the
+/// event-translation boundary and cannot perturb the output.
+#[test]
+fn editor_is_parameterless_pass_through() {
+    let mut plugin = prepared_editor_plugin();
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+
+    // A foreign ParamValue event (no such parameter exists) is inert.
+    let foreign = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.5).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &foreign);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `open_gui` on `test_editor` through the production host bridge
+/// with an opaque lease payload (`ParentLease::new(0, 0)` — payload
+/// `0` is not a real HWND): on Windows the call chain reaches
+/// `clap.ext.gui` `set_parent`, whose `IsWindow` gate rejects the
+/// non-window parent → the host rolls back via `destroy` →
+/// `PluginFailed`; on non-Windows `EDITOR_GUI_API` is `None` →
+/// `Unsupported` before `create` is even reached. Both are defined
+/// rejections — a **real** HWND attach is the `scarecrow173/ruviform#631`
+/// real-attach lane's evidence, not claimed here. The failed open
+/// leaves the instance usable: `close_gui` honestly reports no open
+/// GUI and audio still flows afterwards.
+#[test]
+fn editor_open_gui_rejects_opaque_parent_lease() {
+    let mut plugin = prepared_editor_plugin();
+    let Err(err) = plugin.open_gui(ParentLease::new(0, 0)) else {
+        panic!("an opaque lease payload must not produce a GUI handle");
+    };
+    #[cfg(target_os = "windows")]
+    assert_eq!(err, HostError::PluginFailed);
+    #[cfg(not(target_os = "windows"))]
+    assert_eq!(err, HostError::Unsupported);
+
+    // The rollback ran `destroy` — no GUI is open, so `close_gui`
+    // reports the honest `Unsupported`, and the instance still
+    // processes audio (defined rejection, not instance corruption).
+    assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+    let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+}
+
+/// `test_gain`/`test_fault`/`test_stateful`/`test_instrument` ship no
+/// `clap.ext.gui` extension: `get_extension::<PluginGui>()` finds
+/// nothing, so `open_gui` converges to the honest `Unsupported` on
+/// every platform — `test_editor` is the suite's only GUI surface.
+#[test]
+fn non_editor_classes_decline_open_gui() {
+    for mut plugin in [
+        prepared_plugin(),
+        prepared_fault_plugin(),
+        prepared_stateful_plugin(),
+        prepared_instrument_plugin(),
+    ] {
+        let Err(err) = plugin.open_gui(ParentLease::new(0, 0)) else {
+            panic!("non-editor classes ship no gui extension — open_gui must fail");
+        };
+        assert_eq!(err, HostError::Unsupported);
     }
 }
