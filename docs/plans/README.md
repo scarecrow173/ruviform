@@ -215,6 +215,7 @@ Directory: `docs/plans`
 | PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | PLAN-034XWO1EjjLigZP3nnak6l | Issue #631 Headless Scenario Console 実装計画 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | PLAN-034YaYv5gxaA5bas6AXXIq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 実装計画 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| PLAN-034YJ2M9f2fgfWOT7UhjEs | Issue #631 RealOsGuiTest window-close/DPI 観測面 実装計画 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | PLAN-mJPkr5kJdau9iCE3oIHTKf | Issue #692 s2 Luau analyzer backend — 実装計画 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
