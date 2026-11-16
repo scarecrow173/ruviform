@@ -367,6 +367,7 @@ Directory: `docs/tasks`
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TASK-aN7eM2gEouRJ8oS3WbU4Ee | Issue #650 bench-smoke lane coverage 拡張 — mise.toml/dev-env doc/evidence 是正 | done | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
+| TASK-034YJlja5SyGAbJySCQZfM | Issue #707 — MIDI input cancellation fault タスク | done | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

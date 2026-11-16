@@ -221,6 +221,7 @@ Directory: `docs/plans`
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | PLAN-mJPkr5kJdau9iCE3oIHTKf | Issue #692 s2 Luau analyzer backend — 実装計画 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | PLAN-034ZkLmNpQrStUvWxYzGh4 | Issue #692 実施計画 — ruviform-script 中立契約 port crate 新設・検証・docs chain | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
+| PLAN-034YJjLMWS9oGq5V9aJPaf | Issue #707 — MIDI input cancellation fault implementation plan | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |
