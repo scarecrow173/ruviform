@@ -192,6 +192,7 @@ Directory: `docs/plans`
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-034YbbuRqN5VUqXuQfKKHB | Issue #629 WASAPI streaming verifier implementation plan | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | PLAN-034Y14eOip1VTyZMiRueNr | Issue #630 adapter-state-bridge slice — 実装計画 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| PLAN-034ZCLAPED4pl4ceM3kQ2x | Issue #630 CLAP test_editor slice — 実装計画 Implementation Plan | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | PLAN-034XTBbXfYIHXWJ12juqo7 | Issue #630 CLAP test_gain 実装計画 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | PLAN-034XVsD1tGn1Q9zdYY4pHW | Issue #630 L1 runner slice 実装計画 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | PLAN-034Y13aQ1WvmdD4BN426PS | Issue #630 test_editor slice — 実装計画 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
