@@ -82,6 +82,16 @@ fn enum_to_u8(value: impl Into<i64>) -> u8 {
     u8::try_from(value.into()).unwrap_or(u8::MAX)
 }
 
+/// `StatesAndFlags` bit → `u32` for `ctx.state` masking — the SDK
+/// typedef is `c_int` on Windows and `c_uint` elsewhere, so the
+/// conversion widens through `i64` (both platform types convert
+/// losslessly) instead of `as`, which is a no-op cast off-Windows.
+/// Out-of-range clamps to `u32::MAX` — unreachable for the shipped
+/// flag constants, matching the `enum_to_*` fallback.
+fn flag_to_u32(value: impl Into<i64>) -> u32 {
+    u32::try_from(value.into()).unwrap_or(u32::MAX)
+}
+
 /// Validates an `int16` VST3 channel field (`0..=15`) into the
 /// canonical [`MidiChannel`].
 fn midi_channel(raw: i16) -> Option<MidiChannel> {
@@ -290,8 +300,8 @@ fn ppq_to_ticks(ppq: f64) -> i64 {
 fn musical_from_context(ctx: &VstProcessContext) -> Option<MusicalTimeInfo> {
     use ProcessContext_::StatesAndFlags_ as F;
     let state = ctx.state;
-    if state & F::kProjectTimeMusicValid as u32 == 0
-        || state & F::kTempoValid as u32 == 0
+    if state & flag_to_u32(F::kProjectTimeMusicValid) == 0
+        || state & flag_to_u32(F::kTempoValid) == 0
         || !ctx.tempo.is_finite()
         || ctx.tempo <= 0.0
     {
@@ -300,7 +310,7 @@ fn musical_from_context(ctx: &VstProcessContext) -> Option<MusicalTimeInfo> {
     let bpm_milli = (ctx.tempo * 1_000.0).round().clamp(1.0, 999_999_999.0);
     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let bpm_milli = bpm_milli as u32;
-    let (sig_num, sig_den) = if state & F::kTimeSigValid as u32 != 0 {
+    let (sig_num, sig_den) = if state & flag_to_u32(F::kTimeSigValid) != 0 {
         match (
             u8::try_from(ctx.timeSigNumerator),
             u8::try_from(ctx.timeSigDenominator),
@@ -313,7 +323,7 @@ fn musical_from_context(ctx: &VstProcessContext) -> Option<MusicalTimeInfo> {
     };
     Some(MusicalTimeInfo {
         position_ticks: ppq_to_ticks(ctx.projectTimeMusic),
-        bar_start_tick: if sig_num != 0 && state & F::kBarPositionValid as u32 != 0 {
+        bar_start_tick: if sig_num != 0 && state & flag_to_u32(F::kBarPositionValid) != 0 {
             ppq_to_ticks(ctx.barPositionMusic)
         } else {
             0
@@ -348,7 +358,7 @@ pub(crate) unsafe fn transport_from_context(
     }
     // SAFETY: caller guarantees the pointer is valid for the call.
     let ctx = unsafe { &*process_context };
-    let status = if ctx.state & F::kPlaying as u32 != 0 {
+    let status = if ctx.state & flag_to_u32(F::kPlaying) != 0 {
         TransportStatus::Playing
     } else {
         TransportStatus::Stopped
