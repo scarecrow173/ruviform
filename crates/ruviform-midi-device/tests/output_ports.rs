@@ -7,7 +7,6 @@ use ruviform_audio_core::device::DeviceError;
 use ruviform_audio_core::midi_output::{MidiOutput, MidiOutputEnumerator};
 #[cfg(windows)]
 use ruviform_audio_core::midi_output::{MidiOutputPort, MidiPortOrigin};
-#[cfg(windows)]
 use ruviform_media_core::{MidiChannel, MidiGroup, MidiKind, MidiValue, NoteKey};
 use ruviform_midi_device::backend;
 
