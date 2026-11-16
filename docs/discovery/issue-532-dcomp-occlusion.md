@@ -158,8 +158,10 @@ Issue #532 の遮蔽がどの層で起きるかを query-only 観測で切り分
   `#388`・`#630`・`#631`・`scarecrow173/synvelis#176`。
 - `crates/ruviform-plugin-dock-test/src/osoccl.rs`（新規 —
   設計上の配置、実装は plan/task で確定）。
-- `crates/ruviform-plugin-dock-test/src/oschild.rs`・
-  `src/ospix.rs`（query-only 規約の先例）。
+- `crates/ruviform-plugin-dock-test/src/real_dock.rs` 内の
+  `oschild` module・`src/ospix.rs`（query-only 規約の先例 —
+  `oschild` は独立 file ではなく `real_dock.rs` 内の inline
+  module）。
 - `crates/ruviform-plugin-dock-test/src/real_dock.rs`（
   `observe_one_child_pixels` への配線先）。
 - `evidence/rf532/gpui-public-surface-audit.md`（env var 意味論・
@@ -173,11 +175,13 @@ Issue #532 の遮蔽がどの層で起きるかを query-only 観測で切り分
 
 - 2026-11-16: `windows-sys 0.61` installed source で対象 API の
   存在を確認（`Win32_UI_WindowsAndMessaging` feature 内）。
-- 2026-11-16: `oschild.rs`/`ospix.rs`/`real_dock.rs` の構造を
-  読み、`observe_one_child_pixels` が note step row を既に
-  出していること・`oschild::observe_children` が container の
-  child 列挙に `GW_CHILD`/`GW_HWNDNEXT` を既に使用していることを
-  確認。
+- 2026-11-16: `real_dock.rs` 内 `oschild` module・`ospix.rs`・
+  `real_dock.rs` の構造を読み、`observe_one_child_pixels` が
+  note step row を既に出していることを確認。`oschild::observe`
+  は container 配下の child 列挙に `EnumChildWindows`（再帰・
+  全 descendant）を使用しており、z-order 付き sibling walk
+  （`GW_CHILD`/`GW_HWNDNEXT`）の先例は存在しない — 本 slice の
+  `osoccl` が初出。
 - 2026-11-16: `GpuiSurfaceAdapter` backend の container HWND
   作成（`STATIC` class・`WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN|
   WS_CLIPSIBLINGS`）と `lease_parent` 経路を確認。

@@ -893,8 +893,8 @@ struct ChildWindowFacts {
 /// records `Unsupported` for the observation half honestly).
 #[derive(Debug)]
 struct ChildWindowObservation {
-    /// Every direct child `EnumChildWindows` found under the
-    /// container, in enumeration order.
+    /// Every descendant `EnumChildWindows` found under the
+    /// container (the API recurses), in enumeration order.
     children: Vec<ChildWindowFacts>,
     /// `GetCurrentThreadId` — the scenario caller thread that drove
     /// `session.open`/`attached` (the thread-affinity record).
@@ -919,7 +919,8 @@ mod oschild {
 
     use super::{ChildAttachFacts, ChildWindowFacts, ChildWindowObservation};
 
-    /// Collects `container`'s direct child HWNDs and their contract
+    /// Collects `container`'s descendant child HWNDs (the
+    /// `EnumChildWindows` walk recurses) and their contract
     /// facts, plus the caller/container owning thread ids.
     /// `container` is the opaque `container_token` `u64` (= the
     /// container HWND on Windows). Query-only — safe on any thread.
@@ -2259,34 +2260,45 @@ fn record_occlusion_notes(hwnd: u64, container: u64, steps: &mut Vec<Value>) {
     steps.push(occlusion_hit_test_row(hwnd, container, &facts));
 }
 
-/// `occlusion_exstyle` row — the GPUI root's classified extended
-/// style. `noredirectionbitmap` is the DComp-path marker: GPUI sets
-/// `WS_EX_NOREDIRECTIONBITMAP` only when direct composition is
-/// enabled, so its per-run value is the env-var effectiveness
-/// evidence.
+/// `occlusion_exstyle` row — the extended style of every window
+/// on the probed chain (root, parent/container, child), not just
+/// the root. `noredirectionbitmap` on the root is the DComp-path
+/// marker: GPUI sets `WS_EX_NOREDIRECTIONBITMAP` only when direct
+/// composition is enabled, so its per-run value is the env-var
+/// effectiveness evidence. The child/parent styles carry the
+/// hit-test-relevant bits (`WS_EX_TRANSPARENT` etc.) that the
+/// root-only record cannot see.
 fn occlusion_exstyle_row(hwnd: u64, facts: &osoccl::OcclusionFacts) -> Value {
-    let exstyle = facts.root_exstyle.as_ref().map(|e| {
-        json!({
-            "value": e.value,
-            "noredirectionbitmap": e.noredirectionbitmap(),
-            "topmost": e.topmost(),
-            "layered": e.layered(),
-            "transparent": e.transparent(),
-            "noactivate": e.noactivate(),
-            "toolwindow": e.toolwindow(),
-            "appwindow": e.appwindow(),
+    let exstyle = |e: &Option<osoccl::ExstyleFacts>| {
+        e.as_ref().map(|e| {
+            json!({
+                "value": e.value,
+                "noredirectionbitmap": e.noredirectionbitmap(),
+                "topmost": e.topmost(),
+                "layered": e.layered(),
+                "transparent": e.transparent(),
+                "noactivate": e.noactivate(),
+                "toolwindow": e.toolwindow(),
+                "appwindow": e.appwindow(),
+            })
         })
-    });
+    };
     json!({
         "step": "occlusion_exstyle",
         "verdict": "note",
         "hwnd": hwnd,
         "root": facts.root,
-        "exstyle": exstyle.unwrap_or(Value::Null),
+        "exstyle": exstyle(&facts.root_exstyle).unwrap_or(Value::Null),
         "exstyle_error": facts.root_exstyle_error,
-        "note": "GPUI root HWND GWL_EXSTYLE — WS_EX_NOREDIRECTIONBITMAP \
-                marks the DComp path (absent only when \
-                GPUI_DISABLE_DIRECT_COMPOSITION took effect)",
+        "child_exstyle": exstyle(&facts.child_exstyle).unwrap_or(Value::Null),
+        "child_exstyle_error": facts.child_exstyle_error,
+        "parent_exstyle": exstyle(&facts.parent_exstyle).unwrap_or(Value::Null),
+        "parent_exstyle_error": facts.parent_exstyle_error,
+        "note": "GWL_EXSTYLE of the probed chain (root/parent/child) \
+                — root WS_EX_NOREDIRECTIONBITMAP marks the DComp path \
+                (absent only when GPUI_DISABLE_DIRECT_COMPOSITION took \
+                effect); child/parent styles carry hit-test-relevant \
+                bits such as WS_EX_TRANSPARENT",
     })
 }
 
@@ -2379,11 +2391,18 @@ fn occlusion_zorder_list(
 /// flip-model presentation planes are not HWNDs and cannot appear
 /// here, so a child answer does not by itself prove compositor-
 /// level occlusion (recorded limitation, not a verdict input).
+/// The hit-test also *skips* hidden and disabled windows and
+/// their subtrees, so a non-child answer means "covered OR
+/// skipped" — the `child_window`/`parent_window`/`root_window`
+/// rows record the chain's probe-time `visible`/`disabled`/
+/// `alive`/exstyle state that disambiguates the two.
 fn occlusion_hit_test_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFacts) -> Value {
     let points: Vec<Value> = facts
         .hits
         .iter()
         .map(|hit| {
+            // Uniform key set for resolved and NULL hits — absent
+            // window facts serialize as `null`, never fabricated.
             let mut entry = match &hit.window {
                 Some(row) => {
                     let mut entry = occlusion_window_json(row);
@@ -2395,7 +2414,16 @@ fn occlusion_hit_test_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFa
                     }
                     entry
                 }
-                None => json!({ "hwnd": Value::Null, "role": "none" }),
+                None => json!({
+                    "hwnd": Value::Null,
+                    "z_index": Value::Null,
+                    "class_name": Value::Null,
+                    "rect": Value::Null,
+                    "visible": Value::Null,
+                    "alive": Value::Null,
+                    "disabled": Value::Null,
+                    "role": "none",
+                }),
             };
             if let Some(obj) = entry.as_object_mut() {
                 obj.insert("x".to_string(), json!(hit.x));
@@ -2409,10 +2437,22 @@ fn occlusion_hit_test_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFa
         "verdict": "note",
         "hwnd": hwnd,
         "child_rect": occlusion_rect_json(facts.child_rect),
+        "child_window": occlusion_window_json(&facts.child),
+        "parent_window": facts
+            .parent_window
+            .as_ref()
+            .map_or(Value::Null, occlusion_window_json),
+        "root_window": facts
+            .root_window
+            .as_ref()
+            .map_or(Value::Null, occlusion_window_json),
         "points": points,
         "note": "WindowFromPoint at representative points inside the \
                 child rect — HWND-level hit-test only; compositor \
-                visuals/planes are not HWNDs",
+                visuals/planes are not HWNDs. Hidden/disabled windows \
+                are skipped: child/parent/root_window rows carry the \
+                chain's probe-time visible/disabled/alive state to \
+                separate 'covered' from 'skipped'",
     })
 }
 
@@ -2442,6 +2482,7 @@ fn occlusion_window_json(row: &osoccl::WindowRow) -> Value {
         "rect": occlusion_rect_json(row.rect),
         "visible": row.visible,
         "alive": row.alive,
+        "disabled": row.disabled,
     })
 }
 

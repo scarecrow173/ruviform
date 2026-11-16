@@ -25,11 +25,15 @@
 //! - `WindowFromPoint` — five representative points inside the
 //!   child's screen rectangle resolve to the HWND the window
 //!   manager considers topmost there. A non-child answer is
-//!   HWND-level occlusion evidence; a child answer with zero
-//!   screen green points at compositor-level occlusion (`DComp`
-//!   visual or flip-model presentation plane) — though the
-//!   hit-test's determinism under GPU composition is itself an
-//!   observed limitation, recorded as such.
+//!   HWND-level occlusion *or skip* evidence: the hit-test also
+//!   passes over hidden and disabled windows (and their
+//!   subtrees), so the probed chain's `visible`/`disabled`/
+//!   exstyle state is recorded alongside to let a reader
+//!   distinguish "covered" from "skipped". A child answer with
+//!   zero screen green points at compositor-level occlusion
+//!   (`DComp` visual or flip-model presentation plane) — though
+//!   the hit-test's determinism under GPU composition is itself
+//!   an observed limitation, recorded as such.
 //!
 //! All values crossing the module boundary are plain integers,
 //! booleans, strings, and [`ScreenRect`]s — no Win32 type reaches
@@ -70,6 +74,11 @@ pub(crate) struct WindowRow {
     pub visible: bool,
     /// `IsWindow(hwnd) != 0`.
     pub alive: bool,
+    /// `WS_DISABLED` bit of `GWL_STYLE` — `WindowFromPoint`
+    /// skips hidden *and* disabled windows (and their subtrees),
+    /// so this is a hit-test-relevant state, not style trivia.
+    /// `None` when the style query fails.
+    pub disabled: Option<bool>,
 }
 
 /// One window's raw `GWL_EXSTYLE` value with named accessors for
@@ -176,6 +185,33 @@ pub(crate) struct OcclusionFacts {
     /// from — `None` when the rect query failed (the earlier
     /// `screen_rect` step row carries the error detail).
     pub child_rect: Option<ScreenRect>,
+    /// The probed child's own row at probe time — `alive`,
+    /// `visible`, `disabled`, class name. Together with the
+    /// `parent_window`/`root_window` rows these are the
+    /// skip-semantics inputs that let a reader distinguish
+    /// "something covers the child" from "the hit-test skipped
+    /// the child subtree" (hidden/disabled windows are skipped
+    /// by `WindowFromPoint`).
+    pub child: WindowRow,
+    /// `GetParent(child)` as a full row — the container's probe-
+    /// time state. `None` when there is no parent.
+    pub parent_window: Option<WindowRow>,
+    /// `GetAncestor(child, GA_ROOT)` as a full row — the GPUI
+    /// top-level's probe-time state. `None` when there is no
+    /// root.
+    pub root_window: Option<WindowRow>,
+    /// The probed child's `GWL_EXSTYLE` — `WS_EX_TRANSPARENT`
+    /// and friends are additional hit-test-relevant bits the
+    /// root-only style record does not cover.
+    pub child_exstyle: Option<ExstyleFacts>,
+    /// Why [`Self::child_exstyle`] is `None` — the
+    /// `GetWindowLongPtrW` failure detail.
+    pub child_exstyle_error: Option<String>,
+    /// `GetParent(child)`'s `GWL_EXSTYLE` — same rationale as
+    /// [`Self::child_exstyle`].
+    pub parent_exstyle: Option<ExstyleFacts>,
+    /// Why [`Self::parent_exstyle`] is `None`.
+    pub parent_exstyle_error: Option<String>,
 }
 
 /// Query-only occlusion diagnostics for one docked child HWND —
@@ -190,8 +226,9 @@ pub(crate) fn probe(child: u64) -> OcclusionFacts {
 mod platform {
     use windows_sys::Win32::Foundation::{GetLastError, HWND, POINT, SetLastError};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GA_ROOT, GW_CHILD, GW_HWNDNEXT, GWL_EXSTYLE, GetAncestor, GetClassNameW, GetParent,
-        GetWindow, GetWindowLongPtrW, IsWindow, IsWindowVisible, WindowFromPoint,
+        GA_ROOT, GW_CHILD, GW_HWNDNEXT, GWL_EXSTYLE, GWL_STYLE, GetAncestor, GetClassNameW,
+        GetParent, GetWindow, GetWindowLongPtrW, IsWindow, IsWindowVisible, WS_DISABLED,
+        WindowFromPoint,
     };
 
     use super::{ExstyleFacts, OcclusionFacts, PointHit, ScreenRect, WindowRow, ZOrder};
@@ -214,10 +251,7 @@ mod platform {
             let root = GetAncestor(child_hwnd, GA_ROOT);
             let root_alive = !root.is_null();
             let (root_exstyle, root_exstyle_error) = if root_alive {
-                match exstyle(root) {
-                    Ok(facts) => (Some(facts), None),
-                    Err(error) => (None, Some(error)),
-                }
+                exstyle_opt(root)
             } else {
                 (None, None)
             };
@@ -227,6 +261,12 @@ mod platform {
             let parent_children = parent_alive.then(|| z_order(parent));
             let child_rect = crate::ospix::window_screen_rect(child).ok();
             let hits = child_rect.map_or_else(Vec::new, hit_tests);
+            let (child_exstyle, child_exstyle_error) = exstyle_opt(child_hwnd);
+            let (parent_exstyle, parent_exstyle_error) = if parent_alive {
+                exstyle_opt(parent)
+            } else {
+                (None, None)
+            };
             OcclusionFacts {
                 supported: true,
                 root: root_alive.then_some(root as usize as u64),
@@ -237,7 +277,24 @@ mod platform {
                 parent_children,
                 hits,
                 child_rect,
+                child: window_row(child_hwnd, None),
+                parent_window: parent_alive.then(|| window_row(parent, None)),
+                root_window: root_alive.then(|| window_row(root, None)),
+                child_exstyle,
+                child_exstyle_error,
+                parent_exstyle,
+                parent_exstyle_error,
             }
+        }
+    }
+
+    /// `GWL_EXSTYLE` of `hwnd` as `(facts, error)` — `None`/`None`
+    /// inputs are handled by the caller; this helper only wraps the
+    /// raw query so every chain window shares one failure shape.
+    fn exstyle_opt(hwnd: HWND) -> (Option<ExstyleFacts>, Option<String>) {
+        match exstyle(hwnd) {
+            Ok(facts) => (Some(facts), None),
+            Err(error) => (None, Some(error)),
         }
     }
 
@@ -291,8 +348,8 @@ mod platform {
     }
 
     /// Identifying facts for one window — class name, screen
-    /// rect, visibility, liveness. `z_index` is carried through
-    /// from the z-order walk (`None` elsewhere).
+    /// rect, visibility, liveness, disabled state. `z_index` is
+    /// carried through from the z-order walk (`None` elsewhere).
     fn window_row(hwnd: HWND, z_index: Option<u32>) -> WindowRow {
         WindowRow {
             hwnd: hwnd as usize as u64,
@@ -302,6 +359,24 @@ mod platform {
             // SAFETY: read-only visibility/alive queries.
             visible: unsafe { IsWindowVisible(hwnd) } != 0,
             alive: unsafe { IsWindow(hwnd) } != 0,
+            disabled: disabled(hwnd),
+        }
+    }
+
+    /// `WS_DISABLED` bit of `GWL_STYLE` — `WindowFromPoint` skips
+    /// disabled windows, so a `true` here means the hit-test
+    /// cannot see this window regardless of z-order. `None` when
+    /// the style query fails (a dead handle also reports
+    /// `alive: false`, which disambiguates).
+    fn disabled(hwnd: HWND) -> Option<bool> {
+        // SAFETY: read-only style query on an observed handle.
+        unsafe {
+            SetLastError(0);
+            let raw = GetWindowLongPtrW(hwnd, GWL_STYLE);
+            if GetLastError() != 0 {
+                return None;
+            }
+            Some(u32::try_from(raw).is_ok_and(|style| style & WS_DISABLED != 0))
         }
     }
 
@@ -330,11 +405,15 @@ mod platform {
     /// `WindowFromPoint` at the five representative points inside
     /// `rect` — center plus the four interior quarter points, so a
     /// partially covered child cannot hide behind a lucky center
-    /// probe.
+    /// probe. Coordinates are clamped into the rectangle: for a
+    /// degenerate (< 4 px) window the quarter-point arithmetic
+    /// would otherwise land on the exclusive far edge — outside
+    /// the child — and record a hit that does not belong to it.
     fn hit_tests(rect: ScreenRect) -> Vec<PointHit> {
         let w = i32::try_from(rect.width).expect("rect width fits i32");
         let h = i32::try_from(rect.height).expect("rect height fits i32");
         let (x0, y0) = (rect.left, rect.top);
+        let (xmax, ymax) = (x0 + w - 1, y0 + h - 1);
         [
             (x0 + w / 2, y0 + h / 2),
             (x0 + w / 4, y0 + h / 4),
@@ -343,6 +422,7 @@ mod platform {
             (x0 + w - w / 4, y0 + h - h / 4),
         ]
         .into_iter()
+        .map(|(x, y)| (x.clamp(x0, xmax), y.clamp(y0, ymax)))
         .map(|(x, y)| {
             // SAFETY: read-only hit-test query on a plain
             // screen-coordinate pair.
@@ -368,7 +448,7 @@ mod platform {
 /// never fabricated observations.
 #[cfg(not(windows))]
 mod platform {
-    use super::OcclusionFacts;
+    use super::{OcclusionFacts, WindowRow};
 
     pub(super) fn probe(_child: u64) -> OcclusionFacts {
         OcclusionFacts {
@@ -381,6 +461,21 @@ mod platform {
             parent_children: None,
             hits: Vec::new(),
             child_rect: None,
+            child: WindowRow {
+                hwnd: _child,
+                z_index: None,
+                class_name: None,
+                rect: None,
+                visible: false,
+                alive: false,
+                disabled: None,
+            },
+            parent_window: None,
+            root_window: None,
+            child_exstyle: None,
+            child_exstyle_error: None,
+            parent_exstyle: None,
+            parent_exstyle_error: None,
         }
     }
 }

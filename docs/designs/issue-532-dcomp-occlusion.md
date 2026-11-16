@@ -220,6 +220,20 @@ pub(crate) struct OcclusionFacts {
 pub(crate) fn probe(child: u64) -> OcclusionFacts;
 ```
 
+> **Implementation note（実装時の確定差分）**: 出荷コードは本
+> sketch から次を変更している — `ExstyleFacts` は bool field では
+> なく生値 `value` + flag accessor method（clippy
+> `struct_excessive_bools` 回避）、`root_children`/
+> `parent_children` は `Result<ZOrder,String>` ではなく
+> `Option<ZOrder>`（sibling walk は失敗し得ず、enumerate 対象
+> 不在は caller 側の `skipped_reason` で表現）、`WindowRow` に
+> `disabled`（`GWL_STYLE` の `WS_DISABLED` — `WindowFromPoint`
+> の skip semantics 対応）を追加、`OcclusionFacts` に probe 時点の
+> chain 状態（`child`/`parent_window`/`root_window` の
+> `WindowRow` + `child_exstyle`/`parent_exstyle`）を追加
+> （review-protocol の cover-vs-skip 指摘対応）。差分の詳細は
+> `docs/impl/ir/issue-532-dcomp-occlusion.md` を参照。
+
 ### probe 点の選定
 
 `child_rect`（`ospix::window_screen_rect` 再利用 — DRY）から
