@@ -248,6 +248,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034YbQpZeewSk6QoG6ahZJ | Issue #629 WASAPI endpoint streaming verifier | completed | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | IMPL-034Y1GuSJhatlqbBsFEaYI | Issue #630 test_editor slice — 実装記録 | completed | [issue-630-test-editor-slice.md](./issue-630-test-editor-slice.md) |
