@@ -91,6 +91,7 @@ Directory: `docs/impl/exp`
 | [issue-631-scenario-console.jsonl](./issue-631-scenario-console.jsonl) |
 | [issue-646-numeric-bench-profile.jsonl](./issue-646-numeric-bench-profile.jsonl) |
 | [issue-650-bench-smoke-coverage.jsonl](./issue-650-bench-smoke-coverage.jsonl) |
+| [issue-692-luau-backend-exp.jsonl](./issue-692-luau-backend-exp.jsonl) |
 | [issue-692-script-port-exp.jsonl](./issue-692-script-port-exp.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |

@@ -216,6 +216,7 @@ Directory: `docs/plans`
 | PLAN-034YaYv5gxaA5bas6AXXIq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 実装計画 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| PLAN-mJPkr5kJdau9iCE3oIHTKf | Issue #692 s2 Luau analyzer backend — 実装計画 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | PLAN-034ZkLmNpQrStUvWxYzGh4 | Issue #692 実施計画 — ruviform-script 中立契約 port crate 新設・検証・docs chain | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
