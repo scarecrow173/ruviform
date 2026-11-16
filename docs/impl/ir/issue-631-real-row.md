@@ -35,7 +35,7 @@ relations:
   verifies: []
   verified-by: []
   references:
-    - "docs/impl/exp/issue-631-real-row.jsonl"
+    - "docs/impl/exp/issue-631-real-row-exp.jsonl"
     - "evidence/rf631/verification.md"
   defers: []
   deferred-by: []
@@ -144,7 +144,7 @@ verdict 語彙は `Pass`/`Fail`/`NotRun`/`Unsupported` を維持し、観測で�
 
 ### Adopted
 
-- `docs/impl/exp/issue-631-real-row.jsonl` seq 1-4: 公開面調査・
+- `docs/impl/exp/issue-631-real-row-exp.jsonl` seq 1-4: 公開面調査・
   OpLanding 設計・catalog/entries 拡張の決定を採用。
 
 ### Rejected

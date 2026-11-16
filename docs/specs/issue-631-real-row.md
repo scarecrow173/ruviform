@@ -25,7 +25,7 @@ relations:
       - type: "doc"
         path: "docs/impl/ir/issue-631-real-row.md"
       - type: "doc"
-        path: "docs/impl/exp/issue-631-real-row.jsonl"
+        path: "docs/impl/exp/issue-631-real-row-exp.jsonl"
       - type: "doc"
         path: "evidence/rf631/plugin-dock-real-headless.jsonl"
       - type: "doc"
