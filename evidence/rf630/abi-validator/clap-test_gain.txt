@@ -13,7 +13,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2064700
+        "nanos": 2139900
       }
     },
     {
@@ -29,7 +29,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2225000
+        "nanos": 2186600
       }
     },
     {
@@ -45,7 +45,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 600
+        "nanos": 800
       }
     },
     {
@@ -61,7 +61,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2468200
+        "nanos": 2063900
       }
     },
     {
@@ -77,7 +77,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2192400
+        "nanos": 1993300
       }
     },
     {
@@ -93,7 +93,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2636200
+        "nanos": 2077600
       }
     },
     {
@@ -109,7 +109,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2062200
+        "nanos": 2527700
       }
     },
     {
@@ -126,7 +126,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2314500
+        "nanos": 2460600
       }
     },
     {
@@ -143,7 +143,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2068900
+        "nanos": 2019600
       }
     },
     {
@@ -160,7 +160,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2185800
+        "nanos": 2048400
       }
     },
     {
@@ -177,7 +177,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2482500
+        "nanos": 2830100
       }
     },
     {
@@ -194,7 +194,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2495800
+        "nanos": 2600500
       }
     },
     {
@@ -211,7 +211,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2166500
+        "nanos": 2325000
       }
     },
     {
@@ -228,7 +228,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2023900
+        "nanos": 2162000
       }
     },
     {
@@ -241,11 +241,11 @@
       },
       "status": {
         "code": "warning",
-        "details": "The plugin took 4.99x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+        "details": "The plugin took 3.75x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
       },
       "duration": {
         "secs": 0,
-        "nanos": 8414800
+        "nanos": 7598100
       }
     },
     {
@@ -262,7 +262,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3147800
+        "nanos": 3102000
       }
     },
     {
@@ -279,7 +279,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3507200
+        "nanos": 3461900
       }
     },
     {
@@ -296,7 +296,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2338900
+        "nanos": 2141600
       }
     },
     {
@@ -313,7 +313,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2291400
+        "nanos": 2293200
       }
     },
     {
@@ -330,7 +330,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2107600
+        "nanos": 2610600
       }
     },
     {
@@ -347,7 +347,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 6049400
+        "nanos": 6360300
       }
     },
     {
@@ -364,7 +364,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 6914500
+        "nanos": 6541600
       }
     },
     {
@@ -381,7 +381,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3527100
+        "nanos": 4004300
       }
     },
     {
@@ -398,7 +398,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2790000
+        "nanos": 2643200
       }
     },
     {
@@ -415,7 +415,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2313600
+        "nanos": 2745700
       }
     },
     {
@@ -432,7 +432,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 1989600
+        "nanos": 2462400
       }
     },
     {
@@ -449,7 +449,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2254800
+        "nanos": 2121400
       }
     },
     {
@@ -466,7 +466,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2764700
+        "nanos": 4009200
       }
     },
     {
@@ -483,7 +483,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2520400
+        "nanos": 3074700
       }
     },
     {
@@ -500,7 +500,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2839600
+        "nanos": 2698400
       }
     },
     {
@@ -517,7 +517,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 16073100
+        "nanos": 16272300
       }
     },
     {
@@ -534,7 +534,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 18304800
+        "nanos": 17634500
       }
     },
     {
@@ -551,7 +551,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3274200
+        "nanos": 3536600
       }
     },
     {
@@ -568,7 +568,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3050200
+        "nanos": 2481200
       }
     },
     {
@@ -585,7 +585,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3284300
+        "nanos": 2959700
       }
     },
     {
@@ -602,7 +602,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2168100
+        "nanos": 2656800
       }
     },
     {
@@ -619,7 +619,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2016100
+        "nanos": 2201700
       }
     },
     {
@@ -636,7 +636,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2146400
+        "nanos": 2187300
       }
     },
     {
@@ -653,7 +653,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2333400
+        "nanos": 2241400
       }
     },
     {
@@ -670,7 +670,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2141600
+        "nanos": 2827700
       }
     },
     {
@@ -687,7 +687,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2315700
+        "nanos": 2166400
       }
     },
     {
@@ -704,7 +704,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2656500
+        "nanos": 3061600
       }
     },
     {
@@ -721,7 +721,7 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3014300
+        "nanos": 3508800
       }
     },
     {
@@ -738,36 +738,36 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4815200
+        "nanos": 4455800
       }
     }
   ]
 }
 
-[2m   15[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
-[2m   20[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
-[2m   31[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
-[2m   50[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
-[2m   60[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
-[2m   66[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
-[2m   71[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
-[2m   76[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
-[2m   98[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
-[2m   98[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
-[2m  104[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
-[2m  129[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
-[2m  135[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
-[2m  137[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
-[2m  142[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
-[2m  163[0m[2mms[0m [32m INFO[0m Test param-set-events completed [2;3mclap_validator::validator[0m
-[2m  168[0m[2mms[0m [32m INFO[0m Test param-set-no-cookies completed [2;3mclap_validator::validator[0m
-[2m  174[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
-[2m  194[0m[2mms[0m [32m INFO[0m Test param-fuzz-basic completed [2;3mclap_validator::validator[0m
-[2m  302[0m[2mms[0m [32m INFO[0m Test param-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
-[2m  306[0m[2mms[0m [32m INFO[0m Test param-fuzz-modulation completed [2;3mclap_validator::validator[0m
-[2m  311[0m[2mms[0m [32m INFO[0m Test param-fuzz-bounds completed [2;3mclap_validator::validator[0m
-[2m  313[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
-[2m  317[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
-[2m  351[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
-[2m  356[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
-[2m  363[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m   14[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   20[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m   30[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m  163[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m  168[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m  173[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m  179[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
+[2m  185[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
+[2m  207[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
+[2m  208[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
+[2m  214[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
+[2m  239[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
+[2m  244[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  247[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  251[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
+[2m  276[0m[2mms[0m [32m INFO[0m Test param-set-events completed [2;3mclap_validator::validator[0m
+[2m  283[0m[2mms[0m [32m INFO[0m Test param-set-no-cookies completed [2;3mclap_validator::validator[0m
+[2m  289[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
+[2m  309[0m[2mms[0m [32m INFO[0m Test param-fuzz-basic completed [2;3mclap_validator::validator[0m
+[2m  310[0m[2mms[0m [32m INFO[0m Test param-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m  315[0m[2mms[0m [32m INFO[0m Test param-fuzz-modulation completed [2;3mclap_validator::validator[0m
+[2m  319[0m[2mms[0m [32m INFO[0m Test param-fuzz-bounds completed [2;3mclap_validator::validator[0m
+[2m  322[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
+[2m  327[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
+[2m  367[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
+[2m  375[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
+[2m  382[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m

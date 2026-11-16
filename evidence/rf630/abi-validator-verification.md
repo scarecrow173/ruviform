@@ -12,7 +12,7 @@ validator の実走で充足する。
 | --- | --- |
 | OS | Windows (win32/x64) |
 | Node | v26.12.1（mise 管理） |
-| git HEAD | `70a5fa4d9d440a2556cd57d325643eaa499c9f8f`（branch `feat/630-abi-validator`、検証時点） |
+| git HEAD | `6f0eb5328b7c5f9a35ebb5aa3a0fe7d7606d950c`（branch `feat/630-abi-validator`、origin/main merge 後の canonical run 時点） |
 | Rust | mise 管理 toolchain（`mise run check|lint|test` 経由） |
 
 ## 使用 validator（version / license / digest）
@@ -43,8 +43,12 @@ validator の実走で充足する。
 
 | artifact | SHA-256 |
 | --- | --- |
-| `target/debug/ruviform_plugin_test_clap.dll` | `b770d7dafed4f45010b5fece9e6cc0111d0cd383a3703e0012ba3ee9931af470` |
-| `target/debug/ruviform_plugin_test_vst3.dll` | `0f5e9e51e3bf2427502404d8ab6206442035e9f39f2b2920e0d39a8b2fb14688` |
+| `target/debug/ruviform_plugin_test_clap.dll` | `12b9d82a4905a2794b1a96c99bed96416d26a95c08072b7b16044be819fe8af2` |
+| `target/debug/ruviform_plugin_test_vst3.dll` | `05e7eaed8c764bd38cdbf30873d9d9b9cf8d5b0d2058cfeb6ca3436589b4b180` |
+
+注: debug cdylib の cargo build は bit 再現を保証しないため、digest は
+「実際に validator が検証した artifact」の記録であり、再 build ごとに
+変わりうる（run.json の digest がその run の正本）。
 
 VST3 は DLL を spec layout
 `ruviform-plugin-test-vst3.vst3/Contents/x86_64-win/ruviform-plugin-test-vst3.vst3`
@@ -133,5 +137,10 @@ production adapter crate（`ruviform-plugin-vst3`/`ruviform-plugin-clap`/
 - clap-validator `param-fuzz-sample-accurate` の tool 側 panic は
   upstream 依存 — 別 Issue 化の要否は Coordinator 判断。
 - production `ruviform-plugin-vst3` adapter に VST3 fixture と同型の
-  terminate/setupProcessing 契約疑義がある可能性 — 本 slice 範囲外、
-  Coordinator へ報告済み。
+  terminate/setupProcessing 契約疑義: `crates/ruviform-plugin-vst3/
+  src/component.rs:507`・`src/controller.rs:72` の `terminate` が
+  `LifecycleEvent::Destroy` を遷移させており、fixture で修正した
+  「terminate が終端化し再 setup 不能」と同型の可能性がある
+  （未検証 — production crate には VST3 SDK validator を未適用）。
+  Coordinator 回答: 別 Issue として起票予定。本 slice は zero-diff
+  を維持。
