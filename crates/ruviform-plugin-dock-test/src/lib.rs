@@ -41,7 +41,13 @@
 //! compositor fix lands; `real-dcomp-foreground` (Issue #532
 //! foreground-probe slice) mutates the GPUI root's z-order/
 //! foreground in bounded, restored stages to bisect external HWND
-//! stacking from compositor-internal occlusion. The catalog also
+//! stacking from compositor-internal occlusion;
+//! `real-dcomp-present` (Issue #532 presentation-probe slice)
+//! observes — without mutating — the cover inventory,
+//! presentation attributes, `PrintWindow` flag variants, and
+//! screen-vs-suspect pixel fingerprints that discriminate the
+//! remaining hit-test-transparent / child-presentation /
+//! capture-blind-spot candidates. The catalog also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
 //! injection, and honest `Unsupported` judgments where the adapter
@@ -69,6 +75,8 @@ mod osmut;
 mod osoccl;
 #[cfg(feature = "real-dock")]
 mod ospix;
+#[cfg(feature = "real-dock")]
+mod ospres;
 pub mod probe;
 pub mod real_catalog;
 #[cfg(feature = "real-dock")]

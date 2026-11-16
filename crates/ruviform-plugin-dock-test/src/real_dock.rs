@@ -1,9 +1,10 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
-//! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`
-//! added by the Issue #532 dcomp-pixel/foreground-probe slices).
+//! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`/
+//! `real-dcomp-present` added by the Issue #532
+//! dcomp-pixel/foreground-probe/presentation-probe slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the fourteen cases
+//! windows* through [`RealOsGuiTest`] and records the fifteen cases
 //! of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -26,6 +27,11 @@
 //! |                         |             | z-order/foreground を段階変異し hit-test+screen     |
 //! |                         |             | green を再観測して外部 stacking vs compositor 内部  |
 //! |                         |             | 遮蔽を二分。verdict は probe 実行+復元のみ           |
+//! | `real-dcomp-present`    | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — 変異なしの   |
+//! |                         |             | presentation probe: cover inventory・presentation    |
+//! |                         |             | attributes・PrintWindow flag 変種・screen-vs-suspect |
+//! |                         |             | fingerprint で残余 3 候補を判別。verdict は probe    |
+//! |                         |             | 実行+lifecycle のみ（観測値はデータ）                |
 //! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
@@ -93,6 +99,7 @@ use crate::artifact;
 use crate::osmut;
 use crate::osoccl;
 use crate::ospix;
+use crate::ospres;
 use crate::real_catalog::{LANE, SCENARIO};
 // The run id is shared with the console's catalog metadata —
 // re-exported so `real_dock::RUN_ID` keeps working for the lane.
@@ -345,7 +352,7 @@ fn finalize_real(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 14] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 15] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -394,6 +401,16 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 14] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_foreground_case,
+        },
+        ScenarioEntry {
+            case: "real-dcomp-present",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_present_case,
         },
         ScenarioEntry {
             case: "real-multiwindow-focus",
@@ -766,7 +783,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -820,7 +837,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -3711,6 +3728,1072 @@ fn real_dcomp_foreground_case(
 }
 
 // ---------------------------------------------------------------------
+// case: real-dcomp-present (Issue #532 presentation probe)
+// ---------------------------------------------------------------------
+
+/// `PrintWindow` `nflags` variants exercised per target — `0`
+/// (whole window), `PW_CLIENTONLY`, `PW_RENDERFULLCONTENT`, and
+/// both. The ABI values match `ospix`'s local constants.
+const PRESENT_FLAGS: [u32; 4] = [0x0, 0x1, 0x2, 0x3];
+/// Cap on cover candidates recorded per child — the inventory
+/// itself is already capped at `ospres::INVENTORY_CAP`; this bounds
+/// the per-child attribute queries and JSON size.
+const COVER_CAP: usize = 16;
+/// Cap on fingerprint suspects per child — hit-test HWNDs plus the
+/// topmost cover candidates.
+const FINGERPRINT_CAP: usize = 8;
+
+/// The aggregated presentation-probe outcome — whether the
+/// baseline could be taken and whether every planned observation
+/// family ran. The probe *result* (which mechanism the data
+/// supports) lives in the step rows as data; this struct carries
+/// only the probe's own execution verdict inputs.
+#[derive(Debug, Default)]
+struct PresentationProbeOutcome {
+    /// `false` when the baseline could not be taken (no container,
+    /// window not presented, no children) — the case then reports
+    /// `NotRun`, never a fabricated verdict.
+    evaluated: bool,
+    /// Every planned observation family ran its platform call. A
+    /// family reporting `supported:false` mid-probe (defensive —
+    /// unreachable on Windows) clears this → `Fail`.
+    completed: bool,
+    /// The planned observation families, for the `observed` summary.
+    families: Vec<String>,
+    /// First violated probe check (`name: detail`).
+    failure: Option<String>,
+}
+
+impl PresentationProbeOutcome {
+    /// Probe could not be evaluated — records a `not_run` row and
+    /// returns the honest outcome with the reason carried through.
+    fn not_evaluable(steps: &mut Vec<Value>, reason: &str) -> Self {
+        steps.push(json!({
+            "step": "pres_probe",
+            "verdict": "not_run",
+            "reason": reason,
+        }));
+        Self {
+            failure: Some(reason.to_string()),
+            ..Self::default()
+        }
+    }
+
+    /// Off-Windows / unsupported platform — records an
+    /// `unsupported` row; unreachable today (`NativePluginDock` is
+    /// Windows-only) but kept honest.
+    fn unsupported(steps: &mut Vec<Value>) -> Self {
+        steps.push(json!({
+            "step": "pres_probe",
+            "verdict": "unsupported",
+            "detail": "OS presentation observation is Windows-only",
+        }));
+        Self::default()
+    }
+}
+
+/// Verification for `real-dcomp-present` — same lifecycle contract
+/// as [`ForegroundVerification`] plus the probe outcome. The case
+/// verdict reads `lifecycle_ok` + `probe.{evaluated,completed}`
+/// only; cover/fingerprint/capture observations are bisect *data*,
+/// never verdict inputs.
+struct PresentationVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence) — the same checks as
+    /// `real-editor-attach`.
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated probe outcome.
+    probe: PresentationProbeOutcome,
+    /// `observed` extras — container/child ids, threads, events,
+    /// probe summary (an `Object`, like `ForegroundVerification`).
+    extras: Value,
+}
+
+/// Plain-JSON form of one [`ospres::TopLevelWindow`] — `own_process`
+/// is derived from `pid == own_pid` so own-process (GPUI/plugin)
+/// covers never masquerade as foreign ones.
+fn top_level_window_json(window: &ospres::TopLevelWindow, own_pid: u32) -> Value {
+    json!({
+        "hwnd": window.hwnd,
+        "z_index": window.z_index,
+        "class_name": window.class_name,
+        "rect": occlusion_rect_json(window.rect),
+        "visible": window.visible,
+        "alive": window.alive,
+        "disabled": window.disabled,
+        "exstyle": window.exstyle.as_ref().map(|e| json!({
+            "value": e.value,
+            "noredirectionbitmap": e.noredirectionbitmap(),
+            "topmost": e.topmost(),
+            "layered": e.layered(),
+            "transparent": e.transparent(),
+            "noactivate": e.noactivate(),
+            "toolwindow": e.toolwindow(),
+            "appwindow": e.appwindow(),
+        })),
+        "owner": window.owner,
+        "pid": window.pid,
+        "owner_pid": window.owner_pid,
+        "own_process": window.pid == Some(own_pid),
+    })
+}
+
+/// Plain-JSON form of one [`ospres::PresentationAttributes`] —
+/// every field is already a plain value or `None`.
+fn attributes_json(attributes: &ospres::PresentationAttributes) -> Value {
+    json!({
+        "supported": attributes.supported,
+        "cloaked": attributes.cloaked,
+        "region": attributes.region.as_ref().map(|r| json!({
+            "region_type": r.region_type,
+            // GetWindowRgn/GetRgnBox coordinates — relative to the
+            // window's upper-left corner, NOT screen space.
+            "bounds_space": "window",
+            "bounds": occlusion_rect_json(r.bounds),
+            "error": r.error,
+        })),
+        "update": attributes.update.as_ref().map(|u| json!({
+            "has_update": u.has_update,
+            // GetUpdateRect coordinates — client-area space, NOT
+            // screen space.
+            "rect_space": "client",
+            "rect": occlusion_rect_json(u.rect),
+            "error": u.error,
+        })),
+        "layered": attributes.layered.as_ref().map(|l| json!({
+            "alpha": l.alpha,
+            "color_key": l.color_key,
+            "flags": l.flags,
+        })),
+    })
+}
+
+/// `true` when two screen-space rectangles overlap by at least one
+/// pixel — the cover-candidate predicate.
+fn rects_intersect(a: ospix::ScreenRect, b: ospix::ScreenRect) -> bool {
+    rect_intersection(a, b).is_some()
+}
+
+/// The overlapping region of two screen-space rectangles — `None`
+/// when they do not intersect or the result is degenerate. `i64`
+/// intermediates keep the edge arithmetic overflow-free.
+fn rect_intersection(a: ospix::ScreenRect, b: ospix::ScreenRect) -> Option<ospix::ScreenRect> {
+    let left = a.left.max(b.left);
+    let top = a.top.max(b.top);
+    let right =
+        (i64::from(a.left) + i64::from(a.width)).min(i64::from(b.left) + i64::from(b.width));
+    let bottom =
+        (i64::from(a.top) + i64::from(a.height)).min(i64::from(b.top) + i64::from(b.height));
+    let width = u32::try_from(right - i64::from(left)).ok()?;
+    let height = u32::try_from(bottom - i64::from(top)).ok()?;
+    (width > 0 && height > 0).then_some(ospix::ScreenRect {
+        left,
+        top,
+        width,
+        height,
+    })
+}
+
+/// Whether `inner` is fully contained in `outer` (screen coords) —
+/// `i64` intermediates keep the edge arithmetic overflow-free.
+fn rect_contains(outer: ospix::ScreenRect, inner: ospix::ScreenRect) -> bool {
+    i64::from(inner.left) >= i64::from(outer.left)
+        && i64::from(inner.top) >= i64::from(outer.top)
+        && i64::from(inner.left) + i64::from(inner.width)
+            <= i64::from(outer.left) + i64::from(outer.width)
+        && i64::from(inner.top) + i64::from(inner.height)
+            <= i64::from(outer.top) + i64::from(outer.height)
+}
+
+/// The identity label a fingerprint suspect carries — chain windows
+/// keep their chain role regardless of which list (hit-test or
+/// cover inventory) surfaced them; `foreign` labels everything
+/// else (`hit_test` for `WindowFromPoint` hits, `cover_candidate`
+/// for inventory-only windows).
+fn suspect_role(hwnd: u64, facts: &osoccl::OcclusionFacts, foreign: &'static str) -> &'static str {
+    if Some(hwnd) == facts.root {
+        "root"
+    } else if Some(hwnd) == facts.parent {
+        "container"
+    } else {
+        foreign
+    }
+}
+
+/// Quantized RGB color bin — 5 bits per channel (`>>3`), the
+/// fingerprint comparison unit. Solid surfaces survive
+/// compositing/capture-format differences inside one bin.
+fn color_bin(r: u8, g: u8, b: u8) -> u16 {
+    (u16::from(r >> 3) << 10) | (u16::from(g >> 3) << 5) | u16::from(b >> 3)
+}
+
+/// The bin of the RGBA8 pixel at `index` (pixel index, not byte).
+fn bin_at(rgba: &[u8], index: usize) -> u16 {
+    let base = index * 4;
+    color_bin(rgba[base], rgba[base + 1], rgba[base + 2])
+}
+
+/// `(match_fraction, overlap_pixels)` between the screen capture
+/// (covering `screen_rect`) and a suspect raster (covering
+/// `raster_rect`): the fraction of overlap pixels whose quantized
+/// color bin matches. `None` when either capture's dimensions do
+/// not match its declared rect (a misaligned comparison would
+/// fabricate a match rate — skipped honestly instead).
+fn fingerprint_match(
+    screen: &ospix::PixelCapture,
+    screen_rect: ospix::ScreenRect,
+    raster: &ospix::PixelCapture,
+    raster_rect: ospix::ScreenRect,
+) -> Option<(f64, u64)> {
+    if screen.width != screen_rect.width || screen.height != screen_rect.height {
+        return None;
+    }
+    if raster.width != raster_rect.width || raster.height != raster_rect.height {
+        return None;
+    }
+    let overlap = rect_intersection(screen_rect, raster_rect)?;
+    let sw = usize::try_from(screen.width).ok()?;
+    let rw = usize::try_from(raster.width).ok()?;
+    let mut matched = 0u64;
+    let mut total = 0u64;
+    let y_end = overlap.top + i32::try_from(overlap.height).ok()?;
+    let x_end = overlap.left + i32::try_from(overlap.width).ok()?;
+    for y in overlap.top..y_end {
+        for x in overlap.left..x_end {
+            let si = usize::try_from(y - screen_rect.top).ok()? * sw
+                + usize::try_from(x - screen_rect.left).ok()?;
+            let ri = usize::try_from(y - raster_rect.top).ok()? * rw
+                + usize::try_from(x - raster_rect.left).ok()?;
+            total += 1;
+            if bin_at(&screen.rgba, si) == bin_at(&raster.rgba, ri) {
+                matched += 1;
+            }
+        }
+    }
+    // u32 saturation before the exact u32→f64 conversion — same
+    // pattern as `green_fraction`; real captures are far below
+    // the bound.
+    (total > 0).then(|| {
+        let m = u32::try_from(matched).unwrap_or(u32::MAX);
+        let t = u32::try_from(total).unwrap_or(u32::MAX).max(1);
+        (f64::from(m) / f64::from(t), total)
+    })
+}
+
+/// The top `n` quantized color bins of a capture by pixel count —
+/// the human-readable "what is actually on screen" summary.
+fn top_colors(rgba: &[u8], n: usize) -> Vec<Value> {
+    let mut hist = vec![0u32; 1 << 15];
+    for px in rgba.as_chunks::<4>().0 {
+        hist[usize::from(color_bin(px[0], px[1], px[2]))] += 1;
+    }
+    let mut bins: Vec<(u16, u32)> = hist
+        .iter()
+        .enumerate()
+        .filter(|(_, count)| **count > 0)
+        .map(|(bin, count)| (u16::try_from(bin).unwrap_or(u16::MAX), *count))
+        .collect();
+    bins.sort_by_key(|bin| std::cmp::Reverse(bin.1));
+    bins.into_iter()
+        .take(n)
+        .map(|(bin, count)| {
+            json!({
+                "r": ((bin >> 10) & 0x1f) << 3,
+                "g": ((bin >> 5) & 0x1f) << 3,
+                "b": (bin & 0x1f) << 3,
+                "count": count,
+            })
+        })
+        .collect()
+}
+
+/// One `PrintWindow`/`windowdc` capture step row for the
+/// presentation probe — `note` level only, green stats + opt-in
+/// artifact, never a verdict input. Takes the result by reference
+/// so the caller keeps the `flags=0` raster for fingerprinting.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "per-capture identity (index/role/hwnd/path/flags) + result + artifacts"
+)]
+fn record_present_capture(
+    steps: &mut Vec<Value>,
+    child_index: usize,
+    role: &str,
+    hwnd: u64,
+    path: &str,
+    flags: Option<u32>,
+    result: &Result<ospix::PixelCapture, String>,
+    artifacts: Option<&Path>,
+    artifact_name: &str,
+) {
+    match result {
+        Ok(capture) => {
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            let mut row = json!({
+                "step": "pres_capture",
+                "verdict": "note",
+                "child_index": child_index,
+                "target_role": role,
+                "hwnd": hwnd,
+                "path": path,
+                "flags": flags,
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+            });
+            record_pixel_artifact(&mut row, artifacts, artifact_name, capture);
+            steps.push(row);
+        }
+        Err(error) => steps.push(json!({
+            "step": "pres_capture",
+            "verdict": "note",
+            "child_index": child_index,
+            "target_role": role,
+            "hwnd": hwnd,
+            "path": path,
+            "flags": flags,
+            "error": error,
+        })),
+    }
+}
+
+/// A captured `PrintWindow(flags=0)` raster kept for the
+/// fingerprint comparison — window-rect basis by construction.
+struct FingerprintRaster {
+    /// The target's role label (`root`/`container`/`editor_child`/
+    /// `hit_test`/`cover_candidate`).
+    role: &'static str,
+    /// The HWND the raster belongs to.
+    hwnd: u64,
+    /// The window rect the raster covers (flags=0 → `GetWindowRect`).
+    rect: ospix::ScreenRect,
+    /// The captured pixels.
+    capture: ospix::PixelCapture,
+}
+
+/// Per-child probe result — `Completed` ran every observation
+/// family, `Failed` hit an unsupported observation mid-probe (the
+/// case reports `Fail`), `NotEvaluable` means the child's baseline
+/// could not be established — the top-level root HWND is
+/// unresolvable, so the chain's root attributes/captures/fingerprint
+/// cannot run (the case reports `NotRun`).
+enum ChildProbeResult {
+    /// Every planned family ran.
+    Completed,
+    /// A platform observation reported unsupported mid-probe.
+    Failed,
+    /// The baseline itself could not be taken for this child.
+    NotEvaluable,
+}
+
+/// Per-child presentation observation while attached — cover
+/// inventory intersection, presentation attributes, `PrintWindow`
+/// flag variants, screen capture, and fingerprint matching. Every
+/// family records `note`-level step rows; failures degrade to
+/// `error`/`skipped` fields, never fabricated observations.
+#[expect(clippy::too_many_lines)]
+fn probe_one_child_presentation(
+    index: usize,
+    child: &ChildWindowFacts,
+    container: u64,
+    inventory: &ospres::Inventory,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ChildProbeResult {
+    let hwnd = child.hwnd;
+    let facts = osoccl::probe(hwnd);
+    if !facts.supported {
+        steps.push(json!({
+            "step": "pres_probe",
+            "verdict": "fail",
+            "child_index": index,
+            "error": "osoccl observation unsupported mid-probe",
+        }));
+        return ChildProbeResult::Failed;
+    }
+    // The approved baseline requires the top-level root to resolve
+    // — without it the chain's root attributes, captures, and
+    // fingerprint have no target, so the probe is not evaluable
+    // (recorded as `not_run` by the caller, never a partial pass).
+    if facts.root.is_none() {
+        return ChildProbeResult::NotEvaluable;
+    }
+
+    // pres_attributes — the docked chain (child/container/root).
+    let mut chain_targets: Vec<(&'static str, u64)> =
+        vec![("editor_child", hwnd), ("container", container)];
+    if let Some(root) = facts.root {
+        chain_targets.push(("root", root));
+    }
+    let chain: Vec<Value> = chain_targets
+        .iter()
+        .map(|(role, target)| {
+            json!({
+                "role": role,
+                "hwnd": target,
+                "attributes": attributes_json(&ospres::attributes(*target)),
+            })
+        })
+        .collect();
+    steps.push(json!({
+        "step": "pres_attributes",
+        "verdict": "note",
+        "child_index": index,
+        "hwnd": hwnd,
+        "targets": chain,
+        "note": "DWMWA_CLOAKED / window region / update region / \
+                layered attributes per chain window — each query \
+                degrades independently",
+    }));
+
+    // pres_cover — top-level windows intersecting the child's
+    // screen rect, z-order, with presentation attributes inline.
+    let child_rect = facts
+        .child_rect
+        .or_else(|| ospix::window_screen_rect(hwnd).ok());
+    let covers: Vec<Value> = match child_rect {
+        Some(rect) => inventory
+            .windows
+            .iter()
+            .filter(|window| {
+                window
+                    .rect
+                    .is_some_and(|candidate| rects_intersect(rect, candidate))
+            })
+            .take(COVER_CAP)
+            .map(|window| {
+                let mut entry = top_level_window_json(window, inventory.own_pid);
+                if let Some(obj) = entry.as_object_mut() {
+                    obj.insert(
+                        "covers_child".to_string(),
+                        json!(window.rect.is_some_and(|r| rect_contains(r, rect))),
+                    );
+                    obj.insert(
+                        "attributes".to_string(),
+                        attributes_json(&ospres::attributes(window.hwnd)),
+                    );
+                }
+                entry
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+    steps.push(json!({
+        "step": "pres_cover",
+        "verdict": "note",
+        "child_index": index,
+        "hwnd": hwnd,
+        "child_rect": occlusion_rect_json(child_rect),
+        "cover_count": covers.len(),
+        "covers": covers,
+        "note": "top-level windows intersecting the child rect \
+                (z-order, cap {}) — WindowFromPoint skips hidden/\
+                disabled/transparent/layered/cloaked windows, so \
+                this inventory sees covers the hit-test cannot",
+        "cap": COVER_CAP,
+    }));
+
+    // pres_capture — PrintWindow flag variants + window DC per
+    // chain target. The flags=0 printwindow rasters are kept for
+    // the fingerprint comparison (window-rect basis).
+    let mut fingerprint_rasters: Vec<FingerprintRaster> = Vec::new();
+    for &(role, target) in &chain_targets {
+        for flags in PRESENT_FLAGS {
+            let result = ospix::capture_print_window_flags(target, flags);
+            record_present_capture(
+                steps,
+                index,
+                role,
+                target,
+                "printwindow",
+                Some(flags),
+                &result,
+                artifacts,
+                &format!("real-dcomp-present-{role}-f{flags}-c{index}"),
+            );
+            if flags == 0x0
+                && let Ok(capture) = result
+                && let Ok(rect) = ospix::window_screen_rect(target)
+            {
+                fingerprint_rasters.push(FingerprintRaster {
+                    role,
+                    hwnd: target,
+                    rect,
+                    capture,
+                });
+            }
+        }
+        let result = ospix::capture_window_dc(target);
+        record_present_capture(
+            steps,
+            index,
+            role,
+            target,
+            "windowdc",
+            None,
+            &result,
+            artifacts,
+            &format!("real-dcomp-present-{role}-windowdc-c{index}"),
+        );
+    }
+
+    // pres_screen — the composited child-rect capture, same oracle
+    // as `real-dcomp-pixel`; kept for the fingerprint comparison.
+    let screen = child_rect.map_or_else(
+        || Err("no child rect".to_string()),
+        ospix::capture_screen_rect,
+    );
+    let screen_capture = match &screen {
+        Ok(capture) => {
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            let mut row = json!({
+                "step": "pres_screen",
+                "verdict": "note",
+                "child_index": index,
+                "hwnd": hwnd,
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+                "threshold": GREEN_VISIBLE_FRACTION,
+            });
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                &format!("real-dcomp-present-screen-{index}"),
+                capture,
+            );
+            steps.push(row);
+            Some(capture.clone())
+        }
+        Err(error) => {
+            steps.push(json!({
+                "step": "pres_screen",
+                "verdict": "note",
+                "child_index": index,
+                "hwnd": hwnd,
+                "error": error,
+            }));
+            None
+        }
+    };
+
+    // pres_fingerprint — screen capture vs chain rasters and
+    // suspect rasters, quantized-bin match fraction over the
+    // overlap region.
+    record_fingerprint(
+        index,
+        hwnd,
+        child_rect,
+        &facts,
+        &fingerprint_rasters,
+        screen_capture.as_ref(),
+        inventory,
+        steps,
+    );
+
+    ChildProbeResult::Completed
+}
+
+/// The `pres_fingerprint` step — compares the screen capture of
+/// the child rect against (a) the chain targets' `PrintWindow(0)`
+/// rasters and (b) suspect rasters (hit-test HWNDs + top cover
+/// candidates). `match_fraction` is the quantized-bin agreement
+/// over the screen-rect ∩ raster-rect overlap; `None`/skipped
+/// reasons are recorded, never fabricated.
+#[expect(clippy::too_many_lines)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "per-child inputs (index/hwnd/rect/facts/rasters/screen/inventory) + steps"
+)]
+fn record_fingerprint(
+    index: usize,
+    hwnd: u64,
+    child_rect: Option<ospix::ScreenRect>,
+    facts: &osoccl::OcclusionFacts,
+    chain_rasters: &[FingerprintRaster],
+    screen: Option<&ospix::PixelCapture>,
+    inventory: &ospres::Inventory,
+    steps: &mut Vec<Value>,
+) {
+    let (Some(screen_rect), Some(screen_capture)) = (child_rect, screen) else {
+        steps.push(json!({
+            "step": "pres_fingerprint",
+            "verdict": "note",
+            "child_index": index,
+            "hwnd": hwnd,
+            "skipped": "no screen capture or child rect — fingerprint not evaluable",
+        }));
+        return;
+    };
+
+    // Chain matches — root/container/editor_child flags=0 rasters.
+    let chain_matches: Vec<Value> = chain_rasters
+        .iter()
+        .map(|raster| {
+            match fingerprint_match(screen_capture, screen_rect, &raster.capture, raster.rect) {
+                Some((fraction, pixels)) => json!({
+                    "target": raster.role,
+                    "hwnd": raster.hwnd,
+                    "match_fraction": fraction,
+                    "overlap_pixels": pixels,
+                }),
+                None => json!({
+                    "target": raster.role,
+                    "hwnd": raster.hwnd,
+                    "skipped": "size_mismatch_or_no_overlap",
+                }),
+            }
+        })
+        .collect();
+
+    // Suspects — hit-test HWNDs (any level, dedup) plus the top
+    // cover candidates, capped at FINGERPRINT_CAP. A suspect that
+    // IS a chain window keeps its chain role (`suspect_role`) —
+    // the same HWND never carries two different labels.
+    let mut suspects: Vec<(u64, &'static str)> = Vec::new();
+    let mut seen: Vec<u64> = vec![hwnd];
+    for hit in &facts.hits {
+        if let Some(window) = &hit.window
+            && !seen.contains(&window.hwnd)
+        {
+            seen.push(window.hwnd);
+            suspects.push((window.hwnd, suspect_role(window.hwnd, facts, "hit_test")));
+        }
+    }
+    let cover_candidates: Vec<u64> = inventory
+        .windows
+        .iter()
+        .filter(|window| {
+            window.alive
+                && window.visible
+                && window
+                    .rect
+                    .is_some_and(|rect| rects_intersect(screen_rect, rect))
+                && !seen.contains(&window.hwnd)
+        })
+        .take(FINGERPRINT_CAP.saturating_sub(suspects.len()))
+        .map(|window| window.hwnd)
+        .collect();
+    for candidate in cover_candidates {
+        seen.push(candidate);
+        suspects.push((candidate, suspect_role(candidate, facts, "cover_candidate")));
+    }
+
+    let suspect_matches: Vec<Value> = suspects
+        .iter()
+        .map(|(suspect, role)| {
+            let rect = match ospix::window_screen_rect(*suspect) {
+                Ok(rect) => rect,
+                Err(error) => {
+                    return json!({
+                        "hwnd": suspect,
+                        "role": role,
+                        "error": error,
+                    });
+                }
+            };
+            // `PrintWindow` sends `WM_PRINT` via `SendMessage` — it
+            // blocks until the target thread pumps messages, so a
+            // hung foreign window would stall the lane forever.
+            // `IsHungAppWindow` narrows (not eliminates) that risk;
+            // the skip is recorded as data, not hidden.
+            if ospix::window_hung(*suspect) {
+                return json!({
+                    "hwnd": suspect,
+                    "role": role,
+                    "skipped": "hung_app_window",
+                });
+            }
+            match ospix::capture_print_window_flags(*suspect, 0x0) {
+                Ok(raster) => {
+                    let mut entry =
+                        match fingerprint_match(screen_capture, screen_rect, &raster, rect) {
+                            Some((fraction, pixels)) => json!({
+                                "match_fraction": fraction,
+                                "overlap_pixels": pixels,
+                            }),
+                            None => json!({ "skipped": "size_mismatch_or_no_overlap" }),
+                        };
+                    if let Some(obj) = entry.as_object_mut() {
+                        obj.insert("hwnd".to_string(), json!(suspect));
+                        obj.insert("role".to_string(), json!(role));
+                        obj.insert("raster_backend".to_string(), json!(raster.backend));
+                        obj.insert("raster_width".to_string(), json!(raster.width));
+                        obj.insert("raster_height".to_string(), json!(raster.height));
+                    }
+                    entry
+                }
+                Err(error) => json!({
+                    "hwnd": suspect,
+                    "role": role,
+                    "error": error,
+                }),
+            }
+        })
+        .collect();
+
+    steps.push(json!({
+        "step": "pres_fingerprint",
+        "verdict": "note",
+        "child_index": index,
+        "hwnd": hwnd,
+        "screen": {
+            "width": screen_capture.width,
+            "height": screen_capture.height,
+            "top_colors": top_colors(&screen_capture.rgba, 3),
+        },
+        "chain_matches": chain_matches,
+        "suspect_matches": suspect_matches,
+        "note": "quantized-bin (5bit/channel) match fraction over \
+                the screen∩raster overlap — which surface the screen \
+                actually shows; data only, never a verdict input",
+    }));
+}
+
+/// The presentation probe itself — runs while the editor is still
+/// attached (lease live, child HWNDs present). One global
+/// `ospres::inventory` snapshot, then per child: `osoccl::probe`
+/// chain facts → presentation attributes → cover candidates →
+/// `PrintWindow` flag variants + window DC → screen capture →
+/// fingerprint. No mutation — every observation is read-only.
+fn presentation_probe_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> PresentationProbeOutcome {
+    let Some(token) = container else {
+        return PresentationProbeOutcome::not_evaluable(
+            steps,
+            "no container token — the presentation probe cannot locate children",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return PresentationProbeOutcome::not_evaluable(
+                steps,
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => {
+            return PresentationProbeOutcome::not_evaluable(
+                steps,
+                "top-level presentation query failed",
+            );
+        }
+    }
+    if observation.children.is_empty() {
+        return PresentationProbeOutcome::not_evaluable(steps, "no observed child HWNDs to probe");
+    }
+
+    // Inventory once — the global top-level snapshot every child's
+    // cover analysis shares.
+    let inventory = ospres::inventory();
+    let inventory_ran = inventory.supported;
+    steps.push(json!({
+        "step": "pres_inventory",
+        "verdict": if inventory_ran { "note" } else { "fail" },
+        "supported": inventory.supported,
+        "own_pid": inventory.own_pid,
+        "total": inventory.total,
+        "truncated": inventory.truncated,
+        "windows": inventory
+            .windows
+            .iter()
+            .map(|window| top_level_window_json(window, inventory.own_pid))
+            .collect::<Vec<_>>(),
+        "note": "EnumWindows top-level inventory in z-order — sees \
+                covers WindowFromPoint skips (hidden/disabled/\
+                transparent/layered/cloaked); same-desktop top-level \
+                only, recorded limitation",
+    }));
+
+    let mut families = vec!["inventory".to_string()];
+    let mut completed = inventory_ran;
+    let mut failure =
+        (!inventory_ran).then(|| "top-level window inventory unsupported mid-probe".to_string());
+
+    for (index, child) in observation.children.iter().enumerate() {
+        match probe_one_child_presentation(index, child, token, &inventory, artifacts, steps) {
+            ChildProbeResult::Completed => {}
+            ChildProbeResult::Failed => {
+                completed = false;
+                failure.get_or_insert_with(|| {
+                    format!("child[{index}] osoccl observation unsupported mid-probe")
+                });
+            }
+            ChildProbeResult::NotEvaluable => {
+                return PresentationProbeOutcome::not_evaluable(
+                    steps,
+                    &format!(
+                        "child[{index}] top-level root HWND unresolvable — \
+                         baseline not evaluable"
+                    ),
+                );
+            }
+        }
+    }
+    families.extend([
+        "attributes".to_string(),
+        "cover".to_string(),
+        "capture_variants".to_string(),
+        "screen".to_string(),
+        "fingerprint".to_string(),
+    ]);
+
+    PresentationProbeOutcome {
+        evaluated: true,
+        completed,
+        families,
+        failure,
+    }
+}
+
+/// `observed` extras for the presentation case — same
+/// child/container fields as [`child_extras`] plus the probe
+/// summary. The full per-family data lives in `steps`; this
+/// carries only the verdict-relevant aggregate.
+fn presentation_extras(
+    container: Option<u64>,
+    observation: &ChildWindowObservation,
+    events: &[String],
+    probe: &PresentationProbeOutcome,
+) -> Map<String, Value> {
+    let mut extras = child_extras(container, observation, events);
+    extras.insert(
+        "presentation_probe".to_string(),
+        json!({
+            "evaluated": probe.evaluated,
+            "completed": probe.completed,
+            "families": probe.families,
+            "failure": probe.failure,
+        }),
+    );
+    extras
+}
+
+/// Post-open presentation-probe observation + close convergence —
+/// the `real-dcomp-present` counterpart of
+/// [`observe_editor_foreground_probe`]. Same attach contract
+/// checks, then — while still attached — the read-only
+/// presentation probe ([`presentation_probe_children`]), then the
+/// shared close → detach → convergence tail
+/// ([`conclude_editor_session`]).
+fn observe_editor_presentation_probe(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> PresentationVerification {
+    let mut failure: Option<String> = None;
+
+    // Phase 1 — enumerate the container's children while the editor
+    // is still attached (same observation as `real-editor-attach`).
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    // Phase 1b — the presentation probe while still attached (the
+    // Issue #532 mechanism discrimination). Off-Windows there is
+    // no presentation observation either — recorded as unsupported.
+    let probe = if observation.supported {
+        presentation_probe_children(&observation, container, artifacts, steps)
+    } else {
+        PresentationProbeOutcome::unsupported(steps)
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+    );
+
+    PresentationVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(presentation_extras(
+            container,
+            &observation,
+            &rendered,
+            &probe,
+        )),
+        probe,
+    }
+}
+
+/// `real-dcomp-present`: the same real attach path as
+/// `real-dcomp-foreground`, plus the read-only presentation probe —
+/// does the cover inventory / presentation attributes / capture
+/// variants / fingerprint data discriminate the remaining
+/// hit-test-transparent / child-presentation / capture-blind-spot
+/// candidates? The case verdict is the *probe's own* honest oracle
+/// (executed + lifecycle); the observations are bisect data
+/// recorded in the step rows, never a verdict input.
+fn editor_present_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        |container, _lease_raw, sessions, session_id, host, handle, steps| {
+            observe_editor_presentation_probe(
+                container, sessions, session_id, host, handle, artifacts, steps,
+            )
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     presentation observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) if !verification.probe.evaluated => not_run(format!(
+                "editor lifecycle verified but the presentation probe is not \
+                 evaluable: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("baseline could not be taken")
+            )),
+            Some(verification) if !verification.probe.completed => fail(format!(
+                "editor lifecycle verified but the presentation probe did \
+                 not complete: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("an observation family failed mid-probe")
+            )),
+            Some(_) => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(
+                    "presentation probe executed all observation families \
+                     (cover inventory, presentation attributes, capture \
+                     variants, screen, fingerprint). Bisect data (cover \
+                     candidates, attribute states, per-variant green, \
+                     match fractions) is recorded in steps"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("dcomp-present:probe-executed".to_string());
+                outcome
+            }
+            None => fail("editor opened but no presentation observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-present` case: pre-flight requires `NativePluginDock`
+/// and `VisualCapture` (same capabilities as `real-dcomp-pixel` —
+/// the probe re-uses the screen-pixel oracle plus OS-level
+/// presentation reads), then the body drives the attach chain plus
+/// the read-only presentation probe — or reports the honest
+/// artifact/session/environment outcome.
+fn real_dcomp_present_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_present_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // case: real-multiwindow-focus (AC1 — 2-window focus transfer)
 // ---------------------------------------------------------------------
 
@@ -5124,11 +6207,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 14, "fourteen real-dock cases");
+        assert_eq!(reports.len(), 15, "fifteen real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -5161,7 +6244,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");
@@ -5172,5 +6255,138 @@ mod tests {
                 entry.case
             );
         }
+    }
+
+    fn rect(left: i32, top: i32, width: u32, height: u32) -> ospix::ScreenRect {
+        ospix::ScreenRect {
+            left,
+            top,
+            width,
+            height,
+        }
+    }
+
+    /// A solid-color `width`×`height` capture — `rgba` filled with
+    /// the given R,G,B (alpha 255).
+    fn solid_capture(width: u32, height: u32, r: u8, g: u8, b: u8) -> ospix::PixelCapture {
+        let mut rgba = vec![0u8; (width * height * 4) as usize];
+        for px in rgba.as_chunks_mut::<4>().0 {
+            px[0] = r;
+            px[1] = g;
+            px[2] = b;
+            px[3] = 255;
+        }
+        ospix::PixelCapture {
+            width,
+            height,
+            rgba,
+            backend: "test",
+        }
+    }
+
+    /// `rect_intersection` returns exactly the overlapping region —
+    /// edge-touching and disjoint rectangles must not match, and the
+    /// i64 intermediates must not panic on extreme coordinates.
+    #[test]
+    fn rect_intersection_overlap_and_edges() {
+        let a = rect(0, 0, 10, 10);
+        assert_eq!(
+            rect_intersection(a, rect(5, 5, 10, 10)),
+            Some(rect(5, 5, 5, 5))
+        );
+        assert_eq!(rect_intersection(a, rect(10, 0, 5, 5)), None, "edge touch");
+        assert_eq!(rect_intersection(a, rect(20, 0, 5, 5)), None, "disjoint");
+        assert_eq!(
+            rect_intersection(rect(i32::MIN, i32::MIN, u32::MAX, u32::MAX), a),
+            Some(a)
+        );
+    }
+
+    /// `rect_contains` is inclusive on the far edge and rejects any
+    /// pixel outside — the cover-candidate containment predicate.
+    #[test]
+    fn rect_contains_boundaries() {
+        let outer = rect(0, 0, 10, 10);
+        assert!(rect_contains(outer, rect(0, 0, 10, 10)));
+        assert!(rect_contains(outer, rect(2, 2, 8, 8)));
+        assert!(!rect_contains(outer, rect(0, 0, 11, 5)));
+        assert!(!rect_contains(outer, rect(-1, 0, 5, 5)));
+    }
+
+    /// `color_bin` quantizes 5 bits per channel — values inside one
+    /// bin share it, values across a bin edge do not.
+    #[test]
+    fn color_bin_quantizes() {
+        assert_eq!(color_bin(0, 0, 0), 0);
+        assert_eq!(color_bin(255, 255, 255), 0x7fff);
+        assert_eq!(color_bin(8, 8, 8), color_bin(15, 15, 15));
+        assert_ne!(color_bin(7, 0, 0), color_bin(8, 0, 0));
+    }
+
+    /// `fingerprint_match` compares only the rect overlap: identical
+    /// solid rasters match at 1.0, different colors at 0.0, a
+    /// capture whose dims disagree with its rect is skipped (never
+    /// a fabricated fraction), and a partial overlap compares only
+    /// the shared pixels.
+    #[test]
+    fn fingerprint_match_semantics() {
+        let screen_rect = rect(0, 0, 4, 4);
+        let same = solid_capture(4, 4, 10, 200, 10);
+        assert_eq!(
+            fingerprint_match(&same, screen_rect, &same, screen_rect),
+            Some((1.0, 16))
+        );
+        let other = solid_capture(4, 4, 200, 10, 10);
+        assert_eq!(
+            fingerprint_match(&same, screen_rect, &other, screen_rect),
+            Some((0.0, 16))
+        );
+        // Raster covering only the right half of the screen rect —
+        // 8 overlap pixels, all matching.
+        let half = solid_capture(2, 4, 10, 200, 10);
+        assert_eq!(
+            fingerprint_match(&same, screen_rect, &half, rect(2, 0, 2, 4)),
+            Some((1.0, 8))
+        );
+        // Dims disagreeing with the declared rect → honest skip.
+        let lying = ospix::PixelCapture {
+            width: 2,
+            height: 2,
+            rgba: vec![0; 16],
+            backend: "test",
+        };
+        assert_eq!(
+            fingerprint_match(&lying, screen_rect, &same, screen_rect),
+            None
+        );
+        assert_eq!(
+            fingerprint_match(&same, screen_rect, &lying, rect(0, 0, 4, 4)),
+            None
+        );
+        // No overlap → None.
+        assert_eq!(
+            fingerprint_match(&same, screen_rect, &same, rect(100, 100, 4, 4)),
+            None
+        );
+    }
+
+    /// `top_colors` ranks bins by pixel count and reports the
+    /// quantized (bin-center) RGB values.
+    #[test]
+    fn top_colors_ranking() {
+        let mut rgba = Vec::new();
+        for _ in 0..3 {
+            rgba.extend_from_slice(&[0, 0, 0, 255]);
+        }
+        for _ in 0..2 {
+            rgba.extend_from_slice(&[255, 255, 255, 255]);
+        }
+        let colors = top_colors(&rgba, 2);
+        assert_eq!(colors.len(), 2);
+        assert_eq!(colors[0]["count"], 3);
+        assert_eq!(colors[0]["r"], 0);
+        assert_eq!(colors[1]["count"], 2);
+        // Bin center of 255>>3=31 → 31<<3=248.
+        assert_eq!(colors[1]["r"], 248);
     }
 }

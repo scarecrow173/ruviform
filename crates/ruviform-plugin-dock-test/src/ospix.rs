@@ -4,8 +4,11 @@
 //! Query/capture-only Win32 pixel reads used by the
 //! `real-dcomp-pixel` case — the same boundary convention as the
 //! sibling `oschild` module inside [`crate::real_dock`]: this module
-//! never creates, destroys, moves, or messages a window; it only
+//! never creates, destroys, moves, or re-styles a window; it only
 //! reads rectangles and copies pixels out of device contexts.
+//! `PrintWindow` is the one documented exception — it sends
+//! `WM_PRINT`/`WM_PRINTCLIENT` to the target window (the standard
+//! read path the approved probe design relies on).
 //!
 //! One primary oracle and two deliberately distinct diagnostics:
 //!
@@ -81,6 +84,19 @@ pub(crate) fn presented(hwnd: u64) -> Option<bool> {
     platform::presented(hwnd)
 }
 
+/// Whether Windows currently considers `hwnd`'s owning thread
+/// unresponsive (`IsHungAppWindow`). Callers use this to skip a
+/// `PrintWindow` capture that would otherwise block on a foreign
+/// window's message pump — `PrintWindow` sends `WM_PRINT` via
+/// `SendMessage`, which waits for the target thread. A `false`
+/// result is a snapshot, not a guarantee: a window can hang between
+/// this check and the capture, so the check narrows the hang window
+/// rather than eliminating it. The non-Windows stub reports `false`
+/// — the capture itself errors out there anyway.
+pub(crate) fn window_hung(hwnd: u64) -> bool {
+    platform::window_hung(hwnd)
+}
+
 /// `BitBlt`s the screen rectangle into a fresh top-down 32bpp DIB —
 /// the composited result the user actually sees.
 ///
@@ -99,6 +115,25 @@ pub(crate) fn capture_screen_rect(rect: ScreenRect) -> Result<PixelCapture, Stri
 /// refusal, GDI failure).
 pub(crate) fn capture_print_window(hwnd: u64) -> Result<PixelCapture, String> {
     platform::capture_print_window(hwnd)
+}
+
+/// `PrintWindow`s `hwnd` with an explicit `nflags` value into a
+/// fresh top-down 32bpp DIB — the flag-variant counterpart of
+/// [`capture_print_window`] used by the Issue #532
+/// presentation-probe slice. `flags` is passed to `PrintWindow`
+/// verbatim (`0`, `PW_CLIENTONLY`, `PW_RENDERFULLCONTENT`, or a
+/// combination); the DIB covers the client rect when
+/// `PW_CLIENTONLY` is set and the whole window rect otherwise, so
+/// the raster's coordinate basis is determined by the flag alone.
+/// The `backend` string stays `win32-printwindow` for every variant —
+/// callers record `flags` alongside the capture so evidence never
+/// conflates variants.
+///
+/// # Errors
+/// A string naming the failing call (dead handle, `PrintWindow`
+/// refusal, GDI failure).
+pub(crate) fn capture_print_window_flags(hwnd: u64, flags: u32) -> Result<PixelCapture, String> {
+    platform::capture_print_window_flags(hwnd, flags)
 }
 
 /// `BitBlt`s the child HWND's client area out of its own window DC
@@ -125,17 +160,23 @@ mod platform {
         SelectObject,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GA_ROOT, GetAncestor, GetClientRect, GetWindowRect, IsIconic, IsWindowVisible,
+        GA_ROOT, GetAncestor, GetClientRect, GetWindowRect, IsHungAppWindow, IsIconic,
+        IsWindowVisible,
     };
 
     use super::{PixelCapture, ScreenRect};
 
+    /// `PW_CLIENTONLY` — client area only (`nflags` bit 0).
+    const PRINT_WINDOW_CLIENT_ONLY: u32 = 0x1;
+    /// `PW_RENDERFULLCONTENT` — render all visible content
+    /// (`nflags` bit 1, Windows 8.1+).
+    const PRINT_WINDOW_RENDER_FULL: u32 = 0x2;
     /// `PrintWindow` `nflags`: client area only, full rendered
     /// content (`PW_CLIENTONLY | PW_RENDERFULLCONTENT`). The Win32
     /// ABI values are stable; windows-sys gates `PW_CLIENTONLY`
     /// behind the disabled `Win32_Storage_Xps` feature — same local
     /// declaration as `ruviform-ui-gpui`'s capture backend.
-    const PRINT_WINDOW_CLIENT_FULL: u32 = 0x1 | 0x2;
+    const PRINT_WINDOW_CLIENT_FULL: u32 = PRINT_WINDOW_CLIENT_ONLY | PRINT_WINDOW_RENDER_FULL;
 
     #[link(name = "user32")]
     unsafe extern "system" {
@@ -194,6 +235,14 @@ mod platform {
         }
     }
 
+    /// `IsHungAppWindow` on `hwnd` — a hung target's message pump
+    /// would block `PrintWindow`'s `WM_PRINT` indefinitely.
+    pub(super) fn window_hung(hwnd: u64) -> bool {
+        // SAFETY: read-only responsiveness query on an opaque
+        // handle; invalid handles report "not hung".
+        unsafe { IsHungAppWindow(hwnd as HWND) != 0 }
+    }
+
     /// `BitBlt`s `rect` (virtual-screen coordinates) into a fresh
     /// top-down 32bpp DIB — the composited result the user sees.
     pub(super) fn capture_screen_rect(rect: ScreenRect) -> Result<PixelCapture, String> {
@@ -248,19 +297,52 @@ mod platform {
     /// `PrintWindow`s `hwnd`'s client area into a fresh top-down
     /// 32bpp DIB sized to `GetClientRect` — the child's own raster.
     pub(super) fn capture_print_window(hwnd: u64) -> Result<PixelCapture, String> {
-        let mut client = RECT::default();
-        // SAFETY: `client` is a valid out-param; `hwnd` is an opaque
-        // handle the caller observed alive moments ago.
-        if unsafe { GetClientRect(hwnd as HWND, &raw mut client) } == 0 {
-            return Err(last_error("GetClientRect"));
+        capture_print_window_impl(hwnd, PRINT_WINDOW_CLIENT_FULL)
+    }
+
+    /// `PrintWindow`s `hwnd` with an explicit `nflags` — the
+    /// flag-variant counterpart of [`Self::capture_print_window`].
+    /// `PW_CLIENTONLY` selects the client-rect basis, anything else
+    /// the whole window rect; the raster's coordinate basis is
+    /// therefore determined by the flag alone.
+    pub(super) fn capture_print_window_flags(
+        hwnd: u64,
+        flags: u32,
+    ) -> Result<PixelCapture, String> {
+        capture_print_window_impl(hwnd, flags)
+    }
+
+    /// Shared `PrintWindow` capture — sizes the DIB to the client
+    /// rect when `flags & PW_CLIENTONLY` is set and to the window
+    /// rect otherwise, then hands the DC to `PrintWindow` with
+    /// `flags` verbatim.
+    fn capture_print_window_impl(hwnd: u64, flags: u32) -> Result<PixelCapture, String> {
+        let client_only = flags & PRINT_WINDOW_CLIENT_ONLY != 0;
+        let mut rect = RECT::default();
+        // SAFETY: `rect` is a valid out-param; `hwnd` is an opaque
+        // handle the caller observed alive moments ago. The query
+        // matches the raster basis `flags` selects.
+        let ok = unsafe {
+            if client_only {
+                GetClientRect(hwnd as HWND, &raw mut rect)
+            } else {
+                GetWindowRect(hwnd as HWND, &raw mut rect)
+            }
+        };
+        if ok == 0 {
+            return Err(last_error(if client_only {
+                "GetClientRect"
+            } else {
+                "GetWindowRect"
+            }));
         }
-        let w = client.right - client.left;
-        let h = client.bottom - client.top;
+        let w = rect.right - rect.left;
+        let h = rect.bottom - rect.top;
         if w <= 0 || h <= 0 {
-            return Err(format!("client rect is empty ({w}x{h})"));
+            return Err(format!("capture rect is empty ({w}x{h})"));
         }
-        let width = u32::try_from(w).map_err(|_| "client width overflows u32".to_string())?;
-        let height = u32::try_from(h).map_err(|_| "client height overflows u32".to_string())?;
+        let width = u32::try_from(w).map_err(|_| "capture width overflows u32".to_string())?;
+        let height = u32::try_from(h).map_err(|_| "capture height overflows u32".to_string())?;
 
         // SAFETY: null HWND requests the entire screen DC — it only
         // supplies the pixel format for the memory DC/DIB.
@@ -281,9 +363,8 @@ mod platform {
             let result = dib_capture(mem, screen.0, width, height, "win32-printwindow", |dc| {
                 // SAFETY: `dc` is a live memory DC with our DIB
                 // selected; `hwnd` is the observed-live handle;
-                // the flags request the client area rendered
-                // with full content.
-                if PrintWindow(hwnd as HWND, dc, PRINT_WINDOW_CLIENT_FULL) != 0 {
+                // `flags` is the caller's verbatim `nflags`.
+                if PrintWindow(hwnd as HWND, dc, flags) != 0 {
                     Ok(())
                 } else {
                     Err(last_error("PrintWindow"))
@@ -436,14 +517,21 @@ mod platform {
         // the section is deleted.
         let result = unsafe {
             let stock = SelectObject(mem, bitmap);
-            let rendered = render(mem);
-            SelectObject(mem, stock);
-            match rendered {
-                Err(e) => Err(e),
-                Ok(()) if bits.is_null() => {
-                    Err("CreateDIBSection returned null pixels".to_string())
+            if stock.is_null() {
+                // SAFETY: `stock` is null only when the selection
+                // failed — our DIB was never selected, so there is
+                // nothing to restore; `bitmap` is deleted below.
+                Err(last_error("SelectObject"))
+            } else {
+                let rendered = render(mem);
+                SelectObject(mem, stock);
+                match rendered {
+                    Err(e) => Err(e),
+                    Ok(()) if bits.is_null() => {
+                        Err("CreateDIBSection returned null pixels".to_string())
+                    }
+                    Ok(()) => Ok(bgra_to_rgba(bits, w, h, backend)),
                 }
-                Ok(()) => Ok(bgra_to_rgba(bits, w, h, backend)),
             }
         };
         // SAFETY: `bitmap` is our live GDI object, unselected above.
@@ -507,11 +595,22 @@ mod platform {
         None
     }
 
+    pub(super) fn window_hung(_hwnd: u64) -> bool {
+        false
+    }
+
     pub(super) fn capture_screen_rect(_rect: ScreenRect) -> Result<PixelCapture, String> {
         Err("OS pixel observation is Windows-only".to_string())
     }
 
     pub(super) fn capture_print_window(_hwnd: u64) -> Result<PixelCapture, String> {
+        Err("OS pixel observation is Windows-only".to_string())
+    }
+
+    pub(super) fn capture_print_window_flags(
+        _hwnd: u64,
+        _flags: u32,
+    ) -> Result<PixelCapture, String> {
         Err("OS pixel observation is Windows-only".to_string())
     }
 

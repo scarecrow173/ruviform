@@ -180,6 +180,7 @@ Directory: `docs/plans`
 | PLAN-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel 実装計画 | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | PLAN-034YxG8sLN3ehSqJxikrYs | Issue #532 foreground-probe 実装計画 | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
 | PLAN-034XB2HkzXlDdkYzRd4gWv | Issue #532 GPUI DComp public-surface 監査計画 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
+| PLAN-8a496Ntecdl8SX97zqENF0 | Issue #532 presentation-probe 実装計画 | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | PLAN-034VehuU5KuL3vurAXEXph | Issue #552 — SendInput preflight 実装計画 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | PLAN-zmhvig6ptUxYZGsi0NwJ4MGJBX | Issue #565 WASAPI-native input frame_position 実装 plan | approved | [issue-565-wasapi-input-frame-position-plan.md](./issue-565-wasapi-input-frame-position-plan.md) |
 | PLAN-5ts8wdqB6w1EhNnXtogfbs | Issue #582 実施計画 — ci 3 lane 失敗の修正と workflow_dispatch 検証 | approved | [issue-582-ci-lane-failures-plan.md](./issue-582-ci-lane-failures-plan.md) |

@@ -954,3 +954,96 @@ owner に一致。z-order は `above_count` 一致・`above_hwnd` は
   note データ — foreground branch は未解決のまま。
 - z-order/foreground の restore は best-effort（topmost band のみ
   検証済み保証）— Windows が保証しない完全復元は claim しない。
+
+---
+
+# Slice 追記: Issue #532 presentation-probe（`real-dcomp-present`）
+
+- Date: 2026-11-16
+- Lane JSONL repo_sha: `81308574`（実装 HEAD）
+- 対象: `ospres` module + `ospix` PrintWindow flag variants +
+  `real-dcomp-present` case（catalog 14→15 real rows、計 23 rows）
+
+## Static lanes（全 pass）
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `mise run check/lint/test ruviform-plugin-dock-test`（default） | pass（18 tests） |
+| `mise run check/lint/test ruviform-plugin-dock-test --features real-dock` | pass（real-dock 3 + console 14 + plugin-dock 4） |
+| `mise run test-ui-plugin-dock` / `-console` | pass |
+| `mise run test-ui-scenario-contract`（fake/gpui 両 lane） | pass |
+| `mise run check-ui-driver-boundary` | pass |
+| `mise exec -- prek run --all-files` | pass |
+| `plugin-dock-real-scenario --blocked-probe` | pass（15 case 全て `not_run` fail-closed、`plugin-dock-real-headless.jsonl` 更新） |
+
+## Interactive real lanes（exit 1 = `real-dcomp-pixel` Fail による設計どおり）
+
+`mise run test-ui-plugin-dock-real`（baseline）と
+`GPUI_DISABLE_DIRECT_COMPOSITION=1` env-on（`--pixel-artifacts
+evidence/rf631/presentation-probe` 付き）の 2 run を実走。
+
+| case | baseline | DComp disabled |
+| --- | --- | --- |
+| real-dcomp-pixel | fail | fail（verdict logic 不変、screen green=0 維持） |
+| real-dcomp-foreground | pass | pass |
+| **real-dcomp-present** | **pass** | **pass**（34 steps・全観測 family 完走） |
+| 他 12 case | pass/unsupported（前 slice と同一分布） | 同左 |
+
+### `real-dcomp-present` 観測ハイライト（evidence data、verdict 非入力）
+
+- `pres_inventory`: top-level 449 windows（cap 256 truncated）、
+  child rect 交差の visible foreign cover candidate 複数
+  （`Chrome_WidgetWin_1` z=22 等）。own-process window は cap に
+  より 0 件記録 — limitation として JSONL/本文書に明記。
+- `pres_attributes`: cloaked=0・region/layered query は error/null
+  を正直記録 — DWM cloak/region/layered の兆候なし。
+- capture variants: child `PrintWindow` flags=0/`PW_CLIENTONLY` は
+  green=1.0、`PW_RENDERFULLCONTENT` 系は 0.0（flat dark raster）。
+  window-DC は DComp off で child/container/root green 優位、
+  DComp on では child/root が 0.0。screen BitBlt は両 mode で 0.0。
+- `pres_fingerprint`: screen raster は chain/suspect 全てと
+  match_fraction=0.0（top color `(248,248,248)` light-gray 優位）。
+- `real-dcomp-foreground` stage data: baseline `above_count=399`・
+  hits=`Chrome_RenderWidgetHostHWND`、topmost で hits=自 child に
+  切替・`above_count` 7、screen green は全 stage 0.0。
+- pixel artifacts: topmost stage の screen PNG は全面 flat dark
+  （新規 surface — stale frame ではない）を示し、baseline 系は
+  Chrome の light-gray 静的 histogram と一致。
+
+判別結果の正本: `evidence/rf532/presentation-probe.md`。
+Issue #532 は open のまま — compositor 修正・方式選定は未実施。
+
+## Review-round re-verification（post-review fixes、2026-11-16）
+
+review-protocol の 2 reviewer 監査で確定した修正適用後の再検証。
+対象: `ospres.rs`（pid/owner_pid の tid チェック・UpdateFacts.error・
+SAFETY comment）、`ospix.rs`（SelectObject 失敗の error 化・
+`window_hung` 追加・module doc 修正）、`real_dock.rs`
+（`bounds_space`/`rect_space` 座標系明示・hung suspect skip・
+`ChildProbeResult::NotEvaluable`・families+cover・`suspect_role`・
+純粋 helper 5 unit test 追加）。
+
+- `cargo fmt --all -- --check`: pass
+- `mise run check/lint/test ruviform-plugin-dock-test`（default）: pass
+- 同 lanes `--features real-dock`: pass（unit 8・console 14・
+  plugin_dock 4 全 pass）
+- `mise run test-ui-plugin-dock`: pass
+- `mise run test-ui-plugin-dock-console`: pass
+- `mise run test-ui-scenario-contract`: pass
+- `mise run check-ui-driver-boundary`: pass
+- `mise exec -- prek run --all-files`: pass
+- `plugin-dock-real-scenario --blocked-probe`: pass（15 case
+  全て `not_run` fail-closed、`plugin-dock-real-headless.jsonl`
+  再生成）
+- `mise run test-ui-plugin-dock-real`（baseline・最終コードで再実行）:
+  exit 1（`real-dcomp-pixel` の設計どおり Fail）。`real-dcomp-present`
+  = **pass**、families `["inventory","attributes","cover",
+  "capture_variants","screen","fingerprint"]`、step row に
+  `bounds_space`/`rect_space`/`update.error` を確認。
+- `GPUI_DISABLE_DIRECT_COMPOSITION=1` run（`--pixel-artifacts`
+  付き・最終コードで再実行）: exit 1 同上。`real-dcomp-present` =
+  **pass**、screen green=0.0、root `noredirectionbitmap=false`
+  （env 実効を HWND exstyle で再確認）、PNG artifact 22 枚再生成。
+- verdict 分布は review 前 run と同一 — 修正は観測 schema の
+  正直化と hang 耐性のみで、verdict 経路・既存 case の判定は不変。
