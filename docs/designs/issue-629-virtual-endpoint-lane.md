@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #629 virtual endpoint lane registration design"
 created: "2026-11-16"
-updated: "2026-11-16"
+updated: "2026-11-17"
 owners:
   - "scarecrow173"
 relations:
@@ -204,9 +204,17 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
   `real-abi-test-plugin` ↔ schema `test-plugin` の gap —
   破壊的変更のため後続 slice で serde 移行方針（rename+alias
   等）とともに決定。再開条件: consumer 影響評価 + 承認。
-- reconnect/xrun/permission 実測（AC5）・consumer 照合
-  （AC7 — `scarecrow173/synvelis#115`/`#117`/`#126`・
-  `scarecrow173/audio-lens#127`）— 後続。
+- reconnect/xrun/permission 実測（AC5）— provisioned runner
+  での実測が残る。capability matrix の確定版・provisioning
+  runbook・consumer 照合（AC7 — `scarecrow173/synvelis#115`/
+  `#117`/`#126`・`scarecrow173/audio-lens#127`）の headless
+  記録は closeout slice
+  （`docs/designs/issue-629-provisioning-runbook.md`）で解消
+  済み — consumer 側の独立 Oracle での実受入判定は後続。
+- AC6 の MIDI 側 lane 分離（`test-midi-virtual-endpoint`）は
+  closeout slice で `mise.toml` に登録済み — 本 slice の
+  audio 側 lane 登録と対になる残部であり、詳細は
+  `docs/designs/issue-629-provisioning-runbook.md` を参照。
 
 ## Verification Notes
 

@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #629 WASAPI streaming verifier and endpoint probe extension design"
 created: "2026-11-16"
-updated: "2026-11-16"
+updated: "2026-11-17"
 owners:
   - "scarecrow173"
 relations:
@@ -347,7 +347,11 @@ probe 側は `main` → `print_environment` → `win::run()`:
   `.github/**` CI/runner 統合（定期 opt-in 実行）は引き続き後続の
   外部 gate として残る。
 - reconnect/xrun/permission 実測（AC5）・`StreamInvalidated`
-  の interactive unplug 確認・consumer 照合（AC7）— 後続。
+  の interactive unplug 確認 — provisioned runner での実測が
+  残る。capability matrix の確定版と provisioning runbook・
+  consumer 照合（AC7）の headless 記録は closeout slice
+  （`docs/designs/issue-629-provisioning-runbook.md`）で解消
+  済み — consumer 側の独立 Oracle での実受入判定は後続。
 - pair 複数時の選択ポリシー（現状: 全列挙 + 先頭から順次試行）—
   provisioning 実測後に必要なら env var/引数化を検討。
 - marker/level/spectral 閾値の実測による締め直し — provisioned
