@@ -1,0 +1,22 @@
+[package]
+name = "ruviform-script"
+description = "Language-neutral Script/Analyzer contract port: RF-SCRIPT-00 registry/runtime/value/budget/host/analyzer types + canonical digest + codec (Issue #692, headless — no VM/FFI)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Dependency addition records (暫定規約「依存追加は理由を記録」):
+# - serde_json: canonical 文字列の JSON escape（String/&str の
+#   `serde_json::to_string`）に限定して内部利用。公開 API に serde
+#   型を露出しない（wire format は consumer 未決定 — design D6）。
+#   MIT OR Apache-2.0。Cargo.lock 既在（ruviform-plugin-dock-test 等）。
+serde_json = "1"
+# - sha2: SourceDigest/DefinitionDigest の `"sha256:v1:<hex>"` 計算。
+#   MIT OR Apache-2.0。Cargo.lock 既在（poc/script-coexist 等）。
+sha2 = "0.10"
+
+[lints]
+workspace = true
