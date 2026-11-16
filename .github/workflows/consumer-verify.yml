@@ -54,6 +54,19 @@ name: consumer-verify
 #   記録し、dispatch ref checkout の task で代用して pass にしない。
 # - guard・fake semantic・実 OS/Native/plugin は別 lane 行であり、
 #   一方の成功を他方の成功としない。
+#
+# consumer oracle lane（Issue #294 oracle slice / RF #628）:
+# - 両 verify job が consumer checkout 内の canonical test file
+#   （audio-lens: crates/al-analysis/tests/rf628_oracle.rs、synvelis:
+#   crates/synvelis-recording/tests/rf628_oracle.rs と
+#   rf628_oracle_rt_alloc.rs）を file 単位で probe し、存在すれば
+#   `mise run test <pkg> --test <file>` で実行する。file 不在（oracle test
+#   未同梱の古い consumer SHA 等）は owner 付き not_run を記録し、
+#   dispatch ref や別 crate での代用実行はしない。
+# - lane 行は resolved_ruviform_sha（single-SHA guard 済みの候補 SHA）・
+#   oracle（test target 名）・fixture_version（consumer Cargo.lock の
+#   ruviform-audio-test version + resolved SHA）を記録する。deterministic-
+#   backend の独立 Oracle であり、実 OS/実機・GUI の証拠ではない。
 
 on:
   workflow_dispatch:
@@ -436,6 +449,28 @@ jobs:
           else
             mise run test-ci
           fi
+      # consumer oracle lane（Issue #294 oracle slice / RF #628）。consumer
+      # checkout 内の canonical test file 存在を probe し、存在すれば
+      # `mise run test <pkg> --test <file>` で実行する。file 不在（oracle test
+      # 未同梱の古い consumer SHA 等）は record 側で owner 付き not_run —
+      # dispatch ref や別 crate での代用実行はしない。fetch 成功のみを依存とし
+      # check/test lane の成否には依存しない（独立 oracle 判定）。
+      - name: rf628 oracle test probe (consumer checkout)
+        id: oracle_probe
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
+        run: |
+          set -euo pipefail
+          oracle=0
+          [ -f "$CONSUMER_DIR/crates/al-analysis/tests/rf628_oracle.rs" ] && oracle=1
+          echo "oracle=$oracle" >> "$GITHUB_OUTPUT"
+      - name: rf628 oracle lane (al-analysis --test rf628_oracle)
+        id: oracle
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.fetch.outcome == 'success' && steps.oracle_probe.outputs.oracle == '1'
+        working-directory: ${{ runner.temp }}/audio-lens
+        run: |
+          set -euo pipefail
+          git lfs pull
+          mise run test al-analysis --test rf628_oracle
       # UI headless lane 群は rust lane と独立に証拠を採る（fetch 成功のみ依存）。
       # sync-ui-deps は内部で ruviform へ git fetch するため credential cleanup より前。
       - name: sync-ui-deps (vendor を候補 SHA で再生成)
@@ -578,24 +613,26 @@ jobs:
           set -uo pipefail
           EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
           command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
-          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>]"
+          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>[|<oracle>[|<fixture_version>]]]"
           # 残り引数は従来どおり name command feature outcome [reason]。
           # 既定分類: headless/infra lane = OS-L1 deterministic-backend Required。
           # 実 window / plugin / 実 OS の非既定分類は各行で literal 指定する。
           DEF="OS-L1|deterministic-backend|Required"
           rec() {
             local spec="$1"; shift
-            local case_id level env_kind requirement rsha
-            IFS='|' read -r case_id level env_kind requirement rsha <<< "$spec"
-            local rf=()
+            local case_id level env_kind requirement rsha oracle fixture_ver
+            IFS='|' read -r case_id level env_kind requirement rsha oracle fixture_ver <<< "$spec"
+            local rf=() of=() ff=()
             [ -n "${rsha:-}" ] && rf=(--resolved-ruviform-sha "$rsha")
+            [ -n "${oracle:-}" ] && of=(--oracle "$oracle")
+            [ -n "${fixture_ver:-}" ] && ff=(--fixture-version "$fixture_ver")
             if [ -n "${5:-}" ]; then
               node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
-                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" "${of[@]}" "${ff[@]}" \
                 --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
             else
               node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
-                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" "${of[@]}" "${ff[@]}" \
                 --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
             fi
           }
@@ -611,6 +648,25 @@ jobs:
             rec "${CONSUMER_NAME}-cli-smoke-build|$DEF" "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
             rec "${CONSUMER_NAME}-cli-headless|$DEF" "mise run check-cli-headless (smoke)" "mise run check-cli-headless" "al-cli headless" "$(o '${{ steps.smoke.outcome }}')"
             rec "${CONSUMER_NAME}-test-full|$DEF" "mise run test-full (legacy test-ci fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test-ci)" "workspace" "$(o '${{ steps.test.outcome }}')"
+            # consumer oracle lane（Issue #294 oracle slice / RF #628）— consumer
+            # checkout の canonical test file を file 粒度で実行した独立 Oracle
+            # 結果。probe='1' → run outcome、'0' → owner 付き not_run（oracle
+            # test を含む consumer ref で再実行・代用禁止）、else → probe
+            # outcome をそのまま写す。resolved_ruviform_sha は single-SHA guard
+            # 済みの $RUVIFORM_REV、fixture_version は consumer Cargo.lock の
+            # ruviform-audio-test version + resolved SHA（抽出失敗時は flag 省略・
+            # 値を捏造しない）。expected/observed は consumer test が機械可読値を
+            # 出さないため記録しない。
+            FIXTURE_VER=""
+            audio_test_ver=$(grep -A3 '^name = "ruviform-audio-test"$' "$CONSUMER_DIR/Cargo.lock" 2>/dev/null | grep -m1 '^version = ' | sed -E 's/^version = "([^"]+)".*/\1/' || true)
+            [ -n "$audio_test_ver" ] && FIXTURE_VER="ruviform-audio-test-${audio_test_ver}@${RUVIFORM_REV}"
+            if [ "${{ steps.oracle_probe.outputs.oracle }}" = "1" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (al-analysis --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test al-analysis --test rf628_oracle" "consumer oracle" "$(o '${{ steps.oracle.outcome }}')"
+            elif [ "${{ steps.oracle_probe.outputs.oracle }}" = "0" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (al-analysis --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test al-analysis --test rf628_oracle" "consumer oracle" "not_run" "consumer ref に rf628_oracle test 未同梱（scarecrow173/audio-lens#127 Owner — oracle test を含む consumer ref で再実行。dispatch ref/別 crate 代用の偽 pass 禁止）"
+            else
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (al-analysis --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test al-analysis --test rf628_oracle" "consumer oracle" "$(o '${{ steps.oracle_probe.outcome }}')" "oracle probe 未完了（consumer checkout/tuple 未確立）"
+            fi
             rec "${CONSUMER_NAME}-ui-vendor-sync|$DEF" "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
             rec "${CONSUMER_NAME}-rev-vendor|$DEF" "check-ruviform-rev --require-vendor (lock+REV)" "node tools/check-ruviform-rev.mjs --require-vendor" "ui vendor" "$(o '${{ steps.rev_vendor.outcome }}')"
             rec "${CONSUMER_NAME}-ui-setup|$DEF" "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
@@ -907,6 +963,39 @@ jobs:
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success'
         working-directory: ${{ runner.temp }}/synvelis
         run: mise run check-headless-deps
+      # consumer oracle lane（Issue #294 oracle slice / RF #628）。consumer
+      # checkout 内の canonical test file 存在を probe し、存在すれば
+      # `mise run test <pkg> --test <file>` で実行する。file 不在（oracle test
+      # 未同梱の古い consumer SHA 等）は record 側で owner 付き not_run —
+      # dispatch ref や別 crate での代用実行はしない。fetch 成功のみを依存とし
+      # check/test lane の成否には依存しない（独立 oracle 判定）。file 粒度の
+      # verdict attribution のため 2 file は別 step で実行する。
+      - name: rf628 oracle test probe (consumer checkout)
+        id: oracle_probe
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
+        run: |
+          set -euo pipefail
+          oracle=0; oracle_rt=0
+          [ -f "$CONSUMER_DIR/crates/synvelis-recording/tests/rf628_oracle.rs" ] && oracle=1
+          [ -f "$CONSUMER_DIR/crates/synvelis-recording/tests/rf628_oracle_rt_alloc.rs" ] && oracle_rt=1
+          echo "oracle=$oracle" >> "$GITHUB_OUTPUT"
+          echo "oracle_rt=$oracle_rt" >> "$GITHUB_OUTPUT"
+      - name: rf628 oracle lane (synvelis-recording --test rf628_oracle)
+        id: oracle
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success' && steps.oracle_probe.outputs.oracle == '1'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -euo pipefail
+          git lfs pull
+          mise run test synvelis-recording --test rf628_oracle
+      - name: rf628 oracle RT-alloc lane (synvelis-recording --test rf628_oracle_rt_alloc)
+        id: oracle_rt
+        if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present' && steps.fetch.outcome == 'success' && steps.oracle_probe.outputs.oracle_rt == '1'
+        working-directory: ${{ runner.temp }}/synvelis
+        run: |
+          set -euo pipefail
+          git lfs pull
+          mise run test synvelis-recording --test rf628_oracle_rt_alloc
       # UI headless lane 群（sync-ui-deps は内部 git fetch — cleanup より前）。
       - name: sync-ui-deps (vendor を候補 SHA で再生成)
         id: sync_ui
@@ -1054,24 +1143,26 @@ jobs:
           set -uo pipefail
           EV="$GITHUB_WORKSPACE/ci/consumer-verify/evidence.mjs"
           command -v node >/dev/null || { echo "::error::node missing — evidence cannot be written"; exit 1; }
-          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>]"
+          # Case schema v2: $1 = "<case_id>|<level>|<environment_kind>|<requirement>[|<resolved_ruviform_sha>[|<oracle>[|<fixture_version>]]]"
           # 残り引数は従来どおり name command feature outcome [reason]。
           # 既定分類: headless/infra lane = OS-L1 deterministic-backend Required。
           # 実 window / plugin / 実 OS の非既定分類は各行で literal 指定する。
           DEF="OS-L1|deterministic-backend|Required"
           rec() {
             local spec="$1"; shift
-            local case_id level env_kind requirement rsha
-            IFS='|' read -r case_id level env_kind requirement rsha <<< "$spec"
-            local rf=()
+            local case_id level env_kind requirement rsha oracle fixture_ver
+            IFS='|' read -r case_id level env_kind requirement rsha oracle fixture_ver <<< "$spec"
+            local rf=() of=() ff=()
             [ -n "${rsha:-}" ] && rf=(--resolved-ruviform-sha "$rsha")
+            [ -n "${oracle:-}" ] && of=(--oracle "$oracle")
+            [ -n "${fixture_ver:-}" ] && ff=(--fixture-version "$fixture_ver")
             if [ -n "${5:-}" ]; then
               node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
-                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" "${of[@]}" "${ff[@]}" \
                 --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4" --reason "$5"
             else
               node "$EV" lane --file "$LANES_FILE" --case-id "$case_id" --level "$level" \
-                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" \
+                --environment-kind "$env_kind" --requirement "$requirement" "${rf[@]}" "${of[@]}" "${ff[@]}" \
                 --name "$1" --command "$2" --feature "$3" --os "ubuntu-latest" --outcome "$4"
             fi
           }
@@ -1089,6 +1180,32 @@ jobs:
             rec "${CONSUMER_NAME}-test-full|$DEF" "mise run test-full (legacy test fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test)" "workspace" "$(o '${{ steps.test.outcome }}')"
             rec "${CONSUMER_NAME}-test-rt|$DEF" "mise run test-rt (RT no-alloc)" "mise run test-rt" "rt" "$(o '${{ steps.test_rt.outcome }}')"
             rec "${CONSUMER_NAME}-headless-deps|$DEF" "mise run check-headless-deps" "mise run check-headless-deps" "headless" "$(o '${{ steps.headless_deps.outcome }}')"
+            # consumer oracle lane（Issue #294 oracle slice / RF #628）— consumer
+            # checkout の canonical test file を file 粒度で実行した独立 Oracle
+            # 結果。probe='1' → run outcome、'0' → owner 付き not_run（oracle
+            # test を含む consumer ref で再実行・代用禁止）、else → probe
+            # outcome をそのまま写す。resolved_ruviform_sha は single-SHA guard
+            # 済みの $RUVIFORM_REV、fixture_version は consumer Cargo.lock の
+            # ruviform-audio-test version + resolved SHA（抽出失敗時は flag 省略・
+            # 値を捏造しない）。expected/observed は consumer test が機械可読値を
+            # 出さないため記録しない。
+            FIXTURE_VER=""
+            audio_test_ver=$(grep -A3 '^name = "ruviform-audio-test"$' "$CONSUMER_DIR/Cargo.lock" 2>/dev/null | grep -m1 '^version = ' | sed -E 's/^version = "([^"]+)".*/\1/' || true)
+            [ -n "$audio_test_ver" ] && FIXTURE_VER="ruviform-audio-test-${audio_test_ver}@${RUVIFORM_REV}"
+            if [ "${{ steps.oracle_probe.outputs.oracle }}" = "1" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (synvelis-recording --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle" "consumer oracle" "$(o '${{ steps.oracle.outcome }}')"
+            elif [ "${{ steps.oracle_probe.outputs.oracle }}" = "0" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (synvelis-recording --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle" "consumer oracle" "not_run" "consumer ref に rf628_oracle test 未同梱（scarecrow173/synvelis#115 Owner — oracle test を含む consumer ref で再実行。dispatch ref/別 crate 代用の偽 pass 禁止）"
+            else
+              rec "${CONSUMER_NAME}-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER" "rf628 oracle (synvelis-recording --test rf628_oracle) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle" "consumer oracle" "$(o '${{ steps.oracle_probe.outcome }}')" "oracle probe 未完了（consumer checkout/tuple 未確立）"
+            fi
+            if [ "${{ steps.oracle_probe.outputs.oracle_rt }}" = "1" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle-rt-alloc|$DEF|$RUVIFORM_REV|rf628_oracle_rt_alloc|$FIXTURE_VER" "rf628 oracle RT-alloc (synvelis-recording --test rf628_oracle_rt_alloc) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle_rt_alloc" "consumer oracle" "$(o '${{ steps.oracle_rt.outcome }}')"
+            elif [ "${{ steps.oracle_probe.outputs.oracle_rt }}" = "0" ]; then
+              rec "${CONSUMER_NAME}-rf628-oracle-rt-alloc|$DEF|$RUVIFORM_REV|rf628_oracle_rt_alloc|$FIXTURE_VER" "rf628 oracle RT-alloc (synvelis-recording --test rf628_oracle_rt_alloc) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle_rt_alloc" "consumer oracle" "not_run" "consumer ref に rf628_oracle_rt_alloc test 未同梱（scarecrow173/synvelis#115 Owner — oracle test を含む consumer ref で再実行。dispatch ref/別 crate 代用の偽 pass 禁止）"
+            else
+              rec "${CONSUMER_NAME}-rf628-oracle-rt-alloc|$DEF|$RUVIFORM_REV|rf628_oracle_rt_alloc|$FIXTURE_VER" "rf628 oracle RT-alloc (synvelis-recording --test rf628_oracle_rt_alloc) @ ruviform $RUVIFORM_REV" "mise run test synvelis-recording --test rf628_oracle_rt_alloc" "consumer oracle" "$(o '${{ steps.oracle_probe.outcome }}')" "oracle probe 未完了（consumer checkout/tuple 未確立）"
+            fi
             rec "${CONSUMER_NAME}-ui-vendor-sync|$DEF" "mise run sync-ui-deps (vendor 再生成)" "mise run sync-ui-deps" "ui vendor" "$(o '${{ steps.sync_ui.outcome }}')"
             rec "${CONSUMER_NAME}-ui-setup|$DEF" "mise run setup-ui (npm ci)" "mise run setup-ui" "ui headless" "$(o '${{ steps.setup_ui.outcome }}')"
             rec "${CONSUMER_NAME}-ui-check|$DEF" "mise run check-ui (typecheck+vendor)" "mise run check-ui" "ui headless" "$(o '${{ steps.check_ui.outcome }}')"
