@@ -693,9 +693,9 @@ jobs:
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）
-            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "AL #166/#127 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "AL #127 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + AL #166/#127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #631 + AL #127 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
             rec "${CONSUMER_NAME}-macos-os|OS-L1|physical-device|Required" "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
             drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
@@ -1233,10 +1233,10 @@ jobs:
             fi
             # 未接続 lane（Consumer 側の通常 View/Domain headless — capability は
             # 足りるが Consumer 側 fixture が未実装。owner + 再実行条件を正直記録）
-            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "SV #175-177 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
+            rec "${CONSUMER_NAME}-gui-consumer-side|$DEF" "GUI-CONTRACT consumer-side (通常 View/Domain headless)" "-" "ui contract" "not_run" "SV #176/#177 が Owner — Consumer 通常 View/Domain headless fixture 未実装。実装後に extra_tasks/専用 lane で再実行"
             # capability-absent 固定行（実行しない — skip=pass にしない正直記録）
-            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #313/#314 + SV #175-177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
-            rec "${CONSUMER_NAME}-plugin-native-dock|EXT-L3|test-plugin|Required" "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
+            rec "${CONSUMER_NAME}-gui-real-window|GUI-L2|real-window|Required" "GUI visual/OS + 実 window lanes" "-" "real-window host" "unsupported" "RF #631 + SV #176/#177 — ubuntu headless では capability 不足・実機/別 OS Gate で実施"
+            rec "${CONSUMER_NAME}-plugin-native-dock|EXT-L3|test-plugin|Required" "PLUGIN-NATIVE-DOCK (実 plugin binary)" "-" "real-plugin" "unsupported" "RF #388/#389 + RF #630 + SV #176 — Floating/Generic fallback のみの成功は採用 Pass にしない"
             rec "${CONSUMER_NAME}-macos-os|OS-L1|physical-device|Required" "macOS/実 OS lanes" "-" "os-specific" "unsupported" "正式受入は対象 revision の macOS 実測が別途必須 — 本 run は ubuntu のみ"
             # 解決 SHA 記録後に consumer task が HEAD を動かしていないか再照合
             drift=$(git -C "$CONSUMER_DIR" rev-parse HEAD 2>/dev/null || echo "")
