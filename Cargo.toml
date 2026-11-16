@@ -115,6 +115,10 @@ members = [
     # 非既定 `gpui` feature で real GPUI window 上の実 native editor attach
     # を実行する手動検証入口）
     "crates/ruviform-poc-native-dock",
+    # 利用側層 Script/Analyzer 中立契約 port（Issue #692 / RF-SCRIPT-00 —
+    # 言語非依存の Script backend/analyzer 契約・値モデル・canonical digest・
+    # codec。headless・vendor 型/unsafe/実 VM/FFI 非含有。実 backend は s2 以降）
+    "crates/ruviform-script",
     # RF-SCRIPT-02 隔離 PoC（Issue #560 — Luau.Analysis native bridge。
     # ffi-poc/ 配下の実験 crate。契約ミラー型 + FFI shim + vendored Luau
     # 0.740 Analysis（mlua vendored VM と同一 revision）。

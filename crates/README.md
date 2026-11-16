@@ -1,6 +1,6 @@
 # crates/
 
-Ruviform ワークスペースのメンバークレート索引（計39クレート）。
+Ruviform ワークスペースのメンバークレート索引（計40クレート）。
 各クレートの責務・許可依存層・RT 制約・実装 Issue の詳細は各クレートの
 `README.md` と crate-level doc（`src/lib.rs`）を参照。
 層構造と `path` 依存方向・クレート DAG の正本は
@@ -117,3 +117,4 @@ Ruviform ワークスペースのメンバークレート索引（計39クレー
 | [`ruviform-plugin-test-vst3`](ruviform-plugin-test-vst3/README.md) | テスト専用 VST3 test_gain プラグイン（実 VST3 バイナリを生成し本番 host path `Vst3Library::load` で検証 — Issue #630 first slice。本番クレートは本クレートに依存しない） |
 | [`ruviform-plugin-test-clap`](ruviform-plugin-test-clap/README.md) | テスト専用 CLAP test_gain プラグイン（実 `.clap` cdylib を生成し本番 host path `ClapLibrary::load` で検証 — Issue #630 CLAP slice。本番クレートは本クレートに依存しない） |
 | [`ruviform-plugin-dock-test`](ruviform-plugin-dock-test/README.md) | テスト専用 Plugin Native Dock scenario harness（実 plugin artifact の digest 証拠と正直な verdict 記録 — Issue #631 skeleton。本番クレートは本クレートに依存しない） |
+| [`ruviform-script`](ruviform-script/README.md) | 言語非依存 Script/Analyzer 中立契約 port（RF-SCRIPT-00 — backend/analyzer registry fail-closed resolve・`ScriptValue` 値モデル・canonical digest・`$rv` codec・host surface 記述子。headless・vendor 型/unsafe/実 VM/FFI 非含有 — Issue #692 first slice。実 backend は後続 slice） |
