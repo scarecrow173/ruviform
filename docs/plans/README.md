@@ -151,6 +151,7 @@ Directory: `docs/plans`
 | PLAN-WuOx4rrntClDKCSVPDAM8d | Issue #368 Tracker reconcile 実装計画 | approved | [issue-368-tracker-reconcile.md](./issue-368-tracker-reconcile.md) |
 | PLAN-UmRPBDr4lZ2y8Aj9H6tdYe | Issue #377 実装計画 — QueryBinding adopt-on-join | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
+| PLAN-034YtAeTZbhyJdAJhfmsZp | Issue #389 editor-session real-session-terminate 実装計画 | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
 | PLAN-034WXSRQARP7ZVwXSyqHsA | Issue #389 Parent Lease 移行 plan | approved | [issue-389-parent-lease-plan.md](./issue-389-parent-lease-plan.md) |
 | PLAN-034XGryAYYlLjlEdp2DGUn | Issue #389 dock-test session-lifecycle 実装計画 | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | PLAN-034Uwdhmr1M7BRW1PnLrbn | Issue #410 P2 — view ledger correlation hardening | approved | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
