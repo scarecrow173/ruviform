@@ -9,11 +9,22 @@ canonical = `mise` lane。
 - Date: 2026-11-17
 - OS: Windows (x86_64) — interactive desktop session あり（real lane 実走）
 - Toolchain: rustc 1.99.1 / cargo 1.99.1（mise 管理）
-- Repo SHA: lane JSONL 記録の `repo_sha` =
-  `303db66b3ae0e66d1b0d0c2f51867b5c7724be6e`（作業開始時 HEAD）。
-  commit 前の working tree で実走 — コード差分は本 slice の
-  `real_dock.rs` / `real_catalog.rs` / `tests/console.rs` /
-  crate docs / docs chain のみ。
+- Repo SHA: コミット済み lane JSONL
+  （`plugin-dock-real-scenario.jsonl` /
+  `plugin-dock-real-headless.jsonl`、`evidence/rf631/` 側コピー
+  含む）の `repo.sha` / `environment.repo_sha` は **両 lane とも**
+  `62d595b60e27466b2f714f4211c71b16c47ca1eb`（`origin/main`
+  merge commit）— merge 後に required-capability 修正
+  （後の commit `82034fcc` の内容）を working tree へ適用した
+  状態で両 lane を再実走したため。`62d595b6..HEAD` の `crates/`
+  diff は `real_catalog.rs` / `real_dock.rs` の required
+  capability 4 行のみで、これは lane 実行時の working tree に
+  既に存在した内容と一致する（`d192ae32` は docs index
+  revert のみで crate code 差分なし）— lane が実行したコードと
+  HEAD の lane 関連コードに機能差分はない。なお commit
+  `2810a087` 時点の JSONL は merge 前初回実走の `303db66b`
+  （作業開始時 HEAD、commit 前 working tree）を記録していたが、
+  `82034fcc` で再実走版に更新済み。
 
 ## Lane results
 
@@ -28,6 +39,7 @@ canonical = `mise` lane。
 | `mise run test ruviform-plugin-dock-test --features real-dock` | pass (exit 0 — `real_catalog_matches_entries`・`blocked_reports_fail_closed`・console `list_include_real_appends_real_lane_rows` 29 行を含む全 test green) |
 | `mise run check ruviform-plugin-dock-test --features lab-gui` | pass (exit 0) |
 | `mise run lint ruviform-plugin-dock-test --features lab-gui` | pass (exit 0) |
+| `mise run test ruviform-plugin-dock-test --features lab-gui` | pass (exit 0 — Completion Gate 指摘により追実走・全 test green) |
 | `mise run build ruviform-plugin-test-vst3`（`test-ui-plugin-dock-real` 内） | pass (exit 0 — `test_editor`/`test_gain` cdylib 生成） |
 | `mise run test ruviform-plugin-host --test editor_session --test editor_session_driver` | pass (exit 0) |
 | `mise run test-ui-plugin-dock` | pass (exit 0) |
