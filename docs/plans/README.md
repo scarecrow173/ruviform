@@ -205,6 +205,7 @@ Directory: `docs/plans`
 | PLAN-034Y4f3N8mEveC8nUJLKFw | Issue #630 test_stateful slice — 実装計画 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034Y3odXzCYwJRpyjtWZgK | Issue #631 real-editor-attach 実装計画 | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
+| PLAN-034YqGSA93gczwU51UuDt3 | Issue #631 real-row 拡充 実装計画 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
 | PLAN-034XTP6V40ZLnW8sMLZK2N | Issue #631 Real-window native-slot dock lane 実装計画 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | PLAN-034XWO1EjjLigZP3nnak6l | Issue #631 Headless Scenario Console 実装計画 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
