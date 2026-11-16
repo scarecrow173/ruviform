@@ -223,6 +223,7 @@ Directory: `docs/test-specs`
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TSPEC-byCAXVcNUJp9U972Dd16XL | Issue #629 provisioning runbook test spec | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
