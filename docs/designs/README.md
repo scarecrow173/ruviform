@@ -227,6 +227,7 @@ Directory: `docs/designs`
 | DESIGN-RF628sBscripted0000002 | Issue #628 設計 — scripted port-trait backend（device 境界 fault/clock/PCM/MIDI 結線） | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | DESIGN-P7XCcqW3rGHPzKfQJ6SUA | Issue #630 adapter-state-bridge slice — 設計 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
