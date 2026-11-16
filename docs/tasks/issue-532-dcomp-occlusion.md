@@ -1,7 +1,7 @@
 ---
 id: "TASK-034YnFdRrLrRSoA5rYgwr3"
 type: "task"
-status: "in-progress"
+status: "done"
 title: "Issue #532 dcomp-occlusion slice — query-only 遮蔽層診断 + 根因二分実走"
 created: "2026-11-16"
 updated: "2026-11-16"
@@ -99,21 +99,21 @@ baseline/env-on の interactive 実走で遮蔽が HWND 層か合成器層かを
 
 ## Done When
 
-- [ ] `osoccl` module が `real-dock` feature で compile し、
+- [x] `osoccl` module が `real-dock` feature で compile し、
   `probe(child)` が root/parent/z-order/hit-test を plain 値で
   返す（非 Windows stub 含む）。
-- [ ] `real-dcomp-pixel` が 3 系の `verdict: "note"` step row を
+- [x] `real-dcomp-pixel` が 3 系の `verdict: "note"` step row を
   child ごとに出力し、`PixelScan`/`PixelObservation`/case verdict
   に非干渉。
-- [ ] baseline/env-on の実機実走が記録され、exstyle 差分・
+- [x] baseline/env-on の実機実走が記録され、exstyle 差分・
   z-order・`WindowFromPoint` 結果・二分解釈・limitation が
   evidence/docs に明記される。
-- [ ] exit-127 観測の有無と H1-H5 分類が記録される。
-- [ ] headless lane・contract・boundary guard が非回帰。
-- [ ] impl/ir・impl/exp（+ companion jsonl）が作成される。
-- [ ] Issue #532 は open のまま（close しない）。
+- [x] exit-127 観測の有無と H1-H5 分類が記録される。
+- [x] headless lane・contract・boundary guard が非回帰。
+- [x] impl/ir・impl/exp（+ companion jsonl）が作成される。
+- [x] Issue #532 は open のまま（close しない）。
 
 ## Verification
 
-- [ ] `docs/plans/issue-532-dcomp-occlusion.md` の Verification 節の
+- [x] `docs/plans/issue-532-dcomp-occlusion.md` の Verification 節の
   全コマンド。
