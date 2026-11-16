@@ -1,0 +1,6 @@
+luau-lang/luau tag 0.740
+commit c0e346edd89066b44dca174c9f54ce84c746a540
+vendored: 2026-11-14 (UTC+9)
+note: mlua 0.12.2 -> mlua-sys 0.13.0 -> luau0-src 0.22.0+luau740
+      (luau0-src 0.22.1+luau744 は crates.io で yanked のため VM は 0.740)
+      Analysis/ と public headers を同一 upstream revision で vendored。

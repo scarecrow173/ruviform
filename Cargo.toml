@@ -117,8 +117,14 @@ members = [
     "crates/ruviform-poc-native-dock",
     # 利用側層 Script/Analyzer 中立契約 port（Issue #692 / RF-SCRIPT-00 —
     # 言語非依存の Script backend/analyzer 契約・値モデル・canonical digest・
-    # codec。headless・vendor 型/unsafe/実 VM/FFI 非含有。実 backend は s2 以降）
+    # codec。headless・vendor 型/unsafe/実 VM/FFI 非含有）
     "crates/ruviform-script",
+    # 利用側層 実 Luau analyzer backend（Issue #692 s2 / RF-SCRIPT-03 —
+    # ruviform-script C5 ScriptAnalyzer を vendored Luau.Analysis 0.740 +
+    # 狭小 C ABI shim で実装。unsafe/vendor 型は crate 内部に閉じる。
+    # runtime ScriptBackend は別 slice — AC4 ADR:
+    # docs/adr/issue-692-luau-dependency-selection.md）
+    "crates/ruviform-script-luau",
     # RF-SCRIPT-02 隔離 PoC（Issue #560 — Luau.Analysis native bridge。
     # ffi-poc/ 配下の実験 crate。契約ミラー型 + FFI shim + vendored Luau
     # 0.740 Analysis（mlua vendored VM と同一 revision）。

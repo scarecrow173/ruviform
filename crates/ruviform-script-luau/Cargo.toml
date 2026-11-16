@@ -1,0 +1,47 @@
+# Issue #692 s2 / RF-SCRIPT-03 — 実 Luau analyzer backend。
+# ruviform-script (RF-SCRIPT-00 中立契約) の C5 ScriptAnalyzer を
+# vendored Luau.Analysis (Luau 0.740) + 狭小 C ABI shim で実装する
+# 製品 crate。unsafe/vendor 型/C++ は crate 内部に閉じ、公開 API は
+# 中立契約型 + LuauAnalyzer/LuauAnalyzerOptions のみ。
+# 依存選定 (AC4): docs/adr/issue-692-luau-dependency-selection.md —
+# analyzer = native bridge、runtime (mlua) は別 slice で再評価。
+[package]
+name = "ruviform-script-luau"
+description = "Real Luau ScriptAnalyzer backend: vendored Luau.Analysis 0.740 behind a narrow C ABI shim implementing the ruviform-script neutral contract (Issue #692 s2)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# RF-SCRIPT-00 中立契約 (C5 ScriptAnalyzer port)。path 依存 —
+# 公開 API は本クレート独自型を持たず契約型のみを返す。
+ruviform-script = { path = "../ruviform-script" }
+# shim JSON 応答 → 中立型の防御的パースに使用。公開 API に serde 型を
+# 露出しない。MIT OR Apache-2.0。Cargo.lock 既在。
+serde_json = "1"
+# mlua vendored Luau VM (mlua 0.12.2 → mlua-sys 0.13.0 →
+# luau0-src 0.22.0+luau740 = Luau 0.740)。
+# 本 crate の build.rs が emit する `cargo:rustc-link-lib=static=luau*`
+# は、この依存経由でのみ供給される mlua-sys build script 産物
+# (Luau VM/Ast/Compiler 静的 lib + link-search path) を指す。
+# したがって mlua は「link 順序のための必須依存」であり、
+# Rust API としては本 crate から直接使用しない
+# (runtime ScriptBackend 実装は別 slice — AC4 ADR 参照)。
+# 版整合不変条件: vendored Analysis (0.740) と luau0-src の
+# Luau revision は同一必須 — mlua/luau0-src 更新時は vendor/luau の
+# 再 vendor と build.rs の lib 名再照合が必要。
+mlua = { version = "0.12.2", default-features = false, features = ["luau"] }
+
+[build-dependencies]
+# vendored Luau.Analysis + shim の C++17 静的コンパイル。Cargo.lock 既在。
+cc = "1"
+# Windows MSVC 環境（vcvars 未初期化の shell からの build でも
+# cl.exe が CRT/SDK ヘッダを解決できるよう INCLUDE/LIB/PATH を補う）。
+# Cargo.lock 既在。
+find-msvc-tools = "0.1"
