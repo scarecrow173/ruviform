@@ -112,9 +112,10 @@ Issue #389 は OPEN のまま。
 
 ## What was built
 
-- `real_catalog.rs`: `REAL_CATALOG` 末尾へ 6 行追加（degraded/
-  recovery/timeout/visibility は `required: &[NativePluginDock]`、
-  crash/hang は `required: &[]`）+ module doc 追従。
+- `real_catalog.rs`: `REAL_CATALOG` 末尾へ 6 行追加（全行
+  `required: &[NativePluginDock]` — crash/hang も preflight を
+  通して body が実 session 内に `Unsupported` を記録する形）+
+  module doc 追従。
 - `real_dock.rs`:
   - `real_entries()` を `[ScenarioEntry<RealDockContext>; 21]` 化、
     `blocked_reports`/test の固定長・件数を追従。
@@ -164,9 +165,9 @@ test-ui-plugin-dock-console / check-ui-driver-boundary / prek —
 
 ## Notes / boundaries
 
-- crash/hang は `required: &[]` で executable row として catalog に
-  残し、body が architectural boundary を説明して `Unsupported` を
-  返す — `NotRun` 偽装・行欠落なし。
+- crash/hang は `required: &[NativePluginDock]` で executable row
+  として catalog に残し、body が architectural boundary を説明して
+  `Unsupported` を返す — `NotRun` 偽装・行欠落なし。
 - `real-dcomp-pixel` の fail は GPUI DComp topmost occlusion の既知
   問題（#532）— baseline 系 3 実走で同一 `green_pixels=0` を確認済み。
 - GPUI/Win32 型は public contract・evidence schema に非露出

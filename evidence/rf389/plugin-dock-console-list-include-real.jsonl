@@ -25,5 +25,5 @@
 {"type":"catalog","case":"real-session-recovery","scenario":"rf631.plugin-dock-real","driver":"real-os","required":["native-plugin-dock"],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
 {"type":"catalog","case":"real-session-timeout","scenario":"rf631.plugin-dock-real","driver":"real-os","required":["native-plugin-dock"],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
 {"type":"catalog","case":"real-editor-visibility","scenario":"rf631.plugin-dock-real","driver":"real-os","required":["native-plugin-dock"],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
-{"type":"catalog","case":"real-session-crash","scenario":"rf631.plugin-dock-real","driver":"real-os","required":[],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
-{"type":"catalog","case":"real-session-hang","scenario":"rf631.plugin-dock-real","driver":"real-os","required":[],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
+{"type":"catalog","case":"real-session-crash","scenario":"rf631.plugin-dock-real","driver":"real-os","required":["native-plugin-dock"],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}
+{"type":"catalog","case":"real-session-hang","scenario":"rf631.plugin-dock-real","driver":"real-os","required":["native-plugin-dock"],"runnable":null,"missing":null,"session_required":true,"lane":"real-window-dock"}

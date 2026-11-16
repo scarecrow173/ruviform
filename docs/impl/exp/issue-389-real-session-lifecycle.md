@@ -54,8 +54,10 @@
 - **観測**: fixture の crash fault は hosting process を殺し、
   hang fault は lane を永久に塞ぐ — in-process lane では実行不能。
   out-of-process plugin host は存在しない（L1 は全 op 拒否）。
-- **結論**: `required: &[]` で executable row として catalog に残し、
-  body が architectural boundary を説明して `Unsupported` を返す。
+- **結論**: `required: &[NativePluginDock]` で executable row として
+  catalog に残し（task spec 指定 — capability preflight を通して
+  body が実 session 内に `Unsupported` を記録する形）、body が
+  architectural boundary を説明して `Unsupported` を返す。
   `NotRun` 偽装・catalog 欠落・fault 実行のいずれも行わない。
 
 ## 試行 5: `real-dcomp-pixel` fail の切り分け

@@ -519,14 +519,14 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 21] {
         ScenarioEntry {
             case: "real-session-crash",
             scenario: SCENARIO,
-            required: &[],
+            required: &[ScenarioCapability::NativePluginDock],
             spec_extras: real_window_extras,
             run: real_session_crash_case,
         },
         ScenarioEntry {
             case: "real-session-hang",
             scenario: SCENARIO,
-            required: &[],
+            required: &[ScenarioCapability::NativePluginDock],
             spec_extras: real_window_extras,
             run: real_session_hang_case,
         },

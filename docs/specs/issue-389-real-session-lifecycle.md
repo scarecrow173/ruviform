@@ -194,13 +194,14 @@ session verb、crash/hang は in-process lane 非生存のため正直
   pairwise 一致し、既存 test が drift を検出する。両者の行数は
   21 になる。新規 6 行は `real-session-terminate` の次に置き、
   report 順も一致させる。
-- 新規 editor 系 4 行（degraded/recovery/timeout/visibility）の
-  `required` は `&[ScenarioCapability::NativePluginDock]`、spec
-  extras は editor case と同形（lane marker + plugin artifact
-  identity）。crash/hang 2 行は `required: &[]` — in-process lane
-  では capability の如何を問わず実行不能であり、空 required が
-  「どの capability もこの行を実行可能にしない」ことを正直に
-  宣言する。
+- 新規 6 行はすべて `required` が
+  `&[ScenarioCapability::NativePluginDock]` — capability preflight
+  を通して body が正直な `Unsupported` detail を実 session 内に
+  記録する形（crash/hang 行も同じ — `real-window-close` 系の
+  boundary row 先例）。spec extras は editor 系 4 行が editor
+  case と同形（lane marker + plugin artifact identity）、
+  crash/hang 2 行は `real_window_extras`（lane marker のみ —
+  fixture を消費しない正直な依存宣言）。
 - `real-session-degraded`: `open_or_degrade(Floating, Docked)` が
   `Ok(OpenOutcome::Degraded{mode: Docked,..})` を返し、drain
   event がちょうど `[Degraded{Docked}]`（attach 相当の

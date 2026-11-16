@@ -73,5 +73,5 @@ baseline/ baseline2 / dcomp-disabled の 3 実走でも同一
   `real_entries`（executable）は case id / scenario id /
   required capabilities で 1:1 同期 — `real_catalog_matches_entries`
   test が gate。
-- crash/hang は `required: &[]` で preflight を通り body が
-  `Unsupported` を返す — `NotRun` 偽装・catalog 欠落なし。
+- crash/hang は `required: &[NativePluginDock]` で preflight を通り
+  body が `Unsupported` を返す — `NotRun` 偽装・catalog 欠落なし。

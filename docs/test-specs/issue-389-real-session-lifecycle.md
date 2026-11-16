@@ -64,8 +64,9 @@ real-window lane（`rf631.plugin-dock-real`）の session lifecycle
 
 - R1: catalog 一致 — `REAL_CATALOG` と `real_entries()` は
   case/scenario/required が pairwise 一致し、両者 21 行。新規
-  6 行は `real-session-terminate` の次。editor 系 4 行の
-  `required` は `&[NativePluginDock]`、crash/hang 2 行は `&[]`。
+  6 行は `real-session-terminate` の次。新規 6 行の `required` は
+  すべて `&[NativePluginDock]`（crash/hang も同じ — capability
+  preflight 通過後に body が実 session 内で `Unsupported` を記録）。
 - R2: open 駆動 seam — `attempt_real_attach` は case 供給の
   `drive_open` で session op を駆動し、既存 case は
   `drive_open_docked` で step row を逐語維持する。teardown

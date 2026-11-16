@@ -177,11 +177,11 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-session-crash",
         scenario: SCENARIO,
-        required: &[],
+        required: &[ScenarioCapability::NativePluginDock],
     },
     RealCatalogRow {
         case: "real-session-hang",
         scenario: SCENARIO,
-        required: &[],
+        required: &[ScenarioCapability::NativePluginDock],
     },
 ];

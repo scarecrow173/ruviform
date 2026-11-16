@@ -90,8 +90,9 @@ plugin-host/plugin-vst3/plugin-clap・`mise.toml`・
 
 ## Implementation Sequence
 
-- [ ] `real_catalog.rs`: 6 行追加（degraded/recovery/timeout/
-  visibility は `NativePluginDock`、crash/hang は `required: &[]`）。
+- [x] `real_catalog.rs`: 6 行追加（全行 `NativePluginDock` —
+  crash/hang も preflight を通して body が実 session 内に
+  `Unsupported` を記録する形）。
 - [ ] `real_dock.rs`: `real_entries()` を `[...; 21]` 化。
 - [ ] `real_dock.rs`: `attempt_real_attach` に `drive_open`
   クロージャ引数を追加し、open 呼出しと `session.open(Docked)`
