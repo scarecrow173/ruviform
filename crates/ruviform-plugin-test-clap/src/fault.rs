@@ -416,7 +416,7 @@ impl PluginMainThreadParams for TestFaultMainThread<'_> {
                 | ParamInfoFlags::REQUIRES_PROCESS,
             cookie: Cookie::empty(),
             name: FAULT_PARAM.name.as_bytes(),
-            module: b"/",
+            module: b"",
             min_value: FAULT_PARAM.min_value,
             max_value: FAULT_PARAM.max_value,
             default_value: FAULT_PARAM.default_value,

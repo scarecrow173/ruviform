@@ -271,7 +271,7 @@ impl PluginMainThreadParams for TestInstrumentMainThread<'_> {
             flags: ParamInfoFlags::IS_AUTOMATABLE | ParamInfoFlags::REQUIRES_PROCESS,
             cookie: Cookie::empty(),
             name: GAIN_PARAM.name.as_bytes(),
-            module: b"/",
+            module: b"",
             min_value: GAIN_PARAM.min_value,
             max_value: GAIN_PARAM.max_value,
             default_value: GAIN_PARAM.default_value,

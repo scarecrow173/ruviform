@@ -42,8 +42,9 @@ l1-runner = ["dep:ruviform-plugin-clap", "dep:ruviform-plugin-export"]
 # carries only the plugin-side features this fixture declares
 # (`audio-ports` + `params` + `state` + `gui` — `gui` added for
 # `test_editor`'s `clap.ext.gui` surface); the adapter's
-# `thread-check` feature is deliberately not enabled — this fixture
-# stores no host handle.
+# `thread-check` feature is deliberately not enabled — the only host
+# handle stored is `test_stateful`'s main-thread handle for the
+# `clap_host_params.rescan` request a state `load` owes the host.
 clack-plugin = "=0.2.0"
 clack-common = "=0.2.0"
 clack-extensions = { version = "=0.2.0", features = [
