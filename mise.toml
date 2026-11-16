@@ -972,6 +972,24 @@ run = "cargo test -p ruviform-audio-device --features real-device --test real_in
 description = "Lint ruviform-audio-device at `-D warnings` with feature `real-device` (the E2E test target) — outside the default `lint` task's feature set"
 run = "cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings"
 
+# Virtual-endpoint streaming lane (Issue #629 5th slice / AC6): the
+# `#[ignore]`-gated verifier under `tests/virtual_endpoint.rs` needs a
+# provisioned virtual audio render↔capture pair (VB-CABLE / VAC
+# family), so the lane enables the opt-in `real-device` feature and
+# selects `--ignored` explicitly — same entry shape as
+# `test-audio-real-input`. This task is the only intended entry point
+# for that test — default `cargo test` never runs it (`#![cfg(feature)]`
+# + `#[ignore]`). With no pair provisioned the verifier prints
+# `verdict: NotRun` and exits honestly (fail-closed, never a Pass).
+# Provisioning-dependent manual lane: never in CI; run records live
+# under `evidence/rf629/`. `--test-threads=1` serializes real device
+# opens like `test-audio-real-input`. Lint coverage needs no dedicated
+# lane: `lint-audio-real-input --all-targets --features real-device`
+# already lints this test target.
+[tasks.test-audio-virtual-endpoint]
+description = "Run the `#[ignore]`-gated virtual-endpoint streaming verifier (`--features real-device --test virtual_endpoint -- --ignored`) — requires a provisioned virtual audio pair (VB-CABLE/VAC family); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
+run = "cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1"
+
 # Real-device MIDI lane (Issue #253): the `#[ignore]`-gated E2E tests
 # in `ruviform-midi-device` (adapter path — enumerate → open → repeated
 # `read` with stamp-domain/provenance + `dropped`/`unsupported`

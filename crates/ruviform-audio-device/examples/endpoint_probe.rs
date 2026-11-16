@@ -726,7 +726,7 @@ mod win {
             "    pair candidate table + driver signature + permission observations: best-effort this slice (see sections above; failures are NotRun notes, never probe failures)"
         );
         println!(
-            "    streaming proof: tests/virtual_endpoint.rs — `cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1` (auxiliary lane; no mise task is registered yet)"
+            "    streaming proof: tests/virtual_endpoint.rs — `mise run test-audio-virtual-endpoint` (provisioning-dependent manual lane, never CI)"
         );
         println!(
             "    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)"
