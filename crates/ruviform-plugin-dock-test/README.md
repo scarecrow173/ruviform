@@ -82,6 +82,13 @@ windows**:
 | `real-editor-attach` | `Pass` only when `test_editor`'s real `IPlugView` attaches a real child HWND under the leased container (OS-observed: `EnumChildWindows`/`GetParent`/`IsWindowVisible`) and `session.close` destroys it (`IsWindow(child)==0`, events `[Attached{Docked}, Closed]`); observation mismatch → `Fail`, defined refusal → `Unsupported` |
 | `real-capture` | window/slot-region pixels only — detail states the capture target is not plugin-editor pixels |
 | `real-dcomp-pixel` | `Pass` only when the docked `test_editor` child HWND's **screen-composited** pixels (screen-DC `BitBlt` of its `GetWindowRect` region — what the user sees) show `EDITOR_COLOR` green; lifecycle verified + no green → `Fail` (the known GPUI DComp topmost occlusion regression), pixels unevaluable → `NotRun`, defined refusal → `Unsupported`. `PrintWindow(child)`/`GetDC`+`BitBlt` are recorded as `note`-level diagnostics (the child's own raster/surface, not the on-screen composition), plus query-only occlusion notes (`occlusion_exstyle`/`occlusion_zorder`/`occlusion_hit_test` — root/parent/child styles, sibling z-order, `WindowFromPoint` hit-test). `--pixel-artifacts <dir>` optionally writes the captured frames as PNG |
+| `real-multiwindow-focus` | two real OS windows mounted; `Pass` only when `request_focus` → `window_focused` settles observe the A→B→A focus transfer. Focus release is recorded as observation only (the driver may honestly report `Unsupported`) |
+| `real-os-input` | `Pass` only when the injection-effect preflight proves effective AND pointer move (physical cursor read-back), click, and `Tab` keystroke all land `Injected` on the focused real window; `EnvironmentBlocked`/`NotRun`/`Unsupported` outcomes map to the same-named verdicts — never a fake pass |
+| `real-window-dpi` | `Unsupported` — `RealOsGuiTest` exposes no scale-factor/DPI observation or change API; recorded inside the real session so the gap is machine-visible |
+| `real-window-ime` | `Unsupported` at capability preflight — the adapter never claims `Ime` (IME composition stays Issue #389 scope) |
+| `real-window-close` | `Unsupported` — `RealOsGuiTest` exposes no window-close request/respond API and OS input has no modifier-chord injection; the `CloseRequested` flow cannot be driven from this lane yet |
+| `real-editor-resize` | non-pixel oracle only (session state/events/child-HWND contract, never pixels): `session.set_size` through the production `InProcessEditorOps`; the defined `EditorOpError::Unsupported` refusal → `Unsupported`, an accepted op with no effect oracle → `NotRun`, any contract mismatch → `Fail` |
+| `real-editor-redock` | non-pixel oracle only: `session.reattach` under the same real lease; defined refusal → session `Failed{Unsupported}` + event sequence `[Attached{Docked}, Detached, Failed{..}, Closed]` → `Unsupported`; accepted op → `NotRun` (no effect oracle yet) |
 
 The chain recorded is the production one:
 `NativeSlot → GpuiSurfaceAdapter (実 container HWND) → lease_parent →
@@ -116,6 +123,17 @@ cargo run -p ruviform-plugin-dock-test --features real-dock \
 Manual/opt-in — not a CI-required gate; requires an interactive
 desktop session.
 
+`plugin-dock-real-scenario --blocked-probe` is the deterministic
+headless fail-closed proof: it generates the same reports a
+`RealOsGuiTest::run` startup failure produces **without opening a
+session**, self-checks that every catalog row is `NotRun` +
+`observed.environment_blocked` with no `environment_kind=real-window`
+claim, and exits 1 on any violation. Its detail states plainly that
+no session start was attempted — it evidences the fail-closed
+mapping, never an observed headless run. The
+`test-ui-plugin-dock-real-headless` mise task writes the proof to
+`evidence/rf631/plugin-dock-real-headless.jsonl`.
+
 ## Headless scenario console (`plugin-dock-console`)
 
 `plugin-dock-console` is the headless consumer of the merged catalog —
@@ -133,7 +151,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the five `rf631.plugin-dock-real`
+- `--list --include-real` — appends the twelve `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused

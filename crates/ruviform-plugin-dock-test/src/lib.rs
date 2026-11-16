@@ -38,7 +38,15 @@
 //! after detach); `real-dcomp-pixel` (Issue #532) additionally
 //! captures the docked child's screen-composited pixels to pin the
 //! known GPUI `DComp` topmost occlusion as an honest `Fail` until a
-//! compositor fix lands. It opens real OS windows, so it is never a
+//! compositor fix lands. The catalog also carries the AC1 remainder
+//! rows — two-window focus transfer, real OS pointer/keyboard
+//! injection, and honest `Unsupported` judgments where the adapter
+//! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
+//! editor op rows (`real-editor-resize`/`real-editor-redock`, judged
+//! by session events/HWND contract only, never pixels).
+//! `plugin-dock-real-scenario --blocked-probe` deterministically
+//! proves the headless fail-closed mapping without opening a
+//! session. It opens real OS windows, so it is never a
 //! default feature and never a CI-required gate; a headless host
 //! records `NotRun` + `environment_blocked`, never a fabricated
 //! pass.

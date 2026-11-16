@@ -6,7 +6,7 @@
 //!   row per line — a capability projection, never execution
 //!   evidence (no verdict vocabulary is emitted).
 //! - `--list --include-real` appends the real-window dock lane's
-//!   four catalog rows (`session_required`, `lane`) — requires the
+//!   twelve catalog rows (`session_required`, `lane`) — requires the
 //!   `real-dock` feature; without it the request is refused with
 //!   exit 2 rather than silently omitting rows.
 //! - `--run [--case <id>] [--scenario <id>] [--driver <name>]`
