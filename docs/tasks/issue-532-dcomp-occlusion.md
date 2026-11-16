@@ -95,7 +95,7 @@ baseline/env-on の interactive 実走で遮蔽が HWND 層か合成器層かを
 - `evidence/rf631/plugin-dock-real-scenario-dcomp-disabled.jsonl`
   （env-on、canonical とは別名）
 - `docs/{discovery,designs,plans,tasks,test-specs,impl/ir,impl/exp}/issue-532-dcomp-occlusion.md`
-  + `docs/impl/exp/issue-532-dcomp-occlusion.jsonl`
+  + `docs/impl/exp/issue-532-dcomp-occlusion-exp.jsonl`
 
 ## Done When
 

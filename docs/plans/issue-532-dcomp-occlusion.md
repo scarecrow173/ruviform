@@ -109,7 +109,7 @@ patch は不変）。
   （env-on、canonical JSONL は上書きしない）— 診断 step row を含む
   実走証拠。
 - `docs/impl/ir/issue-532-dcomp-occlusion.md`・
-  `docs/impl/exp/issue-532-dcomp-occlusion.jsonl` — 実装記録・
+  `docs/impl/exp/issue-532-dcomp-occlusion-exp.jsonl` — 実装記録・
   実験ログ。
 
 ## Implementation Sequence

@@ -48,7 +48,7 @@ relations:
     - "docs/plans/issue-532-dcomp-occlusion.md"
     - "docs/specs/issue-532-dcomp-occlusion.md"
     - "docs/test-specs/issue-532-dcomp-occlusion.md"
-    - "docs/impl/exp/issue-532-dcomp-occlusion.jsonl"
+    - "docs/impl/exp/issue-532-dcomp-occlusion-exp.jsonl"
   refines: []
   refined-by: []
   derives-from: []
@@ -62,7 +62,7 @@ relations:
 metadata:
   experiments:
     adopted:
-      - "docs/impl/exp/issue-532-dcomp-occlusion.jsonl"
+      - "docs/impl/exp/issue-532-dcomp-occlusion-exp.jsonl"
     rejected: []
 ---
 
@@ -151,7 +151,7 @@ sibling/z-order）にあるか GPUI DirectComposition / flip-model
 
 ### Adopted
 
-- `docs/impl/exp/issue-532-dcomp-occlusion.jsonl` — baseline/env-on
+- `docs/impl/exp/issue-532-dcomp-occlusion-exp.jsonl` — baseline/env-on
   実機観測、exstyle flag の env 依存、z-order/hit-test 結果、
   「外部 Chrome HWND が WM z-order で上」の観測事実と
   compositor 内部仮説の未解決判定を記録。
