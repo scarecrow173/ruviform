@@ -198,6 +198,7 @@ Directory: `docs/test-specs`
 | TSPEC-034UiRtw5zDZciI3peq94F | Issue #480 tab_focus 解放テスト仕様 | approved | [issue-480-tab-focus-release.md](./issue-480-tab-focus-release.md) |
 | TSPEC-hojj4XgrGAgMW3wK6Tr5Ok | Issue #490 oracle late-create query epoch テスト仕様 | approved | [issue-490-oracle-addquery-epoch.md](./issue-490-oracle-addquery-epoch.md) |
 | TSPEC-034WZEsNYIpYAIB3snCErj | Issue #532 DComp 監査文書チェーン検証 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
+| TSPEC-034YnCis5QOFWOXGztvMIg | Issue #532 dcomp-occlusion test spec | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | TESTSPEC-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel test spec | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | TSPEC-034XB25A57vEBAhqcyKdIM | Issue #532 GPUI DComp public-surface 監査 検証仕様 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
