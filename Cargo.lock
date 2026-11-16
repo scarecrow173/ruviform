@@ -6963,6 +6963,7 @@ dependencies = [
  "ruviform-audio-test",
  "ruviform-graph",
  "ruviform-media-core",
+ "ruviform-midi-device",
  "ruviform-plugin-core",
  "ruviform-plugin-export",
  "ruviform-plugin-host",

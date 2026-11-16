@@ -97,6 +97,12 @@ ruviform-plugin-host = { path = "../ruviform-plugin-host" }
 ruviform-audio = { path = "../ruviform-audio" }
 ruviform-audio-plugin-bridge = { path = "../ruviform-audio-plugin-bridge" }
 ruviform-audio-test = { path = "../ruviform-audio-test" }
+# Issue #253 OS-endpoint e2e (`tests/os_endpoint_midi_e2e.rs`): the
+# verifier enumerates/opens the production `SystemBackend` MIDI ports
+# (WinMM on Windows, `Unsupported` elsewhere) as the real OS endpoint
+# feeding `InputTx::pump`. Path dev-dep only — the plugin cdylib and
+# the `l1-runner` runner dep tree are unchanged.
+ruviform-midi-device = { path = "../ruviform-midi-device" }
 ruviform-graph = { path = "../ruviform-graph" }
 ruviform-rt = { path = "../ruviform-rt" }
 
