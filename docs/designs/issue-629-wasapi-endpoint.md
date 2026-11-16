@@ -313,13 +313,13 @@ probe 側は `main` → `print_environment` → `win::run()`:
 - **lint**: workspace clippy（pedantic + `-D warnings`）。
   `unsafe` 追加なし。
 - **依存**: 新規依存・feature 追加なし。`Cargo.toml`/
-  `Cargo.lock`/`mise.toml` 変更不要（dev-dep 不承認を spec で
-  確定済み）。
+  `Cargo.lock` 変更不要（dev-dep 不承認を spec で確定済み）。
+  `mise.toml` は 5th slice で opt-in lane task の additive 追加
+  のみ（依存・feature の変更ではない）。
 - **lane**: `test-audio-real-input` は `--test real_input_e2e`
-  固定で本 test を収集しない — canonical 実行は直接 cargo 実行
-  （補助証拠）とし、専用 mise lane（例 `test-audio-virtual-
-  endpoint`）の設計を docs に記録。登録は後続 slice /
-  Coordinator。
+  固定で本 test を収集しない — canonical 実行は専用 opt-in lane
+  `mise run test-audio-virtual-endpoint`（5th slice で登録済み。
+  設計は本 design の Verification Notes「AC6 lane 設計記録」参照）。
 
 ## Risks and Trade-offs
 
@@ -340,9 +340,12 @@ probe 側は `main` → `print_environment` → `win::run()`:
 - #628 `PcmFixture`/`oracle`/`RunMetadata` との実結線 —
   `ruviform-audio-test` dev-dep 承認が前提（本 slice は coordinator
   不承認で見送り）。再開条件: 依存承認 + lane 設計確定。
-- AC6 lane 登録本体（`test-audio-virtual-endpoint` 系 mise task +
-  lint lane + `.github/**`）— 後続 slice / Coordinator。
-  設計は本 design の Verification Notes に記録。
+- AC6 lane 登録本体のうち mise task 登録（`test-audio-virtual-
+  endpoint`）は 5th slice で解消済み — 専用 lint lane は追加せず
+  既存 `lint-audio-real-input`（`--all-targets --features
+  real-device`）が本 test target をカバーする（Coordinator 確定）。
+  `.github/**` CI/runner 統合（定期 opt-in 実行）は引き続き後続の
+  外部 gate として残る。
 - reconnect/xrun/permission 実測（AC5）・`StreamInvalidated`
   の interactive unplug 確認・consumer 照合（AC7）— 後続。
 - pair 複数時の選択ポリシー（現状: 全列挙 + 先頭から順次試行）—
@@ -368,20 +371,22 @@ probe 側は `main` → `print_environment` → `win::run()`:
   `verdict: NotRun` を記録（Pass を主張しない）。
 - [ ] MSRV lane — NotRun（daily CI 管轄）。
 
-### AC6 lane 設計記録（登録は後続 slice / Coordinator）
+### AC6 lane 設計記録（mise task は 5th slice で登録済み / `.github/**` は後続）
 
 - `test-audio-virtual-endpoint`: `cargo test -p
   ruviform-audio-device --features real-device --test
   virtual_endpoint -- --ignored --test-threads=1` を実行する
   opt-in manual task（`test-audio-real-input` 先例 — description
   に「provisioned virtual endpoint 必須・manual lane・never CI」
-  を明記）。
+  を明記）。→ **5th slice（`issue-629-virtual-endpoint-lane`）で
+  `mise.toml` に登録済み**。
 - `lint-audio-virtual-endpoint`（または既存
   `lint-audio-real-input` の対象拡張）: `cargo clippy -p
   ruviform-audio-device --all-targets --features real-device --
   -D warnings` — 新規 test target は既に `real-device` feature
   配下のため既存 lint lane でカバー済み。専用 lane を増やすかは
-  Coordinator 判断。
+  Coordinator 判断。→ **5th slice で「専用 lane は追加しない」
+  と確定**（既存 `lint-audio-real-input` が coverage）。
 - CI/runner 統合（`.github/**`・provisioned runner での定期
   実行）は後続 slice — POLICIES §5「Windows専用の仮想
   Endpoint/実Window/実ABI Test Pluginの手動・opt-in・定期実行

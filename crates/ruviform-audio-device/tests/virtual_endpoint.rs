@@ -3,12 +3,11 @@
 //! `#[ignore]`-gated manual real-device lane, gated on the
 //! `real-device` feature exactly like `real_input_e2e.rs`: default
 //! `cargo test` compiles this file empty, and the intended entry
-//! point is the direct command
+//! point is `mise run test-audio-virtual-endpoint` (equivalent to
 //! `cargo test -p ruviform-audio-device --features real-device
-//! --test virtual_endpoint -- --ignored --test-threads=1`
-//! (auxiliary evidence — no dedicated mise lane is registered in
-//! this slice; the lane design is recorded in
-//! `docs/designs/issue-629-wasapi-endpoint.md`).
+//! --test virtual_endpoint -- --ignored --test-threads=1`). The lane
+//! is a provisioning-dependent manual opt-in — never CI; unprovisioned
+//! hosts report `verdict: NotRun` (fail-closed).
 //!
 //! What it verifies when a virtual audio pair is provisioned:
 //!

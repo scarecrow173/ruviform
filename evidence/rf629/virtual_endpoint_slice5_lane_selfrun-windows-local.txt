@@ -1,0 +1,28 @@
+[test-audio-virtual-endpoint] $ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1
+   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf629-ac6-lane\crates\ruviform-audio-device)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.03s
+     Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-b9126c31aa0efe3b.exe)
+
+running 1 test
+test render_capture_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+mbx[cache]: 1 hits, 1 misses; 0 B downloaded, 0 B uploaded, 15.7 MiB stored locally
+mbx[savings]: escorted 4.5 TiB logical of ownerless outputs off the premises.
+
+=== auxiliary evidence: verdict capture (--nocapture) ===
+$ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1 --nocapture
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-b9126c31aa0efe3b.exe)
+
+running 1 test
+test render_capture_round_trip ... virtual_endpoint: WASAPI render→capture streaming verifier
+  capture 3s per pair, watchdog 60s
+  host: WASAPI
+verdict: NotRun — no input devices on this host
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+EXIT=0
