@@ -278,8 +278,6 @@ Directory: `docs/designs`
 | DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | DESIGN-ZwNUJSnzzVrmRrqQ7S6lJ9 | Issue #465 WebView 移行台帳現行化 — 4 分類スキームと証拠設計 | approved | [wv-removal-inventory-design.md](./wv-removal-inventory-design.md) |
 
-| DESIGN-6X6G9umyA344m7SixphdpZ | Issue #692 s2 Luau analyzer backend — 設計 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
-
 ## Settled <!-- doc-suite:settled-index -->
 
 | ID | Title | Status | File |

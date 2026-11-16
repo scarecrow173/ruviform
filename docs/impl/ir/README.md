@@ -322,4 +322,3 @@ Directory: `docs/impl/ir`
 | IMPL-034IwXQh3FK347ImaDBdm4 | apm.yml 識別子更新と APM lockfile 再生成 | completed | [update-apm-identity-and-lockfile.md](./update-apm-identity-and-lockfile.md) |
 | IMPL-034IeuSyH91cISMHS4iUUz | Verify reproducible setup and work memo | completed | [verify-reproducible-setup-and-work-memo.md](./verify-reproducible-setup-and-work-memo.md) |
 | IMPL-czhYl79NIIqQrrZo0gznNl | Issue #465 WebView 移行台帳現行化 — 実装記録 | completed | [wv-removal-inventory.md](./wv-removal-inventory.md) |
-| IMPL-692LuauBackend0001 | Issue #692 s2 ruviform-script-luau analyzer backend | completed | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |

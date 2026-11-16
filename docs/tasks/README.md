@@ -86,7 +86,6 @@ Directory: `docs/tasks`
 | TASK-DktMpNJBhrTSp3LAfeKMjo | T4 mise lane・索引・GPUI 採用証跡（Issue #386） | proposed | [t4-gpui-lanes-and-evidence-issue-386.md](./t4-gpui-lanes-and-evidence-issue-386.md) |
 | TASK-034T6RWXn4Bv9Hg8sM2eR5 | T4 GPUI Controls/Viz renderer(ruviform-ui-gpui::render) | proposed | [t4-gpui-renderer-issue-387.md](./t4-gpui-renderer-issue-387.md) |
 | TASK-1N5a7PAIOH2xfWl6PJFte5 | T5 Fake/GPUI 共通 Window/Dock lifecycle fixture（Issue #386 第 2 PR） | completed | [t5-shared-lifecycle-fixture-issue-386.md](./t5-shared-lifecycle-fixture-issue-386.md) |
-| TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
