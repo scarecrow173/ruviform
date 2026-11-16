@@ -161,6 +161,7 @@ Directory: `docs/test-specs`
 | TSPEC-Q5Bwy4OQ5KsQyE0Z4uhWg6 | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture テスト仕様（terminal-event・stale・timeout・degrade・crash） | approved | [issue-389-editor-session-statemachine.md](./issue-389-editor-session-statemachine.md) |
 | TSPEC-034YtAq6r0vJ8IFSxWqurc | Issue #389 editor-session real-session-terminate テスト仕様 | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
 | TESTSPEC-034WXSuI7vNQqJ4kL2mB8 | Issue #389 Parent Lease 移行 test-spec | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
+| TSPEC-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder テスト仕様 | approved | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | TSPEC-034UnAjuxNxMXzDMasVYeO | Issue #389 Plugin Editor Session hardening テスト仕様（fake-clock timeout・degrade・GraphicsLost contract） | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TSPEC-034XGrxwj0Si1Ax9A1b2X9 | Issue #389 dock-test session-lifecycle テスト仕様 | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | TESTSPEC-bnIEkLgoxp7oIJxODUlJnj | Issue #389 VST3/L0 実外部 Editor attach テスト仕様（adapter headless 契約 + 実 binary manual lane） | approved | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
