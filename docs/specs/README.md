@@ -79,6 +79,7 @@ Directory: `docs/specs`
 | SPEC-034UnxeRRp2vX35gnordF9 | Issue #291 OBS-09 Diagnostics・Evidence・Finding・Health・Report | approved | [issue-291-observability-diagnostics.md](./issue-291-observability-diagnostics.md) |
 | SPEC-tBdATMZtqYxn8MbVgZquYA | Issue #292 OBS-10 Debug Inspection・Invariant・Session・Probe連携（observability 内完結 slice） | approved | [issue-292-observability-debug-inspection.md](./issue-292-observability-debug-inspection.md) |
 | SPEC-4IC1B6yvvsvwdDR85TSYNI | Issue #293 OBS-11 Host統合 Config + ObservationRunner 生命周期 slice（observability 内完結） | approved | [issue-293-observability-integration-runner.md](./issue-293-observability-integration-runner.md) |
+| SPEC-MIToHOPFHSbRZ0H5kHB121 | Issue #294 consumer oracle lanes — consumer-verify 両 verify job への rf628 oracle lane 配線 | approved | [issue-294-consumer-oracle-lanes.md](./issue-294-consumer-oracle-lanes.md) |
 | SPEC-ko4Wl9fIvU1e2cmiVYFmwp | Issue #294 consumer-verify → ci-issue-tracker 配線 — 失敗の Issue 追跡を既存 tracker scope で実現 | proposed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | SPEC-034S9nR4tW7xZ2cF5hJ8kM | Issue #294 Cross-Consumer候補tuple Gate — consumer-verify.yml 証拠契約・UI lane 段階拡張・候補連携接続点 | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | SPEC-034Ul9sCnKK1pa64jCWkdO | Issue #294 daily candidate-tuple trigger — consumer-verify tuple 判定の daily-ci 組込み（tuple-aware decide・証拠 artifact 回復・bounded retry） | proposed | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
@@ -222,6 +223,7 @@ Directory: `docs/specs`
 | SPEC-034YaXUTzcBvabDver3uDY | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | SPEC-034XEUi9KFfbJmIcNkynUU | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | SPEC-oY0DT4RkgQbMmPjZfQUKr0 | Issue #650 bench-smoke lane coverage 拡張（numeric / io-e2e）+ dev-env residual 同期 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| SPEC-WUXVb2PmGVTsr91ylmdD5J | Issue #692 s2 Luau analyzer backend — 仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | SPEC-034ZkLmNpQrStUvWxYzAb1 | Issue #692 RF-SCRIPT-00 script port crate first slice — 中立契約型一式 + registry/analyzer port + canonical digest | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |

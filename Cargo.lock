@@ -7019,6 +7019,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruviform-script-luau"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "find-msvc-tools",
+ "mlua",
+ "ruviform-script",
+ "serde_json",
+]
+
+[[package]]
 name = "ruviform-ui"
 version = "0.1.0"
 dependencies = [

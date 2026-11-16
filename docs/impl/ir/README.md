@@ -170,6 +170,7 @@ Directory: `docs/impl/ir`
 | IMPL-034UqAG1z1lwcerRfda1x1 | Issue #292 OBS-10 Debug Inspection 実装記録 | completed | [issue-292-obs-10-debug-inspection.md](./issue-292-obs-10-debug-inspection.md) |
 | IMPL-uQYRObw7mzwY2AGJRMgIkm | Issue #293 OBS-11 ObservabilityConfig + ObservationRunner 実装記録 | completed | [issue-293-obs-11-observability-integration-runner.md](./issue-293-obs-11-observability-integration-runner.md) |
 | IMPL-4bN8kQ2wX7vL3pR6tY9mD1s | Issue #293 OBS-11 ProbeSource adapter + 統合 edge 強化 実装記録 | completed | [issue-293-probe-source-adapter.md](./issue-293-probe-source-adapter.md) |
+| IMPL-fwt9SAzTdFbcF3sWq52Zlp | Issue #294 consumer oracle lanes — consumer-verify 両 verify job への rf628 oracle lane 配線 | completed | [issue-294-consumer-oracle-lanes.md](./issue-294-consumer-oracle-lanes.md) |
 | IMPL-bBcD5tUpOGVjPEiV79ah2o | Issue #294 consumer-verify → ci-issue-tracker 配線（scope 別 job・reconcile 全 scope 化・contract test） | completed | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | IMPL-034Sd294TupleEvidenceX9f | Issue #294 consumer-verify 候補 tuple 証拠契約（解決 SHA 捕捉・期待照合・SHA ref・UI lane・extra tasks・unsupported 状態） | completed | [issue-294-consumer-verify-tuple-evidence.md](./issue-294-consumer-verify-tuple-evidence.md) |
 | IMPL-034UlznQ9G787VMPYNa3S3 | Issue #294 daily candidate-tuple trigger（decide.mjs tuple mode + daily-ci decide-consumer-verify job） | completed | [issue-294-daily-candidate-tuple-trigger-decide-mjs-tuple-mode-daily-ci-decide-co.md](./issue-294-daily-candidate-tuple-trigger-decide-mjs-tuple-mode-daily-ci-decide-co.md) |
@@ -265,6 +266,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034XEUw3tBbjwqbNReqULG | issue-646-numeric-bench-profile | completed | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | IMPL-R0CaDUMXvtPvWlqdqmhwtT | issue-650-bench-smoke-coverage | completed | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| IMPL-692LuauBackend0001 | Issue #692 s2 ruviform-script-luau analyzer backend | completed | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | IMPL-692ScriptPort0001 | Issue #692 ruviform-script neutral contract port | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |

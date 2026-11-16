@@ -52,6 +52,7 @@ Directory: `docs/discovery`
 | DISC-ubO5TxPGQDZSaLVHth3jpg | Issue #198 Stateful Sequential Offline Render・Frame/Preroll/PDC/Tail・Safe Output Receipt — inventory, placement, contract shape | resolved | [issue-198-sequential-offline-render.md](./issue-198-sequential-offline-render.md) |
 | DISC-034Qohljm0FMrizvY86YLe | Issue #233 media-reader Prefetch/Seek/Pump contract doc & feature improvement candidates — inventory, option analysis | resolved | [issue-233-media-reader-prefetch-contract-improvements.md](./issue-233-media-reader-prefetch-contract-improvements.md) |
 | DISC-034Qx5mnsXSbsrFmJqSCM1 | Issue #244 media-reader prefetch contract residual warts — boundary-first fault emission, reopen-failure dead generation, End commit-once | resolved | [issue-244-media-reader-prefetch-contract-warts.md](./issue-244-media-reader-prefetch-contract-warts.md) |
+| DISC-XxEhtltezK4yxgxXo5SeB7 | Issue #294 consumer oracle lanes — consumer-verify 両 verify job への oracle lane 配線 現状監査 | resolved | [issue-294-consumer-oracle-lanes.md](./issue-294-consumer-oracle-lanes.md) |
 | DISC-034S9kMn2pQ7rT4vX8yB1w | Issue #294 Cross-Consumer候補Gate — consumer-verify.yml 現状監査と要件ギャップ | resolved | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | DISC-034XBVWijUovcdqO2rYXzx | Issue #294 virtual-first evidence schema — consumer-verify Case schema v2 現状監査 | resolved | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |
 | DISC-UsHnmyyijB53IvR586RquN | Issue #311 RF-GT-02 IPC schema conformance / deterministic record-replay / fault matrix — contract inventory | resolved | [issue-311-ipc-conformance-inventory.md](./issue-311-ipc-conformance-inventory.md) |
@@ -69,6 +70,7 @@ Directory: `docs/discovery`
 | DISC-034WZDbDyQpBcWspeahHje | Issue #532 GPUI DComp topmost 合成制約 — 現行 L1 証拠照合・再開条件・方式 A/B/C 調査手順監査 | resolved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
 | DISC-034XAXQbwZKvh8lVqSB9dy | Issue #532 GPUI 0.2.2 DComp public-surface 監査 — 方式A/B/C 技術入力 | resolved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | DISC-034YaXLgv895taUPDbx0B6 | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 — 調査記録 | resolved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| DISC-qxX0PvQy0Qu34AwzZ69G5e | Issue #692 s2 Luau analyzer backend — 調査記録 | resolved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | DISC-034ZkLmNpQrStUvWxYzKl6 | Issue #692 ruviform-script port crate — 調査記録 | resolved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
