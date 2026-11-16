@@ -49,6 +49,8 @@
 pub mod artifact;
 pub mod jsonl;
 #[cfg(feature = "real-dock")]
+mod osoccl;
+#[cfg(feature = "real-dock")]
 mod ospix;
 pub mod probe;
 pub mod real_catalog;

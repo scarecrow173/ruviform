@@ -583,3 +583,182 @@ topmost occlusion」。
   / `*-msrv` / 3OS 横断は本 slice の必須検証に含めず未実施
   （`test-ui-native-slot`・`test-ui-gpui` は ui-gpui/native-slot
   コード非接触のため任意 — 未実行）。
+
+---
+
+# Issue #532 dcomp-occlusion slice — verification record（2026-11-16 追記）
+
+`scarecrow173/ruviform#532` 遮蔽層診断 slice: `real-dcomp-pixel`
+case に query-only の遮蔽診断（`osoccl` module）を追加し、
+baseline / `GPUI_DISABLE_DIRECT_COMPOSITION=1` env-on の双方で
+実機観測を記録した。診断は read/query API のみで、既存 oracle・
+verdict・exit code は不変。
+
+- OS: Windows 11 (10.0.26300.9974) x86_64
+- GPU: NVIDIA GeForce RTX 4070 SUPER
+- Repo SHA: `2e856bca`（branch `feat/532-dcomp-occlusion`、
+  review-protocol 指摘反映 commit。両 real run の JSONL
+  `environment.repo_sha` はこの SHA を記録。初回実装 commit
+  `0fe7bdec` での run も exp log に記録）
+- Session: interactive Windows desktop session
+
+## Lane results（canonical = mise）
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `mise run fmt-check` | 0 | pass |
+| `mise run check ruviform-plugin-dock-test` | 0 | pass |
+| `mise run lint ruviform-plugin-dock-test` | 0 | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test` | 0 | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | 0 | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | 0 | pass |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | 0 | pass |
+| `mise run test-ui-plugin-dock` | 0 | pass（headless verdict 非回帰） |
+| `mise run test-ui-plugin-dock-console` | 0 | pass |
+| `mise run test-ui-scenario-contract` | 0 | pass |
+| `mise run check-ui-driver-boundary` | 0 | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | 0 | pass |
+
+## `test-ui-plugin-dock-real` 実走（interactive session・実 window）
+
+| Run | env `GPUI_DISABLE_DIRECT_COMPOSITION` | JSONL | exit | `real-dcomp-pixel` verdict |
+| --- | --- | --- | --- | --- |
+| baseline canonical | 未設定（JSONL `null`） | `plugin-dock-real-scenario.jsonl` | 1 | fail |
+| env-on 補助 | `"1"`（JSONL 生値記録） | `plugin-dock-real-scenario-dcomp-disabled.jsonl` | 1 | fail |
+
+env-on run は canonical JSONL を上書きしないよう直接
+`cargo run`（補助証拠・canonical = mise）で別 `--out` に記録し、
+`--pixel-artifacts evidence/rf631/dcomp-pixel-occlusion-disabled`
+で PNG を保存。`real-dcomp-pixel` 以外の 4 case
+（`real-window-mount`/`real-native-slot`/`real-editor-attach`/
+`real-capture`）は両 run で `pass`。exit 127 は未観測（両 run
+とも exit 1 = `Fail` verdict による正常な lane 失敗）。
+
+注: 初回 baseline run は実装 commit 前の未コミット tree
+（`repo_sha=cbcc8343`）で実行したが、commit `0fe7bdec` 後に
+canonical lane を再実行し JSONL を commit SHA の記録に揃えた
+（exp log に初回観測も記録）。
+
+## Occlusion 診断観測（`real-dcomp-pixel`・child HWND 1278×798）
+
+3 つの note-level step row が両 run で記録された:
+
+| Step | baseline | env-on `"1"` |
+| --- | --- | --- |
+| `occlusion_exstyle` | root `GWL_EXSTYLE`=`0x240100`、`noredirectionbitmap=true`、`appwindow=true`、他 flag false | root `GWL_EXSTYLE`=`0x40100`、`noredirectionbitmap=false`、`appwindow=true`、他 flag false |
+| `occlusion_zorder` | parent children = `[editor_child z0]` のみ、root children = `[container z0]` のみ（`truncated=false`） | 同一構造（editor_child z0 / container z0 のみ） |
+| `occlusion_hit_test` | child rect 内 5 点（center + 各辺 1/4・3/4 の 4 代表点・矩形内 clamp）全てで `WindowFromPoint` = `Chrome_RenderWidgetHostHWND`（hwnd 987096・rect `0,121,1920x911`・role `other`） | 同一 Chrome HWND が 5 点全てで返る |
+
+review-protocol 指摘（`WindowFromPoint` が hidden/disabled
+window とその subtree を skip するため non-child answer は
+"covered OR skipped" を意味する）を受け、後続 commit
+`2e856bca` で診断を強化して両 run を再実走した（本表は
+`repo_sha=2e856bca` の記録）:
+
+- `WindowRow.disabled`（`GWL_STYLE` の `WS_DISABLED`）を全 row
+  に追加 — child/parent/root/Chrome 全て `disabled:false`。
+- `occlusion_exstyle` は root に加え `child_exstyle`/
+  `parent_exstyle` を記録 — child（`RuviformTestEditor`）と
+  parent（`Static` container）は共に exstyle `0x0`（layered/
+  transparent 等の hit-test 干渉 bit 無し）。
+- `occlusion_hit_test` は `child_window`/`parent_window`/
+  `root_window` の probe 時点 row を併記 — child/parent は
+  `visible:true, alive:true, disabled:false`、root は
+  class `Zed::Window`・`visible:true, alive:true,
+  disabled:false`。
+- hit NULL entry は uniform key（欠損 fact は `null`）。
+
+**cover-vs-skip の判定**: probe 時点で child→container→root の
+全 chain が visible/alive/enabled かつ transparent/layered
+exstyle 無し — `WindowFromPoint` が skip する条件（hidden・
+disabled）に該当しない。したがって 5 点全てで Chrome HWND が
+返ることは **skip ではなく genuine な z-order cover** を意味する
+— HWND 層の外部遮蔽が観測事実として確定した。
+
+既存 oracle は前 slice と同じ結論: `screen_pixels`
+（`win32-bitblt-screen`）green 0.0 / `printwindow_pixels` 0.0 /
+`windowdc_pixels` は baseline 0.0・env-on 1.0。lifecycle steps
+は全て pass、`session.close`→HWND 破棄→`Closed+concluded`→
+events `[Attached{Docked}, Closed]` も pass。
+
+## 観測の解釈（観測事実と仮説を分離・断定しない）
+
+- **env var の実効を初めて直接確認**: baseline `0x240100`
+  （`WS_EX_NOREDIRECTIONBITMAP` 立）→ env-on `0x40100`（同 flag
+  消滅）。`GPUI_DISABLE_DIRECT_COMPOSITION=1` が GPUI 初期化に
+  実際に効いていることを HWND extended style で裏付けた
+  （前 slice の未解決問い「env var が効いたか内部確認手段が無い」
+  を本 slice の診断が解消）。
+- **GPUI 内部 z-order に遮蔽物無し**: root の direct children は
+  container（`Static`）1 件のみ、container の children は editor
+  child（`RuviformTestEditor`）1 件のみ。editor/container より
+  上の GPUI 内部 sibling HWND は観測されなかった。
+- **HWND 層の外部遮蔽を観測**: `WindowFromPoint` は child rect 内
+  全 probe 点で `Chrome_RenderWidgetHostHWND`（role `other`）を
+  返した。`WindowFromPoint` は HWND manager の z-order のみを見る
+  ため、これは「観測時点で Chrome window の HWND が GPUI root
+  より上にある」ことを意味する。real-window lane の mount 経路に
+  `SetForegroundWindow`/activate 呼出は無く（`real_window.rs`・
+  `lifecycle_fixture.rs` を source 確認）、テスト window は
+  foreground 化されない — 画面に前面化していた Chrome window が
+  GPUI window 全体を覆っている状態で観測が行われた。
+- **帰結（観測事実のみ）**: screen `BitBlt` は覆っている topmost
+  HWND（この環境では Chrome）の画素を返すため、screen green=0.0
+  は「GPUI window が外部 HWND に覆われている」だけで説明可能。
+  **DComp visual が child HWND の画素を隠すか（compositor 内部
+  の遮蔽）は screen oracle では判別不能で `unresolved`**。
+  `WindowFromPoint` は DComp visual・flip-model plane を見ない
+  ため、z-order/hit-test の「遮蔽物無し」は compositor 内部の
+  無遮蔽を意味しない。
+- **windowdc の baseline/env-on 差**: `noredirectionbitmap` の
+  有無と一致して windowdc green が 0.0→1.0 に変化。DComp 経路
+  では window-DC surface が提示経路に乗らない可能性を示唆するが
+  機序は断定しない（相関の観測のみ）。
+
+## H1-H5 分類への適用
+
+本症状は compositor 内部仮説（H 系の DComp 機序仮説）ではなく、
+**HWND-layer の外部遮蔽が観測された**。二分結果は
+「HWND-layer occlusion observed（外部 Chrome window・GPUI 内部
+構造は無遮蔽）／ compositor-internal occlusion unresolved」。
+exit-127 仮説は非該当（exit 1 = Fail verdict の正常 lane 失敗）。
+
+## Limitations
+
+- 単一ホスト・単一 GPU（RTX 4070 SUPER）・単一 scale 環境での
+  観測。`scale_factor` は JSONL で `null`。
+- child rect 内 5 点の probe（center + 各辺 1/4・3/4 の 4 代表点、
+  矩形内に clamp） — 矩形端・隙間の局所的遮蔽は代表点では
+  検出しない可能性がある（今回は 5 点全て同一結果で結論に
+  影響なし）。
+- `WindowFromPoint` は hidden/disabled window とその subtree を
+  skip する — non-child answer は "covered OR skipped" を意味
+  し、chain の `visible`/`disabled`/exstyle state を併記して
+  判別する設計（review 反映後の row に `disabled`・
+  `child_window`/`parent_window`/`root_window`・child/parent
+  exstyle を含む）。
+- probe 内の `GetWindowRect` は `screen_rect`/`screen_pixels`
+  row とは別 query — 観測間に window が移動・resize された場合
+  hit-test 点は別矩形を指し得る（実際には sub-second の race、
+  今回の run では顕在化せず）。
+- top-level 間 z-order は child walk では取れず `WindowFromPoint`
+  の結果のみに依存。probe 時点と capture 時点の z-order 変動は
+  排除できない（今回は両 run で安定）。
+- PNG artifact は env-on run のみ（`--pixel-artifacts` opt-in）。
+  canonical baseline run では未指定。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- compositor 内部遮蔽の判別（window foreground 化・GPUI root への
+  `PrintWindow` 等）は後続 slice — 本 slice は query-only 診断で
+  `unresolved` を正直に記録。
+- 方式採否・本 fix（GPUI patch / adapter 変更 / env var 恒常化）
+  は後続 slice — Issue #532 は open のまま。
+- headless host での `NotRun`+`environment_blocked` 経路は unit
+  test で検証済みだが、本検証環境は interactive のため実 headless
+  run は未実施。
+- `mise.toml` L166-169 の stale コメント（「editor-pixel question
+  stays deferred」）は scope 外・未修正 — Coordinator 統合時に対応。
+- docs index（`docs/*/README.md`、`docs/impl/*/README.md`）の再生成は
+  Coordinator が統合時に実施（本 slice では未実施・audit は
+  `index-missing-entry` warning のみ）。
