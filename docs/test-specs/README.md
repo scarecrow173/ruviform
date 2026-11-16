@@ -70,6 +70,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XCNB0kMuKY2YL0umBJp | Issue #253 MIDI event contract fixes テスト仕様 | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | TESTSPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend test specification | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | TSPEC-034VERR0DyAdyknxAagH1U | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane テスト仕様 | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
+| TSPEC-034Yo3wCx9u07BHC0xGCRY | Issue #253 virtual-first OS-endpoint MIDI e2e verifier test spec | approved | [issue-253-virtual-midi-e2e.md](./issue-253-virtual-midi-e2e.md) |
 | TST-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice テスト仕様 | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | TSPEC-034UjQC8AnQxl52Q8wCT6N | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | TSPEC-034XzvJurlMbzQjoWxrwvu | GPUI Native First採用Gate verdict評価検証（Issue #262） | proposed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |

@@ -73,6 +73,7 @@ Directory: `docs/designs`
 | DESIGN-034XCQnVGvNjCrIO3C5trY | Issue #253 MIDI event contract fixes — merge truncation / ledger 一本化 / anchor republish | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | DESIGN-rf253osmidibackend001 | Issue #253 OS MIDI input backend design（WinMM adapter + Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | DESIGN-034VEQoHhDL68K8qLl8w8r | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency-design.md](./issue-253-unsupported-transparency-design.md) |
+| DESIGN-034Yo3tqQqDfgciLUTv3k8 | Issue #253 virtual-first OS-endpoint MIDI e2e verifier design | approved | [issue-253-virtual-midi-e2e.md](./issue-253-virtual-midi-e2e.md) |
 | DSN-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice 設計（IMidiMapping snapshot + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | DESIGN-034UjQBuwtfaWhLg6ZZMBn | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合設計 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | DESIGN-034XzvxSlT8Mm4uX42xwFb | GPUI Native First採用Gate verdict評価設計（Issue #262） | approved | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |

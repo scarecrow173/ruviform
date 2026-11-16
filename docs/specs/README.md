@@ -55,6 +55,7 @@ Directory: `docs/specs`
 | SPEC-034XCLrvoEmreSmTn3sL4E | Issue #253 MIDI event contract fixes — merge truncation / ledger 一本化 / anchor republish | approved | [issue-253-midi-event-contract.md](./issue-253-midi-event-contract.md) |
 | SPEC-rf253osmidibackend001 | Issue #253 OS MIDI input backend slice（Windows 実装 + macOS/Linux Unsupported 境界） | approved | [issue-253-os-midi-backend.md](./issue-253-os-midi-backend.md) |
 | SPEC-034VEOYg1GvMKRp6MWAh4D | Issue #253 bridge unsupported 計数透過 + opt-in 実機 MIDI lane scaffold | approved | [issue-253-unsupported-transparency.md](./issue-253-unsupported-transparency.md) |
+| SPEC-034Yo3qBLOF8ei9OW6Nx7M | Issue #253 virtual-first OS-endpoint MIDI e2e verifier | approved | [issue-253-virtual-midi-e2e.md](./issue-253-virtual-midi-e2e.md) |
 | SPEC-rf253vst3midicanonpath001 | Issue #253 VST3 MIDI 正規経路 slice（IMidiMapping CC→param 配送 + plugin→host reporting） | approved | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | SPEC-034UjQv2KPJWujHxiCffIK | Issue #257 Driver-neutral Reusable UI Contract — 蓄積契約の正本統合 | approved | [issue-257-driver-neutral-ui-contract.md](./issue-257-driver-neutral-ui-contract.md) |
 | SPEC-034Xzvx8VyUUbiqyFokB52 | GPUI Native First採用Gate verdict記録・OS/性能/互換性評価（Issue #262） | proposed | [issue-262-gpui-verdict.md](./issue-262-gpui-verdict.md) |

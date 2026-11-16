@@ -138,6 +138,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Vi78tpdb4wvJ1oTJpLb | Issue #253 OS MIDI input backend adapter（Windows WinMM + 非対応 OS Unsupported 境界） | completed | [issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md](./issue-253-os-midi-input-backend-adapter-windows-winmm-os-unsupported.md) |
 | IMPL-TUskALcC8xZ3ofmqqt0sMj0 | Issue #253 README/specs interim wording closeout — canonical lane 登録済み整合 | completed | [issue-253-readme-specs-interim-wording-closeout.md](./issue-253-readme-specs-interim-wording-closeout.md) |
 | IMPL-034VFhJztohjkuJtNUpBHT | Issue #253 unsupported transparency slice | completed | [issue-253-unsupported-transparency-slice.md](./issue-253-unsupported-transparency-slice.md) |
+| IMPL-034Yo5FWaisliHM3bvwqgc | Issue #253 virtual MIDI e2e | completed | [issue-253-virtual-midi-e2e.md](./issue-253-virtual-midi-e2e.md) |
 | IMPL-rf253vst3midicanonpath001 | Issue 253 VST3 MIDI canonical path — IMidiMapping + plugin→host reporting | completed | [issue-253-vst3-midi-canonical-path.md](./issue-253-vst3-midi-canonical-path.md) |
 | IMPL-034R255MixedRadixFftXy | Issue #255 CorrelationPlan 変換長の非2冪高速サイズ化（混合基数 FFT + smooth 長選択） | completed | [issue-255-nonpow2-fft-transform-length.md](./issue-255-nonpow2-fft-transform-length.md) |
 | IMPL-034QOI4N1Bil7gejYxAo6i | Issue #258 headless value-gesture interaction contract | completed | [issue-258-headless-value-gesture-interaction-contract.md](./issue-258-headless-value-gesture-interaction-contract.md) |
