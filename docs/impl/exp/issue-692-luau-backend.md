@@ -66,17 +66,24 @@ relations:
   `as` cast は 32-bit target で truncate し得るため、clippy
   `cast_possible_truncation` 対応も兼ねて fail-closed の `try_from`
   にした（範囲外は `InvalidRequest`）。
-- **status 6/7 は wildcard arm に集約**: `INTERNAL`/`INJECTED` を
-  個別 const + 明示 arm にすると `match_same_arms` に抵触するため、
-  両者とも `Internal{status code 保持}` の wildcard に任せ、
-  contract.rs には対応関係をコメントで記録した。
+- **status 6/7 の写像**: `INJECTED`(7) は wildcard arm で
+  `Internal{status code 保持}` に集約。`INTERNAL`(6) は spec 写像表の
+  専用 message（"shim internal error"）を出すため明示 arm を持つ
+  （review cycle 1 で message 不一致を検出・修正）。
 - **`position_offset` は shim `offsetToPosition` の逆変換として
-  byte 走査で実装**: `\n`・`\r\n`（`\n` 側計数）・単独 `\r` の
-  改行意味論を shim と一致させ、`line`/`col` 超過は `len` に clamp。
-  match arm guard（`b'\r' if …`）で `collapsible_match` を回避。
+  byte 走査で実装**: 行区切りは Luau Lexer 規約どおり `\n` のみ
+  （`\r` は空白扱い — 単独 `\r` は改行にならず `\r\n` は `\n` で
+  1 回計数）。当初は shim 側と揃えて単独 `\r` も計数していたが、
+  review cycle 1 で Lexer との乖離を指摘され両側を `\n` のみに
+  統一。`col` は行末で clamp、`line_start + col` は saturating add。
 
 ## 棄却した案
 
+- **typecheck timeout を部分診断つき成功で返す**: Luau
+  `CheckResult.timeoutHits` が非空のとき shim は status 6
+  （`Internal`）を返す。中立契約に partial 信号がなく、部分結果を
+  完全な診断として返すのは fail-open のため棄却（review cycle 2
+  P2 で検出・修正）。
 - **shim status code を公開 enum 化**: 中立契約の `AnalyzerError`
   に写像して内部に閉じる設計（spec の境界表どおり）。公開面に
   status code を出すと vendor/ABI 詳細が漏れる。

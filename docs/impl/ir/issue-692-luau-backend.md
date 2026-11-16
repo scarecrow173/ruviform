@@ -17,6 +17,8 @@ relations:
       - type: "directory"
         path: "docs/discovery/"
         note: "issue-692-luau-backend.md"
+      - type: "file"
+        path: "evidence/rf692/luau-backend-verification.md"
     modified:
       - type: "file"
         path: "Cargo.toml"
@@ -55,6 +57,12 @@ relations:
     - "実 runtime ScriptBackend 実装（eval/budget/artifact — 別 slice）"
     - "synvelis thin adapter 接続（AC3 — synvelis#271/#272/#273/#274）"
     - "macOS/Linux 実機検証・release-size/performance（Windows x86_64 のみ実測）"
+metadata:
+  experiments:
+    adopted:
+      - "docs/impl/exp/issue-692-luau-backend-exp.jsonl"
+      - "docs/impl/exp/issue-692-luau-backend.md"
+    rejected: []
 ---
 
 # Issue #692 s2 — ruviform-script-luau Implementation Record
