@@ -20,7 +20,7 @@
 
 ## 3. NotRun / Unsupported
 
-- **実 runner dispatch（consumer-verify workflow_dispatch）**: NotRun — post-merge・Coordinator 管轄。本 slice は schema/記録層のみで lane 実行内容・回数は不変。v2 証拠 artifact の実走確認は merge 後の dispatch で行う。
+- **実 runner dispatch（consumer-verify workflow_dispatch）**: **Run** — 2026-11-16 簿記更新。slice 時点では NotRun（post-merge・Coordinator 管轄）だったが、merge 後 dispatch run `43907984482`（対象 SHA `615cf159`・workflow_dispatch・全 job success）で v2 証拠 artifact（`consumer-evidence-{audiolens,synvelis}.json`・`contract: consumer-verify-tuple/v1`・`schemaVersion: 2`）の実走を確認済み。AC 棚卸しは `evidence/rf294/ac-inventory.md` を参照。
 - **`*-msrv`・`*-full` 系 lane**: 対象外（タスク指定どおり — Rust 変更なし・JS/workflow/docs のみ）。
 - **GUI-L2/EXT-L3/physical-device の実測**: Unsupported（既存どおり — ubuntu headless CI では capability 不足。`unsupported` 固定行の outcome・理由は不変で、Case 分類のみ正直に宣言）。
 

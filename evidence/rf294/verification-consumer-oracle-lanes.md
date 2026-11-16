@@ -19,11 +19,11 @@
 
 ## 3. NotRun / Unsupported
 
-- **実 runner dispatch（consumer-verify workflow_dispatch）**: NotRun — post-merge・Coordinator 管轄。本 slice は lane 配線 + 構造契約 pin のみで、oracle lane の実走証拠（pass/fail/not_run の実値・artifact JSON）は merge 後の dispatch で取得する。
+- **実 runner dispatch（consumer-verify workflow_dispatch）**: **Run** — 2026-11-16 簿記更新。slice 時点では NotRun（post-merge・Coordinator 管轄）だったが、merge 後 dispatch run `43907984482`（対象 SHA `615cf159`・workflow_dispatch・attempt-1 全 job success）で実走証拠を取得済み: AL `audiolens-rf628-oracle`=pass（`rf628_oracle.rs` 7 test・artifact `consumer-evidence-audiolens.json`）、SV `synvelis-rf628-oracle`/`synvelis-rf628-oracle-rt-alloc`=pass×2（artifact `consumer-evidence-synvelis.json`）。両 lane とも `resolved_ruviform_sha=615cf159...`・同一 `fixture_version`（`ruviform-audio-test-0.1.0@615cf159...`）で記録 — file 粒度の実値 verdict と artifact JSON が confirm された。AC 棚卸しは `evidence/rf294/ac-inventory.md` を参照。
 - **`*-msrv`・`*-full` 系 lane**: 対象外（タスク指定どおり — Rust 変更なし・yml/JS/docs のみ）。
 - **per-case (per-test fn) verdict**: Unsupported（本 slice）— consumer test が機械可読 verdict を出力しないため file/domain 粒度 lane 行に留まる。consumer repo 側 emitter は AL #127 / SV #115 後続 slice。
-- **実 OS lane（Windows L2/L3・macOS/Linux L1・OS 仮想 Endpoint・実 ABI Test Plugin・GUI Runner）**: Unsupported/Deferred — RF #629/#630/#631・#313/#314 の別 gate。oracle lane は deterministic-backend OS-L1 のみで実 OS/実機・GUI の証拠ではない。
-- **consumer-side GUI contract fixture**: Deferred — AL #166/#127・SV #175-177 が Owner。
+- **実 OS lane（Windows L2/L3・macOS/Linux L1・OS 仮想 Endpoint・実 ABI Test Plugin・GUI Runner）**: Unsupported/Deferred — RF #629/#630/#631 の別 gate（#313/#314 は CLOSED のため owner 参照を #631 へ更新 — 2026-11-16 簿記）。oracle lane は deterministic-backend OS-L1 のみで実 OS/実機・GUI の証拠ではない。
+- **consumer-side GUI contract fixture**: Deferred — AL #127・SV #176/#177 が Owner（AL #166・SV #175 は CLOSED — 2026-11-16 簿記）。
 - **`contract` v1→v2 bump**: Deferred — `ci/daily`・`daily-ci.yml`・docs 連動の後続 slice。本 slice は `contract: consumer-verify-tuple/v1`・schemaVersion 2 を維持。
 
 ## 4. 実装中に検出・修正した不具合
