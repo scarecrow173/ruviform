@@ -56,6 +56,7 @@ Directory: `docs/impl/exp`
 | [device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl](./device-poc-real-machine-run-list-devices-and-play-sine-on-wasapi.jsonl) |
 | [dsp-simd-poc-benchmark-comparison.jsonl](./dsp-simd-poc-benchmark-comparison.jsonl) |
 | [issue-253-midi-event-contract.jsonl](./issue-253-midi-event-contract.jsonl) |
+| [issue-253-virtual-midi-e2e-exp.jsonl](./issue-253-virtual-midi-e2e-exp.jsonl) |
 | [issue-327-ci-baseline.jsonl](./issue-327-ci-baseline.jsonl) |
 | [issue-389-parent-lease-exp.jsonl](./issue-389-parent-lease-exp.jsonl) |
 | [issue-389-session-lifecycle-exp.jsonl](./issue-389-session-lifecycle-exp.jsonl) |
