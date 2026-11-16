@@ -180,6 +180,7 @@ Directory: `docs/specs`
 | SPEC-034WZDrkNL8aP1DM6LjaVq | Issue #532 DComp 合成制約 — 監査・再開条件・調査手順の文書化 | approved | [issue-532-dcomp-audit.md](./issue-532-dcomp-audit.md) |
 | SPEC-034YnxIOAi2baOZkdyPKlx | Issue #532 DComp 遮蔽層診断 slice（query-only exstyle/z-order/WindowFromPoint による根因二分） | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | SPEC-034YeZkAuQGMGoBAAKoHTL | Issue #532 DComp 画素 regression 固定 slice（test_editor docked 画素 case + GPUI_DISABLE_DIRECT_COMPOSITION 実機観測） | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
+| SPEC-034YxCZzURRuUuQPn2Wdgk | Issue #532 foreground/z-order 変異 probe slice（compositor-internal vs 外部 HWND stacking の二分） | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
 | SPEC-034XAXSMzbLxf6doTfUBYY | Issue #532 GPUI DComp public-surface 監査スライス | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-thW5o4Z4OMp1n1quFRk4uh | Consumer-neutral Workflow/CLI orchestration契約・両Consumer適用性レビュー（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
