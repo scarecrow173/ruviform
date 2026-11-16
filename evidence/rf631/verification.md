@@ -762,3 +762,91 @@ exit-127 仮説は非該当（exit 1 = Fail verdict の正常 lane 失敗）。
 - docs index（`docs/*/README.md`、`docs/impl/*/README.md`）の再生成は
   Coordinator が統合時に実施（本 slice では未実施・audit は
   `index-missing-entry` warning のみ）。
+
+---
+
+# Issue #631 real-row 拡充 slice — verification record
+
+`rf631.plugin-dock-real` の real-window catalog を 5 行から 12 行へ拡充
+（AC1 残件 + AC3 非画素 editor op 行）し、headless fail-closed 証明 lane
+（`--blocked-probe` / `test-ui-plugin-dock-real-headless`）を追加した
+slice の検証記録。canonical = `mise` lane。
+
+- Date: 2026-11-16
+- OS: Windows (x86_64)・interactive desktop あり
+- Lane evidence: `plugin-dock-real-scenario.jsonl`（実走）・
+  `plugin-dock-real-headless.jsonl`（blocked-probe）
+
+## Lane results（canonical = mise / cargo）
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --check` | pass (exit 0) |
+| `cargo clippy -p ruviform-plugin-dock-test --features real-dock --all-targets -- -D warnings` | pass (exit 0) |
+| `cargo clippy -p ruviform-plugin-dock-test --all-targets -- -D warnings`（default feature） | pass (exit 0) |
+| `cargo test -p ruviform-plugin-dock-test --features real-dock` | pass（unit 3 + console 14 + plugin-dock 4 + doc） |
+| `cargo test -p ruviform-plugin-dock-test`（default feature） | pass |
+| `mise run test-ui-plugin-dock-real-headless` | pass (exit 0) |
+| `mise run test-ui-plugin-dock-scenario` | pass（non-regression） |
+| `mise run test-ui-plugin-dock-console`（`--list`/`--run`） | pass（non-regression） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | pass |
+| `mise run test-ui-plugin-dock-real` | exit 1 — `real-dcomp-pixel` の既知 Fail のみ（下記） |
+
+## `test-ui-plugin-dock-real` 実走 verdict（12 case）
+
+| case | verdict | 備考 |
+| --- | --- | --- |
+| real-window-mount | pass | |
+| real-native-slot | pass | |
+| real-editor-attach | pass | |
+| real-capture | pass | |
+| real-dcomp-pixel | **fail** | 既知の DComp topmost occlusion（Issue #532）— screen-composited pixels に `EDITOR_COLOR` が出ない正直な regression signal。Pass に変換しない |
+| real-multiwindow-focus | pass | A baseline → B → A の `window_focused` 遷移を観測。release は note のみ |
+| real-os-input | pass | preflight effective → `plugin.editor` painted bounds へ pointer move（cursor read-back (959,551)）・click・`Tab` が全て `Injected`。transport-level のみ、semantic effect は claim しない |
+| real-window-dpi | unsupported | 公開 API に scale-factor/DPI 観測なし |
+| real-window-ime | unsupported | adapter が `Ime` を claim しない → preflight で拒否 |
+| real-window-close | unsupported | close request/respond API・modifier chord 注入なし |
+| real-editor-resize | unsupported | `set_size` → 定義済み `EditorOpError::Unsupported`。session `Attached` 維持・events `[Attached{Docked}, Closed]`・子 HWND 収束を検証 |
+| real-editor-redock | unsupported | `reattach` → `Unsupported`。`Failed{Unsupported}` 着地・events `[Attached{Docked}, Detached, Failed{..}, Closed]` を検証 |
+
+lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — 設計どおりの
+正直な regression signal であり、lane defect ではない。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+- `RealOsGuiTest` session を開始せず window を開かない決定的経路。
+- 出力 12 case 全て `not_run` + `observed.environment_blocked` +
+  `environment_kind=deterministic-backend`。`real-window` claim 無し。
+- 自己検査: case id ↔ catalog 行対応・driver=RealOs・environment_kind
+  存在かつ非 real-window を含め、違反時 exit 1。
+- detail は session start 未試行を明示 — 観測した headless run を装わない。
+
+## Review 反映（review-protocol）
+
+- `editor_op_body`: `OpLanding::Accepted` は `verification.verified`
+  必須に修正 — 受理 + 契約検証失敗が `NotRun` に隠れず `Fail` になる。
+- `real-os-input`: pointer aim が `Injected` でない場合 mouse down/up を
+  発火せず `not_run` 記録（未検証 cursor 位置への stray click 防止）。
+  focus settle timeout は `not_run`（未達 precondition）、driver 契約
+  error は `fail` に分離。`OsInputOutcome` 未知 variant は `not_run`
+  （fold が Pass に昇格させない）。
+- `real-multiwindow-focus`: A baseline focus を先に観測し "A→B→A" の
+  遷移を実際に証明可能にした。
+- `blocked_probe_violations`: case id 順序・driver・environment_kind
+  存在の検査を追加。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-dcomp-pixel` の `Fail` は Issue #532 の未解決 occlusion —
+  本 slice 範囲外、修正しない。
+- `real-window-dpi`/`ime`/`close` の `Unsupported` は adapter 公開面に
+  API が無いことの正直な判定 — 実装は後続 slice。
+- `real-editor-resize`/`redock` は fixture が op を `Unsupported` で
+  拒否する現状に依存。受理されても非画素 effect oracle が無ければ
+  `NotRun`（検証失敗時は `Fail`）。
+- accepted re-dock 経路では再観測した子 HWND のみを detach 検証する
+  （初回 attach の HWND は追跡対象から外れる）— accepted path は現状
+  到達不能のため既知制限として記録。
+- cursor read-back は `commanded` との tolerance 検査を持たず証拠記録
+  のみ — driver の `Injected` 意味論に委ねる。

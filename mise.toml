@@ -160,22 +160,46 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # evidence/rf631/plugin-dock-real-scenario.jsonl. `real-editor-attach`
 # selects the `test_editor` descriptor whose plugin-side `IPlugView`
 # creates a real child HWND under the container lease (OS-observed
-# attach → detach). Requires an interactive desktop session; on a
-# headless host every case records NotRun +
+# attach → detach). The catalog also carries the AC1 remainder rows
+# (2-window focus transfer, real OS input injection, and honest
+# `Unsupported` judgments for DPI/IME/window-close where no adapter
+# API exists) and the AC3 non-pixel editor op rows
+# (`real-editor-resize`/`real-editor-redock` — session event/HWND
+# oracles only, never pixels). Requires an interactive desktop
+# session; on a headless host every case records NotRun +
 # observed="environment_blocked" (fail-closed — never a fake pass,
 # exit code stays 0). Honest verdicts only: capture stays
 # window/slot-region pixels (never plugin editor pixels — the
-# editor-pixel question stays deferred), and child-HWND
-# input/resize/focus/re-dock stay NotRun. Real OS windows — run
+# editor-pixel question stays deferred). Real OS windows — run
 # unattended (writes only target/ + evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]
-description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, honest Unsupported for DPI/IME/close) and AC3 non-pixel editor op rows (resize/re-dock); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 cargo build --locked -p ruviform-plugin-test-vst3
 mkdir -p evidence/rf631
 cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --out evidence/rf631/plugin-dock-real-scenario.jsonl
+'''
+
+# Issue #631 real-row slice — headless fail-closed proof lane
+# (manual/opt-in — NOT a CI-required gate): runs
+# `plugin-dock-real-scenario --blocked-probe`, which generates the
+# exact reports a `RealOsGuiTest::run` startup failure produces
+# WITHOUT opening a session (deterministic on any host), self-checks
+# that every catalog row is NotRun + observed.environment_blocked
+# and none claims environment_kind=real-window, and exits 1 on any
+# violation. The reports' detail records that no session start was
+# attempted — they evidence the fail-closed mapping, not an observed
+# headless run. JSONL to evidence/rf631/plugin-dock-real-headless.jsonl
+# (writes only target/ + evidence/rf631/).
+[tasks.test-ui-plugin-dock-real-headless]
+description = "Issue #631 real-window headless fail-closed proof lane (manual/opt-in — NOT a CI-required gate): plugin-dock-real-scenario --blocked-probe generates the session-start-failure reports without opening a window, asserts every catalog row is NotRun + observed.environment_blocked with no real-window claim (exit 1 on violation); JSONL to evidence/rf631/plugin-dock-real-headless.jsonl (writes only target/ + evidence/rf631/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p evidence/rf631
+cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --blocked-probe --out evidence/rf631/plugin-dock-real-headless.jsonl
 '''
 
 # Issue #631 GPUI Test Lab / Scenario Console lane (manual/opt-in —

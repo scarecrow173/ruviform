@@ -52,7 +52,14 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The five real-window dock cases in run order — metadata only.
+/// The twelve real-window dock cases in run order — metadata only.
+/// The AC1 remainder rows (`real-multiwindow-focus`, `real-os-input`,
+/// `real-window-dpi`, `real-window-ime`, `real-window-close`) judge
+/// the remaining adopted capabilities per case — executable where a
+/// real oracle exists, honestly `Unsupported` where the adapter
+/// exposes no API. The AC3 rows (`real-editor-resize`,
+/// `real-editor-redock`) judge editor ops through non-pixel oracles
+/// (session events, child-HWND contract, session state) only.
 pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-mount",
@@ -81,5 +88,40 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
             ScenarioCapability::NativePluginDock,
             ScenarioCapability::VisualCapture,
         ],
+    },
+    RealCatalogRow {
+        case: "real-multiwindow-focus",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::MultiWindow],
+    },
+    RealCatalogRow {
+        case: "real-os-input",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::RealOsPointerOrKeyboard],
+    },
+    RealCatalogRow {
+        case: "real-window-dpi",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::SemanticAction],
+    },
+    RealCatalogRow {
+        case: "real-window-ime",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::Ime],
+    },
+    RealCatalogRow {
+        case: "real-window-close",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::SemanticAction],
+    },
+    RealCatalogRow {
+        case: "real-editor-resize",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-editor-redock",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
     },
 ];

@@ -2,26 +2,37 @@
 //! feature `real-dock`; `real-dcomp-pixel` added by the Issue #532
 //! dcomp-pixel slice).
 //!
-//! [`run_all`] mounts [`plugin_dock_view_spec`] into a *real OS
-//! window* through [`RealOsGuiTest`] and records the five cases of
-//! the `rf631.plugin-dock-real` scenario:
+//! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
+//! windows* through [`RealOsGuiTest`] and records the twelve cases
+//! of the `rf631.plugin-dock-real` scenario:
 //!
-//! | case                  | driver      | honest outcome today                                  |
-//! |-----------------------|-------------|--------------------------------------------------------|
-//! | `real-window-mount`   | `RealOs`    | `Pass` — spec mounts; `NativeSlot` resolves/observes   |
-//! | `real-native-slot`    | `RealOs`    | `Pass`/`Fail` — declare→bind→project→`lease_parent`→   |
-//! |                       |             | validate→`container_token`→release + stale/forged      |
-//! |                       |             | lease rejection, all real ops                          |
-//! | `real-editor-attach`  | `RealOs`    | `Pass`/`Fail`/`Unsupported` — `test_editor` real   |
-//! |                       |             | `IPlugView` child HWND under the real container     |
-//! |                       |             | lease, OS-observed attach → detach (`IsWindow==0`)  |
-//! | `real-capture`        | `RealOs`    | `Pass`/`Unsupported`/`NotRun` — window/slot-region     |
-//! |                       |             | pixels, explicitly NOT plugin editor pixels            |
-//! | `real-dcomp-pixel`    | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — docked         |
-//! |                       |             | `test_editor` child HWND の**画面合成画素**に         |
-//! |                       |             | `EDITOR_COLOR` 緑が出るか（screen `BitBlt` が主       |
-//! |                       |             | oracle、`PrintWindow(child)` は補助診断）。既知の      |
-//! |                       |             | GPUI `DComp` topmost occlusion 下では正直な `Fail` |
+//! | case                    | driver      | honest outcome today                              |
+//! |-------------------------|-------------|----------------------------------------------------|
+//! | `real-window-mount`     | `RealOs`    | `Pass` — spec mounts; `NativeSlot` resolves/observes |
+//! | `real-native-slot`      | `RealOs`    | `Pass`/`Fail` — declare→bind→project→`lease_parent`→ |
+//! |                         |             | validate→`container_token`→release + stale/forged  |
+//! |                         |             | lease rejection, all real ops                      |
+//! | `real-editor-attach`    | `RealOs`    | `Pass`/`Fail`/`Unsupported` — `test_editor` real   |
+//! |                         |             | `IPlugView` child HWND under the real container    |
+//! |                         |             | lease, OS-observed attach → detach (`IsWindow==0`) |
+//! | `real-capture`          | `RealOs`    | `Pass`/`Unsupported`/`NotRun` — window/slot-region   |
+//! |                         |             | pixels, explicitly NOT plugin editor pixels        |
+//! | `real-dcomp-pixel`      | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — docked       |
+//! |                         |             | `test_editor` child HWND の**画面合成画素**に       |
+//! |                         |             | `EDITOR_COLOR` 緑が出るか（screen `BitBlt` が主     |
+//! |                         |             | oracle、`PrintWindow(child)` は補助診断）。既知の    |
+//! |                         |             | GPUI `DComp` topmost occlusion 下では正直な `Fail` |
+//! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
+//! |                         |             | → `window_focused` 観測による focus 移譲            |
+//! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
+//! |                         |             | effective な実 OS pointer/key 注入が `Injected`     |
+//! | `real-window-dpi`       | `RealOs`    | `Unsupported` — scale-factor/DPI API が公開面に無い   |
+//! | `real-window-ime`       | `RealOs`    | `Unsupported` — `Ime` capability は未 claim（#389）  |
+//! | `real-window-close`     | `RealOs`    | `Unsupported` — window close API が公開面に無い       |
+//! | `real-editor-resize`    | `RealOs`    | `Unsupported`/`Fail` — `set_size` の定義済み拒否を    |
+//! |                         |             | 非画素 oracle（session 状態・event・HWND）で観測      |
+//! | `real-editor-redock`    | `RealOs`    | `Unsupported`/`Fail` — `reattach` の定義済み拒否 →    |
+//! |                         |             | `Failed` → close 収束を event 系列で観測             |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -42,8 +53,9 @@
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    HostCommand, InProcessEditorOps, InProcessHost, ParentLease, ParentSlotLease,
-    PluginEditorSession, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
+    EditorSessionState, EditorSize, HostCommand, InProcessEditorOps, InProcessHost, ParentLease,
+    ParentSlotLease, PluginEditorSession, PluginEditorSessionId, PluginEditorSessions,
+    PluginHandle, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::dock::ViewInstanceId;
@@ -52,7 +64,8 @@ use ruviform_ui::native_slot::{
     SurfaceSlotId,
 };
 use ruviform_ui::view::{AttachEpochAllocator, ComponentKey, ViewHost};
-use ruviform_ui::{WindowId, WindowSpec};
+use ruviform_ui::{LogicalPosition, WindowId, WindowSpec};
+use ruviform_ui_gpui::os_input::{OsInputOutcome, OsKey, PreflightScope};
 use ruviform_ui_gpui::{RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount};
 use ruviform_ui_test::scenario::plugin_dock::{
     PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_view_spec,
@@ -60,8 +73,8 @@ use ruviform_ui_test::scenario::plugin_dock::{
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::{
     CaseId, RunId, ScenarioCapability, ScenarioDriver, ScenarioEntry, ScenarioError, ScenarioId,
-    ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioVerdict,
-    SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
+    ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioTarget,
+    ScenarioVerdict, SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
 };
 use std::path::{Path, PathBuf};
 
@@ -109,8 +122,13 @@ struct PluginUnavailable {
 struct RealDockContext<'a> {
     /// The live session driver — `run_scenario`'s `G`.
     gui: &'a mut RealOsGuiTest,
-    /// The mounted window id.
+    /// The first mounted window id (`windows()` order = mount order).
     window: WindowId,
+    /// The second mounted window id — `real-multiwindow-focus`'s
+    /// focus-transfer target. `None` only if the session mounted a
+    /// single window (never on the live path — two mounts are
+    /// requested up front).
+    window_b: Option<WindowId>,
     /// The mounted view instance id.
     view: ViewInstanceId,
     /// Lane environment snapshot (borrowed — the session is
@@ -128,7 +146,7 @@ struct RealDockContext<'a> {
     pixel_artifacts: Option<&'a Path>,
 }
 
-/// Runs the four real-window cases inside one `RealOsGuiTest`
+/// Runs the catalog's real-window cases inside one `RealOsGuiTest`
 /// session and returns their reports in case order — a thin
 /// projection over [`real_entries`], the session-scoped catalog the
 /// blocked path also reads so case ids/required caps never drift.
@@ -168,20 +186,44 @@ pub fn run_all_with_pixel_artifacts(
     let plugin_error = plugin.as_ref().err().cloned();
 
     let view = ViewInstanceId::new(631).expect("view instance id 631 is non-zero");
+    let view_b = ViewInstanceId::new(632).expect("view instance id 632 is non-zero");
     let mut epochs = AttachEpochAllocator::new();
     let mut host = ViewHost::new(view, epochs.mint());
     host.mount(plugin_dock_view_spec())
         .expect("plugin dock view spec mounts");
     host.drain_events();
+    let mut host_b = ViewHost::new(view_b, epochs.mint());
+    host_b
+        .mount(plugin_dock_view_spec())
+        .expect("plugin dock view spec mounts");
+    host_b.drain_events();
 
+    // Two mounts so `real-multiwindow-focus` has a real second
+    // window; window B is offset right of window A so the windows
+    // never overlap (an OS click on A's panel center must land on A).
+    let window_spec_b = WindowSpec {
+        title: "ruviform plugin-dock B".to_string(),
+        position: Some(LogicalPosition::new(1450, 80)),
+        ..WindowSpec::default()
+    };
     let outcome = RealOsGuiTest::run(
-        vec![RealWindowMount {
-            window: WindowSpec::default(),
-            view: ViewMount { host, theme: None },
-        }],
+        vec![
+            RealWindowMount {
+                window: WindowSpec::default(),
+                view: ViewMount { host, theme: None },
+            },
+            RealWindowMount {
+                window: window_spec_b,
+                view: ViewMount {
+                    host: host_b,
+                    theme: None,
+                },
+            },
+        ],
         RealWindowOptions::default(),
         |gui| {
-            let Some(window) = gui.windows().into_iter().next() else {
+            let mut windows = gui.windows().into_iter();
+            let Some(window) = windows.next() else {
                 return blocked_reports(
                     &run_id,
                     env,
@@ -189,12 +231,14 @@ pub fn run_all_with_pixel_artifacts(
                     "real-window session reported no mounted window",
                 );
             };
+            let window_b = windows.next();
             // The session-scoped catalog — `real_entries` rows run
             // through `run_entries` against the live context.
             let entries = real_entries();
             let mut ctx = RealDockContext {
                 gui,
                 window,
+                window_b,
                 view,
                 env,
                 plugin: plugin.as_ref().ok(),
@@ -289,7 +333,7 @@ fn finalize_real(
 /// `blocked_reports` reads the same rows for case ids and required
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 5] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 12] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -328,6 +372,55 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 5] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_pixel_case,
+        },
+        ScenarioEntry {
+            case: "real-multiwindow-focus",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::MultiWindow],
+            spec_extras: real_window_extras,
+            run: real_multiwindow_focus_case,
+        },
+        ScenarioEntry {
+            case: "real-os-input",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::RealOsPointerOrKeyboard],
+            spec_extras: real_window_extras,
+            run: real_os_input_case,
+        },
+        ScenarioEntry {
+            case: "real-window-dpi",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::SemanticAction],
+            spec_extras: real_window_extras,
+            run: real_window_dpi_case,
+        },
+        ScenarioEntry {
+            case: "real-window-ime",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::Ime],
+            spec_extras: real_window_extras,
+            run: real_window_ime_case,
+        },
+        ScenarioEntry {
+            case: "real-window-close",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::SemanticAction],
+            spec_extras: real_window_extras,
+            run: real_window_close_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-resize",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_resize_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-redock",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_redock_case,
         },
     ]
 }
@@ -629,7 +722,7 @@ fn steps_outcome(
     }
 }
 
-/// The four fail-closed reports for a session that never started —
+/// The fail-closed reports for a session that never started —
 /// `NotRun` + `observed.environment_blocked`, the
 /// `test-ui-real-scenario` precedent. `environment_kind` stays the
 /// honest "no real environment produced this" bucket; nothing
@@ -644,7 +737,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -670,6 +763,85 @@ fn blocked_reports(
             )
         })
         .collect()
+}
+
+/// `--blocked-probe` reports — the fail-closed mapping a
+/// `RealOsGuiTest::run` startup failure produces (verdict,
+/// `observed`, and `environment_kind` identical; artifact evidence
+/// aside, since no session resolved one), generated WITHOUT
+/// opening a session so the proof is deterministic on any host
+/// (interactive or headless). The detail string says plainly that
+/// no session start was attempted — these reports evidence the
+/// *mapping*, never an observed headless run.
+#[must_use]
+pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
+    blocked_reports(
+        &RunId::new(RUN_ID),
+        env,
+        None,
+        "blocked-probe: RealOsGuiTest session start not attempted — \
+         exercising the fail-closed mapping a headless host hits",
+    )
+}
+
+/// Self-check for the blocked-probe lane: every report must be
+/// `NotRun` + `observed.environment_blocked` and none may claim
+/// `environment_kind == "real-window"` — the fail-closed shape a
+/// headless host must produce. Returns violation strings; empty
+/// means the shape held for every catalog row.
+#[must_use]
+pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
+    let mut violations = Vec::new();
+    if reports.len() != entries.len() {
+        violations.push(format!(
+            "report count {} != catalog rows {}",
+            reports.len(),
+            entries.len()
+        ));
+    }
+    for (index, report) in reports.iter().enumerate() {
+        let case = report
+            .case
+            .as_ref()
+            .map_or_else(|| format!("row[{index}]"), |id| id.as_str().to_string());
+        if report.verdict != ScenarioVerdict::NotRun {
+            violations.push(format!("{case}: verdict {:?} != NotRun", report.verdict));
+        }
+        if let Some(entry) = entries.get(index)
+            && report.case.as_ref().map(CaseId::as_str) != Some(entry.case)
+        {
+            violations.push(format!(
+                "{case}: case id does not match catalog row {index} ({})",
+                entry.case
+            ));
+        }
+        if report.driver != ScenarioDriver::RealOs {
+            violations.push(format!("{case}: driver {:?} != RealOs", report.driver));
+        }
+        let observed_ok = report
+            .observed
+            .as_ref()
+            .and_then(|observed| observed["observed"].as_str())
+            == Some("environment_blocked");
+        if !observed_ok {
+            violations.push(format!("{case}: observed.environment_blocked missing"));
+        }
+        let kind = report
+            .environment
+            .as_ref()
+            .and_then(|env| env["environment_kind"].as_str());
+        match kind {
+            Some("real-window") => {
+                violations.push(format!("{case}: claims environment_kind=real-window"));
+            }
+            None => {
+                violations.push(format!("{case}: environment_kind missing"));
+            }
+            _ => {}
+        }
+    }
+    violations
 }
 
 // ---------------------------------------------------------------------
@@ -1416,6 +1588,7 @@ fn conclude_editor_session(
 /// violated check.
 fn observe_editor_child_lifecycle(
     container: Option<u64>,
+    _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
     session_id: PluginEditorSessionId,
     host: &mut InProcessHost,
@@ -1429,25 +1602,7 @@ fn observe_editor_child_lifecycle(
     // u64 (= the container HWND on Windows); `None` means the token
     // observation already failed — the child checks then fail
     // honestly downstream.
-    let mut observation = match container {
-        Some(token) => oschild::observe(token),
-        None => oschild::empty(),
-    };
-
-    // The attach-phase checks run only where an HWND concept exists;
-    // off-Windows the observation half records `Unsupported` and the
-    // session still converges below.
-    let attach_ok = if observation.supported {
-        check_attached_children(&observation, container, steps, &mut failure)
-    } else {
-        steps.push(json!({
-            "step": "child_hwnd_observation",
-            "verdict": "unsupported",
-            "detail": "OS child-HWND observation is Windows-only — an \
-                       accepted open cannot be verified off-Windows",
-        }));
-        false
-    };
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
 
     let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
         &mut observation,
@@ -1571,6 +1726,7 @@ fn attempt_real_attach<V>(
     steps: &mut Vec<Value>,
     observe_open: impl FnOnce(
         Option<u64>,
+        u64,
         &mut PluginEditorSessions,
         PluginEditorSessionId,
         &mut InProcessHost,
@@ -1659,6 +1815,7 @@ fn attempt_real_attach<V>(
     let observed = match &open_result {
         Some(Ok(_)) => Some(observe_open(
             container_token,
+            lease.raw(),
             &mut sessions,
             session_id,
             host,
@@ -2716,7 +2873,7 @@ fn editor_pixel_body(
         &mut host,
         handle,
         &mut steps,
-        |container, sessions, session_id, host, handle, steps| {
+        |container, _lease_raw, sessions, session_id, host, handle, steps| {
             observe_editor_pixel_lifecycle(
                 container, sessions, session_id, host, handle, artifacts, steps,
             )
@@ -2824,6 +2981,1101 @@ fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
     )
 }
 
+// ---------------------------------------------------------------------
+// case: real-multiwindow-focus (AC1 — 2-window focus transfer)
+// ---------------------------------------------------------------------
+
+/// Requests focus on `window` through the driver's own op, settles
+/// until `window_focused` reports it, and pushes the per-step rows.
+/// `Ok(true)` = focus observed; `Ok(false)` = settle timed out
+/// (recorded as a failure); `Err` = driver contract error — the
+/// caller decides whether to halt the sequence.
+fn drive_focus(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+    window: WindowId,
+    request_step: &str,
+    observe_step: &str,
+) -> Result<bool, String> {
+    step(steps, request_step, gui.request_focus(window, true), |()| {
+        Value::Null
+    })?;
+    match settle_until(gui, |g| g.window_focused(window), 120) {
+        Ok(true) => {
+            steps.push(json!({ "step": observe_step, "verdict": "pass" }));
+            Ok(true)
+        }
+        Ok(false) => {
+            record_obs_fail(
+                steps,
+                failure,
+                observe_step,
+                format!("window {window} never reported focused after request_focus"),
+            );
+            Ok(false)
+        }
+        Err(error) => {
+            record_obs_fail(steps, failure, observe_step, error.to_string());
+            Ok(false)
+        }
+    }
+}
+
+/// `real-multiwindow-focus`: two real OS windows are mounted; the
+/// case drives `request_focus` on the driver and observes
+/// `window_focused` transitions — the AC1 "2Window Focus" judgment.
+/// Focus *release* (`focused = false`) is recorded as an observation
+/// only: the driver may honestly report `Unsupported`, which is
+/// evidence, never a verdict input. Window close is NOT exercised —
+/// the `RealOsGuiTest` public surface exposes no close request (see
+/// `real-window-close`); this case's scope is focus transfer only.
+fn multiwindow_focus_body(
+    gui: &mut RealOsGuiTest,
+    window_a: WindowId,
+    window_b: Option<WindowId>,
+) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+    let windows = gui.windows();
+    let ids: Vec<String> = windows.iter().map(ToString::to_string).collect();
+    steps.push(json!({
+        "step": "window_count",
+        "verdict": if windows.len() >= 2 { "pass" } else { "fail" },
+        "count": windows.len(),
+        "windows": ids,
+    }));
+
+    let mut failure: Option<String> = None;
+    let attempt = (|| -> Result<Value, String> {
+        if windows.len() < 2 {
+            return Err("session mounted fewer than 2 windows".to_string());
+        }
+        let wb = window_b.ok_or_else(|| "second window id not recorded".to_string())?;
+
+        // Establish the A baseline first — the A→B→A claim requires
+        // proof A actually held focus before B was requested (the
+        // second-created window may take foreground at mount, which
+        // would make an unobserved "A→B" leg unfalsifiable).
+        drive_focus(
+            gui,
+            &mut steps,
+            &mut failure,
+            window_a,
+            "focus_request_a_baseline",
+            "focus_a_baseline_observed",
+        )?;
+
+        // A → B focus transfer through the driver's own focus op.
+        drive_focus(
+            gui,
+            &mut steps,
+            &mut failure,
+            wb,
+            "focus_request_b",
+            "focus_b_observed",
+        )?;
+        // Observation only — whether A released focus is platform
+        // behavior, recorded for evidence, never a verdict input.
+        steps.push(json!({
+            "step": "focus_a_state_while_b",
+            "verdict": "note",
+            "focused": gui.window_focused(window_a),
+        }));
+
+        // Focus release honesty — `focused = false` may be a defined
+        // `Unsupported` on this backend; record the driver's answer.
+        match gui.request_focus(wb, false) {
+            Ok(()) => steps.push(json!({
+                "step": "focus_release_b",
+                "verdict": "note",
+                "detail": "release request accepted",
+            })),
+            Err(error) => steps.push(json!({
+                "step": "focus_release_b",
+                "verdict": "note",
+                "detail": format!("release refused/unsupported: {error}"),
+            })),
+        }
+
+        // B → A transfer back — proves focus moves both directions.
+        drive_focus(
+            gui,
+            &mut steps,
+            &mut failure,
+            window_a,
+            "focus_request_a",
+            "focus_a_observed",
+        )?;
+        steps.push(json!({
+            "step": "focus_b_state_after_a",
+            "verdict": "note",
+            "focused": gui.window_focused(wb),
+        }));
+
+        if let Some(detail) = &failure {
+            return Err(detail.clone());
+        }
+        Ok(json!({
+            "windows": windows.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "window_a": window_a.to_string(),
+            "window_b": wb.to_string(),
+        }))
+    })();
+
+    steps_outcome(
+        &steps,
+        attempt,
+        "two real OS windows mounted; request_focus moved observed \
+         window_focused state A→B→A (release recorded as observation \
+         only — window close is out of this case's scope)",
+        &["multiwindow:focus-transfer:real-os"],
+    )
+}
+
+/// `real-multiwindow-focus` case: pre-flight requires `MultiWindow`,
+/// then the body drives the two-window focus transfer — or reports
+/// the honest mount/focus failure.
+fn real_multiwindow_focus_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window_a = ctx.window;
+    let window_b = ctx.window_b;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(multiwindow_focus_body(gui, window_a, window_b))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
+// case: real-os-input (AC1 — real OS pointer/keyboard injection)
+// ---------------------------------------------------------------------
+
+/// Maps an [`OsInputOutcome`] to its step verdict + detail — the
+/// lane verdict vocabulary mirrored honestly (`Injected` is the only
+/// pass-grade landing; `EnvironmentBlocked`/`NotRun`/`Unsupported`
+/// stay distinct, never collapsed into a failure). `OsInputOutcome`
+/// is `#[non_exhaustive]`: an unlisted variant maps to `not_run`,
+/// never a neutral tag the verdict fold could promote to `Pass`.
+fn os_outcome_tag(outcome: &OsInputOutcome) -> (&'static str, String) {
+    match outcome {
+        OsInputOutcome::Injected { detail, .. } => ("pass", detail.clone()),
+        OsInputOutcome::Unsupported { reason } => ("unsupported", reason.clone()),
+        OsInputOutcome::EnvironmentBlocked { detail } => ("environment_blocked", detail.clone()),
+        OsInputOutcome::NotRun { reason } => ("not_run", reason.clone()),
+        _ => (
+            "not_run",
+            "unlisted OsInputOutcome variant — injection effect cannot be proven".to_string(),
+        ),
+    }
+}
+
+/// Pushes one `observed.steps` row for an OS-input op outcome —
+/// the verdict tag mirrors the lane vocabulary honestly.
+fn push_os_step(steps: &mut Vec<Value>, name: &str, outcome: &OsInputOutcome) {
+    let (tag, detail) = os_outcome_tag(outcome);
+    steps.push(json!({ "step": name, "verdict": tag, "detail": detail }));
+}
+
+/// Runs the family-effect preflight (Issue #552) and pushes the
+/// `os_preflight` step row with every per-family check. Returns
+/// `false` when injection cannot take effect — the caller then
+/// records the honest `environment_blocked`, never a fake pass.
+fn os_input_preflight_effective(gui: &mut RealOsGuiTest, steps: &mut Vec<Value>) -> bool {
+    let preflight = gui.os_input_preflight(PreflightScope::PointerAndKeyboard);
+    let checks: Vec<Value> = preflight
+        .checks
+        .iter()
+        .map(|check| {
+            json!({
+                "family": check.family,
+                "effective": check.effective,
+                "detail": check.detail,
+            })
+        })
+        .collect();
+    steps.push(json!({
+        "step": "os_preflight",
+        "verdict": if preflight.effective { "pass" } else { "environment_blocked" },
+        "checks": checks,
+    }));
+    preflight.effective
+}
+
+/// Pushes one op call's result as a step row — `Err` is a contract
+/// error and lands as `fail`.
+fn push_op_result(
+    steps: &mut Vec<Value>,
+    name: &str,
+    result: Result<OsInputOutcome, ScenarioError>,
+) {
+    match result {
+        Ok(outcome) => push_os_step(steps, name, &outcome),
+        Err(error) => steps.push(json!({
+            "step": name,
+            "verdict": "fail",
+            "error": error.to_string(),
+        })),
+    }
+}
+
+/// Runs the real OS injection ops — pointer aim at `component`'s
+/// center (logical bounds → physical pixels with cursor read-back)
+/// first, then click down/up, and an unmodified `Tab` keystroke —
+/// pushing one step row per op. `Injected` is the only pass-grade
+/// landing; every other `OsInputOutcome` keeps its honest tag and a
+/// contract error lands as `fail`.
+///
+/// The click ops are gated on the pointer move landing `Injected`:
+/// the driver injects buttons at the *current* cursor position, so
+/// when the aim cannot be proven the cursor stays wherever it was —
+/// firing a click there would hit an uncontrolled screen target.
+/// The skipped ops record `not_run`, never a fabricated pass. `Tab`
+/// is keyboard input gated only on window focus, so it runs
+/// regardless of the pointer leg.
+fn push_injection_steps(
+    gui: &mut RealOsGuiTest,
+    target: &ScenarioTarget,
+    component: &ComponentKey,
+    steps: &mut Vec<Value>,
+) {
+    let aimed = match gui.os_pointer_move_to(target, component, (0.5, 0.5)) {
+        Ok(outcome) => {
+            let injected = matches!(&outcome, OsInputOutcome::Injected { .. });
+            push_os_step(steps, "pointer_move", &outcome);
+            injected
+        }
+        Err(error) => {
+            steps.push(json!({
+                "step": "pointer_move",
+                "verdict": "fail",
+                "error": error.to_string(),
+            }));
+            false
+        }
+    };
+    if aimed {
+        push_op_result(steps, "mouse_down", gui.os_mouse_down(target));
+        push_op_result(steps, "mouse_up", gui.os_mouse_up(target));
+    } else {
+        for name in ["mouse_down", "mouse_up"] {
+            steps.push(json!({
+                "step": name,
+                "verdict": "not_run",
+                "detail": "skipped — pointer aim did not inject; a click \
+                           at the unverified cursor position would hit \
+                           an uncontrolled target",
+            }));
+        }
+    }
+    push_op_result(steps, "key_tab", gui.os_press_key(target, OsKey::Tab));
+}
+
+/// Binds a real native slot so `plugin.editor` records painted
+/// bounds (the dock panel paints no canvas, so `plugin.dock` can
+/// never be an aim target), runs the four OS injection ops aimed at
+/// that dock region, then tears the slot down — pushing every step
+/// row. `Err` means the slot chain itself failed; op outcomes land
+/// as step rows instead.
+fn inject_into_bound_slot(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    target: &ScenarioTarget,
+    steps: &mut Vec<Value>,
+) -> Result<(), String> {
+    let key = slot_key();
+    let (slot, lease) = lease_real_slot(gui, window, view, steps)?;
+
+    push_injection_steps(gui, target, &key, steps);
+
+    // Success-path teardown — unbind → release lease → release
+    // slot; notes never mask the case verdict.
+    let notes = release_real_slot(gui, window, &key, slot, Some(lease));
+    if notes.is_empty() {
+        steps.push(json!({ "step": "release", "verdict": "pass" }));
+    } else {
+        steps.push(json!({
+            "step": "release",
+            "verdict": "note",
+            "detail": notes.join("; "),
+        }));
+    }
+    Ok(())
+}
+
+/// `real-os-input`: verifies real OS pointer/keyboard injection
+/// reaches the focused real window — the AC1 "実 Window … 入力"
+/// judgment at transport level. `os_input_preflight` must prove
+/// *effect* (Issue #552) before any injection; every op's
+/// `OsInputOutcome` is recorded verbatim. The dock panel paints no
+/// canvas, so a real native slot is bound first and the pointer
+/// aims at `plugin.editor`'s painted bounds (the actual dock
+/// region). Pass requires the pointer move (with physical cursor
+/// read-back), the click, and the `Tab` keystroke all `Injected`
+/// while the window stays focused. The view has no component-level
+/// input oracle, so semantic effect beyond injection+focus is
+/// honestly out of scope — recorded in `detail`, never claimed.
+fn os_input_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+
+    // Family-effect preflight — a `false` report means the session
+    // cannot deliver effective injection; the honest verdict is
+    // `NotRun` + `environment_blocked`, never a fake pass.
+    if !os_input_preflight_effective(gui, &mut steps) {
+        let mut outcome = not_run(
+            "OS input injection preflight proved ineffective on this \
+             session — pointer/keyboard events would not take effect",
+        );
+        outcome.observed = Some(json!({
+            "observed": "environment_blocked",
+            "steps": steps,
+        }));
+        return outcome;
+    }
+
+    // OS injection ops only reach the *observed focused* window —
+    // focus it through the driver's own op first. A settle timeout
+    // is an unmet precondition (`not_run` — the ops below record
+    // their own `NotRun` on an unfocused window); a driver contract
+    // error stays `fail`.
+    let _ = gui.request_focus(window, true);
+    match settle_until(gui, |g| g.window_focused(window), 120) {
+        Ok(true) => steps.push(json!({
+            "step": "window_focus_for_input",
+            "verdict": "pass",
+            "focused": true,
+        })),
+        Ok(false) => steps.push(json!({
+            "step": "window_focus_for_input",
+            "verdict": "not_run",
+            "focused": false,
+            "detail": "window never reported focused — injection ops \
+                       will record their own NotRun",
+        })),
+        Err(error) => steps.push(json!({
+            "step": "window_focus_for_input",
+            "verdict": "fail",
+            "focused": false,
+            "error": error.to_string(),
+        })),
+    }
+
+    let target = match gui.resolve_target(&TargetQuery::new(window, view)) {
+        Ok(target) => target,
+        Err(error) => {
+            steps.push(json!({
+                "step": "resolve_target",
+                "verdict": "fail",
+                "error": error.to_string(),
+            }));
+            let mut outcome = fail(format!("resolve_target: {error}"));
+            outcome.observed = Some(json!({ "steps": steps }));
+            return outcome;
+        }
+    };
+    steps.push(json!({ "step": "resolve_target", "verdict": "pass" }));
+
+    if let Err(detail) = inject_into_bound_slot(gui, window, view, &target, &mut steps) {
+        let mut outcome = fail(detail);
+        outcome.observed = Some(json!({ "steps": steps }));
+        return outcome;
+    }
+
+    // Verdict aggregation — the worst honest landing wins:
+    // environment_blocked → NotRun, unsupported → Unsupported,
+    // not_run → NotRun, any contract error → Fail, all Injected →
+    // Pass. `steps` rows already carry the per-op detail.
+    let worst =
+        steps
+            .iter()
+            .filter_map(|row| row["verdict"].as_str())
+            .fold("pass", |acc, verdict| match (acc, verdict) {
+                ("fail", _) | (_, "fail") => "fail",
+                ("environment_blocked", _) | (_, "environment_blocked") => "environment_blocked",
+                ("unsupported", _) | (_, "unsupported") => "unsupported",
+                ("not_run", _) | (_, "not_run") => "not_run",
+                _ => acc,
+            });
+    let mut observed = Map::from_iter([("steps".to_string(), json!(steps))]);
+    if worst == "environment_blocked" {
+        observed.insert("observed".to_string(), json!("environment_blocked"));
+    }
+    let mut outcome = match worst {
+        "pass" => {
+            let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+            outcome.detail = Some(
+                "preflight proved injection effect; pointer move \
+                 (cursor read-back), click, and Tab keystroke all \
+                 Injected into the focused real OS window — transport- \
+                 level input evidence; the dock view has no component- \
+                 level input oracle, so semantic effect is not claimed"
+                    .to_string(),
+            );
+            outcome
+                .evidence
+                .push("os-input:injected:real-window".to_string());
+            outcome
+        }
+        "environment_blocked" => not_run(
+            "an OS input op reported environment_blocked — injection \
+             would not take effect on this session",
+        ),
+        "unsupported" => ScenarioOutcome::new(ScenarioVerdict::Unsupported),
+        "not_run" => not_run(
+            "an OS input op could not run (target unfocused, no painted \
+             bounds, or run precondition unmet) — see steps",
+        ),
+        _ => fail("an OS input op hit a contract error — see steps"),
+    };
+    if worst == "unsupported" {
+        outcome.detail =
+            Some("OS input injection is unsupported on this platform/backend".to_string());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-os-input` case: pre-flight requires
+/// `RealOsPointerOrKeyboard` (claimed only where the OS injection
+/// backend exists), then the body runs the injection sequence — or
+/// reports the honest environment/capability outcome.
+fn real_os_input_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(os_input_body(gui, window, view))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
+// cases: real-window-dpi / real-window-ime / real-window-close
+// (AC1 — honest Unsupported judgments for absent adapter surface)
+// ---------------------------------------------------------------------
+
+/// `real-window-dpi`: per-case DPI judgment needs scale-factor
+/// observation and/or a display-scale change. `RealOsGuiTest`
+/// exposes neither — the honest verdict is `Unsupported`, recorded
+/// inside the real session so the gap is machine-visible in the
+/// catalog projection instead of silently absent.
+fn real_window_dpi_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+        outcome.detail = Some(
+            "RealOsGuiTest exposes no scale-factor/DPI observation or \
+             change API — DPI adoption judgment deferred until the \
+             adapter surface grows (window move across mixed-DPI \
+             monitors is likewise not drivable)"
+                .to_string(),
+        );
+        outcome
+            .evidence
+            .push("window:dpi:api-not-exposed".to_string());
+        Ok(outcome)
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+/// `real-window-ime`: `Ime` is never claimed by the adapter's
+/// `supported_capabilities()` (IME composition is Issue #389
+/// scope), so the capability preflight reports `Unsupported`
+/// before the body runs. The body stays as a defensive honest
+/// `NotRun` — unreachable today, correct if the vocabulary ever
+/// changes.
+fn real_window_ime_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        Ok(not_run(
+            "Ime capability is not provided by the adapter — IME \
+             composition judgment stays deferred (Issue #389)",
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+/// `real-window-close`: window close through the normal
+/// `CloseRequested` flow needs `WindowDriver::request_close` /
+/// `respond_close` (or an Alt+F4 chord), none of which the
+/// `RealOsGuiTest` public surface forwards — the driver supports
+/// them internally but the seam is outside this slice's lease. The
+/// honest verdict is `Unsupported`, recorded inside the real
+/// session.
+fn real_window_close_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+        outcome.detail = Some(
+            "RealOsGuiTest exposes no window-close request/respond \
+             API and os_input has no modifier-chord injection — the \
+             CloseRequested flow cannot be driven from this lane yet \
+             (adapter surface extension is a follow-up slice)"
+                .to_string(),
+        );
+        outcome
+            .evidence
+            .push("window:close:api-not-exposed".to_string());
+        Ok(outcome)
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
+// AC3 non-pixel editor op cases (resize / re-dock)
+// ---------------------------------------------------------------------
+
+/// How the attempted editor op landed through the production ops
+/// adapter — the case body's verdict input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OpLanding {
+    /// The op returned the defined `EditorOpError::Unsupported`.
+    Refused,
+    /// The op returned `Ok` — recorded, but no non-pixel oracle can
+    /// confirm the effect took place (honest `NotRun`, never Pass).
+    Accepted,
+    /// Any other landing — a contract error or a vanished session;
+    /// `EditorOpVerification::failure` carries the detail.
+    Other,
+}
+
+/// Post-open observation for the non-pixel editor-op cases
+/// (`real-editor-resize`, `real-editor-redock`): the same child-HWND
+/// attach contract as `real-editor-attach`, plus the op attempt's
+/// honest landing — the defined `Unsupported` refusal, an accepted
+/// op (no non-pixel oracle exists to confirm effect → never Pass),
+/// or a real failure.
+struct EditorOpVerification {
+    /// `false` off-Windows — the OS observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// How the attempted op landed.
+    landing: OpLanding,
+    /// Every contract check agreed (attach children, session state
+    /// after the op, close/detach convergence, expected events).
+    verified: bool,
+    /// First violated check (`name: detail`) for the `Fail` detail.
+    failure: Option<String>,
+    /// `observed` extras — container/child HWND ids, thread ids,
+    /// drained events.
+    extras: Value,
+}
+
+/// Phase-1 child-HWND attach observation shared by the editor-op
+/// cases — identical contract to `observe_editor_child_lifecycle`'s
+/// first phase: enumerate the container's children while attached
+/// and run `check_attached_children` where an HWND concept exists.
+/// Returns the observation plus whether every check agreed.
+fn observe_attached_children(
+    container: Option<u64>,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (ChildWindowObservation, bool) {
+    let observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+    (observation, attach_ok)
+}
+
+/// `real-editor-resize` post-open observation: child-HWND attach
+/// contract → `session.set_size` through the production
+/// `InProcessEditorOps` (the defined `Unsupported` refusal today —
+/// no `HostCommand` resize verb exists) → the session must stay
+/// `Attached` (a refused `set_size` is non-fatal by contract) →
+/// close convergence with the unchanged `[Attached{Docked},
+/// Closed]` event sequence. No pixel capture is touched — the
+/// oracle is session state + events + the HWND contract only.
+fn observe_editor_resize_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+
+    // The resize attempt — `rejecting_editor_ops` is the production
+    // `InProcessEditorOps`; `set_size` refuses before any lease
+    // redeem, so the rejecting redeemer is never consulted.
+    let mut landing = OpLanding::Other;
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = rejecting_editor_ops(host, handle);
+        session.set_size(
+            &mut ops,
+            EditorSize {
+                width: 800.0,
+                height: 600.0,
+            },
+        )
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_resize",
+                "verdict": "unsupported",
+                "detail": "session.set_size → InProcessEditorOps::set_size \
+                           → EditorOpError::Unsupported — no HostCommand \
+                           resize verb exists on the L0 surface",
+            }));
+            landing = OpLanding::Refused;
+        }
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": "editor_resize",
+                "verdict": "pass",
+                "detail": "set_size accepted — no non-pixel oracle exists \
+                           yet to confirm the resize took effect",
+            }));
+            landing = OpLanding::Accepted;
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_resize", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_resize",
+                "editor session vanished before set_size",
+            );
+        }
+    }
+
+    // Non-fatal contract: an accepted or refused `set_size` leaves
+    // the session `Attached` — any other landing is a violation.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let attached = sessions
+            .session(session_id)
+            .is_some_and(|session| matches!(session.state(), EditorSessionState::Attached { .. }));
+        if attached {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": "Attached",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                "session did not stay Attached after set_size",
+            );
+            state_ok = false;
+        }
+    }
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+    );
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        verified: attach_ok && state_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// Drained-event contract for the re-dock lifecycle — the refused
+/// path must produce exactly `[Attached{Docked}, Detached,
+/// Failed{Unsupported}, Closed]`; an accepted re-attach produces
+/// `[Attached{Docked}, Detached, Reattached{Docked}, Closed]`.
+/// Anything else is a contract surprise, never a pass.
+fn check_redock_events(
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    refused: bool,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (bool, Vec<String>) {
+    let mut ok = true;
+    if session_closed_concluded(sessions, session_id) {
+        steps.push(json!({ "step": "session_concluded", "verdict": "pass" }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_concluded",
+            "session did not converge to Closed+concluded",
+        );
+        ok = false;
+    }
+
+    let events = sessions
+        .session_mut(session_id)
+        .map_or_else(Vec::new, PluginEditorSession::drain_events);
+    let rendered = events_debug(&events);
+    let expected = if refused {
+        vec![
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Detached,
+            EditorSessionEvent::Failed {
+                cause: SessionFailCause::Unsupported,
+            },
+            EditorSessionEvent::Closed,
+        ]
+    } else {
+        vec![
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Detached,
+            EditorSessionEvent::Reattached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Closed,
+        ]
+    };
+    if events == expected {
+        steps.push(json!({
+            "step": "session_events",
+            "verdict": "pass",
+            "events": rendered,
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_events",
+            format!("unexpected re-dock event sequence: {rendered:?}"),
+        );
+        ok = false;
+    }
+    (ok, rendered)
+}
+
+/// `real-editor-redock` post-open observation: child-HWND attach
+/// contract → `session.reattach` under the same real lease through
+/// the production `InProcessEditorOps` (the defined `Unsupported`
+/// refusal today — no re-dock verb on the L0 surface) → the session
+/// must land `Failed{Unsupported}` per contract → `close` →
+/// `IsWindow(child) == 0` → the exact `[Attached{Docked}, Detached,
+/// Failed{Unsupported}, Closed]` event sequence. No pixel capture —
+/// the oracle is session events + HWND contract + session state.
+fn observe_editor_redock_lifecycle(
+    container: Option<u64>,
+    lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+
+    // The re-dock attempt — same lease (`ParentSlotLease` wraps the
+    // registry's opaque payload; the verb refuses before any redeem
+    // today, and the lease itself stays honest evidence).
+    let mut landing = OpLanding::Other;
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = rejecting_editor_ops(host, handle);
+        session.reattach(&mut ops, &ParentSlotLease::new(lease_raw))
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_redock",
+                "verdict": "unsupported",
+                "detail": "session.reattach → InProcessEditorOps::reattach \
+                           → EditorOpError::Unsupported — no re-dock verb \
+                           on the L0 surface; the session lands Failed \
+                           per contract",
+            }));
+            landing = OpLanding::Refused;
+            // Contract: a refused re-attach lands `Failed`, never
+            // silently `Attached`.
+            if session_failed_unsupported(sessions, session_id) {
+                steps.push(json!({
+                    "step": "session_state_after_op",
+                    "verdict": "pass",
+                    "state": "Failed{Unsupported}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_op",
+                    "refused reattach did not land Failed{Unsupported}",
+                );
+            }
+        }
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": "editor_redock",
+                "verdict": "pass",
+                "detail": "reattach accepted — a Reattached event and a \
+                           live child contract are expected",
+            }));
+            landing = OpLanding::Accepted;
+            // An accepted re-dock may recreate the editor surface —
+            // re-run the child contract against the live container.
+            let (re_observation, re_ok) = observe_attached_children(container, steps, &mut failure);
+            attach_ok = attach_ok && re_ok;
+            observation = re_observation;
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_redock", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_redock",
+                "editor session vanished before reattach",
+            );
+        }
+    }
+
+    // Convergence — close (production `close_gui` → `removed()` →
+    // `DestroyWindow`), post-detach `IsWindow(child) == 0`, and the
+    // re-dock-specific event sequence.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
+    let detach_ok =
+        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
+    let (events_ok, rendered) = check_redock_events(
+        sessions,
+        session_id,
+        landing == OpLanding::Refused,
+        steps,
+        &mut failure,
+    );
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        verified: attach_ok && close_ok && detach_ok && events_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// Shared body for the non-pixel editor-op cases — identical
+/// prerequisite/attempt mapping to `editor_attach_body`; the
+/// case-supplied `observe_open` drives the op attempt and decides
+/// the verdict: verified + defined refusal → `Unsupported`,
+/// accepted-but-unverifiable → `NotRun`, any contract mismatch →
+/// `Fail`.
+fn editor_op_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    observe_open: impl FnOnce(
+        Option<u64>,
+        u64,
+        &mut PluginEditorSessions,
+        PluginEditorSessionId,
+        &mut InProcessHost,
+        PluginHandle,
+        &mut Vec<Value>,
+    ) -> EditorOpVerification,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        observe_open,
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                // An accepted open off-Windows — the OS observation
+                // cannot verify the child contract there, so the
+                // case honestly stays `Unsupported` (unreachable
+                // today: `NativePluginDock` is Windows-only).
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     child-HWND observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification)
+                if verification.verified && verification.landing == OpLanding::Refused =>
+            {
+                // The op ran through the production ops adapter on a
+                // real lease and returned the defined `Unsupported`
+                // refusal; every non-pixel contract check agreed —
+                // the honest per-case judgment is `Unsupported`.
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor op attempted through the REAL container lease \
+                     returned the defined EditorOpError::Unsupported — \
+                     the verb is absent on the L0 ops surface; child-HWND \
+                     contract, session state, events, and close \
+                     convergence all verified without pixel evidence"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("editor-op:defined-refusal-real-lease".to_string());
+                outcome
+            }
+            Some(verification)
+                if verification.verified && verification.landing == OpLanding::Accepted =>
+            {
+                // The op was accepted AND every non-pixel contract
+                // check agreed — but those oracles verify lifecycle,
+                // not the op's effect, so the honest verdict stays
+                // `NotRun`. An accepted op whose verification FAILED
+                // falls through to `Fail` below: a contract violation
+                // is never demoted to `NotRun`.
+                not_run(
+                    "editor op was accepted and every lifecycle/HWND/ \
+                     event check agreed, but no oracle confirms the \
+                     op's effect took place — judgment deferred until \
+                     a session/HWND oracle lands",
+                )
+            }
+            Some(verification) => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 op observation failed: {}",
+                verification
+                    .failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            None => fail("editor opened but no op observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-editor-resize` case: pre-flight requires `NativePluginDock`,
+/// then the body drives the real attach chain plus the `set_size`
+/// attempt — judged by session state/events/HWND contract only,
+/// never pixels.
+fn real_editor_resize_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            observe_editor_resize_lifecycle,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-editor-redock` case: pre-flight requires `NativePluginDock`,
+/// then the body drives the real attach chain plus the `reattach`
+/// attempt under the same lease — judged by session events, child
+/// HWND contract, and session state only, never pixels.
+fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            observe_editor_redock_lifecycle,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2860,7 +4112,7 @@ mod tests {
         }
     }
 
-    /// A session that never started must produce five `NotRun`
+    /// A session that never started must produce `NotRun`
     /// reports tagged `environment_blocked` — fail-closed, never a
     /// fabricated pass and never a `RealWindow` claim. Case ids and
     /// required capabilities come from the same `real_entries`
@@ -2871,11 +4123,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 5, "five real-dock cases");
+        assert_eq!(reports.len(), 12, "twelve real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -2908,7 +4160,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 5] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 12] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");
