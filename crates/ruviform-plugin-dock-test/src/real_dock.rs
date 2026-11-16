@@ -70,6 +70,7 @@ use serde_json::{Map, Value, json};
 
 use crate::LaneEnvironment;
 use crate::artifact;
+use crate::osoccl;
 use crate::ospix;
 use crate::real_catalog::{LANE, SCENARIO};
 // The run id is shared with the console's catalog metadata —
@@ -2073,7 +2074,7 @@ fn observe_child_pixels(
 
     let mut scan = PixelScan::default();
     for (index, child) in observation.children.iter().enumerate() {
-        observe_one_child_pixels(index, child, artifacts, steps, &mut scan);
+        observe_one_child_pixels(index, child, token, artifacts, steps, &mut scan);
     }
 
     if scan.evaluated == 0 {
@@ -2127,11 +2128,16 @@ fn record_pixel_artifact(
 
 /// One child's pixel observation while attached: `GetWindowRect` →
 /// screen-DC `BitBlt` of the screen rectangle (primary oracle —
-/// what the user sees) → `PrintWindow(child)` (diagnostic — the
-/// child's own raster, `note` level only).
+/// what the user sees) → `PrintWindow(child)` and `GetDC`+`BitBlt`
+/// of the child's own surface (two `note`-level diagnostics that
+/// separate "the plugin painted green" from "the screen shows
+/// green") → query-only occlusion diagnostics (root exstyle,
+/// sibling z-order, `WindowFromPoint` — `note` level only, they
+/// never feed the oracle).
 fn observe_one_child_pixels(
     index: usize,
     child: &ChildWindowFacts,
+    container: u64,
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
     scan: &mut PixelScan,
@@ -2215,6 +2221,240 @@ fn observe_one_child_pixels(
 
     record_printwindow_pixels(index, hwnd, artifacts, steps);
     record_windowdc_pixels(index, hwnd, artifacts, steps);
+    record_occlusion_notes(hwnd, container, steps);
+}
+
+/// Query-only occlusion diagnostics for one docked child — three
+/// `note`-level step rows that separate *which layer* hides the
+/// child's pixels without touching the oracle or any verdict:
+///
+/// - `occlusion_exstyle` — the GPUI root HWND's `GWL_EXSTYLE`
+///   (`WS_EX_NOREDIRECTIONBITMAP` proves whether
+///   `GPUI_DISABLE_DIRECT_COMPOSITION` reached GPUI's window
+///   creation on this run).
+/// - `occlusion_zorder` — direct children of the child's parent
+///   and of the root in z-order, with role labels and
+///   above-reference flags — HWND-level cover candidates.
+/// - `occlusion_hit_test` — `WindowFromPoint` at five points
+///   inside the child's screen rect — the HWND the window manager
+///   considers topmost there.
+///
+/// All reads go through [`osoccl::probe`]; every row is
+/// `verdict: "note"` and failures degrade to `error` fields,
+/// never to fabricated observations.
+fn record_occlusion_notes(hwnd: u64, container: u64, steps: &mut Vec<Value>) {
+    let facts = osoccl::probe(hwnd);
+    if !facts.supported {
+        steps.push(json!({
+            "step": "occlusion",
+            "verdict": "note",
+            "hwnd": hwnd,
+            "supported": false,
+            "note": "OS occlusion observation is unsupported on this platform",
+        }));
+        return;
+    }
+    steps.push(occlusion_exstyle_row(hwnd, &facts));
+    steps.push(occlusion_zorder_row(hwnd, container, &facts));
+    steps.push(occlusion_hit_test_row(hwnd, container, &facts));
+}
+
+/// `occlusion_exstyle` row — the GPUI root's classified extended
+/// style. `noredirectionbitmap` is the DComp-path marker: GPUI sets
+/// `WS_EX_NOREDIRECTIONBITMAP` only when direct composition is
+/// enabled, so its per-run value is the env-var effectiveness
+/// evidence.
+fn occlusion_exstyle_row(hwnd: u64, facts: &osoccl::OcclusionFacts) -> Value {
+    let exstyle = facts.root_exstyle.as_ref().map(|e| {
+        json!({
+            "value": e.value,
+            "noredirectionbitmap": e.noredirectionbitmap(),
+            "topmost": e.topmost(),
+            "layered": e.layered(),
+            "transparent": e.transparent(),
+            "noactivate": e.noactivate(),
+            "toolwindow": e.toolwindow(),
+            "appwindow": e.appwindow(),
+        })
+    });
+    json!({
+        "step": "occlusion_exstyle",
+        "verdict": "note",
+        "hwnd": hwnd,
+        "root": facts.root,
+        "exstyle": exstyle.unwrap_or(Value::Null),
+        "exstyle_error": facts.root_exstyle_error,
+        "note": "GPUI root HWND GWL_EXSTYLE — WS_EX_NOREDIRECTIONBITMAP \
+                marks the DComp path (absent only when \
+                GPUI_DISABLE_DIRECT_COMPOSITION took effect)",
+    })
+}
+
+/// `occlusion_zorder` row — both sibling walks with role labels.
+/// `parent_children` is annotated `above_editor` (position above
+/// the docked child); `root_children` is annotated
+/// `above_container` (position above the container). A `null`
+/// flag means the reference window was not found in that list —
+/// unknown, never assumed.
+fn occlusion_zorder_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFacts) -> Value {
+    json!({
+        "step": "occlusion_zorder",
+        "verdict": "note",
+        "hwnd": hwnd,
+        "parent": facts.parent,
+        "parent_children": occlusion_zorder_list(
+            facts.parent_children.as_ref(),
+            "GetParent returned null — no parent to enumerate",
+            hwnd,
+            "above_editor",
+            hwnd,
+            container,
+            facts.root,
+        ),
+        "root_children": occlusion_zorder_list(
+            facts.root_children.as_ref(),
+            "GetAncestor(GA_ROOT) returned null — no root to enumerate",
+            container,
+            "above_container",
+            hwnd,
+            container,
+            facts.root,
+        ),
+        "note": "direct-child z-order walks (topmost first) — \
+                siblings above the child/container are HWND-level \
+                occlusion candidates",
+    })
+}
+
+/// Serializes one [`osoccl::ZOrder`] option: `{children, truncated}`
+/// when the walk ran, `{error}` when there was no window to
+/// enumerate (`skipped_reason` names which query came back null).
+/// Each entry carries its z-order position, role, the `above_key`
+/// flag relative to `reference`, and the window's identifying
+/// facts.
+fn occlusion_zorder_list(
+    result: Option<&osoccl::ZOrder>,
+    skipped_reason: &str,
+    reference: u64,
+    above_key: &str,
+    child: u64,
+    container: u64,
+    root: Option<u64>,
+) -> Value {
+    match result {
+        None => json!({ "error": skipped_reason }),
+        Some(zorder) => {
+            let reference_index = zorder.children.iter().position(|row| row.hwnd == reference);
+            let children: Vec<Value> = zorder
+                .children
+                .iter()
+                .enumerate()
+                .map(|(index, row)| {
+                    let mut entry = occlusion_window_json(row);
+                    if let Some(obj) = entry.as_object_mut() {
+                        obj.insert(
+                            "role".to_string(),
+                            json!(occlusion_role(row.hwnd, child, container, root)),
+                        );
+                        obj.insert(
+                            above_key.to_string(),
+                            json!(reference_index.map(|r| index < r)),
+                        );
+                    }
+                    entry
+                })
+                .collect();
+            json!({
+                "children": children,
+                "truncated": zorder.truncated,
+            })
+        }
+    }
+}
+
+/// `occlusion_hit_test` row — `WindowFromPoint` at the
+/// representative points inside the child's screen rectangle,
+/// each resolved to a role. `WindowFromPoint` sees the window
+/// manager's z-order/visibility only — `DComp` visuals and
+/// flip-model presentation planes are not HWNDs and cannot appear
+/// here, so a child answer does not by itself prove compositor-
+/// level occlusion (recorded limitation, not a verdict input).
+fn occlusion_hit_test_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFacts) -> Value {
+    let points: Vec<Value> = facts
+        .hits
+        .iter()
+        .map(|hit| {
+            let mut entry = match &hit.window {
+                Some(row) => {
+                    let mut entry = occlusion_window_json(row);
+                    if let Some(obj) = entry.as_object_mut() {
+                        obj.insert(
+                            "role".to_string(),
+                            json!(occlusion_role(row.hwnd, hwnd, container, facts.root)),
+                        );
+                    }
+                    entry
+                }
+                None => json!({ "hwnd": Value::Null, "role": "none" }),
+            };
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert("x".to_string(), json!(hit.x));
+                obj.insert("y".to_string(), json!(hit.y));
+            }
+            entry
+        })
+        .collect();
+    json!({
+        "step": "occlusion_hit_test",
+        "verdict": "note",
+        "hwnd": hwnd,
+        "child_rect": occlusion_rect_json(facts.child_rect),
+        "points": points,
+        "note": "WindowFromPoint at representative points inside the \
+                child rect — HWND-level hit-test only; compositor \
+                visuals/planes are not HWNDs",
+    })
+}
+
+/// Role label for one observed HWND relative to the docked child,
+/// the container token, and the GPUI root — `other` covers any
+/// unrelated window (including GPUI-owned children that are not
+/// the container).
+fn occlusion_role(hwnd: u64, child: u64, container: u64, root: Option<u64>) -> &'static str {
+    if hwnd == child {
+        "editor_child"
+    } else if hwnd == container {
+        "container"
+    } else if root == Some(hwnd) {
+        "root"
+    } else {
+        "other"
+    }
+}
+
+/// Plain-JSON form of one [`osoccl::WindowRow`] — `z_index` is
+/// `null` for rows that did not come from a z-order walk.
+fn occlusion_window_json(row: &osoccl::WindowRow) -> Value {
+    json!({
+        "hwnd": row.hwnd,
+        "z_index": row.z_index,
+        "class_name": row.class_name,
+        "rect": occlusion_rect_json(row.rect),
+        "visible": row.visible,
+        "alive": row.alive,
+    })
+}
+
+/// Plain-JSON form of an [`ospix::ScreenRect`].
+fn occlusion_rect_json(rect: Option<ospix::ScreenRect>) -> Value {
+    rect.map_or(Value::Null, |r| {
+        json!({
+            "left": r.left,
+            "top": r.top,
+            "width": r.width,
+            "height": r.height,
+        })
+    })
 }
 
 /// The `GetDC`+`BitBlt` diagnostic — the child HWND's own backing
