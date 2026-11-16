@@ -4,8 +4,8 @@
 //! dcomp-pixel/foreground-probe/presentation-probe slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the fifteen cases
-//! of the `rf631.plugin-dock-real` scenario:
+//! windows* through [`RealOsGuiTest`] and records the twenty-one
+//! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
 //! |-------------------------|-------------|----------------------------------------------------|
@@ -46,6 +46,21 @@
 //! | `real-session-terminate`| `RealOs`    | `Pass`/`Fail`/`Unsupported` — attach 中の            |
 //! |                         |             | `HostCommand::Destroy` → `Terminated{HostLost}`       |
 //! |                         |             | exactly-once → child HWND teardown → host 存続        |
+//! | `real-session-degraded` | `RealOs`    | `Pass`/`Fail`/`Unsupported` — `open_or_degrade`      |
+//! |                         |             | (Floating→Docked) の `Degraded{Docked}` event +       |
+//! |                         |             | `OpenOutcome::Degraded` + child HWND 契約             |
+//! | `real-session-recovery` | `RealOs`    | `Pass`/`Fail`/`Unsupported` — refused open →         |
+//! |                         |             | `Failed{Unsupported}` → `recover(Docked)` →           |
+//! |                         |             | `Recovered{Docked}` + child HWND 契約                 |
+//! | `real-session-timeout`  | `RealOs`    | `Pass`/`Fail`/`Unsupported` — ZERO deadline policy +  |
+//! |                         |             | `begin_detach` + `tick_all` → `Failed{Timeout}` +     |
+//! |                         |             | child HWND 契約                                       |
+//! | `real-editor-visibility`| `RealOs`    | `Unsupported`/`Fail` — `set_visibility` の定義済み     |
+//! |                         |             | 拒否・`Attached` 維持・`Hidden`/`Shown` event 0 件    |
+//! | `real-session-crash`    | `RealOs`    | `Unsupported` — in-process lane は fixture の         |
+//! |                         |             | process-killing fault を生存不能（out-of-process      |
+//! |                         |             | host 未実装）                                         |
+//! | `real-session-hang`     | `RealOs`    | `Unsupported` — 同上（wedging fault で lane 非生存）  |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -67,8 +82,9 @@ use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionState, EditorSize, HostCommand, HostError, HostReply, InProcessEditorOps,
-    InProcessHost, ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId,
-    PluginEditorSessions, PluginHandle, SessionFailCause,
+    InProcessHost, MonotonicSessionClock, OpenOutcome, ParentLease, ParentSlotLease,
+    PluginEditorSession, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
+    SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::dock::ViewInstanceId;
@@ -90,6 +106,7 @@ use ruviform_ui_test::{
     ScenarioVerdict, SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
 };
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use ruviform_ui_test::golden::RgbaImage;
 use serde_json::{Map, Value, json};
@@ -111,9 +128,12 @@ use crate::scenario::{
 };
 
 /// The resolved plugin binary + its evidence identity — only the
-/// editor cases (`real-editor-attach`, `real-dcomp-pixel`,
-/// `real-dcomp-foreground`, `real-editor-resize`, `real-editor-redock`)
-/// consume it.
+/// editor/session cases (`real-editor-attach`, `real-dcomp-pixel`,
+/// `real-dcomp-foreground`, `real-dcomp-present`,
+/// `real-editor-resize`, `real-editor-redock`,
+/// `real-session-terminate`, `real-session-degraded`,
+/// `real-session-recovery`, `real-session-timeout`,
+/// `real-editor-visibility`) consume it.
 type PluginPair = (Vst3Library, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
@@ -352,7 +372,7 @@ fn finalize_real(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 15] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 21] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -467,6 +487,48 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 15] {
             required: &[ScenarioCapability::NativePluginDock],
             spec_extras: editor_attach_extras,
             run: real_session_terminate_case,
+        },
+        ScenarioEntry {
+            case: "real-session-degraded",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_degraded_case,
+        },
+        ScenarioEntry {
+            case: "real-session-recovery",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_recovery_case,
+        },
+        ScenarioEntry {
+            case: "real-session-timeout",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_timeout_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-visibility",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_visibility_case,
+        },
+        ScenarioEntry {
+            case: "real-session-crash",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: real_window_extras,
+            run: real_session_crash_case,
+        },
+        ScenarioEntry {
+            case: "real-session-hang",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: real_window_extras,
+            run: real_session_hang_case,
         },
     ]
 }
@@ -783,7 +845,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -837,7 +899,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -1494,16 +1556,26 @@ fn check_detached_children(
     }
 }
 
+/// The graceful-close event tail a plain docked attach must
+/// produce — `[Attached{Docked}, Closed]`.
+const ATTACH_CLOSE_EVENTS: &[EditorSessionEvent] = &[
+    EditorSessionEvent::Attached {
+        mode: AttachMode::Docked,
+    },
+    EditorSessionEvent::Closed,
+];
+
 /// Phase-4 session convergence — `Closed`+`concluded` and the
-/// drained event stream must be exactly `[Attached{Docked},
-/// Closed]`; an unexpected event (degrade, failure, terminate) is
-/// a contract surprise, never a pass. Returns the checks' outcome
-/// plus the rendered event list for `observed`.
+/// drained event stream must equal `expected` exactly; an
+/// unexpected event (degrade, failure, terminate) is a contract
+/// surprise, never a pass. Returns the checks' outcome plus the
+/// rendered event list for `observed`.
 fn check_session_converged(
     sessions: &mut PluginEditorSessions,
     session_id: PluginEditorSessionId,
     steps: &mut Vec<Value>,
     failure: &mut Option<String>,
+    expected: &[EditorSessionEvent],
 ) -> (bool, Vec<String>) {
     let mut ok = true;
     if session_closed_concluded(sessions, session_id) {
@@ -1522,13 +1594,7 @@ fn check_session_converged(
         .session_mut(session_id)
         .map_or_else(Vec::new, PluginEditorSession::drain_events);
     let rendered = events_debug(&events);
-    let events_ok = events.len() == 2
-        && events[0]
-            == EditorSessionEvent::Attached {
-                mode: AttachMode::Docked,
-            }
-        && events[1] == EditorSessionEvent::Closed;
-    if events_ok {
+    if events.as_slice() == expected {
         steps.push(json!({
             "step": "session_events",
             "verdict": "pass",
@@ -1539,7 +1605,10 @@ fn check_session_converged(
             steps,
             failure,
             "session_events",
-            format!("expected [Attached{{Docked}}, Closed], got {rendered:?}"),
+            format!(
+                "unexpected session event sequence: expected {:?}, got {rendered:?}",
+                events_debug(expected)
+            ),
         );
         ok = false;
     }
@@ -1592,9 +1661,9 @@ fn child_extras(
 /// `DestroyWindow`), the post-detach `IsWindow(child) == 0` check
 /// (skipped off-Windows where `child_hwnd_observation` already
 /// recorded `unsupported`), and session convergence
-/// (`Closed`+`concluded`, drained events exactly
-/// `[Attached{Docked}, Closed]`). Returns `(close_ok, detach_ok,
-/// converged_ok, rendered_events)`.
+/// (`Closed`+`concluded`, drained events exactly `expected`).
+/// Returns `(close_ok, detach_ok, converged_ok, rendered_events)`.
+#[expect(clippy::too_many_arguments)]
 fn conclude_editor_session(
     observation: &mut ChildWindowObservation,
     sessions: &mut PluginEditorSessions,
@@ -1603,6 +1672,7 @@ fn conclude_editor_session(
     handle: PluginHandle,
     steps: &mut Vec<Value>,
     failure: &mut Option<String>,
+    expected: &[EditorSessionEvent],
 ) -> (bool, bool, bool, Vec<String>) {
     // Phase 2 — `session.close` runs the production `close_gui` →
     // `removed()` → `DestroyWindow` path.
@@ -1614,9 +1684,9 @@ fn conclude_editor_session(
     let detach_ok = !observation.supported || check_detached_children(observation, steps, failure);
 
     // Phase 4 — session convergence: `Closed`+`concluded` and the
-    // drained event stream must be exactly `[Attached{Docked},
-    // Closed]`.
-    let (converged_ok, rendered) = check_session_converged(sessions, session_id, steps, failure);
+    // drained event stream must equal `expected` exactly.
+    let (converged_ok, rendered) =
+        check_session_converged(sessions, session_id, steps, failure, expected);
     (close_ok, detach_ok, converged_ok, rendered)
 }
 
@@ -1658,6 +1728,7 @@ fn observe_editor_child_lifecycle(
         handle,
         steps,
         &mut failure,
+        ATTACH_CLOSE_EVENTS,
     );
 
     ChildVerification {
@@ -1717,6 +1788,29 @@ fn observe_container_token(
     }
 }
 
+/// `InProcessEditorOps` redeeming session leases against the real
+/// slot ledger through [`RealOsGuiTest::redeem_native_lease`] — the
+/// issuer-side seam every real session op shares: the
+/// session-facing `ParentSlotLease` payload decodes to a `SlotLease`,
+/// the adapter validates it against its live ledger, and the minted
+/// `ParentLease` carries the container token as payload. A
+/// stale/forged lease never reaches the plugin.
+fn real_editor_ops<'a>(
+    gui: &'a RealOsGuiTest,
+    host: &'a mut InProcessHost,
+    handle: PluginHandle,
+) -> InProcessEditorOps<'a> {
+    InProcessEditorOps::with_redeemer(
+        host,
+        handle,
+        Box::new(move |session_lease| {
+            gui.redeem_native_lease(session_lease.raw())
+                .map(|token| ParentLease::new(SlotLease::new(session_lease.raw()).seq(), token))
+                .map_err(|_| EditorOpError::LeaseRejected)
+        }),
+    )
+}
+
 /// Drives `session.open(Docked)` through the real lease — the
 /// session-facing `ParentSlotLease` wraps the registry's opaque
 /// payload (never an OS handle) and the issuer-side redeem happens
@@ -1731,17 +1825,7 @@ fn open_session_docked(
     session_id: PluginEditorSessionId,
     parent_slot_lease: ParentSlotLease,
 ) -> Option<Result<EditorCapabilities, EditorSessionError>> {
-    let gui_ref: &RealOsGuiTest = gui;
-    let mut ops = InProcessEditorOps::with_redeemer(
-        host,
-        handle,
-        Box::new(move |session_lease| {
-            gui_ref
-                .redeem_native_lease(session_lease.raw())
-                .map(|token| ParentLease::new(SlotLease::new(session_lease.raw()).seq(), token))
-                .map_err(|_| EditorOpError::LeaseRejected)
-        }),
-    );
+    let mut ops = real_editor_ops(gui, host, handle);
     sessions.session_mut(session_id).map(|session| {
         session.open(
             &mut ops,
@@ -1752,25 +1836,89 @@ fn open_session_docked(
     })
 }
 
+/// The default open drive — `session.open(Docked)` through the real
+/// lease. Records the same `session.open(Docked)` step row the
+/// pre-seam `attempt_real_attach` emitted (verdict mapping and the
+/// `failed_unsupported` flag unchanged) so existing cases' evidence
+/// keeps its shape.
+fn drive_open_docked(
+    gui: &RealOsGuiTest,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    parent_slot_lease: ParentSlotLease,
+    steps: &mut Vec<Value>,
+) -> Option<Result<EditorCapabilities, EditorSessionError>> {
+    let open_result =
+        open_session_docked(gui, host, handle, sessions, session_id, parent_slot_lease);
+    // Session state at this point is the honest landing — a refused
+    // open sits `Failed{Unsupported}`.
+    let failed_unsupported = session_failed_unsupported(sessions, session_id);
+    let (open_verdict, open_detail) = match &open_result {
+        Some(Ok(_)) => ("pass", "editor capabilities returned".to_string()),
+        Some(Err(error)) => {
+            let verdict = if matches!(error, EditorSessionError::Ops(EditorOpError::Unsupported)) {
+                "unsupported"
+            } else {
+                "fail"
+            };
+            (verdict, error.to_string())
+        }
+        None => ("fail", "editor session vanished before open".to_string()),
+    };
+    steps.push(json!({
+        "step": "session.open(Docked)",
+        "verdict": open_verdict,
+        "detail": open_detail,
+        "failed_unsupported": failed_unsupported,
+    }));
+    open_result
+}
+
+/// The case-supplied session drive for [`attempt_real_attach`] —
+/// which open to drive and which post-open observation to run,
+/// bundled so the attempt stays within the argument limit.
+struct AttachDrive<O, V> {
+    /// Session-open drive — records its own step rows and returns
+    /// the open landing (`None` = session vanished → `Setup`).
+    drive_open: O,
+    /// Post-open observation run while the lease is live.
+    observe_open: V,
+}
+
 /// The real attach attempt — session begin, real-slot
 /// declare/bind/project/`lease_parent` (real container HWND),
 /// `container_token` observation, `ParentSlotLease` →
 /// `InProcessEditorOps` redeem through
-/// [`RealOsGuiTest::redeem_native_lease`], then `session.open(Docked)`.
-/// An accepted open additionally runs `observe_open` — the case's
-/// post-open observation + close convergence — while the lease is
-/// still live. Always tears down (session end, slot/lease release,
-/// instance destroy). Returns the open outcome (or the setup
-/// failure), cleanup notes, and — only when `open` returned `Ok` —
-/// the observation result that gates the verdict.
-fn attempt_real_attach<V>(
+/// [`RealOsGuiTest::redeem_native_lease`], then the case's
+/// [`AttachDrive`] session ops. An accepted open additionally runs
+/// `observe_open` — the case's post-open observation + close
+/// convergence — while the lease is still live. Always tears down
+/// (session end, slot/lease release, instance destroy). Returns the
+/// open outcome (or the setup failure), cleanup notes, and — only
+/// when `open` returned `Ok` — the observation result that gates the
+/// verdict.
+fn attempt_real_attach<O, V, R>(
     gui: &mut RealOsGuiTest,
     window: WindowId,
     view: ViewInstanceId,
     host: &mut InProcessHost,
     handle: PluginHandle,
     steps: &mut Vec<Value>,
-    observe_open: impl FnOnce(
+    drive: AttachDrive<O, V>,
+) -> (RealAttachAttempt, Vec<String>, Option<R>)
+where
+    O: FnOnce(
+        &RealOsGuiTest,
+        &mut InProcessHost,
+        PluginHandle,
+        &mut PluginEditorSessions,
+        PluginEditorSessionId,
+        ParentSlotLease,
+        &mut Vec<Value>,
+    ) -> Option<Result<EditorCapabilities, EditorSessionError>>,
+    V: FnOnce(
         Option<u64>,
         u64,
         &mut PluginEditorSessions,
@@ -1778,8 +1926,8 @@ fn attempt_real_attach<V>(
         &mut InProcessHost,
         PluginHandle,
         &mut Vec<Value>,
-    ) -> V,
-) -> (RealAttachAttempt, Vec<String>, Option<V>) {
+    ) -> R,
+{
     let mut cleanup = Vec::new();
     let mut sessions = PluginEditorSessions::new();
 
@@ -1822,36 +1970,17 @@ fn attempt_real_attach<V>(
     };
 
     let parent_slot_lease = ParentSlotLease::new(lease.raw());
-    let open_result = open_session_docked(
+    // The case's open drive records its own step rows and returns
+    // the open landing — `None` means the session vanished (Setup).
+    let open_result = (drive.drive_open)(
         gui,
         host,
         handle,
         &mut sessions,
         session_id,
         parent_slot_lease,
+        steps,
     );
-
-    // Session state at this point is the honest landing — a refused
-    // open sits `Failed{Unsupported}`.
-    let failed_unsupported = session_failed_unsupported(&sessions, session_id);
-    let (open_verdict, open_detail) = match &open_result {
-        Some(Ok(_)) => ("pass", "editor capabilities returned".to_string()),
-        Some(Err(error)) => {
-            let verdict = if matches!(error, EditorSessionError::Ops(EditorOpError::Unsupported)) {
-                "unsupported"
-            } else {
-                "fail"
-            };
-            (verdict, error.to_string())
-        }
-        None => ("fail", "editor session vanished before open".to_string()),
-    };
-    steps.push(json!({
-        "step": "session.open(Docked)",
-        "verdict": open_verdict,
-        "detail": open_detail,
-        "failed_unsupported": failed_unsupported,
-    }));
 
     // An accepted open means the plugin claims an editor surface —
     // run the case's post-open observation (child-HWND contract for
@@ -1859,7 +1988,7 @@ fn attempt_real_attach<V>(
     // and close convergence. The observation decides Pass vs Fail;
     // it runs while the lease is still live.
     let observed = match &open_result {
-        Some(Ok(_)) => Some(observe_open(
+        Some(Ok(_)) => Some((drive.observe_open)(
             container_token,
             lease.raw(),
             &mut sessions,
@@ -1969,28 +2098,61 @@ struct ChildCaseIdentity<'a> {
     label: &'a str,
 }
 
+/// The session-open drive signature [`attempt_real_attach`] invokes
+/// after `begin_session` — records its own step rows and returns
+/// the open landing (`None` = session vanished → `Setup`).
+type DriveOpenFn = fn(
+    &RealOsGuiTest,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    ParentSlotLease,
+    &mut Vec<Value>,
+) -> Option<Result<EditorCapabilities, EditorSessionError>>;
+
+/// The post-open observation signature [`attempt_real_attach`]
+/// invokes while the lease is live — decides `verified`/`failure`/
+/// `extras` for the verdict.
+type ObserveOpenFn = fn(
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> ChildVerification;
+
+/// A child-lifecycle case's session drive — the open drive, the
+/// post-open observation, and the verdict identity bundled into one
+/// value so [`editor_child_body`] stays within the argument limit.
+#[derive(Clone, Copy)]
+struct ChildLifecycle<'a> {
+    /// Session-open drive invoked after `begin_session`.
+    drive_open: DriveOpenFn,
+    /// Post-open observation run while the lease is live.
+    observe_open: ObserveOpenFn,
+    /// Verdict identity — pass detail, evidence tag, label.
+    case: &'a ChildCaseIdentity<'a>,
+}
+
 /// Shared body for the child-HWND lifecycle cases
-/// (`real-editor-attach`, `real-session-terminate`) — identical
-/// prerequisite/attempt mapping; the case-supplied `observe_open`
-/// drives the post-open observation and decides the verdict:
-/// verified → `Pass` (`pass_detail`/`evidence`), platform-unsupported
-/// observation → `Unsupported`, any contract mismatch → `Fail`.
+/// (`real-editor-attach`, `real-session-terminate`,
+/// `real-session-degraded`, `real-session-recovery`,
+/// `real-session-timeout`) — identical prerequisite/attempt
+/// mapping; the case-supplied [`ChildLifecycle`] drives the open
+/// and the post-open observation, which decides the verdict:
+/// verified → `Pass` (`pass_detail`/`evidence`),
+/// platform-unsupported observation → `Unsupported`, any contract
+/// mismatch → `Fail`.
 fn editor_child_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
     view: ViewInstanceId,
     plugin: Option<&PluginPair>,
     plugin_error: Option<&PluginUnavailable>,
-    observe_open: impl FnOnce(
-        Option<u64>,
-        u64,
-        &mut PluginEditorSessions,
-        PluginEditorSessionId,
-        &mut InProcessHost,
-        PluginHandle,
-        &mut Vec<Value>,
-    ) -> ChildVerification,
-    case: &ChildCaseIdentity<'_>,
+    lifecycle: ChildLifecycle<'_>,
 ) -> ScenarioOutcome {
     let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
         Ok(pair) => pair,
@@ -2005,7 +2167,10 @@ fn editor_child_body(
         &mut host,
         handle,
         &mut steps,
-        observe_open,
+        AttachDrive {
+            drive_open: lifecycle.drive_open,
+            observe_open: lifecycle.observe_open,
+        },
     );
 
     let mut outcome = match attach_attempt_failure(&attempt) {
@@ -2016,10 +2181,10 @@ fn editor_child_body(
                 // child HWND under the leased container and every OS
                 // observation agreed — the case's own detail names
                 // which lifecycle path ran (graceful close vs host
-                // loss).
+                // loss vs degrade/recovery/timeout).
                 let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
-                outcome.detail = Some(case.pass_detail.to_string());
-                outcome.evidence.push(case.evidence.to_string());
+                outcome.detail = Some(lifecycle.case.pass_detail.to_string());
+                outcome.evidence.push(lifecycle.case.evidence.to_string());
                 outcome
             }
             Some(verification) if !verification.supported => {
@@ -2038,7 +2203,7 @@ fn editor_child_body(
             Some(verification) => fail(format!(
                 "editor opened through the REAL container lease but the \
                  {} observation failed: {}",
-                case.label,
+                lifecycle.case.label,
                 verification
                     .failure
                     .as_deref()
@@ -2046,7 +2211,7 @@ fn editor_child_body(
             )),
             None => fail(format!(
                 "editor opened but no {} observation was recorded",
-                case.label
+                lifecycle.case.label
             )),
         },
     };
@@ -2078,15 +2243,18 @@ fn editor_attach_body(
         view,
         plugin,
         plugin_error,
-        observe_editor_child_lifecycle,
-        &ChildCaseIdentity {
-            pass_detail: "test_editor real IPlugView attached a real child \
-                          HWND under the leased container HWND and detached \
-                          on close (EnumChildWindows/GetParent/IsWindowVisible \
-                          observed; IsWindow(child)==0 after removed(); events \
-                          [Attached{Docked}, Closed])",
-            evidence: "editor-attach:real-child-hwnd-lifecycle",
-            label: "child-HWND",
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_editor_child_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "test_editor real IPlugView attached a real child \
+                              HWND under the leased container HWND and detached \
+                              on close (EnumChildWindows/GetParent/IsWindowVisible \
+                              observed; IsWindow(child)==0 after removed(); events \
+                              [Attached{Docked}, Closed])",
+                evidence: "editor-attach:real-child-hwnd-lifecycle",
+                label: "child-HWND",
+            },
         },
     )
 }
@@ -2865,6 +3033,71 @@ fn pixel_extras(
     extras
 }
 
+/// `real-dcomp-pixel`'s post-open observation bound to its artifact
+/// directory — a named `impl FnOnce` wrapper so the closure's
+/// parameter types are inferred against the [`AttachDrive`] contract
+/// (a bare closure literal inside the struct cannot infer them).
+fn pixel_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> PixelVerification
++ '_ {
+    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_pixel_lifecycle(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
+/// `real-dcomp-foreground`'s post-open observation bound to its
+/// artifact directory — see [`pixel_observe`].
+fn foreground_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> ForegroundVerification
++ '_ {
+    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_foreground_probe(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
+/// `real-dcomp-present`'s post-open observation bound to its
+/// artifact directory — see [`pixel_observe`].
+fn present_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> PresentationVerification
++ '_ {
+    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_presentation_probe(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
 /// Post-open pixel observation + close convergence for an accepted
 /// `session.open(Docked)` — the `real-dcomp-pixel` counterpart of
 /// [`observe_editor_child_lifecycle`]. Same attach contract checks,
@@ -2923,6 +3156,7 @@ fn observe_editor_pixel_lifecycle(
         handle,
         steps,
         &mut failure,
+        ATTACH_CLOSE_EVENTS,
     );
 
     PixelVerification {
@@ -2963,10 +3197,9 @@ fn editor_pixel_body(
         &mut host,
         handle,
         &mut steps,
-        |container, _lease_raw, sessions, session_id, host, handle, steps| {
-            observe_editor_pixel_lifecycle(
-                container, sessions, session_id, host, handle, artifacts, steps,
-            )
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: pixel_observe(artifacts),
         },
     );
 
@@ -3571,6 +3804,7 @@ fn observe_editor_foreground_probe(
         handle,
         steps,
         &mut failure,
+        ATTACH_CLOSE_EVENTS,
     );
 
     ForegroundVerification {
@@ -3615,10 +3849,9 @@ fn editor_foreground_body(
         &mut host,
         handle,
         &mut steps,
-        |container, _lease_raw, sessions, session_id, host, handle, steps| {
-            observe_editor_foreground_probe(
-                container, sessions, session_id, host, handle, artifacts, steps,
-            )
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: foreground_observe(artifacts),
         },
     );
 
@@ -4640,6 +4873,7 @@ fn observe_editor_presentation_probe(
         handle,
         steps,
         &mut failure,
+        ATTACH_CLOSE_EVENTS,
     );
 
     PresentationVerification {
@@ -4685,10 +4919,9 @@ fn editor_present_body(
         &mut host,
         handle,
         &mut steps,
-        |container, _lease_raw, sessions, session_id, host, handle, steps| {
-            observe_editor_presentation_probe(
-                container, sessions, session_id, host, handle, artifacts, steps,
-            )
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: present_observe(artifacts),
         },
     );
 
@@ -5530,6 +5763,7 @@ fn observe_editor_resize_lifecycle(
         handle,
         steps,
         &mut failure,
+        ATTACH_CLOSE_EVENTS,
     );
     EditorOpVerification {
         supported: observation.supported,
@@ -5552,25 +5786,8 @@ fn check_redock_events(
     steps: &mut Vec<Value>,
     failure: &mut Option<String>,
 ) -> (bool, Vec<String>) {
-    let mut ok = true;
-    if session_closed_concluded(sessions, session_id) {
-        steps.push(json!({ "step": "session_concluded", "verdict": "pass" }));
-    } else {
-        record_obs_fail(
-            steps,
-            failure,
-            "session_concluded",
-            "session did not converge to Closed+concluded",
-        );
-        ok = false;
-    }
-
-    let events = sessions
-        .session_mut(session_id)
-        .map_or_else(Vec::new, PluginEditorSession::drain_events);
-    let rendered = events_debug(&events);
-    let expected = if refused {
-        vec![
+    let expected: &[EditorSessionEvent] = if refused {
+        &[
             EditorSessionEvent::Attached {
                 mode: AttachMode::Docked,
             },
@@ -5581,7 +5798,7 @@ fn check_redock_events(
             EditorSessionEvent::Closed,
         ]
     } else {
-        vec![
+        &[
             EditorSessionEvent::Attached {
                 mode: AttachMode::Docked,
             },
@@ -5592,22 +5809,7 @@ fn check_redock_events(
             EditorSessionEvent::Closed,
         ]
     };
-    if events == expected {
-        steps.push(json!({
-            "step": "session_events",
-            "verdict": "pass",
-            "events": rendered,
-        }));
-    } else {
-        record_obs_fail(
-            steps,
-            failure,
-            "session_events",
-            format!("unexpected re-dock event sequence: {rendered:?}"),
-        );
-        ok = false;
-    }
-    (ok, rendered)
+    check_session_converged(sessions, session_id, steps, failure, expected)
 }
 
 /// `real-editor-redock` post-open observation: child-HWND attach
@@ -5750,7 +5952,10 @@ fn editor_op_body(
         &mut host,
         handle,
         &mut steps,
-        observe_open,
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open,
+        },
     );
 
     let mut outcome = match attach_attempt_failure(&attempt) {
@@ -5944,46 +6149,25 @@ fn terminate_editor_session(
         "cause": "host-lost",
     }));
 
-    let mut ok = true;
-    if session_closed_concluded(sessions, session_id) {
-        steps.push(json!({ "step": "session_concluded", "verdict": "pass" }));
-    } else {
-        record_obs_fail(
-            steps,
-            failure,
-            "session_concluded",
-            "session did not converge to Closed+concluded after Terminated",
-        );
-        ok = false;
-    }
-
-    let events = sessions
-        .session_mut(session_id)
-        .map_or_else(Vec::new, PluginEditorSession::drain_events);
-    let rendered = events_debug(&events);
-    let expected = [
-        EditorSessionEvent::Attached {
-            mode: AttachMode::Docked,
-        },
-        EditorSessionEvent::Terminated {
-            cause: SessionFailCause::HostLost,
-        },
-    ];
-    if events == expected {
-        steps.push(json!({
-            "step": "session_events",
-            "verdict": "pass",
-            "events": rendered,
-        }));
-    } else {
-        record_obs_fail(
-            steps,
-            failure,
-            "session_events",
-            format!("expected [Attached{{Docked}}, Terminated{{HostLost}}], got {rendered:?}"),
-        );
-        ok = false;
-    }
+    // `Terminated` is the abnormal terminal event — the drained
+    // stream must be exactly `[Attached{Docked}, Terminated{HostLost}]`
+    // (no graceful `Closed`); `session_closed_concluded` still holds
+    // because `notify_terminated` converges the session to `Closed`.
+    let (converged_ok, rendered) = check_session_converged(
+        sessions,
+        session_id,
+        steps,
+        failure,
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Terminated {
+                cause: SessionFailCause::HostLost,
+            },
+        ],
+    );
+    let mut ok = converged_ok;
 
     // exactly-once — the first notify removed the instance binding,
     // so a repeated notify (or any late callback) emits nothing.
@@ -6116,15 +6300,18 @@ fn session_terminate_body(
         view,
         plugin,
         plugin_error,
-        observe_session_terminate_lifecycle,
-        &ChildCaseIdentity {
-            pass_detail: "test_editor real IPlugView attached under the \
-                          leased container HWND; host Destroy converged the \
-                          session to Terminated{HostLost} exactly once \
-                          (repeated notify is a no-op), the child HWND tore \
-                          down (IsWindow(child)==0), and the host survived",
-            evidence: "session-terminate:host-loss-exactly-once",
-            label: "session-terminate",
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_session_terminate_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "test_editor real IPlugView attached under the \
+                              leased container HWND; host Destroy converged the \
+                              session to Terminated{HostLost} exactly once \
+                              (repeated notify is a no-op), the child HWND tore \
+                              down (IsWindow(child)==0), and the host survived",
+                evidence: "session-terminate:host-loss-exactly-once",
+                label: "session-terminate",
+            },
         },
     )
 }
@@ -6156,6 +6343,856 @@ fn real_session_terminate_case(
         ctx.env,
         EnvironmentKind::RealWindow,
         artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
+// cases: real-session-{degraded,recovery,timeout},
+//        real-editor-visibility, real-session-{crash,hang}
+//        (Issue #389 session-lifecycle remainder)
+// ---------------------------------------------------------------------
+
+/// `real-session-degraded` open drive — `open_or_degrade` with
+/// `Floating` preferred and `Docked` fallback through the real
+/// lease. `InProcessEditorOps` refuses the non-docked preferred
+/// mode with the defined `Unsupported` before any lease redeem, so
+/// the fallback runs the real `OpenGui` attach and lands
+/// `Attached{Docked}` emitting `Degraded{Docked}` — never
+/// `Attached` — returning `OpenOutcome::Degraded`. An
+/// `OpenOutcome::Attached` landing means the degrade path was not
+/// exercised and is recorded `fail`; the observe half's exact
+/// event check decides the verdict either way. An unrecognized
+/// `OpenOutcome` variant (the enum is `#[non_exhaustive]`) maps to
+/// `Ops(Internal)` — a contract surprise, never a silent pass.
+fn drive_open_degraded(
+    gui: &RealOsGuiTest,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    parent_slot_lease: ParentSlotLease,
+    steps: &mut Vec<Value>,
+) -> Option<Result<EditorCapabilities, EditorSessionError>> {
+    let mut ops = real_editor_ops(gui, host, handle);
+    let outcome = sessions.session_mut(session_id).map(|session| {
+        session.open_or_degrade(
+            &mut ops,
+            &parent_slot_lease,
+            editor_size(),
+            AttachMode::Floating,
+            AttachMode::Docked,
+        )
+    });
+    let failed_unsupported = session_failed_unsupported(sessions, session_id);
+    let (verdict, detail) = match &outcome {
+        Some(Ok(OpenOutcome::Degraded { mode, .. })) => (
+            "pass",
+            format!("open_or_degrade(Floating→Docked) degraded to {mode:?}"),
+        ),
+        Some(Ok(OpenOutcome::Attached(_))) => (
+            "fail",
+            "open_or_degrade landed Attached — the degrade path was not exercised".to_string(),
+        ),
+        Some(Ok(_)) => (
+            "fail",
+            "open_or_degrade returned an unrecognized OpenOutcome variant".to_string(),
+        ),
+        Some(Err(error)) => {
+            let verdict = if matches!(error, EditorSessionError::Ops(EditorOpError::Unsupported)) {
+                "unsupported"
+            } else {
+                "fail"
+            };
+            (verdict, error.to_string())
+        }
+        None => (
+            "fail",
+            "editor session vanished before open_or_degrade".to_string(),
+        ),
+    };
+    steps.push(json!({
+        "step": "session.open_or_degrade(Floating→Docked)",
+        "verdict": verdict,
+        "detail": detail,
+        "failed_unsupported": failed_unsupported,
+    }));
+    outcome.map(|result| match result {
+        Ok(OpenOutcome::Attached(capabilities) | OpenOutcome::Degraded { capabilities, .. }) => {
+            Ok(capabilities)
+        }
+        Ok(_) => Err(EditorSessionError::Ops(EditorOpError::Internal)),
+        Err(error) => Err(error),
+    })
+}
+
+/// `real-session-recovery` open drive — `open(Floating)` first,
+/// which `InProcessEditorOps` refuses with the defined
+/// `Unsupported` before any lease redeem, landing the session
+/// `Failed{Unsupported}` with `editor_live == false` (a refused
+/// open produced no adapter editor, and `open_gui` refuses a
+/// second open on a live view — this refused-open `Failed` is the
+/// only recoverable starting point). `recover(Docked)` then runs
+/// the real `OpenGui` attach and lands `Attached{Docked}` emitting
+/// `Recovered{Docked}`.
+fn drive_open_recovery(
+    gui: &RealOsGuiTest,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    parent_slot_lease: ParentSlotLease,
+    steps: &mut Vec<Value>,
+) -> Option<Result<EditorCapabilities, EditorSessionError>> {
+    let mut ops = real_editor_ops(gui, host, handle);
+
+    // The refused open that creates the recoverable
+    // `Failed{Unsupported}` state — any other landing is recorded
+    // honestly and the recover step plus the observe half's exact
+    // event check decide the verdict.
+    let refused = sessions.session_mut(session_id).map(|session| {
+        session.open(
+            &mut ops,
+            &parent_slot_lease,
+            editor_size(),
+            AttachMode::Floating,
+        )
+    });
+    let (refused_verdict, refused_detail) = match &refused {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => (
+            "unsupported",
+            "session.open(Floating) → defined Unsupported refusal → \
+             Failed{Unsupported} (editor_live=false — the recoverable \
+             starting point)"
+                .to_string(),
+        ),
+        Some(Ok(_)) => (
+            "fail",
+            "session.open(Floating) unexpectedly attached — the \
+             preferred-mode refusal was not exercised"
+                .to_string(),
+        ),
+        Some(Err(error)) => ("fail", error.to_string()),
+        None => ("fail", "editor session vanished before open".to_string()),
+    };
+    steps.push(json!({
+        "step": "session.open(Floating)",
+        "verdict": refused_verdict,
+        "detail": refused_detail,
+        "failed_unsupported": session_failed_unsupported(sessions, session_id),
+    }));
+
+    // The recovery — `Failed{Unsupported}` → `recover(Docked)` runs
+    // the real `OpenGui` attach and lands `Recovered{Docked}`.
+    let recovered = sessions.session_mut(session_id).map(|session| {
+        session.recover(
+            &mut ops,
+            &parent_slot_lease,
+            editor_size(),
+            AttachMode::Docked,
+        )
+    });
+    let (recover_verdict, recover_detail) = match &recovered {
+        Some(Ok(_)) => ("pass", "editor capabilities returned".to_string()),
+        Some(Err(error)) => {
+            let verdict = if matches!(error, EditorSessionError::Ops(EditorOpError::Unsupported)) {
+                "unsupported"
+            } else {
+                "fail"
+            };
+            (verdict, error.to_string())
+        }
+        None => ("fail", "editor session vanished before recover".to_string()),
+    };
+    steps.push(json!({
+        "step": "session.recover(Docked)",
+        "verdict": recover_verdict,
+        "detail": recover_detail,
+    }));
+    recovered
+}
+
+/// Post-open observation for the graceful-close lifecycle cases
+/// whose drained event sequence differs from the plain-attach
+/// `[Attached{Docked}, Closed]` — child-HWND attach contract →
+/// `session.close` (production `close_gui` → `removed()` →
+/// `DestroyWindow`) → `IsWindow(child) == 0` → `Closed`+`concluded`
+/// → drained events exactly `expected`.
+fn observe_session_close_events(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    expected: &[EditorSessionEvent],
+) -> ChildVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        expected,
+    );
+    ChildVerification {
+        supported: observation.supported,
+        verified: attach_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-session-degraded` post-open observation — identical
+/// close-convergence contract to the plain attach, except the
+/// drained events must be exactly `[Degraded{Docked}, Closed]`:
+/// the degrade landing is the case's whole point and an `Attached`
+/// event here would mean the degrade path never ran.
+fn observe_session_degraded_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> ChildVerification {
+    observe_session_close_events(
+        container,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &[
+            EditorSessionEvent::Degraded {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Closed,
+        ],
+    )
+}
+
+/// `real-session-recovery` post-open observation — close
+/// convergence with the drained events exactly
+/// `[Failed{Unsupported}, Recovered{Docked}, Closed]`: the refused
+/// `open(Floating)` failure, the `recover(Docked)` landing, and the
+/// graceful close — in that order, nothing else.
+fn observe_session_recovery_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> ChildVerification {
+    observe_session_close_events(
+        container,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &[
+            EditorSessionEvent::Failed {
+                cause: SessionFailCause::Unsupported,
+            },
+            EditorSessionEvent::Recovered {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Closed,
+        ],
+    )
+}
+
+/// The deadline drive for `real-session-timeout` — install a
+/// ZERO-timeout `SessionDeadlinePolicy`, `begin_detach`, prove a
+/// deadline armed, then `tick_all` once: the in-flight `Detaching`
+/// request expires into `Failed{Timeout}`. Returns whether every
+/// step agreed.
+fn drive_detach_timeout(
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let mut ok = true;
+    if let Some(session) = sessions.session_mut(session_id) {
+        session.set_deadline_policy(Some(SessionDeadlinePolicy {
+            timeout: Duration::ZERO,
+            clock: Box::new(MonotonicSessionClock::new()),
+        }));
+        steps.push(json!({
+            "step": "deadline_policy_zero",
+            "verdict": "pass",
+            "timeout": "0s",
+        }));
+        match session.begin_detach() {
+            Ok(request) => steps.push(json!({
+                "step": "begin_detach",
+                "verdict": "pass",
+                "request": request,
+            })),
+            Err(error) => {
+                record_obs_fail(steps, failure, "begin_detach", error.to_string());
+                ok = false;
+            }
+        }
+        if let Some(deadline) = session.request_deadline() {
+            steps.push(json!({
+                "step": "request_deadline",
+                "verdict": "pass",
+                "deadline": format!("{deadline:?}"),
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                failure,
+                "request_deadline",
+                "no deadline armed for the in-flight detach",
+            );
+            ok = false;
+        }
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "deadline_policy_zero",
+            "editor session vanished before the deadline drive",
+        );
+        ok = false;
+    }
+
+    let timed_out = sessions.tick_all();
+    if timed_out == 1 {
+        steps.push(json!({
+            "step": "tick_all",
+            "verdict": "pass",
+            "timed_out": timed_out,
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "tick_all",
+            format!("expected exactly 1 timed-out request, got {timed_out}"),
+        );
+        ok = false;
+    }
+
+    let failed_timeout = sessions.session(session_id).is_some_and(|session| {
+        matches!(
+            session.state(),
+            EditorSessionState::Failed {
+                cause: SessionFailCause::Timeout
+            }
+        )
+    });
+    if failed_timeout {
+        steps.push(json!({
+            "step": "session_state_after_timeout",
+            "verdict": "pass",
+            "state": "Failed{Timeout}",
+        }));
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "session_state_after_timeout",
+            "session did not land Failed{Timeout} after tick_all",
+        );
+        ok = false;
+    }
+    ok
+}
+
+/// `real-session-timeout` post-open observation: child-HWND attach
+/// contract → [`drive_detach_timeout`] → close convergence with
+/// drained events exactly `[Attached{Docked}, Failed{Timeout},
+/// Closed]`. The timeout is caused by the session deadline/tick
+/// API — never a synthetic verdict.
+fn observe_session_timeout_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> ChildVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+
+    let deadline_ok = drive_detach_timeout(sessions, session_id, steps, &mut failure);
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Failed {
+                cause: SessionFailCause::Timeout,
+            },
+            EditorSessionEvent::Closed,
+        ],
+    );
+    ChildVerification {
+        supported: observation.supported,
+        verified: attach_ok && deadline_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-session-degraded` body — the degrade-fallback child-HWND
+/// lifecycle through [`editor_child_body`].
+fn session_degraded_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_child_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        ChildLifecycle {
+            drive_open: drive_open_degraded,
+            observe_open: observe_session_degraded_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "open_or_degrade(Floating→Docked) refused the \
+                              preferred mode with the defined Unsupported, \
+                              fell back to Docked, attached the real \
+                              IPlugView child HWND under the leased \
+                              container, and emitted Degraded{Docked} — \
+                              never Attached — then closed cleanly \
+                              (events [Degraded{Docked}, Closed])",
+                evidence: "session-degraded:open-or-degrade-docked-fallback",
+                label: "session-degraded",
+            },
+        },
+    )
+}
+
+/// `real-session-degraded` case: pre-flight requires
+/// `NativePluginDock`, then the body drives the degrade-fallback
+/// attach chain — judged by `OpenOutcome::Degraded`, the
+/// `Degraded{Docked}` event, the child HWND contract, and close
+/// convergence, never pixels.
+fn real_session_degraded_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(session_degraded_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-session-recovery` body — the refused-open → recover
+/// child-HWND lifecycle through [`editor_child_body`].
+fn session_recovery_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_child_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        ChildLifecycle {
+            drive_open: drive_open_recovery,
+            observe_open: observe_session_recovery_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "open(Floating) landed the defined \
+                              Failed{Unsupported} (editor_live=false), \
+                              recover(Docked) attached the real IPlugView \
+                              child HWND under the leased container and \
+                              emitted Recovered{Docked} (events \
+                              [Failed{Unsupported}, Recovered{Docked}, \
+                              Closed])",
+                evidence: "session-recovery:refused-open-recover-docked",
+                label: "session-recovery",
+            },
+        },
+    )
+}
+
+/// `real-session-recovery` case: pre-flight requires
+/// `NativePluginDock`, then the body drives the refused-open →
+/// recover chain — judged by `Failed{Unsupported}` →
+/// `Recovered{Docked}`, the child HWND contract, and close
+/// convergence, never pixels.
+fn real_session_recovery_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(session_recovery_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-session-timeout` body — the deadline-timeout child-HWND
+/// lifecycle through [`editor_child_body`] (normal docked open;
+/// the timeout drive lives in the observation).
+fn session_timeout_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_child_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_session_timeout_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "ZERO SessionDeadlinePolicy + begin_detach + \
+                              tick_all expired the in-flight detach into \
+                              Failed{Timeout} on the real attached editor \
+                              (events [Attached{Docked}, Failed{Timeout}, \
+                              Closed]); the child HWND tore down on close",
+                evidence: "session-timeout:deadline-policy-zero-tick",
+                label: "session-timeout",
+            },
+        },
+    )
+}
+
+/// `real-session-timeout` case: pre-flight requires
+/// `NativePluginDock`, then the body drives the real attach chain
+/// plus the deadline-timeout lifecycle — judged by
+/// `Failed{Timeout}`, the child HWND contract, and close
+/// convergence, never pixels.
+fn real_session_timeout_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(session_timeout_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-editor-visibility` post-open observation: child-HWND
+/// attach contract → `session.set_visibility(false)` through the
+/// production `InProcessEditorOps` (the defined `Unsupported`
+/// refusal today — no hide/show verb on the L0 surface) → the
+/// session must stay `Attached{Docked}` with no `Hidden`/`Shown`
+/// event → close convergence with the unchanged
+/// `[Attached{Docked}, Closed]` event sequence. An accepted
+/// `set_visibility` lands `Hidden{Docked}` + `Hidden` event and
+/// converges to `[Attached{Docked}, Hidden, Closed]` — recorded,
+/// but `editor_op_body` judges it `NotRun` (no oracle confirms the
+/// hide took effect). Any other landing is a contract violation.
+fn observe_editor_visibility_lifecycle(
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+
+    // The visibility attempt — `rejecting_editor_ops` is the
+    // production `InProcessEditorOps`; `set_visibility` refuses
+    // before any lease redeem, so the rejecting redeemer is never
+    // consulted.
+    let mut landing = OpLanding::Other;
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = rejecting_editor_ops(host, handle);
+        session.set_visibility(&mut ops, false)
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_visibility",
+                "verdict": "unsupported",
+                "detail": "session.set_visibility → InProcessEditorOps::\
+                           set_visibility → EditorOpError::Unsupported — \
+                           no hide/show verb on the L0 surface",
+            }));
+            landing = OpLanding::Refused;
+        }
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": "editor_visibility",
+                "verdict": "pass",
+                "detail": "set_visibility accepted — the session must \
+                           have landed Hidden{Docked} with a Hidden event",
+            }));
+            landing = OpLanding::Accepted;
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_visibility", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_visibility",
+                "editor session vanished before set_visibility",
+            );
+        }
+    }
+
+    // Contract: a refused `set_visibility` leaves the session
+    // `Attached{Docked}` (no `Hidden`/`Shown` event); an accepted
+    // one lands `Hidden{Docked}`. Any other landing is a violation.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let expected_state = if landing == OpLanding::Refused {
+            "Attached{Docked}"
+        } else {
+            "Hidden{Docked}"
+        };
+        let landed =
+            sessions
+                .session(session_id)
+                .is_some_and(|session| match (landing, session.state()) {
+                    (OpLanding::Refused, EditorSessionState::Attached { mode })
+                    | (OpLanding::Accepted, EditorSessionState::Hidden { mode }) => {
+                        mode == AttachMode::Docked
+                    }
+                    _ => false,
+                });
+        if landed {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": expected_state,
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                format!("session did not land {expected_state} after set_visibility"),
+            );
+            state_ok = false;
+        }
+    }
+
+    // Convergence — close (production `close_gui` → `removed()` →
+    // `DestroyWindow`), post-detach `IsWindow(child) == 0`, and the
+    // visibility-specific event sequence: refused keeps
+    // `[Attached{Docked}, Closed]` (no `Hidden`/`Shown` may appear);
+    // accepted produces `[Attached{Docked}, Hidden, Closed]`.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
+    let detach_ok =
+        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
+    let expected: &[EditorSessionEvent] = if landing == OpLanding::Refused {
+        ATTACH_CLOSE_EVENTS
+    } else {
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Hidden,
+            EditorSessionEvent::Closed,
+        ]
+    };
+    let (events_ok, rendered) =
+        check_session_converged(sessions, session_id, steps, &mut failure, expected);
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        verified: attach_ok && state_ok && close_ok && detach_ok && events_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-editor-visibility` body — the defined-refusal observation
+/// through [`editor_op_body`] (normal docked open; the op attempt
+/// lives in the observation).
+fn editor_visibility_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    editor_op_body(
+        gui,
+        window,
+        view,
+        plugin,
+        plugin_error,
+        observe_editor_visibility_lifecycle,
+    )
+}
+
+/// `real-editor-visibility` case: pre-flight requires
+/// `NativePluginDock`, then the body drives the real attach chain
+/// plus the `set_visibility` attempt — judged by the defined
+/// refusal, session state, the absence of `Hidden`/`Shown` events,
+/// and close convergence, never pixels.
+fn real_editor_visibility_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_visibility_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-session-crash`: the fixture's crash fault modes
+/// (`test_fault` abort/exit) kill the plugin cdylib — which shares
+/// the host process in this lane — so the in-process real-window
+/// lane cannot survive them, and no out-of-process plugin host
+/// exists yet. `L1EditorOps` refuses every editor op with the
+/// defined `Unsupported`. The honest verdict is `Unsupported`,
+/// recorded inside the real session without touching GUI/session
+/// state — never a fabricated `NotRun` (the catalog row is
+/// executable; the boundary is architectural) and never a `Pass`.
+fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+        outcome.detail = Some(
+            "the in-process lane cannot survive the fixture's \
+             process-killing crash fault (test_fault abort/exit — \
+             the plugin cdylib shares the host process) and no \
+             out-of-process plugin host exists yet; L1EditorOps \
+             refuses every editor op with the defined Unsupported"
+                .to_string(),
+        );
+        outcome
+            .evidence
+            .push("session:crash:in-process-lane-nonviable".to_string());
+        Ok(outcome)
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
+        Map::new(),
+    )
+}
+
+/// `real-session-hang`: the fixture's hang fault mode
+/// (`test_fault` hang) wedges the plugin call — which shares the
+/// host process in this lane — so the in-process real-window lane
+/// cannot survive it either, and no out-of-process plugin host
+/// exists yet. `L1EditorOps` refuses every editor op with the
+/// defined `Unsupported`. The honest verdict is `Unsupported`,
+/// recorded inside the real session without touching GUI/session
+/// state — never a fabricated `NotRun` and never a `Pass`.
+fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+        outcome.detail = Some(
+            "the in-process lane cannot survive the fixture's \
+             wedging hang fault (test_fault hang — the plugin call \
+             never returns and shares the host process) and no \
+             out-of-process plugin host exists yet; L1EditorOps \
+             refuses every editor op with the defined Unsupported"
+                .to_string(),
+        );
+        outcome
+            .evidence
+            .push("session:hang:in-process-lane-nonviable".to_string());
+        Ok(outcome)
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        None,
         Map::new(),
     )
 }
@@ -6207,11 +7244,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 15, "fifteen real-dock cases");
+        assert_eq!(reports.len(), 21, "twenty-one real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -6244,7 +7281,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 15] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

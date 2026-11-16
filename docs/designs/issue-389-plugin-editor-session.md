@@ -465,3 +465,46 @@ R1〜R6 の決定履歴は維持し、以下が現行の真実である。
   に限定）。
 - Issue #389 は依然 OPEN — L2/L3 実 GUI（`test_editor` fixture・
   実 Window/Dock）・consumer gates は後続 slice の scope。
+
+## 改訂 3: real-window session lifecycle slice（2026-11-17・rf389-session-lifecycle）
+
+`rf631.plugin-dock-real` lane を 15 → 21 row へ拡張し、Issue #389
+session lifecycle の real-window 受入を 6 row 追加した slice
+（`docs/tasks/issue-389-real-session-lifecycle.md`）。実装は
+`crates/ruviform-plugin-dock-test`（feature `real-dock`）に閉じ、
+plugin-host/plugin-vst3/plugin-clap は無変更。NativeSlot →
+container HWND → `ParentSlotLease` → `InProcessEditorOps` redeem
+の実 chain を全 case が通る。
+
+### S4: 追加 row と verdict（interactive Windows 実走）
+
+| row | verdict | 内容 |
+| --- | --- | --- |
+| `real-session-degraded` | **pass** | `open_or_degrade(Floating, Docked)` — Floating は `InProcessEditorOps` が `Unsupported` で拒否、Docked fallback が attach。`OpenOutcome::Degraded{Docked}` + event 列 `[Degraded{Docked}, Closed]`（`Attached` 非発火）+ child HWND 契約を実測 |
+| `real-session-recovery` | **pass** | `open(Floating)` refused（`editor_live=false`）→ `recover(Docked)` で attach。event 列 `[Failed{Unsupported}, Recovered{Docked}, Closed]` + child HWND 契約を実測 |
+| `real-session-timeout` | **pass** | attach 後 ZERO `SessionDeadlinePolicy` + `begin_detach` → `tick_all()==1` で `Failed{Timeout}`。event 列 `[Attached{Docked}, Failed{Timeout}, Closed]` + child HWND teardown を実測 |
+| `real-editor-visibility` | **unsupported** | `set_visibility(false)` は定義済み `EditorOpError::Unsupported` — session は `Attached{Docked}` 維持・`Hidden`/`Shown` event 0 件を確認した上で refused boundary として正直に記録 |
+| `real-session-crash` | **unsupported** | in-process lane は fixture の process-killing crash fault を生存できず、out-of-process plugin host は存在しない — 実行せず boundary row として記録 |
+| `real-session-hang` | **unsupported** | 同上 — wedging/hang fault は lane を永久に塞ぐため実行しない。architectural boundary を明示 |
+
+### S5: capability/DoD reconcile
+
+- R5 matrix の L0 VST3 行「Floating: Unsupported（`InProcessEditorOps`
+  が非 Docked を明示拒否）」は本 slice の degraded/recovery 実測で
+  **裏付けられた**（拒否は fake ではなく実 lease chain 上で観測）。
+  `set_visibility`/`reattach`/`set_size` の Unsupported も同様に
+  実 window 上で確認。
+- R6「Floating / Recovery の安全 fallback」: 実 editor への degrade
+  attach が **達成**（`real-session-degraded`/`real-session-recovery`
+  Pass・`evidence/rf389/`）。L0 Floating attach 自体は依然
+  `Unsupported` のまま — degrade は Docked への安全 fallback であり
+  Floating 成功ではない。
+- crash/hang の実機受入は **依然 NotRun 相当** — in-process lane の
+  architectural boundary として `Unsupported` を維持。process 分離
+  host（L1 実装）が前提の後続 slice。
+- `real-dcomp-pixel` の `fail`（GPUI DComp topmost occlusion・
+  #532 決裁待ち）は本 slice でも不変 — 既知・対象外。
+- headless fail-closed: `test-ui-plugin-dock-real-headless` が
+  21 row 全て `not_run` + `observed.environment_blocked` を記録
+  （violation 0）。catalog と executable entry の同期は
+  `real_catalog_matches_entries` test が gate。

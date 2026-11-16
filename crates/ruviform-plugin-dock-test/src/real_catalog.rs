@@ -52,17 +52,23 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The fifteen real-window dock cases in run order — metadata only.
-/// The AC1 remainder rows (`real-multiwindow-focus`, `real-os-input`,
-/// `real-window-dpi`, `real-window-ime`, `real-window-close`) judge
-/// the remaining adopted capabilities per case — executable where a
-/// real oracle exists, honestly `Unsupported` where the adapter
-/// exposes no API. The AC3 rows (`real-editor-resize`,
-/// `real-editor-redock`) judge editor ops through non-pixel oracles
-/// (session events, child-HWND contract, session state) only. The
-/// AC1/AC6 remainder row (`real-session-terminate`) judges the
-/// host-loss session lifecycle path through session events and
-/// child-HWND teardown oracles only.
+/// The twenty-one real-window dock cases in run order — metadata
+/// only. The AC1 remainder rows (`real-multiwindow-focus`,
+/// `real-os-input`, `real-window-dpi`, `real-window-ime`,
+/// `real-window-close`) judge the remaining adopted capabilities
+/// per case — executable where a real oracle exists, honestly
+/// `Unsupported` where the adapter exposes no API. The AC3 rows
+/// (`real-editor-resize`, `real-editor-redock`) judge editor ops
+/// through non-pixel oracles (session events, child-HWND contract,
+/// session state) only. The AC1/AC6 remainder rows
+/// (`real-session-terminate` and the Issue #389 lifecycle
+/// remainder: `real-session-degraded`, `real-session-recovery`,
+/// `real-session-timeout`, `real-editor-visibility`,
+/// `real-session-crash`, `real-session-hang`) judge the session
+/// lifecycle paths through session events, child-HWND, and session
+/// state oracles only — crash/hang stay honest `Unsupported`
+/// boundary rows because the in-process lane cannot survive the
+/// fixture's process-killing/wedging fault modes.
 pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-mount",
@@ -145,6 +151,36 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     },
     RealCatalogRow {
         case: "real-session-terminate",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-degraded",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-recovery",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-timeout",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-editor-visibility",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-crash",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-hang",
         scenario: SCENARIO,
         required: &[ScenarioCapability::NativePluginDock],
     },
