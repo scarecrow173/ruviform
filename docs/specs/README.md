@@ -144,7 +144,6 @@ Directory: `docs/specs`
 | SPEC-034YtuGM7OKrg9UOnR4L7V | Issue #389 editor-session real-session-terminate（real-window session lifecycle L2 case） | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
 | SPEC-034WXSykXHx9U87oel8vLy | Issue #389 GuiParentToken → 型付き Parent Lease 公開 API 移行 | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
-| SPEC-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder（real-window session lifecycle L2 cases） | approved | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | SPEC-034UnwHc80Nd7iT5pKN2Eg | Issue #389 Plugin Editor Session hardening — bounded timeout・明示 degrade・GPU cause・DComp 正直記録 | approved | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | SPEC-034XGr9WuDhnEjKHHcee0S | Issue #389 dock-test session-lifecycle cases（ruviform-plugin-dock-test に session lifecycle/host-terminate/open-or-degrade case 追加・issue-389 設計書 verification-status reconcile） | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | SPEC-034T9TZQ7ztGDAPvFaz9IT | Issue #390 Driver Contract Lab — UI-DVR fixture registry・境界 Guard・GPUI なし Fake・Native Component Lab harness | proposed | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |

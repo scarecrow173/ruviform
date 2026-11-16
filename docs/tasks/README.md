@@ -38,7 +38,6 @@ Directory: `docs/tasks`
 | TASK-rf388DockWindowing01 | Issue #388 slice 3 タスク — clip/focus/redock windowing 実測 | in-progress | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TASK-034YtASlLiwI44BLXyY1zl | Issue #389 editor-session real-session-terminate 実装タスク | in-progress | [issue-389-editor-session.md](./issue-389-editor-session.md) |
 | TASK-034WYaQlaDnroaK9zoe9D3 | Issue #389 Parent Lease 移行タスク | in-progress | [issue-389-parent-lease-task.md](./issue-389-parent-lease-task.md) |
-| TASK-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder 実装タスク | in-progress | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | TASK-034UnqS8L3S2tF4h6u8LJd | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
 | TASK-ll0hVC7GhO5tm1LEDBWZIe | Issue #389 VST3/L0 実外部 Editor attach タスク（adapter open_gui + PoC vst3 lane） | completed | [issue-389-vst3-l0-editor-attach.md](./issue-389-vst3-l0-editor-attach.md) |
 | TASK-034TaJ4jQd92g4mWa81cxX | Issue #390 Driver Contract/Lab 実装 | todo | [issue-390-driver-contract-lab.md](./issue-390-driver-contract-lab.md) |

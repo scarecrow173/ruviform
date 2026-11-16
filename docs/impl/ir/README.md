@@ -223,7 +223,6 @@ Directory: `docs/impl/ir`
 | IMPL-jcCS5NAauic4OhiRJK2CAb | Issue #389 Plugin Editor Session headless fixture 実装記録（contract 認定 + DSP/RT 非干渉 fixture + NotRun 記録） | completed | [issue-389-editor-session-headless-implementation.md](./issue-389-editor-session-headless-implementation.md) |
 | IMPL-9fK2mQxT7vBnRwYsJhGtUi | Issue #389 Plugin Editor Session fake host driver 状態機械 fixture 実装記録（driver async protocol fixture + SM-xx terminal-event 検証） | completed | [issue-389-editor-session-statemachine-implementation.md](./issue-389-editor-session-statemachine-implementation.md) |
 | IMPL-034WYcEVkJHFgwJtp10GaL | Issue #389 Parent Lease 移行 IR | completed | [issue-389-parent-lease-ir.md](./issue-389-parent-lease-ir.md) |
-| IMPL-7fK2mQx9wRt4vBn8sLp3 | Issue #389 rf631.plugin-dock-real session lifecycle 実装記録 | completed | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | IMPL-034UnS9SUfwZF2v4zSQck6 | Issue #389 Plugin Editor Session hardening 実装記録（timeout/degrade/GraphicsLost/DComp 記録） | completed | [issue-389-session-hardening-implementation.md](./issue-389-session-hardening-implementation.md) |
 | IMPL-034XGt17uREc5neDsnIhoO | Issue #389 dock-test session-lifecycle 実装記録 | completed | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | IMPL-qCX7OwfBENOC4OHbkUSGZ | Issue #389 VST3/L0 実外部 Editor attach 実装記録 | completed | [issue-389-vst3-l0-editor-attach-implementation.md](./issue-389-vst3-l0-editor-attach-implementation.md) |
