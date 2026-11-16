@@ -25,6 +25,7 @@ Directory: `docs/discovery`
 | DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | final | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
 | DISC-034YnFUCO4ivyDKz4EYxVt | Issue #532 dcomp-occlusion discovery — 遮蔽層診断の探索結果 | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | DISC-034YxCYwvosUuX47paEbNO | Issue #532 foreground-probe discovery — 変異 probe の探索結果 | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
+| DISC-fZWC8q6tfUQG3VuH1L9Eoz | Issue #532 presentation-probe discovery — 残余 3 候補の判別設計探索 | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 
