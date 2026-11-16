@@ -850,3 +850,107 @@ lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — 設計ど
   到達不能のため既知制限として記録。
 - cursor read-back は `commanded` との tolerance 検査を持たず証拠記録
   のみ — driver の `Injected` 意味論に委ねる。
+
+---
+
+# rf532 foreground/compositor mutation probe — verification record（追記）
+
+Issue `scarecrow173/ruviform#532` の foreground probe slice
+（branch `feat/532-foreground-probe`、worktree
+`rf532-foreground-probe`）のローカル検証記録。canonical = `mise` lane。
+Issue #532 は open のまま — 本 slice は診断 probe であり修正ではない。
+
+- Date: 2026-11-16
+- OS: Windows (x86_64)、interactive desktop
+- Lane JSONL repo_sha 記録値: `513b33450e8cef4b0e41bf1b3250b9c7418c5746`
+- Bisect 結論の正本: `evidence/rf532/foreground-probe-bisect.md`
+- review-protocol 反映: `IsWindow` liveness guard（foreground
+  hand-back）・`topmost_restored` の fail-closed 化・`not_evaluable`
+  reason の detail 伝播・doc comment 修正を適用後、fmt/lint/test
+  （default + real-dock）と interactive real lane 2 本を最終
+  binary で再実走 — 上記 JSONL はその記録。
+
+## Lane results
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `mise run check ruviform-plugin-dock-test` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test` | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass（`-D warnings` — pedantic 含む全 warning 解消） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass（unit 3 + console 14 + integration 4） |
+| `mise run test-ui-plugin-dock` | pass |
+| `mise run test-ui-plugin-dock-console` | pass |
+| `mise run test-ui-scenario-contract` | pass（7 tests） |
+| `mise run check-ui-driver-boundary` | pass |
+| `mise exec -- prek run --all-files` | pass |
+| `plugin-dock-real-scenario --blocked-probe` | pass — 14 case 全て `not_run` + `observed.environment_blocked` + `environment_kind=deterministic-backend`、exit 0 |
+| `mise run test-ui-plugin-dock-real`（baseline） | exit 1 — `real-dcomp-pixel` の既知 Fail のみ（14 case 中 1 件）。`real-dcomp-foreground` は `pass` |
+| `GPUI_DISABLE_DIRECT_COMPOSITION=1 plugin-dock-real-scenario` | exit 1 — 同上（`real-dcomp-pixel` fail、`real-dcomp-foreground` pass） |
+
+## `test-ui-plugin-dock-real` verdict（14 case、両 run 同一構成）
+
+| case | baseline | DComp off | 備考 |
+| --- | --- | --- | --- |
+| real-window-mount | pass | pass | |
+| real-native-slot | pass | pass | |
+| real-editor-attach | pass | pass | |
+| real-capture | pass | pass | |
+| real-dcomp-pixel | **fail** | **fail** | 既知 occlusion（Issue #532）— screen green 不観測を正直に維持。DComp off でも best fraction 0.0 |
+| real-dcomp-foreground | **pass** | **pass** | probe 全 stage 実行・restore 検証済み。verdict は実行/復元/lifecycle のみで green 非依存 |
+| real-multiwindow-focus | pass | pass | |
+| real-os-input | pass | pass | |
+| real-window-dpi | unsupported | unsupported | |
+| real-window-ime | unsupported | unsupported | |
+| real-window-close | unsupported | unsupported | |
+| real-editor-resize | unsupported | unsupported | |
+| real-editor-redock | unsupported | unsupported | |
+| real-session-terminate | pass | pass | |
+
+lane exit 1 の原因は `real-dcomp-pixel` の `Fail` のみ — 設計どおりの
+正直な regression signal。probe case の `pass` は occlusion 解消を
+意味しない。
+
+## `real-dcomp-foreground` stage 別観測（bisect データ、最終 run）
+
+sample 点の `WindowFromPoint` class 名（screen green は全 stage・
+全 run で 0）:
+
+| stage | baseline (DComp on) | DComp disabled |
+| --- | --- | --- |
+| baseline | `Chrome_RenderWidgetHostHWND` | `Zed::Window` |
+| raise `HWND_TOP` | `Chrome_RenderWidgetHostHWND` | `RuviformTestEditor`（自 HWND） |
+| foreground | `Chrome_RenderWidgetHostHWND` | `RuviformTestEditor` |
+| topmost `HWND_TOPMOST` | `RuviformTestEditor` | `RuviformTestEditor` |
+| restore | `Chrome_RenderWidgetHostHWND` | `Zed::Window` |
+
+mutation 適用状況: `SetWindowPos` raise/topmost/restore 全て applied、
+`SetForegroundWindow` は baseline run で foreground lock 拒否
+（note）、DComp off run では適用（pass）— 環境依存で正直に記録。
+restore は両 run で `topmost_restored:true`、DComp off run では
+foreground hand-back も適用され `foreground_final` が baseline
+owner に一致。z-order は `above_count` 一致・`above_hwnd` は
+近似復元の別値（best-effort をそのまま記録）。
+
+## Bisect 結論（要約 — 詳細は rf532 文書）
+
+- 外部 HWND stacking（実行ごとに異なる foreign window — Chrome /
+  Zed）は第一の境界として確定。
+- hit-test が自 HWND に解決した stage（baseline run では topmost、
+  DComp off run では raise 以降）でも screen green は 0 — HWND
+  z-order では説明できない compositor/presentation 内部の第二の
+  境界が存在。`GPUI_DISABLE_DIRECT_COMPOSITION=1` でも解消しない。
+- `WindowFromPoint` は DComp visual/plane・hit-test-transparent
+  surface を観測できないため、残余機構の断定はしない。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- 残余 occlusion の機構特定（hit-test-transparent surface か、child
+  presentation 経路か、capture 盲点か）は未解決 — 次 slice の診断
+  候補は `foreground-probe-bisect.md` に記載。
+- `SetForegroundWindow` の foreground-lock 拒否は OS 仕様どおりの
+  note データ — foreground branch は未解決のまま。
+- z-order/foreground の restore は best-effort（topmost band のみ
+  検証済み保証）— Windows が保証しない完全復元は claim しない。
