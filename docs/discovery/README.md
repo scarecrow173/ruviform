@@ -24,7 +24,6 @@ Directory: `docs/discovery`
 | DISCOVERY-034T6RWRk7Pj3Qm9vN0xF4 | Issue #387 Driver-neutral Component/View Specs + Headless Behavior + GPUI Renderer 棚卸 | proposed | [issue-387-component-view-inventory.md](./issue-387-component-view-inventory.md) |
 | DISC-034T9T71FKLbmcJ4jmuUcD | Issue #390 Driver Contract Lab 既存資産棚卸し（Fake/Boundary/Dock/Headless 現行 coverage と gap） | final | [issue-390-driver-contract-lab-inventory.md](./issue-390-driver-contract-lab-inventory.md) |
 | DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
-| DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

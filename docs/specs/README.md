@@ -198,7 +198,6 @@ Directory: `docs/specs`
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034YaVh88vUiMap5dBbjln | Issue #629 WASAPI streaming verifier and endpoint probe extension (4th slice) | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
 | SPEC-034Y13Y73IFhhGtTmihC8f | Issue #630 adapter-state-bridge slice — VST3 IBStream + CLAP clap.state host bridge | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
-| SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | SPEC-034Y10F0GbD81g2dJSmyyY | Issue #630 test_editor slice — VST3 plugin-side IPlugView (AC-4 real child HWND fixture) | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
