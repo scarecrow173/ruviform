@@ -110,8 +110,12 @@ sha2 = "0.10"
 #   `BitBlt`/`CreateDIBSection`/`PrintWindow` via local extern) to
 #   observe the screen-composited pixels of the docked editor child —
 #   `Win32_Graphics_Gdi` covers the DIB/BitBlt surface.
-#   Observation only — this crate never creates, destroys, moves, or
-#   messages a window through it. Windows-targeted so the dep never
+#   Observation plus bounded, restored window-state mutation for the
+#   Issue #532 foreground-probe slice — `SetWindowPos`/
+#   `SetForegroundWindow`/`GetForegroundWindow`/`GW_HWNDPREV` move the
+#   GPUI root's z-order band and foreground inside `osmut`, always
+#   followed by a restore; this crate still never creates, destroys,
+#   or messages a window through it. Windows-targeted so the dep never
 #   enters non-Windows builds; optional so the default headless
 #   lane's dependency tree is unchanged. Same `windows-sys` 0.61
 #   line `ruviform-poc-native-dock` already uses; the Gdi feature is

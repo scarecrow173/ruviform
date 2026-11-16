@@ -1,9 +1,9 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
-//! feature `real-dock`; `real-dcomp-pixel` added by the Issue #532
-//! dcomp-pixel slice).
+//! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`
+//! added by the Issue #532 dcomp-pixel/foreground-probe slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the thirteen cases
+//! windows* through [`RealOsGuiTest`] and records the fourteen cases
 //! of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -22,6 +22,10 @@
 //! |                         |             | `EDITOR_COLOR` 緑が出るか（screen `BitBlt` が主     |
 //! |                         |             | oracle、`PrintWindow(child)` は補助診断）。既知の    |
 //! |                         |             | GPUI `DComp` topmost occlusion 下では正直な `Fail` |
+//! | `real-dcomp-foreground` | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — GPUI root の |
+//! |                         |             | z-order/foreground を段階変異し hit-test+screen     |
+//! |                         |             | green を再観測して外部 stacking vs compositor 内部  |
+//! |                         |             | 遮蔽を二分。verdict は probe 実行+復元のみ           |
 //! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
@@ -86,6 +90,7 @@ use serde_json::{Map, Value, json};
 
 use crate::LaneEnvironment;
 use crate::artifact;
+use crate::osmut;
 use crate::osoccl;
 use crate::ospix;
 use crate::real_catalog::{LANE, SCENARIO};
@@ -99,8 +104,9 @@ use crate::scenario::{
 };
 
 /// The resolved plugin binary + its evidence identity — only the
-/// editor cases (`real-editor-attach`, `real-dcomp-pixel`) consume
-/// it.
+/// editor cases (`real-editor-attach`, `real-dcomp-pixel`,
+/// `real-dcomp-foreground`, `real-editor-resize`, `real-editor-redock`)
+/// consume it.
 type PluginPair = (Vst3Library, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
@@ -144,8 +150,9 @@ struct RealDockContext<'a> {
     plugin_error: Option<&'a PluginUnavailable>,
     /// The artifact evidence identity, when the artifact loaded.
     artifact: Option<&'a PluginArtifactEvidence>,
-    /// Opt-in pixel-artifact directory for `real-dcomp-pixel`
-    /// (`--pixel-artifacts`); `None` records stats only.
+    /// Opt-in pixel-artifact directory for `real-dcomp-pixel` and
+    /// `real-dcomp-foreground` (`--pixel-artifacts`); `None` records
+    /// stats only.
     pixel_artifacts: Option<&'a Path>,
 }
 
@@ -171,10 +178,11 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 }
 
 /// [`run_all`] plus the opt-in pixel-artifact path: when `dir` is
-/// `Some`, `real-dcomp-pixel` writes each captured frame as a PNG
-/// under `dir` (created on demand). Artifact write failures land as
-/// step notes — they never change a verdict. The canonical lane
-/// calls [`run_all`], so no artifacts are written by default.
+/// `Some`, `real-dcomp-pixel` and `real-dcomp-foreground` write each
+/// captured frame as a PNG under `dir` (created on demand).
+/// Artifact write failures land as step notes — they never change a
+/// verdict. The canonical lane calls [`run_all`], so no artifacts
+/// are written by default.
 ///
 /// # Panics
 /// Same contract as [`run_all`].
@@ -336,7 +344,8 @@ fn finalize_real(
 /// `blocked_reports` reads the same rows for case ids and required
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 13] {
+#[expect(clippy::too_many_lines)]
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 14] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -375,6 +384,16 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 13] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_pixel_case,
+        },
+        ScenarioEntry {
+            case: "real-dcomp-foreground",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_foreground_case,
         },
         ScenarioEntry {
             case: "real-multiwindow-focus",
@@ -747,7 +766,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -801,7 +820,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -3036,6 +3055,662 @@ fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
 }
 
 // ---------------------------------------------------------------------
+// case: real-dcomp-foreground (Issue #532 foreground/z-order probe)
+// ---------------------------------------------------------------------
+
+/// The aggregated foreground/z-order probe outcome — whether the
+/// baseline could be taken, whether every planned mutation stage
+/// executed, and whether state was restored. The bisect *result*
+/// (did green appear, which HWND answered the hit-test) lives in
+/// the step rows as data; this struct carries only the probe's own
+/// execution/restore verdict inputs.
+#[derive(Debug, Default)]
+struct ProbeOutcome {
+    /// `false` when the baseline could not be taken (no container,
+    /// window not presented, no children, root unresolvable) — the
+    /// case then reports `NotRun`, never a fabricated verdict.
+    evaluated: bool,
+    /// Every planned z-order mutation applied (`SetWindowPos`
+    /// TRUE) and the foreground attempt was issued. A refused
+    /// `SetForegroundWindow` still counts as executed — the
+    /// refusal is recorded data, not a skipped stage.
+    executed: bool,
+    /// `osmut::restore` verification passed — topmost flag back to
+    /// baseline and every `SetWindowPos` restore op applied.
+    restored: bool,
+    /// First violated probe check (`name: detail`).
+    failure: Option<String>,
+}
+
+impl ProbeOutcome {
+    /// Probe could not be evaluated — records a `not_run` row and
+    /// returns the honest outcome. The reason is carried in
+    /// `failure` so the case-level `NotRun` detail names the cause,
+    /// not a generic fallback.
+    fn not_evaluable(steps: &mut Vec<Value>, reason: &str) -> Self {
+        steps.push(json!({
+            "step": "fg_probe",
+            "verdict": "not_run",
+            "reason": reason,
+        }));
+        Self {
+            failure: Some(reason.to_string()),
+            ..Self::default()
+        }
+    }
+
+    /// Off-Windows / unsupported platform — records an
+    /// `unsupported` row; unreachable today (`NativePluginDock` is
+    /// Windows-only) but kept honest.
+    fn unsupported(steps: &mut Vec<Value>) -> Self {
+        steps.push(json!({
+            "step": "fg_probe",
+            "verdict": "unsupported",
+            "detail": "OS window-state mutation is Windows-only",
+        }));
+        Self::default()
+    }
+}
+
+/// Verification for `real-dcomp-foreground` — same lifecycle
+/// contract as [`PixelVerification`] plus the probe outcome. The
+/// case verdict reads `lifecycle_ok` + `probe.{evaluated,
+/// executed,restored}` only; screen green and hit-test answers are
+/// bisect *data*, never verdict inputs.
+struct ForegroundVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence) — the same checks as
+    /// `real-editor-attach`.
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated probe outcome.
+    probe: ProbeOutcome,
+    /// `observed` extras — container/child ids, threads, events,
+    /// probe summary (an `Object`, like `PixelVerification`).
+    extras: Value,
+}
+
+/// Plain-JSON form of one [`osmut::RootSnapshot`] — every field is
+/// already a plain value; `exstyle` is flattened to its
+/// compositor-relevant bits.
+fn snapshot_json(snapshot: &osmut::RootSnapshot) -> Value {
+    json!({
+        "supported": snapshot.supported,
+        "root": snapshot.root,
+        "exstyle": snapshot.exstyle.as_ref().map(|e| json!({
+            "value": e.value,
+            "noredirectionbitmap": e.noredirectionbitmap(),
+            "topmost": e.topmost(),
+            "layered": e.layered(),
+            "transparent": e.transparent(),
+            "noactivate": e.noactivate(),
+            "toolwindow": e.toolwindow(),
+            "appwindow": e.appwindow(),
+        })),
+        "topmost": snapshot.topmost,
+        "above_count": snapshot.above_count,
+        "above_hwnd": snapshot.above_hwnd,
+        "below_hwnd": snapshot.below_hwnd,
+        "foreground": snapshot.foreground,
+        "truncated": snapshot.truncated,
+    })
+}
+
+/// Plain-JSON form of one [`osmut::MutationOutcome`].
+fn mutation_json(outcome: &osmut::MutationOutcome) -> Value {
+    json!({
+        "api": outcome.api,
+        "applied": outcome.applied,
+        "win32_error": outcome.win32_error,
+        "after": snapshot_json(&outcome.after),
+    })
+}
+
+/// Plain-JSON form of one [`osmut::RestoreOutcome`] — every restore
+/// op plus the verification fields (`topmost_restored` is the only
+/// deterministic check; z-order/foreground are recorded observed
+/// values, never claimed restored).
+fn restore_json(outcome: &osmut::RestoreOutcome) -> Value {
+    json!({
+        "ops": outcome.ops.iter().map(mutation_json).collect::<Vec<_>>(),
+        "topmost_restored": outcome.topmost_restored,
+        "zorder_before": {
+            "above_count": outcome.zorder_before.0,
+            "above_hwnd": outcome.zorder_before.1,
+        },
+        "zorder_after": {
+            "above_count": outcome.zorder_after.0,
+            "above_hwnd": outcome.zorder_after.1,
+        },
+        "foreground_before": outcome.foreground_before,
+        "foreground_attempted": outcome.foreground_attempted,
+        "foreground_final": outcome.foreground_final,
+        "final_state": snapshot_json(&outcome.final_state),
+    })
+}
+
+/// One per-child re-observation at one probe stage — `WindowFromPoint`
+/// hit-test roles plus the screen-composited green fraction. Both are
+/// `note`-level bisect *data*: they never feed the case verdict. The
+/// stage name distinguishes baseline/raise/foreground/topmost/restore.
+fn record_foreground_observation(
+    stage: &str,
+    index: usize,
+    hwnd: u64,
+    container: u64,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) {
+    let facts = osoccl::probe(hwnd);
+    let root = facts.root;
+    let hits: Vec<Value> = facts
+        .hits
+        .iter()
+        .map(|hit| match &hit.window {
+            Some(row) => json!({
+                "x": hit.x,
+                "y": hit.y,
+                "hwnd": row.hwnd,
+                "class_name": row.class_name,
+                "role": occlusion_role(row.hwnd, hwnd, container, root),
+                "visible": row.visible,
+                "alive": row.alive,
+            }),
+            None => json!({
+                "x": hit.x,
+                "y": hit.y,
+                "hwnd": Value::Null,
+                "role": "none",
+            }),
+        })
+        .collect();
+
+    // Screen-composited green fraction — the same oracle
+    // `real-dcomp-pixel` reads, re-sampled after each mutation. A
+    // capture failure degrades to an `error` field, never a verdict.
+    let screen = ospix::window_screen_rect(hwnd).and_then(ospix::capture_screen_rect);
+    let mut screen_json = match &screen {
+        Ok(capture) => {
+            let (green, total) = green_stats(&capture.rgba);
+            let fraction = green_fraction(green, total);
+            let mut row = json!({
+                "backend": capture.backend,
+                "width": capture.width,
+                "height": capture.height,
+                "green_pixels": green,
+                "total_pixels": total,
+                "green_fraction": fraction,
+                "threshold": GREEN_VISIBLE_FRACTION,
+            });
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                &format!("real-dcomp-foreground-{stage}-{index}"),
+                capture,
+            );
+            row
+        }
+        Err(error) => json!({ "error": error }),
+    };
+    if let Some(obj) = screen_json.as_object_mut() {
+        obj.insert("stage".to_string(), json!(stage));
+    }
+
+    steps.push(json!({
+        "step": format!("fg_observe_{stage}"),
+        "verdict": "note",
+        "stage": stage,
+        "child_index": index,
+        "hwnd": hwnd,
+        "root": root,
+        "hits": hits,
+        "screen": screen_json,
+    }));
+}
+
+/// The mutation probe itself — runs while the editor is still
+/// attached (lease live, child HWNDs present). Baseline snapshot +
+/// per-child observation, then the three mutation stages (raise →
+/// foreground → topmost) each followed by a per-child re-observation,
+/// then `osmut::restore` + a final per-child observation. The root
+/// is shared across children, so mutations apply once per stage and
+/// every child is re-observed at each stage.
+fn foreground_probe_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ProbeOutcome {
+    let Some(token) = container else {
+        return ProbeOutcome::not_evaluable(
+            steps,
+            "no container token — the GPUI root cannot be resolved",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return ProbeOutcome::not_evaluable(
+                steps,
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => {
+            return ProbeOutcome::not_evaluable(steps, "top-level presentation query failed");
+        }
+    }
+    if observation.children.is_empty() {
+        return ProbeOutcome::not_evaluable(steps, "no observed child HWNDs to probe");
+    }
+
+    // Baseline — resolve the shared GPUI root through the first
+    // child's ancestry and snapshot its mutable state before any
+    // mutation. `osmut::observe` returns `supported:false` only on
+    // the non-Windows stub (unreachable — `observation.supported`
+    // already gated this path).
+    let first = &observation.children[0];
+    let baseline = osmut::observe(first.hwnd);
+    let Some(root) = baseline.root else {
+        steps.push(json!({
+            "step": "fg_baseline_state",
+            "verdict": "note",
+            "snapshot": snapshot_json(&baseline),
+        }));
+        return ProbeOutcome::not_evaluable(steps, "GA_ROOT returned null for the child HWND");
+    };
+    steps.push(json!({
+        "step": "fg_baseline_state",
+        "verdict": "note",
+        "root": root,
+        "snapshot": snapshot_json(&baseline),
+    }));
+
+    observe_all_children("baseline", observation, token, artifacts, steps);
+
+    let (mut executed, mut failure) = run_probe_stages(root, observation, token, artifacts, steps);
+
+    // Restore — always attempted regardless of stage outcomes. The
+    // verification is `topmost_restored` plus every `SetWindowPos`
+    // restore op applying; the `SetForegroundWindow` hand-back is
+    // note-level (foreign foreground is not forcibly restorable).
+    let restore = osmut::restore(&baseline);
+    let mut restore_ops_ok = true;
+    for op in &restore.ops {
+        if op.api.starts_with("SetWindowPos") && !op.applied {
+            restore_ops_ok = false;
+        }
+    }
+    let restored = restore.topmost_restored && restore_ops_ok;
+    if !restored {
+        executed = false;
+        failure.get_or_insert_with(|| {
+            format!(
+                "restore verification failed (topmost_restored={}, \
+                 setwindowpos_ops_ok={restore_ops_ok})",
+                restore.topmost_restored
+            )
+        });
+    }
+    steps.push(json!({
+        "step": "fg_restore",
+        "verdict": if restored { "pass" } else { "fail" },
+        "restore": restore_json(&restore),
+        "note": "topmost flag restoration is verified; z-order and \
+                 foreground are best-effort — zorder_before/after and \
+                 foreground_before/final record what could and could \
+                 not be restored, never claimed",
+    }));
+    observe_all_children("restore", observation, token, artifacts, steps);
+
+    ProbeOutcome {
+        evaluated: true,
+        executed,
+        restored,
+        failure,
+    }
+}
+
+/// Re-observe every child at one probe stage — one
+/// [`record_foreground_observation`] row per child.
+fn observe_all_children(
+    stage: &str,
+    observation: &ChildWindowObservation,
+    token: u64,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) {
+    for (index, child) in observation.children.iter().enumerate() {
+        record_foreground_observation(stage, index, child.hwnd, token, artifacts, steps);
+    }
+}
+
+/// One mutation apply step row — `pass` when the API applied,
+/// `fail` for a refused `SetWindowPos` (strict stage), `note` for a
+/// refused `SetForegroundWindow` (foreground-lock refusal is
+/// spec-expected data, never a failure).
+fn record_apply_row(
+    steps: &mut Vec<Value>,
+    step: &str,
+    outcome: &osmut::MutationOutcome,
+    strict: bool,
+) {
+    let verdict = if outcome.applied {
+        "pass"
+    } else if strict {
+        "fail"
+    } else {
+        "note"
+    };
+    let mut row = json!({
+        "step": step,
+        "verdict": verdict,
+        "mutation": mutation_json(outcome),
+    });
+    if !strict {
+        row["note"] = json!(
+            "SetForegroundWindow may be refused by the foreground lock — \
+             a refusal is recorded data (the foreground branch stays \
+             unresolved), never disguised as success"
+        );
+    }
+    steps.push(row);
+}
+
+/// Apply the three mutation stages in order — (a) raise to top of
+/// the non-topmost band, (b) `SetForegroundWindow`, (c) topmost
+/// band — recording each apply row and re-observing every child.
+/// Returns `(executed, first_failure)`: `executed` clears when a
+/// `SetWindowPos` stage is refused (anomalous for our own window);
+/// a refused `SetForegroundWindow` is recorded data and does not
+/// clear it.
+fn run_probe_stages(
+    root: u64,
+    observation: &ChildWindowObservation,
+    token: u64,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> (bool, Option<String>) {
+    let mut executed = true;
+    let mut failure: Option<String> = None;
+
+    // (a) raise — strict `SetWindowPos` (refusal on our own window
+    // is anomalous → `fail` step + probe failure).
+    let raise = osmut::raise_to_top(root);
+    record_apply_row(steps, "fg_apply_raise", &raise, true);
+    if !raise.applied {
+        executed = false;
+        failure.get_or_insert_with(|| {
+            format!(
+                "raise_to_top refused (win32 error {})",
+                raise
+                    .win32_error
+                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+            )
+        });
+    }
+    observe_all_children("raise", observation, token, artifacts, steps);
+
+    // (b) foreground — non-strict (foreground-lock refusal is data).
+    let foreground = osmut::set_foreground(root);
+    record_apply_row(steps, "fg_apply_foreground", &foreground, false);
+    observe_all_children("foreground", observation, token, artifacts, steps);
+
+    // (c) topmost — strict `SetWindowPos`.
+    let topmost = osmut::set_topmost(root);
+    record_apply_row(steps, "fg_apply_topmost", &topmost, true);
+    if !topmost.applied {
+        executed = false;
+        failure.get_or_insert_with(|| {
+            format!(
+                "set_topmost refused (win32 error {})",
+                topmost
+                    .win32_error
+                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+            )
+        });
+    }
+    observe_all_children("topmost", observation, token, artifacts, steps);
+
+    (executed, failure)
+}
+
+/// `observed` extras for the foreground case — same child/container
+/// fields as [`child_extras`] plus the probe summary. The full
+/// per-stage data lives in `steps`; this carries only the verdict-
+/// relevant aggregate.
+fn foreground_extras(
+    container: Option<u64>,
+    observation: &ChildWindowObservation,
+    events: &[String],
+    probe: &ProbeOutcome,
+) -> Map<String, Value> {
+    let mut extras = child_extras(container, observation, events);
+    extras.insert(
+        "foreground_probe".to_string(),
+        json!({
+            "evaluated": probe.evaluated,
+            "executed": probe.executed,
+            "restored": probe.restored,
+            "failure": probe.failure,
+        }),
+    );
+    extras
+}
+
+/// Post-open foreground-probe observation + close convergence —
+/// the `real-dcomp-foreground` counterpart of
+/// [`observe_editor_pixel_lifecycle`]. Same attach contract checks,
+/// then — while still attached — the z-order/foreground mutation
+/// probe ([`foreground_probe_children`]), then the shared close →
+/// detach → convergence tail ([`conclude_editor_session`]).
+fn observe_editor_foreground_probe(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ForegroundVerification {
+    let mut failure: Option<String> = None;
+
+    // Phase 1 — enumerate the container's children while the editor
+    // is still attached (same observation as `real-editor-attach`).
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    // Phase 1b — the foreground/z-order mutation probe while still
+    // attached (the Issue #532 bisect). Off-Windows there is no
+    // window-state mutation either — recorded as unsupported.
+    let probe = if observation.supported {
+        foreground_probe_children(&observation, container, artifacts, steps)
+    } else {
+        ProbeOutcome::unsupported(steps)
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+    );
+
+    ForegroundVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(foreground_extras(
+            container,
+            &observation,
+            &rendered,
+            &probe,
+        )),
+        probe,
+    }
+}
+
+/// `real-dcomp-foreground`: the same real attach path as
+/// `real-dcomp-pixel`, plus the foreground/z-order mutation probe —
+/// does displacing external HWND stacking (and then the topmost
+/// band) let the docked child's pixels reach the screen? The case
+/// verdict is the *probe's own* honest oracle (executed + restored +
+/// lifecycle); whether green appeared is bisect data recorded in the
+/// step rows, never a verdict input.
+fn editor_foreground_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        |container, _lease_raw, sessions, session_id, host, handle, steps| {
+            observe_editor_foreground_probe(
+                container, sessions, session_id, host, handle, artifacts, steps,
+            )
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     window-state observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) if !verification.probe.evaluated => not_run(format!(
+                "editor lifecycle verified but the foreground probe is not \
+                 evaluable: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("baseline could not be taken")
+            )),
+            Some(verification) if !verification.probe.executed || !verification.probe.restored => {
+                fail(format!(
+                    "editor lifecycle verified but the foreground probe did \
+                     not complete: {}",
+                    verification
+                        .probe
+                        .failure
+                        .as_deref()
+                        .unwrap_or("probe execution or restore verification failed")
+                ))
+            }
+            Some(_) => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(
+                    "foreground/z-order probe executed all mutation \
+                     stages; topmost band verified restored (z-order \
+                     and foreground restoration are best-effort — \
+                     see steps). Bisect data (hit-test answers, screen \
+                     green per stage) is recorded in steps"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("dcomp-foreground:probe-executed-restored".to_string());
+                outcome
+            }
+            None => fail("editor opened but no foreground observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-foreground` case: pre-flight requires `NativePluginDock`
+/// and `VisualCapture` (same capabilities as `real-dcomp-pixel` — the
+/// probe re-uses the screen-pixel oracle per stage), then the body
+/// drives the attach chain plus the mutation probe — or reports the
+/// honest artifact/session/environment outcome.
+fn real_dcomp_foreground_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_foreground_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_real(
+        report,
+        ctx.env,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // case: real-multiwindow-focus (AC1 — 2-window focus transfer)
 // ---------------------------------------------------------------------
 
@@ -4449,11 +5124,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 13, "thirteen real-dock cases");
+        assert_eq!(reports.len(), 14, "fourteen real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -4486,7 +5161,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 13] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

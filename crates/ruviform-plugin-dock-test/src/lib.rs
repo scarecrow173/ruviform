@@ -38,7 +38,11 @@
 //! after detach); `real-dcomp-pixel` (Issue #532) additionally
 //! captures the docked child's screen-composited pixels to pin the
 //! known GPUI `DComp` topmost occlusion as an honest `Fail` until a
-//! compositor fix lands. The catalog also carries the AC1 remainder
+//! compositor fix lands; `real-dcomp-foreground` (Issue #532
+//! foreground-probe slice) mutates the GPUI root's z-order/
+//! foreground in bounded, restored stages to bisect external HWND
+//! stacking from compositor-internal occlusion. The catalog also
+//! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
 //! injection, and honest `Unsupported` judgments where the adapter
 //! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
@@ -59,6 +63,8 @@
 
 pub mod artifact;
 pub mod jsonl;
+#[cfg(feature = "real-dock")]
+mod osmut;
 #[cfg(feature = "real-dock")]
 mod osoccl;
 #[cfg(feature = "real-dock")]
