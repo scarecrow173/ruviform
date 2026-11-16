@@ -34,7 +34,8 @@ relations:
   deferred-by: []
 metadata:
   experiments:
-    adopted: []
+    adopted:
+      - "../exp/issue-532-foreground-probe-exp.jsonl"
     rejected: []
 ---
 
@@ -114,8 +115,11 @@ compositor-internal DComp occlusion from external stacking.
 
 ### Adopted
 
-None — the approach was fixed by the approved design; no experiment log
-was needed.
+- [issue-532-foreground-probe-exp.jsonl](../exp/issue-532-foreground-probe-exp.jsonl)
+  — 実装中の試行・観測イベントログ（osmut 境界設計、clippy 対応の
+  分岐、fmt reflow、review 反映、interactive bisect データ）。
+  対応する人間可読の記録は
+  [issue-532-foreground-probe.md](../exp/issue-532-foreground-probe.md)。
 
 ### Rejected
 
