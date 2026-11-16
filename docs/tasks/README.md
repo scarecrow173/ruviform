@@ -60,6 +60,7 @@ Directory: `docs/tasks`
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XVm2WqXrYsZaBcDeFgH | Issue #629 MIDI loopback round-trip verifier implementation task | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TASK-034ZCLAPED5tk5ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-034Y13NY1bznQbU0TgCsEn | Issue #630 test_editor slice — task | completed | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
