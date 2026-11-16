@@ -160,7 +160,7 @@ runtime=mlua — runtime backend 実装は別 slice で依存選定を再評価
 * `crates/ruviform-script-luau` の `tests/bridge.rs`・
   `tests/registry.rs`・`src/ffi_boundary_tests.rs` が Windows
   x86_64 で全 Pass すること（`mise run test ruviform-script-luau`）。
-* `evidence/rf692/s2-verification.md` に実行コマンド・OS・
+* `evidence/rf692/luau-backend-verification.md` に実行コマンド・OS・
   toolchain・exit code を記録すること。
 * macOS/Linux・release-size/performance・3-OS 実機は NotRun として
   記録し、Issue #692 の AC4 checkbox 更新は consumer gate
