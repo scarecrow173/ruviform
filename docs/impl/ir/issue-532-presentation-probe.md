@@ -35,7 +35,7 @@ relations:
 metadata:
   experiments:
     adopted:
-      - "../exp/issue-532-presentation-probe.jsonl"
+      - "../exp/issue-532-presentation-probe-exp.jsonl"
     rejected: []
 ---
 
@@ -122,7 +122,7 @@ no production code changes.
 
 ### Adopted
 
-- `../exp/issue-532-presentation-probe.jsonl` — implementation and
+- `../exp/issue-532-presentation-probe-exp.jsonl` — implementation and
   both interactive runs; discrimination recorded in
   `evidence/rf532/presentation-probe.md`.
 

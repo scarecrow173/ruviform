@@ -65,7 +65,7 @@ test の合否入力ではなく evidence として記録されることを保�
   `required = [NativePluginDock, VisualCapture]`、
   `spec_extras = editor_attach_extras`。
 
-### F2: osres/ospix 境界
+### F2: ospres/ospix 境界
 
 - `ospres` は `supported:false` の non-Windows stub を持ち、
   Windows 実装は plain 値のみ返す（HWND は `u64`）。

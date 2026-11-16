@@ -2,7 +2,7 @@
 
 `docs/tasks/issue-532-presentation-probe.md` の diagnostic probe
 slice で試行した手法と結果の記録。raw event log は
-[`issue-532-presentation-probe.jsonl`](issue-532-presentation-probe.jsonl)、
+[`issue-532-presentation-probe-exp.jsonl`](issue-532-presentation-probe-exp.jsonl)、
 判別結果の正本は
 [`evidence/rf532/presentation-probe.md`](../../../evidence/rf532/presentation-probe.md)
 を参照。
