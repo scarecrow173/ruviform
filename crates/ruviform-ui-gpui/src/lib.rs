@@ -1580,7 +1580,7 @@ pub use gpui_driver::observe::{
 pub use gpui_driver::os_input;
 #[cfg(feature = "real-scenario")]
 pub use gpui_driver::real_window::{
-    CaptureMeta, RealOsGuiTest, RealWindowMount, RealWindowOptions,
+    CaptureMeta, RealOsGuiTest, RealWindowMount, RealWindowOptions, WindowLifecycleEvent,
 };
 #[cfg(feature = "gpui-test")]
 pub use gpui_driver::scenario::GpuiGuiTest;
