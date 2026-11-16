@@ -43,7 +43,10 @@
 //! injection, and honest `Unsupported` judgments where the adapter
 //! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
 //! editor op rows (`real-editor-resize`/`real-editor-redock`, judged
-//! by session events/HWND contract only, never pixels).
+//! by session events/HWND contract only, never pixels) and the
+//! Issue #389 host-loss session lifecycle row
+//! (`real-session-terminate` — `Terminated{HostLost}` exactly-once,
+//! child HWND teardown, host survival).
 //! `plugin-dock-real-scenario --blocked-probe` deterministically
 //! proves the headless fail-closed mapping without opening a
 //! session. It opens real OS windows, so it is never a

@@ -89,6 +89,7 @@ windows**:
 | `real-window-close` | `Unsupported` — `RealOsGuiTest` exposes no window-close request/respond API and OS input has no modifier-chord injection; the `CloseRequested` flow cannot be driven from this lane yet |
 | `real-editor-resize` | non-pixel oracle only (session state/events/child-HWND contract, never pixels): `session.set_size` through the production `InProcessEditorOps`; the defined `EditorOpError::Unsupported` refusal → `Unsupported`, an accepted op with no effect oracle → `NotRun`, any contract mismatch → `Fail` |
 | `real-editor-redock` | non-pixel oracle only: `session.reattach` under the same real lease; defined refusal → session `Failed{Unsupported}` + event sequence `[Attached{Docked}, Detached, Failed{..}, Closed]` → `Unsupported`; accepted op → `NotRun` (no effect oracle yet) |
+| `real-session-terminate` | non-pixel oracle only: attach 中の `HostCommand::Deactivate`+`Destroy` → registry `notify_terminated(HostLost)`; `Pass` only when the session converges `Closed`+`concluded` with exactly `[Attached{Docked}, Terminated{HostLost}]`, a repeated notify is a no-op, every recorded child HWND reports `IsWindow(child)==0`, and the host survives (`Scan` ok + destroyed handle `InvalidHandle`); observation mismatch → `Fail`, defined refusal → `Unsupported` (Issue #389) |
 
 The chain recorded is the production one:
 `NativeSlot → GpuiSurfaceAdapter (実 container HWND) → lease_parent →
@@ -151,7 +152,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the twelve `rf631.plugin-dock-real`
+- `--list --include-real` — appends the thirteen `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused
