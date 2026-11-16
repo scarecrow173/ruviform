@@ -1,0 +1,117 @@
+# Issue #253 OS-endpoint MIDI e2e verifier — verification evidence
+
+- date: 2026-11-16
+- host: windows-local (DESKTOP-NH00KUI)
+- os: Microsoft Windows 11 Pro 10.0.26300, x86_64 (MINGW64_NT-10.0-26300)
+- toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), cargo 1.99.1, mise-managed
+- branch: feat/253-os-endpoint-midi
+- base SHA: cbcc83437616fdd7418da37183c6be66b6cfe225 (origin/main at branch point)
+- environment_kind: os-l1 (host compile/test + auxiliary ignored-run evidence
+  only — NOT virtual-os-endpoint, NOT EXT-L3; no provisioned loopback pair
+  exists on this host: 0 input ports / 1 output port enumerated)
+
+Scope: `crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs`
+(new `#[ignore]`-gated fail-closed verifier — real WinMM backend →
+name-match loopback-style pair → `InputTx::pump` → `InputStage` →
+`attach` → `PluginNode` → typed `GraphRuntime` → out-of-process
+real-ABI VST3 `test_instrument` → PCM/counter/close oracle),
+`Cargo.toml` dev-dep (`ruviform-midi-device` path dep, coordinator-approved),
+`Cargo.lock` regenerated diff (one dep line), doc chain
+`docs/{specs,designs,plans,tasks,test-specs,impl/ir,impl/exp}/
+issue-253-virtual-midi-e2e.md` + `issue-253-virtual-midi-e2e-exp.jsonl`.
+
+## Verification matrix (canonical = mise tasks)
+
+| command | os | toolchain | exit | result |
+| --- | --- | --- | --- | --- |
+| `mise run fmt-check` | windows-local | rustc 1.99.1 | 0 | Pass — `cargo fmt --all -- --check` clean |
+| `mise run check ruviform-plugin-test-vst3` | windows-local | rustc 1.99.1 | 0 | Pass — `cargo check --locked --all-targets` |
+| `mise run lint ruviform-plugin-test-vst3` | windows-local | rustc 1.99.1 | 0 | Pass — clippy `-D warnings` |
+| `mise run test ruviform-plugin-test-vst3` | windows-local | rustc 1.99.1 | 0 | Pass — all suites; `os_endpoint_midi_e2e` binary collects 0 tests without `l1-runner` (file is `#![cfg]`-gated empty, as designed) |
+| `mise run check-l1-real-plugin` | windows-local | rustc 1.99.1 | 0 | Pass — `--all-targets` + `l1-runner` compiles the new test file |
+| `mise run lint-l1-real-plugin` | windows-local | rustc 1.99.1 | 0 | Pass — clippy `-D warnings` on the feature-enabled target set |
+| `mise run test-l1-real-plugin` | windows-local | rustc 1.99.1 | 0 | Pass — existing ignored L1 suites non-regressed (new file is name-selected, not auto-collected) |
+| `mise exec -- prek run --all-files` | windows-local | prek (apm) | 0 | Pass — all hooks green |
+
+## Auxiliary (supplementary) evidence — cargo direct, NOT canonical
+
+| command | os | toolchain | exit | result |
+| --- | --- | --- | --- | --- |
+| `cargo check -p ruviform-plugin-test-vst3 --features l1-runner --tests` | windows-local | rustc 1.99.1 | 0 | Pass (auxiliary, during development) |
+| `cargo clippy -p ruviform-plugin-test-vst3 --features l1-runner --tests -- -D warnings` | windows-local | rustc 1.99.1 | 0 | Pass (auxiliary) |
+| `cargo check -p ruviform-plugin-test-vst3` (no feature) | windows-local | rustc 1.99.1 | 0 | Pass — `#![cfg(feature = "l1-runner")]` empties the file (auxiliary) |
+| `cargo fmt -p ruviform-plugin-test-vst3 -- --check` | windows-local | rustc 1.99.1 | 0 | Pass (auxiliary; canonical `mise run fmt-check` also Pass) |
+| `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --nocapture` | windows-local | rustc 1.99.1 | 0 | **verdict: NotRun — NOT_PROVISIONED** (auxiliary run; see below) |
+
+## Auxiliary ignored-run transcript (verbatim verdict)
+
+```
+running 1 test
+enumerated: 0 input ports, 1 output ports
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match; provision a
+loopMIDI/Windows MIDI Services loopback pair first)
+test os_endpoint_midi_loopback_drives_test_instrument ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+Notes on this run:
+
+- `assert_fixture_present()` passed — the fixture cdylib +
+  `l1-runner` runner binary built by `test-l1-real-plugin` resolve
+  correctly as siblings under `target/debug/` (fixture plumbing
+  verified up to the enumeration gate).
+- The production `SystemBackend` enumerated **0 input ports / 1
+  output port** on this host — no bidirectional name match exists,
+  so the verifier printed `verdict: NotRun — NOT_PROVISIONED` and
+  returned early with zero asserts. This is the designed
+  fail-closed path, not a Pass.
+- The test harness reports `ok` because the early return is a
+  normal return; the *verdict* is `NotRun`. No
+  `environment_kind=virtual-os-endpoint` claim is made anywhere.
+
+## Case records (Case schema vocabulary)
+
+| case | environment_kind | depth | status | expected | observed |
+| --- | --- | --- | --- | --- | --- |
+| os_endpoint_midi_e2e compile/lint (l1-runner, all-targets) | deterministic_backend (host toolchain) | OS-L1 | Pass | check/lint clean | exit 0 on all listed lanes |
+| os_endpoint_midi_e2e non-feature test collection | deterministic_backend | OS-L1 | Pass | 0 tests collected (cfg-gated) | 0 run / 0 failed |
+| os_endpoint_midi_e2e ignored run, no provisioned pair | os-l1 (real WinMM enumeration, no virtual endpoint) | EXT-L3 attempt → NotRun | **NotRun** | `verdict: NotRun — NOT_PROVISIONED` | exactly that verdict, 0 input / 1 output ports, early return |
+| os_endpoint_midi_e2e on provisioned virtual pair | virtual-os-endpoint (requires repo-external provisioning) | EXT-L3 | **NotRun — NOT_PROVISIONED** | full chain Pass with PCM/counter/close oracle | not executed — no pair on this host; follow-up slice |
+| physical-device specifics | n/a | n/a | NotApplicable | unguaranteed per virtual-first policy | recorded as unguaranteed |
+
+## Explicitly NOT proven here
+
+- `environment_kind=virtual-os-endpoint` — no loopMIDI / Windows
+  MIDI Services loopback pair is provisioned on this host; the
+  name-match candidate rule cannot prove virtuality
+  (`MidiPortOrigin::Unknown`). Not claimed.
+- EXT-L3 real end-to-end Pass — the attach→plugin→PCM oracle path
+  is implemented and compile/lint-verified but has never executed
+  past the enumeration gate on this host.
+- Timestamp/stamp-offset oracle behavior on real `WinMM` stamps —
+  untested until a pair exists (the `×48` frame math and
+  `ClockAnchor` calibration are exercised only in the NotRun path
+  so far).
+- Non-Windows behavior — backend returns `DeviceError::Unsupported`
+  by contract; the `NotRun` path is compile-verified only on this
+  Windows host (the code has no `#[cfg]` branches, so non-Windows
+  compile is covered by the shared target set in CI, not re-run
+  here).
+- `test-l1-real-plugin` lane non-regression covers the *existing*
+  ignored suites only; the new file is not auto-collected by any
+  canonical lane (`mise.toml` lane registration is out of scope —
+  see PR "未対応の作業").
+
+## What the Pass results actually prove (OS-L1 only)
+
+- The new test file compiles under `l1-runner` + `--all-targets`,
+  passes clippy `-D warnings`, and is fmt-clean.
+- The production `ruviform_midi_device::backend()` surface is
+  exercised for real enumeration (0 input / 1 output observed).
+- The fail-closed `NotRun` path executes correctly: honest verdict,
+  zero asserts, no Pass claim.
+- Fixture artifact resolution (`CARGO_BIN_EXE_*` sibling cdylib)
+  works — `assert_fixture_present` passed before enumeration.
+- Existing L1 ignored suites (`l1_real_adapter`,
+  `l1_stateful_test_plugin`) remain green — no regression.
