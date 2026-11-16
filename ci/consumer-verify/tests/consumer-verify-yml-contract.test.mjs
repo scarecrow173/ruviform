@@ -281,6 +281,74 @@ for (const [name, job] of [
     assert.ok((record.match(/steps\.gui_candidate\.outcome[^\n]*依存取得/g) ?? []).length >= 2,
       "both gui_candidate failure rows must name dependency fetch in their reason");
   });
+
+  test(`contract: ${name} consumer oracle lanes probe canonical files and record oracle fields`, () => {
+    // Issue #294 oracle slice (RF #628): both verify jobs run the consumer
+    // repo's merged rf628_oracle tests via probe→run→record at file
+    // granularity. Canonical paths/commands are pinned — a moved or renamed
+    // target is canonical-unexecutable and must stay an honest not_run,
+    // never a substitute pass on another crate or the dispatch ref.
+    const runIds = name === "verify-audiolens" ? ["oracle"] : ["oracle", "oracle_rt"];
+    for (const id of ["oracle_probe", ...runIds]) {
+      assert.ok(new RegExp(`\\n\\s+id: ${id}\\n`).test(job), `step id ${id} missing`);
+    }
+    const record = job.slice(job.indexOf("Record evidence"));
+    for (const id of ["oracle_probe", ...runIds]) {
+      assert.ok(record.includes(`steps.${id}.outcome`), `${id} outcome must map to a lane row`);
+    }
+    // probe inspects the canonical consumer test files (file-level presence)
+    const canonical = name === "verify-audiolens"
+      ? ["crates/al-analysis/tests/rf628_oracle.rs"]
+      : ["crates/synvelis-recording/tests/rf628_oracle.rs",
+         "crates/synvelis-recording/tests/rf628_oracle_rt_alloc.rs"];
+    for (const p of canonical) {
+      assert.ok(job.includes(`$CONSUMER_DIR/${p}`), `probe must check canonical path ${p}`);
+    }
+    // run steps use the canonical mise commands — one step per file so a
+    // single file's failure cannot be buried inside a combined --test run
+    const commands = name === "verify-audiolens"
+      ? ["mise run test al-analysis --test rf628_oracle"]
+      : ["mise run test synvelis-recording --test rf628_oracle",
+         "mise run test synvelis-recording --test rf628_oracle_rt_alloc"];
+    for (const cmd of commands) {
+      assert.ok(job.includes(cmd), `canonical oracle command missing: ${cmd}`);
+    }
+    // run steps gate on fetch success + probe output only — never on the
+    // check/test lane outcomes (the oracle verdict is independent)
+    const oracleIfs = [...job.matchAll(
+      /if: steps\.gate\.outputs\.gate == 'run' &&[^\n]*oracle_probe\.outputs\.oracle[^\n]*/g,
+    )].map((m) => m[0]);
+    assert.equal(oracleIfs.length, runIds.length,
+      `expected ${runIds.length} oracle run if-conditions, got ${oracleIfs.length}`);
+    for (const cond of oracleIfs) {
+      assert.ok(cond.includes("steps.fetch.outcome == 'success'"),
+        "oracle run must gate on fetch success (toolchain+deps resolved)");
+      assert.ok(!cond.includes("steps.check.outcome") && !cond.includes("steps.test.outcome"),
+        "oracle run must not depend on check/test lane outcomes");
+    }
+    // target-absent rows stay owner-attributed not_run with rerun condition
+    const owner = name === "verify-audiolens" ? "#127" : "#115";
+    assert.ok(
+      new RegExp(`rf628 oracle[^\\n]*"not_run" "[^"]*${owner}`).test(job),
+      `oracle not_run row missing owner ${owner} and rerun condition`,
+    );
+    // spec tail pins oracle id + fixture_version per file
+    const specs = name === "verify-audiolens"
+      ? ["-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER"]
+      : ["-rf628-oracle|$DEF|$RUVIFORM_REV|rf628_oracle|$FIXTURE_VER",
+         "-rf628-oracle-rt-alloc|$DEF|$RUVIFORM_REV|rf628_oracle_rt_alloc|$FIXTURE_VER"];
+    for (const spec of specs) {
+      assert.ok(job.includes(spec), `oracle spec tail missing: ${spec}`);
+    }
+    // fixture_version is derived from the resolved consumer Cargo.lock —
+    // never a declared constant; extraction failure omits the flag
+    assert.ok(/ruviform-audio-test/.test(job) && /\$CONSUMER_DIR\/Cargo\.lock/.test(job)
+      && /FIXTURE_VER="ruviform-audio-test-/.test(job),
+      "fixture_version must be extracted from consumer Cargo.lock ruviform-audio-test");
+    // rec() maps spec fields 6/7 to the --oracle/--fixture-version flags
+    assert.ok(/of=\(--oracle "\$oracle"\)/.test(job) && /ff=\(--fixture-version "\$fixture_ver"\)/.test(job),
+      "rec() must map oracle/fixture spec fields to lane flags");
+  });
 }
 
 test("contract: boundary guard task stays --offline (fetch, not online relaxation)", () => {
@@ -372,13 +440,15 @@ test("contract: evidence.mjs checkout is the dispatch ref (no candidate ref)", (
 // ---------------------------------------------------------------------------
 
 // Every rec() first argument must be a Case spec:
-//   "${CONSUMER_NAME}-<slug>|<level>|<environment_kind>|<requirement>[|<resolved_sha>]"
+//   "${CONSUMER_NAME}-<slug>|<level>|<environment_kind>|<requirement>[|<resolved_sha>[|<oracle>[|<fixture_version>]]]"
 // where the classification tail is either the shared $DEF default
 // (OS-L1|deterministic-backend|Required) or an explicit honest literal for
-// non-default depths. Old-style `rec "<name>" ...` calls (no spec) are a
-// contract violation — evidence.mjs lane would reject them at runtime.
+// non-default depths. The optional oracle+fixture_version pair is only
+// meaningful together with a resolved sha (candidate-bound oracle rows).
+// Old-style `rec "<name>" ...` calls (no spec) are a contract violation —
+// evidence.mjs lane would reject them at runtime.
 const CASE_SPEC_RE =
-  /^"\$\{CONSUMER_NAME\}-[a-z0-9-]+\|(?:\$DEF|OS-L1\|deterministic-backend\|Required|GUI-L2\|real-window\|Required|EXT-L3\|test-plugin\|Required|OS-L1\|physical-device\|Required)(?:\|\$RUVIFORM_REV)?"$/;
+  /^"\$\{CONSUMER_NAME\}-[a-z0-9-]+\|(?:\$DEF|OS-L1\|deterministic-backend\|Required|GUI-L2\|real-window\|Required|EXT-L3\|test-plugin\|Required|OS-L1\|physical-device\|Required)(?:\|\$RUVIFORM_REV(?:\|[a-z0-9_]+\|\$FIXTURE_VER)?)?"$/;
 
 for (const [name, job] of [
   ["verify-audiolens", audiolens],
@@ -392,11 +462,26 @@ for (const [name, job] of [
     }
     // default classification constant exists and is the headless/infra default
     assert.ok(/DEF="OS-L1\|deterministic-backend\|Required"/.test(job), "DEF default classification missing");
-    // resolved_ruviform_sha is bound only on candidate-tree GUI rows
+    // resolved_ruviform_sha is bound only on candidate-bound rows: GUI
+    // contract rows (boundary+semantic x3) plus consumer oracle rows
+    // (AL: rf628-oracle x3 branches; SV: + rf628-oracle-rt-alloc x3)
     const rshaRows = specs.filter((s) => s.includes("$RUVIFORM_REV"));
-    assert.ok(rshaRows.length === 6, `expected 6 candidate-bound rows (boundary+semantic x3), got ${rshaRows.length}`);
+    const expectedRsha = name === "verify-audiolens" ? 9 : 12;
+    assert.ok(rshaRows.length === expectedRsha,
+      `expected ${expectedRsha} candidate-bound rows (gui x3 + oracle file rows), got ${rshaRows.length}`);
     for (const s of rshaRows) {
-      assert.ok(/-gui-(boundary|semantic)\|/.test(s), `resolved sha only on gui rows: ${s}`);
+      assert.ok(/-(gui-(boundary|semantic)|rf628-oracle(-rt-alloc)?)\|/.test(s),
+        `resolved sha only on gui/oracle rows: ${s}`);
+    }
+    // oracle rows carry oracle id + fixture_version as a required pair —
+    // one row per 3-branch record call (AL 1 file, SV 2 files)
+    const oracleRows = specs.filter((s) => s.includes("$FIXTURE_VER"));
+    const expectedOracle = name === "verify-audiolens" ? 3 : 6;
+    assert.ok(oracleRows.length === expectedOracle,
+      `expected ${expectedOracle} oracle rows (3 branches per file), got ${oracleRows.length}`);
+    for (const s of oracleRows) {
+      assert.ok(/\|rf628_oracle(_rt_alloc)?\|\$FIXTURE_VER"$/.test(s),
+        `oracle row missing oracle+fixture tail: ${s}`);
     }
   });
 
