@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034YJ5ZPjma7y6yufrmtYd"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #631 RealOsGuiTest window-close/DPI 観測面"
 created: "2026-11-16"
 updated: "2026-11-16"
