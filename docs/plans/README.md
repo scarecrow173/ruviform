@@ -98,6 +98,7 @@ Directory: `docs/plans`
 | PLAN-YgAwqghg3ANT8uWJE1Y1t2 | Issue #285 IO-03 Compression — Serde境界・Format/Version契約・Consumer利用面・証拠項目対応 設計 | approved | [issue-285-io-03-compression-serde-boundary.md](./issue-285-io-03-compression-serde-boundary.md) |
 | PLAN-034UAvKoJIuTCFJwOSaF5Z | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | approved | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | PLAN-034UtOFqGK9dkffJMoPRvK | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | approved | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
+| PLAN-6ZacrJMGjfi3GkTurYfEpj | Issue #294 consumer oracle lanes 実装計画 — probe/run/record 追加・rec() spec 拡張・contract test 更新 | approved | [issue-294-consumer-oracle-lanes.md](./issue-294-consumer-oracle-lanes.md) |
 | PLAN-034S9vX2cF6hK9mP3rT7wZ | Issue #294 Cross-Consumer候補tuple Gate 実装計画 — evidence script・workflow 拡張・契約 test | proposed | [issue-294-cross-consumer-candidate-gate.md](./issue-294-cross-consumer-candidate-gate.md) |
 | PLAN-ARAErEdgpSOlWBQBofZQ2t | Issue #294 GUI-CONTRACT lane 接続 実装計画 — 候補 checkout/probe step・record 置換・contract test 更新 | approved | [issue-294-gui-contract-lane-wiring.md](./issue-294-gui-contract-lane-wiring.md) |
 | PLAN-034XC0f0Wxlvtq0vaQJb2t | Issue #294 first slice — consumer-verify Case schema v2 実装計画 | approved | [issue-294-virtual-first-evidence-schema.md](./issue-294-virtual-first-evidence-schema.md) |

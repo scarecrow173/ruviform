@@ -238,6 +238,7 @@ Directory: `docs/tasks`
 | TASK-c2c4wEGmlw9xtzdbWf5HKz | T1 IO-03 Compression 設計正本照合・契約試験棚卸し・検証 | done | [issue-285-t1-contract-audit.md](./issue-285-t1-contract-audit.md) |
 | TASK-034UAvL4WBHRKsOVxsrTgG | Issue #286 IO-04 ZIP/TAR Archive — Entry API・安全な展開・終了/公開契約 設計 | done | [issue-286-io-04-zip-tar-archive.md](./issue-286-io-04-zip-tar-archive.md) |
 | TASK-034UtPLgt4p9kVhsCVVQ5f | Issue #288 IO-06 Cross-Consumer/OS-FS/Security/性能/互換性 Gate 設計 | done | [issue-288-io-06-cross-consumer-os-fs-security-gate.md](./issue-288-io-06-cross-consumer-os-fs-security-gate.md) |
+| TASK-65Lh1QvTgy1yhrYEwfozUi | Issue #294 consumer oracle lanes — consumer-verify 両 verify job への rf628 oracle lane 配線 | done | [issue-294-consumer-oracle-lanes.md](./issue-294-consumer-oracle-lanes.md) |
 | TASK-1t4MTPYFiTORT83MpcEqRB | Issue #294 consumer-verify → ci-issue-tracker 配線実装 — scope 別 job・reconcile 全 scope 化・contract test | done | [issue-294-consumer-verify-tracker-wiring.md](./issue-294-consumer-verify-tracker-wiring.md) |
 | TASK-034UlgdtbhGVBT1saWLNNP | Issue #294 daily tuple trigger 実装 — decide.mjs tuple モード・daily-ci job・契約 test | done | [issue-294-daily-tuple-trigger.md](./issue-294-daily-tuple-trigger.md) |
 | TASK-034Sa3F7jL2nQ5uY8cE1hK | T1 ci/consumer-verify evidence.mjs + fixture tests + test-ci-consumer-verify task（Issue #294） | done | [issue-294-t1-consumer-verify-evidence-script.md](./issue-294-t1-consumer-verify-evidence-script.md) |
