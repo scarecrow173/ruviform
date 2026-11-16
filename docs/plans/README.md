@@ -154,6 +154,7 @@ Directory: `docs/plans`
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034YtAeTZbhyJdAJhfmsZp | Issue #389 editor-session real-session-terminate 実装計画 | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
 | PLAN-034WXSRQARP7ZVwXSyqHsA | Issue #389 Parent Lease 移行 plan | approved | [issue-389-parent-lease-plan.md](./issue-389-parent-lease-plan.md) |
+| PLAN-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder 実装計画 | approved | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | PLAN-034XGryAYYlLjlEdp2DGUn | Issue #389 dock-test session-lifecycle 実装計画 | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |
 | PLAN-034Uwdhmr1M7BRW1PnLrbn | Issue #410 P2 — view ledger correlation hardening | approved | [issue-410-p2-view-ledger-correlation-hardening.md](./issue-410-p2-view-ledger-correlation-hardening.md) |
 | PLAN-034UmJJcFMIKvjd1orEeeI | Issue #410 — view command ledger bounded retention & correlation semantics | approved | [issue-410-view-command-ledger-bounded-retention-correlation-semantics.md](./issue-410-view-command-ledger-bounded-retention-correlation-semantics.md) |
