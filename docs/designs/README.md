@@ -254,6 +254,7 @@ Directory: `docs/designs`
 | DESIGN-034YaXW1QInVHHaV5zshvW | Issue #631 GPUI Test Lab / Scenario Console GUI v1 設計 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | DESIGN-034XEUiEWDih8GYy2D0ytt | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | DESIGN-EEySPRA3APW4bbQzAFGv0Y | Issue #650 bench-smoke lane coverage 拡張 — 設計 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| DESIGN-6X6G9umyA344m7SixphdpZ | Issue #692 s2 Luau analyzer backend — 設計 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | DESIGN-034ZkLmNpQrStUvWxYzCd2 | Issue #692 設計 — ruviform-script 中立契約 port crate（headless） | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |

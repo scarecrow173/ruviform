@@ -243,6 +243,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YaYvGNtksNB54jY0Umq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 テスト仕様 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
+| TSPEC-PwucpxWy6XmKiZkGa4xT4U | Issue #692 s2 Luau analyzer backend — テスト仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | TSPEC-034ZkLmNpQrStUvWxYzEf3 | Issue #692 テスト仕様 — 中立契約 port の fail-closed・codec 往復・digest・analyzer | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
