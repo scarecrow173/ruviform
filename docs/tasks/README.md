@@ -74,6 +74,7 @@ Directory: `docs/tasks`
 | TASK-034XVTrDLIayJZvRDYBcAb | Issue #631 T1 — Plugin-dock scenario catalog + driver projection | in-progress | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TASK-034XWO3lADUXxGJf44pNX3 | Issue #631 T1 — Headless Scenario Console（plugin-dock-console bin） | in-progress | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | TASK-034YaXXtkSHtOycwJibVwz | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | in-progress | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| TASK-034YJ3y9Bg5CeSmMMjs3g1 | Issue #631 T1 — RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | TASK-034ZkLmNpQrStUvWxYzIj5 | Issue #692 T1 — ruviform-script 中立契約 port crate 実装・検証・docs chain | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
@@ -353,6 +354,7 @@ Directory: `docs/tasks`
 | TASK-034XBNDF8ghODBVWqwPPlR | Issue #628 T1 — deterministic core crate 実装・検証・docs chain | done | [issue-628-deterministic-test-runtime.md](./issue-628-deterministic-test-runtime.md) |
 | TASK-RF628pwpipeline0000004 | Issue #628 タスク — pipeline wiring 実装 | done | [issue-628-pipeline-wiring.md](./issue-628-pipeline-wiring.md) |
 | TASK-RF628sBscripted0000004 | Issue #628 タスク — scripted port-trait backend 実装 | done | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
+| TASK-W4O6BsG8WBPnXtsyy5hX8Y | Issue #629 provisioning runbook tasks | done | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | TASK-034YnAFuBxhg3H6xRVBCKB | Issue #629 virtual endpoint lane registration tasks | done | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034YboiLqA86ymomdjc56s | Issue #629 WASAPI streaming verifier tasks | done | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -365,6 +367,7 @@ Directory: `docs/tasks`
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TASK-aN7eM2gEouRJ8oS3WbU4Ee | Issue #650 bench-smoke lane coverage 拡張 — mise.toml/dev-env doc/evidence 是正 | done | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
+| TASK-034YJlja5SyGAbJySCQZfM | Issue #707 — MIDI input cancellation fault タスク | done | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

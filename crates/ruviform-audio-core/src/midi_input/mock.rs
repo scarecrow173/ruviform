@@ -7,9 +7,10 @@
 //! PoC/bridge tests (`docs/specs/issue-188-timed-midi.md`). It
 //! implements the three port traits over an `Arc<Mutex<…>>` state so
 //! a test can script enumeration results, inject timestamped events
-//! and backend-side loss/untranslatable counters, fail `open`, and
-//! observe `close` — the same surface a real OS adapter exposes,
-//! with none of the OS.
+//! and backend-side loss/untranslatable counters, fail `open`, queue
+//! read-level faults (one-shot errors and terminal cancellation),
+//! and observe `close` — the same surface a real OS adapter
+//! exposes, with none of the OS.
 //!
 //! Thread model mirrors the real contract: `read` takes a short
 //! internal queue lock and never blocks; the test-side handle may be
@@ -36,7 +37,24 @@ struct PortState {
     unsupported: u64,
     opened: bool,
     closed: bool,
+    terminated: bool,
     open_error: Option<DeviceError>,
+    read_faults: VecDeque<ReadFault>,
+}
+
+/// One queued read-level fault, consumed FIFO by the next `read`.
+/// `Fail` reports a non-terminal error once; `Cancel` reports
+/// `Backend("cancelled")` once and kills the subscription (every
+/// later read is `StreamInvalidated`) — the MIDI-side mapping of the
+/// Issue #628 audio cancellation observable onto the
+/// `MidiInput::read → DeviceResult` contract.
+enum ReadFault {
+    /// Return this error once; the subscription stays alive.
+    Fail(DeviceError),
+    /// Return `Backend("cancelled")` once and terminate the
+    /// subscription — models a backend-side abort, distinct from a
+    /// plain `Fail` carrying the same error value.
+    Cancel,
 }
 
 /// Deterministic scripted MIDI backend — the
@@ -130,7 +148,9 @@ impl MockPort {
                 unsupported: 0,
                 opened: false,
                 closed: false,
+                terminated: false,
                 open_error: None,
+                read_faults: VecDeque::new(),
             })),
         }
     }
@@ -178,6 +198,35 @@ impl MockPort {
         self.lock().open_error = Some(error);
     }
 
+    /// Queue one non-terminal `read` failure: the *next* `read` on
+    /// the open subscription returns `Err(error)` without draining
+    /// `pending`/`dropped`/`unsupported` or delivering anything to
+    /// `out`. The subscription stays alive — later reads behave
+    /// normally. Multiple armed faults are consumed FIFO.
+    ///
+    /// A `DeviceError::Backend("cancelled")` scripted here is a
+    /// **plain error**, not a cancellation — use
+    /// [`Self::inject_cancelled`] for the terminating variant.
+    ///
+    /// **RT contract:** non-RT — allocates.
+    pub fn fail_next_read(&self, error: DeviceError) {
+        self.lock().read_faults.push_back(ReadFault::Fail(error));
+    }
+
+    /// Queue a terminal cancellation: the *next* `read` returns
+    /// `Err(DeviceError::Backend("cancelled"))` without delivering
+    /// anything, and every later `read` returns
+    /// `Err(DeviceError::StreamInvalidated)` — the backend-side
+    /// abort the Issue #628 audio cancellation maps onto the
+    /// `MidiInput` contract. Armed like [`Self::fail_next_read`]
+    /// (FIFO among read faults); a dead subscription never consumes
+    /// it.
+    ///
+    /// **RT contract:** non-RT — allocates.
+    pub fn inject_cancelled(&self) {
+        self.lock().read_faults.push_back(ReadFault::Cancel);
+    }
+
     /// Whether `open` has succeeded at least once.
     #[must_use]
     pub fn is_open(&self) -> bool {
@@ -188,6 +237,15 @@ impl MockPort {
     #[must_use]
     pub fn is_closed(&self) -> bool {
         self.lock().closed
+    }
+
+    /// Whether a scripted cancellation has terminated the current
+    /// subscription — distinct from [`Self::is_closed`], which the
+    /// consumer sets via `MidiInput::close`. A terminated port is
+    /// dead for `read` purposes exactly like a closed one.
+    #[must_use]
+    pub fn is_terminated(&self) -> bool {
+        self.lock().terminated
     }
 
     /// Events still queued for the next `read`.
@@ -235,17 +293,30 @@ impl MockInput {
 impl MidiInput for MockInput {
     /// Drains up to `max_events` in arrival order and surfaces the
     /// scripted backend-side drop count exactly once (consumed by the
-    /// first read that reports it). After `close`, reads fail with
-    /// [`DeviceError::StreamInvalidated`] — the subscription is dead,
-    /// matching a real backend whose handle was released.
+    /// first read that reports it). Armed read faults fire first
+    /// (FIFO): `fail_next_read` returns its error once without
+    /// draining anything, `inject_cancelled` returns
+    /// `DeviceError::Backend("cancelled")` once and marks the
+    /// subscription terminated. After `close` or termination, reads
+    /// fail with [`DeviceError::StreamInvalidated`] — the
+    /// subscription is dead, matching a real backend whose handle
+    /// was released or whose stream was cancelled.
     fn read(
         &mut self,
         out: &mut Vec<TimedMidiInput>,
         max_events: usize,
     ) -> DeviceResult<MidiReadStats> {
         let mut state = self.lock();
-        if state.closed {
+        if state.closed || state.terminated {
             return Err(DeviceError::StreamInvalidated);
+        }
+        match state.read_faults.pop_front() {
+            Some(ReadFault::Fail(error)) => return Err(error),
+            Some(ReadFault::Cancel) => {
+                state.terminated = true;
+                return Err(DeviceError::Backend("cancelled"));
+            }
+            None => {}
         }
         let n = state.pending.len().min(max_events);
         out.extend(state.pending.drain(..n));
@@ -398,5 +469,129 @@ mod tests {
         // Consumed — the next read reports zero for both.
         let stats = input.read(&mut out, 8).unwrap();
         assert_eq!(stats, MidiReadStats::new(0));
+    }
+
+    #[test]
+    fn fail_next_read_is_non_terminal_and_does_not_drain() {
+        let mut backend = MockBackend::new();
+        let port = backend.add_port(port_info("p"));
+        port.push(note_on());
+        port.inject_dropped(2);
+        port.inject_unsupported(1);
+        port.fail_next_read(DeviceError::Backend("cancelled"));
+
+        let ports = backend.input_ports().unwrap();
+        let mut input = ports[0].open().unwrap();
+
+        // The fault fires before any drain — the error value is a
+        // plain failure, not a cancellation.
+        let mut out = Vec::new();
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::Backend("cancelled"))
+        ));
+        assert_eq!(out.len(), 0);
+        // Nothing was consumed: event, counters and termination
+        // state all survive for the next read.
+        assert_eq!(port.pending_len(), 1);
+        assert!(!port.is_terminated());
+        assert!(!port.is_closed());
+
+        let stats = input.read(&mut out, 8).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(stats, MidiReadStats::with_unsupported(2, 1));
+    }
+
+    #[test]
+    fn inject_cancelled_reports_then_invalidates() {
+        let mut backend = MockBackend::new();
+        let port = backend.add_port(port_info("p"));
+        port.push(note_on());
+        port.inject_cancelled();
+
+        let ports = backend.input_ports().unwrap();
+        let mut input = ports[0].open().unwrap();
+
+        // The cancelled read aborts delivery: no event reaches `out`,
+        // the queued event stays pending, and the subscription dies.
+        let mut out = Vec::new();
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::Backend("cancelled"))
+        ));
+        assert_eq!(out.len(), 0);
+        assert!(port.is_terminated());
+        assert!(!port.is_closed());
+        assert_eq!(port.pending_len(), 1);
+
+        // Every later read is StreamInvalidated — the queued event is
+        // never delivered.
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::StreamInvalidated)
+        ));
+        assert_eq!(out.len(), 0);
+    }
+
+    #[test]
+    fn read_faults_are_consumed_fifo() {
+        let mut backend = MockBackend::new();
+        let port = backend.add_port(port_info("p"));
+        port.fail_next_read(DeviceError::DeviceBusy);
+        port.inject_cancelled();
+        port.fail_next_read(DeviceError::Backend("cancelled"));
+
+        let ports = backend.input_ports().unwrap();
+        let mut input = ports[0].open().unwrap();
+
+        let mut out = Vec::new();
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::DeviceBusy)
+        ));
+        assert!(!port.is_terminated());
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::Backend("cancelled"))
+        ));
+        assert!(port.is_terminated());
+        // The third armed fault sits behind the terminal one — once
+        // terminated, reads fail StreamInvalidated without consuming it.
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::StreamInvalidated)
+        ));
+    }
+
+    #[test]
+    fn dead_subscription_never_consumes_armed_faults() {
+        let mut backend = MockBackend::new();
+        let port = backend.add_port(port_info("p"));
+        port.fail_next_read(DeviceError::DeviceBusy);
+
+        let ports = backend.input_ports().unwrap();
+        let mut input = ports[0].open().unwrap();
+
+        input.close();
+        let mut out = Vec::new();
+        // Close wins over armed faults: StreamInvalidated, and the
+        // armed fault is never consumed (it would have reported
+        // DeviceBusy had it fired).
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::StreamInvalidated)
+        ));
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::StreamInvalidated)
+        ));
+
+        // Arming on a terminated subscription is inert — reads stay
+        // StreamInvalidated either way.
+        port.inject_cancelled();
+        assert!(matches!(
+            input.read(&mut out, 8),
+            Err(DeviceError::StreamInvalidated)
+        ));
     }
 }

@@ -12,7 +12,7 @@ Directory: `docs/adr`
 | ADR-20261101-variable-ppqn-rational-beat | 可変PPQN・分解能非依存の音楽時間・Native MIDI時刻保持 | accepted | [configurable-ppqn-resolution-independent-musical-time.md](./configurable-ppqn-resolution-independent-musical-time.md) |
 | ADR-034QdDEaffrclLniNBLhQe | Cross-Repo CI アクセス認証と候補revision検証方式 | proposed | [cross-repo-ci-revision.md](./cross-repo-ci-revision.md) |
 | ADR-034JZDNRML000000000002 | denormal 崖対策の実装方針（エンジン層ソフトウェア flush ノード） | accepted | [denormal-mitigation-policy.md](./denormal-mitigation-policy.md) |
-| ADR-034T6RXL42NlmST9mgHHgZ | Driver-neutral GUIアーキテクチャ — GPUI標準Driver方針（仮決定）とWebView-first後継（Issue #384） | proposed | [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](./driver-neutral-gui-gpui-driver-webview-first-issue-384.md) |
+| ADR-034T6RXL42NlmST9mgHHgZ | Driver-neutral GUIアーキテクチャ — GPUI標準Driver方針（仮決定）とWebView-first後継（Issue #384） | accepted | [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](./driver-neutral-gui-gpui-driver-webview-first-issue-384.md) |
 | ADR-034JEe7SAbksaycyrum16R | DSP/SIMD 二層構造とバックエンドの採否 | accepted | [dsp-simd-backend-adoption.md](./dsp-simd-backend-adoption.md) |
 | ADR-034JcihlNe8WCZVpp9RBCq | DSP/SIMD PoC 評価アプローチ | accepted | [dsp-simd-poc.md](./dsp-simd-poc.md) |
 | ADR-034JceOKDwTeWus9xBVXND | FrameRate/TimeBase 意味分離と Timecode 拡張 | accepted | [framerate-timebase-separation-and-timecode-extension.md](./framerate-timebase-separation-and-timecode-extension.md) |

@@ -223,6 +223,7 @@ Directory: `docs/test-specs`
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TSPEC-byCAXVcNUJp9U972Dd16XL | Issue #629 provisioning runbook test spec | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -242,10 +243,12 @@ Directory: `docs/test-specs`
 | TSPEC-034XVTsew8bdAg2cxa7FPJ | Issue #631 Plugin-dock scenario catalog + driver projection のテスト仕様 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TSPEC-034XWO2xGlAsmD12I1K5tl | Issue #631 Headless Scenario Console のテスト仕様 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | TSPEC-034YaYvGNtksNB54jY0Umq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 テスト仕様 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| TSPEC-034YJ3x3sCrtx2chmCg7dk | Issue #631 RealOsGuiTest window-close/DPI 観測面のテスト仕様 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-PwucpxWy6XmKiZkGa4xT4U | Issue #692 s2 Luau analyzer backend — テスト仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | TSPEC-034ZkLmNpQrStUvWxYzEf3 | Issue #692 テスト仕様 — 中立契約 port の fail-closed・codec 往復・digest・analyzer | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
+| TSPEC-034YJlkbKnctq9LE7na0TZ | Issue #707 — MIDI input cancellation fault test specification | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

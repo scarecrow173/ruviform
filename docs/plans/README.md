@@ -196,6 +196,7 @@ Directory: `docs/plans`
 | PLAN-RF628sBscripted0000003 | Issue #628 実装計画 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | PLAN-034XVm4OZxJqPqKqTqVqYq | Issue #629 MIDI loopback round-trip verifier plan | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| PLAN-lbYjQBxlWJgpBMrj1gEUoI | Issue #629 provisioning runbook plan | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | PLAN-034YnADuTW0N5PDeaJtW36 | Issue #629 virtual endpoint lane registration plan | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-034YbbuRqN5VUqXuQfKKHB | Issue #629 WASAPI streaming verifier implementation plan | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -215,10 +216,12 @@ Directory: `docs/plans`
 | PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | PLAN-034XWO1EjjLigZP3nnak6l | Issue #631 Headless Scenario Console 実装計画 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | PLAN-034YaYv5gxaA5bas6AXXIq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 実装計画 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| PLAN-034YJ2M9f2fgfWOT7UhjEs | Issue #631 RealOsGuiTest window-close/DPI 観測面 実装計画 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | PLAN-034XEUqvt3QlpD8X3zyJV2 | Issue #646 ruviform-numeric bench profile compile fix — implementation plan | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | PLAN-a9Ssxq76yRlE9D8PlcxJMe | Issue #650 bench-smoke lane coverage 拡張 — implementation plan | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | PLAN-mJPkr5kJdau9iCE3oIHTKf | Issue #692 s2 Luau analyzer backend — 実装計画 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | PLAN-034ZkLmNpQrStUvWxYzGh4 | Issue #692 実施計画 — ruviform-script 中立契約 port crate 新設・検証・docs chain | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
+| PLAN-034YJjLMWS9oGq5V9aJPaf | Issue #707 — MIDI input cancellation fault implementation plan | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

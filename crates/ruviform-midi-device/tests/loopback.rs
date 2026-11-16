@@ -1,12 +1,14 @@
 //! Loopback round-trip verifier — Issue #629 third slice.
 //!
-//! `#[ignore]`-gated manual real-device lane: the `test-midi-real-device`
-//! mise task collects `#[ignore]` tests, so no lane registration is
-//! needed. Exercises the production `midi_input`/`midi_output` port
-//! traits end to end over the real OS backend: enumerate → name-match
-//! a loopback candidate pair → open both → send a fixed channel-voice
-//! sequence → drain `read` → verify payload, order, and timestamp
-//! invariants against an independent expected list.
+//! `#[ignore]`-gated manual real-device lane: the canonical lane is
+//! `mise run test-midi-virtual-endpoint` (`--test loopback --
+//! --ignored`); `test-midi-real-device` also collects it as part of
+//! its all-`#[ignore]` sweep. Exercises the production
+//! `midi_input`/`midi_output` port traits end to end over the real
+//! OS backend: enumerate → name-match a loopback candidate pair →
+//! open both → send a fixed channel-voice sequence → drain `read` →
+//! verify payload, order, and timestamp invariants against an
+//! independent expected list.
 //!
 //! Fail-closed by contract: with no provisioned loopback pair (the
 //! common case — `WinMM` reports `MidiPortOrigin::Unknown` and cannot
@@ -212,7 +214,8 @@ fn assert_stamp_contract(
 /// Loopback round-trip verifier — the Issue #629 AC2 evidence path.
 ///
 /// Manual opt-in: `cargo test -p ruviform-midi-device --test loopback
-/// -- --ignored` (canonical lane: `mise run test-midi-real-device`).
+/// -- --ignored` (canonical lane: `mise run
+/// test-midi-virtual-endpoint`).
 /// Honest `NotRun` when the backend is unavailable, a direction has
 /// no ports, or no bidirectional name match exists — a name match
 /// alone is a candidate, and a matched pair that fails to round-trip

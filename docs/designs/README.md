@@ -234,6 +234,7 @@ Directory: `docs/designs`
 | DESIGN-RF628sBscripted0000002 | Issue #628 設計 — scripted port-trait backend（device 境界 fault/clock/PCM/MIDI 結線） | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| DESIGN-E2nW52u7DBe6EqaWvY1PRi | Issue #629 provisioning runbook and MIDI virtual lane separation design | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -253,10 +254,12 @@ Directory: `docs/designs`
 | DESIGN-034XVTqsKVWAgXMI3CBA6o | Issue #631 Plugin-dock scenario catalog + driver projection 設計 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | DESIGN-034XWNVav0w3OewvNDtAcm | Issue #631 Headless Scenario Console 設計 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | DESIGN-034YaXW1QInVHHaV5zshvW | Issue #631 GPUI Test Lab / Scenario Console GUI v1 設計 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
+| DESIGN-034YJ0ge8DoTURTLqPKx6J | Issue #631 RealOsGuiTest window-close/DPI 観測面 設計 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | DESIGN-034XEUiEWDih8GYy2D0ytt | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | DESIGN-EEySPRA3APW4bbQzAFGv0Y | Issue #650 bench-smoke lane coverage 拡張 — 設計 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | DESIGN-6X6G9umyA344m7SixphdpZ | Issue #692 s2 Luau analyzer backend — 設計 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | DESIGN-034ZkLmNpQrStUvWxYzCd2 | Issue #692 設計 — ruviform-script 中立契約 port crate（headless） | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
+| DESIGN-034YJiaD4GvnZzHb0ClYwr | Issue #707 — MIDI input cancellation fault detailed design | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |
