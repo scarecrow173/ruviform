@@ -1,0 +1,690 @@
+ADR audit: docs/adr
+Files: 82
+[info] docs/adr/audio-engine-snapshot-swap.md: Missing recommended section: Consequences
+[info] docs/adr/audio-engine-snapshot-swap.md: Missing recommended section: Confirmation
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/designs/audio-engine.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/discovery/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/designs/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-113-engine-plugin-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/test-specs/plugin-rt-retirement-tests.md
+[error] docs/adr/broad-color-management.md: Missing section: Implementation Plan
+[info] docs/adr/broad-color-management.md: Missing recommended section: Decision Drivers
+[info] docs/adr/broad-color-management.md: Missing recommended section: Confirmation
+[info] docs/adr/broad-color-management.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/broad-color-management.md: Missing recommended section: More Information
+[warning] docs/adr/broad-color-management.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/broad-color-management.md: Relation depends-on points to missing ADR: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/specs/color-conversion-kernels.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/designs/color-conversion-kernels.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-99-color-conversion-kernels.md
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Context and Problem Statement
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Considered Options
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Decision Outcome
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Implementation Plan
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Verification
+[info] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing recommended section: Decision Drivers
+[info] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing recommended section: Consequences
+[info] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing recommended section: Confirmation
+[info] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing recommended section: More Information
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation supersedes points to missing ADR: docs/adr/musical-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/designs/music-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/designs/time-model-extension.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation derives-from points to missing ADR: docs/adr/musical-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/cross-repo-ci-revision.md: Relation source points to missing ADR: docs/discovery/issue-219-consumer-cross-repo-ci.md
+[warning] docs/adr/cross-repo-ci-revision.md: Relation related points to missing ADR: docs/discovery/issue-219-consumer-cross-repo-ci.md
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Context and Problem Statement
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Decision Outcome
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Implementation Plan
+[info] docs/adr/denormal-mitigation-policy.md: Missing recommended section: Decision Drivers
+[info] docs/adr/denormal-mitigation-policy.md: Missing recommended section: Confirmation
+[info] docs/adr/denormal-mitigation-policy.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/denormal-mitigation-policy.md: Missing recommended section: More Information
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derives-from points to missing ADR: docs/specs/denormal-mitigation.md
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derives-from points to missing ADR: docs/adr/dsp-simd-backend-adoption.md
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derived-by points to missing ADR: docs/designs/denormal-flush-node.md
+[warning] docs/adr/dsp-simd-backend-adoption.md: Relation derived-by points to missing ADR: docs/designs/ruviform-dsp.md
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Decision Outcome
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Implementation Plan
+[info] docs/adr/issue-116-supervisor-placement.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-116-supervisor-placement.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-116-supervisor-placement.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-116-supervisor-placement.md: Missing recommended section: More Information
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-core.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-e2e.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/test-specs/issue-116-supervisor-core-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/test-specs/issue-116-supervisor-e2e-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation verified-by points to missing ADR: docs/test-specs/issue-116-supervisor-core-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation verified-by points to missing ADR: docs/test-specs/issue-116-supervisor-e2e-tests.md
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Decision Outcome
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Implementation Plan
+[info] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing recommended section: More Information
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/specs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/discovery/issue-117-bundle-child-process-discovery.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-child-instance-split.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-route-pool-and-isolation-surface.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-bundle-e2e-and-granularity-verification.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/test-specs/issue-117-bundle-failed-granularity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/adr/issue-116-supervisor-placement.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-e2e.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-failed-parity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation verified-by points to missing ADR: docs/test-specs/issue-117-bundle-failed-granularity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-failed-parity-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation depends-on points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation depends-on points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/adr/issue-118-video-l1-host-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/specs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-wire-v3-video-codec.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-runner-and-erased-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-host-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-wire-v3-codec-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation depends-on points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation depends-on points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/adr/issue-118-video-l1-create-path-segment.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/specs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-host-surface.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/specs/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/discovery/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/designs/issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/impl/ir/rt-observability-poc.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derives-from points to missing ADR: docs/specs/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derives-from points to missing ADR: docs/discovery/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/designs/issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-audio-counters-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-stderr-drain-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-diagnostics-retention-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-failure-cause-notification-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-parity-nonregression-tests.md
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.added.0: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.0: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.1: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.2: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.3: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.4: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.5: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing section: Implementation Plan
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing section: Verification
+[info] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing recommended section: More Information
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/specs/issue-181-multi-window.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/discovery/issue-181-multi-window-inventory.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/designs/issue-156-gui-host-foundation.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation derives-from points to missing ADR: docs/discovery/issue-181-multi-window-inventory.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation derives-from points to missing ADR: docs/specs/issue-181-multi-window.md
+[error] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing section: Implementation Plan
+[error] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing section: Verification
+[info] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing recommended section: More Information
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/specs/issue-182-dock-tree.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/discovery/issue-182-dock-tree-inventory.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/designs/issue-181-multi-window.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation derives-from points to missing ADR: docs/discovery/issue-182-dock-tree-inventory.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation derives-from points to missing ADR: docs/specs/issue-182-dock-tree.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation derives-from points to missing ADR: docs/discovery/issue-185-generic-probe-observation-inventory.md
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation implements points to missing ADR: docs/specs/issue-187-audio-input-port-capture-clock.md
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation derives-from points to missing ADR: docs/specs/issue-187-audio-input-port-capture-clock.md
+[error] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Missing section: Verification
+[info] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Missing recommended section: Pros and Cons of the Options
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation related points to missing ADR: docs/discovery/issue-188-timed-midi-inventory.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation related points to missing ADR: docs/specs/issue-188-timed-midi.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation derives-from points to missing ADR: docs/discovery/issue-188-timed-midi-inventory.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation source points to missing ADR: docs/discovery/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation source points to missing ADR: docs/specs/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation derives-from points to missing ADR: docs/discovery/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation derives-from points to missing ADR: docs/specs/issue-191-pcm-wav-output-backend.md
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Decision Outcome
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Implementation Plan
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Verification
+[info] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing recommended section: Consequences
+[info] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing recommended section: More Information
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/specs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/discovery/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/designs/issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/designs/issue-184-typed-graph-ir-ports-buses-connections-validation-revisions-m1.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation derives-from points to missing ADR: docs/discovery/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation derives-from points to missing ADR: docs/specs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[error] docs/adr/issue-197-media-reader-boundary-additions.md: Missing section: Implementation Plan
+[error] docs/adr/issue-197-media-reader-boundary-additions.md: Missing section: Verification
+[info] docs/adr/issue-197-media-reader-boundary-additions.md: Missing recommended section: Consequences
+[info] docs/adr/issue-197-media-reader-boundary-additions.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-197-media-reader-boundary-additions.md: Missing recommended section: More Information
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation source points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation source points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation related points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation derives-from points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation derives-from points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Decision Outcome
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Implementation Plan
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Verification
+[info] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing recommended section: More Information
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation source points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation source points to missing ADR: docs/discovery/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation implements points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/offline-determinism-scope.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation derives-from points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation derives-from points to missing ADR: docs/discovery/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation source points to missing ADR: docs/discovery/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation source points to missing ADR: docs/specs/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/specs/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/issue-197-media-reader-boundary-additions.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation related points to missing ADR: docs/designs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation related points to missing ADR: docs/impl/ir/issue-197-media-reader-implementation-record.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation derives-from points to missing ADR: docs/discovery/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation source points to missing ADR: docs/discovery/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation source points to missing ADR: docs/specs/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/specs/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/issue-197-media-reader-boundary-additions.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/impl/ir/issue-197-media-reader-implementation-record.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/impl/ir/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation derives-from points to missing ADR: docs/discovery/issue-244-media-reader-prefetch-contract-warts.md
+[error] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing section: Implementation Plan
+[error] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing section: Verification
+[info] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing recommended section: More Information
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Relation related points to missing ADR: docs/impl/ir/issue-183-bandfilter-shared-spectrum-and-per-call-scratch-api.md
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Relation related points to missing ADR: docs/designs/issue-152-f64-correlation.md
+[info] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Missing recommended section: Consequences
+[info] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Missing recommended section: More Information
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation related points to missing ADR: docs/designs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation derives-from points to missing ADR: docs/designs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation derives-from points to missing ADR: docs/specs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-309-probe-time-context-and-alignment.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-308-probe-rebind-atomic.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-280-rt-record-bridge-clock-correlation.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation derives-from points to missing ADR: docs/specs/issue-309-probe-time-frame-clock-epoch-alignment.md
+[error] docs/adr/issue-312-test-control-transport-security.md: Missing section: Implementation Plan
+[error] docs/adr/issue-312-test-control-transport-security.md: Missing section: Verification
+[info] docs/adr/issue-312-test-control-transport-security.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-312-test-control-transport-security.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-312-test-control-transport-security.md: Missing recommended section: More Information
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation source points to missing ADR: docs/discovery/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation source points to missing ADR: docs/specs/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/specs/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation related points to missing ADR: docs/designs/issue-156-gui-host-foundation.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation derives-from points to missing ADR: docs/discovery/issue-312-test-gui-host-lifecycle.md
+[error] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing section: Implementation Plan
+[error] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing section: Verification
+[info] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing recommended section: More Information
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Contains unresolved placeholders
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation source points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation implements points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation implemented-by points to missing ADR: docs/designs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation depends-on points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation depends-on points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation related points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation related points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation refines points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation derives-from points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation derived-by points to missing ADR: docs/designs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation verified-by points to missing ADR: docs/test-specs/issue-326-ci-manual-only.md
+[error] docs/adr/issue-328-ci-concurrency-grouping.md: Missing section: Implementation Plan
+[error] docs/adr/issue-328-ci-concurrency-grouping.md: Missing section: Verification
+[info] docs/adr/issue-328-ci-concurrency-grouping.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-328-ci-concurrency-grouping.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-328-ci-concurrency-grouping.md: Missing recommended section: More Information
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Contains unresolved placeholders
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation source points to missing ADR: docs/specs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation depends-on points to missing ADR: docs/specs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation related points to missing ADR: docs/designs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation refined-by points to missing ADR: docs/adr/issue-326-ci-yml-dispatch-only.md
+[error] docs/adr/issue-329-sccache-gha-backend.md: Missing section: Implementation Plan
+[error] docs/adr/issue-329-sccache-gha-backend.md: Missing section: Verification
+[info] docs/adr/issue-329-sccache-gha-backend.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-329-sccache-gha-backend.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-329-sccache-gha-backend.md: Missing recommended section: More Information
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Contains unresolved placeholders
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation source points to missing ADR: docs/specs/issue-329-sccache-compile-cache.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation depends-on points to missing ADR: docs/specs/issue-329-sccache-compile-cache.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation related points to missing ADR: docs/designs/issue-329-sccache-compile-cache.md
+[error] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing section: Implementation Plan
+[error] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing section: Verification
+[info] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing recommended section: More Information
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation related points to missing ADR: docs/designs/issue-336-sink-degraded-clone.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation derives-from points to missing ADR: docs/specs/issue-336-sink-degraded-clone.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation derived-by points to missing ADR: docs/designs/issue-336-sink-degraded-clone.md
+[info] docs/adr/issue-360-mint-child-exit-test-scenario.md: Missing recommended section: Consequences
+[info] docs/adr/issue-360-mint-child-exit-test-scenario.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-360-mint-child-exit-test-scenario.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/issue-360-mint-child-exit-test-scenario.md: Missing recommended section: More Information
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation source points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation depends-on points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation related points to missing ADR: docs/designs/issue-360-heir-exit-post-mint-ordering.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation derives-from points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation source points to missing ADR: docs/specs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation implemented-by points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation depends-on points to missing ADR: docs/specs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation depends-on points to missing ADR: docs/specs/issue-366-full-ci-stage1.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/designs/issue-366-full-ci-stage1.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation refined-by points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation derived-by points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Contains unresolved placeholders
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation source points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation implements points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation implemented-by points to missing ADR: docs/designs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation depends-on points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation depends-on points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation related points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation related points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation refines points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation derives-from points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation derived-by points to missing ADR: docs/designs/issue-368-tracker-reconcile.md
+[error] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing section: Implementation Plan
+[error] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing section: Verification
+[info] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing recommended section: More Information
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Considered Options
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Decision Outcome
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Implementation Plan
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Verification
+[info] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing recommended section: Decision Drivers
+[info] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing recommended section: Confirmation
+[info] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing recommended section: Pros and Cons of the Options
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/designs/issue-558-script-contract-design.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation derived-by points to missing ADR: docs/designs/issue-553-workflow-orchestration-design.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: docs/specs/issue-553-workflow-orchestration.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: evidence/rf553/contract-trace.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: evidence/rf553/consumer-applicability.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation derived-by points to missing ADR: docs/designs/issue-558-script-contract-design.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: docs/specs/issue-558-script-contract.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: evidence/rf558/contract-trace.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: evidence/rf558/consumer-applicability.md
+[error] docs/adr/issue-692-luau-dependency-selection.md: Missing section: Implementation Plan
+[error] docs/adr/issue-692-luau-dependency-selection.md: Missing section: Verification
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: docs/specs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation related points to missing ADR: docs/adr/issue-558-script-backend-contract.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation related points to missing ADR: docs/designs/issue-692-script-port.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation derived-by points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: docs/specs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: docs/discovery/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/gap-report.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/revision-alignment.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/license-ledger.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/platform-matrix.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/build-link-run.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: ffi-poc/Cargo.toml
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: Cargo.lock
+[error] docs/adr/issue-716-runtime-backend.md: Missing section: Implementation Plan
+[error] docs/adr/issue-716-runtime-backend.md: Missing section: Verification
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: docs/specs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: docs/designs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/adr/issue-692-luau-dependency-selection.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/adr/issue-558-script-backend-contract.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation refines points to missing ADR: docs/adr/issue-692-luau-dependency-selection.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation derived-by points to missing ADR: docs/designs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: docs/specs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: docs/discovery/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: Cargo.toml
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: Cargo.lock
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: evidence/rf692/luau-backend-verification.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: docs/specs/issue-727-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/adr/issue-716-runtime-backend.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/offline-execution-driver.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation derived-by points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/specs/issue-727-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/offline-execution-driver.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/lib.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/job.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/offline.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/README.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: evidence/rf727/verification.md
+[info] docs/adr/licensing-and-distribution-policy.md: Missing recommended section: Pros and Cons of the Options
+[error] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing section: Implementation Plan
+[error] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing section: Verification
+[info] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing recommended section: More Information
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation related points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation refines points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation derives-from points to missing ADR: docs/specs/issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation derives-from points to missing ADR: docs/discovery/issue-195-m2-typed-graph-compiler-runtime-audit.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation references points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[info] docs/adr/media-io-backend-abstraction.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/media-observation-non-destructive-pcm.md: Missing recommended section: Confirmation
+[info] docs/adr/media-observation-non-destructive-pcm.md: Missing recommended section: Pros and Cons of the Options
+[error] docs/adr/musical-time-model.md: Missing section: Context and Problem Statement
+[error] docs/adr/musical-time-model.md: Missing section: Decision Outcome
+[error] docs/adr/musical-time-model.md: Missing section: Implementation Plan
+[error] docs/adr/musical-time-model.md: Missing section: Verification
+[info] docs/adr/musical-time-model.md: Missing recommended section: Decision Drivers
+[info] docs/adr/musical-time-model.md: Missing recommended section: Confirmation
+[info] docs/adr/musical-time-model.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/musical-time-model.md: Missing recommended section: More Information
+[warning] docs/adr/musical-time-model.md: Relation depends-on points to missing ADR: docs/specs/music-time-design.md
+[warning] docs/adr/musical-time-model.md: Relation superseded-by points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/musical-time-model.md: Relation derives-from points to missing ADR: docs/specs/music-time-design.md
+[warning] docs/adr/musical-time-model.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/musical-time-model.md: Relation derived-by points to missing ADR: docs/designs/music-time-model.md
+[info] docs/adr/offline-determinism-scope.md: Missing recommended section: Consequences
+[info] docs/adr/offline-determinism-scope.md: Missing recommended section: Confirmation
+[warning] docs/adr/offline-determinism-scope.md: Relation derives-from points to missing ADR: docs/specs/offline-execution-driver.md
+[warning] docs/adr/offline-determinism-scope.md: Relation derived-by points to missing ADR: docs/designs/offline-execution-driver.md
+[info] docs/adr/ofx-host-video-contract-and-c-abi.md: Missing recommended section: Confirmation
+[info] docs/adr/ofx-host-video-contract-and-c-abi.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/ofx-host-video-contract-and-c-abi.md: Missing recommended section: More Information
+[error] docs/adr/ofx-video-plugin-scope.md: Missing section: Implementation Plan
+[info] docs/adr/ofx-video-plugin-scope.md: Missing recommended section: Decision Drivers
+[info] docs/adr/ofx-video-plugin-scope.md: Missing recommended section: Confirmation
+[info] docs/adr/ofx-video-plugin-scope.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/ofx-video-plugin-scope.md: Missing recommended section: More Information
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation related points to missing ADR: docs/discovery/issue-186-param-control-events-inventory.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation related points to missing ADR: docs/specs/issue-186-param-control-events.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation derives-from points to missing ADR: docs/discovery/issue-186-param-control-events-inventory.md
+[info] docs/adr/platform-and-toolchain-targets.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/plugin-architecture-clap-vst3.md: Missing recommended section: Pros and Cons of the Options
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/adr/plugin-gui-embedding.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/plugin-isolation-design.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/discovery/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-114-real-adapter-l1-e2e.md
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Context and Problem Statement
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Decision Outcome
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Implementation Plan
+[info] docs/adr/plugin-gui-embedding.md: Missing recommended section: Decision Drivers
+[info] docs/adr/plugin-gui-embedding.md: Missing recommended section: Confirmation
+[info] docs/adr/plugin-gui-embedding.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/plugin-gui-embedding.md: Missing recommended section: More Information
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/adr/plugin-architecture-clap-vst3.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derived-by points to missing ADR: docs/designs/plugin-gui-poc.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derived-by points to missing ADR: docs/designs/issue-115-l1-gui-cross-process-parenting.md
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Context and Problem Statement
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Decision Outcome
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Implementation Plan
+[info] docs/adr/plugin-isolation-strategy.md: Missing recommended section: Decision Drivers
+[info] docs/adr/plugin-isolation-strategy.md: Missing recommended section: Confirmation
+[info] docs/adr/plugin-isolation-strategy.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/plugin-isolation-strategy.md: Missing recommended section: More Information
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derives-from points to missing ADR: docs/specs/plugin-isolation-design.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derives-from points to missing ADR: docs/adr/plugin-architecture-clap-vst3.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-host-l0.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/ofx-video-plugin-scope.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-76-plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-116-supervisor-placement.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-118-video-l1-host-surface.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/designs/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-113-engine-plugin-integration.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation verified-by points to missing ADR: docs/test-specs/plugin-rt-retirement-tests.md
+[info] docs/adr/realtime-contract-and-verification-policy.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/replace-template-derived-docs-metadata-with-ruviform.md: Missing recommended section: Pros and Cons of the Options
+[error] docs/adr/rooted-read-capability-placement.md: Missing section: Implementation Plan
+[error] docs/adr/rooted-read-capability-placement.md: Missing section: Verification
+[info] docs/adr/rooted-read-capability-placement.md: Missing recommended section: Confirmation
+[info] docs/adr/rooted-read-capability-placement.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/rooted-read-capability-placement.md: Missing recommended section: More Information
+[info] docs/adr/rt-foundation-primitives-implementation.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/rust-dev-foundation-toolchain-and-ci-profile.md: Missing recommended section: Pros and Cons of the Options
+[error] docs/adr/second-target-editing-model.md: Missing section: Implementation Plan
+[info] docs/adr/second-target-editing-model.md: Missing recommended section: Decision Drivers
+[info] docs/adr/second-target-editing-model.md: Missing recommended section: Confirmation
+[info] docs/adr/second-target-editing-model.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/second-target-editing-model.md: Missing recommended section: More Information
+[warning] docs/adr/second-target-editing-model.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation depends-on points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/second-target-editing-model.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/specs/edit-data-model.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/edit-data-model.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/specs/composite-transition-kernels.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/composite-transition-kernels.md
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Decision Outcome
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Implementation Plan
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Verification
+[info] docs/adr/select-media-backends-avi-and-mp4.md: Missing recommended section: Confirmation
+[info] docs/adr/select-media-backends-avi-and-mp4.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/select-media-backends-avi-and-mp4.md: Missing recommended section: More Information
+[error] docs/adr/select-midi-input-backend.md: Missing section: Decision Outcome
+[info] docs/adr/select-midi-input-backend.md: Missing recommended section: Confirmation
+[info] docs/adr/select-midi-input-backend.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/select-midi-input-backend.md: Missing recommended section: More Information
+[warning] docs/adr/select-midi-input-backend.md: Relation depends-on points to missing ADR: docs/adr/select-audio-device-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/designs/issue-253-os-midi-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/specs/issue-253-os-midi-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/designs/issue-188-timed-midi-detailed.md
+[info] docs/adr/simd-ulp.md: Missing recommended section: More Information
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Context and Problem Statement
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Considered Options
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Decision Outcome
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Implementation Plan
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Verification
+[info] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing recommended section: Decision Drivers
+[info] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing recommended section: Consequences
+[info] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing recommended section: Confirmation
+[info] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing recommended section: More Information
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Context and Problem Statement
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Decision Outcome
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Implementation Plan
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Verification
+[info] docs/adr/transport-span-scheduler-applied-receipt.md: Missing recommended section: Decision Drivers
+[info] docs/adr/transport-span-scheduler-applied-receipt.md: Missing recommended section: Consequences
+[info] docs/adr/transport-span-scheduler-applied-receipt.md: Missing recommended section: Confirmation
+[info] docs/adr/transport-span-scheduler-applied-receipt.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/transport-span-scheduler-applied-receipt.md: Missing recommended section: More Information
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/discovery/issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation derives-from points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation derives-from points to missing ADR: docs/discovery/issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/specs/issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation derives-from points to missing ADR: docs/discovery/issue-184-bus-port-graph-ir-crate.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation derives-from points to missing ADR: docs/specs/issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md
+[info] docs/adr/ui-architecture-webview-hybrid.md: Missing recommended section: Pros and Cons of the Options
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation derived-by points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation derived-by points to missing ADR: docs/adr/plugin-gui-embedding.md
+[error] docs/adr/video-av-sync-policy.md: Missing section: Context and Problem Statement
+[error] docs/adr/video-av-sync-policy.md: Missing section: Decision Outcome
+[error] docs/adr/video-av-sync-policy.md: Missing section: Implementation Plan
+[info] docs/adr/video-av-sync-policy.md: Missing recommended section: Decision Drivers
+[info] docs/adr/video-av-sync-policy.md: Missing recommended section: Confirmation
+[info] docs/adr/video-av-sync-policy.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/video-av-sync-policy.md: Missing recommended section: More Information
+[warning] docs/adr/video-av-sync-policy.md: Relation derives-from points to missing ADR: docs/specs/video-engine.md
+[warning] docs/adr/video-av-sync-policy.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/video-av-sync-policy.md: Relation derived-by points to missing ADR: docs/designs/video-engine.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/adr/broad-color-management.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-26-video-foundation.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/specs/composite-transition-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/designs/composite-transition-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/specs/color-conversion-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/designs/color-conversion-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-99-color-conversion-kernels.md
+[info] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Missing recommended section: Decision Drivers
+[info] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Missing recommended section: Consequences
+[info] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Missing recommended section: Confirmation
+[info] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Missing recommended section: Pros and Cons of the Options
+[info] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Missing recommended section: More Information
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Index does not link issue-727-bounded-nonrt-job-executor-placement.md

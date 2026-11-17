@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "共通基盤・Observability・Diagnostics・Debug とクレート分割の設計方針"
 created: "2026-10-22"
-updated: "2026-11-09"
+updated: "2026-11-17"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -279,7 +279,7 @@ Issue #101 の後続として workspace 18 クレート（棚卸し時点の数�
 
 ### Process / IPC / Platform
 
-- `ruviform-exec` の OS 接地面はスレッド優先度機構（Windows MMCSS・macOS time-constraint・Linux `SCHED_FIFO`。`audio_thread_priority` は非公開の実装詳細）と `OfflineDriver` のみであり、プロセス管理・IPC・共有メモリの実装は workspace に存在しない。なお [全体設計ベースライン](ruviform-architecture-design-baseline.md) L240・L352・L392 の「スレッドプール／ワーカープール」表記は Issue #24 の実装（`run_parallel` 呼び出しごとに `std::thread::scope` で生成される scoped worker）より前の記述であり、次回 baseline 改訂時の更新候補とする。
+- `ruviform-exec` の OS 接地面はスレッド優先度機構（Windows MMCSS・macOS time-constraint・Linux `SCHED_FIFO`。`audio_thread_priority` は非公開の実装詳細）と `OfflineDriver` のみであり、プロセス管理・IPC・共有メモリの実装は workspace に存在しない。なお [全体設計ベースライン](ruviform-architecture-design-baseline.md) L262・L375・L415 の「スレッドプール／ワーカープール」表記は Issue #24 の実装（`run_parallel` 呼び出しごとに `std::thread::scope` で生成される scoped worker）より前の記述であり、bounded 非 RT job executor の配置判断（[Issue #727 ADR](../adr/issue-727-bounded-nonrt-job-executor-placement.md)）でも baseline 改訂が必要と結論づけた。改訂は次回 baseline 改訂時の更新候補とする。
 - プラグイン L1 は [plugin-isolation](plugin-isolation.md) 上の設計のみである。L0 のコマンド面は既にシリアライズ可能な plain data（`ruviform-plugin-host` の `command.rs`）であり、L1 化時にコマンド表現の再設計を要しない。
 
 ## 依存方向と既存契約との整合

@@ -1,0 +1,94 @@
+impl record audit: docs/impl/ir
+Files: 323
+[warning] docs/impl/ir/issue-193-migration-plan-update.md: Relation related points to missing target: docs/impl/ir/issue-193-migration-execution-plan.md
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: fixture_version は consumer Cargo.lock の ruviform-audio-test version + @<RUVIFORM_REV> 形式（ruviform-audio-test-<version>@<40hex>）で記録 — 抽出失敗時は flag 省略（null）で捏造しない
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: rec() case spec を field 6=oracle・field 7=fixture_version へ additive 拡張（oracle+fixture は $RUVIFORM_REV 同伴のペア必須 — CASE_SPEC_RE で pin）
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: SV の 2 oracle file は別 step・別 lane 行で実行（file 別 verdict attribution）
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: SV の `mise run test synvelis-recording --test rf628_oracle --test rf628_oracle_rt_alloc` 単一併記実行 — coverage 同等だが file 別 verdict を埋没させるため却下
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: fixture_version の version+SHA opaque hash 化 — 可読性・監査性で却下
+[warning] docs/impl/ir/issue-294-consumer-oracle-lanes.md: Experiment reference points to missing target: oracle 行のみ `node "$EV" lane` 直接呼出し — spec/flag 対応が分散するため却下（rec() 拡張で一箇所に集約）
+[warning] docs/impl/ir/issue-299-io-structured-xml.md: Relation implements points to missing target: TASK-034S6MooKs5lp0V92HyYuw
+[warning] docs/impl/ir/issue-306-io-composition-e2e.md: Experiment reference points to missing target: serde_json は非有限 f64 をエラーにせず null に写すため、encode 失敗 fixture は custom Serialize impl 失敗に切替
+[warning] docs/impl/ir/issue-306-io-composition-e2e.md: Experiment reference points to missing target: WAV 未 finalize drop は backend が best-effort finalize するため placeholder 仮定を捨て、incomplete 試験は truncated bytes の独立 decode 不一致で検証
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Summary
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Context
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Validation
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Risks
+[error] docs/impl/ir/issue-306-io-e2e-cases.md: Missing required section: Follow-ups
+[warning] docs/impl/ir/issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md: Experiment reference points to missing target: TAR terminator mutant: writer.finish は 1024 bytes (2 zero block) を出力するが reader は単一 zero block を終端受理するため 512 bytes 欠落は mutant にならず、1024 bytes 除去に修正
+[warning] docs/impl/ir/issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md: Experiment reference points to missing target: truncated TAR payload read: TarEntryReader は typed ArchiveError を io::Error に包んで返すため、helper の一律 Io 分類をやめ entry.finish() で真の kind を再取得
+[warning] docs/impl/ir/issue-306-io-e2e-slice-2-fault-fuzz-fixture-os-fs-probe-rooted-boundary.md: Experiment reference points to missing target: Windows delete-pending: open handle 保持中の directory は try_exists に残るため、RootedDir/file handle を scope 解放してから cleanup 非存在 assert
+[warning] docs/impl/ir/issue-313-windows-os-sendinput-smoke-os-capability-matrix.md: Relation defers points to missing target: ScenarioDriver::RealOs adapter 本体（#464 系の別タスク）
+[warning] docs/impl/ir/issue-313-windows-os-sendinput-smoke-os-capability-matrix.md: Relation defers points to missing target: macOS/Linux/pointer/IME/a11y の real-OS smoke（Issue #313 残スコープ）
+[warning] docs/impl/ir/issue-313-windows-pointer-smoke.md: Relation defers points to missing target: macOS/Linux/pointer 右中ボタン・修飾・wheel・IME/a11y・DPI 動的変化・2 window（Issue #313 残スコープ）
+[warning] docs/impl/ir/issue-313-windows-pointer-smoke.md: Relation defers points to missing target: ScenarioDriver::RealOs adapter 本体（#464 系の別タスク）
+[error] docs/impl/ir/issue-389-real-session-lifecycle.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-389-real-session-lifecycle.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-389-real-session-lifecycle.md: Missing required section: Validation
+[error] docs/impl/ir/issue-389-real-session-lifecycle.md: Missing required section: Risks
+[error] docs/impl/ir/issue-389-real-session-lifecycle.md: Missing required section: Follow-ups
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Context
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Validation
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Risks
+[error] docs/impl/ir/issue-562-cb-poc.md: Missing required section: Follow-ups
+[error] docs/impl/ir/issue-582-ci-lane-failures.md: Missing required section: Context
+[error] docs/impl/ir/issue-582-ci-lane-failures.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-582-ci-lane-failures.md: Missing required section: Validation
+[error] docs/impl/ir/issue-582-ci-lane-failures.md: Missing required section: Risks
+[error] docs/impl/ir/issue-582-ci-lane-failures.md: Missing required section: Follow-ups
+[error] docs/impl/ir/issue-625-ci-e2e-handshake-race.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-628-scripted-backend.md: Missing required section: Context
+[error] docs/impl/ir/issue-628-scripted-backend.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-628-scripted-backend.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Summary
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Context
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Validation
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Risks
+[error] docs/impl/ir/issue-630-abi-validator.md: Missing required section: Follow-ups
+[warning] docs/impl/ir/issue-692-luau-backend.md: Relation defers points to missing target: 実 runtime ScriptBackend 実装（eval/budget/artifact — 別 slice）
+[warning] docs/impl/ir/issue-692-luau-backend.md: Relation defers points to missing target: synvelis thin adapter 接続（AC3 — synvelis#271/#272/#273/#274）
+[warning] docs/impl/ir/issue-692-luau-backend.md: Relation defers points to missing target: macOS/Linux 実機検証・release-size/performance（Windows x86_64 のみ実測）
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Summary
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Context
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Validation
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Risks
+[error] docs/impl/ir/issue-692-luau-backend.md: Missing required section: Follow-ups
+[warning] docs/impl/ir/issue-692-script-port.md: Relation defers points to missing target: 実 Luau backend / Analyzer 製品 port（Issue #692 AC2 本体 — s2 slice）
+[warning] docs/impl/ir/issue-692-script-port.md: Relation defers points to missing target: synvelis thin adapter 接続（synvelis#271/#272/#273/#274 consumer gate）
+[warning] docs/impl/ir/issue-692-script-port.md: Relation defers points to missing target: Luau.Analysis native FFI 統合（Issue #560 系 — s2 以降）
+[warning] docs/impl/ir/issue-692-script-port.md: Relation defers points to missing target: mlua vendored vs native bridge の依存選定（s2 slice で RF-SCRIPT-02 結果を参照）
+[warning] docs/impl/ir/issue-692-script-port.md: Relation defers points to missing target: *-full / *-msrv / 3OS 横断検証（CI lane 委譲）
+[warning] docs/impl/ir/issue-716-runtime-backend.md: Relation defers points to missing target: 実 OS/実 VM 経路の受入（consumer gate — synvelis#516・synvelis#267 AUTX-08）
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Summary
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Context
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Validation
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Risks
+[error] docs/impl/ir/issue-716-runtime-backend.md: Missing required section: Follow-ups
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Summary
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Context
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Validation
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Risks
+[error] docs/impl/ir/issue-720-consumer-tuple-v2.md: Missing required section: Follow-ups
+[warning] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Experiment reference points to missing target: docs/impl/exp/issue-722-vst3-lifecycle-audit-exp.jsonl
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Summary
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Context
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Implementation
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Related Experiments
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Validation
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Risks
+[error] docs/impl/ir/issue-722-vst3-lifecycle-audit.md: Missing required section: Follow-ups
+[warning] docs/impl/ir/poc-clap-binding-adapter.md: Experiment reference points to missing target: clack-0.2.0-clap-binding-poc
+[warning] docs/impl/ir/README.md: docs/impl/ir/README.md has no row for issue-727-job-executor.md
+[info] docs/impl/ir/README.md: docs/impl/ir/README.md row order differs from the deterministic index order

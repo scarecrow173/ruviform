@@ -1,0 +1,13 @@
+Scope mismatch: no shared-suite document types are resident in "docs/impl" (owned by impl-doc; resident types: none)
+Usage: node scripts/doc_status.js <command> [options]
+
+Commands:
+  list     List artifact inventory and metadata
+  lint     Enumerate deterministic contract and structure findings
+  audit    Evaluate findings with blocking summary for graph gates
+  health   Aggregate repository-wide findings by category
+
+Options:
+  [--type idea|brainstorm|discovery|spec|plan|task|design|adr|test-spec|all]
+  [--dir <path>] [--status <status>] [--rule <ruleId>] [--severity error|warning|info]
+  [--profile artifact|materialized] [--blocking] [--json] [--external-links]

@@ -1,0 +1,928 @@
+ADR agent-readiness review: docs/adr
+[warning] docs/adr/audio-engine-snapshot-swap.md: Implementation Plan should name affected paths
+[warning] docs/adr/audio-engine-snapshot-swap.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/designs/audio-engine.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/discovery/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/designs/engine-plugin-host-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-113-engine-plugin-integration.md
+[warning] docs/adr/audio-engine-snapshot-swap.md: Relation derived-by points to missing ADR: docs/test-specs/plugin-rt-retirement-tests.md
+[error] docs/adr/broad-color-management.md: Missing section: Implementation Plan
+[warning] docs/adr/broad-color-management.md: Implementation Plan should name affected paths
+[warning] docs/adr/broad-color-management.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/broad-color-management.md: Verification should contain checkboxes
+[warning] docs/adr/broad-color-management.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/broad-color-management.md: Relation depends-on points to missing ADR: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/adr/video-proc-kernel-api-and-color-hdr-scope.md
+[warning] docs/adr/broad-color-management.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/specs/color-conversion-kernels.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/designs/color-conversion-kernels.md
+[warning] docs/adr/broad-color-management.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-99-color-conversion-kernels.md
+[warning] docs/adr/chunk-outputcallbackinfo-timestamp.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/59
+[warning] docs/adr/chunk-outputcallbackinfo-timestamp.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/pull/47
+[warning] docs/adr/chunk-outputcallbackinfo-timestamp.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/25
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Context and Problem Statement
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Considered Options
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Decision Outcome
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Implementation Plan
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Missing section: Verification
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Implementation Plan should name affected paths
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Verification should contain checkboxes
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/19
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/189
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation supersedes points to missing ADR: docs/adr/musical-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/designs/music-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/designs/time-model-extension.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation related points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation derives-from points to missing ADR: docs/adr/musical-time-model.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/90
+[warning] docs/adr/configurable-ppqn-resolution-independent-musical-time.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/91
+[warning] docs/adr/cross-repo-ci-revision.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/219
+[warning] docs/adr/cross-repo-ci-revision.md: Relation source points to missing ADR: docs/discovery/issue-219-consumer-cross-repo-ci.md
+[warning] docs/adr/cross-repo-ci-revision.md: Relation related points to missing ADR: docs/discovery/issue-219-consumer-cross-repo-ci.md
+[warning] docs/adr/cross-repo-ci-revision.md: Relation related points to missing ADR: https://github.com/scarecrow173/audio-lens/blob/main/docs/designs/ruviform-dependency-ci.md
+[warning] docs/adr/cross-repo-ci-revision.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/199
+[warning] docs/adr/cross-repo-ci-revision.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/201
+[warning] docs/adr/cross-repo-ci-revision.md: Relation references points to missing ADR: https://github.com/scarecrow173/audio-lens/blob/main/docs/guides/ruviform-private-access-ci.md
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Context and Problem Statement
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Decision Outcome
+[error] docs/adr/denormal-mitigation-policy.md: Missing section: Implementation Plan
+[warning] docs/adr/denormal-mitigation-policy.md: Implementation Plan should name affected paths
+[warning] docs/adr/denormal-mitigation-policy.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derives-from points to missing ADR: docs/specs/denormal-mitigation.md
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derives-from points to missing ADR: docs/adr/dsp-simd-backend-adoption.md
+[warning] docs/adr/denormal-mitigation-policy.md: Relation derived-by points to missing ADR: docs/designs/denormal-flush-node.md
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/384
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/257
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/384
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/257
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/385
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/262
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/386
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/387
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/388
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/389
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/390
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/294
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/419
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/532
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/175
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/176
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/177
+[warning] docs/adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md: Relation references points to missing ADR: https://github.com/scarecrow173/audio-lens/issues/166
+[warning] docs/adr/dsp-simd-backend-adoption.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/19
+[warning] docs/adr/dsp-simd-backend-adoption.md: Relation derived-by points to missing ADR: docs/designs/ruviform-dsp.md
+[warning] docs/adr/dsp-simd-backend-adoption.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/dsp-simd-poc.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/19
+[warning] docs/adr/dsp-simd-poc.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/framerate-timebase-separation-and-timecode-extension.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/42
+[warning] docs/adr/framerate-timebase-separation-and-timecode-extension.md: Relation references points to missing ADR: https://crates.io/crates/vtc
+[warning] docs/adr/framerate-timebase-separation-and-timecode-extension.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/41
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Decision Outcome
+[error] docs/adr/issue-116-supervisor-placement.md: Missing section: Implementation Plan
+[warning] docs/adr/issue-116-supervisor-placement.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-116-supervisor-placement.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/116
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation related points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derives-from points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-116-supervisor.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-core.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-e2e.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/test-specs/issue-116-supervisor-core-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation derived-by points to missing ADR: docs/test-specs/issue-116-supervisor-e2e-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation verified-by points to missing ADR: docs/test-specs/issue-116-supervisor-core-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation verified-by points to missing ADR: docs/test-specs/issue-116-supervisor-e2e-tests.md
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/31
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/76
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/117
+[warning] docs/adr/issue-116-supervisor-placement.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/113
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Decision Outcome
+[error] docs/adr/issue-117-bundle-child-failed-granularity.md: Missing section: Implementation Plan
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/117
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation related points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/specs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/discovery/issue-117-bundle-child-process-discovery.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-117-bundle-child-process.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-child-instance-split.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-route-pool-and-isolation-surface.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-bundle-e2e-and-granularity-verification.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/test-specs/issue-117-bundle-failed-granularity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/adr/issue-116-supervisor-placement.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/tasks/l1-supervisor-e2e.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-failed-parity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation verified-by points to missing ADR: docs/test-specs/issue-117-bundle-failed-granularity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-failed-parity-tests.md
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/76
+[warning] docs/adr/issue-117-bundle-child-failed-granularity.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/119
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/118
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation depends-on points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation depends-on points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/adr/issue-118-video-l1-host-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/specs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derives-from points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-wire-v3-video-codec.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-runner-and-erased-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-host-surface.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-wire-v3-codec-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/76
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/117
+[warning] docs/adr/issue-118-video-l1-create-path-segment.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/119
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/118
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation depends-on points to missing ADR: docs/specs/issue-119-l1-wire-version-policy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation depends-on points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/adr/issue-118-video-l1-create-path-segment.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation related points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/specs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/discovery/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-118-video-l1.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/tasks/l1-video-host-surface.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation derived-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation verified-by points to missing ADR: docs/test-specs/issue-118-video-e2e-tests.md
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/117
+[warning] docs/adr/issue-118-video-l1-host-surface.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/119
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/121
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/specs/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/discovery/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/designs/issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/impl/ir/rt-observability-poc.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation related points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derives-from points to missing ADR: docs/specs/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derives-from points to missing ADR: docs/discovery/issue-121-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/designs/issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-121-l1-diagnostics.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-audio-counters-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-stderr-drain-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-diagnostics-retention-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-failure-cause-notification-tests.md
+[warning] docs/adr/issue-121-l1-diagnostics-policy.md: Relation derived-by points to missing ADR: docs/test-specs/issue-121-l1-parity-nonregression-tests.md
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing section: Implementation Plan
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Missing section: Verification
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Verification should contain checkboxes
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.added.0: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.0: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.1: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.2: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.3: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.4: Invalid input: expected object, received string
+[error] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Invalid front matter relations.changes.modified.5: Invalid input: expected object, received string
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/181
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/specs/issue-181-multi-window.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/discovery/issue-181-multi-window-inventory.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation related points to missing ADR: docs/designs/issue-156-gui-host-foundation.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation derives-from points to missing ADR: docs/discovery/issue-181-multi-window-inventory.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation derives-from points to missing ADR: docs/specs/issue-181-multi-window.md
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/156
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/192
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/21
+[warning] docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/22
+[error] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing section: Implementation Plan
+[error] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Missing section: Verification
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Verification should contain checkboxes
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/182
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation depends-on points to missing ADR: docs/adr/issue-181-multi-window-contract-placement-close-decision-ipc-routing.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/specs/issue-182-dock-tree.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/discovery/issue-182-dock-tree-inventory.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation related points to missing ADR: docs/designs/issue-181-multi-window.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation derives-from points to missing ADR: docs/discovery/issue-182-dock-tree-inventory.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation derives-from points to missing ADR: docs/specs/issue-182-dock-tree.md
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/181
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/192
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/21
+[warning] docs/adr/issue-182-dock-tree-placement-move-contract-and-persistence.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/22
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/185
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation derives-from points to missing ADR: docs/discovery/issue-185-generic-probe-observation-inventory.md
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/104
+[warning] docs/adr/issue-185-generic-probe-contract-placement-and-rt-handoff-model.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/187
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/187
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/12
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation implements points to missing ADR: docs/specs/issue-187-audio-input-port-capture-clock.md
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation derives-from points to missing ADR: docs/specs/issue-187-audio-input-port-capture-clock.md
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/59
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/188
+[warning] docs/adr/issue-187-input-port-surface-shape-same-clock-duplex-via-clock-domain-correlatio.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/12
+[error] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Missing section: Verification
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Verification should contain checkboxes
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/188
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/12
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation related points to missing ADR: docs/discovery/issue-188-timed-midi-inventory.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation related points to missing ADR: docs/specs/issue-188-timed-midi.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation derives-from points to missing ADR: docs/discovery/issue-188-timed-midi-inventory.md
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/184
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/189
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/190
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/196
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/18
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/20
+[warning] docs/adr/issue-188-timed-midi-contract-placement-clock-authority-and-backend-deferral.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/22
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/191
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation source points to missing ADR: docs/discovery/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation source points to missing ADR: docs/specs/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation derives-from points to missing ADR: docs/discovery/issue-191-pcm-wav-output-backend.md
+[warning] docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md: Relation derives-from points to missing ADR: docs/specs/issue-191-pcm-wav-output-backend.md
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Decision Outcome
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Implementation Plan
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Missing section: Verification
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Verification should contain checkboxes
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/196
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/specs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation depends-on points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/discovery/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/designs/issue-195-m2-typed-graph-compiler-buffer-pdc-rt-runtime-ownership-activation.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation related points to missing ADR: docs/designs/issue-184-typed-graph-ir-ports-buses-connections-validation-revisions-m1.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation derives-from points to missing ADR: docs/discovery/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[warning] docs/adr/issue-196-plugin-adapter-bridge-placement-scheduler-ownership-bus-role.md: Relation derives-from points to missing ADR: docs/specs/issue-196-typed-graph-plugin-adapter-multi-bus-lifecycle-process-offset.md
+[error] docs/adr/issue-197-media-reader-boundary-additions.md: Missing section: Implementation Plan
+[error] docs/adr/issue-197-media-reader-boundary-additions.md: Missing section: Verification
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-197-media-reader-boundary-additions.md: Verification should contain checkboxes
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/197
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation source points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation source points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation depends-on points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation related points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation derives-from points to missing ADR: docs/discovery/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-197-media-reader-boundary-additions.md: Relation derives-from points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Decision Outcome
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Implementation Plan
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Missing section: Verification
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Verification should contain checkboxes
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/198
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation source points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation source points to missing ADR: docs/discovery/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation implements points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/offline-determinism-scope.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/issue-191-pcm-wav-output-backend-ruviform-io-wav-crate-mediasink-port-staged-pub.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation derives-from points to missing ADR: docs/specs/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-198-sequential-offline-render-placement-and-contracts.md: Relation derives-from points to missing ADR: docs/discovery/issue-198-sequential-offline-render.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/233
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation source points to missing ADR: docs/discovery/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation source points to missing ADR: docs/specs/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/specs/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/issue-197-media-reader-boundary-additions.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation related points to missing ADR: docs/designs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation related points to missing ADR: docs/impl/ir/issue-197-media-reader-implementation-record.md
+[warning] docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md: Relation derives-from points to missing ADR: docs/discovery/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/244
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation source points to missing ADR: docs/discovery/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation source points to missing ADR: docs/specs/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/specs/issue-244-media-reader-prefetch-contract-warts.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/issue-197-media-reader-boundary-additions.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/issue-233-prefetch-contract-improvements-doc-only-clarifications-consumer-drain-.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/specs/issue-197-media-reader-prefetch-rt-consumer.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/impl/ir/issue-197-media-reader-implementation-record.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation related points to missing ADR: docs/impl/ir/issue-233-media-reader-prefetch-contract-improvements.md
+[warning] docs/adr/issue-244-prefetch-contract-warts-boundary-first-fault-emission-dead-generation-.md: Relation derives-from points to missing ADR: docs/discovery/issue-244-media-reader-prefetch-contract-warts.md
+[error] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing section: Implementation Plan
+[error] docs/adr/issue-255-nonpow2-fft-transform-length.md: Missing section: Verification
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-255-nonpow2-fft-transform-length.md: Verification should contain checkboxes
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/255
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Relation related points to missing ADR: docs/impl/ir/issue-183-bandfilter-shared-spectrum-and-per-call-scratch-api.md
+[warning] docs/adr/issue-255-nonpow2-fft-transform-length.md: Relation related points to missing ADR: docs/designs/issue-152-f64-correlation.md
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/276
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation related points to missing ADR: docs/designs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation derives-from points to missing ADR: docs/designs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-276-logging-adapter-bounded-writer-ownership-and-build-time-sink-resilienc.md: Relation derives-from points to missing ADR: docs/specs/issue-276-generic-logging-adapter.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/309
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/185
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/308
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/280
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-309-probe-time-context-and-alignment.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-308-probe-rebind-atomic.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/issue-280-rt-record-bridge-clock-correlation.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation derives-from points to missing ADR: docs/specs/issue-309-probe-time-frame-clock-epoch-alignment.md
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/107
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation references points to missing ADR: https://github.com/scarecrow173/synvelis/issues/109
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/294
+[warning] docs/adr/issue-309-probe-time-context-placement-and-alignment-contract.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/219
+[error] docs/adr/issue-312-test-control-transport-security.md: Missing section: Implementation Plan
+[error] docs/adr/issue-312-test-control-transport-security.md: Missing section: Verification
+[warning] docs/adr/issue-312-test-control-transport-security.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-312-test-control-transport-security.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-312-test-control-transport-security.md: Verification should contain checkboxes
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/312
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation source points to missing ADR: docs/discovery/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation source points to missing ADR: docs/specs/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/specs/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation related points to missing ADR: docs/designs/issue-156-gui-host-foundation.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation derives-from points to missing ADR: docs/discovery/issue-312-test-gui-host-lifecycle.md
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/313
+[warning] docs/adr/issue-312-test-control-transport-security.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/243
+[error] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing section: Implementation Plan
+[error] docs/adr/issue-326-ci-yml-dispatch-only.md: Missing section: Verification
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-326-ci-yml-dispatch-only.md: Verification should contain checkboxes
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: ADR still contains draft placeholders
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/326
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/365
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation source points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation implements points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation implemented-by points to missing ADR: docs/designs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation depends-on points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation depends-on points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation related points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation related points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation refines points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation derives-from points to missing ADR: docs/specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation derived-by points to missing ADR: docs/designs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation verified-by points to missing ADR: docs/test-specs/issue-326-ci-manual-only.md
+[warning] docs/adr/issue-326-ci-yml-dispatch-only.md: Relation references points to missing ADR: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
+[error] docs/adr/issue-328-ci-concurrency-grouping.md: Missing section: Implementation Plan
+[error] docs/adr/issue-328-ci-concurrency-grouping.md: Missing section: Verification
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-328-ci-concurrency-grouping.md: Verification should contain checkboxes
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: ADR still contains draft placeholders
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/328
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation source points to missing ADR: docs/specs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation depends-on points to missing ADR: docs/specs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation related points to missing ADR: docs/designs/issue-328-ci-pr-concurrency.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation refined-by points to missing ADR: docs/adr/issue-326-ci-yml-dispatch-only.md
+[warning] docs/adr/issue-328-ci-concurrency-grouping.md: Relation references points to missing ADR: https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+[error] docs/adr/issue-329-sccache-gha-backend.md: Missing section: Implementation Plan
+[error] docs/adr/issue-329-sccache-gha-backend.md: Missing section: Verification
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-329-sccache-gha-backend.md: Verification should contain checkboxes
+[warning] docs/adr/issue-329-sccache-gha-backend.md: ADR still contains draft placeholders
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/329
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation source points to missing ADR: docs/specs/issue-329-sccache-compile-cache.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation depends-on points to missing ADR: docs/specs/issue-329-sccache-compile-cache.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation related points to missing ADR: docs/designs/issue-329-sccache-compile-cache.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation references points to missing ADR: https://github.com/mozilla-actions/sccache-action
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation references points to missing ADR: https://github.com/mozilla/sccache/blob/main/docs/GHA.md
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation references points to missing ADR: https://github.com/actions/github-script
+[warning] docs/adr/issue-329-sccache-gha-backend.md: Relation references points to missing ADR: https://github.com/Swatinem/rust-cache
+[error] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing section: Implementation Plan
+[error] docs/adr/issue-336-sink-degraded-clone-derive.md: Missing section: Verification
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-336-sink-degraded-clone-derive.md: Verification should contain checkboxes
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/336
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation related points to missing ADR: docs/designs/issue-336-sink-degraded-clone.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation related points to missing ADR: docs/designs/foundation-observability-minimal-api.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation derives-from points to missing ADR: docs/specs/issue-336-sink-degraded-clone.md
+[warning] docs/adr/issue-336-sink-degraded-clone-derive.md: Relation derived-by points to missing ADR: docs/designs/issue-336-sink-degraded-clone.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/360
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation source points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation depends-on points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation related points to missing ADR: docs/designs/issue-360-heir-exit-post-mint-ordering.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation related points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/issue-360-mint-child-exit-test-scenario.md: Relation derives-from points to missing ADR: docs/specs/issue-360-l1-proxy-e2e-heir-flake.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/368
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/365
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/366
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation source points to missing ADR: docs/specs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation implemented-by points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation depends-on points to missing ADR: docs/specs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation depends-on points to missing ADR: docs/specs/issue-366-full-ci-stage1.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/adr/issue-328-ci-concurrency-grouping.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/designs/issue-366-full-ci-stage1.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation related points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation refined-by points to missing ADR: docs/adr/issue-368-tracker-reconcile-schedule-entry.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation derived-by points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation references points to missing ADR: https://docs.github.com/en/actions/reference/events-that-trigger-workflows#workflow_run
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation references points to missing ADR: https://docs.github.com/en/rest/issues/issues#list-repository-issues
+[warning] docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md: Relation references points to missing ADR: https://docs.github.com/en/rest/commits/commits#compare-two-commits
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: ADR still contains draft placeholders
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/368
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/365
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/367
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation source points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation implements points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation implemented-by points to missing ADR: docs/designs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation depends-on points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation depends-on points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation related points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation related points to missing ADR: docs/designs/issue-368-ci-issue-tracker.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation refines points to missing ADR: docs/adr/issue-368-ci-failure-issue-tracker-workflow-run-issue-run-id-attempt-compare-2-g.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation derives-from points to missing ADR: docs/specs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation derived-by points to missing ADR: docs/designs/issue-368-tracker-reconcile.md
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation references points to missing ADR: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation references points to missing ADR: https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows
+[warning] docs/adr/issue-368-tracker-reconcile-schedule-entry.md: Relation references points to missing ADR: https://docs.github.com/en/actions/how-tos/troubleshoot-workflows
+[error] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing section: Implementation Plan
+[error] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Missing section: Verification
+[warning] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Verification should contain checkboxes
+[warning] docs/adr/issue-431-legacy-host-trait-phase2-retain.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/431
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Context and Problem Statement
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Considered Options
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Decision Outcome
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Implementation Plan
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Missing section: Verification
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-465-legacy-webview-retirement-status.md: Verification should contain checkboxes
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/465
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/384
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/419
+[warning] docs/adr/issue-465-legacy-webview-retirement-status.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/455
+[warning] docs/adr/issue-468-rooteddir-canonical-premise.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/468
+[warning] docs/adr/issue-468-rooteddir-canonical-premise.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/184
+[warning] docs/adr/issue-468-rooteddir-canonical-premise.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/pull/186
+[warning] docs/adr/issue-478-fader-knob-vertical-size-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/478
+[warning] docs/adr/issue-478-fader-knob-vertical-size-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/453
+[warning] docs/adr/issue-478-fader-knob-vertical-size-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/450
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/553
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation related points to missing ADR: docs/designs/issue-558-script-contract-design.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/553
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation derived-by points to missing ADR: docs/designs/issue-553-workflow-orchestration-design.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: docs/specs/issue-553-workflow-orchestration.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: evidence/rf553/contract-trace.md
+[warning] docs/adr/issue-553-workflow-cli-contract.md: Relation references points to missing ADR: evidence/rf553/consumer-applicability.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/558
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/558
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation derived-by points to missing ADR: docs/designs/issue-558-script-contract-design.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: docs/specs/issue-558-script-contract.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: evidence/rf558/contract-trace.md
+[warning] docs/adr/issue-558-script-backend-contract.md: Relation references points to missing ADR: evidence/rf558/consumer-applicability.md
+[error] docs/adr/issue-692-luau-dependency-selection.md: Missing section: Implementation Plan
+[error] docs/adr/issue-692-luau-dependency-selection.md: Missing section: Verification
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-692-luau-dependency-selection.md: Verification should contain checkboxes
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/692
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/560
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: docs/specs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation source points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation related points to missing ADR: docs/adr/issue-558-script-backend-contract.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation related points to missing ADR: docs/designs/issue-692-script-port.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/692
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation derived-by points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: docs/specs/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: docs/discovery/issue-692-luau-backend.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/gap-report.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/revision-alignment.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/license-ledger.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/platform-matrix.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: evidence/rf560/build-link-run.md
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: ffi-poc/Cargo.toml
+[warning] docs/adr/issue-692-luau-dependency-selection.md: Relation references points to missing ADR: Cargo.lock
+[error] docs/adr/issue-716-runtime-backend.md: Missing section: Implementation Plan
+[error] docs/adr/issue-716-runtime-backend.md: Missing section: Verification
+[warning] docs/adr/issue-716-runtime-backend.md: Implementation Plan should name affected paths
+[warning] docs/adr/issue-716-runtime-backend.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/issue-716-runtime-backend.md: Verification should contain checkboxes
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/716
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/692
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: docs/specs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation source points to missing ADR: docs/designs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/adr/issue-692-luau-dependency-selection.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/adr/issue-558-script-backend-contract.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation related points to missing ADR: docs/designs/issue-692-luau-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation refines points to missing ADR: docs/adr/issue-692-luau-dependency-selection.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/716
+[warning] docs/adr/issue-716-runtime-backend.md: Relation derived-by points to missing ADR: docs/designs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: docs/specs/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: docs/discovery/issue-716-runtime-backend.md
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: Cargo.toml
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: Cargo.lock
+[warning] docs/adr/issue-716-runtime-backend.md: Relation references points to missing ADR: evidence/rf692/luau-backend-verification.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/727
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/518
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: docs/specs/issue-727-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation source points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/adr/issue-716-runtime-backend.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/offline-execution-driver.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation related points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/727
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation derived-by points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/specs/issue-727-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/issue-727-bounded-nonrt-job-executor.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/shared-foundations-and-modularization-policy.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/issue-155-headless-cli-foundation.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: docs/designs/offline-execution-driver.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/lib.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/job.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/src/offline.rs
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: crates/ruviform-exec/README.md
+[warning] docs/adr/issue-727-bounded-nonrt-job-executor-placement.md: Relation references points to missing ADR: evidence/rf727/verification.md
+[warning] docs/adr/licensing-and-distribution-policy.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/licensing-and-distribution-policy.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/licensing-and-distribution-policy.md: Relation references points to missing ADR: https://spdx.org/licenses/MIT.html
+[warning] docs/adr/licensing-and-distribution-policy.md: Relation references points to missing ADR: https://spdx.org/licenses/Apache-2.0.html
+[warning] docs/adr/licensing-and-distribution-policy.md: Relation references points to missing ADR: https://doc.rust-lang.org/cargo/reference/manifest.html#the-publish-field
+[error] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing section: Implementation Plan
+[error] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Missing section: Verification
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Implementation Plan should name affected paths
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Verification should contain checkboxes
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/195
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation related points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation related points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation refines points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation derives-from points to missing ADR: docs/specs/issue-195-typed-graph-audio-compiler-buffer-pdc-stateful-ownership-activation-m2.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation derives-from points to missing ADR: docs/discovery/issue-195-m2-typed-graph-compiler-runtime-audit.md
+[warning] docs/adr/m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md: Relation references points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/media-io-backend-abstraction.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/media-io-backend-abstraction.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/media-io-backend-abstraction.md: Relation references points to missing ADR: https://github.com/pdeljanov/Symphonia
+[warning] docs/adr/media-io-backend-abstraction.md: Relation references points to missing ADR: https://ffmpeg.org/legal.html
+[warning] docs/adr/media-observation-non-destructive-pcm.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/151
+[warning] docs/adr/media-observation-non-destructive-pcm.md: Relation related points to missing ADR: https://github.com/scarecrow173/audio-lens/issues/95
+[warning] docs/adr/media-observation-non-destructive-pcm.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/151
+[warning] docs/adr/media-observation-non-destructive-pcm.md: Relation references points to missing ADR: https://github.com/pdeljanov/Symphonia
+[error] docs/adr/musical-time-model.md: Missing section: Context and Problem Statement
+[error] docs/adr/musical-time-model.md: Missing section: Decision Outcome
+[error] docs/adr/musical-time-model.md: Missing section: Implementation Plan
+[error] docs/adr/musical-time-model.md: Missing section: Verification
+[warning] docs/adr/musical-time-model.md: Implementation Plan should name affected paths
+[warning] docs/adr/musical-time-model.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/musical-time-model.md: Verification should contain checkboxes
+[warning] docs/adr/musical-time-model.md: Relation depends-on points to missing ADR: docs/specs/music-time-design.md
+[warning] docs/adr/musical-time-model.md: Relation superseded-by points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/musical-time-model.md: Relation derives-from points to missing ADR: docs/specs/music-time-design.md
+[warning] docs/adr/musical-time-model.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/musical-time-model.md: Relation derived-by points to missing ADR: docs/designs/music-time-model.md
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Implementation Plan should name affected paths
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/obs-05-observability-leaf-primitive-deps.md: Verification should contain checkboxes
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/280
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/280
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/277
+[warning] docs/adr/obs-05-observability-leaf-primitive-deps.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/101
+[warning] docs/adr/offline-determinism-scope.md: Implementation Plan should name affected paths
+[warning] docs/adr/offline-determinism-scope.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/offline-determinism-scope.md: Relation derives-from points to missing ADR: docs/specs/offline-execution-driver.md
+[warning] docs/adr/offline-determinism-scope.md: Relation derived-by points to missing ADR: docs/designs/offline-execution-driver.md
+[warning] docs/adr/ofx-host-video-contract-and-c-abi.md: Implementation Plan should name affected paths
+[warning] docs/adr/ofx-host-video-contract-and-c-abi.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/ofx-host-video-contract-and-c-abi.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/98
+[error] docs/adr/ofx-video-plugin-scope.md: Missing section: Implementation Plan
+[warning] docs/adr/ofx-video-plugin-scope.md: Implementation Plan should name affected paths
+[warning] docs/adr/ofx-video-plugin-scope.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/ofx-video-plugin-scope.md: Verification should contain checkboxes
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation depends-on points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/ofx-video-plugin-scope.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/186
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/6
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/transport-span-scheduler-applied-receipt.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation related points to missing ADR: docs/discovery/issue-186-param-control-events-inventory.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation related points to missing ADR: docs/specs/issue-186-param-control-events.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation derives-from points to missing ADR: docs/discovery/issue-186-param-control-events-inventory.md
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/185
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/188
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/parameter-control-events-contract-placement-and-deferral-of-generic-control-grap.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/196
+[warning] docs/adr/platform-and-toolchain-targets.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/platform-and-toolchain-targets.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/platform-and-toolchain-targets.md: Relation references points to missing ADR: https://doc.rust-lang.org/nightly/rustc/platform-support.html
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/adr/plugin-gui-embedding.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/adr/plugin-isolation-strategy.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/plugin-isolation-design.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/discovery/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/specs/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation references points to missing ADR: https://github.com/free-audio/clap
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation references points to missing ADR: https://steinbergmedia.github.io/vst3_dev_portal/
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation references points to missing ADR: https://github.com/robbert-vdh/nih-plug
+[warning] docs/adr/plugin-architecture-clap-vst3.md: Relation references points to missing ADR: https://www.thefoundry.co.uk/products/ofx/
+[warning] docs/adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/29
+[warning] docs/adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md: Relation references points to missing ADR: https://github.com/prokopyl/clack
+[warning] docs/adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md: Relation references points to missing ADR: https://github.com/coupler-rs/vst3-rs
+[warning] docs/adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/22
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Context and Problem Statement
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Decision Outcome
+[error] docs/adr/plugin-gui-embedding.md: Missing section: Implementation Plan
+[warning] docs/adr/plugin-gui-embedding.md: Implementation Plan should name affected paths
+[warning] docs/adr/plugin-gui-embedding.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derives-from points to missing ADR: docs/adr/plugin-architecture-clap-vst3.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derived-by points to missing ADR: docs/designs/plugin-gui-poc.md
+[warning] docs/adr/plugin-gui-embedding.md: Relation derived-by points to missing ADR: docs/designs/issue-115-l1-gui-cross-process-parenting.md
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Context and Problem Statement
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Decision Outcome
+[error] docs/adr/plugin-isolation-strategy.md: Missing section: Implementation Plan
+[warning] docs/adr/plugin-isolation-strategy.md: Implementation Plan should name affected paths
+[warning] docs/adr/plugin-isolation-strategy.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derives-from points to missing ADR: docs/specs/plugin-isolation-design.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derives-from points to missing ADR: docs/adr/plugin-architecture-clap-vst3.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-isolation.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-host-l0.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/ofx-video-plugin-scope.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-76-plugin-l1-out-of-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/issue-114-real-adapter-l1-e2e.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-117-bundle-child-failed-granularity.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/discovery/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/specs/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-116-supervisor.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-116-supervisor-placement.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/designs/issue-118-video-l1.md
+[warning] docs/adr/plugin-isolation-strategy.md: Relation derived-by points to missing ADR: docs/adr/issue-118-video-l1-host-surface.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/113
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/76
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/74
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/114
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/designs/engine-plugin-host-integration.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-113-engine-plugin-integration.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation derived-by points to missing ADR: docs/designs/issue-117-bundle-child-process.md
+[warning] docs/adr/plugin-rt-ownership-split.md: Relation verified-by points to missing ADR: docs/test-specs/plugin-rt-retirement-tests.md
+[warning] docs/adr/public-enum-non-exhaustive-policy.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/41
+[warning] docs/adr/public-enum-non-exhaustive-policy.md: Relation references points to missing ADR: https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute
+[warning] docs/adr/public-enum-non-exhaustive-policy.md: Relation references points to missing ADR: https://doc.rust-lang.org/cargo/reference/semver.html#enum-new
+[warning] docs/adr/realtime-contract-and-verification-policy.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/realtime-contract-and-verification-policy.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/replace-template-derived-docs-metadata-with-ruviform.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/3
+[warning] docs/adr/replace-template-derived-docs-metadata-with-ruviform.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/3
+[warning] docs/adr/replace-template-derived-docs-metadata-with-ruviform.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/2
+[warning] docs/adr/replace-template-derived-docs-metadata-with-ruviform.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[error] docs/adr/rooted-read-capability-placement.md: Missing section: Implementation Plan
+[error] docs/adr/rooted-read-capability-placement.md: Missing section: Verification
+[warning] docs/adr/rooted-read-capability-placement.md: Implementation Plan should name affected paths
+[warning] docs/adr/rooted-read-capability-placement.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/rooted-read-capability-placement.md: Verification should contain checkboxes
+[warning] docs/adr/rooted-read-capability-placement.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/304
+[warning] docs/adr/rt-assert-no-alloc-thread-check.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/22
+[warning] docs/adr/rt-assert-no-alloc-thread-check.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/22
+[warning] docs/adr/rt-assert-no-alloc-thread-check.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/rt-foundation-primitives-implementation.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/21
+[warning] docs/adr/rt-foundation-primitives-implementation.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/rust-dev-foundation-toolchain-and-ci-profile.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/2
+[warning] docs/adr/rust-dev-foundation-toolchain-and-ci-profile.md: Relation references points to missing ADR: https://doc.rust-lang.org/cargo/reference/profiles.html
+[warning] docs/adr/rust-dev-foundation-toolchain-and-ci-profile.md: Relation references points to missing ADR: https://doc.rust-lang.org/cargo/guide/build-performance.html
+[warning] docs/adr/rust-dev-foundation-toolchain-and-ci-profile.md: Relation references points to missing ADR: https://github.com/scarecrow173/cheaper/pull/109
+[error] docs/adr/second-target-editing-model.md: Missing section: Implementation Plan
+[warning] docs/adr/second-target-editing-model.md: Implementation Plan should name affected paths
+[warning] docs/adr/second-target-editing-model.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/second-target-editing-model.md: Verification should contain checkboxes
+[warning] docs/adr/second-target-editing-model.md: Relation depends-on points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation depends-on points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/second-target-editing-model.md: Relation derives-from points to missing ADR: docs/specs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/second-target-design.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/specs/edit-data-model.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/edit-data-model.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/specs/composite-transition-kernels.md
+[warning] docs/adr/second-target-editing-model.md: Relation derived-by points to missing ADR: docs/designs/composite-transition-kernels.md
+[warning] docs/adr/select-audio-device-backend.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/23
+[warning] docs/adr/select-audio-device-backend.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/23
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/RustAudio/cpal
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/RustAudio/cpal/issues/981
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/RustAudio/cpal/pull/1229
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/mozilla/cubeb-rs
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/MeadowlarkDAW/rtaudio-rs
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/BillyDM/Firewheel
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://github.com/HEnquist/audioadapter-rs
+[warning] docs/adr/select-audio-device-backend.md: Relation references points to missing ADR: https://crates.io/crates/audio_thread_priority
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Decision Outcome
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Implementation Plan
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Missing section: Verification
+[warning] docs/adr/select-media-backends-avi-and-mp4.md: Implementation Plan should name affected paths
+[warning] docs/adr/select-media-backends-avi-and-mp4.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/select-media-backends-avi-and-mp4.md: Verification should contain checkboxes
+[warning] docs/adr/select-media-backends-avi-and-mp4.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/154
+[warning] docs/adr/select-media-backends-avi-and-mp4.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/151
+[error] docs/adr/select-midi-input-backend.md: Missing section: Decision Outcome
+[warning] docs/adr/select-midi-input-backend.md: Implementation Plan should name affected paths
+[warning] docs/adr/select-midi-input-backend.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/select-midi-input-backend.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/253
+[warning] docs/adr/select-midi-input-backend.md: Relation depends-on points to missing ADR: docs/adr/select-audio-device-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/designs/issue-253-os-midi-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/specs/issue-253-os-midi-backend.md
+[warning] docs/adr/select-midi-input-backend.md: Relation related points to missing ADR: docs/designs/issue-188-timed-midi-detailed.md
+[warning] docs/adr/select-midi-input-backend.md: Relation references points to missing ADR: https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/
+[warning] docs/adr/simd-ulp.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/53
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Context and Problem Statement
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Considered Options
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Decision Outcome
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Implementation Plan
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Missing section: Verification
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Implementation Plan should name affected paths
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/synvelis-driven-generic-execution-boundaries.md: Verification should contain checkboxes
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/192
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/22
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/media-io-backend-abstraction.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation related points to missing ADR: docs/adr/ui-architecture-webview-hybrid.md
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/synvelis/issues/17
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/synvelis/issues/18
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/synvelis/issues/19
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/synvelis/issues/20
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/synvelis/issues/21
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/184
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/189
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/190
+[warning] docs/adr/synvelis-driven-generic-execution-boundaries.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/191
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Context and Problem Statement
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Decision Outcome
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Implementation Plan
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Missing section: Verification
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Implementation Plan should name affected paths
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Implementation Plan should name constraints or patterns to follow
+[error] docs/adr/transport-span-scheduler-applied-receipt.md: Verification should contain checkboxes
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/190
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/20
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/blob/main/docs/designs/time-transport-midi-automation-plugin-integration-architecture.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/configurable-ppqn-resolution-independent-musical-time.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation depends-on points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/discovery/issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation derives-from points to missing ADR: docs/specs/issue-190-transport-span-scheduler.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation derives-from points to missing ADR: docs/discovery/issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/195
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/196
+[warning] docs/adr/transport-span-scheduler-applied-receipt.md: Relation references points to missing ADR: https://github.com/free-audio/clap/blob/main/include/clap/events.h
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/184
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/192
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/193
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/4
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation source points to missing ADR: https://github.com/scarecrow173/synvelis/issues/18
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/synvelis-driven-generic-execution-boundaries.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/realtime-contract-and-verification-policy.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/plugin-rt-ownership-split.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/audio-engine-snapshot-swap.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation depends-on points to missing ADR: docs/adr/public-enum-non-exhaustive-policy.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/designs/synvelis-driven-target-architecture-and-migration.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/specs/issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation related points to missing ADR: docs/specs/engine-plugin-host-integration.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation derives-from points to missing ADR: docs/discovery/issue-184-bus-port-graph-ir-crate.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation derives-from points to missing ADR: docs/specs/issue-184-typed-multi-bus-port-connection-graph-ir-contract-migration-m1.md
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/195
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/196
+[warning] docs/adr/typed-multi-bus-graph-ir-placement-and-port-connection-validation-model-issue-18.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/185
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation derives-from points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation derived-by points to missing ADR: docs/specs/plugin-gui-poc.md
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation derived-by points to missing ADR: docs/adr/plugin-gui-embedding.md
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation references points to missing ADR: https://wgpu.rs/
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation references points to missing ADR: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation references points to missing ADR: https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API
+[warning] docs/adr/ui-architecture-webview-hybrid.md: Relation references points to missing ADR: https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API
+[warning] docs/adr/ui-tech-selection-poc.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/28
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/28
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/34
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/57
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://docs.rs/wry/latest/wry/
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://crates.io/crates/tao
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://crates.io/crates/wgpu
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://wgpu.rs/
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/tauri-apps/wry/pull/1762
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/novonotes/wxp
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://github.com/httnn/nih-plug-webview
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution
+[warning] docs/adr/ui-tech-selection-poc.md: Relation references points to missing ADR: https://blogs.gnome.org/mcatanzaro/2025/04/28/webkitgtk-api-versions/
+[error] docs/adr/video-av-sync-policy.md: Missing section: Context and Problem Statement
+[error] docs/adr/video-av-sync-policy.md: Missing section: Decision Outcome
+[error] docs/adr/video-av-sync-policy.md: Missing section: Implementation Plan
+[warning] docs/adr/video-av-sync-policy.md: Implementation Plan should name affected paths
+[warning] docs/adr/video-av-sync-policy.md: Implementation Plan should name constraints or patterns to follow
+[warning] docs/adr/video-av-sync-policy.md: Relation derives-from points to missing ADR: docs/specs/video-engine.md
+[warning] docs/adr/video-av-sync-policy.md: Relation derives-from points to missing ADR: docs/designs/ruviform-architecture-design-baseline.md
+[warning] docs/adr/video-av-sync-policy.md: Relation derived-by points to missing ADR: docs/designs/video-engine.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/26
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/adr/broad-color-management.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-26-video-foundation.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/specs/composite-transition-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/designs/composite-transition-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/specs/color-conversion-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/designs/color-conversion-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation derived-by points to missing ADR: docs/plans/implement-issue-99-color-conversion-kernels.md
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/1
+[warning] docs/adr/video-proc-kernel-api-and-color-hdr-scope.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/41
+[warning] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Relation source points to missing ADR: https://github.com/scarecrow173/ruviform/issues/52
+[warning] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/34
+[warning] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Relation references points to missing ADR: https://github.com/scarecrow173/ruviform/issues/53
+[warning] docs/adr/workspace-msrv-1-85-1-89-fearless-simd.md: Relation references points to missing ADR: https://releases.rs/docs/1.89.0/
