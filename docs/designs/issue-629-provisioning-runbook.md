@@ -116,6 +116,9 @@ headless 部分を閉じる。
   `real-abi-test-plugin`↔`test-plugin` 語彙 gap — spec の
   Out of Scope と同一。production コード・dependency・
   feature・`unsafe`・test target 構造の変更なし。
+  status: rf#725 Phase A で deserialize alias `test-plugin`
+  受容を適用済み・emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 
 ## Components and Boundaries
 
@@ -261,6 +264,9 @@ module doc（「`test-midi-real-device` が `#[ignore]` を収集
   #115/#117/#126・AudioLens #127）。
 - `EnvironmentKind` の `real-abi-test-plugin`↔`test-plugin`
   serde 語彙 gap — #389 占有解除後または Coordinator 調整。
+  status: rf#725 Phase A で consumer 影響評価と deserialize
+  alias `test-plugin` 受容を適用済み — emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - capability matrix の ❓/⚠️ 項目の実測 — provisioned
   runner 初回実走待ち（runbook の検証手順で収集）。
 

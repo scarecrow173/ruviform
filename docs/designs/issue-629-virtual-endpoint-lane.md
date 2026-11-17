@@ -93,6 +93,8 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
 - `RealAbiTestPlugin` の serde 綴り `real-abi-test-plugin`
   ↔ schema `test-plugin` の解消（破壊的 — 後続 slice の
   serde 移行判断へ）。
+  status: rf#725 Phase A で consumer 影響評価（`evidence/rf725/consumer-impact-assessment.md`）と deserialize alias `test-plugin` 受容を適用済み —
+  emit flip は第2 slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - production 契約・verifier/probe の挙動変更・新規
   dependency/feature/`unsafe`・docs index 再生成。
 
@@ -184,7 +186,7 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
 | --- | --- | --- |
 | lane 登録で既存 task を壊す | 3OS lane / opt-in lane の退行 | `mise.toml` は task ブロック追加のみ — 既存 task 定義に触れない。`prek run --all-files` の `check-toml` で TOML 検査 |
 | `EnvironmentKind` variant 追加が consumer を壊す | AL/SV/plugin-dock-test の compile/証拠破壊 | additive variant のみ・既存 variant 不変。`#[non_exhaustive]` 既付で外部 match は wildcard 必須。check/lint/test を `ruviform-audio-test` と消費側に実施 |
-| `real-abi-test-plugin`↔`test-plugin` の語彙差を見落とす | schema 語彙との不一致を「解消済み」と誤記 | Coordinator 回答 (A) に従い gap を enum doc・design・PR 本文に明記し、serde 移行は後続 slice へ |
+| `real-abi-test-plugin`↔`test-plugin` の語彙差を見落とす | schema 語彙との不一致を「解消済み」と誤記 | Coordinator 回答 (A) に従い gap を enum doc・design・PR 本文に明記し、serde 移行は後続 slice へ（status: rf#725 Phase A で deserialize alias `test-plugin` 受容適用済み・emit flip は第2 slice — `docs/designs/issue-725-serde-vocab-phase-a.md`） |
 | self-run を Pass と誤記 | 未 provisioning の NotRun を実走 Pass と誤読 | evidence・docs・PR で `verdict: NotRun — NOT_PROVISIONED`・exit 0 をそのまま記録し、Pass 主張を明示的に否定 |
 | probe 文言変更で evidence が古いまま | verdict 行と実装の不一致 | probe を Windows 実機で再実行し `endpoint_probe-windows-local.txt` を更新（best-effort・exit 0 維持の既存契約は不変） |
 
@@ -204,6 +206,11 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
   `real-abi-test-plugin` ↔ schema `test-plugin` の gap —
   破壊的変更のため後続 slice で serde 移行方針（rename+alias
   等）とともに決定。再開条件: consumer 影響評価 + 承認。
+  status: rf#725 Phase A で consumer 影響評価
+  （`evidence/rf725/consumer-impact-assessment.md`）と
+  deserialize alias `test-plugin` 受容を適用済み — emit flip
+  は rf#631 占有解除後の第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - reconnect/xrun/permission 実測（AC5）— provisioned runner
   での実測が残る。capability matrix の確定版・provisioning
   runbook・consumer 照合（AC7 — `scarecrow173/synvelis#115`/
