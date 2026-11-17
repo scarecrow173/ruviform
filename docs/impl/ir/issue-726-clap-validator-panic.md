@@ -1,7 +1,7 @@
 ---
 id: "IMPL-034Z1KOt5WW4W743J3SiQh"
 type: "impl"
-status: "in-progress"
+status: "completed"
 title: "Issue #726 clap validator panic"
 created: "2026-11-17"
 updated: "2026-11-17"
