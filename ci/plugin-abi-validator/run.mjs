@@ -79,6 +79,10 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // cases. The unfiltered run is still executed as an *informational*
 // leg: its abnormal termination is recorded as Unsupported evidence of
 // the intentional-crash surface, not as a plugin defect.
+// `test_spawn_fail` is enumerable but deliberately uncreatable
+// (`create_plugin` returns None — the spawn-phase rejection oracle);
+// its leg carries a declared create-decline expectation instead of a
+// param exclusion.
 export const CLAP_PLUGINS = [
   { id: "org.ruviform-test.clap-test-gain", name: "test_gain" },
   {
@@ -93,6 +97,49 @@ export const CLAP_PLUGINS = [
   { id: "org.ruviform-test.clap-test-stateful", name: "test_stateful" },
   { id: "org.ruviform-test.clap-test-instrument", name: "test_instrument" },
   { id: "org.ruviform-test.clap-test-editor", name: "test_editor" },
+  {
+    id: "org.ruviform-test.clap-test-spawn-fail",
+    name: "test_spawn_fail",
+    expectCreateDecline: {
+      // Every plugin-instance case is expected to fail with the
+      // create_plugin-returns-null signature; any other failure or
+      // crash violates the fixture contract and fails the leg.
+      pattern: "Could not create the plugin instance|returned a null pointer",
+      reason:
+        "test_spawn_fail is listed in plugin_descriptor but create_plugin " +
+        "deliberately returns None (spawn-phase CreateInstance-rejection " +
+        "oracle, Issue #630 preset/spawn-fault slice). clap-validator " +
+        "reports each plugin-instance case as failed with the " +
+        "create-decline signature — the leg passes only when every " +
+        "failed/crashed case matches that signature and at least one " +
+        "decline is observed.",
+    },
+  },
+];
+
+// Library-level exclusions applied to every leg of a CLAP target.
+// clap-validator 0.4.1's preset-discovery crawl/load cases deadlock
+// inside the validator's own MetadataReceiver (upstream
+// free-audio/clap-validator issue #41 — fixed on master after the
+// 0.4.1 pin). The fixture suite registers the preset-discovery factory
+// since the Issue #630 preset/spawn-fault slice, so the library-level
+// cases now run on every leg and each costs a 45 s timeout plus an
+// orphaned sandboxed child that locks the DLL. Excluded declaratively;
+// preset-discovery-descriptor-consistency still validates the catalog,
+// and preset load/save round-trips are covered by the fixture's
+// in-process ABI tests. Revisit when the validator pin moves to a
+// release containing the upstream fix.
+export const CLAP_FIXTURE_LIBRARY_EXCLUDES = [
+  {
+    pattern: "preset-discovery-(crawl|load)",
+    reason:
+      "clap-validator 0.4.1 preset-discovery crawl/load deadlock — " +
+      "upstream free-audio/clap-validator issue #41 (MetadataReceiver " +
+      "self-deadlock), fixed on master after the 0.4.1 pin. Library-" +
+      "level cases reproduce on every fixture leg; descriptor-" +
+      "consistency still runs and preset load/save is covered by the " +
+      "fixture's in-process ABI tests.",
+  },
 ];
 
 // Issue #732: the production CLAP adapter lives in a separate cdylib
@@ -275,6 +322,41 @@ export function normalizeClapLeg({ proc, plugin, extraArgs, validator, dll, dura
   if (proc.error) {
     leg.status = "Failed";
     leg.details = `spawn error: ${proc.error.message}`;
+  } else if (plugin.expectCreateDecline && leg.counts) {
+    // Declared create-decline expectation (e.g. test_spawn_fail): the
+    // fixture contract is enumerable-but-uncreatable, so every
+    // plugin-instance case is *expected* to fail with the
+    // create_plugin-null signature. The leg passes only when all
+    // failed cases match the declared pattern, nothing crashed, and
+    // at least one decline was actually observed — anything else is
+    // a real defect signal and fails the leg.
+    const expect = plugin.expectCreateDecline;
+    const pattern = new RegExp(expect.pattern, "i");
+    const declined = [];
+    const unexpected = [];
+    for (const c of leg.failedCases) {
+      if (c.code === "failed" && pattern.test(c.details || "")) {
+        declined.push(c);
+      } else {
+        unexpected.push(c);
+      }
+    }
+    const crashed = leg.counts.crashed;
+    const met = crashed === 0 && declined.length > 0 && unexpected.length === 0;
+    leg.expectation = {
+      kind: "create-declined",
+      reason: expect.reason,
+      declinedCases: declined.length,
+      unexpectedCases: unexpected.slice(0, 10).map((c) => `${c.test} (${c.code})`),
+      crashedCases: crashed,
+    };
+    leg.status = met ? "Passed" : "Failed";
+    leg.details = met
+      ? `declared expectation met — ${declined.length} plugin-instance case(s) ` +
+        `declined at create_plugin by design; ${leg.counts.success} passed, ` +
+        `${leg.counts.skipped} skipped, ${leg.counts.warning} warning(s)`
+      : `declared create-decline expectation violated — ${declined.length} declined, ` +
+        `${unexpected.length} unexpected failed/crashed case(s), ${crashed} crashed`;
   } else if (proc.status !== 0 && !leg.counts) {
     // Non-zero exit without a JSON report — the validator itself
     // terminated abnormally (e.g. sandbox panic). That is a tool-side
@@ -324,7 +406,8 @@ export function spawnCapture(exe, args, { timeout } = {}) {
 }
 
 // Runs clap-validator for one plugin id and returns a normalized leg
-// result. `extraArgs` carries the declared per-plugin scope (e.g. the
+// result. `extraArgs` carries the declared exclusion scope (target-
+// level library exclusions merged with the plugin's own, e.g. the
 // fault fixture's param exclusion).
 export function runClapLeg({ validator, dll, plugin, extraArgs = [] }) {
   const args = ["validate", "--json", ...extraArgs, "--plugin-id", plugin.id, dll];
@@ -431,6 +514,66 @@ export function stageVst3Bundle(dllPath, stageRoot, bundleName = "ruviform-plugi
   return { bundleDir, innerPath };
 }
 
+// VST3 suite classes that are enumerable but deliberately uncreatable,
+// keyed by the staged bundle's package name so the declaration only
+// applies to the fixture suite — never to a production adapter passed
+// via --vst3-dll/--vst3-package. The SDK validator logs
+// "Failed to create component instance of <class>!" for every test it
+// attempts on such a class but does not count those setup failures in
+// its `Result:` line, so without a declared record the intentional
+// decline would be invisible in run.json. A declared class that
+// produces no decline evidence (removed from the bundle, or
+// unexpectedly creatable) flips a Passed leg to Failed — the oracle
+// must observe the rejection, not assume it.
+export const VST3_DECLARED_UNCREATABLE = {
+  "ruviform-plugin-test-vst3": [
+    {
+      className: "test_spawn_fail",
+      reason:
+        "enumerable class whose createInstance deliberately returns " +
+        "kInvalidArgument — the spawn-phase CreateInstance-rejection " +
+        "oracle added by the Issue #630 preset/spawn-fault slice",
+    },
+  ],
+};
+
+// Annotates a finished VST3 leg with the declared-uncreatable evidence
+// found in its raw output. Must run while `leg.rawOutput` is still
+// attached (before the caller writes it to the evidence file).
+export function applyVst3DeclaredUncreatable(leg) {
+  const declared = VST3_DECLARED_UNCREATABLE[leg.package];
+  if (!declared || !leg.rawOutput) return leg;
+  leg.declaredUncreatable = declared.map((d) => {
+    const marker = `Failed to create component instance of ${d.className}!`;
+    return {
+      class: d.className,
+      occurrences: leg.rawOutput.split(marker).length - 1,
+      reason: d.reason,
+    };
+  });
+  const absent = leg.declaredUncreatable.filter((d) => d.occurrences === 0);
+  if (absent.length > 0 && leg.status === "Passed") {
+    leg.status = "Failed";
+    leg.details =
+      `${leg.details} — declared uncreatable class(es) produced no ` +
+      `create-decline evidence: ${absent.map((d) => d.class).join(", ")}`;
+  }
+  return leg;
+}
+
+// Merges a CLAP target's library-level exclusions with a plugin's own
+// declared exclusion into the leg's recorded exclusion list. The
+// informational fault run passes `includePlugin: false` — "unfiltered"
+// lifts the fault plugin's param exclusion while the target-level
+// library exclusion (upstream deadlock) still applies.
+export function clapLegExclusions(target, plugin, { includePlugin = true } = {}) {
+  const pluginExcludes =
+    includePlugin && plugin.exclude
+      ? [{ pattern: plugin.exclude, reason: plugin.excludeReason }]
+      : [];
+  return [...(target.excludes || []), ...pluginExcludes];
+}
+
 // Canonical legs: every CLAP plugin (fault scoped) + the VST3 bundle.
 // Informational legs (fault unfiltered) never affect the exit code.
 export function canonicalLegs(legs) {
@@ -524,7 +667,13 @@ export function run(opts) {
   // The informational unfiltered fault run stays fixture-only — the
   // production adapter has no intentional-crash surface.
   const clapTargets = [
-    { dll: clapDll, plugins: CLAP_PLUGINS, fixture: true, dllOption: "--clap-dll" },
+    {
+      dll: clapDll,
+      plugins: CLAP_PLUGINS,
+      fixture: true,
+      dllOption: "--clap-dll",
+      excludes: CLAP_FIXTURE_LIBRARY_EXCLUDES,
+    },
   ];
   if (clapProduction) {
     clapTargets.push({
@@ -532,6 +681,7 @@ export function run(opts) {
       plugins: CLAP_PRODUCTION_PLUGINS,
       fixture: false,
       dllOption: "--clap-production-dll",
+      excludes: [],
     });
   }
   for (const target of clapTargets) {
@@ -571,27 +721,54 @@ export function run(opts) {
       }
     } else {
       for (const plugin of target.plugins) {
-        const extraArgs = plugin.exclude ? ["--exclude", plugin.exclude] : [];
+        // Declared exclusions merge target-level (library-wide, e.g.
+        // the preset-discovery upstream deadlock) and plugin-level
+        // (e.g. test_fault's param cases) scopes into repeated
+        // --exclude flags; every applied exclusion is recorded on the
+        // leg with its reason.
+        const exclusions = clapLegExclusions(target, plugin);
+        const extraArgs = exclusions.flatMap((e) => ["--exclude", e.pattern]);
         const leg = runClapLeg({
           validator: tools.clap,
           dll: target.dll,
           plugin,
           extraArgs,
         });
-        if (plugin.exclude) leg.exclusion = { pattern: plugin.exclude, reason: plugin.excludeReason };
+        if (exclusions.length > 0) {
+          leg.exclusions = exclusions.map((e) => ({
+            pattern: e.pattern,
+            reason: e.reason,
+          }));
+        }
         legs.push(leg);
         writeFileSync(join(evidenceDir, `clap-${plugin.name}.txt`), leg.rawOutput || "");
         delete leg.rawOutput;
       }
       if (target.fixture) {
         // Informational unfiltered fault run — records the intentional
-        // crash surface without affecting the verdict.
+        // crash surface without affecting the verdict. "Unfiltered"
+        // means the fault plugin's own param exclusion is lifted; the
+        // target-level library exclusion (upstream deadlock) still
+        // applies so the leg stays focused on the fault surface.
         const fault = CLAP_PLUGINS.find((p) => p.exclude);
         if (fault) {
-          const leg = runClapLeg({ validator: tools.clap, dll: target.dll, plugin: fault });
+          const exclusions = clapLegExclusions(target, fault, { includePlugin: false });
+          const extraArgs = exclusions.flatMap((e) => ["--exclude", e.pattern]);
+          const leg = runClapLeg({
+            validator: tools.clap,
+            dll: target.dll,
+            plugin: fault,
+            extraArgs,
+          });
           leg.informational = true;
+          if (exclusions.length > 0) {
+            leg.exclusions = exclusions.map((e) => ({
+              pattern: e.pattern,
+              reason: e.reason,
+            }));
+          }
           leg.details =
-            `unfiltered run: ${leg.status} — ${leg.details || ""} ` +
+            `unfiltered run (fault param cases included): ${leg.status} — ${leg.details || ""} ` +
             `(expected: fatal fault modes are armed by param-mutating cases)`;
           legs.push(leg);
           writeFileSync(join(evidenceDir, `clap-${fault.name}-unfiltered.txt`), leg.rawOutput || "");
@@ -639,6 +816,7 @@ export function run(opts) {
       leg.bundle = bundleDir;
       leg.innerBinary = innerPath;
       leg.package = vst3Package;
+      applyVst3DeclaredUncreatable(leg);
       legs.push(leg);
       writeFileSync(join(evidenceDir, "vst3-validator.txt"), leg.rawOutput || "");
       delete leg.rawOutput;
@@ -650,7 +828,7 @@ export function run(opts) {
   const evaluation = evaluate(legs);
 
   const report = {
-    schema: "rf630-abi-validator-run/1",
+    schema: "rf630-abi-validator-run/2",
     startedAt,
     finishedAt: new Date().toISOString(),
     repo: {
