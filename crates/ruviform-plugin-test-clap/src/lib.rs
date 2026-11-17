@@ -66,7 +66,7 @@
 //! | `clap_entry` | required by the CLAP module spec — a custom
 //!   `Entry` + `PluginFactoryImpl` exposing `test_gain`,
 //!   `test_fault`, `test_stateful`, `test_instrument` and
-//!   `test_editor` through one factory (`plugin_count() == 5`) |
+//!   `test_editor`/`test_spawn_fail` through one factory (`plugin_count() == 6`) |
 //!
 //! ## Process path (RT)
 //!
@@ -91,10 +91,13 @@ mod gain;
 mod instrument;
 mod instrument_core;
 mod plugin;
+mod preset;
 mod stateful;
 
 use std::ffi::CStr;
 
+use clack_common::plugin::features;
+use clack_extensions::preset_discovery::prelude::PresetDiscoveryFactoryWrapper;
 use clack_plugin::entry::DefaultPluginFactory;
 use clack_plugin::entry::prelude::{
     Entry, EntryFactories, EntryLoadError, HostInfo, PluginDescriptor, PluginFactoryImpl,
@@ -106,6 +109,7 @@ use editor::TestEditorClapPlugin;
 use fault::TestFaultClapPlugin;
 use instrument::TestInstrumentClapPlugin;
 use plugin::TestGainClapPlugin;
+use preset::TestPresetDiscoveryFactory;
 use stateful::TestStatefulClapPlugin;
 
 /// The suite's CLAP entry — one factory exposing all test plugins.
@@ -116,17 +120,20 @@ use stateful::TestStatefulClapPlugin;
 /// that dispatches `create_plugin` on the requested plugin id.
 struct TestSuiteEntry {
     plugin_factory: PluginFactoryWrapper<TestSuiteFactory>,
+    preset_factory: PresetDiscoveryFactoryWrapper<TestPresetDiscoveryFactory>,
 }
 
 impl Entry for TestSuiteEntry {
     fn new(_bundle_path: Option<&CStr>) -> Result<Self, EntryLoadError> {
         Ok(Self {
             plugin_factory: PluginFactoryWrapper::new(TestSuiteFactory::new()),
+            preset_factory: PresetDiscoveryFactoryWrapper::new(TestPresetDiscoveryFactory::new()),
         })
     }
 
     fn declare_factories<'a>(&'a self, builder: &mut EntryFactories<'a>) {
         builder.register_factory(&self.plugin_factory);
+        builder.register_factory(&self.preset_factory);
     }
 }
 
@@ -138,6 +145,11 @@ struct TestSuiteFactory {
     stateful: PluginDescriptor,
     instrument: PluginDescriptor,
     editor: PluginDescriptor,
+    /// `test_spawn_fail` — listed in `plugin_descriptor` but
+    /// deliberately unmatched in `create_plugin`, so instantiation
+    /// returns `None` (the spawn-phase `CreateInstance`-rejection
+    /// oracle).
+    spawn_fail: PluginDescriptor,
 }
 
 impl TestSuiteFactory {
@@ -148,13 +160,23 @@ impl TestSuiteFactory {
             stateful: TestStatefulClapPlugin::get_descriptor(),
             instrument: TestInstrumentClapPlugin::get_descriptor(),
             editor: TestEditorClapPlugin::get_descriptor(),
+            spawn_fail: PluginDescriptor::new(
+                "org.ruviform-test.clap-test-spawn-fail",
+                "test_spawn_fail",
+            )
+            .with_vendor("Ruviform Test")
+            .with_version("0.0.0")
+            .with_description(
+                "Ruviform test-suite CLAP fixture — listed but never creatable (spawn-fault oracle)",
+            )
+            .with_features([features::AUDIO_EFFECT, features::STEREO]),
         }
     }
 }
 
 impl PluginFactoryImpl for TestSuiteFactory {
     fn plugin_count(&self) -> u32 {
-        5
+        6
     }
 
     fn plugin_descriptor(&self, index: u32) -> Option<&PluginDescriptor> {
@@ -164,6 +186,7 @@ impl PluginFactoryImpl for TestSuiteFactory {
             2 => Some(&self.stateful),
             3 => Some(&self.instrument),
             4 => Some(&self.editor),
+            5 => Some(&self.spawn_fail),
             _ => None,
         }
     }

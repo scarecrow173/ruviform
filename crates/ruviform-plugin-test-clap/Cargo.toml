@@ -40,8 +40,12 @@ l1-runner = ["dep:ruviform-plugin-clap", "dep:ruviform-plugin-export"]
 # production adapter pins; shared as the "SDK layer" only (see
 # docs/designs/issue-630-test-plugin-suite.md). `clack-extensions`
 # carries only the plugin-side features this fixture declares
-# (`audio-ports` + `params` + `state` + `gui` — `gui` added for
-# `test_editor`'s `clap.ext.gui` surface); the adapter's
+# (`audio-ports` + `params` + `state` + `preset-discovery` + `gui` —
+# `gui` added for `test_editor`'s `clap.ext.gui` surface,
+# `preset-discovery` for `test_stateful`'s factory/provider +
+# `clap.ext.preset-load` surface); `state-context` stays disabled —
+# preset loads restore through the same `clap.ext.state` blob law,
+# no extra context channel is needed; the adapter's
 # `thread-check` feature is deliberately not enabled — the only host
 # handle stored is `test_stateful`'s main-thread handle for the
 # `clap_host_params.rescan` request a state `load` owes the host.
@@ -53,6 +57,7 @@ clack-extensions = { version = "=0.2.0", features = [
     "note-ports",
     "params",
     "state",
+    "preset-discovery",
     "gui",
 ] }
 # Neutral plugin contracts (PluginProcessor/Event/EventList/ParamInfo/
@@ -98,6 +103,12 @@ assert_no_alloc = "1.1"
 # `EventBuffer`/`PluginInstance`) drive the plugin-side ABI in-process —
 # the same dev-dep shape the adapter's own tests use.
 clack-host = { version = "=0.2.0", features = ["clack-plugin"] }
+# Host-side preset-discovery types (`PresetDiscoveryFactory`,
+# `Provider`, `MetadataReceiverImpl`, `IndexerImpl`,
+# `PluginPresetLoad`) for the in-process ABI preset tests — the
+# `clack-extensions/clack-host` precedent the adapter's own tests
+# follow; dev-dep features never reach the cdylib build.
+clack-extensions = { version = "=0.2.0", features = ["clack-host"] }
 # Production host bridge for the real-file host-path test — dev-dep
 # edge only; the adapter itself stays pristine and this crate never
 # appears in its dependency tree.

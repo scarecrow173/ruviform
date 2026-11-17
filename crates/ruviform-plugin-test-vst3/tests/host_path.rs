@@ -63,7 +63,7 @@ fn load_library() -> Vst3Library {
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5, "the module ships five plugins");
+    assert_eq!(factories.len(), 6, "the module ships six plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -144,7 +144,7 @@ fn discovers_suite_plugins_through_production_host() {
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        5,
+        6,
         "only the audio component classes are plugin descriptors"
     );
     let gain = descriptors[0];
@@ -184,7 +184,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -203,7 +203,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -342,7 +342,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn editor_reports_no_params() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[2].create();
     assert!(
         plugin.params().is_empty(),
@@ -417,7 +417,7 @@ fn gain_and_fault_have_no_editor_view() {
 fn stateful_reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[3].create();
     let params = plugin.params();
     assert_eq!(
