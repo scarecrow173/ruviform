@@ -21,6 +21,7 @@ import {
   parseArgs,
   resolveValidators,
   run,
+  spawnCapture,
   stageVst3Bundle,
 } from "../run.mjs";
 
@@ -181,6 +182,34 @@ test("normalizeClapLeg: zero exit with unparseable output is Failed", () => {
     durationMs: 0,
   });
   assert.equal(leg.status, "Failed");
+});
+
+// -- spawnCapture ----------------------------------------------------------
+//
+// clap-validator's sandboxed children inherit its stdio; wedged
+// grandchildren (e.g. the 0.4.1 preset-discovery deadlock) keep pipes
+// open after the validator exits. spawnCapture must return at child
+// exit with the captured output rather than blocking on pipe EOF.
+
+test("spawnCapture returns at child exit despite stdio-inheriting grandchildren", () => {
+  const script = [
+    "const { spawn } = require('node:child_process');",
+    "spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'inherit' });",
+    "process.stdout.write('done');",
+  ].join("");
+  const started = Date.now();
+  const proc = spawnCapture(process.execPath, ["-e", script], { timeout: 10_000 });
+  assert.equal(proc.error, undefined);
+  assert.equal(proc.status, 0);
+  assert.equal(proc.stdout, "done");
+  assert.ok(Date.now() - started < 10_000);
+});
+
+test("spawnCapture still reports spawn failures and timeouts fail-closed", () => {
+  const missing = spawnCapture(join(tmpdir(), "rf630-no-such-exe.exe"), ["x"], { timeout: 5_000 });
+  assert.ok(missing.error);
+  const hung = spawnCapture(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { timeout: 500 });
+  assert.equal(hung.error && hung.error.code, "ETIMEDOUT");
 });
 
 // -- normalizeVst3Leg ------------------------------------------------------

@@ -55,10 +55,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -294,17 +296,48 @@ export function normalizeClapLeg({ proc, plugin, extraArgs, validator, dll, dura
   return leg;
 }
 
+// Runs an external validator capturing stdout/stderr through files
+// instead of pipes. clap-validator spawns sandboxed child processes
+// that inherit its stdio; when one wedges (e.g. the preset-discovery
+// deadlock present in 0.4.1) the orphaned grandchildren keep the pipes
+// open after the validator itself exits, so a piped spawnSync blocks
+// until its timeout and records a spurious ETIMEDOUT that masks the
+// completed report. File-backed stdio returns as soon as the validator
+// process exits. Temporary files are left for the OS to reap —
+// orphaned grandchildren may hold them open on Windows.
+export function spawnCapture(exe, args, { timeout } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "rf-abi-validator-"));
+  const outPath = join(dir, "stdout.txt");
+  const errPath = join(dir, "stderr.txt");
+  const outFd = openSync(outPath, "w");
+  const errFd = openSync(errPath, "w");
+  let proc;
+  try {
+    proc = spawnSync(exe, args, { stdio: ["ignore", outFd, errFd], timeout });
+  } finally {
+    closeSync(outFd);
+    closeSync(errFd);
+  }
+  proc.stdout = readFileSync(outPath, "utf8");
+  proc.stderr = readFileSync(errPath, "utf8");
+  return proc;
+}
+
 // Runs clap-validator for one plugin id and returns a normalized leg
 // result. `extraArgs` carries the declared per-plugin scope (e.g. the
 // fault fixture's param exclusion).
 export function runClapLeg({ validator, dll, plugin, extraArgs = [] }) {
   const args = ["validate", "--json", ...extraArgs, "--plugin-id", plugin.id, dll];
   const started = Date.now();
-  const proc = spawnSync(validator, args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 300_000,
-  });
+  let proc;
+  try {
+    proc = spawnCapture(validator, args, { timeout: 300_000 });
+  } catch (error) {
+    // spawnCapture setup can fail (e.g. temp dir unavailable); record it
+    // as a spawn failure so the leg fails closed and run.json is still
+    // written.
+    proc = { error, status: null, signal: null, stdout: "", stderr: "" };
+  }
   return normalizeClapLeg({
     proc,
     plugin,
