@@ -1,6 +1,6 @@
 * Loading module...
 
-	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-pU3eCq\ruviform-plugin-test-vst3.vst3
+	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-nvYp9a\ruviform-plugin-test-vst3.vst3
 
 * Check valid bundle structure...
 
@@ -90,6 +90,14 @@
 	version = 0.0.0
 	sdkVersion = VST 3.x
 	cid = 9C4D2F817E3A5B96D8F14A623B7E9C05
+
+  Class Info 10:
+	name = test_spawn_fail
+	category = Audio Module Class
+	subCategories = Fx
+	version = 0.0.0
+	sdkVersion = VST 3.x
+	cid = 5E2A9F147C3D8B61A4E91F27D8B36C05
 
 * Checking snapshots...
 
@@ -919,12 +927,17 @@ Info:  No MIDI Learn interface supplied!
 
 [Scan Units]
 Info:  ===Scan Units ====================================
-Info:  This component has no units.
+Info:  This component has 1 unit(s).
+Info:     Unit000 (ID = 0): "Main" (parent ID = -1, programlist ID = 0)
 [Succeeded]
 
 [Scan Programs]
 Info:  ===Scan Programs ====================================
-Info:  This component does not export any programs.
+Info:  Programlist 000 (id=0):  "Factory" (4 programs).
+Info:  Programlist 000->Program 000: "Default"
+Info:  Programlist 000->Program 001: "Half"
+Info:  Programlist 000->Program 002: "Boost"
+Info:  Programlist 000->Program 003: "Mute"
 [Succeeded]
 
 [Terminate/Initialize]
@@ -933,7 +946,7 @@ Info:  ===Terminate/Initialize ====================================
 
 [Check Unit Structure]
 Info:  ===Check Unit Structure ====================================
-Info:  This component does not support IUnitInfo!
+Info:  All units have valid parent IDs.
 [Succeeded]
 
 [Valid State Transition 32bits]
@@ -1395,6 +1408,210 @@ Info:  ===Accuracy: Sample, 1 Parameters, Change every100 Samples ==============
 Info:  64bit Audio Processing not supported.
 [Succeeded]
 Failed to teardown test!
+
+-------------------------------------------------------------
+TestSuite : test_spawn_fail
+-------------------------------------------------------------
+
+-------------------------------------------------------------
+TestSuite : General Tests
+-------------------------------------------------------------
+
+[Scan Editor Classes]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Scan Buses]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Scan Parameters]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[MIDI Mapping]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[MIDI Learn]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Scan Units]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Scan Programs]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Terminate/Initialize]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Check Unit Structure]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Valid State Transition 32bits]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Valid State Transition 64bits]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Bus Consistency]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Bus Activation]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Check Audio Bus Arrangement]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[SideChain Arrangement]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Suspend/Resume]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Note Expression]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Keyswitch]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[ProcessContext Requirements]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+-------------------------------------------------------------
+TestSuite : Single Precision (32 bit) Tests
+-------------------------------------------------------------
+
+[Process Test]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Process function running in another thread]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Silence Flags]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Silence Processing]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush (no Buffer)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush 2 (only numChannel==0)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush 2 (no Buffer, no parameter change)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Variable Block Size]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Process Format]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameter Bypass persistence]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[In: Stereo: 2 Channels, Out: Stereo: 2 Channels]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[In: Mono: 1 Channels, Out: Mono: 1 Channels]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Accuracy: Block, 1 Parameters, Change every100 Samples]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Accuracy: Sample, 1 Parameters, Change every100 Samples]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+-------------------------------------------------------------
+TestSuite : Double Precision (64 bit) Tests
+-------------------------------------------------------------
+
+[Process Test]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Process function running in another thread]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Silence Flags]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Silence Processing]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush (no Buffer)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush 2 (only numChannel==0)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameters Flush 2 (no Buffer, no parameter change)]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Variable Block Size]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Process Format]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Parameter Bypass persistence]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[In: Stereo: 2 Channels, Out: Stereo: 2 Channels]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[In: Mono: 1 Channels, Out: Mono: 1 Channels]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Accuracy: Block, 1 Parameters, Change every100 Samples]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
+
+[Accuracy: Sample, 1 Parameters, Change every100 Samples]
+Failed to create component instance of test_spawn_fail!
+Failed to setup test!
 
 -------------------------------------------------------------
 Result: 235 tests passed, 0 tests failed

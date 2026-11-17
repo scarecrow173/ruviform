@@ -13,8 +13,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  CLAP_FIXTURE_LIBRARY_EXCLUDES,
   CLAP_PLUGINS,
+  VST3_DECLARED_UNCREATABLE,
+  applyVst3DeclaredUncreatable,
   canonicalLegs,
+  clapLegExclusions,
   evaluate,
   normalizeClapLeg,
   normalizeVst3Leg,
@@ -310,7 +314,7 @@ test("run() with no tools and no artifacts records NotRun and exits nonzero", ()
   for (const l of report.legs) assert.equal(l.status, "NotRun");
   const written = JSON.parse(readFileSync(join(evidenceDir, "run.json"), "utf8"));
   assert.equal(written.evaluation.verdict, "NotRun");
-  assert.equal(written.schema, "rf630-abi-validator-run/1");
+  assert.equal(written.schema, "rf630-abi-validator-run/2");
 });
 
 test("run() records tool + artifact digests when present", () => {
@@ -388,4 +392,187 @@ test("run() --clap-production records an honest NotRun leg for a missing artifac
   assert.equal(report.artifacts.clapProductionDll.missing, true);
   // Fail-closed: a NotRun canonical leg keeps the verdict non-Passed.
   assert.notEqual(report.evaluation.verdict, "Passed");
+});
+
+// -- post-#735 suite surface (Issue #630 abi-validator rerun) --------------
+//
+// The preset/spawn-fault slice added test_spawn_fail (enumerable but
+// deliberately uncreatable on both ABIs) and the CLAP preset-discovery
+// factory. These tests pin the declared-expectation mechanism: the
+// intentional create-decline must be *observed* to pass, and the
+// upstream preset-discovery deadlock exclusion must stay declared.
+
+const SPAWN_FAIL_PLUGIN = CLAP_PLUGINS.find((p) => p.name === "test_spawn_fail");
+const DECLINE_DETAILS =
+  "Could not create the plugin instance\n" +
+  '\'clap_plugin_factory::create_plugin("org.ruviform-test.clap-test-spawn-fail")\' returned a null pointer.';
+
+function clapCase(testName, code, details = null, scope = "plugin-instance") {
+  return {
+    test: { [scope]: { test: testName, path: "x.dll" } },
+    status: { code, details },
+    duration: { secs: 0, nanos: 0 },
+  };
+}
+
+test("CLAP_PLUGINS declares test_spawn_fail with a create-decline expectation", () => {
+  assert.ok(SPAWN_FAIL_PLUGIN);
+  assert.equal(SPAWN_FAIL_PLUGIN.id, "org.ruviform-test.clap-test-spawn-fail");
+  assert.ok(SPAWN_FAIL_PLUGIN.expectCreateDecline);
+  assert.ok(SPAWN_FAIL_PLUGIN.expectCreateDecline.pattern.length > 0);
+  assert.ok(SPAWN_FAIL_PLUGIN.expectCreateDecline.reason.length > 0);
+});
+
+test("normalizeClapLeg: declared create-decline met → Passed with expectation record", () => {
+  const leg = normalizeClapLeg({
+    proc: clapProc({
+      status: 1,
+      stdout: JSON.stringify({
+        results: [
+          clapCase("scan-time", "success", "scanned", "plugin-library"),
+          clapCase("process-audio-basic-out-of-place", "failed", DECLINE_DETAILS),
+          clapCase("descriptor-consistency", "failed", DECLINE_DETAILS),
+          clapCase("param-set-events", "failed", DECLINE_DETAILS),
+        ],
+      }),
+    }),
+    plugin: SPAWN_FAIL_PLUGIN,
+    extraArgs: [],
+    validator: "v",
+    dll: "d",
+    durationMs: 0,
+  });
+  assert.equal(leg.status, "Passed");
+  assert.equal(leg.expectation.kind, "create-declined");
+  assert.equal(leg.expectation.declinedCases, 3);
+  assert.equal(leg.expectation.unexpectedCases.length, 0);
+  assert.equal(leg.expectation.crashedCases, 0);
+  assert.match(leg.details, /declared expectation met/);
+});
+
+test("normalizeClapLeg: unexpected failure or crash violates the expectation → Failed", () => {
+  for (const [name, results] of [
+    [
+      "unexpected-failure",
+      [
+        clapCase("process-audio-basic-out-of-place", "failed", DECLINE_DETAILS),
+        clapCase("state-reproducibility-basic", "failed", "state blob rejected"),
+      ],
+    ],
+    [
+      "crashed-case",
+      [
+        clapCase("process-audio-basic-out-of-place", "failed", DECLINE_DETAILS),
+        clapCase("preset-discovery-crawl", "crashed", "Timed out", "plugin-library"),
+      ],
+    ],
+    [
+      "no-decline-observed",
+      [clapCase("process-audio-basic-out-of-place", "success")],
+    ],
+  ]) {
+    const leg = normalizeClapLeg({
+      proc: clapProc({ status: 1, stdout: JSON.stringify({ results }) }),
+      plugin: SPAWN_FAIL_PLUGIN,
+      extraArgs: [],
+      validator: "v",
+      dll: "d",
+      durationMs: 0,
+    });
+    assert.equal(leg.status, "Failed", name);
+    assert.equal(leg.expectation.kind, "create-declined");
+    assert.match(leg.details, /expectation violated/);
+  }
+});
+
+test("normalizeClapLeg: expectation plugin without JSON falls back to generic verdict", () => {
+  const leg = normalizeClapLeg({
+    proc: clapProc({ status: 101, stdout: "", stderr: "panic" }),
+    plugin: SPAWN_FAIL_PLUGIN,
+    extraArgs: [],
+    validator: "v",
+    dll: "d",
+    durationMs: 0,
+  });
+  assert.equal(leg.status, "Unsupported");
+  assert.equal(leg.expectation, undefined);
+});
+
+test("clapLegExclusions merges target library and plugin exclusions", () => {
+  const target = { excludes: CLAP_FIXTURE_LIBRARY_EXCLUDES };
+  const fault = CLAP_PLUGINS.find((p) => p.name === "test_fault");
+  const gain = CLAP_PLUGINS.find((p) => p.name === "test_gain");
+
+  const gainEx = clapLegExclusions(target, gain);
+  assert.equal(gainEx.length, 1);
+  assert.equal(gainEx[0].pattern, "preset-discovery-(crawl|load)");
+  assert.match(gainEx[0].reason, /upstream/);
+
+  const faultEx = clapLegExclusions(target, fault);
+  assert.equal(faultEx.length, 2);
+  assert.equal(faultEx[1].pattern, "param-(set|fuzz)");
+
+  // The informational fault run lifts only the plugin-level exclusion.
+  const infoEx = clapLegExclusions(target, fault, { includePlugin: false });
+  assert.equal(infoEx.length, 1);
+  assert.equal(infoEx[0].pattern, "preset-discovery-(crawl|load)");
+
+  // Targets without declared exclusions stay unfiltered.
+  assert.deepEqual(clapLegExclusions({ excludes: [] }, fault), [
+    { pattern: "param-(set|fuzz)", reason: fault.excludeReason },
+  ]);
+});
+
+test("applyVst3DeclaredUncreatable records decline evidence and keeps Passed", () => {
+  const leg = {
+    kind: "vst3-sdk-validator",
+    package: "ruviform-plugin-test-vst3",
+    status: "Passed",
+    details: "235 passed, 0 failed",
+    rawOutput:
+      "TestSuite : test_spawn_fail\n" +
+      ("Failed to create component instance of test_spawn_fail!\n" +
+        "Failed to setup test!\n").repeat(3) +
+      "Result: 235 tests passed, 0 tests failed\n",
+  };
+  applyVst3DeclaredUncreatable(leg);
+  assert.equal(leg.status, "Passed");
+  assert.equal(leg.declaredUncreatable.length, 1);
+  assert.equal(leg.declaredUncreatable[0].class, "test_spawn_fail");
+  assert.equal(leg.declaredUncreatable[0].occurrences, 3);
+  assert.ok(leg.declaredUncreatable[0].reason.length > 0);
+});
+
+test("applyVst3DeclaredUncreatable flips Passed to Failed when decline evidence is absent", () => {
+  const leg = {
+    kind: "vst3-sdk-validator",
+    package: "ruviform-plugin-test-vst3",
+    status: "Passed",
+    details: "235 passed, 0 failed",
+    rawOutput: "Result: 235 tests passed, 0 tests failed\n",
+  };
+  applyVst3DeclaredUncreatable(leg);
+  assert.equal(leg.status, "Failed");
+  assert.match(leg.details, /no create-decline evidence/);
+  assert.equal(leg.declaredUncreatable[0].occurrences, 0);
+});
+
+test("applyVst3DeclaredUncreatable is a no-op for non-fixture packages", () => {
+  const leg = {
+    kind: "vst3-sdk-validator",
+    package: "ruviform-plugin-vst3",
+    status: "Passed",
+    details: "10 passed, 0 failed",
+    rawOutput: "Result: 10 tests passed, 0 tests failed\n",
+  };
+  applyVst3DeclaredUncreatable(leg);
+  assert.equal(leg.status, "Passed");
+  assert.equal(leg.declaredUncreatable, undefined);
+});
+
+test("VST3_DECLARED_UNCREATABLE covers the fixture suite's spawn-fail class", () => {
+  const declared = VST3_DECLARED_UNCREATABLE["ruviform-plugin-test-vst3"];
+  assert.ok(declared);
+  assert.equal(declared[0].className, "test_spawn_fail");
+  assert.ok(declared[0].reason.length > 0);
 });
