@@ -1,0 +1,2 @@
+[check] $ cargo check --locked --all-targets -p ruviform-plugin-test-clap
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s

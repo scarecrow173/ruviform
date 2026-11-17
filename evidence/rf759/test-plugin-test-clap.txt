@@ -1,0 +1,133 @@
+[test] $ cargo test --locked -p ruviform-plugin-test-clap
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf759-clippy-cast\crates\ruviform-plugin-test-clap)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf759-clippy-cast\crates\ruviform-plugin-clap)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.48s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_test_clap-5cf5e64e828a381c.exe)
+
+running 67 tests
+test editor::tests::set_parent_creates_real_child_hwnd ... ignored, requires a Windows window station — real-attach lane owns the formal evidence
+test block::tests::raw_midi_bytes_translate_to_neutral_midi ... ok
+test editor::tests::api_support_is_win32_embedded_on_windows_only ... ok
+test fault::tests::decode_fault_maps_bands_and_exit_codes ... ok
+test block::tests::note_on_and_off_translate_to_neutral_midi ... ok
+test editor::tests::processor_is_bitwise_pass_through ... ok
+test editor::tests::size_and_transient_verbs_are_honest ... ok
+test block::tests::dense_event_stream_within_bound_translates ... ok
+test editor::tests::show_and_hide_require_an_attached_parent ... ok
+test fault::tests::error_mode_returns_process_error ... ok
+test block::tests::fractional_sample_rate_rounds_to_nearest_hz ... ok
+test gain::tests::in_place_channel_scales_output_as_input ... ok
+test fault::tests::unarmed_block_is_pass_through ... ok
+test gain::tests::gain_persists_across_blocks ... ok
+test fault::tests::foreign_param_events_do_not_arm ... ok
+test editor::tests::create_and_destroy_are_idempotent_edges ... ok
+test editor::tests::set_parent_rejects_invalid_parents_honestly ... ok
+test gain::tests::normalized_maps_to_plain_non_identically ... ok
+test gain::tests::mid_block_event_switches_at_its_offset ... ok
+test gain::tests::default_gain_is_unity ... ok
+test gain::tests::offset_zero_event_applies_to_whole_block ... ok
+test gain::tests::prepare_resets_gain_to_default ... ok
+test gain::tests::same_offset_events_last_wins ... ok
+test gain::tests::set_gain_plain_clamps_to_range ... ok
+test gain::tests::stereo_applies_per_channel ... ok
+test gain::tests::unrelated_param_events_are_ignored ... ok
+test gain::tests::zero_frame_block_flushes_events_and_persists_gain ... ok
+test instrument_core::tests::gain_param_scales_voices ... ok
+test instrument_core::tests::cc7_scales_volume_and_cc1_enables_tremolo ... ok
+test instrument_core::tests::ninth_note_steals_oldest_voice ... ok
+test instrument_core::tests::note_on_offset_gates_voice_start ... ok
+test instrument_core::tests::note_on_renders_deterministic_voice ... ok
+test instrument_core::tests::note_off_releases_then_silences ... ok
+test instrument_core::tests::retrigger_same_key_resets_phase ... ok
+test instrument_core::tests::silence_without_events ... ok
+test instrument_core::tests::velocity_scales_amplitude ... ok
+test instrument_core::tests::zero_frame_block_flushes_events ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::params_extension_reports_and_flushes_gain ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test preset::tests::catalog_is_the_shared_four_preset_pool ... ok
+test preset::tests::factory_reports_one_wellformed_provider ... ok
+test preset::tests::load_key_dispatch_is_catalog_scoped ... ok
+test preset::tests::preset_discovery_exposes_catalog_through_real_abi ... ok
+test preset::tests::preset_load_restores_gain_and_reports_loaded ... ok
+test preset::tests::preset_load_rejects_undefined_inputs_and_reports_errors ... ok
+test stateful::tests::activation_preserves_loaded_gain ... ok
+test stateful::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test stateful::tests::params_extension_reports_and_flushes_gain ... ok
+test stateful::tests::process_applies_param_event_sample_accurately ... ok
+test stateful::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test stateful::tests::state_blob_clamps_finite_out_of_range ... ok
+test stateful::tests::state_blob_rejects_malformed_input ... ok
+test stateful::tests::state_blob_round_trips_plain_gain ... ok
+test stateful::tests::state_extension_load_rejects_malformed_blobs ... ok
+test stateful::tests::state_extension_saves_and_loads_plain_gain ... ok
+test stateful::tests::state_load_requests_params_values_rescan ... ok
+test instrument_core::tests::playing_transport_clicks_at_beat_boundaries ... ok
+test instrument_core::tests::stopped_transport_produces_no_clicks ... ok
+test instrument_core::tests::click_respects_cc7_volume ... ok
+test instrument_core::tests::seek_shifts_click_position ... ok
+
+test result: ok. 66 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\host_path.rs (target\debug\deps\host_path-6f8d06eaab098960.exe)
+
+running 18 tests
+test editor_gui_verbs_over_real_child_hwnd ... ignored, requires an interactive Windows window station — real-HWND lane
+test reports_fault_param_in_plain_domain ... ok
+test reports_gain_param_in_plain_domain ... ok
+test reports_stateful_param_in_plain_domain ... ok
+test discovers_suite_plugins_through_production_host ... ok[CLAP_PLUGIN_ERROR]
+state blob truncated
+[CLAP_PLUGIN_ERROR] state blob has trailing data
+[CLAP_PLUGIN_ERROR] test editor_is_parameterless_pass_through ... malformed state blobok
+test fault_unarmed_and_none_mode_are_pass_through ...
+ok[CLAP_PLUGIN_ERROR]
+processor returned an unmapped statustest editor_reports_no_params ...
+[CLAP_PLUGIN_ERROR] malformed state blob
+ok
+[CLAP_PLUGIN_ERROR] set_parent: child window creation failed
+test editor_gui_verbs_decline_without_open_gui ... ok
+test processes_audio_with_sample_accurate_gain_events ... ok
+test stateful_save_mutate_restore_save_round_trips ... ok
+test fault_error_mode_is_defined_rejection_not_crash ... ok
+test stateful_restore_rejects_malformed_blob ... ok
+test stateless_classes_decline_state_verbs ... ok
+test editor_open_gui_rejects_opaque_parent_lease ... ok
+test non_editor_classes_decline_gui_verbs ... ok
+test non_editor_classes_decline_open_gui ... ok
+test instrument_note_lifecycle_releases_to_silence ... ok
+
+test result: ok. 17 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_fault_test_plugin_e2e.rs (target\debug\deps\l1_fault_test_plugin_e2e-6f4167df437316cc.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_real_test_plugin_e2e.rs (target\debug\deps\l1_real_test_plugin_e2e-c14f2f04a8270d06.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_stateful_test_plugin_e2e.rs (target\debug\deps\l1_stateful_test_plugin_e2e-826b6db89dcb42bc.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_test_clap
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[cache]: 0 hits, 5 misses, 2 incremental, 3 bypassed; 0 B downloaded, 0 B uploaded, 45.4 MiB stored locally
+mbx[savings]: the running total stands at 3d 4h across 4343 builds. nobody is counting except the box.
