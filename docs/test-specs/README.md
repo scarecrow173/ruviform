@@ -227,6 +227,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| TSPEC-630abiValidatorRerun06 | Issue #630 外部 ABI validator 再実走 slice — test specification | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | TSPEC-630abiValidator06 | Issue #630 外部 ABI validator slice — test specification | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TSPEC-034Y14780zESXWkqYxDVNj | Issue #630 adapter-state-bridge slice — test specification | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TSPEC-034ZCLAPED6ts6ceM3kQ2x | Issue #630 CLAP test_editor slice — test specification | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
@@ -260,6 +261,7 @@ Directory: `docs/test-specs`
 | TSPEC-726clapValidatorPanic06 | Issue #726 clap-validator param-fuzz panic — test specification | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | TSPEC-034Z0uy4qJcLIsiQTm3jM5 | Issue #727 bounded 非 RT job executor 責務判断・API 契約 テスト仕様 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | TSPEC-732clapLifecycleAudit06 | Issue #732 production CLAP adapter lifecycle 監査 — test specification | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| TSPEC-034Z78HXuZljkt8u95PZgA | Issue #744 JobExecutor 実装 テスト仕様 | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

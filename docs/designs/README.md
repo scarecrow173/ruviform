@@ -238,6 +238,7 @@ Directory: `docs/designs`
 | DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| DESIGN-630abiValidatorRerun03 | Issue #630 外部 ABI validator 再実走 slice — 設計 | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | DESIGN-630abiValidator03 | Issue #630 外部 ABI validator slice — 設計 | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | DESIGN-P7XCcqW3rGHPzKfQJ6SUA | Issue #630 adapter-state-bridge slice — 設計 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
@@ -271,6 +272,7 @@ Directory: `docs/designs`
 | DESIGN-726clapValidatorPanic03 | Issue #726 clap-validator param-fuzz panic — 設計と判断記録 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | DESIGN-034Z0tS0DTi5T7v5ov5cWH | Issue #727 bounded 非 RT job executor — ruviform-exec 内 executor primitive の API 設計 | approved | [issue-727-bounded-nonrt-job-executor.md](./issue-727-bounded-nonrt-job-executor.md) |
 | DESIGN-732clapLifecycleAudit03 | Issue #732 production CLAP adapter lifecycle 監査 — 設計 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| DESIGN-034Z78w2daJkBjWWj2OXIP | Issue #744 JobExecutor 実装設計 — bounded queue・協調 cancel・result joining | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

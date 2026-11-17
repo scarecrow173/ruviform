@@ -206,6 +206,7 @@ Directory: `docs/specs`
 | SPEC-034YnyKRDisxQAnJdC2wTj | Issue #629 virtual endpoint lane registration and Test Runtime wiring check (5th slice) | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034YaVh88vUiMap5dBbjln | Issue #629 WASAPI streaming verifier and endpoint probe extension (4th slice) | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| SPEC-630abiValidatorRerun02 | Issue #630 外部 ABI validator 再実走 slice — post-#735 declared-expectation + run.json/evidence 更新 — spec | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | SPEC-630abiValidator02 | Issue #630 外部 ABI validator slice — clap-validator 実走 + VST3 SDK validator + opt-in runner | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | SPEC-034Y13Y73IFhhGtTmihC8f | Issue #630 adapter-state-bridge slice — VST3 IBStream + CLAP clap.state host bridge | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
@@ -239,6 +240,7 @@ Directory: `docs/specs`
 | SPEC-726clapValidatorPanic02 | Issue #726 clap-validator 0.4.1 param-fuzz panic — 根因判断と leg 扱い確定 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | SPEC-034Z0tP43L1BILteVZhtDI | Issue #727 bounded 非 RT job executor primitive の責務判断と配置 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| SPEC-034Z78vorbxe5h4YnZofGo | Issue #744 bounded 非 RT JobExecutor 実装（ruviform-exec executor module） | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

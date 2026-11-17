@@ -78,6 +78,7 @@ Directory: `docs/impl/exp`
 | [issue-629-virtual-endpoint-lane-exp.jsonl](./issue-629-virtual-endpoint-lane-exp.jsonl) |
 | [issue-629-wasapi-endpoint-exp.jsonl](./issue-629-wasapi-endpoint-exp.jsonl) |
 | [issue-630-abi-validator-exp.jsonl](./issue-630-abi-validator-exp.jsonl) |
+| [issue-630-abi-validator-rerun-exp.jsonl](./issue-630-abi-validator-rerun-exp.jsonl) |
 | [issue-630-adapter-state-bridge.jsonl](./issue-630-adapter-state-bridge.jsonl) |
 | [issue-630-clap-test-editor-exp.jsonl](./issue-630-clap-test-editor-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
@@ -105,6 +106,7 @@ Directory: `docs/impl/exp`
 | [issue-725-serde-vocab-phase-a-exp.jsonl](./issue-725-serde-vocab-phase-a-exp.jsonl) |
 | [issue-726-clap-validator-panic-exp.jsonl](./issue-726-clap-validator-panic-exp.jsonl) |
 | [issue-727-job-executor-exp.jsonl](./issue-727-job-executor-exp.jsonl) |
+| [issue-744-job-executor-exp.jsonl](./issue-744-job-executor-exp.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |

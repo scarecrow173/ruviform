@@ -78,6 +78,7 @@ Directory: `docs/tasks`
 | TASK-034ZkLmNpQrStUvWxYzIj5 | Issue #692 T1 — ruviform-script 中立契約 port crate 実装・検証・docs chain | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | TASK-Tl2K23IPFpdnJ46b7lJJAc | Issue #716 runtime ScriptBackend — タスク分解 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | TASK-034YZZNkTftEQV1BWT8vGc | Issue #725 serde 語彙 Phase A — task | in-progress | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| TASK-034Z78J47Pz01PXhvix6fI | Issue #744 JobExecutor 実装 — task | completed | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -360,6 +361,7 @@ Directory: `docs/tasks`
 | TASK-034YnAFuBxhg3H6xRVBCKB | Issue #629 virtual endpoint lane registration tasks | done | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TASK-034XCkcQ3OJUyxLkwM19xs | Issue #629 virtual endpoint probe task | done | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TASK-034YboiLqA86ymomdjc56s | Issue #629 WASAPI streaming verifier tasks | done | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| TASK-630abiValidatorRerun05 | Issue #630 外部 ABI validator 再実走 slice — task | done | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | TASK-630abiValidator05 | Issue #630 外部 ABI validator slice — task | done | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
