@@ -1,0 +1,2 @@
+[2m   13[0m[2mms[0m [1;31mERROR[0m processor returned an unmapped status [2;3mplugin::error[0m
+[2m   18[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-bounds failed [2;3mclap_validator::validator[0m

@@ -1,0 +1,773 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-library": {
+          "test": "query-nonexistent-factory",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 529700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "create-id-with-trailing-garbage",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 414900
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-rtld-now",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "This test is only relevant to Unix-like platforms"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-time",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin can be scanned in 0 milliseconds."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 454900
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-crawl",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'clap.preset-discovery-factory/2' factory."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 611300
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-descriptor-consistency",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'clap.preset-discovery-factory/2' factory."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 663700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-load",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'clap.preset-discovery-factory/2' factory."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 345600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "descriptor-consistency",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 641700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-categories",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 627400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-duplicates",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 368400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-out-of-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1143300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-in-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1078700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-out-of-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not support 64-bit floating point audio."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 405300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-in-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not support 64-bit floating point audio."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 437700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-denormals",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "warning",
+        "details": "The plugin took 5.89x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 8236900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-constant-mask",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin never set the constant flag on any output"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1654900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-process-status",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin never went to sleep during the test."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1914400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-out-of-place-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 632800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-inconsistent",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 565500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-wildcard",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 513900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-sample-rates",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4483700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-block-sizes",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 5214100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-random-block-sizes",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1631300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-reset-reactivate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 766200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-activation",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'audio-ports-activation' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 371100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-config",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'audio-ports-config' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 386900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-configurable-audio-ports",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'configurable-audio-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 402400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-events",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 993000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-no-cookies",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 718200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-wrong-namespace",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 742300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 13980900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-bounds",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 14268800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-sample-accurate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1235200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-modulation",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 631900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-conversions",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 672800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-default-values",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 393300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-empty",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 362500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-random",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 463500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 390300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-binary",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 375800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-buffered",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 430200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-null",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 671800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1400500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz-sample-accurate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+          "plugin_id": "org.ruviform.clap-gain-poc"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2384200
+      }
+    }
+  ]
+}
+
+[2m   14[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   19[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m  464[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m  489[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m  496[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m  502[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m  509[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
+[2m  517[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
+[2m  537[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
+[2m  552[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
+[2m  554[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
+[2m  580[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
+[2m  587[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  591[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  595[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
+[2m  621[0m[2mms[0m [32m INFO[0m Test param-set-events completed [2;3mclap_validator::validator[0m
+[2m  626[0m[2mms[0m [32m INFO[0m Test param-set-no-cookies completed [2;3mclap_validator::validator[0m
+[2m  632[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
+[2m  650[0m[2mms[0m [32m INFO[0m Test param-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m  651[0m[2mms[0m [32m INFO[0m Test param-fuzz-basic completed [2;3mclap_validator::validator[0m
+[2m  655[0m[2mms[0m [32m INFO[0m Test param-fuzz-modulation completed [2;3mclap_validator::validator[0m
+[2m  656[0m[2mms[0m [32m INFO[0m Test param-fuzz-bounds completed [2;3mclap_validator::validator[0m
+[2m  661[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
+[2m  666[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
+[2m  708[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
+[2m  715[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
+[2m  722[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m

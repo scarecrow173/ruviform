@@ -1,0 +1,1 @@
+[2m   15[0m[2mms[0m [1;31mERROR[0m thread 'main' panicked at 'Failed to deserialize the output from the sandboxed operation: Error("EOF while parsing a value", line: 1, column: 0). This is a bug in the validator': src\cli\sandbox.rs:98. Set RUST_BACKTRACE=1 for a backtrace. [2;3mpanic[0m

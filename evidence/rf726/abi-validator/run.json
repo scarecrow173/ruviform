@@ -1,0 +1,276 @@
+{
+  "schema": "rf630-abi-validator-run/1",
+  "startedAt": "2026-11-17T07:02:33.655Z",
+  "finishedAt": "2026-11-17T07:32:37.915Z",
+  "repo": {
+    "root": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic",
+    "head": "5b2dbe001387bceffc5e1dc4170fdc6c8cd8a4b1",
+    "platform": "win32/x64",
+    "osRelease": "MINGW64_NT-10.0-26300 3.6.7-fb42d713.x86_64",
+    "node": "v26.12.1"
+  },
+  "tools": {
+    "clapValidator": {
+      "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe",
+      "sha256": "825439ad3ff98770a24656013eeb11591407687b97058e1db9549c4f7d53e38a"
+    },
+    "vst3Validator": null
+  },
+  "artifacts": {
+    "clapDll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "sha256": "b7b36329616676a83ddbfda6dfbb7cb27efe068c953e513eedc4124e9e4c3ae7"
+    },
+    "clapProductionDll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+      "sha256": "fe608aa00a30a0f9e0063cdaf9fb4987c6b486e9ffb4f56e315994ac35a5c725"
+    },
+    "vst3Dll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_vst3.dll",
+      "sha256": "a77fcec568e28f0e83544782fc9987ce192ea188df05882a14611e6000e8e131"
+    },
+    "vst3Package": "ruviform-plugin-test-vst3",
+    "vst3Bundle": "ruviform-plugin-test-vst3.vst3"
+  },
+  "build": {
+    "ran": true,
+    "command": "cargo build -p ruviform-plugin-test-clap -p ruviform-plugin-test-vst3 -p ruviform-plugin-clap",
+    "exitCode": 0,
+    "ok": true,
+    "tail": "Compiling ruviform-plugin-test-clap v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\crates\\ruviform-plugin-test-clap)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.79s\nmbx[cache]: 0 hits, 0 misses, 1 incremental, 1 bypassed; 0 B downloaded, 0 B uploaded, 0 B stored locally\nmbx[savings]: 8.7 TiB logical tidied away. you may continue not thinking about it."
+  },
+  "legs": [
+    {
+      "kind": "clap-validator",
+      "plugin": "test_gain",
+      "pluginId": "org.ruviform-test.clap-test-gain",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-gain G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 300007,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 27,
+        "skipped": 14,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 2
+      },
+      "failedCases": [
+        {
+          "test": "preset-discovery-crawl",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        },
+        {
+          "test": "preset-discovery-load",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        }
+      ],
+      "warnings": [
+        "The plugin took 2.85x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 14,
+      "status": "Failed",
+      "details": "spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_fault",
+      "pluginId": "org.ruviform-test.clap-test-fault",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude param-(set|fuzz) --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 300007,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 21,
+        "skipped": 14,
+        "warning": 0,
+        "failed": 0,
+        "crashed": 2
+      },
+      "failedCases": [
+        {
+          "test": "preset-discovery-crawl",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        },
+        {
+          "test": "preset-discovery-load",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        }
+      ],
+      "warnings": [],
+      "skipped": 14,
+      "status": "Failed",
+      "details": "spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT",
+      "exclusion": {
+        "pattern": "param-(set|fuzz)",
+        "reason": "test_fault's stepped Fault parameter intentionally arms abort/exit/hang modes; param-mutating validator cases would crash the sandboxed child by design. The fatal surface is covered by the L1 out-of-process fault lane instead."
+      }
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_stateful",
+      "pluginId": "org.ruviform-test.clap-test-stateful",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-stateful G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 302441,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 32,
+        "skipped": 9,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 2
+      },
+      "failedCases": [
+        {
+          "test": "preset-discovery-crawl",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        },
+        {
+          "test": "preset-discovery-load",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        }
+      ],
+      "warnings": [
+        "The plugin took 4.05x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 9,
+      "status": "Failed",
+      "details": "spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_instrument",
+      "pluginId": "org.ruviform-test.clap-test-instrument",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-instrument G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 300009,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 31,
+        "skipped": 11,
+        "warning": 0,
+        "failed": 0,
+        "crashed": 2
+      },
+      "failedCases": [
+        {
+          "test": "preset-discovery-crawl",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        },
+        {
+          "test": "preset-discovery-load",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        }
+      ],
+      "warnings": [],
+      "skipped": 11,
+      "status": "Failed",
+      "details": "spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_editor",
+      "pluginId": "org.ruviform-test.clap-test-editor",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-editor G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 300010,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 18,
+        "skipped": 23,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 2
+      },
+      "failedCases": [
+        {
+          "test": "preset-discovery-crawl",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        },
+        {
+          "test": "preset-discovery-load",
+          "code": "crashed",
+          "details": "Timed out after 45 seconds"
+        }
+      ],
+      "warnings": [
+        "The plugin took 2.36x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 23,
+      "status": "Failed",
+      "details": "spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_fault",
+      "pluginId": "org.ruviform-test.clap-test-fault",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 300003,
+      "exitCode": 101,
+      "signal": null,
+      "counts": null,
+      "failedCases": [],
+      "warnings": [],
+      "skipped": 0,
+      "status": "Failed",
+      "details": "unfiltered run: Failed — spawn error: spawnSync C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe ETIMEDOUT (expected: fatal fault modes are armed by param-mutating cases)",
+      "informational": true
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "production_gain",
+      "pluginId": "org.ruviform.clap-gain-poc",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform.clap-gain-poc G:\\orca\\workspaces\\ruviform\\rf726-validator-panic\\target\\debug\\ruviform_plugin_clap.dll",
+      "durationMs": 535,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 26,
+        "skipped": 17,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [
+        "The plugin took 4.49x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 17,
+      "status": "Passed",
+      "details": "26 passed, 17 skipped, 1 warning(s), 0 failed"
+    },
+    {
+      "kind": "vst3-sdk-validator",
+      "plugin": "ruviform-plugin-test-vst3.vst3",
+      "pluginId": null,
+      "status": "NotRun",
+      "details": "VST3 SDK validator binary not found — build `validator` from the pinned SDK source revision (see docs/specs/issue-630-abi-validator.md) or pass --vst3-validator / VST3_VALIDATOR",
+      "counts": null,
+      "failedCases": [],
+      "warnings": [],
+      "skipped": 0,
+      "exitCode": null
+    }
+  ],
+  "evaluation": {
+    "verdict": "Failed",
+    "exitCode": 1,
+    "summary": {
+      "total": 7,
+      "passed": 1,
+      "failed": 5,
+      "notRun": 1,
+      "unsupported": 0
+    }
+  }
+}

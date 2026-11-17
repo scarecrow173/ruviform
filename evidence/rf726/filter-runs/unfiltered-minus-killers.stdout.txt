@@ -1,0 +1,711 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-library": {
+          "test": "query-nonexistent-factory",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2575400
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "create-id-with-trailing-garbage",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2592900
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-rtld-now",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "This test is only relevant to Unix-like platforms"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-time",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin can be scanned in 2 milliseconds."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2531200
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-crawl",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 49357700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-descriptor-consistency",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2083300
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-load",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 49192100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "descriptor-consistency",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1992800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-categories",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 1989100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-duplicates",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2192200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-out-of-place",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3182500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-in-place",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2896700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-out-of-place",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not support 64-bit floating point audio."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2072400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-in-place",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not support 64-bit floating point audio."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2253900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-denormals",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "warning",
+        "details": "The plugin took 3.09x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 5375000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-constant-mask",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin never set the constant flag on any output"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3076700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-process-status",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin never went to sleep during the test."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3379400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-out-of-place-basic",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2508500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-inconsistent",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2302200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-wildcard",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'note-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2088100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-sample-rates",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 6337000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-block-sizes",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 6453100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-random-block-sizes",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4466200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-reset-reactivate",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3423300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-activation",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'audio-ports-activation' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3653200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-config",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'audio-ports-config' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2463100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-configurable-audio-ports",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'configurable-audio-ports' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2849400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-events",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "After calling 'clap_plugin_params::flush()', the parameter values did not change"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2540700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-no-cookies",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "After calling 'clap_plugin_params::flush()', the parameter values did not change"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2435900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-wrong-namespace",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2863300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-bounds",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Invalid output detected in parameter value permutation 2 of 50 ('C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\clap-validator\\org.ruviform-test.clap-test-fault\\param-fuzz-basic\\param-values-current.json' and 'C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\clap-validator\\org.ruviform-test.clap-test-fault\\param-fuzz-basic\\param-values-previous.json' contain the current and previous parameter values)\nThe plugin returned 'CLAP_PROCESS_ERROR' from 'clap_plugin::process()'."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 5152400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-sample-accurate",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "exit code: 0xc0000409"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 431629600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-conversions",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2446700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-default-values",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2408900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-empty",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2317200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-random",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2464500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-basic",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2876200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-binary",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4439700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-buffered",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "The plugin does not implement the 'state' extension."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2924800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-null",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4180200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4761800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz-sample-accurate",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 5203500
+      }
+    }
+  ]
+}
