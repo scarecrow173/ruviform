@@ -197,6 +197,12 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   （`evidence/rf725/consumer-impact-assessment.md`）と
   deserialize alias `test-plugin` 受容を適用済み — emit flip
   は第2 slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - consumer 照合（AC7 — `scarecrow173/synvelis#115`/`#117`/
   `#126`・`scarecrow173/audio-lens#127`）。
 - MIDI 側 lane（`test-midi-real-device` は登録済み・変更なし）。
@@ -254,7 +260,10 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   決定、`real-abi-test-plugin`↔`test-plugin` の既知語彙 gap
   が docs に記録される（status: rf#725 Phase A で deserialize
   alias `test-plugin` 受容を適用済み・emit flip は第2 slice —
-  `docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  `docs/designs/issue-725-serde-vocab-phase-a.md`；rf#725 Phase B
+  で emit flip 実施・検証済み — emit/`as_str()`/plugin-dock-test
+  assert が `test-plugin` に統一・語彙 gap 解消 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`）。
 - [ ] `EnvironmentKind` に `VirtualOsEndpoint`・
   `PhysicalDevice` が additive 追加され、serde
   `kebab-case` が schema 語彙（`virtual-os-endpoint`・
@@ -286,6 +295,12 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   （`evidence/rf725/consumer-impact-assessment.md`）と
   deserialize alias `test-plugin` 受容を適用済み — emit flip
   は第2 slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - reconnect/xrun/permission 実測（AC5）・consumer 照合
   （AC7）— 後続。
 - 実体は `docs/designs/issue-629-virtual-endpoint-lane.md`
