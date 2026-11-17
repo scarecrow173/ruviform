@@ -27,6 +27,7 @@ Directory: `docs/discovery`
 | DISC-034YxCYwvosUuX47paEbNO | Issue #532 foreground-probe discovery — 変異 probe の探索結果 | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
 | DISC-fZWC8q6tfUQG3VuH1L9Eoz | Issue #532 presentation-probe discovery — 残余 3 候補の判別設計探索 | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
+| DSC-630abiValidatorRerun01 | Issue #630 外部 ABI validator 再実走 slice — post-#735 surface の調査と declared-expectation 設計判断 | final | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | DSC-630abiValidator01 | Issue #630 外部 ABI validator slice — provisioning 調査と validator 指摘の診断 | final | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DSC-630presetSpawnFault01 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 調査記録 | final | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
@@ -82,5 +83,6 @@ Directory: `docs/discovery`
 | DISC-034ZkLmNpQrStUvWxYzKl6 | Issue #692 ruviform-script port crate — 調査記録 | resolved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | DISC-uyGbmYQxvwiFeiFkGWSPO7 | Issue #716 runtime ScriptBackend — 調査記録 | resolved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | DISC-034YZUNuibc7hwIC9PXWm9 | Issue #725 EnvironmentKind serde 語彙 gap — consumer 影響評価と移行方針（Phase A） | resolved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| DISC-034Z78u4glu94S3wActSDq | Issue #744 bounded non-RT JobExecutor — 実装 slice の探索・設計確定 | resolved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

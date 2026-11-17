@@ -200,6 +200,7 @@ Directory: `docs/plans`
 | PLAN-034YnADuTW0N5PDeaJtW36 | Issue #629 virtual endpoint lane registration plan | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | PLAN-034XCkcPRJrWqtaLLfUlAS | Issue #629 virtual endpoint probe plan | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | PLAN-034YbbuRqN5VUqXuQfKKHB | Issue #629 WASAPI streaming verifier implementation plan | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| PLAN-630abiValidatorRerun04 | Issue #630 外部 ABI validator 再実走 slice — 実装計画 | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | PLAN-630abiValidator04 | Issue #630 外部 ABI validator slice — 実装計画 | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | PLAN-034Y14eOip1VTyZMiRueNr | Issue #630 adapter-state-bridge slice — 実装計画 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | PLAN-034ZCLAPED4pl4ceM3kQ2x | Issue #630 CLAP test_editor slice — 実装計画 Implementation Plan | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
@@ -233,6 +234,7 @@ Directory: `docs/plans`
 | PLAN-726clapValidatorPanic04 | Issue #726 clap-validator param-fuzz panic — 実装計画 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | PLAN-034Z0ufhfy1zqe3TvK5xrp | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | PLAN-732clapLifecycleAudit04 | Issue #732 production CLAP adapter lifecycle 監査 — 実装計画 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| PLAN-034Z78H8qbs20QnotU2UIi | Issue #744 JobExecutor 実装計画 | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

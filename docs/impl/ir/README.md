@@ -255,6 +255,7 @@ Directory: `docs/impl/ir`
 | IMPL-034YnB8vZodK9rvl3LOMoQ | Issue #629 virtual endpoint lane registration | completed | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034YbQpZeewSk6QoG6ahZJ | Issue #629 WASAPI endpoint streaming verifier | completed | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
+| IMPL-630abiValidatorRerun07 | Issue #630 外部 ABI validator 再実走 slice — 実装記録 | completed | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | IMPL-630abiValidator07 | Issue #630 外部 ABI validator slice — 実装記録 | completed | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
@@ -282,6 +283,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Z1KOt5WW4W743J3SiQh | Issue #726 clap validator panic | completed | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | IMPL-034Z0uHvTxRFpgNslvN5XM | Issue #727 bounded non-RT job executor placement decision | completed | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | IMPL-732clapLifecycleAudit07 | Issue #732 production CLAP adapter lifecycle 監査 — 実装記録 | completed | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| IMPL-034Z78UHtD5xUTmbZ2lpQh | Issue #744 JobExecutor 実装記録 | completed | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |
