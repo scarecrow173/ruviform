@@ -119,6 +119,12 @@ headless 部分を閉じる。
   status: rf#725 Phase A で deserialize alias `test-plugin`
   受容を適用済み・emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 
 ## Components and Boundaries
 
@@ -267,6 +273,12 @@ module doc（「`test-midi-real-device` が `#[ignore]` を収集
   status: rf#725 Phase A で consumer 影響評価と deserialize
   alias `test-plugin` 受容を適用済み — emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - capability matrix の ❓/⚠️ 項目の実測 — provisioned
   runner 初回実走待ち（runbook の検証手順で収集）。
 

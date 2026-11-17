@@ -165,7 +165,7 @@ fn fixture_run_reports_honest_verdicts() {
     assert_eq!(plugin["name"], "test_gain");
     assert!(plugin["version"].as_str().is_some());
     assert_eq!(
-        environment["environment_kind"], "real-abi-test-plugin",
+        environment["environment_kind"], "test-plugin",
         "real ABI execution claims the real kind"
     );
 
@@ -208,7 +208,7 @@ fn fixture_run_reports_honest_verdicts() {
             .and_then(|env| env["environment_kind"].as_str());
         assert_eq!(
             kind,
-            Some("real-abi-test-plugin"),
+            Some("test-plugin"),
             "case `{case}` claims the real ABI kind only because it ran"
         );
     }

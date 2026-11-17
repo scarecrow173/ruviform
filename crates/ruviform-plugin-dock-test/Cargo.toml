@@ -75,7 +75,7 @@ ruviform-plugin-core = { path = "../ruviform-plugin-core" }
 # - ruviform-audio-core: SampleRate for the Activate ProcessConfig.
 ruviform-audio-core = { path = "../ruviform-audio-core" }
 # - ruviform-audio-test: EnvironmentKind vocabulary
-#   (real-abi-test-plugin is claimed only by cases that actually
+#   (test-plugin is claimed only by cases that actually
 #   executed the real binary; real-window only by the real-dock lane).
 ruviform-audio-test = { path = "../ruviform-audio-test" }
 # - ruviform-ui-gpui (optional; `real-dock`/`lab-gui` features only):

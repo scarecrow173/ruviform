@@ -100,6 +100,12 @@ headless）。
   受容を適用済み・emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）— emit 側の
   語彙は依然として一致していないため「解消済み」とは記さない。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - **R9 stale 参照ゼロ**: 「mise lane 未登録」を示す記述は
   canonical lane `mise run test-audio-virtual-endpoint` への
   参照に更新される。survey doc Evidence 節は append-only
@@ -129,6 +135,11 @@ headless）。
   status: rf#725 Phase A で `as_str`/emit は不変のまま
   deserialize alias `test-plugin` のみ追加 — emit flip は第2
   slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  `as_str()`/serde emit が `test-plugin` に統一され語彙 gap は
+  解消（deserialize は新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - **E5 stale 参照**: Given verifier module doc・probe verdict・
   wasapi-endpoint design・survey doc When lane 記述を確認
   Then canonical lane `mise run test-audio-virtual-endpoint`
@@ -154,3 +165,9 @@ headless）。
   status: rf#725 Phase A で deserialize alias `test-plugin`
   受容を適用済み — emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。

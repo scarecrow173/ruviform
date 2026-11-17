@@ -222,6 +222,12 @@ NOT_PROVISIONED/NotRun を維持する。
   status: rf#725 Phase A で deserialize alias `test-plugin`
   受容を適用済み・emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - production コード変更・新規 dependency/feature/`unsafe`・
   test target 分割・関数移動・docs index 再生成。
 
@@ -310,6 +316,12 @@ NOT_PROVISIONED/NotRun を維持する。
   status: rf#725 Phase A で consumer 影響評価と deserialize
   alias `test-plugin` 受容を適用済み — emit flip は第2 slice
   （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
+  status: rf#725 Phase B で emit flip を実施・検証済み —
+  serde emit・`as_str()`・plugin-dock-test assert が全て
+  `test-plugin` に統一され語彙 gap は解消（deserialize は
+  新旧両綴りを恒久受容 —
+  `docs/designs/issue-725-serde-vocab-phase-b.md`・
+  `docs/impl/ir/issue-725-serde-vocab-phase-b.md`）。
 - 実体は `docs/designs/issue-629-provisioning-runbook.md`
   の Deferred Design Concerns に記録する。
 
