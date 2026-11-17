@@ -252,6 +252,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | IMPL-034YIlnrAlTVIKDGSVNxwW | Issue #629 provisioning runbook and MIDI virtual lane separation | completed | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
+| IMPL-034Zb3GiG71rPTDG6eZpFv | Issue #629 AC3 Test Runtime wiring — verdict to RunMetadata and deterministic signal/Event supply | completed | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | IMPL-034YnB8vZodK9rvl3LOMoQ | Issue #629 virtual endpoint lane registration | completed | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | IMPL-034XCe9Yszn1tqayGEjYYk | Issue #629 virtual endpoint probe implementation record | completed | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | IMPL-034YbQpZeewSk6QoG6ahZJ | Issue #629 WASAPI endpoint streaming verifier | completed | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -261,6 +262,7 @@ Directory: `docs/impl/ir`
 | IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| IMPL-630presetDiscoveryReeval07 | Issue #630 preset-discovery 外部検証再評価 slice — 実装記録 | completed | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | IMPL-630presetSpawnFault07 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 実装記録 | completed | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | IMPL-034Y1GuSJhatlqbBsFEaYI | Issue #630 test_editor slice — 実装記録 | completed | [issue-630-test-editor-slice.md](./issue-630-test-editor-slice.md) |
 | IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |

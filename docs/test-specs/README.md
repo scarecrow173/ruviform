@@ -224,6 +224,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | TSPEC-byCAXVcNUJp9U972Dd16XL | Issue #629 provisioning runbook test spec | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
+| TSPEC-A0lPTvgFQReroORyTmsciT | Issue #629 AC3 Test Runtime wiring test spec | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | TSPEC-034XCdLA9CKhCyJHi0wtK9 | Issue #629 virtual endpoint probe test spec | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | TSPEC-034Ybd5eFlJYcz1k7fLguo | Issue #629 WASAPI streaming verifier test spec | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -233,6 +234,7 @@ Directory: `docs/test-specs`
 | TSPEC-034ZCLAPED6ts6ceM3kQ2x | Issue #630 CLAP test_editor slice — test specification | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| TSPEC-630presetDiscoveryReeval06 | Issue #630 preset-discovery 外部検証再評価 slice — test specification | approved | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | TSPEC-630presetSpawnFault06 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — test specification | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | TSPEC-034Y13OOyL62lZ84qd2ILq | Issue #630 test_editor slice — test specification | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TSPEC-1jGomS13d3GgO1MNrOleAi | Issue #630 test_fault slice — test specification | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |

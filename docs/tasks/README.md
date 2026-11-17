@@ -64,6 +64,7 @@ Directory: `docs/tasks`
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XVm2WqXrYsZaBcDeFgH | Issue #629 MIDI loopback round-trip verifier implementation task | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TASK-GxQyjrINNr7NrJtRcsxIBf | Issue #629 AC3 Test Runtime wiring tasks | in-progress | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | TASK-034ZCLAPED5tk5ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-034Y13NY1bznQbU0TgCsEn | Issue #630 test_editor slice — task | completed | [issue-630-test-editor.md](./issue-630-test-editor.md) |
@@ -366,6 +367,7 @@ Directory: `docs/tasks`
 | TASK-630abiValidator05 | Issue #630 外部 ABI validator slice — task | done | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| TASK-630presetDiscoveryReeval05 | Issue #630 preset-discovery 外部検証再評価 slice — task | done | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | TASK-630presetSpawnFault05 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — task | done | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | TASK-3bwAN8UwWS5HsnXVLLCAap | Issue #630 test_fault slice — task | done | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TASK-034Z9pVw6xJmZ5sNtQeUgD | Issue #630 test_instrument slice — task | done | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
