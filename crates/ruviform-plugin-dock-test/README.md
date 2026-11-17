@@ -16,6 +16,7 @@ VST3 cdylib built by `ruviform-plugin-test-vst3`:
 | case | driver | verdict today |
 | --- | --- | --- |
 | `view-mount` | `Fake` | `Pass` — semantic `NativeSlot` spec mounts (contract conformance only) |
+| `command-receipt` | `Fake` | `Pass` — `sv_fader_dock_fixture` gesture mints receipt-expecting `Commit` intents; applied/rejected `Event::Result`s settle `Applied`→`Observed`/`Rejected` and populate `receipts` (contract conformance only — never real-window/pixel/OS evidence) |
 | `artifact` | `PluginHostProbe` | `Pass` — resolve + SHA-256 + `Vst3Library::load` + descriptor |
 | `host-lifecycle` | `PluginHostProbe` | `Pass` — Scan → Instantiate → Initialize → Activate(48 kHz, 1..=512) → Destroy |
 | `editor-attach` | `PluginHostProbe` | `Unsupported` — `createView` null → `HostError::Unsupported` (fixture has no editor) |
@@ -31,7 +32,7 @@ artifact fails closed as `NotRun`.
 
 ## Scenario catalog
 
-The eight cases are declared once in `HEADLESS_MATRIX`
+The nine cases are declared once in `HEADLESS_MATRIX`
 (`scenario::HEADLESS_MATRIX`) — a driver-independent
 `ScenarioMatrix`/`ScenarioEntry` table from `ruviform-ui-test`'s
 `scenario::catalog` module. `run_all` is the select-all case of
@@ -160,7 +161,7 @@ cargo run -p ruviform-plugin-dock-test --bin plugin-dock-console -- \
   `runnable`, `missing`). This is a **capability projection, not
   evidence**: it carries no verdict vocabulary and claims no
   execution.
-- `--list --include-real` — appends the twenty-one `rf631.plugin-dock-real`
+- `--list --include-real` — appends the twenty-two `rf631.plugin-dock-real`
   rows from `real_catalog` with `session_required:true` and
   `lane:"real-window-dock"` (`runnable`/`missing` are `null`).
   Requires the `real-dock` feature; without it the option is refused

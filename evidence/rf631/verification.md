@@ -1242,3 +1242,104 @@ lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — Issue #53
   evidence 同梱・window/plugin hash の完全 digest 化）は残件。
 - consumer 投影（Synvelis/AudioLens 実 GUI）は synvelis#114/#176・
   audio-lens#127 gate として NotRun のまま。
+
+---
+
+# Headless command-receipt slice（`command-receipt` — HEADLESS_MATRIX 側）
+
+Issue `scarecrow173/ruviform#631` の headless counterpart slice。
+`HEADLESS_MATRIX` の Fake binding に `command-receipt` case を
+追加し（catalog 8→9 cell）、headless lane の `receipts` を初めて
+非空化した。real lane 側 `real-command-receipt`（PR
+`ruviform#748`）と同一の semantic flow を Fake driver で再現 —
+`sv_fader_dock_fixture` の `fader-ch1` へ Begin→Preview→Commit
+gesture を駆動し、minted `command_id` 相関の applied
+`Event::Result` + `Event::Notify` projection / rejected
+`Event::result_err` を `post_event` で投入、
+`CommandReceipt::from_result` decode を `ScenarioOutcome.receipts`
+へ populate する。real lane・manifest・他 crate は無変更。
+
+- Date: 2026-11-18（JST）
+- OS: Windows (x86_64)
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA: lane 実走時 HEAD `e4c9f6f0715da3ac479f8c437d21a021327e51da`
+  （`origin/main` と同一 — 本 slice の commit 前ベース）
+
+## Lane results（全て実走・exit 0）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `mise run check ruviform-plugin-dock-test` | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass（`-D warnings` clean） |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run lint ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run test ruviform-plugin-dock-test` | pass（unit 2 + console 14 + plugin_dock 4） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run test ruviform-plugin-dock-test --features lab-gui` | pass（lab bin unit 7 含む） |
+| `mise run test-ui-plugin-dock` | pass — `plugin-dock-scenario.jsonl` 再生成（run header + 9 case） |
+| `mise run test-ui-plugin-dock-console` | pass — `--list` 9 row + `plugin-dock-console.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-real-headless` | pass（exit 0 — 22 real row 全て `not_run`+`environment_blocked` の fail-closed 形状を維持。real lane 無変更のため出力 JSONL は lease 範囲外として復元） |
+| `mise run test-ui-scenario-contract` | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | pass |
+
+補助証拠（canonical = mise）: `plugin-dock-console --list` /
+`--list --include-real` の JSONL 2 件は `cargo run --locked`
+で再生成（対応する mise task は `--run` のみを canonical とする
+ため、list 出力は補助コマンド）。
+
+## `test-ui-plugin-dock` 実走 verdict（`plugin-dock-scenario.jsonl`、9 case）
+
+| case | driver | verdict | 備考 |
+| --- | --- | --- | --- |
+| `view-mount` | fake | pass | 変更なし |
+| **`command-receipt`** | fake | **pass**（新規） | `fader-ch1` gesture が receipt-expecting `Commit` を mint（`command_id` 記録）。applied `Event::Result`→`Applied`→`Notify` projection→`Observed`、第 2 gesture の rejected result→`Rejected` を観測。`receipts` に decode 済み `CommandReceipt` 2 件を populate — headless lane 初の非空 receipts |
+| `artifact` | plugin-host-probe | pass | 変更なし |
+| `host-lifecycle` | plugin-host-probe | pass | 変更なし |
+| `editor-attach` | plugin-host-probe | unsupported | 変更なし |
+| `session-lifecycle` | plugin-host-probe | pass | 変更なし |
+| `host-terminate` | plugin-host-probe | pass | 変更なし |
+| `open-or-degrade` | plugin-host-probe | pass | 変更なし |
+| `dock-pixels` | plugin-host-probe | not_run | 変更なし |
+
+## Console catalog 投影
+
+- `plugin-dock-console --list`: 9 headless catalog row
+  （`command-receipt` を `view-mount` 直後に含む catalog 順）。
+- `--list --include-real`（`--features real-dock`）: 31 row
+  （9 headless + 22 real）。
+
+## AC1/AC4 evidence（本 slice）
+
+- `command-receipt` の `receipts` が JSONL に非空で出る:
+  `{"command_id":"view-1:a1:m1:fader-ch1:3","status":"applied",
+  "revision":1}` と `{"command_id":"view-1:a1:m1:fader-ch1:6",
+  "status":"rejected","detail":"consumer refused the commit"}`。
+  両 receipt は view へ配送した `Event::Result` を
+  `CommandReceipt::from_result` で decode したもの — minted
+  `command_id` で相関、合成値なし。
+- `observed.steps` に gesture intent 数・`command_id`/`control_id`・
+  phase 遷移（`phase_applied`/`phase_observed`/`phase_rejected`）を
+  step 単位で記録。`semantic_tree` に fader snapshot を同梱。
+- `environment_kind` は `deterministic-backend`、`driver` は
+  `fake`、`claim` は `semantic-command-receipt` — real-window・
+  pixel・OS-level の主張なし。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- real lane（`real_dock.rs`/`real_catalog.rs`/
+  `plugin-dock-real-*.jsonl`）は無変更 — interactive real lane
+  の再実走は本 slice の検証条件に含めない（task spec 明記）。
+  `test-ui-plugin-dock-real-headless`（blocked-probe）は exit 0
+  で fail-closed 形状を確認済み。
+- `real-dcomp-pixel` の `Fail`（Issue `ruviform#532`）は据え置き。
+- AC4 の未実装 field（GPU 情報・semantic tree 全量・pixel-diff
+  evidence 同梱・window/plugin hash 完全化）は残件。
+- consumer 投影（Synvelis/AudioLens 実 GUI）は
+  `synvelis#114`/`synvelis#176`・`audio-lens#127` gate として
+  NotRun のまま。
+- docs index（`docs/**/README.md`）は未同期 — Coordinator が
+  統合時に `doc-maintenance` で再生成する。

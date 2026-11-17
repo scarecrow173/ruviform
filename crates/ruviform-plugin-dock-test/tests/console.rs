@@ -20,9 +20,10 @@ use serde_json::Value;
 
 const BIN: &str = env!("CARGO_BIN_EXE_plugin-dock-console");
 
-/// The eight headless case ids in catalog order.
-const HEADLESS_CASES: [&str; 8] = [
+/// The nine headless case ids in catalog order.
+const HEADLESS_CASES: [&str; 9] = [
     "view-mount",
+    "command-receipt",
     "artifact",
     "host-lifecycle",
     "editor-attach",
@@ -68,7 +69,7 @@ fn case_rows(output: &Output) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `--list` emits exactly the eight headless catalog cells as
+/// `--list` emits exactly the nine headless catalog cells as
 /// `type:"catalog"` rows carrying `runnable`/`missing` — and no
 /// verdict key or verdict vocabulary anywhere.
 #[test]
@@ -80,7 +81,7 @@ fn list_emits_headless_projection_without_verdicts() {
         String::from_utf8_lossy(&output.stderr)
     );
     let rows = stdout_lines(&output);
-    assert_eq!(rows.len(), 8, "eight headless catalog rows");
+    assert_eq!(rows.len(), 9, "nine headless catalog rows");
     for row in &rows {
         assert_eq!(row["type"], "catalog");
         assert!(row["case"].as_str().is_some());
@@ -116,8 +117,8 @@ fn list_include_real_appends_real_lane_rows() {
         String::from_utf8_lossy(&output.stderr)
     );
     let rows = stdout_lines(&output);
-    assert_eq!(rows.len(), 30, "8 headless + 22 real rows");
-    let real: Vec<&Value> = rows.iter().skip(8).collect();
+    assert_eq!(rows.len(), 31, "9 headless + 22 real rows");
+    let real: Vec<&Value> = rows.iter().skip(9).collect();
     let expected = [
         "real-window-mount",
         "real-native-slot",
@@ -172,7 +173,7 @@ fn include_real_refused_without_feature() {
     assert!(stderr.contains("real-dock"), "stderr: {stderr}");
 }
 
-/// Bare `--run` executes all eight headless cells through the same
+/// Bare `--run` executes all nine headless cells through the same
 /// catalog path as the lane — JSONL header carries run id
 /// `rf631-plugin-dock` and lane `plugin-dock-console`, and every
 /// verdict is an honest recorded outcome (never fabricated).
@@ -189,7 +190,7 @@ fn run_executes_full_catalog() {
     assert_eq!(rows[0]["run_id"], "rf631-plugin-dock");
     assert_eq!(rows[0]["lane"], "plugin-dock-console");
     let cases = case_rows(&output);
-    assert_eq!(cases.len(), 8, "one case row per catalog cell");
+    assert_eq!(cases.len(), 9, "one case row per catalog cell");
     assert_eq!(
         cases
             .iter()
@@ -240,19 +241,20 @@ fn run_selector_dimensions_and_empty_is_refused() {
     assert!(output.stdout.is_empty(), "no JSONL on refused selector");
 }
 
-/// `--driver fake` selects the single fake-bound cell;
-/// `--scenario rf631.plugin-dock` selects all eight.
+/// `--driver fake` selects the two fake-bound cells;
+/// `--scenario rf631.plugin-dock` selects all nine.
 #[test]
 fn run_driver_and_scenario_selectors() {
     let output = console(&["--run", "--driver", "fake"]);
     assert!(output.status.success());
     let rows = case_rows(&output);
-    assert_eq!(rows.len(), 1);
+    assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].0, "view-mount");
+    assert_eq!(rows[1].0, "command-receipt");
 
     let output = console(&["--run", "--scenario", "rf631.plugin-dock"]);
     assert!(output.status.success());
-    assert_eq!(case_rows(&output).len(), 8);
+    assert_eq!(case_rows(&output).len(), 9);
 }
 
 /// `editor-attach` alone reports `NotRun` — the `artifact`

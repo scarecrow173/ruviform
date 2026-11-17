@@ -1,4 +1,5 @@
 {"case":"view-mount","driver":"fake","missing":null,"required":["semantic-action"],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"command-receipt","driver":"fake","missing":null,"required":["semantic-action"],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
 {"case":"artifact","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
 {"case":"host-lifecycle","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
 {"case":"editor-attach","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
