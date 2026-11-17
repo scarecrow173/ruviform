@@ -260,6 +260,7 @@ Directory: `docs/impl/ir`
 | IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| IMPL-630presetSpawnFault07 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 実装記録 | completed | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | IMPL-034Y1GuSJhatlqbBsFEaYI | Issue #630 test_editor slice — 実装記録 | completed | [issue-630-test-editor-slice.md](./issue-630-test-editor-slice.md) |
 | IMPL-LmwhKtokutWwtYG7PzukdG | Issue #630 test_fault slice — 実装記録 | completed | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | IMPL-034Z9rDv8wCoN4sTuVgXzF | Issue #630 test_instrument slice — 実装記録 | completed | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
@@ -276,6 +277,8 @@ Directory: `docs/impl/ir`
 | IMPL-720tupleV207 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 実装記録 | completed | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | IMPL-034YYygeQzyUVTUGAny27w | Issue #721 post-seal temp boundary decision | completed | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | IMPL-722vst3LifecycleAudit07 | Issue #722 production VST3 adapter lifecycle 監査 — 実装記録 | completed | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| IMPL-034Z04w3xKvYC8XSP2bAGu | Issue #725 serde 語彙 Phase A — 実装記録 | completed | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| IMPL-732clapLifecycleAudit07 | Issue #732 production CLAP adapter lifecycle 監査 — 実装記録 | completed | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |
