@@ -1,0 +1,3 @@
+[check] $ cargo check --locked --all-targets -p ruviform-plugin-clap
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.58s
+mbx[savings]: escorted 5.7 TiB logical of ownerless outputs off the premises.
