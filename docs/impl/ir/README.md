@@ -252,6 +252,7 @@ Directory: `docs/impl/ir`
 | IMPL-628SB0000000000000001 | Issue #628 scripted port-trait backend (2nd slice) | completed | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | IMPL-034XVmf1QyR2KtHQqfxoPa | Issue #629 MIDI loopback round-trip verifier | completed | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | IMPL-034XTg5OfewvDOstfoNzy3 | Issue #629 MIDI output path | completed | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| IMPL-034Zfqq9gdwjWSsYVJXdgk | Issue #629 os endpoint wiring lane registration | completed | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | IMPL-034YIlnrAlTVIKDGSVNxwW | Issue #629 provisioning runbook and MIDI virtual lane separation | completed | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | IMPL-034Zb3GiG71rPTDG6eZpFv | Issue #629 AC3 Test Runtime wiring — verdict to RunMetadata and deterministic signal/Event supply | completed | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | IMPL-034YnB8vZodK9rvl3LOMoQ | Issue #629 virtual endpoint lane registration | completed | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
@@ -260,6 +261,7 @@ Directory: `docs/impl/ir`
 | IMPL-630abiValidatorRerun07 | Issue #630 外部 ABI validator 再実走 slice — 実装記録 | completed | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | IMPL-630abiValidator07 | Issue #630 外部 ABI validator slice — 実装記録 | completed | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | IMPL-034Y14g9JXH2bWmCtJyAoV | Issue #630 adapter-state-bridge slice — 実装記録 | completed | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| IMPL-630clapEditorVerbs07 | Issue #630 CLAP editor verb 実バイナリ coverage slice — 実装記録 | completed | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | IMPL-034ZCLAPED7ir7ceM3kQ2x | Issue #630 CLAP test_editor — 実装記録 | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | IMPL-034XTBVQ7ft6fUvrNI0tXJ | Issue #630 CLAP test_gain — 実装記録 | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | IMPL-034XVFtnDImIcYkvdrAeSl | Issue #630 test-plugin L1 runner — 実装記録 | completed | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
@@ -271,6 +273,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034Y4g5Cx7ToOHTcgE2U9x | Issue #630 test_stateful slice — 実装記録 | completed | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | IMPL-Pe62sVfdQG9xKm3wNz8cRl | Add real-command-receipt case to the real dock lane | completed | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| IMPL-Qt95vZbeRG2yPl8uXy0kNf | Add command-receipt case to the headless dock lane | completed | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034Z08gK0V0GGSoPCC5Vvl | Flip real-window close/dpi catalog rows to real verdicts | completed | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | IMPL-034YJ5ZPjma7y6yufrmtYd | Issue #631 RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |

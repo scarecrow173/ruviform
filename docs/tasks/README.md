@@ -65,6 +65,7 @@ Directory: `docs/tasks`
 | TASK-034Veln6e33I4gj6qIv08d | Issue #552 — SendInput preflight 実装タスク | in-progress | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TASK-034XVm2WqXrYsZaBcDeFgH | Issue #629 MIDI loopback round-trip verifier implementation task | in-progress | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TASK-034XTg3GE8Q84dZ1stdcNY | Issue #629 MIDI output path implementation task | in-progress | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TASK-034Zf8CVOiy6ouwq8fioMs | Issue #629 os endpoint wiring lane registration tasks | in-progress | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | TASK-GxQyjrINNr7NrJtRcsxIBf | Issue #629 AC3 Test Runtime wiring tasks | in-progress | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | TASK-034ZCLAPED5tk5ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
@@ -367,6 +368,7 @@ Directory: `docs/tasks`
 | TASK-630abiValidatorRerun05 | Issue #630 外部 ABI validator 再実走 slice — task | done | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | TASK-630abiValidator05 | Issue #630 外部 ABI validator slice — task | done | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| TASK-630clapEditorVerbs05 | Issue #630 CLAP editor verb 実バイナリ coverage slice — task | done | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | TASK-630presetDiscoveryReeval05 | Issue #630 preset-discovery 外部検証再評価 slice — task | done | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | TASK-630presetSpawnFault05 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — task | done | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
@@ -374,6 +376,7 @@ Directory: `docs/tasks`
 | TASK-034Z9pVw6xJmZ5sNtQeUgD | Issue #630 test_instrument slice — task | done | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TASK-034Y4fNMwyna1imxqrp1rF | Issue #630 test_stateful slice — task | done | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | TASK-Gh04pUabNC7uKg9tWx5zOf | Issue #631 T1 — real-command-receipt case | done | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| TASK-Km62sWdPfC8vNx4rTq9yHb | Issue #631 T1 — headless-command-receipt case | done | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | TASK-034XEbSIxHaIKblAZevx7R | Issue #631 T1 — Plugin-dock scenario skeleton（ruviform-plugin-dock-test） | done | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TASK-R7rbYG8Ew6lrrKHrYcKDbA | Issue #631 T1 — real-window-close/dpi catalog flip | done | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |

@@ -203,6 +203,7 @@ Directory: `docs/specs`
 | SPEC-RF628sBscripted0000001 | Issue #628 scripted port-trait backend — deterministic device boundary slice | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | SPEC-034XVlYdozn65zqMmYFFb5 | Issue #629 MIDI loopback round-trip verifier and probe refresh (3rd slice) | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | SPEC-034XTfa1sD2K4NXS4eKDfn | Issue #629 MIDI output path — WinMM midiOut* backend (2nd slice) | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| SPEC-034ZeZCKCdRoly8j8VOIc9 | Issue #629 os endpoint wiring lane registration (AC6 residual) | approved | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | SPEC-9bPUGYlLtIw7dXbS3LAyex | Issue #629 provisioning runbook and MIDI virtual lane separation (closeout-prep slice) | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | SPEC-e9Hp1wpFJhAUcwotfrV2Sh | Issue #629 AC3 Test Runtime complete wiring — verdict to RunMetadata and deterministic signal/Event supply (headless slice) | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | SPEC-034YnyKRDisxQAnJdC2wTj | Issue #629 virtual endpoint lane registration and Test Runtime wiring check (5th slice) | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
@@ -211,6 +212,7 @@ Directory: `docs/specs`
 | SPEC-630abiValidatorRerun02 | Issue #630 外部 ABI validator 再実走 slice — post-#735 declared-expectation + run.json/evidence 更新 — spec | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | SPEC-630abiValidator02 | Issue #630 外部 ABI validator slice — clap-validator 実走 + VST3 SDK validator + opt-in runner | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | SPEC-034Y13Y73IFhhGtTmihC8f | Issue #630 adapter-state-bridge slice — VST3 IBStream + CLAP clap.state host bridge | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| SPEC-630clapEditorVerbs02 | Issue #630 CLAP editor verb 実バイナリ coverage slice — spec | approved | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
@@ -222,6 +224,7 @@ Directory: `docs/specs`
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | SPEC-Nb71vRwYkP8sHd4mQt2xLc | Issue #631 real-command-receipt case | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| SPEC-Qa82xTzLmV5nWp7rYh3dGf | Issue #631 headless-command-receipt case | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034Y3nW74RKYWUkLfv81MG | Issue #631 real-editor-attach（test_editor 実 IPlugView による real-editor-attach Pass 化 — 実 child HWND の OS 観測・detach 収束・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | SPEC-034YqGGPYfozoUitsF1nl3 | Issue #631 real-row 拡充（AC1 残り能力の catalog 化 + AC3 非画素 editor case + headless fail-closed 実証） | approved | [issue-631-real-row.md](./issue-631-real-row.md) |

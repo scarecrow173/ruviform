@@ -235,6 +235,7 @@ Directory: `docs/designs`
 | DESIGN-RF628sBscripted0000002 | Issue #628 設計 — scripted port-trait backend（device 境界 fault/clock/PCM/MIDI 結線） | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| DESIGN-034Zf150QPyFzf8wtSyMhi | Issue #629 os endpoint wiring lane registration design | approved | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | DESIGN-E2nW52u7DBe6EqaWvY1PRi | Issue #629 provisioning runbook and MIDI virtual lane separation design | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | DESIGN-ItrgZQG5ROZFAEevhfFR9H | Issue #629 AC3 Test Runtime wiring design — dependency direction adjudication and verdict to RunMetadata mapping | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
@@ -243,6 +244,7 @@ Directory: `docs/designs`
 | DESIGN-630abiValidatorRerun03 | Issue #630 外部 ABI validator 再実走 slice — 設計 | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | DESIGN-630abiValidator03 | Issue #630 外部 ABI validator slice — 設計 | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | DESIGN-P7XCcqW3rGHPzKfQJ6SUA | Issue #630 adapter-state-bridge slice — 設計 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| DESIGN-630clapEditorVerbs03 | Issue #630 CLAP editor verb 実バイナリ coverage slice — 設計 | approved | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
@@ -254,6 +256,7 @@ Directory: `docs/designs`
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034Y4dCo7zV1IwCz9gEIi0 | Issue #630 test_stateful slice — 設計 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | DESIGN-Hc82nSyZlQ9tIe5oRu3yMd | Issue #631 real-command-receipt case 設計 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| DESIGN-Rt91uVbKxW4mJq8sZc6fDh | Issue #631 headless-command-receipt case 設計 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034Y3o3I0foDX68pAnpDEx | Issue #631 real-editor-attach 設計（test_editor descriptor 選択・child HWND OS 観測・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | DESIGN-034YqGS0FcTkFNpOd08X6E | Issue #631 real-row 拡充 設計 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |

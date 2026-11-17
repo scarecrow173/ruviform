@@ -197,6 +197,7 @@ Directory: `docs/plans`
 | PLAN-RF628sBscripted0000003 | Issue #628 実装計画 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | PLAN-034XVm4OZxJqPqKqTqVqYq | Issue #629 MIDI loopback round-trip verifier plan | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | PLAN-034XTg1js6FWqynnGrY6kw | Issue #629 MIDI output path plan | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| PLAN-034Zf5tX0ChfrY1d88CGQw | Issue #629 os endpoint wiring lane registration plan | approved | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | PLAN-lbYjQBxlWJgpBMrj1gEUoI | Issue #629 provisioning runbook plan | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | PLAN-g2t6LzqvnsCpXGOdR0kf1G | Issue #629 AC3 Test Runtime wiring plan | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | PLAN-034YnADuTW0N5PDeaJtW36 | Issue #629 virtual endpoint lane registration plan | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
@@ -205,6 +206,7 @@ Directory: `docs/plans`
 | PLAN-630abiValidatorRerun04 | Issue #630 外部 ABI validator 再実走 slice — 実装計画 | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | PLAN-630abiValidator04 | Issue #630 外部 ABI validator slice — 実装計画 | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | PLAN-034Y14eOip1VTyZMiRueNr | Issue #630 adapter-state-bridge slice — 実装計画 | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| PLAN-630clapEditorVerbs04 | Issue #630 CLAP editor verb 実バイナリ coverage slice — 実装計画 | approved | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | PLAN-034ZCLAPED4pl4ceM3kQ2x | Issue #630 CLAP test_editor slice — 実装計画 Implementation Plan | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | PLAN-034XTBbXfYIHXWJ12juqo7 | Issue #630 CLAP test_gain 実装計画 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | PLAN-034XVsD1tGn1Q9zdYY4pHW | Issue #630 L1 runner slice 実装計画 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
@@ -216,6 +218,7 @@ Directory: `docs/plans`
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034Y4f3N8mEveC8nUJLKFw | Issue #630 test_stateful slice — 実装計画 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | PLAN-Fd93oTzaMRA6jFk8sVw4Ne | Issue #631 real-command-receipt case 実装計画 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| PLAN-Wq03yXcMnB7pLr9tKv5gJd | Issue #631 headless-command-receipt case 実装計画 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034Y3odXzCYwJRpyjtWZgK | Issue #631 real-editor-attach 実装計画 | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | PLAN-034YqGSA93gczwU51UuDt3 | Issue #631 real-row 拡充 実装計画 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |

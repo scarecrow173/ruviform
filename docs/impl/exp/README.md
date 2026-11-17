@@ -75,6 +75,7 @@ Directory: `docs/impl/exp`
 | [issue-628-scripted-backend.jsonl](./issue-628-scripted-backend.jsonl) |
 | [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
+| [issue-629-os-endpoint-lane-exp.jsonl](./issue-629-os-endpoint-lane-exp.jsonl) |
 | [issue-629-provisioning-runbook-exp.jsonl](./issue-629-provisioning-runbook-exp.jsonl) |
 | [issue-629-test-runtime-wiring-exp.jsonl](./issue-629-test-runtime-wiring-exp.jsonl) |
 | [issue-629-virtual-endpoint-lane-exp.jsonl](./issue-629-virtual-endpoint-lane-exp.jsonl) |
@@ -82,6 +83,7 @@ Directory: `docs/impl/exp`
 | [issue-630-abi-validator-exp.jsonl](./issue-630-abi-validator-exp.jsonl) |
 | [issue-630-abi-validator-rerun-exp.jsonl](./issue-630-abi-validator-rerun-exp.jsonl) |
 | [issue-630-adapter-state-bridge.jsonl](./issue-630-adapter-state-bridge.jsonl) |
+| [issue-630-clap-editor-verbs-exp.jsonl](./issue-630-clap-editor-verbs-exp.jsonl) |
 | [issue-630-clap-test-editor-exp.jsonl](./issue-630-clap-test-editor-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
@@ -93,6 +95,7 @@ Directory: `docs/impl/exp`
 | [issue-630-test-stateful.jsonl](./issue-630-test-stateful.jsonl) |
 | [issue-631-command-receipt-exp.jsonl](./issue-631-command-receipt-exp.jsonl) |
 | [issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl](./issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl) |
+| [issue-631-headless-command-receipt-exp.jsonl](./issue-631-headless-command-receipt-exp.jsonl) |
 | [issue-631-real-editor-attach.jsonl](./issue-631-real-editor-attach.jsonl) |
 | [issue-631-real-row-exp.jsonl](./issue-631-real-row-exp.jsonl) |
 | [issue-631-real-window-dock.jsonl](./issue-631-real-window-dock.jsonl) |

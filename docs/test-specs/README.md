@@ -224,6 +224,7 @@ Directory: `docs/test-specs`
 | TESTSPEC-RF628sBscripted0005 | Issue #628 テスト仕様 — scripted port-trait backend | approved | [issue-628-scripted-backend.md](./issue-628-scripted-backend.md) |
 | TSPEC-034XVm1QwVvUtSrTpQpO | Issue #629 MIDI loopback round-trip verifier test spec | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | TSPEC-034XTfGCCaBBZvQJ72kOjc | Issue #629 MIDI output path test spec | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
+| TSPEC-k5cAm0SZOyBhOgpEHHkVZ4 | Issue #629 os endpoint wiring lane registration test spec | approved | [issue-629-os-endpoint-lane.md](./issue-629-os-endpoint-lane.md) |
 | TSPEC-byCAXVcNUJp9U972Dd16XL | Issue #629 provisioning runbook test spec | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
 | TSPEC-A0lPTvgFQReroORyTmsciT | Issue #629 AC3 Test Runtime wiring test spec | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | TSPEC-034YnAGpr2IBccDJo26Mx9 | Issue #629 virtual endpoint lane registration test spec | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
@@ -232,6 +233,7 @@ Directory: `docs/test-specs`
 | TSPEC-630abiValidatorRerun06 | Issue #630 外部 ABI validator 再実走 slice — test specification | approved | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | TSPEC-630abiValidator06 | Issue #630 外部 ABI validator slice — test specification | approved | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TSPEC-034Y14780zESXWkqYxDVNj | Issue #630 adapter-state-bridge slice — test specification | approved | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
+| TSPEC-630clapEditorVerbs06 | Issue #630 CLAP editor verb 実バイナリ coverage slice — test specification | approved | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | TSPEC-034ZCLAPED6ts6ceM3kQ2x | Issue #630 CLAP test_editor slice — test specification | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
@@ -243,6 +245,7 @@ Directory: `docs/test-specs`
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034Y4fXVmWB9YKK3r9ty7n | Issue #630 test_stateful slice — test specification | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | TSPEC-Ji15qVcbOD8vLh0tYx6aPg | Issue #631 real-command-receipt case のテスト仕様 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| TSPEC-Lp73tXeQgD9wMz5sUv8iNc | Issue #631 headless-command-receipt case のテスト仕様 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034Y3opmTfAWO3534oKOoH | Issue #631 real-editor-attach テスト仕様（child HWND OS 観測・detach 収束・thread-affinity の判定） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TSPEC-034YqGZs8qcuHItS5Ep1JW | Issue #631 real-row 拡充 テスト仕様 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
