@@ -82,6 +82,13 @@ AudioLens（#143）・Synvelis（#84）・Ruviform 本体（#305/#306）が共�
   プロセスカウンタの混合で、暗号学的保証ではない。path は診断用識別
   （`RecoveryInfo.temp_path`）であり、所有権・ロックの証明ではない。
   `create_new` 排他 + retry が衝突安全性を担う。
+- **Post-seal temp 内容**: `seal()` は write phase の型レベル
+  終了であり、`publish()` は seal 後の temp 内容を再検証しない。
+  seal〜publish 間の temp 外部改竄は publish される bytes を
+  変え、外部削除は `NotPublished` になる — いずれも呼び出し側
+  信頼境界内の事象として契約化されている（実 FS pin:
+  `ruviform-io-e2e` `post_seal_temp_*` 試験、設計判断の正本:
+  `docs/designs/issue-721-post-seal-temp.md`）。
 - **Close 段階**: Rust `File` の drop では `close(2)` エラーを取得
   できないため、`prepare_for_publish` はハンドル解放のみを行い、
   durability エラーの観測点は `sync_file`（`fsync`）に置く。
