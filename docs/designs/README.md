@@ -267,6 +267,7 @@ Directory: `docs/designs`
 | DESIGN-034YYnXY7447GWCMHE4dOI | Issue #721 post-seal temp 改竄境界 — 現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | DESIGN-722vst3LifecycleAudit03 | Issue #722 production VST3 adapter lifecycle 契約監査 — 設計 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | DESIGN-034YZXlJnaKqZu7Z6E9Lmy | Issue #725 EnvironmentKind serde 語彙移行方針 — Phase A deserialize alias | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| DESIGN-034Z0tS0DTi5T7v5ov5cWH | Issue #727 bounded 非 RT job executor — ruviform-exec 内 executor primitive の API 設計 | approved | [issue-727-bounded-nonrt-job-executor.md](./issue-727-bounded-nonrt-job-executor.md) |
 | DESIGN-732clapLifecycleAudit03 | Issue #732 production CLAP adapter lifecycle 監査 — 設計 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
