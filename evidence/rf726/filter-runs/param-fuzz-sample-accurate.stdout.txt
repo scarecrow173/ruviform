@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-sample-accurate",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "exit code: 0xc0000409"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 113660000
+      }
+    }
+  ]
+}

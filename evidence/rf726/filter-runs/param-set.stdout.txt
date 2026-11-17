@@ -1,0 +1,55 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-events",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "After calling 'clap_plugin_params::flush()', the parameter values did not change"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2447100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-no-cookies",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "After calling 'clap_plugin_params::flush()', the parameter values did not change"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2138500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-wrong-namespace",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2636900
+      }
+    }
+  ]
+}

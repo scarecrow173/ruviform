@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-basic",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-gain"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 18209400
+      }
+    }
+  ]
+}

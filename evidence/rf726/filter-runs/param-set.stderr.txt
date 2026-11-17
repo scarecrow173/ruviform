@@ -1,0 +1,3 @@
+[2m   17[0m[2mms[0m [1;31mERROR[0m Test param-set-events failed [2;3mclap_validator::validator[0m
+[2m   26[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
+[2m   31[0m[2mms[0m [1;31mERROR[0m Test param-set-no-cookies failed [2;3mclap_validator::validator[0m

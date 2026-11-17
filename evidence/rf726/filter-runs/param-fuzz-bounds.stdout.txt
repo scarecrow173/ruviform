@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-bounds",
+          "path": "target/debug/ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-fault"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Invalid output detected in parameter value permutation 2 of 50 ('C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\clap-validator\\org.ruviform-test.clap-test-fault\\param-fuzz-basic\\param-values-current.json' and 'C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\clap-validator\\org.ruviform-test.clap-test-fault\\param-fuzz-basic\\param-values-previous.json' contain the current and previous parameter values)\nThe plugin returned 'CLAP_PROCESS_ERROR' from 'clap_plugin::process()'."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4898800
+      }
+    }
+  ]
+}

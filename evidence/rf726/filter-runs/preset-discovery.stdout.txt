@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-crawl",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 13481500
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-descriptor-consistency",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2295300
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-load",
+          "path": "target/debug/ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 28627800
+      }
+    }
+  ]
+}
