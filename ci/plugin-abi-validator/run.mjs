@@ -4,8 +4,10 @@
 // Drives the two authoritative external validators against the real
 // test-plugin artifacts built by this workspace:
 //
-//   * clap-validator (free-audio/clap-validator, pinned release binary)
-//     against `ruviform_plugin_test_clap.dll` — one run per plugin id.
+//   * clap-validator (free-audio/clap-validator, pinned upstream commit
+//     build — post-0.4.1 master containing the preset-discovery
+//     deadlock fix) against `ruviform_plugin_test_clap.dll` — one run
+//     per plugin id.
 //   * Steinberg VST3 SDK `validator` (built from the pinned SDK source
 //     revision) against a staged `.vst3` bundle wrapping the cdylib
 //     named by `--vst3-dll` (default: the `ruviform-plugin-test-vst3`
@@ -117,30 +119,12 @@ export const CLAP_PLUGINS = [
   },
 ];
 
-// Library-level exclusions applied to every leg of a CLAP target.
-// clap-validator 0.4.1's preset-discovery crawl/load cases deadlock
-// inside the validator's own MetadataReceiver (upstream
-// free-audio/clap-validator issue #41 — fixed on master after the
-// 0.4.1 pin). The fixture suite registers the preset-discovery factory
-// since the Issue #630 preset/spawn-fault slice, so the library-level
-// cases now run on every leg and each costs a 45 s timeout plus an
-// orphaned sandboxed child that locks the DLL. Excluded declaratively;
-// preset-discovery-descriptor-consistency still validates the catalog,
-// and preset load/save round-trips are covered by the fixture's
-// in-process ABI tests. Revisit when the validator pin moves to a
-// release containing the upstream fix.
-export const CLAP_FIXTURE_LIBRARY_EXCLUDES = [
-  {
-    pattern: "preset-discovery-(crawl|load)",
-    reason:
-      "clap-validator 0.4.1 preset-discovery crawl/load deadlock — " +
-      "upstream free-audio/clap-validator issue #41 (MetadataReceiver " +
-      "self-deadlock), fixed on master after the 0.4.1 pin. Library-" +
-      "level cases reproduce on every fixture leg; descriptor-" +
-      "consistency still runs and preset load/save is covered by the " +
-      "fixture's in-process ABI tests.",
-  },
-];
+// No library-level exclusions are declared: the pinned clap-validator
+// build (upstream commit 47e2424 — post-0.4.1 master containing the
+// free-audio/clap-validator PR#41 MetadataReceiver deadlock fix)
+// completes the preset-discovery crawl/load library cases, which the
+// 0.4.1 release binary deadlocked on. Supplying the old 0.4.1 binary
+// again surfaces those cases as honest tool-side failures.
 
 // Issue #732: the production CLAP adapter lives in a separate cdylib
 // (`ruviform_plugin_clap.dll`, plugin id `org.ruviform.clap-gain-poc`),
@@ -380,13 +364,14 @@ export function normalizeClapLeg({ proc, plugin, extraArgs, validator, dll, dura
 
 // Runs an external validator capturing stdout/stderr through files
 // instead of pipes. clap-validator spawns sandboxed child processes
-// that inherit its stdio; when one wedges (e.g. the preset-discovery
-// deadlock present in 0.4.1) the orphaned grandchildren keep the pipes
-// open after the validator itself exits, so a piped spawnSync blocks
-// until its timeout and records a spurious ETIMEDOUT that masks the
-// completed report. File-backed stdio returns as soon as the validator
-// process exits. Temporary files are left for the OS to reap —
-// orphaned grandchildren may hold them open on Windows.
+// that inherit its stdio; when one wedges (observed with the 0.4.1
+// preset-discovery deadlock and with crashed fault-injection
+// children) the orphaned grandchildren keep the pipes open after the
+// validator itself exits, so a piped spawnSync blocks until its
+// timeout and records a spurious ETIMEDOUT that masks the completed
+// report. File-backed stdio returns as soon as the validator process
+// exits. Temporary files are left for the OS to reap — orphaned
+// grandchildren may hold them open on Windows.
 export function spawnCapture(exe, args, { timeout } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "rf-abi-validator-"));
   const outPath = join(dir, "stdout.txt");
@@ -407,8 +392,8 @@ export function spawnCapture(exe, args, { timeout } = {}) {
 
 // Runs clap-validator for one plugin id and returns a normalized leg
 // result. `extraArgs` carries the declared exclusion scope (target-
-// level library exclusions merged with the plugin's own, e.g. the
-// fault fixture's param exclusion).
+// level exclusions merged with the plugin's own, e.g. the fault
+// fixture's param exclusion).
 export function runClapLeg({ validator, dll, plugin, extraArgs = [] }) {
   const args = ["validate", "--json", ...extraArgs, "--plugin-id", plugin.id, dll];
   const started = Date.now();
@@ -561,11 +546,11 @@ export function applyVst3DeclaredUncreatable(leg) {
   return leg;
 }
 
-// Merges a CLAP target's library-level exclusions with a plugin's own
-// declared exclusion into the leg's recorded exclusion list. The
-// informational fault run passes `includePlugin: false` — "unfiltered"
-// lifts the fault plugin's param exclusion while the target-level
-// library exclusion (upstream deadlock) still applies.
+// Merges a CLAP target's exclusions with a plugin's own declared
+// exclusion into the leg's recorded exclusion list. The informational
+// fault run passes `includePlugin: false` — "unfiltered" lifts the
+// fault plugin's param exclusion while any target-level exclusions
+// still apply.
 export function clapLegExclusions(target, plugin, { includePlugin = true } = {}) {
   const pluginExcludes =
     includePlugin && plugin.exclude
@@ -672,7 +657,7 @@ export function run(opts) {
       plugins: CLAP_PLUGINS,
       fixture: true,
       dllOption: "--clap-dll",
-      excludes: CLAP_FIXTURE_LIBRARY_EXCLUDES,
+      excludes: [],
     },
   ];
   if (clapProduction) {
@@ -692,8 +677,10 @@ export function run(opts) {
             "clap-validator",
             plugin.name,
             plugin.id,
-            "clap-validator binary not found — provision the pinned release " +
-              "(see docs/specs/issue-630-abi-validator.md) or pass --clap-validator / CLAP_VALIDATOR",
+            "clap-validator binary not found — provision the pinned " +
+              "upstream-commit build (upstream 47e2424; see " +
+              "docs/specs/issue-630-preset-discovery-reeval.md) or pass " +
+              "--clap-validator / CLAP_VALIDATOR"
           ),
         );
       }
@@ -721,11 +708,12 @@ export function run(opts) {
       }
     } else {
       for (const plugin of target.plugins) {
-        // Declared exclusions merge target-level (library-wide, e.g.
-        // the preset-discovery upstream deadlock) and plugin-level
-        // (e.g. test_fault's param cases) scopes into repeated
-        // --exclude flags; every applied exclusion is recorded on the
-        // leg with its reason.
+        // Declared exclusions merge any target-level scope with
+        // plugin-level scopes (e.g. test_fault's param cases) into
+        // repeated --exclude flags; every applied exclusion is
+        // recorded on the leg with its reason. The fixture target
+        // currently declares no library-level exclusions, so the
+        // preset-discovery crawl/load cases run unfiltered.
         const exclusions = clapLegExclusions(target, plugin);
         const extraArgs = exclusions.flatMap((e) => ["--exclude", e.pattern]);
         const leg = runClapLeg({
@@ -747,9 +735,9 @@ export function run(opts) {
       if (target.fixture) {
         // Informational unfiltered fault run — records the intentional
         // crash surface without affecting the verdict. "Unfiltered"
-        // means the fault plugin's own param exclusion is lifted; the
-        // target-level library exclusion (upstream deadlock) still
-        // applies so the leg stays focused on the fault surface.
+        // means the fault plugin's own param exclusion is lifted; with
+        // no fixture library exclusions the leg runs the full
+        // validator surface, including preset-discovery.
         const fault = CLAP_PLUGINS.find((p) => p.exclude);
         if (fault) {
           const exclusions = clapLegExclusions(target, fault, { includePlugin: false });

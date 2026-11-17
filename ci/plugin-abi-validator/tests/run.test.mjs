@@ -13,7 +13,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CLAP_FIXTURE_LIBRARY_EXCLUDES,
   CLAP_PLUGINS,
   VST3_DECLARED_UNCREATABLE,
   applyVst3DeclaredUncreatable,
@@ -400,7 +399,7 @@ test("run() --clap-production records an honest NotRun leg for a missing artifac
 // deliberately uncreatable on both ABIs) and the CLAP preset-discovery
 // factory. These tests pin the declared-expectation mechanism: the
 // intentional create-decline must be *observed* to pass, and the
-// upstream preset-discovery deadlock exclusion must stay declared.
+// pinned upstream-commit validator leaves preset-discovery unexcluded.
 
 const SPAWN_FAIL_PLUGIN = CLAP_PLUGINS.find((p) => p.name === "test_spawn_fail");
 const DECLINE_DETAILS =
@@ -498,26 +497,26 @@ test("normalizeClapLeg: expectation plugin without JSON falls back to generic ve
   assert.equal(leg.expectation, undefined);
 });
 
-test("clapLegExclusions merges target library and plugin exclusions", () => {
-  const target = { excludes: CLAP_FIXTURE_LIBRARY_EXCLUDES };
+test("clapLegExclusions merges target and plugin exclusions without preset-discovery scope", () => {
+  const target = {
+    excludes: [{ pattern: "library-scope", reason: "synthetic target exclusion" }],
+  };
   const fault = CLAP_PLUGINS.find((p) => p.name === "test_fault");
   const gain = CLAP_PLUGINS.find((p) => p.name === "test_gain");
 
-  const gainEx = clapLegExclusions(target, gain);
-  assert.equal(gainEx.length, 1);
-  assert.equal(gainEx[0].pattern, "preset-discovery-(crawl|load)");
-  assert.match(gainEx[0].reason, /upstream/);
+  assert.deepEqual(clapLegExclusions(target, gain), target.excludes);
 
   const faultEx = clapLegExclusions(target, fault);
   assert.equal(faultEx.length, 2);
   assert.equal(faultEx[1].pattern, "param-(set|fuzz)");
+  assert.equal(faultEx[1].reason, fault.excludeReason);
 
   // The informational fault run lifts only the plugin-level exclusion.
-  const infoEx = clapLegExclusions(target, fault, { includePlugin: false });
-  assert.equal(infoEx.length, 1);
-  assert.equal(infoEx[0].pattern, "preset-discovery-(crawl|load)");
+  assert.deepEqual(clapLegExclusions(target, fault, { includePlugin: false }), target.excludes);
 
-  // Targets without declared exclusions stay unfiltered.
+  // The fixture target declares no library-level exclusions, so the
+  // pinned validator runs preset-discovery crawl/load unfiltered.
+  assert.deepEqual(clapLegExclusions({ excludes: [] }, gain), []);
   assert.deepEqual(clapLegExclusions({ excludes: [] }, fault), [
     { pattern: "param-(set|fuzz)", reason: fault.excludeReason },
   ]);

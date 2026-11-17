@@ -1,18 +1,18 @@
 {
   "schema": "rf630-abi-validator-run/2",
-  "startedAt": "2026-11-17T11:06:03.894Z",
-  "finishedAt": "2026-11-17T11:06:12.752Z",
+  "startedAt": "2026-11-17T13:54:38.335Z",
+  "finishedAt": "2026-11-17T13:54:56.793Z",
   "repo": {
-    "root": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun",
-    "head": "1d18e2970d887fe925d3777ddb814bc46644af3d",
+    "root": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery",
+    "head": "b6d0cc6a2e14f47e5324061d8dcac3d905e4abd5",
     "platform": "win32/x64",
     "osRelease": "MINGW64_NT-10.0-26300 3.6.7-fb42d713.x86_64",
     "node": "v26.12.1"
   },
   "tools": {
     "clapValidator": {
-      "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe",
-      "sha256": "825439ad3ff98770a24656013eeb11591407687b97058e1db9549c4f7d53e38a"
+      "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe",
+      "sha256": "b4bd645877bba3d5abe4300a84c5785312ce16f7d1179a2fd3177eedc45afe26"
     },
     "vst3Validator": {
       "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\vst3sdk-build\\bin\\Release\\validator.exe",
@@ -21,13 +21,13 @@
   },
   "artifacts": {
     "clapDll": {
-      "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "sha256": "09bc4cdd13fd977c3a9a16d3cd8d72ac610f3dd2118febef9eb02e000abc86a7"
+      "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "sha256": "9fd29888e005631131a79fa0d939b9e17c6a2a3222d81b987412dfe003277271"
     },
     "clapProductionDll": null,
     "vst3Dll": {
-      "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_vst3.dll",
-      "sha256": "8496b044436996011326b559aee052e51d00dc17d163328ddf0bd794bec62efb"
+      "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_vst3.dll",
+      "sha256": "bf35cb36381a6de3da08163ea513bea3f0c5032917db969f7a5467cb6d58c6db"
     },
     "vst3Package": "ruviform-plugin-test-vst3",
     "vst3Bundle": "ruviform-plugin-test-vst3.vst3"
@@ -37,19 +37,19 @@
     "command": "cargo build -p ruviform-plugin-test-clap -p ruviform-plugin-test-vst3",
     "exitCode": 0,
     "ok": true,
-    "tail": "Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s"
+    "tail": "Compiling com-scrape-types v0.1.1\n   Compiling vst3 v0.3.0\n   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\crates\\ruviform-plugin-test-vst3)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.89s\nmbx[cache]: 2 hits, 0 misses, 1 incremental, 1 bypassed; 0 B downloaded, 0 B uploaded, 0 B stored locally\nmbx[savings]: across 4150 builds, rustc has been excused from 3d 1h of its duties."
   },
   "legs": [
     {
       "kind": "clap-validator",
       "plugin": "test_gain",
       "pluginId": "org.ruviform-test.clap-test-gain",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-gain G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 2014,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-gain G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 4683,
       "exitCode": 0,
       "signal": null,
       "counts": {
-        "success": 27,
+        "success": 29,
         "skipped": 14,
         "warning": 1,
         "failed": 0,
@@ -57,45 +57,33 @@
       },
       "failedCases": [],
       "warnings": [
-        "The plugin took 3.15x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+        "The plugin took 2.25x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
       ],
       "skipped": 14,
       "status": "Passed",
-      "details": "27 passed, 14 skipped, 1 warning(s), 0 failed",
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "details": "29 passed, 14 skipped, 1 warning(s), 0 failed"
     },
     {
       "kind": "clap-validator",
       "plugin": "test_fault",
       "pluginId": "org.ruviform-test.clap-test-fault",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --exclude param-(set|fuzz) --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 471,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --exclude param-(set|fuzz) --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 1994,
       "exitCode": 0,
       "signal": null,
       "counts": {
-        "success": 20,
+        "success": 23,
         "skipped": 14,
-        "warning": 1,
+        "warning": 0,
         "failed": 0,
         "crashed": 0
       },
       "failedCases": [],
-      "warnings": [
-        "The plugin took 3.25x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
-      ],
+      "warnings": [],
       "skipped": 14,
       "status": "Passed",
-      "details": "20 passed, 14 skipped, 1 warning(s), 0 failed",
+      "details": "23 passed, 14 skipped, 0 warning(s), 0 failed",
       "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        },
         {
           "pattern": "param-(set|fuzz)",
           "reason": "test_fault's stepped Fault parameter intentionally arms abort/exit/hang modes; param-mutating validator cases would crash the sandboxed child by design. The fatal surface is covered by the L1 out-of-process fault lane instead."
@@ -106,12 +94,12 @@
       "kind": "clap-validator",
       "plugin": "test_stateful",
       "pluginId": "org.ruviform-test.clap-test-stateful",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-stateful G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 732,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-stateful G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 1199,
       "exitCode": 0,
       "signal": null,
       "counts": {
-        "success": 32,
+        "success": 34,
         "skipped": 9,
         "warning": 1,
         "failed": 0,
@@ -119,28 +107,22 @@
       },
       "failedCases": [],
       "warnings": [
-        "The plugin took 2.75x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+        "The plugin took 2.47x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
       ],
       "skipped": 9,
       "status": "Passed",
-      "details": "32 passed, 9 skipped, 1 warning(s), 0 failed",
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "details": "34 passed, 9 skipped, 1 warning(s), 0 failed"
     },
     {
       "kind": "clap-validator",
       "plugin": "test_instrument",
       "pluginId": "org.ruviform-test.clap-test-instrument",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-instrument G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 1175,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-instrument G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 1155,
       "exitCode": 0,
       "signal": null,
       "counts": {
-        "success": 31,
+        "success": 33,
         "skipped": 11,
         "warning": 0,
         "failed": 0,
@@ -150,24 +132,18 @@
       "warnings": [],
       "skipped": 11,
       "status": "Passed",
-      "details": "31 passed, 11 skipped, 0 warning(s), 0 failed",
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "details": "33 passed, 11 skipped, 0 warning(s), 0 failed"
     },
     {
       "kind": "clap-validator",
       "plugin": "test_editor",
       "pluginId": "org.ruviform-test.clap-test-editor",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-editor G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 2026,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-editor G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 3771,
       "exitCode": 0,
       "signal": null,
       "counts": {
-        "success": 18,
+        "success": 20,
         "skipped": 23,
         "warning": 1,
         "failed": 0,
@@ -175,28 +151,22 @@
       },
       "failedCases": [],
       "warnings": [
-        "The plugin took 2.17x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+        "The plugin took 2.05x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
       ],
       "skipped": 23,
       "status": "Passed",
-      "details": "18 passed, 23 skipped, 1 warning(s), 0 failed",
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "details": "20 passed, 23 skipped, 1 warning(s), 0 failed"
     },
     {
       "kind": "clap-validator",
       "plugin": "test_spawn_fail",
       "pluginId": "org.ruviform-test.clap-test-spawn-fail",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-spawn-fail G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 493,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-spawn-fail G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 448,
       "exitCode": 1,
       "signal": null,
       "counts": {
-        "success": 6,
+        "success": 8,
         "skipped": 1,
         "warning": 0,
         "failed": 35,
@@ -389,20 +359,14 @@
         "unexpectedCases": [],
         "crashedCases": 0
       },
-      "details": "declared expectation met — 35 plugin-instance case(s) declined at create_plugin by design; 6 passed, 1 skipped, 0 warning(s)",
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "details": "declared expectation met — 35 plugin-instance case(s) declined at create_plugin by design; 8 passed, 1 skipped, 0 warning(s)"
     },
     {
       "kind": "clap-validator",
       "plugin": "test_fault",
       "pluginId": "org.ruviform-test.clap-test-fault",
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude preset-discovery-(crawl|load) --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
-      "durationMs": 748,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\pin-47e2424\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 959,
       "exitCode": 101,
       "signal": null,
       "counts": null,
@@ -411,20 +375,14 @@
       "skipped": 0,
       "status": "Unsupported",
       "details": "unfiltered run (fault param cases included): Unsupported — validator exited 101 without a JSON report (tool-side termination) (expected: fatal fault modes are armed by param-mutating cases)",
-      "informational": true,
-      "exclusions": [
-        {
-          "pattern": "preset-discovery-(crawl|load)",
-          "reason": "clap-validator 0.4.1 preset-discovery crawl/load deadlock — upstream free-audio/clap-validator issue #41 (MetadataReceiver self-deadlock), fixed on master after the 0.4.1 pin. Library-level cases reproduce on every fixture leg; descriptor-consistency still runs and preset load/save is covered by the fixture's in-process ABI tests."
-        }
-      ]
+      "informational": true
     },
     {
       "kind": "vst3-sdk-validator",
       "plugin": "ruviform-plugin-test-vst3.vst3",
       "pluginId": null,
-      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\vst3sdk-build\\bin\\Release\\validator.exe C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-nvYp9a\\ruviform-plugin-test-vst3.vst3",
-      "durationMs": 418,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\vst3sdk-build\\bin\\Release\\validator.exe C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-FYKKRK\\ruviform-plugin-test-vst3.vst3",
+      "durationMs": 467,
       "exitCode": 0,
       "signal": null,
       "counts": {
@@ -436,8 +394,8 @@
       "skipped": 0,
       "status": "Passed",
       "details": "235 passed, 0 failed",
-      "bundle": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-nvYp9a\\ruviform-plugin-test-vst3.vst3",
-      "innerBinary": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-nvYp9a\\ruviform-plugin-test-vst3.vst3\\Contents\\x86_64-win\\ruviform-plugin-test-vst3.vst3",
+      "bundle": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-FYKKRK\\ruviform-plugin-test-vst3.vst3",
+      "innerBinary": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-FYKKRK\\ruviform-plugin-test-vst3.vst3\\Contents\\x86_64-win\\ruviform-plugin-test-vst3.vst3",
       "package": "ruviform-plugin-test-vst3",
       "declaredUncreatable": [
         {

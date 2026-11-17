@@ -4,7 +4,7 @@
       "test": {
         "plugin-library": {
           "test": "query-nonexistent-factory",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -13,14 +13,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3505300
+        "nanos": 3441200
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "create-id-with-trailing-garbage",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -29,14 +29,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2752200
+        "nanos": 4099100
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "scan-rtld-now",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -45,14 +45,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 600
+        "nanos": 2000
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "scan-time",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -61,14 +61,30 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3127900
+        "nanos": 3906500
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-crawl",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4390400
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "preset-discovery-descriptor-consistency",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -77,14 +93,30 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3199700
+        "nanos": 6500800
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-load",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 12290000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "descriptor-consistency",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -94,14 +126,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3494900
+        "nanos": 5208700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "features-categories",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -111,14 +143,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3908000
+        "nanos": 4250100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "features-duplicates",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -128,14 +160,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3396300
+        "nanos": 5530500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-basic-out-of-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -145,14 +177,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4416200
+        "nanos": 9722000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-basic-in-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -162,14 +194,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4278700
+        "nanos": 7616800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-double-out-of-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -179,14 +211,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3670000
+        "nanos": 3736500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-double-in-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -196,31 +228,31 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3758400
+        "nanos": 8740900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-denormals",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
       "status": {
         "code": "warning",
-        "details": "The plugin took 2.75x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+        "details": "The plugin took 2.47x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
       },
       "duration": {
         "secs": 0,
-        "nanos": 11296100
+        "nanos": 19209400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-sleep-constant-mask",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -230,14 +262,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 5448200
+        "nanos": 6946200
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-sleep-process-status",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -247,14 +279,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 6836400
+        "nanos": 5791800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-out-of-place-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -264,14 +296,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4646100
+        "nanos": 4737000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-inconsistent",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -281,14 +313,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2622700
+        "nanos": 4638300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-wildcard",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -298,14 +330,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2786400
+        "nanos": 5689800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-varying-sample-rates",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -315,14 +347,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 7052100
+        "nanos": 170136300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-varying-block-sizes",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -332,14 +364,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 8764500
+        "nanos": 126172400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-random-block-sizes",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -349,14 +381,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 5224900
+        "nanos": 9108900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-reset-reactivate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -366,14 +398,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3938300
+        "nanos": 8978600
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-audio-ports-activation",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -383,14 +415,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2577400
+        "nanos": 4190100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-audio-ports-config",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -400,14 +432,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3088900
+        "nanos": 3880100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-configurable-audio-ports",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -417,14 +449,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3478500
+        "nanos": 4870600
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-events",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -434,14 +466,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3616100
+        "nanos": 5911900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-no-cookies",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -451,14 +483,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3199900
+        "nanos": 5667800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-wrong-namespace",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -468,14 +500,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3809800
+        "nanos": 5369900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -485,14 +517,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 22140900
+        "nanos": 226276700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-bounds",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -502,14 +534,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 23061300
+        "nanos": 193493100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-sample-accurate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -519,14 +551,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4380200
+        "nanos": 5429500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-modulation",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -536,14 +568,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4015100
+        "nanos": 6364300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-conversions",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -553,14 +585,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3156100
+        "nanos": 5000500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-default-values",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -570,14 +602,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3371300
+        "nanos": 3840000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-invalid-empty",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -587,14 +619,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2545200
+        "nanos": 4732400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-invalid-random",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -604,14 +636,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 6235100
+        "nanos": 7080800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -621,14 +653,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4634000
+        "nanos": 4069200
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-binary",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -638,14 +670,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3775100
+        "nanos": 3516400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-buffered",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -655,14 +687,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3502700
+        "nanos": 3862500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-null",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -672,14 +704,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 5830500
+        "nanos": 8766900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-fuzz",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -689,14 +721,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 5631200
+        "nanos": 6412900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-fuzz-sample-accurate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-abi-validator-rerun\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-stateful"
         }
       },
@@ -706,46 +738,48 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 5350400
+        "nanos": 10653500
       }
     }
   ]
 }
 
-[2m   21[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
-[2m   33[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
-[2m   52[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
-[2m   62[0m[2mms[0m [32m INFO[0m Test preset-discovery-descriptor-consistency completed [2;3mclap_validator::validator[0m
-[2m   69[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
-[2m   78[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
-[2m   88[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
-[2m   95[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
-[2m  105[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
-[2m  117[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
-[2m  153[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
-[2m  157[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
-[2m  362[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
-[2m  371[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
-[2m  375[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
-[2m  382[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
-[2m  410[0m[2mms[0m [32m INFO[0m Test param-set-events completed [2;3mclap_validator::validator[0m
-[2m  417[0m[2mms[0m [32m INFO[0m Test param-set-no-cookies completed [2;3mclap_validator::validator[0m
-[2m  426[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
-[2m  450[0m[2mms[0m [32m INFO[0m Test param-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
-[2m  453[0m[2mms[0m [32m INFO[0m Test param-fuzz-basic completed [2;3mclap_validator::validator[0m
-[2m  456[0m[2mms[0m [32m INFO[0m Test param-fuzz-modulation completed [2;3mclap_validator::validator[0m
-[2m  459[0m[2mms[0m [32m INFO[0m Test param-fuzz-bounds completed [2;3mclap_validator::validator[0m
-[2m  464[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
-[2m  473[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
-[2m  476[0m[2mms[0m [1;31mERROR[0m state blob truncated [2;3mplugin::error[0m
-[2m  480[0m[2mms[0m [32m INFO[0m Test state-invalid-empty completed [2;3mclap_validator::validator[0m
-[2m  650[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
-[2m  652[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
-[2m  652[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
-[2m  657[0m[2mms[0m [32m INFO[0m Test state-invalid-random completed [2;3mclap_validator::validator[0m
-[2m  676[0m[2mms[0m [32m INFO[0m Test state-reproducibility-binary completed [2;3mclap_validator::validator[0m
-[2m  681[0m[2mms[0m [32m INFO[0m Test state-reproducibility-basic completed [2;3mclap_validator::validator[0m
-[2m  684[0m[2mms[0m [32m INFO[0m Test state-reproducibility-buffered completed [2;3mclap_validator::validator[0m
-[2m  692[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
-[2m  705[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
-[2m  710[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m   44[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   93[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m   98[0m[2mms[0m [32m INFO[0m Test preset-discovery-load completed [2;3mclap_validator::validator[0m
+[2m  117[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m  127[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m  137[0m[2mms[0m [32m INFO[0m Test preset-discovery-crawl completed [2;3mclap_validator::validator[0m
+[2m  153[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m  164[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m  164[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
+[2m  176[0m[2mms[0m [32m INFO[0m Test preset-discovery-descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m  182[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
+[2m  526[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
+[2m  540[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
+[2m  592[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
+[2m  628[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  644[0m[2mms[0m [32m INFO[0m Test param-set-events completed [2;3mclap_validator::validator[0m
+[2m  646[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
+[2m  667[0m[2mms[0m [32m INFO[0m Test param-set-no-cookies completed [2;3mclap_validator::validator[0m
+[2m  707[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  714[0m[2mms[0m [32m INFO[0m Test param-fuzz-modulation completed [2;3mclap_validator::validator[0m
+[2m  729[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
+[2m  733[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
+[2m  745[0m[2mms[0m [32m INFO[0m Test param-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m  754[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
+[2m  755[0m[2mms[0m [1;31mERROR[0m state blob truncated [2;3mplugin::error[0m
+[2m  759[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
+[2m  761[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
+[2m  761[0m[2mms[0m [1;31mERROR[0m state blob has trailing data [2;3mplugin::error[0m
+[2m  762[0m[2mms[0m [32m INFO[0m Test state-invalid-empty completed [2;3mclap_validator::validator[0m
+[2m  767[0m[2mms[0m [32m INFO[0m Test state-invalid-random completed [2;3mclap_validator::validator[0m
+[2m  774[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
+[2m  776[0m[2mms[0m [32m INFO[0m Test state-reproducibility-basic completed [2;3mclap_validator::validator[0m
+[2m  798[0m[2mms[0m [32m INFO[0m Test state-reproducibility-binary completed [2;3mclap_validator::validator[0m
+[2m  826[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
+[2m  831[0m[2mms[0m [32m INFO[0m Test state-reproducibility-buffered completed [2;3mclap_validator::validator[0m
+[2m  840[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
+[2m  891[0m[2mms[0m [32m INFO[0m Test param-fuzz-basic completed [2;3mclap_validator::validator[0m
+[2m  898[0m[2mms[0m [32m INFO[0m Test param-fuzz-bounds completed [2;3mclap_validator::validator[0m
+[2m 1133[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
