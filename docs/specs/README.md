@@ -231,6 +231,8 @@ Directory: `docs/specs`
 | SPEC-034YJhpMyzjNwAu0RkAPam | Issue #707 — MIDI input path への cancellation fault 拡張 | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | SPEC-ankzjfsDvEl62A6zPVHgnx | Issue #716 runtime ScriptBackend — 仕様 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | SPEC-720tupleV202 | Issue #720 consumer-verify-tuple contract v1→v2 bump — spec | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
+| SPEC-034YXxVwj3nAIfWDF2rZcG | Issue #721 post-seal temp 改竄境界 — bench-smoke 配線照合と現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
+| SPEC-722vst3LifecycleAudit02 | Issue #722 production VST3 adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

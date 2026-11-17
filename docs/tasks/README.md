@@ -371,6 +371,8 @@ Directory: `docs/tasks`
 | TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | TASK-034YJlja5SyGAbJySCQZfM | Issue #707 — MIDI input cancellation fault タスク | done | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | TASK-720tupleV205 | Issue #720 consumer-verify-tuple contract v1→v2 bump — task | done | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
+| TASK-034YYxvzrqG58pQIKDaukG | Issue #721 post-seal temp 境界確定 — bench-smoke 照合・README 補強・検証 | done | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
+| TASK-722vst3LifecycleAudit05 | Issue #722 production VST3 adapter lifecycle 監査 — task | done | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
