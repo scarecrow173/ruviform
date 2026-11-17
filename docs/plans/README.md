@@ -214,6 +214,7 @@ Directory: `docs/plans`
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034Y3odXzCYwJRpyjtWZgK | Issue #631 real-editor-attach 実装計画 | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | PLAN-034YqGSA93gczwU51UuDt3 | Issue #631 real-row 拡充 実装計画 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
+| PLAN-eRJIJo4Ufvn0Zb1s92nk4I | Issue #631 real-window-close/dpi catalog flip 実装計画 | approved | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | PLAN-034XTP6V40ZLnW8sMLZK2N | Issue #631 Real-window native-slot dock lane 実装計画 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | PLAN-034XVTr2qWvCZbojyUlWuD | Issue #631 Plugin-dock scenario catalog + driver projection 実装計画 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | PLAN-034XWO1EjjLigZP3nnak6l | Issue #631 Headless Scenario Console 実装計画 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
@@ -229,6 +230,7 @@ Directory: `docs/plans`
 | PLAN-034YYuiRq03qc7utzYExKJ | Issue #721 post-seal temp 境界確定 — implementation plan | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | PLAN-722vst3LifecycleAudit04 | Issue #722 production VST3 adapter lifecycle 監査 — 実装計画 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | PLAN-034YZYv4eOit5JDno5u0gR | Issue #725 serde 語彙 Phase A — 実装計画 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| PLAN-726clapValidatorPanic04 | Issue #726 clap-validator param-fuzz panic — 実装計画 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | PLAN-034Z0ufhfy1zqe3TvK5xrp | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | PLAN-732clapLifecycleAudit04 | Issue #732 production CLAP adapter lifecycle 監査 — 実装計画 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

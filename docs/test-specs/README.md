@@ -241,6 +241,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034Y3opmTfAWO3534oKOoH | Issue #631 real-editor-attach テスト仕様（child HWND OS 観測・detach 収束・thread-affinity の判定） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TSPEC-034YqGZs8qcuHItS5Ep1JW | Issue #631 real-row 拡充 テスト仕様 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
+| TSPEC-UR22WOFZb80aKDFszwBay2 | Issue #631 real-window-close/dpi catalog flip のテスト仕様 | approved | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | TSPEC-034XTPhKNKddA4TmQhwjZJ | Issue #631 Real-window native-slot dock lane のテスト仕様 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | TSPEC-034XVTsew8bdAg2cxa7FPJ | Issue #631 Plugin-dock scenario catalog + driver projection のテスト仕様 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | TSPEC-034XWO2xGlAsmD12I1K5tl | Issue #631 Headless Scenario Console のテスト仕様 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
@@ -256,6 +257,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YYs26BK9ql96HKlJEJQ | Issue #721 post-seal temp 境界・bench-smoke 配線 テスト仕様 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | TSPEC-722vst3LifecycleAudit06 | Issue #722 production VST3 adapter lifecycle 監査 — test specification | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | TSPEC-034YZZbBgKzfmFfSLl9ai4 | Issue #725 serde 語彙 Phase A — test specification | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| TSPEC-726clapValidatorPanic06 | Issue #726 clap-validator param-fuzz panic — test specification | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | TSPEC-034Z0uy4qJcLIsiQTm3jM5 | Issue #727 bounded 非 RT job executor 責務判断・API 契約 テスト仕様 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | TSPEC-732clapLifecycleAudit06 | Issue #732 production CLAP adapter lifecycle 監査 — test specification | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |

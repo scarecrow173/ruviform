@@ -103,6 +103,7 @@ Directory: `docs/impl/exp`
 | [issue-720-consumer-tuple-v2-exp.jsonl](./issue-720-consumer-tuple-v2-exp.jsonl) |
 | [issue-721-post-seal-temp-exp.jsonl](./issue-721-post-seal-temp-exp.jsonl) |
 | [issue-725-serde-vocab-phase-a-exp.jsonl](./issue-725-serde-vocab-phase-a-exp.jsonl) |
+| [issue-726-clap-validator-panic-exp.jsonl](./issue-726-clap-validator-panic-exp.jsonl) |
 | [issue-727-job-executor-exp.jsonl](./issue-727-job-executor-exp.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
