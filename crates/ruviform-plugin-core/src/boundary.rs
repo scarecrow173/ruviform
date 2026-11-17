@@ -144,6 +144,21 @@ impl ParentLease {
     }
 }
 
+/// A plugin GUI's logical size (scale-independent units).
+///
+/// The driver-neutral size the editor-session verbs carry — each
+/// format adapter interprets it in its own units (VST3 `ViewRect`
+/// pixels, CLAP `GuiSize` pixels or logical units per `GuiApiType`).
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct GuiSize {
+    /// Width in logical units.
+    pub width: f64,
+    /// Height in logical units.
+    pub height: f64,
+}
+
 /// Opaque reference to one open plugin editor session.
 ///
 /// The `{slot, generation}` pair mirrors [`PluginHandle`]'s stale

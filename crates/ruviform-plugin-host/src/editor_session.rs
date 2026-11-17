@@ -29,7 +29,7 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::{
-    HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
@@ -1630,8 +1630,11 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             handle: self.instance,
             parent,
         }) {
-            // The L0 surface carries open/close only — an accepted docked
-            // open proves dock and close; nothing else is claimed.
+            // An accepted docked open proves dock and close. The
+            // resize/visibility/reparent verbs exist on this surface
+            // now, but per-plugin support is only known when a verb
+            // is invoked (there is no capability query), so the
+            // flags stay unclaimed rather than over-claiming.
             Ok(HostReply::Opened { .. }) => Ok(EditorCapabilities {
                 dock: Support::Supported,
                 close: Support::Supported,
@@ -1660,26 +1663,62 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
     fn set_size(
         &mut self,
         _session: PluginEditorSessionId,
-        _size: EditorSize,
+        size: EditorSize,
     ) -> Result<(), EditorOpError> {
-        // No `HostCommand` resize verb exists yet — honest refusal.
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SetGuiSize {
+                handle: self.instance,
+                size: GuiSize {
+                    width: size.width,
+                    height: size.height,
+                },
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn set_visibility(
         &mut self,
         _session: PluginEditorSessionId,
-        _visible: bool,
+        visible: bool,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SetGuiVisibility {
+                handle: self.instance,
+                visible,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn reattach(
         &mut self,
         _session: PluginEditorSessionId,
-        _lease: &ParentSlotLease,
+        lease: &ParentSlotLease,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        // Reattach redeems the new parent lease through the same
+        // issuer-side seam `open` uses — a stale or forged lease is
+        // rejected before it can reach the plugin.
+        let parent = (self.redeemer)(lease)?;
+        match self
+            .host
+            .execute(HostCommand::SetGuiParent {
+                handle: self.instance,
+                parent,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 }
 

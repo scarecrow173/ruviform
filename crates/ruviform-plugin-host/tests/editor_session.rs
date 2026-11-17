@@ -9,16 +9,16 @@
 //! window, OS parent or real plugin). The L1 adapter remains defined-
 //! `Unsupported` on every op and never degrades to L0.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, HostInput, HostOutput, LifecycleState,
-    ParamInfo, ParentLease, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
-    ProcessResult, ProcessStatus, TransportInfo,
+    BufferView, BufferViewMut, EventList, GuiHandle, GuiSize, HostInput, HostOutput,
+    LifecycleState, ParamInfo, ParentLease, PluginDescriptor, PrepareError, ProcessConfig,
+    ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
@@ -618,9 +618,23 @@ const GAIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
     features: &[],
 };
 
-/// Minimal `PluginProcessor` + `Plugin` whose `open_gui` is switchable.
+/// One plugin-side GUI verb call recorded by [`GuiPlugin`].
+#[derive(Debug, PartialEq)]
+enum GuiVerb {
+    /// `set_gui_size` — the logical size the plugin received.
+    Size(GuiSize),
+    /// `set_gui_visibility` — the show/hide flag.
+    Visibility(bool),
+    /// `set_gui_parent` — the redeemed parent payload the plugin saw.
+    Parent(u64),
+}
+
+/// Minimal `PluginProcessor` + `Plugin` whose `open_gui` is switchable
+/// and whose GUI verbs record into an optional shared log.
 struct GuiPlugin {
     gui_supported: bool,
+    verbs_supported: bool,
+    verbs: Option<Rc<RefCell<Vec<GuiVerb>>>>,
 }
 
 impl ruviform_plugin_core::PluginProcessor for GuiPlugin {
@@ -672,10 +686,42 @@ impl Plugin for GuiPlugin {
             Err(HostError::Unsupported)
         }
     }
+
+    fn set_gui_size(&mut self, size: GuiSize) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Size(size));
+        }
+        Ok(())
+    }
+
+    fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Visibility(visible));
+        }
+        Ok(())
+    }
+
+    fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Parent(parent.payload()));
+        }
+        Ok(())
+    }
 }
 
 struct GuiFactory {
     gui_supported: bool,
+    verbs_supported: bool,
+    verbs: Option<Rc<RefCell<Vec<GuiVerb>>>>,
 }
 
 impl PluginFactory for GuiFactory {
@@ -686,13 +732,41 @@ impl PluginFactory for GuiFactory {
     fn create(&self) -> Box<dyn ruviform_plugin_host::ErasedPlugin> {
         erase(GuiPlugin {
             gui_supported: self.gui_supported,
+            verbs_supported: self.verbs_supported,
+            verbs: self.verbs.clone(),
         })
     }
 }
 
 fn host_with_plugin(gui_supported: bool) -> InProcessHost {
+    host_with_plugin_full(gui_supported, true, None)
+}
+
+fn host_with_plugin_verbs(
+    gui_supported: bool,
+    verbs: Option<Rc<RefCell<Vec<GuiVerb>>>>,
+) -> InProcessHost {
+    host_with_plugin_full(gui_supported, true, verbs)
+}
+
+/// `verbs_supported = false` models a plugin whose GUI opens but
+/// whose resize/visibility/reparent hooks decline — the defined
+/// `Unsupported` the adapter must surface honestly.
+fn host_with_plugin_no_verbs(gui_supported: bool) -> InProcessHost {
+    host_with_plugin_full(gui_supported, false, None)
+}
+
+fn host_with_plugin_full(
+    gui_supported: bool,
+    verbs_supported: bool,
+    verbs: Option<Rc<RefCell<Vec<GuiVerb>>>>,
+) -> InProcessHost {
     let mut host = InProcessHost::new();
-    host.register_factory(Box::new(GuiFactory { gui_supported }));
+    host.register_factory(Box::new(GuiFactory {
+        gui_supported,
+        verbs_supported,
+        verbs,
+    }));
     host
 }
 
@@ -935,6 +1009,172 @@ fn l0_redeemer_token_reaches_plugin_open_gui() {
         ));
     }
     assert_eq!(seen.get(), Some(ParentLease::new(0x1234, 0xBBBB)));
+}
+
+#[test]
+fn l0_set_size_reaches_plugin_through_setguisize() {
+    // The L0 verb chain: session.set_size → InProcessEditorOps →
+    // HostCommand::SetGuiSize → plugin.set_gui_size — the plugin
+    // sees the same logical size the session requested.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session.set_size(&mut ops, SIZE).expect("set_size");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(
+        verbs.borrow().as_slice(),
+        &[GuiVerb::Size(GuiSize {
+            width: 800.0,
+            height: 600.0
+        })]
+    );
+}
+
+#[test]
+fn l0_set_visibility_cycles_hidden_shown_through_host() {
+    // hide → Hidden{Docked}+Hidden event; show → Attached+Shown —
+    // both land as real plugin `set_gui_visibility` calls.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session.set_visibility(&mut ops, false).expect("hide");
+        assert!(matches!(session.state(), EditorSessionState::Hidden { .. }));
+        session.set_visibility(&mut ops, true).expect("show");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(
+        verbs.borrow().as_slice(),
+        &[GuiVerb::Visibility(false), GuiVerb::Visibility(true),]
+    );
+}
+
+#[test]
+fn l0_reattach_redeems_lease_and_reaches_set_gui_parent() {
+    // reattach runs the same issuer-side redeem as open: the plugin
+    // sees the `ParentLease` the redeemer minted, and the session
+    // emits the `[Detached, Reattached]` vocabulary.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(
+            &mut host,
+            instance,
+            Box::new(|lease: &ParentSlotLease| Ok(ParentLease::new(0x777, lease.raw()))),
+        );
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session.reattach(&mut ops, &lease()).expect("reattach");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    // token_redeemer is not used here — the custom redeemer maps the
+    // opaque payload straight through, so the plugin sees the lease
+    // raw value as the parent payload.
+    assert_eq!(verbs.borrow().as_slice(), &[GuiVerb::Parent(lease().raw())]);
+}
+
+#[test]
+fn l0_redeemer_refusal_blocks_reattach_before_setguiparent() {
+    // A redeemer that accepts the open lease then rejects the
+    // reattach lease must stop the verb before `SetGuiParent` can
+    // reach the plugin — the same staleness boundary `open` has.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let calls = Rc::new(Cell::new(0usize));
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let redeem_calls = calls.clone();
+        let mut ops = InProcessEditorOps::with_redeemer(
+            &mut host,
+            instance,
+            Box::new(move |lease: &ParentSlotLease| {
+                let n = redeem_calls.get();
+                redeem_calls.set(n + 1);
+                if n == 0 {
+                    Ok(ParentLease::new(0, lease.raw()))
+                } else {
+                    Err(EditorOpError::LeaseRejected)
+                }
+            }),
+        );
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        assert_eq!(
+            session.reattach(&mut ops, &lease()),
+            Err(EditorSessionError::Ops(EditorOpError::LeaseRejected))
+        );
+        assert_eq!(calls.get(), 2);
+    }
+    assert!(verbs.borrow().is_empty());
+}
+
+#[test]
+fn l0_plugin_verb_refusal_maps_to_unsupported_non_fatally() {
+    // A plugin whose GUI opens but declines the verbs surfaces the
+    // defined `Unsupported` — `set_size` is a non-fatal rejection
+    // (the session stays attached), `reattach` lands `Failed` per
+    // the session's reattach contract.
+    let mut host = host_with_plugin_no_verbs(true);
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        assert_eq!(
+            session.set_size(&mut ops, SIZE),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+        assert_eq!(
+            session.set_visibility(&mut ops, false),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
 }
 
 #[test]
@@ -1744,12 +1984,13 @@ fn l0_session_open_close_leaves_dsp_processing_untouched() {
         session
             .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
             .expect("open while processing");
-        // A refused non-lifecycle op is non-fatal and changes nothing
-        // DSP-side either — the session stays Attached.
-        assert_eq!(
-            session.set_visibility(&mut ops, false),
-            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
-        );
+        // An accepted non-lifecycle op is equally non-fatal and
+        // changes nothing DSP-side either — the session lands
+        // `Hidden` and `process` keeps answering `Continue`.
+        session
+            .set_visibility(&mut ops, false)
+            .expect("hide while processing");
+        assert!(matches!(session.state(), EditorSessionState::Hidden { .. }));
         session.close(&mut ops).expect("close while processing");
     }
     assert_dsp_untouched(&mut host, instance);

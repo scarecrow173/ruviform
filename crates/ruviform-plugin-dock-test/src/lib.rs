@@ -52,18 +52,19 @@
 //! rows — two-window focus transfer, real OS pointer/keyboard
 //! injection, and honest `Unsupported` judgments where the adapter
 //! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
-//! editor op rows (`real-editor-resize`/`real-editor-redock`, judged
-//! by session events/HWND contract only, never pixels) and the
+//! editor op rows (`real-editor-resize`/`real-editor-redock`/
+//! `real-editor-visibility`, judged by session events/HWND contract
+//! plus each verb's own OS-level effect oracle — child `GetWindowRect`
+//! geometry, hide→destroy/show→recreate, attach-generation title —
+//! never pixels) and the
 //! Issue #389 session lifecycle rows
 //! (`real-session-terminate` — `Terminated{HostLost}` exactly-once,
 //! child HWND teardown, host survival; `real-session-degraded` —
 //! `open_or_degrade` `Degraded{Docked}` + `OpenOutcome::Degraded`;
 //! `real-session-recovery` — refused open `Failed{Unsupported}` →
 //! `recover(Docked)` `Recovered{Docked}`; `real-session-timeout` —
-//! ZERO deadline policy + `tick_all` → `Failed{Timeout}`;
-//! `real-editor-visibility` — the defined `set_visibility`
-//! `Unsupported` refusal with `Attached` preserved; and the honest
-//! `Unsupported` boundaries `real-session-crash`/`real-session-hang`
+//! ZERO deadline policy + `tick_all` → `Failed{Timeout}`; and the
+//! honest `Unsupported` boundaries `real-session-crash`/`real-session-hang`
 //! — process-killing/wedging fault modes the in-process lane cannot
 //! survive).
 //! `plugin-dock-real-scenario --blocked-probe` deterministically

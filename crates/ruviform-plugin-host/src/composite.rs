@@ -1588,6 +1588,12 @@ impl PluginHost {
                 self.l0.execute(retarget(command, inner))
             }
             Slot::OutOfProcess(instance) => {
+                // The L0-only GUI verbs carry no `wire::Command`
+                // encoding (Issue #115 owns that scope) — the defined
+                // refusal, never a wire attempt.
+                if l0_only_gui_verb(&command) {
+                    return Err(HostError::Unsupported);
+                }
                 let command = to_wire(command);
                 let expected = expected_reply_kind(&command);
                 instance
@@ -1756,7 +1762,10 @@ fn command_handle(command: &HostCommand) -> PluginHandle {
         | HostCommand::SaveState { handle }
         | HostCommand::RestoreState { handle, .. }
         | HostCommand::OpenGui { handle, .. }
-        | HostCommand::CloseGui { handle } => handle,
+        | HostCommand::CloseGui { handle }
+        | HostCommand::SetGuiSize { handle, .. }
+        | HostCommand::SetGuiVisibility { handle, .. }
+        | HostCommand::SetGuiParent { handle, .. } => handle,
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate never reach dispatch")
         }
@@ -1778,10 +1787,29 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
         HostCommand::RestoreState { bytes, .. } => HostCommand::RestoreState { handle, bytes },
         HostCommand::OpenGui { parent, .. } => HostCommand::OpenGui { handle, parent },
         HostCommand::CloseGui { .. } => HostCommand::CloseGui { handle },
+        HostCommand::SetGuiSize { size, .. } => HostCommand::SetGuiSize { handle, size },
+        HostCommand::SetGuiVisibility { visible, .. } => {
+            HostCommand::SetGuiVisibility { handle, visible }
+        }
+        HostCommand::SetGuiParent { parent, .. } => HostCommand::SetGuiParent { handle, parent },
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate carry no handle")
         }
     }
+}
+
+/// `true` for the editor-GUI verbs that exist only on the L0
+/// in-process surface — `SetGuiSize`/`SetGuiVisibility`/
+/// `SetGuiParent` have no `wire::Command` encoding yet, so an
+/// `OutOfProcess` slot answers the defined `Unsupported` instead of
+/// reaching `to_wire` (which would panic on them).
+fn l0_only_gui_verb(command: &HostCommand) -> bool {
+    matches!(
+        command,
+        HostCommand::SetGuiSize { .. }
+            | HostCommand::SetGuiVisibility { .. }
+            | HostCommand::SetGuiParent { .. }
+    )
 }
 
 /// The `wire::Command` mirror of a handle-carrying `HostCommand` —
@@ -1800,8 +1828,15 @@ fn to_wire(command: HostCommand) -> wire::Command {
         HostCommand::RestoreState { bytes, .. } => wire::Command::RestoreState { bytes },
         HostCommand::OpenGui { parent, .. } => wire::Command::OpenGui { parent },
         HostCommand::CloseGui { .. } => wire::Command::CloseGui,
-        HostCommand::Scan | HostCommand::Instantiate { .. } | HostCommand::Destroy { .. } => {
-            unreachable!("Scan/Instantiate/Destroy are not wire verbs here")
+        HostCommand::Scan
+        | HostCommand::Instantiate { .. }
+        | HostCommand::Destroy { .. }
+        | HostCommand::SetGuiSize { .. }
+        | HostCommand::SetGuiVisibility { .. }
+        | HostCommand::SetGuiParent { .. } => {
+            unreachable!(
+                "Scan/Instantiate/Destroy and the L0-only GUI verbs are not wire verbs here"
+            )
         }
     }
 }

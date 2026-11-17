@@ -49,10 +49,12 @@
 //! | `real-window-close`     | `RealOs`    | `Pass`/`Fail`/`NotRun` — armed `Veto`/`Defer`→        |
 //! |                         |             | `Approve`/既定 `Approve` の `CloseRequested`→         |
 //! |                         |             | `Destroyed` を B/C window で実観測（A は sentinel）   |
-//! | `real-editor-resize`    | `RealOs`    | `Unsupported`/`Fail` — `set_size` の定義済み拒否を    |
-//! |                         |             | 非画素 oracle（session 状態・event・HWND）で観測      |
-//! | `real-editor-redock`    | `RealOs`    | `Unsupported`/`Fail` — `reattach` の定義済み拒否 →    |
-//! |                         |             | `Failed` → close 収束を event 系列で観測             |
+//! | `real-editor-resize`    | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_size` を     |
+//! |                         |             | 実 lease 経由で実行し、child HWND の `GetWindowRect` が  |
+//! |                         |             | 要求サイズと一致することを非画素 oracle で検証           |
+//! | `real-editor-redock`    | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `reattach` を     |
+//! |                         |             | 同一 live lease で実行し、旧 child HWND の破棄 + 新      |
+//! |                         |             | attach generation（window title）の出現を検証            |
 //! | `real-session-terminate`| `RealOs`    | `Pass`/`Fail`/`Unsupported` — attach 中の            |
 //! |                         |             | `HostCommand::Destroy` → `Terminated{HostLost}`       |
 //! |                         |             | exactly-once → child HWND teardown → host 存続        |
@@ -65,8 +67,9 @@
 //! | `real-session-timeout`  | `RealOs`    | `Pass`/`Fail`/`Unsupported` — ZERO deadline policy +  |
 //! |                         |             | `begin_detach` + `tick_all` → `Failed{Timeout}` +     |
 //! |                         |             | child HWND 契約                                       |
-//! | `real-editor-visibility`| `RealOs`    | `Unsupported`/`Fail` — `set_visibility` の定義済み     |
-//! |                         |             | 拒否・`Attached` 維持・`Hidden`/`Shown` event 0 件    |
+//! | `real-editor-visibility`| `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_visibility` |
+//! |                         |             | の hide→destroy / show→recreate cycle を child HWND     |
+//! |                         |             | 生死 + `Hidden`/`Shown` event で検証                    |
 //! | `real-session-crash`    | `RealOs`    | `Unsupported` — in-process lane は fixture の         |
 //! |                         |             | process-killing fault を生存不能（out-of-process      |
 //! |                         |             | host 未実装）                                         |
@@ -1403,6 +1406,17 @@ struct ChildWindowFacts {
     /// `GetWindowThreadProcessId(child)` — the thread that created
     /// the child (the thread `attached` ran on).
     thread_id: u32,
+    /// `GetWindowRect(child)` width/height in device pixels — the
+    /// editor-op effect oracle for `set_size` (the plugin's `onSize`
+    /// resizes its own window; the host only reports the size).
+    width: i32,
+    /// `GetWindowRect(child)` height in device pixels — see `width`.
+    height: i32,
+    /// `GetWindowTextW(child)` — the fixture stamps its attach
+    /// generation here (`rvf-test-editor-attach-{n}`), the reliable
+    /// detach/`removed` + `attached` recreation marker (an HWND
+    /// value alone can be reused by Windows).
+    title: String,
     /// The three attach-phase checks, taken while the lease is live.
     attach: ChildAttachFacts,
     /// `IsWindow(child) == 0` after `session.close` — the plugin's
@@ -1433,10 +1447,11 @@ struct ChildWindowObservation {
 /// destroys, moves, or messages a window.
 #[cfg(windows)]
 mod oschild {
-    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT};
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, GetParent, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
+        EnumChildWindows, GetParent, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
+        GetWindowThreadProcessId, IsWindow, IsWindowVisible,
     };
 
     use super::{ChildAttachFacts, ChildWindowFacts, ChildWindowObservation};
@@ -1475,9 +1490,14 @@ mod oschild {
                 // lease (and thus the container) is held.
                 unsafe {
                     let mut pid = 0u32;
+                    let mut rect = RECT::default();
+                    GetWindowRect(hwnd as HWND, &raw mut rect);
                     ChildWindowFacts {
                         hwnd,
                         thread_id: GetWindowThreadProcessId(hwnd as HWND, &raw mut pid),
+                        width: rect.right - rect.left,
+                        height: rect.bottom - rect.top,
+                        title: window_text(hwnd),
                         attach: ChildAttachFacts {
                             parent_matches: GetParent(hwnd as HWND) == container as HWND,
                             visible: IsWindowVisible(hwnd as HWND) != 0,
@@ -1494,6 +1514,38 @@ mod oschild {
             container_thread,
             supported: true,
         }
+    }
+
+    /// `GetWindowTextW` as a `String` — empty on any failure (a
+    /// title is evidence garnish, never a verdict input by itself).
+    /// Query-only.
+    #[expect(unsafe_code)]
+    #[expect(clippy::cast_sign_loss)]
+    fn window_text(hwnd: u64) -> String {
+        // SAFETY: query-only; `hwnd` is an HWND this enumeration just
+        // returned.
+        unsafe {
+            let len = GetWindowTextLengthW(hwnd as HWND);
+            if len <= 0 {
+                return String::new();
+            }
+            let mut buf = vec![0u16; len as usize + 1];
+            let got = GetWindowTextW(hwnd as HWND, buf.as_mut_ptr(), len + 1);
+            if got <= 0 {
+                return String::new();
+            }
+            String::from_utf16_lossy(&buf[..got as usize])
+        }
+    }
+
+    /// `IsWindow(hwnd) != 0` — the editor-op effect oracles use this
+    /// to prove a pre-op child really died (`removed()` →
+    /// `DestroyWindow`) before the op's replacement was observed.
+    /// Query-only; accepts any HWND value.
+    #[expect(unsafe_code)]
+    pub(super) fn is_alive(hwnd: u64) -> bool {
+        // SAFETY: query-only handle-validity check.
+        unsafe { IsWindow(hwnd as HWND) != 0 }
     }
 
     /// An observation for the no-container-token path — the platform
@@ -1549,6 +1601,11 @@ mod oschild {
     /// Same unsupported answer for the no-container path.
     pub(super) fn empty() -> ChildWindowObservation {
         unsupported()
+    }
+
+    /// No HWND concept off-Windows — never alive.
+    pub(super) fn is_alive(_hwnd: u64) -> bool {
+        false
     }
 
     /// No-op off-Windows — there are never children to mark.
@@ -1944,7 +2001,9 @@ fn conclude_editor_session(
 /// as a pass/fail row in `steps` (`unsupported` off-Windows);
 /// `verified` is the Pass gate and `failure` names the first
 /// violated check.
+#[expect(clippy::too_many_arguments)]
 fn observe_editor_child_lifecycle(
+    _gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -2161,6 +2220,7 @@ where
         &mut Vec<Value>,
     ) -> Option<Result<EditorCapabilities, EditorSessionError>>,
     V: FnOnce(
+        &RealOsGuiTest,
         Option<u64>,
         u64,
         &mut PluginEditorSessions,
@@ -2231,6 +2291,7 @@ where
     // it runs while the lease is still live.
     let observed = match &open_result {
         Some(Ok(_)) => Some((drive.observe_open)(
+            gui,
             container_token,
             lease.raw(),
             &mut sessions,
@@ -2355,8 +2416,12 @@ type DriveOpenFn = fn(
 
 /// The post-open observation signature [`attempt_real_attach`]
 /// invokes while the lease is live — decides `verified`/`failure`/
-/// `extras` for the verdict.
+/// `extras` for the verdict. `gui` is the live session driver so an
+/// observation can redeem leases through the real slot ledger
+/// (`real_editor_ops`) — `reattach` is the only verb that consults
+/// the redeemer.
 type ObserveOpenFn = fn(
+    &RealOsGuiTest,
     Option<u64>,
     u64,
     &mut PluginEditorSessions,
@@ -3276,6 +3341,7 @@ fn pixel_extras(
 fn pixel_observe(
     artifacts: Option<&Path>,
 ) -> impl FnOnce(
+    &RealOsGuiTest,
     Option<u64>,
     u64,
     &mut PluginEditorSessions,
@@ -3285,7 +3351,7 @@ fn pixel_observe(
     &mut Vec<Value>,
 ) -> PixelVerification
 + '_ {
-    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
         observe_editor_pixel_lifecycle(
             container, sessions, session_id, host, handle, artifacts, steps,
         )
@@ -3297,6 +3363,7 @@ fn pixel_observe(
 fn foreground_observe(
     artifacts: Option<&Path>,
 ) -> impl FnOnce(
+    &RealOsGuiTest,
     Option<u64>,
     u64,
     &mut PluginEditorSessions,
@@ -3306,7 +3373,7 @@ fn foreground_observe(
     &mut Vec<Value>,
 ) -> ForegroundVerification
 + '_ {
-    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
         observe_editor_foreground_probe(
             container, sessions, session_id, host, handle, artifacts, steps,
         )
@@ -3318,6 +3385,7 @@ fn foreground_observe(
 fn present_observe(
     artifacts: Option<&Path>,
 ) -> impl FnOnce(
+    &RealOsGuiTest,
     Option<u64>,
     u64,
     &mut PluginEditorSessions,
@@ -3327,7 +3395,7 @@ fn present_observe(
     &mut Vec<Value>,
 ) -> PresentationVerification
 + '_ {
-    move |container, _lease_raw, sessions, session_id, host, handle, steps| {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
         observe_editor_presentation_probe(
             container, sessions, session_id, host, handle, artifacts, steps,
         )
@@ -6504,8 +6572,8 @@ fn real_window_close_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
 enum OpLanding {
     /// The op returned the defined `EditorOpError::Unsupported`.
     Refused,
-    /// The op returned `Ok` — recorded, but no non-pixel oracle can
-    /// confirm the effect took place (honest `NotRun`, never Pass).
+    /// The op returned `Ok` — an `effect_confirmed` observation then
+    /// gates `Pass`; without it the honest verdict stays `NotRun`.
     Accepted,
     /// Any other landing — a contract error or a vanished session;
     /// `EditorOpVerification::failure` carries the detail.
@@ -6513,17 +6581,25 @@ enum OpLanding {
 }
 
 /// Post-open observation for the non-pixel editor-op cases
-/// (`real-editor-resize`, `real-editor-redock`): the same child-HWND
-/// attach contract as `real-editor-attach`, plus the op attempt's
-/// honest landing — the defined `Unsupported` refusal, an accepted
-/// op (no non-pixel oracle exists to confirm effect → never Pass),
-/// or a real failure.
+/// (`real-editor-resize`, `real-editor-redock`,
+/// `real-editor-visibility`): the same child-HWND attach contract as
+/// `real-editor-attach`, plus the op attempt's honest landing — the
+/// defined `Unsupported` refusal, an accepted op whose OS-level
+/// effect oracle either confirmed the change (`Pass`) or stayed
+/// unobservable (`NotRun`), or a real failure. An accepted op whose
+/// effect oracle observed a *mismatch* is a contract failure
+/// (`verified == false`), never demoted to `NotRun`.
 struct EditorOpVerification {
     /// `false` off-Windows — the OS observation half then reports
     /// `Unsupported`, never a fabricated pass.
     supported: bool,
     /// How the attempted op landed.
     landing: OpLanding,
+    /// The op's OS-observable effect was confirmed: child-HWND
+    /// geometry for `set_size`, the hide→destroy/show→recreate cycle
+    /// for `set_visibility`, the attach-generation advance for
+    /// `reattach`.
+    effect_confirmed: bool,
     /// Every contract check agreed (attach children, session state
     /// after the op, close/detach convergence, expected events).
     verified: bool,
@@ -6532,6 +6608,17 @@ struct EditorOpVerification {
     /// `observed` extras — container/child HWND ids, thread ids,
     /// drained events.
     extras: Value,
+}
+
+/// Verdict identity for an editor-op case — the `Pass` detail and
+/// evidence tag `editor_op_body` reports when the op's effect oracle
+/// confirmed the change (the refusal/`NotRun`/`Fail` arms keep their
+/// own generic wording).
+struct EditorOpIdentity {
+    /// `Pass` detail — names the op, the oracle, and the contract.
+    pass_detail: &'static str,
+    /// Evidence tag pushed on `Pass`.
+    evidence: &'static str,
 }
 
 /// Phase-1 child-HWND attach observation shared by the editor-op
@@ -6563,14 +6650,19 @@ fn observe_attached_children(
 }
 
 /// `real-editor-resize` post-open observation: child-HWND attach
-/// contract → `session.set_size` through the production
-/// `InProcessEditorOps` (the defined `Unsupported` refusal today —
-/// no `HostCommand` resize verb exists) → the session must stay
-/// `Attached` (a refused `set_size` is non-fatal by contract) →
-/// close convergence with the unchanged `[Attached{Docked},
-/// Closed]` event sequence. No pixel capture is touched — the
-/// oracle is session state + events + the HWND contract only.
+/// contract → `session.set_size(800×600)` through the production
+/// `InProcessEditorOps` redeeming against the real slot ledger →
+/// the child HWND's `GetWindowRect` must report the requested size
+/// (the fixture's `onSize` resizes its own window — the host only
+/// reports the size) → the session must stay `Attached` (a refused
+/// `set_size` is non-fatal by contract) → close convergence with
+/// the unchanged `[Attached{Docked}, Closed]` event sequence. No
+/// pixel capture — the oracle is child-window geometry, never
+/// pixels.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn observe_editor_resize_lifecycle(
+    gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -6579,30 +6671,35 @@ fn observe_editor_resize_lifecycle(
     handle: PluginHandle,
     steps: &mut Vec<Value>,
 ) -> EditorOpVerification {
+    /// The size the case requests — distinct from whatever geometry
+    /// the attach produced so the oracle can tell "took effect"
+    /// from "never moved".
+    const REQUESTED: EditorSize = EditorSize {
+        width: 800.0,
+        height: 600.0,
+    };
     let mut failure: Option<String> = None;
-    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
 
-    // The resize attempt — `rejecting_editor_ops` is the production
-    // `InProcessEditorOps`; `set_size` refuses before any lease
-    // redeem, so the rejecting redeemer is never consulted.
     let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    // An accepted op whose geometry oracle observed a mismatch is a
+    // contract failure — tracked separately so `verified` (and thus
+    // the `Fail` verdict) sees it.
+    let mut effect_ok = true;
     match sessions.session_mut(session_id).map(|session| {
-        let mut ops = rejecting_editor_ops(host, handle);
-        session.set_size(
-            &mut ops,
-            EditorSize {
-                width: 800.0,
-                height: 600.0,
-            },
-        )
+        let mut ops = real_editor_ops(gui, host, handle);
+        session.set_size(&mut ops, REQUESTED)
     }) {
         Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
             steps.push(json!({
                 "step": "editor_resize",
                 "verdict": "unsupported",
                 "detail": "session.set_size → InProcessEditorOps::set_size \
-                           → EditorOpError::Unsupported — no HostCommand \
-                           resize verb exists on the L0 surface",
+                           → HostCommand::SetGuiSize → the plugin declined \
+                           resize (canResize) — the defined \
+                           EditorOpError::Unsupported",
             }));
             landing = OpLanding::Refused;
         }
@@ -6610,10 +6707,79 @@ fn observe_editor_resize_lifecycle(
             steps.push(json!({
                 "step": "editor_resize",
                 "verdict": "pass",
-                "detail": "set_size accepted — no non-pixel oracle exists \
-                           yet to confirm the resize took effect",
+                "detail": "set_size accepted — verifying the child HWND \
+                           geometry took the requested size",
+                "requested": {
+                    "width": REQUESTED.width,
+                    "height": REQUESTED.height,
+                },
             }));
             landing = OpLanding::Accepted;
+            // Effect oracle — re-enumerate while attached: the child
+            // contract must still hold AND every child's
+            // `GetWindowRect` must report the requested size. An
+            // accepted op whose geometry did not move is a contract
+            // failure, never a `NotRun`.
+            if observation.supported {
+                let (resized, resized_ok) =
+                    observe_attached_children(container, steps, &mut failure);
+                attach_ok = attach_ok && resized_ok;
+                let mismatches: Vec<String> = resized
+                    .children
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, child)| {
+                        f64::from(child.width) != REQUESTED.width
+                            || f64::from(child.height) != REQUESTED.height
+                    })
+                    .map(|(index, child)| {
+                        format!(
+                            "child[{index}] hwnd={:#x}: {}x{} != {}x{}",
+                            child.hwnd,
+                            child.width,
+                            child.height,
+                            REQUESTED.width,
+                            REQUESTED.height,
+                        )
+                    })
+                    .collect();
+                if resized.children.is_empty() {
+                    // `child_enumerated`/`child_contract` already
+                    // recorded the failure.
+                    effect_ok = false;
+                } else if mismatches.is_empty() {
+                    effect_confirmed = true;
+                    steps.push(json!({
+                        "step": "editor_resize_effect",
+                        "verdict": "pass",
+                        "children": resized
+                            .children
+                            .iter()
+                            .map(|child| json!({
+                                "hwnd": child.hwnd,
+                                "width": child.width,
+                                "height": child.height,
+                                "title": child.title,
+                            }))
+                            .collect::<Vec<_>>(),
+                    }));
+                } else {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_resize_effect",
+                        format!(
+                            "accepted set_size but child HWND geometry did \
+                             not take {}x{}: {}",
+                            REQUESTED.width,
+                            REQUESTED.height,
+                            mismatches.join("; "),
+                        ),
+                    );
+                    effect_ok = false;
+                }
+                observation = resized;
+            }
         }
         Some(Err(error)) => {
             record_obs_fail(steps, &mut failure, "editor_resize", error.to_string());
@@ -6665,7 +6831,8 @@ fn observe_editor_resize_lifecycle(
     EditorOpVerification {
         supported: observation.supported,
         landing,
-        verified: attach_ok && state_ok && close_ok && detach_ok && converged_ok,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && converged_ok,
         failure,
         extras: Value::Object(child_extras(container, &observation, &rendered)),
     }
@@ -6710,14 +6877,21 @@ fn check_redock_events(
 }
 
 /// `real-editor-redock` post-open observation: child-HWND attach
-/// contract → `session.reattach` under the same real lease through
-/// the production `InProcessEditorOps` (the defined `Unsupported`
-/// refusal today — no re-dock verb on the L0 surface) → the session
-/// must land `Failed{Unsupported}` per contract → `close` →
-/// `IsWindow(child) == 0` → the exact `[Attached{Docked}, Detached,
-/// Failed{Unsupported}, Closed]` event sequence. No pixel capture —
-/// the oracle is session events + HWND contract + session state.
+/// contract → `session.reattach` under the same live lease through
+/// the production `InProcessEditorOps` redeeming against the real
+/// slot ledger → the pre-reattach child HWNDs must be dead
+/// (`removed()` → `DestroyWindow`) and the re-observed child
+/// contract must hold under a new attach generation (the fixture
+/// stamps `rvf-test-editor-attach-{n}` into the window text — an
+/// HWND value alone can be reused) → `close` → `IsWindow(child) ==
+/// 0` → the re-dock event sequence (`[Attached{Docked}, Detached,
+/// Reattached{Docked}, Closed]` accepted / `Failed{Unsupported}`
+/// refused). No pixel capture — the oracle is session events +
+/// HWND contract + attach generation + session state.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn observe_editor_redock_lifecycle(
+    gui: &RealOsGuiTest,
     container: Option<u64>,
     lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -6727,15 +6901,27 @@ fn observe_editor_redock_lifecycle(
     steps: &mut Vec<Value>,
 ) -> EditorOpVerification {
     let mut failure: Option<String> = None;
-    let (mut observation, mut attach_ok) =
+    let (pre_observation, mut attach_ok) =
         observe_attached_children(container, steps, &mut failure);
+    // Pre-reattach child identities — the recreation oracle: every
+    // recorded child must die (`removed()` → `DestroyWindow`) and
+    // the post-reattach generation must carry a new attach title.
+    let pre_children: Vec<(u64, String)> = pre_observation
+        .children
+        .iter()
+        .map(|child| (child.hwnd, child.title.clone()))
+        .collect();
+    let mut observation = pre_observation;
 
-    // The re-dock attempt — same lease (`ParentSlotLease` wraps the
-    // registry's opaque payload; the verb refuses before any redeem
-    // today, and the lease itself stays honest evidence).
     let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    // An accepted re-dock whose recreation oracle observed a
+    // mismatch is a contract failure — tracked separately so
+    // `verified` (and thus the `Fail` verdict) sees it.
+    let mut effect_ok = true;
+    let mut state_ok = true;
     match sessions.session_mut(session_id).map(|session| {
-        let mut ops = rejecting_editor_ops(host, handle);
+        let mut ops = real_editor_ops(gui, host, handle);
         session.reattach(&mut ops, &ParentSlotLease::new(lease_raw))
     }) {
         Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
@@ -6743,9 +6929,10 @@ fn observe_editor_redock_lifecycle(
                 "step": "editor_redock",
                 "verdict": "unsupported",
                 "detail": "session.reattach → InProcessEditorOps::reattach \
-                           → EditorOpError::Unsupported — no re-dock verb \
-                           on the L0 surface; the session lands Failed \
-                           per contract",
+                           → HostCommand::SetGuiParent → the plugin \
+                           declined re-parent — the defined \
+                           EditorOpError::Unsupported; the session lands \
+                           Failed per contract",
             }));
             landing = OpLanding::Refused;
             // Contract: a refused re-attach lands `Failed`, never
@@ -6763,21 +6950,111 @@ fn observe_editor_redock_lifecycle(
                     "session_state_after_op",
                     "refused reattach did not land Failed{Unsupported}",
                 );
+                state_ok = false;
             }
         }
         Some(Ok(())) => {
             steps.push(json!({
                 "step": "editor_redock",
                 "verdict": "pass",
-                "detail": "reattach accepted — a Reattached event and a \
-                           live child contract are expected",
+                "detail": "reattach accepted — verifying the old child \
+                           HWNDs died and a new attach generation lives \
+                           under the container",
             }));
             landing = OpLanding::Accepted;
-            // An accepted re-dock may recreate the editor surface —
-            // re-run the child contract against the live container.
-            let (re_observation, re_ok) = observe_attached_children(container, steps, &mut failure);
-            attach_ok = attach_ok && re_ok;
-            observation = re_observation;
+            // Contract: an accepted re-dock lands `Attached` again.
+            let attached = sessions
+                .session(session_id)
+                .is_some_and(|session| {
+                    matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+                });
+            if attached {
+                steps.push(json!({
+                    "step": "session_state_after_op",
+                    "verdict": "pass",
+                    "state": "Attached{Docked}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_op",
+                    "accepted reattach did not land Attached{Docked}",
+                );
+                state_ok = false;
+            }
+            // Effect oracle — only meaningful where HWNDs exist.
+            if observation.supported {
+                // Half 1 — every pre-reattach child must be dead:
+                // `set_gui_parent` ran `removed()` → `DestroyWindow`.
+                let survivors: Vec<String> = pre_children
+                    .iter()
+                    .filter(|(hwnd, _)| oschild::is_alive(*hwnd))
+                    .map(|(hwnd, _)| format!("hwnd={hwnd:#x}"))
+                    .collect();
+                // Half 2 — the child contract must hold again under
+                // the container, on a new attach generation.
+                let (reattached, reattached_ok) =
+                    observe_attached_children(container, steps, &mut failure);
+                attach_ok = attach_ok && reattached_ok;
+                let pre_titles: Vec<&str> = pre_children
+                    .iter()
+                    .map(|(_, title)| title.as_str())
+                    .collect();
+                let generation_advanced = !reattached.children.is_empty()
+                    && reattached.children.iter().all(|child| {
+                        !child.title.is_empty()
+                            && pre_titles.iter().all(|title| *title != child.title)
+                    });
+                if survivors.is_empty() && !reattached.children.is_empty() && generation_advanced {
+                    effect_confirmed = true;
+                    steps.push(json!({
+                        "step": "editor_redock_effect",
+                        "verdict": "pass",
+                        "detail": "pre-reattach children destroyed; new \
+                                   attach generation observed under the \
+                                   container",
+                        "pre_titles": pre_children
+                            .iter()
+                            .map(|(_, title)| title.clone())
+                            .collect::<Vec<_>>(),
+                        "post_titles": reattached
+                            .children
+                            .iter()
+                            .map(|child| child.title.clone())
+                            .collect::<Vec<_>>(),
+                    }));
+                } else {
+                    let mut problems = Vec::new();
+                    if !survivors.is_empty() {
+                        problems.push(format!(
+                            "pre-reattach child HWND(s) still alive: {}",
+                            survivors.join(", ")
+                        ));
+                    }
+                    if reattached.children.is_empty() {
+                        problems.push("no child re-appeared under the container".to_string());
+                    } else if !generation_advanced {
+                        problems.push(
+                            "post-reattach children carry no new attach \
+                             generation title"
+                                .to_string(),
+                        );
+                    }
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_redock_effect",
+                        format!(
+                            "accepted reattach without a verified \
+                                 detach/reattach cycle: {}",
+                            problems.join("; ")
+                        ),
+                    );
+                    effect_ok = false;
+                }
+                observation = reattached;
+            }
         }
         Some(Err(error)) => {
             record_obs_fail(steps, &mut failure, "editor_redock", error.to_string());
@@ -6808,7 +7085,8 @@ fn observe_editor_redock_lifecycle(
     EditorOpVerification {
         supported: observation.supported,
         landing,
-        verified: attach_ok && close_ok && detach_ok && events_ok,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && events_ok,
         failure,
         extras: Value::Object(child_extras(container, &observation, &rendered)),
     }
@@ -6817,16 +7095,19 @@ fn observe_editor_redock_lifecycle(
 /// Shared body for the non-pixel editor-op cases — identical
 /// prerequisite/attempt mapping to `editor_attach_body`; the
 /// case-supplied `observe_open` drives the op attempt and decides
-/// the verdict: verified + defined refusal → `Unsupported`,
-/// accepted-but-unverifiable → `NotRun`, any contract mismatch →
-/// `Fail`.
+/// the verdict: verified + accepted + effect-confirmed → `Pass`
+/// (the case's [`EditorOpIdentity`]), verified + defined refusal →
+/// `Unsupported`, accepted-but-unverifiable → `NotRun`, any
+/// contract mismatch → `Fail`.
 fn editor_op_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
     view: ViewInstanceId,
     plugin: Option<&PluginPair>,
     plugin_error: Option<&PluginUnavailable>,
+    case: &EditorOpIdentity,
     observe_open: impl FnOnce(
+        &RealOsGuiTest,
         Option<u64>,
         u64,
         &mut PluginEditorSessions,
@@ -6893,6 +7174,21 @@ fn editor_op_body(
                 outcome
             }
             Some(verification)
+                if verification.verified
+                    && verification.landing == OpLanding::Accepted
+                    && verification.effect_confirmed =>
+            {
+                // The op was accepted AND its OS-level effect oracle
+                // confirmed the change (child-HWND geometry /
+                // hide-show cycle / attach generation) with every
+                // lifecycle, state, event, and close check agreeing —
+                // an honest `Pass`, never pixel-dependent.
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(case.pass_detail.to_string());
+                outcome.evidence.push(case.evidence.to_string());
+                outcome
+            }
+            Some(verification)
                 if verification.verified && verification.landing == OpLanding::Accepted =>
             {
                 // The op was accepted AND every non-pixel contract
@@ -6934,8 +7230,9 @@ fn editor_op_body(
 
 /// `real-editor-resize` case: pre-flight requires `NativePluginDock`,
 /// then the body drives the real attach chain plus the `set_size`
-/// attempt — judged by session state/events/HWND contract only,
-/// never pixels.
+/// attempt — judged by the child-HWND geometry oracle
+/// (`GetWindowRect` == requested size), session state/events, and
+/// close convergence, never pixels.
 fn real_editor_resize_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
     let window = ctx.window;
     let view = ctx.view;
@@ -6949,6 +7246,16 @@ fn real_editor_resize_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             view,
             plugin,
             plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "session.set_size(800x600) accepted through the \
+                              REAL container lease; the child HWND's \
+                              GetWindowRect reported the requested size \
+                              (the fixture's onSize resized its own window), \
+                              the session stayed Attached, events \
+                              [Attached{Docked}, Closed], and close \
+                              convergence verified — no pixels",
+                evidence: "editor-resize:real-hwnd-geometry-effect",
+            },
             observe_editor_resize_lifecycle,
         ))
     });
@@ -6963,8 +7270,10 @@ fn real_editor_resize_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
 
 /// `real-editor-redock` case: pre-flight requires `NativePluginDock`,
 /// then the body drives the real attach chain plus the `reattach`
-/// attempt under the same lease — judged by session events, child
-/// HWND contract, and session state only, never pixels.
+/// attempt under the same live lease — judged by the recreation
+/// oracle (pre-reattach children destroyed, new attach generation
+/// under the container), session events, child HWND contract, and
+/// session state, never pixels.
 fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
     let window = ctx.window;
     let view = ctx.view;
@@ -6978,6 +7287,17 @@ fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             view,
             plugin,
             plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "session.reattach accepted through the REAL \
+                              container lease; the pre-reattach child HWNDs \
+                              were destroyed (removed() → DestroyWindow) and \
+                              a new attach generation re-appeared under the \
+                              container (rvf-test-editor-attach-{n} title \
+                              advanced), events [Attached{Docked}, Detached, \
+                              Reattached{Docked}, Closed], and close \
+                              convergence verified — no pixels",
+                evidence: "editor-redock:real-attach-generation-cycle",
+            },
             observe_editor_redock_lifecycle,
         ))
     });
@@ -7155,7 +7475,9 @@ fn check_host_survives(
 /// runs — the terminal event is `Terminated`, never `Closed`, and
 /// the child teardown is observed at OS level, not inferred from
 /// the session state.
+#[expect(clippy::too_many_arguments)]
 fn observe_session_terminate_lifecycle(
+    _gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -7449,7 +7771,9 @@ fn observe_session_close_events(
 /// drained events must be exactly `[Degraded{Docked}, Closed]`:
 /// the degrade landing is the case's whole point and an `Attached`
 /// event here would mean the degrade path never ran.
+#[expect(clippy::too_many_arguments)]
 fn observe_session_degraded_lifecycle(
+    _gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -7479,7 +7803,9 @@ fn observe_session_degraded_lifecycle(
 /// `[Failed{Unsupported}, Recovered{Docked}, Closed]`: the refused
 /// `open(Floating)` failure, the `recover(Docked)` landing, and the
 /// graceful close — in that order, nothing else.
+#[expect(clippy::too_many_arguments)]
 fn observe_session_recovery_lifecycle(
+    _gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -7613,7 +7939,9 @@ fn drive_detach_timeout(
 /// drained events exactly `[Attached{Docked}, Failed{Timeout},
 /// Closed]`. The timeout is caused by the session deadline/tick
 /// API — never a synthetic verdict.
+#[expect(clippy::too_many_arguments)]
 fn observe_session_timeout_lifecycle(
+    _gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -7846,16 +8174,22 @@ fn real_session_timeout_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec)
 
 /// `real-editor-visibility` post-open observation: child-HWND
 /// attach contract → `session.set_visibility(false)` through the
-/// production `InProcessEditorOps` (the defined `Unsupported`
-/// refusal today — no hide/show verb on the L0 surface) → the
-/// session must stay `Attached{Docked}` with no `Hidden`/`Shown`
-/// event → close convergence with the unchanged
-/// `[Attached{Docked}, Closed]` event sequence. An accepted
-/// `set_visibility` lands `Hidden{Docked}` + `Hidden` event and
-/// converges to `[Attached{Docked}, Hidden, Closed]` — recorded,
-/// but `editor_op_body` judges it `NotRun` (no oracle confirms the
-/// hide took effect). Any other landing is a contract violation.
+/// production `InProcessEditorOps` redeeming against the real slot
+/// ledger → the session must land `Hidden{Docked}` and every
+/// pre-hide child HWND must be dead (`removed()` → `DestroyWindow`
+/// — `IPlugView` has no hide verb, so hide IS detach) →
+/// `session.set_visibility(true)` → `Attached{Docked}` again and
+/// the child contract must hold under a new attach generation →
+/// `close` → `IsWindow(child) == 0` → the visibility event sequence
+/// (`[Attached{Docked}, Hidden, Shown{Docked}, Closed]` accepted /
+/// `[Attached{Docked}, Closed]` refused). An accepted op whose
+/// hide/show oracle observed a mismatch is a contract failure,
+/// never a `NotRun`. No pixel capture — the oracle is child-HWND
+/// lifecycle + session state/events.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn observe_editor_visibility_lifecycle(
+    gui: &RealOsGuiTest,
     container: Option<u64>,
     _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
@@ -7865,35 +8199,235 @@ fn observe_editor_visibility_lifecycle(
     steps: &mut Vec<Value>,
 ) -> EditorOpVerification {
     let mut failure: Option<String> = None;
-    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+    // Pre-hide child identities — the hide oracle proves every one
+    // of them died before the show half re-observes the container.
+    let pre_hide: Vec<u64> = observation
+        .children
+        .iter()
+        .map(|child| child.hwnd)
+        .collect();
+    let pre_titles: Vec<String> = observation
+        .children
+        .iter()
+        .map(|child| child.title.clone())
+        .collect();
 
-    // The visibility attempt — `rejecting_editor_ops` is the
-    // production `InProcessEditorOps`; `set_visibility` refuses
-    // before any lease redeem, so the rejecting redeemer is never
-    // consulted.
     let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    // An accepted cycle whose hide/show oracle observed a mismatch
+    // is a contract failure — tracked separately so `verified`
+    // (and thus the `Fail` verdict) sees it.
+    let mut effect_ok = true;
+    let mut state_ok = true;
+    // Whether the show half of the cycle ran `Ok` — picks the honest
+    // expected event tail.
+    let mut shown = false;
     match sessions.session_mut(session_id).map(|session| {
-        let mut ops = rejecting_editor_ops(host, handle);
+        let mut ops = real_editor_ops(gui, host, handle);
         session.set_visibility(&mut ops, false)
     }) {
         Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
             steps.push(json!({
                 "step": "editor_visibility",
                 "verdict": "unsupported",
-                "detail": "session.set_visibility → InProcessEditorOps::\
-                           set_visibility → EditorOpError::Unsupported — \
-                           no hide/show verb on the L0 surface",
+                "detail": "session.set_visibility(false) → \
+                           InProcessEditorOps::set_visibility → \
+                           HostCommand::SetGuiVisibility → the plugin \
+                           declined hide — the defined \
+                           EditorOpError::Unsupported",
             }));
             landing = OpLanding::Refused;
+            // Contract: a refused hide leaves the session
+            // `Attached{Docked}` — no `Hidden`/`Shown` may appear.
+            let attached = sessions.session(session_id).is_some_and(|session| {
+                matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+            });
+            if attached {
+                steps.push(json!({
+                    "step": "session_state_after_op",
+                    "verdict": "pass",
+                    "state": "Attached{Docked}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_op",
+                    "refused set_visibility did not leave Attached{Docked}",
+                );
+                state_ok = false;
+            }
         }
         Some(Ok(())) => {
-            steps.push(json!({
-                "step": "editor_visibility",
-                "verdict": "pass",
-                "detail": "set_visibility accepted — the session must \
-                           have landed Hidden{Docked} with a Hidden event",
-            }));
             landing = OpLanding::Accepted;
+            steps.push(json!({
+                "step": "editor_visibility_hide",
+                "verdict": "pass",
+                "detail": "set_visibility(false) accepted — verifying \
+                           Hidden{Docked} and child-HWND teardown",
+            }));
+            // Contract: hide lands `Hidden{Docked}` with a `Hidden`
+            // event (checked in the event tail below).
+            let hidden = sessions.session(session_id).is_some_and(|session| {
+                matches!(session.state(), EditorSessionState::Hidden { mode } if mode == AttachMode::Docked)
+            });
+            if hidden {
+                steps.push(json!({
+                    "step": "session_state_after_hide",
+                    "verdict": "pass",
+                    "state": "Hidden{Docked}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_hide",
+                    "accepted hide did not land Hidden{Docked}",
+                );
+                state_ok = false;
+            }
+            // Hide effect oracle — `IPlugView` has no hide verb, so
+            // hide IS `removed()` → `DestroyWindow`: every pre-hide
+            // child must be dead and no live child may remain under
+            // the container.
+            if observation.supported {
+                let survivors: Vec<String> = pre_hide
+                    .iter()
+                    .filter(|hwnd| oschild::is_alive(**hwnd))
+                    .map(|hwnd| format!("hwnd={hwnd:#x}"))
+                    .collect();
+                let hidden_enum = match container {
+                    Some(token) => oschild::observe(token),
+                    None => oschild::empty(),
+                };
+                let live_remaining: Vec<String> = hidden_enum
+                    .children
+                    .iter()
+                    .filter(|child| child.attach.alive)
+                    .map(|child| format!("hwnd={:#x}", child.hwnd))
+                    .collect();
+                if survivors.is_empty() && live_remaining.is_empty() {
+                    steps.push(json!({
+                        "step": "editor_visibility_hide_effect",
+                        "verdict": "pass",
+                        "detail": "every pre-hide child HWND destroyed; \
+                                   no live child remains under the container",
+                        "pre_hwnds": pre_hide,
+                    }));
+                } else {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_hide_effect",
+                        format!(
+                            "accepted hide left live child HWND(s): {}",
+                            survivors
+                                .iter()
+                                .chain(live_remaining.iter())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
+                    );
+                    effect_ok = false;
+                }
+            }
+            // Show half — the same verb surface in reverse. A show
+            // refusal after an accepted hide is a contract break.
+            match sessions.session_mut(session_id).map(|session| {
+                let mut ops = real_editor_ops(gui, host, handle);
+                session.set_visibility(&mut ops, true)
+            }) {
+                Some(Ok(())) => {
+                    shown = true;
+                    steps.push(json!({
+                        "step": "editor_visibility_show",
+                        "verdict": "pass",
+                        "detail": "set_visibility(true) accepted — \
+                                   verifying Attached{Docked} and the \
+                                   child contract on the new generation",
+                    }));
+                    let attached = sessions.session(session_id).is_some_and(|session| {
+                        matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+                    });
+                    if attached {
+                        steps.push(json!({
+                            "step": "session_state_after_show",
+                            "verdict": "pass",
+                            "state": "Attached{Docked}",
+                        }));
+                    } else {
+                        record_obs_fail(
+                            steps,
+                            &mut failure,
+                            "session_state_after_show",
+                            "accepted show did not land Attached{Docked}",
+                        );
+                        state_ok = false;
+                    }
+                    // Show effect oracle — the child contract must
+                    // hold again; the new generation's attach title
+                    // is recorded as recreation evidence (the old
+                    // children are already proven dead above, so a
+                    // live parented child under the container is
+                    // necessarily a new window).
+                    if observation.supported {
+                        let (reshown, reshown_ok) =
+                            observe_attached_children(container, steps, &mut failure);
+                        attach_ok = attach_ok && reshown_ok;
+                        let generation_advanced = !reshown.children.is_empty()
+                            && reshown.children.iter().all(|child| {
+                                !child.title.is_empty()
+                                    && pre_titles.iter().all(|title| *title != child.title)
+                            });
+                        if reshown.children.is_empty() {
+                            // `child_enumerated` already recorded the
+                            // contract failure.
+                            effect_ok = false;
+                        } else {
+                            steps.push(json!({
+                                "step": "editor_visibility_show_effect",
+                                "verdict": "pass",
+                                "detail": "child contract re-established \
+                                           under the container",
+                                "pre_titles": pre_titles,
+                                "post_titles": reshown
+                                    .children
+                                    .iter()
+                                    .map(|child| child.title.clone())
+                                    .collect::<Vec<_>>(),
+                                "attach_generation_advanced": generation_advanced,
+                            }));
+                            if reshown_ok {
+                                effect_confirmed = true;
+                            } else {
+                                effect_ok = false;
+                            }
+                        }
+                        observation = reshown;
+                    }
+                }
+                Some(Err(error)) => {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_show",
+                        error.to_string(),
+                    );
+                    effect_ok = false;
+                }
+                None => {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_show",
+                        "editor session vanished before set_visibility(true)",
+                    );
+                    effect_ok = false;
+                }
+            }
         }
         Some(Err(error)) => {
             record_obs_fail(steps, &mut failure, "editor_visibility", error.to_string());
@@ -7908,53 +8442,30 @@ fn observe_editor_visibility_lifecycle(
         }
     }
 
-    // Contract: a refused `set_visibility` leaves the session
-    // `Attached{Docked}` (no `Hidden`/`Shown` event); an accepted
-    // one lands `Hidden{Docked}`. Any other landing is a violation.
-    let mut state_ok = true;
-    if landing != OpLanding::Other {
-        let expected_state = if landing == OpLanding::Refused {
-            "Attached{Docked}"
-        } else {
-            "Hidden{Docked}"
-        };
-        let landed =
-            sessions
-                .session(session_id)
-                .is_some_and(|session| match (landing, session.state()) {
-                    (OpLanding::Refused, EditorSessionState::Attached { mode })
-                    | (OpLanding::Accepted, EditorSessionState::Hidden { mode }) => {
-                        mode == AttachMode::Docked
-                    }
-                    _ => false,
-                });
-        if landed {
-            steps.push(json!({
-                "step": "session_state_after_op",
-                "verdict": "pass",
-                "state": expected_state,
-            }));
-        } else {
-            record_obs_fail(
-                steps,
-                &mut failure,
-                "session_state_after_op",
-                format!("session did not land {expected_state} after set_visibility"),
-            );
-            state_ok = false;
-        }
-    }
-
     // Convergence — close (production `close_gui` → `removed()` →
     // `DestroyWindow`), post-detach `IsWindow(child) == 0`, and the
     // visibility-specific event sequence: refused keeps
     // `[Attached{Docked}, Closed]` (no `Hidden`/`Shown` may appear);
-    // accepted produces `[Attached{Docked}, Hidden, Closed]`.
+    // accepted hide+show produces
+    // `[Attached{Docked}, Hidden, Shown{Docked}, Closed]`; an
+    // accepted hide whose show failed produces
+    // `[Attached{Docked}, Hidden, Closed]`.
     let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
     let detach_ok =
         !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
     let expected: &[EditorSessionEvent] = if landing == OpLanding::Refused {
         ATTACH_CLOSE_EVENTS
+    } else if shown {
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Hidden,
+            EditorSessionEvent::Shown {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Closed,
+        ]
     } else {
         &[
             EditorSessionEvent::Attached {
@@ -7969,15 +8480,16 @@ fn observe_editor_visibility_lifecycle(
     EditorOpVerification {
         supported: observation.supported,
         landing,
-        verified: attach_ok && state_ok && close_ok && detach_ok && events_ok,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && events_ok,
         failure,
         extras: Value::Object(child_extras(container, &observation, &rendered)),
     }
 }
 
-/// `real-editor-visibility` body — the defined-refusal observation
-/// through [`editor_op_body`] (normal docked open; the op attempt
-/// lives in the observation).
+/// `real-editor-visibility` body — the hide/show observation
+/// through [`editor_op_body`] (normal docked open; the op attempts
+/// live in the observation).
 fn editor_visibility_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -7991,15 +8503,25 @@ fn editor_visibility_body(
         view,
         plugin,
         plugin_error,
+        &EditorOpIdentity {
+            pass_detail: "session.set_visibility(false→true) accepted through \
+                          the REAL container lease; Hidden{Docked} destroyed \
+                          every pre-hide child HWND (removed() → \
+                          DestroyWindow) and Attached{Docked} re-established \
+                          the child contract on a new attach generation, \
+                          events [Attached{Docked}, Hidden, Shown{Docked}, \
+                          Closed], and close convergence verified — no pixels",
+            evidence: "editor-visibility:real-hide-show-cycle",
+        },
         observe_editor_visibility_lifecycle,
     )
 }
 
 /// `real-editor-visibility` case: pre-flight requires
 /// `NativePluginDock`, then the body drives the real attach chain
-/// plus the `set_visibility` attempt — judged by the defined
-/// refusal, session state, the absence of `Hidden`/`Shown` events,
-/// and close convergence, never pixels.
+/// plus the `set_visibility` hide/show cycle — judged by the
+/// child-HWND teardown/recreation oracles, session state, the
+/// `Hidden`/`Shown` event pair, and close convergence, never pixels.
 fn real_editor_visibility_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,

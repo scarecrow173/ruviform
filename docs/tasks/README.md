@@ -699,3 +699,4 @@ Directory: `docs/tasks`
 | TASK-ovbF_E6zV8WeEi0OsUIw-w | Issue #426 GPUI lab binding 作業記録 | in-progress | [issue-426-gpui-lab-binding.md](./issue-426-gpui-lab-binding.md) |
 | TASK-Ym6Rc1EkVw8PsTn4ZhDa3G | Issue #451 — Tabs pointer 切替と descriptor 更新の実装タスク | in-progress | [issue-451-tabs-pointer-descriptor.md](./issue-451-tabs-pointer-descriptor.md) |
 | TASK-034WIND0WEDTESTI0S2TK | Issue #313 — windowed `TestIo`/`rvf.uitest.v1` 実装タスク（slice S2） | done | [issue-313-task2-windowed-testio.md](./issue-313-task2-windowed-testio.md) |
+| TASK-rf389-editor-verbs-01 | Issue #389 adapter editor verbs 実装タスク（set_size/set_visibility/reattach production chain + rf631 lane flip） | in-progress | [issue-389-editor-verbs.md](./issue-389-editor-verbs.md) |
