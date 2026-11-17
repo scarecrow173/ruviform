@@ -56,7 +56,7 @@ test("contract: tuple job pins tuple-mode env for decide.mjs", () => {
   for (const [key, value] of [
     ["DAILY_MODE", "tuple"],
     ["DAILY_TARGET_WORKFLOW", "consumer-verify.yml"],
-    ["DAILY_TUPLE_CONTRACT", "consumer-verify-tuple/v1"],
+    ["DAILY_TUPLE_CONTRACT", "consumer-verify-tuple/v2"],
     ["DAILY_CONSUMER_REPOS", "audiolens=scarecrow173/audio-lens,synvelis=scarecrow173/synvelis"],
   ]) {
     assert.ok(new RegExp(`${key}:\\s*${value.replace(/[/.]/g, "\\$&")}`).test(tuple),

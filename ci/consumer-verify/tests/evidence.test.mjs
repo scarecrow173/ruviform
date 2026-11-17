@@ -106,9 +106,9 @@ test("lane record: requires name and a known outcome", () => {
 // Case schema v2 (Issue #294 first slice — #627 contract §2)
 // ---------------------------------------------------------------------------
 
-test("schema v2: SCHEMA_VERSION=2 while CONTRACT stays consumer-verify-tuple/v1", () => {
+test("schema v2: SCHEMA_VERSION=2 and CONTRACT is consumer-verify-tuple/v2 (Issue #720)", () => {
   assert.equal(SCHEMA_VERSION, 2);
-  assert.equal(CONTRACT, "consumer-verify-tuple/v1");
+  assert.equal(CONTRACT, "consumer-verify-tuple/v2");
 });
 
 test("case schema: required fields land as snake_case record keys", () => {
@@ -431,7 +431,7 @@ test("cli: lane appends JSONL and finalize emits JSON/summary/status", () => {
     const ev = JSON.parse(readFileSync(out, "utf8"));
     assert.equal(ev.status, "pass");
     assert.equal(ev.schemaVersion, 2);
-    assert.equal(ev.contract, "consumer-verify-tuple/v1");
+    assert.equal(ev.contract, "consumer-verify-tuple/v2");
     assert.equal(ev.lanes.length, 2);
     assert.equal(ev.lanes[0].case_id, "synvelis-check");
     assert.equal(ev.lanes[0].level, "OS-L1");
