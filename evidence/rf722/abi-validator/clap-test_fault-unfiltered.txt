@@ -1,0 +1,30 @@
+
+[2m   16[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   21[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m   32[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m   61[0m[2mms[0m [32m INFO[0m Test descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m   67[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m   73[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m   79[0m[2mms[0m [32m INFO[0m Test process-audio-basic-out-of-place completed [2;3mclap_validator::validator[0m
+[2m   84[0m[2mms[0m [32m INFO[0m Test process-audio-basic-in-place completed [2;3mclap_validator::validator[0m
+[2m  112[0m[2mms[0m [33m WARN[0m Test process-audio-denormals completed with a warning [2;3mclap_validator::validator[0m
+[2m  112[0m[2mms[0m [32m INFO[0m Test process-sleep-constant-mask completed [2;3mclap_validator::validator[0m
+[2m  119[0m[2mms[0m [32m INFO[0m Test process-sleep-process-status completed [2;3mclap_validator::validator[0m
+[2m  320[0m[2mms[0m [1;31mERROR[0m thread '<unnamed>' panicked at 'Failed to deserialize the output from the sandboxed operation: Error("EOF while parsing a value", line: 1, column: 0). This is a bug in the validator': src\cli\sandbox.rs:98. Set RUST_BACKTRACE=1 for a backtrace. [2;3mpanic[0m
+[2m  329[0m[2mms[0m [1;31mERROR[0m processor returned an unmapped status [2;3mplugin::error[0m
+[2m  348[0m[2mms[0m [1;31mERROR[0m thread '<unnamed>' panicked at 'Failed to deserialize the output from the sandboxed operation: Error("EOF while parsing a value", line: 1, column: 0). This is a bug in the validator': src\cli\sandbox.rs:98. Set RUST_BACKTRACE=1 for a backtrace. [2;3mpanic[0m
+[2m  631[0m[2mms[0m [1;31mERROR[0m Test param-set-no-cookies failed [2;3mclap_validator::validator[0m
+[2m  631[0m[2mms[0m [32m INFO[0m Test process-varying-sample-rates completed [2;3mclap_validator::validator[0m
+[2m  631[0m[2mms[0m [32m INFO[0m Test process-varying-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  631[0m[2mms[0m [32m INFO[0m Test param-set-wrong-namespace completed [2;3mclap_validator::validator[0m
+[2m  631[0m[2mms[0m [32m INFO[0m Test process-random-block-sizes completed [2;3mclap_validator::validator[0m
+[2m  632[0m[2mms[0m [32m INFO[0m Test process-reset-reactivate completed [2;3mclap_validator::validator[0m
+[2m  634[0m[2mms[0m [1;31mERROR[0m Test param-set-events failed [2;3mclap_validator::validator[0m
+[2m  637[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-bounds failed [2;3mclap_validator::validator[0m
+[2m  652[0m[2mms[0m [32m INFO[0m Test param-conversions completed [2;3mclap_validator::validator[0m
+[2m  666[0m[2mms[0m [32m INFO[0m Test param-default-values completed [2;3mclap_validator::validator[0m
+[2m  685[0m[2mms[0m [32m INFO[0m Test transport-null completed [2;3mclap_validator::validator[0m
+[2m  701[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-sample-accurate crashed: exit code: 0xc0000409 [2;3mclap_validator::validator[0m
+[2m  820[0m[2mms[0m [32m INFO[0m Test transport-fuzz-sample-accurate completed [2;3mclap_validator::validator[0m
+[2m  824[0m[2mms[0m [32m INFO[0m Test transport-fuzz completed [2;3mclap_validator::validator[0m
+[2m  829[0m[2mms[0m [1;31mERROR[0m thread 'main' panicked at 'a scoped thread panicked. This is a bug in the validator': src\cli.rs:55. Set RUST_BACKTRACE=1 for a backtrace. [2;3mpanic[0m

@@ -7,14 +7,14 @@
 //!
 //! | VST3 call | `LifecycleEvent` | Notes |
 //! | --- | --- | --- |
-//! | `initialize` | `Initialize` | `Created → Initialized` |
+//! | `initialize` | `Initialize` | `Created → Initialized`; legal again after `terminate` |
 //! | `setActive(true)` | `Activate` | `Initialized → Activated` |
-//! | `setupProcessing` | — | `PluginProcessor::prepare` + scratch alloc (stays `Activated`) |
+//! | `setupProcessing` | — | `PluginProcessor::prepare` + scratch alloc; legal from `Initialized`/`Activated` |
 //! | `setProcessing(true)` | `StartProcessing` | `Activated → Processing`; requires a successful `setupProcessing` |
 //! | `process` | `Process` | self-loop; rejected elsewhere → `kResultFalse` |
 //! | `setProcessing(false)` | `StopProcessing` | `Processing → Activated` |
 //! | `setActive(false)` | `Deactivate` | `Activated → Initialized`; rejected while `Processing` |
-//! | `terminate` | `Destroy` | requires prior `Deactivate` |
+//! | `terminate` | `Destroy` then reset | requires prior `Deactivate`; non-terminal — returns to `Created` (VST3 `terminate` ≠ CLAP `destroy`) |
 //!
 //! Protocol violations are defined rejections (`kResultFalse`) —
 //! e.g. `process` outside `Processing`, `setActive(false)` while
@@ -501,15 +501,25 @@ impl IPluginBaseTrait for GainComponent {
         }
     }
 
-    /// `Destroy` — legal only from `Initialized`/`Created`, i.e. after
-    /// `Deactivate`; a still-activated terminate is rejected.
+    /// `terminate` — legal only from `Initialized`/`Created` (and
+    /// `Failed`), i.e. after `Deactivate`; a still-activated
+    /// terminate is rejected. Unlike the neutral `Destroy` event —
+    /// which is terminal because CLAP `destroy` is — VST3 `terminate`
+    /// is *non-terminal*: only COM `release` destroys the instance,
+    /// and the SDK's terminf suite re-runs `initialize` on the same
+    /// object. A legal terminate therefore returns the lifecycle to
+    /// `Created` and drops the negotiated processing config.
     #[expect(unsafe_code)]
     unsafe fn terminate(&self) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
             return kResultFalse;
         };
         match state.lifecycle.transition(LifecycleEvent::Destroy) {
-            Ok(_) => kResultOk,
+            Ok(_) => {
+                state.lifecycle = Lifecycle::new();
+                state.config = None;
+                kResultOk
+            }
             Err(_) => kResultFalse,
         }
     }
@@ -701,7 +711,12 @@ impl IAudioProcessorTrait for GainComponent {
     /// The activation hook (`prepare`) plus scratch allocation: reads
     /// `ProcessSetup`, builds `ProcessConfig`, calls
     /// `PluginProcessor::prepare`, sizes the per-instance scratch.
-    /// Legal only while `Activated`; a `kSample64` request is rejected.
+    /// Legal in the disabled states — `Initialized` (the SDK
+    /// documents `setupProcessing` as "[UI-thread & (Initialized |
+    /// Connected)]" and hosts may call it before `setActive(true)`)
+    /// and `Activated` (post-activation re-negotiation); rejected
+    /// while `Processing`, before `initialize`, and after `terminate`.
+    /// A `kSample64` request is rejected.
     #[expect(unsafe_code)]
     unsafe fn setupProcessing(&self, setup: *mut ProcessSetup) -> tresult {
         if setup.is_null() {
@@ -713,7 +728,10 @@ impl IAudioProcessorTrait for GainComponent {
             return kResultFalse;
         };
         let state = &mut *guard;
-        if state.lifecycle.state() != LifecycleState::Activated {
+        if !matches!(
+            state.lifecycle.state(),
+            LifecycleState::Initialized | LifecycleState::Activated
+        ) {
             return kResultFalse;
         }
         if setup.symbolicSampleSize != sdk_enum_i32(SymbolicSampleSizes_::kSample32) {
@@ -1273,6 +1291,87 @@ mod tests {
             // Still a legal shutdown path after the failures.
             assert_eq!(component.setActive(0), kResultOk);
             assert_eq!(component.terminate(), kResultOk);
+        }
+    }
+
+    /// VST3 `terminate` is non-terminal: the SDK's terminf suite
+    /// re-runs `initialize` on the same instance and expects
+    /// `kResultTrue` — only COM `release` destroys the object, so the
+    /// component returns to `Created` and the full handshake works
+    /// again.
+    #[expect(unsafe_code)]
+    #[test]
+    fn terminate_allows_reinitialize() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe {
+            assert_eq!(component.initialize(std::ptr::null_mut()), kResultOk);
+            assert_eq!(component.setActive(1), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+            assert_eq!(component.terminate(), kResultOk);
+            // The terminf scenario: initialize must succeed again on
+            // the same instance, and the component must be fully
+            // usable — setupProcessing included.
+            assert_eq!(component.initialize(std::ptr::null_mut()), kResultOk);
+            assert_eq!(component.setActive(1), kResultOk);
+            let mut setup = ProcessSetup {
+                processMode: 0,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
+                maxSamplesPerBlock: 64,
+                sampleRate: 48_000.0,
+            };
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
+            assert_eq!(processor.setProcessing(1), kResultOk);
+            assert_eq!(processor.setProcessing(0), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+            assert_eq!(component.terminate(), kResultOk);
+        }
+    }
+
+    /// `setupProcessing` is legal in the disabled states — the SDK
+    /// documents it as "[UI-thread & (Initialized | Connected)]"
+    /// and the validator's Suspend/Resume suite calls it *before*
+    /// `setActive(true)`. It stays rejected before `initialize`,
+    /// while `Processing`, and after `terminate` (the post-terminate
+    /// `Created` state is the same rejection the neutral `Destroyed`
+    /// state would give — `terminate` never leaves the machine there).
+    #[expect(unsafe_code)]
+    #[test]
+    fn setup_processing_accepted_while_initialized() {
+        let wrapper = ComWrapper::new(GainComponent::new());
+        let component = wrapper.to_com_ptr::<IComponent>().unwrap();
+        let processor = wrapper.to_com_ptr::<IAudioProcessor>().unwrap();
+        // SAFETY: live COM objects.
+        unsafe {
+            let mut setup = ProcessSetup {
+                processMode: 0,
+                symbolicSampleSize: sdk_enum_i32(SymbolicSampleSizes_::kSample32),
+                maxSamplesPerBlock: 64,
+                sampleRate: 48_000.0,
+            };
+            // Created (never initialized) is still a defined reject.
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultFalse);
+
+            assert_eq!(component.initialize(std::ptr::null_mut()), kResultOk);
+            // Initialized — the SDK's documented disable-state call.
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
+            assert_eq!(component.setActive(1), kResultOk);
+            assert_eq!(processor.setProcessing(1), kResultOk);
+            // `Processing` is outside the SDK's accepted set — a
+            // defined reject; processing must stop first.
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultFalse);
+            assert_eq!(processor.setProcessing(0), kResultOk);
+            // `Activated` still accepts re-negotiation.
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
+            assert_eq!(component.setActive(0), kResultOk);
+            assert_eq!(component.terminate(), kResultOk);
+            // After `terminate` the component is `Created` again —
+            // `setupProcessing` stays rejected until re-initialized.
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultFalse);
+            assert_eq!(component.initialize(std::ptr::null_mut()), kResultOk);
+            assert_eq!(processor.setupProcessing(&raw mut setup), kResultOk);
         }
     }
 
