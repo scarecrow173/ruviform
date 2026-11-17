@@ -50,8 +50,10 @@ Directory: `docs/adr`
 | ADR-JwwKl26JnYjSWNJAuhGJs5 | Consumer-neutral Workflow/CLI orchestration契約の採否（Issue #553 RF-AUTX-01） | accepted | [issue-553-workflow-cli-contract.md](./issue-553-workflow-cli-contract.md) |
 | ADR-034Xe9xZEqz5ftcu5yCqXB | 言語非依存 Script Backend/Analyzer 契約（Issue #558 RF-SCRIPT-00） | accepted | [issue-558-script-backend-contract.md](./issue-558-script-backend-contract.md) |
 | ADR-7Qk2mXvLp9RwTd4YsN8bF | issue-630-test-spawn-fault-runner-argv | accepted | [issue-630-test-spawn-fault-runner-argv.md](./issue-630-test-spawn-fault-runner-argv.md) |
+| ADR-Km83rTzcPE9wLj6uVx7yHq | issue-631-command-receipt fixture mount 形態 | accepted | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
 | ADR-GUIvRTewPsVAJEv3wqlUBg | Issue #716 runtime 依存選定 — mlua Rust API（#692 AC4 再評価） | accepted | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| ADR-034Z7ygFmhM17agQb1FhO7 | Issue #725 EnvironmentKind RealAbiTestPlugin serde canonical 綴りを test-plugin に統一 | accepted | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | ADR-034Z0u1KVcuWt7EQla0t16 | Issue #727 bounded 非 RT job executor primitive の配置 — ruviform-exec 採用 | accepted | [issue-727-bounded-nonrt-job-executor-placement.md](./issue-727-bounded-nonrt-job-executor-placement.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |

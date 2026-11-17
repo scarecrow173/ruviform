@@ -218,6 +218,7 @@ Directory: `docs/specs`
 | SPEC-034Z9kQm4xVtW2sLpNbRcA | Issue #630 test_instrument slice — deterministic MIDI/transport synth fixture + L1 real-ABI oracle | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| SPEC-Nb71vRwYkP8sHd4mQt2xLc | Issue #631 real-command-receipt case | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034Y3nW74RKYWUkLfv81MG | Issue #631 real-editor-attach（test_editor 実 IPlugView による real-editor-attach Pass 化 — 実 child HWND の OS 観測・detach 収束・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | SPEC-034YqGGPYfozoUitsF1nl3 | Issue #631 real-row 拡充（AC1 残り能力の catalog 化 + AC3 非画素 editor case + headless fail-closed 実証） | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
@@ -237,6 +238,7 @@ Directory: `docs/specs`
 | SPEC-034YXxVwj3nAIfWDF2rZcG | Issue #721 post-seal temp 改竄境界 — bench-smoke 配線照合と現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | SPEC-722vst3LifecycleAudit02 | Issue #722 production VST3 adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | SPEC-034YZVNYlydMg2rp3mE6v7 | Issue #725 EnvironmentKind serde 語彙 gap 解消 Phase A — deserialize alias 受容 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| SPEC-034Z7dKIl2FnoV81lYbnhI | Issue #725 EnvironmentKind serde 語彙 gap 解消 Phase B — emit flip（test-plugin 統一） | approved | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | SPEC-726clapValidatorPanic02 | Issue #726 clap-validator 0.4.1 param-fuzz panic — 根因判断と leg 扱い確定 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | SPEC-034Z0tP43L1BILteVZhtDI | Issue #727 bounded 非 RT job executor primitive の責務判断と配置 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |

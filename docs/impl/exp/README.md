@@ -88,6 +88,7 @@ Directory: `docs/impl/exp`
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |
 | [issue-630-test-instrument.jsonl](./issue-630-test-instrument.jsonl) |
 | [issue-630-test-stateful.jsonl](./issue-630-test-stateful.jsonl) |
+| [issue-631-command-receipt-exp.jsonl](./issue-631-command-receipt-exp.jsonl) |
 | [issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl](./issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl) |
 | [issue-631-real-editor-attach.jsonl](./issue-631-real-editor-attach.jsonl) |
 | [issue-631-real-row-exp.jsonl](./issue-631-real-row-exp.jsonl) |
@@ -104,6 +105,7 @@ Directory: `docs/impl/exp`
 | [issue-720-consumer-tuple-v2-exp.jsonl](./issue-720-consumer-tuple-v2-exp.jsonl) |
 | [issue-721-post-seal-temp-exp.jsonl](./issue-721-post-seal-temp-exp.jsonl) |
 | [issue-725-serde-vocab-phase-a-exp.jsonl](./issue-725-serde-vocab-phase-a-exp.jsonl) |
+| [issue-725-serde-vocab-phase-b-exp.jsonl](./issue-725-serde-vocab-phase-b-exp.jsonl) |
 | [issue-726-clap-validator-panic-exp.jsonl](./issue-726-clap-validator-panic-exp.jsonl) |
 | [issue-727-job-executor-exp.jsonl](./issue-727-job-executor-exp.jsonl) |
 | [issue-744-job-executor-exp.jsonl](./issue-744-job-executor-exp.jsonl) |

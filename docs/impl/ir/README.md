@@ -267,6 +267,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Z9rDv8wCoN4sTuVgXzF | Issue #630 test_instrument slice — 実装記録 | completed | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034Y4g5Cx7ToOHTcgE2U9x | Issue #630 test_stateful slice — 実装記録 | completed | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| IMPL-Pe62sVfdQG9xKm3wNz8cRl | Add real-command-receipt case to the real dock lane | completed | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034Z08gK0V0GGSoPCC5Vvl | Flip real-window close/dpi catalog rows to real verdicts | completed | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | IMPL-034YJ5ZPjma7y6yufrmtYd | Issue #631 RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |
@@ -280,6 +281,7 @@ Directory: `docs/impl/ir`
 | IMPL-034YYygeQzyUVTUGAny27w | Issue #721 post-seal temp boundary decision | completed | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | IMPL-722vst3LifecycleAudit07 | Issue #722 production VST3 adapter lifecycle 監査 — 実装記録 | completed | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | IMPL-034Z04w3xKvYC8XSP2bAGu | Issue #725 serde 語彙 Phase A — 実装記録 | completed | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| IMPL-034Z7e3kdbNfHBXFrRomHP | Issue #725 serde 語彙 Phase B — 実装記録 | completed | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | IMPL-034Z1KOt5WW4W743J3SiQh | Issue #726 clap validator panic | completed | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | IMPL-034Z0uHvTxRFpgNslvN5XM | Issue #727 bounded non-RT job executor placement decision | completed | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | IMPL-732clapLifecycleAudit07 | Issue #732 production CLAP adapter lifecycle 監査 — 実装記録 | completed | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
