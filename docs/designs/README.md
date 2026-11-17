@@ -261,6 +261,8 @@ Directory: `docs/designs`
 | DESIGN-6X6G9umyA344m7SixphdpZ | Issue #692 s2 Luau analyzer backend — 設計 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | DESIGN-034ZkLmNpQrStUvWxYzCd2 | Issue #692 設計 — ruviform-script 中立契約 port crate（headless） | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | DESIGN-034YJiaD4GvnZzHb0ClYwr | Issue #707 — MIDI input cancellation fault detailed design | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
+| DESIGN-BL3vYGzJnsXP64pLXgyLln | Issue #716 runtime ScriptBackend — 詳細設計 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| DESIGN-720tupleV203 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 設計 | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

@@ -229,6 +229,8 @@ Directory: `docs/specs`
 | SPEC-WUXVb2PmGVTsr91ylmdD5J | Issue #692 s2 Luau analyzer backend — 仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | SPEC-034ZkLmNpQrStUvWxYzAb1 | Issue #692 RF-SCRIPT-00 script port crate first slice — 中立契約型一式 + registry/analyzer port + canonical digest | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | SPEC-034YJhpMyzjNwAu0RkAPam | Issue #707 — MIDI input path への cancellation fault 拡張 | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
+| SPEC-ankzjfsDvEl62A6zPVHgnx | Issue #716 runtime ScriptBackend — 仕様 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| SPEC-720tupleV202 | Issue #720 consumer-verify-tuple contract v1→v2 bump — spec | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
