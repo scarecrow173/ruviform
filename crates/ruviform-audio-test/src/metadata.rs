@@ -87,14 +87,12 @@ pub enum VerificationLevel {
 /// Serialized as the Case Schema v1 `kebab-case` vocabulary — the
 /// same spelling [`EnvironmentKind::as_str`] returns.
 ///
-/// Known vocabulary gap (Issue #725 Phase A): `RealAbiTestPlugin`
-/// keeps its historical `real-abi-test-plugin` wire spelling on the
-/// emit side (`as_str()` and serde serialize), which differs from
-/// the Case Schema v1 `test-plugin` value. Phase A adds
-/// `#[serde(alias = "test-plugin")]` so deserialize accepts both
-/// spellings; the emit flip to `test-plugin` is deferred to a
-/// second slice together with the `ruviform-plugin-dock-test`
-/// updates it requires (serde migration decision recorded in
+/// Vocabulary note (Issue #725): `RealAbiTestPlugin` serializes and
+/// [`EnvironmentKind::as_str`] emits the Case Schema v1 `test-plugin`
+/// spelling. Deserialize accepts both `test-plugin` (canonical) and
+/// the historical `real-abi-test-plugin` spelling via
+/// `#[serde(alias)]`, so documents and evidence emitted before the
+/// Phase B flip still read back (migration decision recorded in
 /// `docs/designs/issue-725-serde-vocab-phase-a.md`).
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,12 +106,11 @@ pub enum EnvironmentKind {
     /// that actually executed the binary may claim this — mock or
     /// headless plugin success stays `DeterministicBackend`.
     ///
-    /// Serde vocabulary migration (Issue #725 Phase A): deserialize
-    /// accepts both the historical `real-abi-test-plugin` spelling
-    /// and the Case Schema v1 `test-plugin` spelling; serialize and
-    /// [`EnvironmentKind::as_str`] still emit `real-abi-test-plugin`
-    /// until the emit flip in the second slice.
-    #[serde(alias = "test-plugin")]
+    /// Serde vocabulary (Issue #725): serialize and
+    /// [`EnvironmentKind::as_str`] emit the Case Schema v1
+    /// `test-plugin` spelling; deserialize accepts both `test-plugin`
+    /// and the historical `real-abi-test-plugin` spelling.
+    #[serde(rename = "test-plugin", alias = "real-abi-test-plugin")]
     RealAbiTestPlugin,
     /// A real OS window / GUI session produced the evidence (GUI-L2
     /// lanes). Reserved for real-window driver runs — a headless or
@@ -142,7 +139,7 @@ impl EnvironmentKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::DeterministicBackend => "deterministic-backend",
-            Self::RealAbiTestPlugin => "real-abi-test-plugin",
+            Self::RealAbiTestPlugin => "test-plugin",
             Self::RealWindow => "real-window",
             Self::VirtualOsEndpoint => "virtual-os-endpoint",
             Self::PhysicalDevice => "physical-device",

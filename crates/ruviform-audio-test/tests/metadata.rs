@@ -184,17 +184,17 @@ fn environment_kind_serde_matches_as_str() {
 
 #[test]
 fn environment_kind_wire_spellings_match_case_schema_v1() {
-    // Case Schema v1 closed-set spellings (issue-627 contract). The
-    // variants whose `as_str` spelling is part of that closed set are
-    // pinned literally; `RealAbiTestPlugin` keeps its historical
-    // `real-abi-test-plugin` emit spelling (schema says `test-plugin`)
-    // — a known vocabulary gap whose emit flip is deferred to the
-    // second slice of issue #725, so it is deliberately absent here
-    // (deserialize accepts both spellings; see the alias test below).
+    // Case Schema v1 closed-set spellings (issue-627 contract). All
+    // variants' `as_str` spellings are part of that closed set and
+    // are pinned literally — `RealAbiTestPlugin` emits the schema
+    // `test-plugin` spelling since the Issue #725 Phase B emit flip
+    // (the historical `real-abi-test-plugin` spelling remains
+    // accepted on deserialize via the alias; see the test below).
     assert_eq!(
         EnvironmentKind::DeterministicBackend.as_str(),
         "deterministic-backend"
     );
+    assert_eq!(EnvironmentKind::RealAbiTestPlugin.as_str(), "test-plugin");
     assert_eq!(
         EnvironmentKind::VirtualOsEndpoint.as_str(),
         "virtual-os-endpoint"
@@ -205,23 +205,22 @@ fn environment_kind_wire_spellings_match_case_schema_v1() {
 
 #[test]
 fn environment_kind_deserialize_accepts_both_vocab_spellings() {
-    // Issue #725 Phase A: deserialize accepts the historical emit
-    // spelling and the Case Schema v1 `test-plugin` spelling; the
-    // emit side stays `real-abi-test-plugin` until the second slice.
-    for spelling in ["real-abi-test-plugin", "test-plugin"] {
+    // Issue #725 Phase B: deserialize accepts the canonical Case
+    // Schema v1 `test-plugin` spelling and the historical
+    // `real-abi-test-plugin` spelling (alias — documents and
+    // evidence emitted before the flip still read back); emit is
+    // unified on `test-plugin`.
+    for spelling in ["test-plugin", "real-abi-test-plugin"] {
         let kind: EnvironmentKind = serde_json::from_str(&format!("\"{spelling}\"")).unwrap();
         assert_eq!(kind, EnvironmentKind::RealAbiTestPlugin);
     }
-    // Emit is unchanged: serialize and `as_str` still produce the
-    // historical spelling (alias is deserialize-side only).
+    // Emit is the schema spelling: serialize and `as_str` produce
+    // `test-plugin` (the alias is deserialize-side only).
     assert_eq!(
         serde_json::to_string(&EnvironmentKind::RealAbiTestPlugin).unwrap(),
-        "\"real-abi-test-plugin\""
+        "\"test-plugin\""
     );
-    assert_eq!(
-        EnvironmentKind::RealAbiTestPlugin.as_str(),
-        "real-abi-test-plugin"
-    );
+    assert_eq!(EnvironmentKind::RealAbiTestPlugin.as_str(), "test-plugin");
     // Spellings outside the accepted pair stay rejected.
     for bad in ["test_plugin", "TestPlugin", "plugin-test", "testplugin"] {
         assert!(
@@ -233,22 +232,28 @@ fn environment_kind_deserialize_accepts_both_vocab_spellings() {
 
 #[test]
 fn run_metadata_from_json_accepts_test_plugin_spelling() {
-    // Issue #725 Phase A: a RunMetadata document carrying the schema
-    // vocabulary `test-plugin` deserializes to RealAbiTestPlugin, and
-    // re-emitting produces the historical canonical spelling.
+    // Issue #725 Phase B: a RunMetadata document carrying the schema
+    // vocabulary `test-plugin` deserializes to RealAbiTestPlugin,
+    // and re-emitting produces the canonical `test-plugin` spelling.
     let m = full_metadata();
     let json = m.to_json().unwrap();
     let schema_vocab = json.replace("\"deterministic-backend\"", "\"test-plugin\"");
     let parsed: RunMetadata = RunMetadata::from_json(&schema_vocab).unwrap();
     assert_eq!(parsed.environment_kind, EnvironmentKind::RealAbiTestPlugin);
-    // Re-emit normalizes back to the historical canonical spelling.
+    // Re-emit produces the canonical schema spelling.
     let reemitted: serde_json::Value = serde_json::from_str(&parsed.to_json().unwrap()).unwrap();
-    assert_eq!(reemitted["environment_kind"], "real-abi-test-plugin");
+    assert_eq!(reemitted["environment_kind"], "test-plugin");
     // The historical spelling also deserializes (documents emitted
-    // before the alias still read back).
-    let legacy_doc = parsed.to_json().unwrap();
+    // before the Phase B flip still read back) and re-emits
+    // normalized to the canonical spelling.
+    let legacy_doc = parsed
+        .to_json()
+        .unwrap()
+        .replace("\"test-plugin\"", "\"real-abi-test-plugin\"");
     let back = RunMetadata::from_json(&legacy_doc).unwrap();
     assert_eq!(back.environment_kind, EnvironmentKind::RealAbiTestPlugin);
+    let renormalized: serde_json::Value = serde_json::from_str(&back.to_json().unwrap()).unwrap();
+    assert_eq!(renormalized["environment_kind"], "test-plugin");
     assert_eq!(back, parsed);
 }
 
