@@ -35,7 +35,7 @@ fn verdict_of<'a>(
 #[test]
 fn catalog_matches_run_all_reports() {
     let cells: Vec<_> = HEADLESS_MATRIX.cells().collect();
-    assert_eq!(cells.len(), 8, "eight catalog cells");
+    assert_eq!(cells.len(), 9, "nine catalog cells");
 
     // The bogus path keeps the run artifact-free and fast; the
     // catalog↔report correspondence does not depend on verdicts.
@@ -71,7 +71,7 @@ fn catalog_matches_run_all_reports() {
 #[test]
 fn catalog_projection_covers_every_declared_requirement() {
     let projections = HEADLESS_MATRIX.project();
-    assert_eq!(projections.len(), 8);
+    assert_eq!(projections.len(), 9);
     for projection in &projections {
         assert!(
             projection.runnable,
@@ -92,12 +92,17 @@ fn missing_artifact_fails_closed_as_not_run() {
         plugin_path: Some(PathBuf::from("definitely/not/a/real/plugin.dll")),
     };
     let reports = run_all(&environment);
-    assert_eq!(reports.len(), 8, "eight plugin-dock cases");
+    assert_eq!(reports.len(), 9, "nine plugin-dock cases");
 
     assert_eq!(
         verdict_of(&reports, "view-mount").verdict,
         ScenarioVerdict::Pass,
         "semantic mount does not depend on the artifact"
+    );
+    assert_eq!(
+        verdict_of(&reports, "command-receipt").verdict,
+        ScenarioVerdict::Pass,
+        "semantic receipt flow does not depend on the artifact"
     );
     for case in [
         "artifact",
@@ -123,6 +128,38 @@ fn missing_artifact_fails_closed_as_not_run() {
     assert!(detail.contains("not found"), "detail: {detail}");
 }
 
+/// The Fake-driver command-receipt case is deterministic and
+/// artifact-independent: it must pass and populate `receipts`
+/// with the two decoded command results (applied + rejected).
+fn assert_command_receipt(report: &ruviform_ui_test::ScenarioReport) {
+    assert_eq!(
+        report.verdict,
+        ScenarioVerdict::Pass,
+        "command-receipt must pass on the Fake driver: {:?}",
+        report.detail
+    );
+    assert_eq!(
+        report.receipts.len(),
+        2,
+        "applied + rejected receipts recorded: {:?}",
+        report.receipts
+    );
+    assert!(
+        report
+            .receipts
+            .iter()
+            .any(|r| r.status == ruviform_ui::behavior::ReceiptStatus::Applied),
+        "an applied receipt must be recorded"
+    );
+    assert!(
+        report
+            .receipts
+            .iter()
+            .any(|r| r.status == ruviform_ui::behavior::ReceiptStatus::Rejected),
+        "a rejected receipt must be recorded"
+    );
+}
+
 /// With the real cdylib resolvable, the honest-verdict contract
 /// holds: load/discover/hash + host lifecycle pass; editor attach is
 /// `Unsupported` (fixture has no editor); dock pixels are `NotRun`.
@@ -131,7 +168,9 @@ fn missing_artifact_fails_closed_as_not_run() {
 #[test]
 fn fixture_run_reports_honest_verdicts() {
     let reports = run_all(&LaneEnvironment::default());
-    assert_eq!(reports.len(), 8);
+    assert_eq!(reports.len(), 9);
+
+    assert_command_receipt(verdict_of(&reports, "command-receipt"));
 
     let artifact = verdict_of(&reports, "artifact");
     if artifact.verdict == ScenarioVerdict::NotRun {

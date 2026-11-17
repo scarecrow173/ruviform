@@ -1,7 +1,7 @@
 //! Plugin-dock scenario cases (Issue #631 first slice, Issue #389
 //! session-lifecycle cases).
 //!
-//! [`run_all`] executes the eight cases of the `rf631.plugin-dock`
+//! [`run_all`] executes the nine cases of the `rf631.plugin-dock`
 //! scenario — a thin projection over [`HEADLESS_MATRIX`], the
 //! driver-independent catalog table the lane binary, the integration
 //! tests, and any future console share — and returns one
@@ -10,6 +10,8 @@
 //! | case                | driver            | honest outcome today                        |
 //! |---------------------|-------------------|---------------------------------------------|
 //! | `view-mount`        | `Fake`            | `Pass` — semantic `NativeSlot` spec mounts  |
+//! | `command-receipt`   | `Fake`            | `Pass` — gesture→receipt/projection settle  |
+//! |                     |                   | + `receipts` populate (contract evidence)   |
 //! | `artifact`          | `PluginHostProbe` | `Pass`/`NotRun`/`Fail` — resolve+hash+load  |
 //! | `host-lifecycle`    | `PluginHostProbe` | `Pass`/`NotRun` — Scan→…→Activate→Destroy   |
 //! | `editor-attach`     | `PluginHostProbe` | `Unsupported` — `createView` null today     |
@@ -43,19 +45,22 @@ use ruviform_plugin_host::{
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::WindowId;
+use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
 use ruviform_ui::dock::ViewInstanceId;
+use ruviform_ui::ipc::{ErrorBody, Event};
 use ruviform_ui::native_slot::{
     LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotLease, SlotSpec,
     SlotVisibility, Support, SurfaceSlotId,
 };
+use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
 use ruviform_ui_test::scenario::plugin_dock::{
     PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_view_spec,
 };
 use ruviform_ui_test::{
-    DriverBinding, FakeGuiTest, FakeNativeSlot, RunId, ScenarioCapability, ScenarioDriver,
-    ScenarioEntry, ScenarioMatrix, ScenarioOutcome, ScenarioReport, ScenarioSpec,
-    ScenarioSpecExtras, ScenarioTarget, ScenarioVerdict, SemanticGuiTest, TargetQuery, run_entry,
-    run_scenario,
+    DriverBinding, FakeGuiTest, FakeNativeSlot, MintedIntent, RunId, ScenarioCapability,
+    ScenarioDriver, ScenarioEntry, ScenarioError, ScenarioMatrix, ScenarioOutcome, ScenarioReport,
+    ScenarioSpec, ScenarioSpecExtras, ScenarioTarget, ScenarioVerdict, SemanticGuiTest,
+    TargetQuery, parity_gesture_scenario, run_entry, run_scenario, sv_fader_dock_fixture,
 };
 use serde_json::{Map, Value, json};
 
@@ -164,6 +169,7 @@ macro_rules! claim_extras {
 }
 
 claim_extras! {
+    command_receipt_extras => "semantic-command-receipt",
     artifact_extras => "real-abi-artifact-identity",
     host_lifecycle_extras => "real-abi-host-lifecycle",
     editor_attach_extras => "real-abi-editor-attach-attempt",
@@ -188,13 +194,22 @@ pub static HEADLESS_MATRIX: ScenarioMatrix<'static, HeadlessContext> = ScenarioM
                 ScenarioCapability::SemanticAction,
                 ScenarioCapability::MultiWindow,
             ],
-            cases: &[ScenarioEntry {
-                case: "view-mount",
-                scenario: PLUGIN_DOCK_SCENARIO,
-                required: &[ScenarioCapability::SemanticAction],
-                spec_extras: view_mount_extras,
-                run: view_mount_case,
-            }],
+            cases: &[
+                ScenarioEntry {
+                    case: "view-mount",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[ScenarioCapability::SemanticAction],
+                    spec_extras: view_mount_extras,
+                    run: view_mount_case,
+                },
+                ScenarioEntry {
+                    case: "command-receipt",
+                    scenario: PLUGIN_DOCK_SCENARIO,
+                    required: &[ScenarioCapability::SemanticAction],
+                    spec_extras: command_receipt_extras,
+                    run: command_receipt_case,
+                },
+            ],
         },
         DriverBinding {
             driver: ScenarioDriver::PluginHostProbe,
@@ -853,7 +868,7 @@ fn view_mount_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioRe
         let view = ViewInstanceId::new(1).expect("view id 1 is non-zero");
         gui.mount_view(window, view, plugin_dock_view_spec())?;
 
-        let slot_key = ruviform_ui::view::ComponentKey(PLUGIN_DOCK_SLOT_KEY.to_string());
+        let slot_key = ComponentKey(PLUGIN_DOCK_SLOT_KEY.to_string());
         let mut query = TargetQuery::new(window, view);
         query.component = Some(slot_key.clone());
         let target: ScenarioTarget = gui.resolve_target(&query)?;
@@ -875,6 +890,326 @@ fn view_mount_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioRe
         EnvironmentKind::DeterministicBackend,
         None,
         Map::from_iter([("claim".to_string(), json!("semantic-view-mount-only"))]),
+    )
+}
+
+// ---------------------------------------------------------------------
+// case: command-receipt (Fake — Command→Receipt link + receipts populate)
+// ---------------------------------------------------------------------
+
+/// The component key `command-receipt` drives — the
+/// `sv_fader_dock_fixture` walk key, a command-minting fader.
+const RECEIPT_FADER_KEY: &str = "fader-ch1";
+
+/// Records one step of a case body: a `pass` row carrying `extra`
+/// fields on success, a `fail` row with the error on failure.
+/// Returns the unwrapped value or the stringified step error.
+fn step<T>(
+    steps: &mut Vec<Value>,
+    name: &str,
+    result: Result<T, ScenarioError>,
+    extra: impl FnOnce(&T) -> Value,
+) -> Result<T, String> {
+    match result {
+        Ok(value) => {
+            let mut row = json!({ "step": name, "verdict": "pass" });
+            if let (Some(object), Value::Object(fields)) = (row.as_object_mut(), extra(&value)) {
+                object.extend(fields);
+            }
+            steps.push(row);
+            Ok(value)
+        }
+        Err(error) => {
+            steps.push(json!({
+                "step": name,
+                "verdict": "fail",
+                "error": error.to_string(),
+            }));
+            Err(format!("{name}: {error}"))
+        }
+    }
+}
+
+/// Assembles the case outcome from the recorded `steps`: `attempt`
+/// success yields `Pass` with `pass_detail`/`evidence` plus the
+/// attempt's extra observed fields merged under `steps`; failure
+/// yields `Fail` carrying the detail and the same step evidence.
+fn steps_outcome(
+    steps: &[Value],
+    attempt: Result<Value, String>,
+    pass_detail: &str,
+    evidence: &[&str],
+) -> ScenarioOutcome {
+    let mut observed = Map::from_iter([("steps".to_string(), json!(steps))]);
+    match attempt {
+        Ok(extras) => {
+            if let Value::Object(fields) = extras {
+                observed.extend(fields);
+            }
+            let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+            outcome.detail = Some(pass_detail.to_string());
+            outcome.observed = Some(Value::Object(observed));
+            outcome.evidence = evidence.iter().map(|tag| (*tag).to_string()).collect();
+            outcome
+        }
+        Err(detail) => {
+            let mut outcome = fail(detail);
+            outcome.observed = Some(Value::Object(observed));
+            outcome
+        }
+    }
+}
+
+/// The receipt-expecting `Commit` minted for `gesture_id`, if the
+/// drained intents carry one — the command→receipt correlation key
+/// this case exists to prove. `expect_receipt` plus the gesture id
+/// pin the match so a stray intent can never be mistaken for this
+/// command.
+fn commit_for_gesture<'a>(
+    intents: &'a [MintedIntent],
+    gesture_id: &str,
+) -> Option<&'a MintedIntent> {
+    intents.iter().find(|minted| {
+        minted.expect_receipt
+            && matches!(
+                &minted.intent,
+                CommandIntent::Commit { gesture_id: g, .. } if g == gesture_id
+            )
+    })
+}
+
+/// The `control_id` a `Commit` intent carries — the binding id the
+/// later `Notify` projection must name to reach the same binding.
+fn commit_control_id(minted: &MintedIntent) -> Option<String> {
+    match &minted.intent {
+        CommandIntent::Commit { control_id, .. } => Some(control_id.clone()),
+        _ => None,
+    }
+}
+
+/// JSON view of a [`ComponentSnapshot`] for `observed.semantic_tree`
+/// evidence.
+fn component_snapshot_json(snapshot: &ComponentSnapshot) -> Value {
+    json!({
+        "display": snapshot.display,
+        "committed": snapshot.committed,
+        "phase": snapshot.phase,
+        "observed": snapshot.observed,
+        "selected": snapshot.selected,
+        "mounted": snapshot.mounted,
+    })
+}
+
+/// The command→receipt attempt on the fader fixture: two
+/// `Begin → Preview → Commit` gestures mint receipt-expecting
+/// intents, `result` events carrying the minted `command_id`s are
+/// posted back through `post_event` — `applied` for the first
+/// command (then an authoritative `Notify` projection), `result_err`
+/// for the second — and the binding phases plus the decoded
+/// [`CommandReceipt`]s are the verdict inputs. Receipts are decoded
+/// with the same [`CommandReceipt::from_result`] `deliver_event`
+/// runs, so a recorded receipt is exactly what the view applied —
+/// never a hand-built stand-in. Collected receipts escape through
+/// `receipts` even on the failure path: whatever the view accepted
+/// is honest evidence. Fake-driver contract evidence only — never a
+/// real-window, pixel, or OS-level claim.
+#[expect(clippy::too_many_lines)]
+fn command_receipt_body(gui: &mut FakeGuiTest) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+    let mut receipts = Vec::new();
+    let key = ComponentKey(RECEIPT_FADER_KEY.to_string());
+    let attempt = (|| -> Result<Value, String> {
+        let window = gui.open_window();
+        let view = ViewInstanceId::new(1).expect("view id 1 is non-zero");
+        step(
+            &mut steps,
+            "mount_view",
+            gui.mount_view(window, view, sv_fader_dock_fixture().spec),
+            |()| Value::Null,
+        )?;
+        let target = step(
+            &mut steps,
+            "resolve_target",
+            gui.resolve_target(&TargetQuery::new(window, view).component(key.clone())),
+            |_| Value::Null,
+        )?;
+
+        // -- command 1: commit → applied receipt → observed projection --
+        let (intents, _snapshot) = step(
+            &mut steps,
+            "gesture_apply",
+            parity_gesture_scenario(gui, &target, &key, "rc-apply", ValueInput::Plain(0.7)),
+            |(intents, _)| json!({ "intents": intents.len() }),
+        )?;
+        let commit = commit_for_gesture(&intents, "rc-apply")
+            .ok_or_else(|| "gesture_apply: no receipt-expecting Commit minted".to_string())?;
+        let command_id = commit.command_id.clone();
+        let control_id = commit_control_id(commit)
+            .ok_or_else(|| "commit intent carried no control_id".to_string())?;
+        steps.push(json!({
+            "step": "commit_minted",
+            "verdict": "pass",
+            "command_id": command_id,
+            "control_id": control_id,
+        }));
+
+        // The receipt the consumer gateway posts back — decoded by
+        // the same `from_result` the view's `deliver_event` runs, so
+        // the recorded receipt is exactly what the binding applies.
+        let applied_event = Event::result_ok(
+            command_id.clone(),
+            json!({ "status": "applied", "revision": 1 }),
+        );
+        let applied_receipt = CommandReceipt::from_result(&applied_event)
+            .ok_or_else(|| "applied result did not decode to a receipt".to_string())?;
+        if applied_receipt.command_id != command_id {
+            return Err("decoded receipt command_id diverged from the minted id".to_string());
+        }
+        receipts.push(applied_receipt);
+        step(
+            &mut steps,
+            "post_applied_receipt",
+            gui.post_event(&target, &applied_event),
+            |()| json!({ "command_id": command_id }),
+        )?;
+        step(&mut steps, "settle_applied", gui.settle(), |()| Value::Null)?;
+        let applied_snapshot = step(
+            &mut steps,
+            "observe_applied",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if applied_snapshot.phase != CommandPhase::Applied {
+            return Err(format!(
+                "applied receipt did not settle the binding: phase {:?}",
+                applied_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_applied", "verdict": "pass" }));
+
+        // Authoritative projection through the same event path —
+        // the receipt-routed binding must also accept state.
+        let notify = Event::Notify {
+            seq: 1,
+            data: json!({
+                "control_id": control_id,
+                "revision": 2,
+                "value": { "normalized": 0.7 },
+            }),
+        };
+        step(
+            &mut steps,
+            "post_projection",
+            gui.post_event(&target, &notify),
+            |()| Value::Null,
+        )?;
+        step(&mut steps, "settle_projection", gui.settle(), |()| {
+            Value::Null
+        })?;
+        let observed_snapshot = step(
+            &mut steps,
+            "observe_projection",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if observed_snapshot.phase != CommandPhase::Observed || observed_snapshot.observed.is_none()
+        {
+            return Err(format!(
+                "projection did not reach Observed: phase {:?}",
+                observed_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_observed", "verdict": "pass" }));
+
+        // -- command 2: commit → rejected receipt --
+        let (intents2, _snapshot2) = step(
+            &mut steps,
+            "gesture_reject",
+            parity_gesture_scenario(gui, &target, &key, "rc-reject", ValueInput::Plain(0.4)),
+            |(intents, _)| json!({ "intents": intents.len() }),
+        )?;
+        let commit2 = commit_for_gesture(&intents2, "rc-reject")
+            .ok_or_else(|| "gesture_reject: no receipt-expecting Commit minted".to_string())?;
+        let command_id2 = commit2.command_id.clone();
+        steps.push(json!({
+            "step": "commit_minted_rejected",
+            "verdict": "pass",
+            "command_id": command_id2,
+        }));
+        let rejected_event = Event::result_err(
+            command_id2.clone(),
+            ErrorBody::new("command_rejected", "consumer refused the commit"),
+        );
+        let rejected_receipt = CommandReceipt::from_result(&rejected_event)
+            .ok_or_else(|| "rejected result did not decode to a receipt".to_string())?;
+        receipts.push(rejected_receipt);
+        step(
+            &mut steps,
+            "post_rejected_receipt",
+            gui.post_event(&target, &rejected_event),
+            |()| json!({ "command_id": command_id2 }),
+        )?;
+        step(&mut steps, "settle_rejected", gui.settle(), |()| {
+            Value::Null
+        })?;
+        let rejected_snapshot = step(
+            &mut steps,
+            "observe_rejected",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if rejected_snapshot.phase != CommandPhase::Rejected {
+            return Err(format!(
+                "rejected receipt did not settle the binding: phase {:?}",
+                rejected_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_rejected", "verdict": "pass" }));
+
+        Ok(json!({
+            "window": window.to_string(),
+            "view": view.to_string(),
+            "component": RECEIPT_FADER_KEY,
+            "semantic_tree": {
+                RECEIPT_FADER_KEY: component_snapshot_json(&rejected_snapshot),
+            },
+        }))
+    })();
+
+    let mut outcome = steps_outcome(
+        &steps,
+        attempt,
+        "Fake driver hosted the fader fixture; Begin→Preview→Commit \
+         minted receipt-expecting intents whose command_ids were \
+         answered through post_event — applied settled Applied→Observed \
+         and rejected settled Rejected, with the decoded receipts \
+         recorded on the report",
+        &["fake:command-receipt:fader-ch1"],
+    );
+    outcome.receipts = receipts;
+    outcome
+}
+
+/// `command-receipt`: the headless counterpart of the real lane's
+/// `real-command-receipt` — the AC1 Command→Receipt link plus AC4
+/// receipt population on the Fake driver. The semantic
+/// `sv_fader_dock_fixture` view mints receipt-expecting `Commit`
+/// intents, `result` events carrying the minted `command_id`s return
+/// through `post_event`, and the binding phases plus decoded
+/// [`CommandReceipt`]s prove the link — the first command takes the
+/// applied→observed path, the second the rejected path. Contract
+/// evidence only: `driver: Fake`, `environment_kind:
+/// deterministic-backend` — never a real-window, pixel, or OS-level
+/// claim.
+fn command_receipt_case(ctx: &mut HeadlessContext, spec: &ScenarioSpec) -> ScenarioReport {
+    let mut gui = FakeGuiTest::new();
+    let report = run_scenario(&mut gui, spec, |gui| Ok(command_receipt_body(gui)));
+    finalize(
+        report,
+        &ctx.env,
+        EnvironmentKind::DeterministicBackend,
+        None,
+        Map::from_iter([("claim".to_string(), json!("semantic-command-receipt"))]),
     )
 }
 
