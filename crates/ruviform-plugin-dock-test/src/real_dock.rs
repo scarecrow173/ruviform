@@ -36,9 +36,13 @@
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
 //! |                         |             | effective な実 OS pointer/key 注入が `Injected`     |
-//! | `real-window-dpi`       | `RealOs`    | `Unsupported` — scale-factor/DPI API が公開面に無い   |
+//! | `real-window-dpi`       | `RealOs`    | `Pass`/`Fail`/`NotRun` — live `window_geometry` +   |
+//! |                         |             | lifecycle `Resized`/`ScaleFactorChanged` 整合を      |
+//! |                         |             | 観測判定（DPI 変更経路は未駆動 — 観測のみ）           |
 //! | `real-window-ime`       | `RealOs`    | `Unsupported` — `Ime` capability は未 claim（#389）  |
-//! | `real-window-close`     | `RealOs`    | `Unsupported` — window close API が公開面に無い       |
+//! | `real-window-close`     | `RealOs`    | `Pass`/`Fail`/`NotRun` — armed `Veto`/`Defer`→        |
+//! |                         |             | `Approve`/既定 `Approve` の `CloseRequested`→         |
+//! |                         |             | `Destroyed` を B/C window で実観測（A は sentinel）   |
 //! | `real-editor-resize`    | `RealOs`    | `Unsupported`/`Fail` — `set_size` の定義済み拒否を    |
 //! |                         |             | 非画素 oracle（session 状態・event・HWND）で観測      |
 //! | `real-editor-redock`    | `RealOs`    | `Unsupported`/`Fail` — `reattach` の定義済み拒否 →    |
@@ -92,10 +96,13 @@ use ruviform_ui::native_slot::{
     LogicalRect, SlotCapabilities, SlotGeometry, SlotLease, SlotSpec, SlotVisibility, Support,
     SurfaceSlotId,
 };
-use ruviform_ui::view::{AttachEpochAllocator, ComponentKey, ViewHost};
-use ruviform_ui::{LogicalPosition, WindowId, WindowSpec};
+use ruviform_ui::view::{AttachEpochAllocator, ComponentKey, ComponentSnapshot, ViewHost};
+use ruviform_ui::{CloseDecision, LogicalPosition, WindowId, WindowSpec};
 use ruviform_ui_gpui::os_input::{OsInputOutcome, OsKey, PreflightScope};
-use ruviform_ui_gpui::{RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount};
+use ruviform_ui_gpui::{
+    OsWindowGeometry, RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount,
+    WindowLifecycleEvent,
+};
 use ruviform_ui_test::scenario::plugin_dock::{
     PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_view_spec,
 };
@@ -110,6 +117,7 @@ use std::time::Duration;
 
 use ruviform_ui_test::golden::RgbaImage;
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 
 use crate::LaneEnvironment;
 use crate::artifact;
@@ -161,10 +169,21 @@ struct RealDockContext<'a> {
     /// The first mounted window id (`windows()` order = mount order).
     window: WindowId,
     /// The second mounted window id — `real-multiwindow-focus`'s
-    /// focus-transfer target. `None` only if the session mounted a
-    /// single window (never on the live path — two mounts are
-    /// requested up front).
+    /// focus-transfer target and `real-window-close`'s
+    /// veto/defer/approve target. `None` only if the session
+    /// mounted fewer windows (never on the live path — three
+    /// mounts are requested up front).
     window_b: Option<WindowId>,
+    /// The third mounted window id — `real-window-close`'s
+    /// default-approve target; window A stays the sentinel the
+    /// remaining cases build on. `None` only if the session
+    /// mounted fewer than three windows.
+    window_c: Option<WindowId>,
+    /// The primary window's live scale factor measured once at
+    /// session start through `window_geometry` — stamped into
+    /// every case's `environment.scale_factor` (AC4 evidence;
+    /// `None` keeps the honest `null` when unmeasured).
+    session_scale_factor: Option<f64>,
     /// The mounted view instance id.
     view: ViewInstanceId,
     /// Lane environment snapshot (borrowed — the session is
@@ -225,6 +244,7 @@ pub fn run_all_with_pixel_artifacts(
 
     let view = ViewInstanceId::new(631).expect("view instance id 631 is non-zero");
     let view_b = ViewInstanceId::new(632).expect("view instance id 632 is non-zero");
+    let view_c = ViewInstanceId::new(633).expect("view instance id 633 is non-zero");
     let mut epochs = AttachEpochAllocator::new();
     let mut host = ViewHost::new(view, epochs.mint());
     host.mount(plugin_dock_view_spec())
@@ -235,13 +255,28 @@ pub fn run_all_with_pixel_artifacts(
         .mount(plugin_dock_view_spec())
         .expect("plugin dock view spec mounts");
     host_b.drain_events();
+    let mut host_c = ViewHost::new(view_c, epochs.mint());
+    host_c
+        .mount(plugin_dock_view_spec())
+        .expect("plugin dock view spec mounts");
+    host_c.drain_events();
 
-    // Two mounts so `real-multiwindow-focus` has a real second
-    // window; window B is offset right of window A so the windows
-    // never overlap (an OS click on A's panel center must land on A).
+    // Three mounts: window A stays the sentinel every later case
+    // builds on (the GPUI platform loop exits when its last window
+    // closes), window B gives `real-multiwindow-focus` a
+    // focus-transfer target and `real-window-close` its
+    // veto/defer/approve target, window C is the close case's
+    // default-approve target. B/C are offset right of A so the
+    // windows never overlap (an OS click on A's panel center must
+    // land on A).
     let window_spec_b = WindowSpec {
         title: "ruviform plugin-dock B".to_string(),
         position: Some(LogicalPosition::new(1450, 80)),
+        ..WindowSpec::default()
+    };
+    let window_spec_c = WindowSpec {
+        title: "ruviform plugin-dock C".to_string(),
+        position: Some(LogicalPosition::new(2900, 80)),
         ..WindowSpec::default()
     };
     let outcome = RealOsGuiTest::run(
@@ -254,6 +289,13 @@ pub fn run_all_with_pixel_artifacts(
                 window: window_spec_b,
                 view: ViewMount {
                     host: host_b,
+                    theme: None,
+                },
+            },
+            RealWindowMount {
+                window: window_spec_c,
+                view: ViewMount {
+                    host: host_c,
                     theme: None,
                 },
             },
@@ -270,6 +312,15 @@ pub fn run_all_with_pixel_artifacts(
                 );
             };
             let window_b = windows.next();
+            let window_c = windows.next();
+            // The session's primary-window scale factor, measured
+            // once — stamped into every case's `environment.
+            // scale_factor` (AC4; a failed read stays the honest
+            // `null`).
+            let session_scale_factor = gui
+                .window_geometry(window)
+                .ok()
+                .map(|geometry| geometry.scale_factor);
             // The session-scoped catalog — `real_entries` rows run
             // through `run_entries` against the live context.
             let entries = real_entries();
@@ -277,6 +328,8 @@ pub fn run_all_with_pixel_artifacts(
                 gui,
                 window,
                 window_b,
+                window_c,
+                session_scale_factor,
                 view,
                 env,
                 plugin: plugin.as_ref().ok(),
@@ -362,6 +415,26 @@ fn finalize_real(
     let mut merged = dcomp_env_extra();
     merged.extend(extra);
     finalize(report, env, kind, artifact, merged)
+}
+
+/// [`finalize_real`] plus the session's measured primary-window
+/// scale factor — stamped into `environment.scale_factor` when the
+/// session recorded one (AC4 evidence; `extra` overrides the honest
+/// `null` base in `case_environment`). `blocked_reports` keeps
+/// [`finalize`] — no session exists there, so `null` stays the
+/// honest record.
+fn finalize_case(
+    report: ScenarioReport,
+    ctx: &RealDockContext<'_>,
+    kind: EnvironmentKind,
+    artifact: Option<&PluginArtifactEvidence>,
+    extra: Map<String, Value>,
+) -> ScenarioReport {
+    let mut merged = extra;
+    if let Some(scale_factor) = ctx.session_scale_factor {
+        merged.insert("scale_factor".to_string(), json!(scale_factor));
+    }
+    finalize_real(report, ctx.env, kind, artifact, merged)
 }
 
 /// The `rf631.plugin-dock-real` catalog rows — session-scoped: the
@@ -463,7 +536,7 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 21] {
         ScenarioEntry {
             case: "real-window-close",
             scenario: SCENARIO,
-            required: &[ScenarioCapability::SemanticAction],
+            required: &[ScenarioCapability::MultiWindow],
             spec_extras: real_window_extras,
             run: real_window_close_case,
         },
@@ -830,6 +903,113 @@ fn steps_outcome(
     }
 }
 
+/// Count of `window`'s recorded lifecycle events equal to `event`
+/// — a non-destructive snapshot read, safe inside `settle_until`
+/// predicates (the log is append-only for the session).
+fn lifecycle_event_count(
+    gui: &RealOsGuiTest,
+    window: WindowId,
+    event: WindowLifecycleEvent,
+) -> usize {
+    gui.window_events(window)
+        .iter()
+        .filter(|observed| **observed == event)
+        .count()
+}
+
+/// The ordered `CloseRequested`/`Destroyed` subsequence of
+/// `window`'s lifecycle log — the close-case's verdict-relevant
+/// record.
+fn close_sequence(gui: &RealOsGuiTest, window: WindowId) -> Vec<&'static str> {
+    gui.window_events(window)
+        .iter()
+        .filter_map(|event| match event {
+            WindowLifecycleEvent::CloseRequested => Some("close_requested"),
+            WindowLifecycleEvent::Destroyed => Some("destroyed"),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Evidence summary of `window`'s recorded lifecycle log — counts
+/// per variant, latest geometry-carrying values, and the ordered
+/// close-relevant subsequence. Observation only: the log is the
+/// app thread's record, never synthesized caller-side.
+fn lifecycle_summary(gui: &RealOsGuiTest, window: WindowId) -> Value {
+    let events = gui.window_events(window);
+    let mut created = 0usize;
+    let mut ready = 0usize;
+    let mut resized = 0usize;
+    let mut moved = 0usize;
+    let mut focused = 0usize;
+    let mut scale_factor_changed = 0usize;
+    let mut latest_resized: Option<(u32, u32)> = None;
+    let mut latest_scale_factor: Option<f64> = None;
+    let mut close_events: Vec<&'static str> = Vec::new();
+    for event in &events {
+        match event {
+            WindowLifecycleEvent::Created => created += 1,
+            WindowLifecycleEvent::Ready => ready += 1,
+            WindowLifecycleEvent::Resized { width, height } => {
+                resized += 1;
+                latest_resized = Some((*width, *height));
+            }
+            WindowLifecycleEvent::Moved { .. } => moved += 1,
+            WindowLifecycleEvent::Focused(_) => focused += 1,
+            WindowLifecycleEvent::ScaleFactorChanged { factor } => {
+                scale_factor_changed += 1;
+                latest_scale_factor = Some(*factor);
+            }
+            WindowLifecycleEvent::CloseRequested => close_events.push("close_requested"),
+            WindowLifecycleEvent::Destroyed => close_events.push("destroyed"),
+            _ => {}
+        }
+    }
+    json!({
+        "total": events.len(),
+        "created": created,
+        "ready": ready,
+        "resized": resized,
+        "moved": moved,
+        "focused": focused,
+        "scale_factor_changed": scale_factor_changed,
+        "latest_resized": latest_resized.map(|(width, height)| json!({
+            "width": width,
+            "height": height,
+        })),
+        "latest_scale_factor": latest_scale_factor,
+        "close_sequence": close_events,
+    })
+}
+
+/// `steps`/`observed` JSON for one [`OsWindowGeometry`] — origin,
+/// physical client size, and scale factor; the same physical-pixel
+/// unit the lifecycle `Resized`/`Moved` events report.
+fn geometry_json(geometry: &OsWindowGeometry) -> Value {
+    json!({
+        "origin_x": geometry.origin_x,
+        "origin_y": geometry.origin_y,
+        "width": geometry.width,
+        "height": geometry.height,
+        "scale_factor": geometry.scale_factor,
+    })
+}
+
+/// JSON projection of one [`ComponentSnapshot`] for semantic-tree
+/// evidence — every field type is `Serialize`; the snapshot struct
+/// itself is not, so the evidence boundary maps it field-by-field
+/// (AC4 — additive, observation only).
+fn component_snapshot_json(snapshot: &ComponentSnapshot) -> Value {
+    json!({
+        "display": snapshot.display,
+        "committed": snapshot.committed,
+        "phase": snapshot.phase,
+        "observed": snapshot.observed,
+        "selected": snapshot.selected,
+        "mounted": snapshot.mounted,
+    })
+}
+
 /// The fail-closed reports for a session that never started —
 /// `NotRun` + `observed.environment_blocked`, the
 /// `test-ui-real-scenario` precedent. `environment_kind` stays the
@@ -966,7 +1146,29 @@ fn real_window_mount_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let key = slot_key();
         let target = gui.resolve_target(&TargetQuery::new(window, view).component(key.clone()))?;
-        let _snapshot = gui.observe(&target, &key)?;
+        let snapshot = gui.observe(&target, &key)?;
+        // AC4 semantic-tree evidence — best-effort `ComponentSnapshot`
+        // projection of the dock panel and slot: observation only,
+        // never a verdict input; an unobservable component records
+        // `null` rather than a fabricated tree.
+        let panel_key = ComponentKey("plugin.dock".to_string());
+        let panel_snapshot = (|| {
+            let panel_target = gui
+                .resolve_target(&TargetQuery::new(window, view).component(panel_key.clone()))
+                .ok()?;
+            gui.observe(&panel_target, &panel_key).ok()
+        })();
+        let mut tree = Map::new();
+        tree.insert(
+            "plugin.dock".to_string(),
+            panel_snapshot
+                .as_ref()
+                .map_or(Value::Null, component_snapshot_json),
+        );
+        tree.insert(
+            PLUGIN_DOCK_SLOT_KEY.to_string(),
+            component_snapshot_json(&snapshot),
+        );
         let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
         outcome.detail = Some(format!(
             "real OS window mounts plugin_dock_view_spec; NativeSlot \
@@ -975,19 +1177,14 @@ fn real_window_mount_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
         outcome.observed = Some(json!({
             "window": window.to_string(),
             "component": PLUGIN_DOCK_SLOT_KEY,
+            "semantic_tree": Value::Object(tree),
         }));
         outcome
             .evidence
             .push("real-window:semantic-mount:plugin.editor".to_string());
         Ok(outcome)
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
@@ -1125,13 +1322,7 @@ fn real_native_slot_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
             ],
         ))
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
@@ -2272,9 +2463,9 @@ fn real_editor_attach_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         Ok(editor_attach_body(gui, window, view, plugin, plugin_error))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -2331,13 +2522,7 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
             ))),
         }
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
@@ -3295,9 +3480,9 @@ fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
             pixel_artifacts,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -3951,9 +4136,9 @@ fn real_dcomp_foreground_case(
             pixel_artifacts,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -5017,9 +5202,9 @@ fn real_dcomp_present_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             pixel_artifacts,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -5189,13 +5374,7 @@ fn real_multiwindow_focus_case(
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         Ok(multiwindow_focus_body(gui, window_a, window_b))
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
@@ -5501,47 +5680,143 @@ fn real_os_input_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Sce
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         Ok(os_input_body(gui, window, view))
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
 // cases: real-window-dpi / real-window-ime / real-window-close
-// (AC1 — honest Unsupported judgments for absent adapter surface)
+// (AC1 — dpi/close flipped to real verdicts on the window-surface
+// observation API; ime stays Unsupported — `Ime` unclaimed, #389)
 // ---------------------------------------------------------------------
 
-/// `real-window-dpi`: per-case DPI judgment needs scale-factor
-/// observation and/or a display-scale change. `RealOsGuiTest`
-/// exposes neither — the honest verdict is `Unsupported`, recorded
-/// inside the real session so the gap is machine-visible in the
-/// catalog projection instead of silently absent.
-fn real_window_dpi_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-        outcome.detail = Some(
-            "RealOsGuiTest exposes no scale-factor/DPI observation or \
-             change API — DPI adoption judgment deferred until the \
-             adapter surface grows (window move across mixed-DPI \
-             monitors is likewise not drivable)"
-                .to_string(),
+/// The DPI/geometry attempt: two `window_geometry` reads must
+/// agree, the live physical client rect must be positive with a
+/// finite positive scale factor, and the lifecycle log's latest
+/// `Resized`/`ScaleFactorChanged` must agree within rounding slack
+/// — the window-surface slice's observation contract turned into a
+/// case verdict. No DPI-change path is driven: the driver exposes
+/// no move/display-scale verb, so the case judges observation
+/// consistency only and records that honestly.
+fn dpi_body(gui: &mut RealOsGuiTest, window: WindowId) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+    let attempt = (|| -> Result<Value, String> {
+        // Flush pending drains first — the geometry reads and the
+        // lifecycle log must describe the same instant.
+        step(&mut steps, "settle", gui.settle(), |()| Value::Null)?;
+        let first = step(
+            &mut steps,
+            "window_geometry_1",
+            gui.window_geometry(window),
+            geometry_json,
+        )?;
+        let second = step(
+            &mut steps,
+            "window_geometry_2",
+            gui.window_geometry(window),
+            geometry_json,
+        )?;
+        if first != second {
+            return Err(format!(
+                "window_geometry reads disagree: {first:?} vs {second:?}"
+            ));
+        }
+        if first.width == 0 || first.height == 0 {
+            return Err(format!(
+                "window_geometry reported empty client rect {}x{}",
+                first.width, first.height
+            ));
+        }
+        if !(first.scale_factor.is_finite() && first.scale_factor > 0.0) {
+            return Err(format!(
+                "window_geometry reported invalid scale_factor {}",
+                first.scale_factor
+            ));
+        }
+        steps.push(json!({ "step": "geometry_stable", "verdict": "pass" }));
+
+        let events = gui.window_events(window);
+        let resized: Vec<(u32, u32)> = events
+            .iter()
+            .filter_map(|event| match event {
+                WindowLifecycleEvent::Resized { width, height } => Some((*width, *height)),
+                _ => None,
+            })
+            .collect();
+        let Some((resized_w, resized_h)) = resized.last().copied() else {
+            return Err("no physical Resized lifecycle record to cross-check".to_string());
+        };
+        // The lifecycle log and the live OS read describe the same
+        // physical client area — the same ±2px rounding slack the
+        // window-surface lifecycle test proved.
+        let dw = i64::from(resized_w) - i64::from(first.width);
+        let dh = i64::from(resized_h) - i64::from(first.height);
+        if dw.abs() > 2 || dh.abs() > 2 {
+            return Err(format!(
+                "latest Resized {resized_w}x{resized_h} disagrees with live \
+                 geometry {}x{} beyond rounding",
+                first.width, first.height
+            ));
+        }
+        let latest_scale = events.iter().rev().find_map(|event| match event {
+            WindowLifecycleEvent::ScaleFactorChanged { factor } => Some(*factor),
+            _ => None,
+        });
+        if let Some(factor) = latest_scale
+            && (factor - first.scale_factor).abs() > 1e-6
+        {
+            return Err(format!(
+                "latest ScaleFactorChanged {factor} disagrees with live \
+                 scale_factor {}",
+                first.scale_factor
+            ));
+        }
+        steps.push(json!({ "step": "lifecycle_consistent", "verdict": "pass" }));
+
+        // Window-identity digest — canonical geometry string hashed
+        // with the crate's existing sha2 dep (AC4 window hash; no
+        // lockfile change).
+        let canonical = format!(
+            "{window}|{},{},{},{}|{}",
+            first.origin_x, first.origin_y, first.width, first.height, first.scale_factor
         );
-        outcome
-            .evidence
-            .push("window:dpi:api-not-exposed".to_string());
-        Ok(outcome)
-    });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
+        let digest = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+        Ok(json!({
+            "window": window.to_string(),
+            "geometry": geometry_json(&first),
+            "geometry_stable_reads": 2,
+            "resized_transitions": resized.len(),
+            "latest_resized": {
+                "width": resized_w,
+                "height": resized_h,
+            },
+            "latest_scale_factor_changed": latest_scale,
+            "window_geometry_sha256": digest,
+            "dpi_change_driven": false,
+            "lifecycle": lifecycle_summary(gui, window),
+        }))
+    })();
+
+    steps_outcome(
+        &steps,
+        attempt,
+        "live OS client geometry observed twice identically (origin, \
+         physical px, scale factor) and consistent with the lifecycle \
+         Resized/ScaleFactorChanged record within rounding slack — \
+         DPI-change paths are not driven (no move/display-scale verb)",
+        &["window:dpi:geometry:real-window"],
     )
+}
+
+/// `real-window-dpi`: live `window_geometry` (origin, physical
+/// pixels, scale factor) observed twice and cross-checked against
+/// the lifecycle `Resized`/`ScaleFactorChanged` record — the
+/// window-surface slice's observation contract turned into a case
+/// verdict. DPI *change* paths (mixed-monitor move) have no driver
+/// verb and are honestly recorded as not driven.
+fn real_window_dpi_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| Ok(dpi_body(gui, window)));
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 /// `real-window-ime`: `Ime` is never claimed by the adapter's
@@ -5557,44 +5832,364 @@ fn real_window_ime_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> S
              composition judgment stays deferred (Issue #389)",
         ))
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
+}
+
+/// Bounded wait for `window`'s lifecycle `event` count to reach
+/// `expected` — pushes the observation step row and returns the
+/// halt detail on timeout or driver error. `>=` (not `==`): the
+/// final `close_sequence` assertion is the exact-count check;
+/// the wait only proves the transition landed.
+fn wait_event_count(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+    event: WindowLifecycleEvent,
+    expected: usize,
+    name: &str,
+) -> Result<(), String> {
+    let seen = settle_until(
+        gui,
+        |g| lifecycle_event_count(g, window, event) >= expected,
+        40,
+    )
+    .map_err(|error| error.to_string())?;
+    if seen {
+        steps.push(json!({ "step": name, "verdict": "pass" }));
+        Ok(())
+    } else {
+        steps.push(json!({
+            "step": name,
+            "verdict": "fail",
+            "error": format!("lifecycle event count {expected} not observed"),
+        }));
+        Err(format!(
+            "{name}: lifecycle event count {expected} not observed"
+        ))
+    }
+}
+
+/// Bounded wait asserting `window`'s lifecycle `event` count stays
+/// at zero — the veto/defer survival proof: a
+/// wrongly-approved close lands `Destroyed` within a few drains,
+/// so a short budget that sees none is the evidence (same shape as
+/// the window-surface lifecycle test).
+fn assert_event_absent(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+    event: WindowLifecycleEvent,
+    name: &str,
+) -> Result<(), String> {
+    let appeared = settle_until(gui, |g| lifecycle_event_count(g, window, event) >= 1, 8)
+        .map_err(|error| error.to_string())?;
+    if appeared || !gui.windows().contains(&window) {
+        steps.push(json!({
+            "step": name,
+            "verdict": "fail",
+            "error": "window destroyed despite the armed decision",
+        }));
+        return Err(format!("{name}: window destroyed despite armed decision"));
+    }
+    steps.push(json!({ "step": name, "verdict": "pass" }));
+    Ok(())
+}
+
+/// The armed-Veto leg: `CloseRequested` observed, the window
+/// survives — the armed decision is consumed inside the
+/// synchronous close-request flush.
+fn close_veto_leg(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+) -> Result<(), String> {
+    gui.arm_close_response(window, CloseDecision::Veto);
+    step(
+        steps,
+        "request_close_veto",
+        gui.request_close(window),
+        |()| Value::Null,
+    )?;
+    wait_event_count(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::CloseRequested,
+        1,
+        "close_requested_veto",
+    )?;
+    assert_event_absent(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::Destroyed,
+        "veto_survived",
     )
 }
 
-/// `real-window-close`: window close through the normal
-/// `CloseRequested` flow needs `WindowDriver::request_close` /
-/// `respond_close` (or an Alt+F4 chord), none of which the
-/// `RealOsGuiTest` public surface forwards — the driver supports
-/// them internally but the seam is outside this slice's lease. The
-/// honest verdict is `Unsupported`, recorded inside the real
-/// session.
-fn real_window_close_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-        outcome.detail = Some(
-            "RealOsGuiTest exposes no window-close request/respond \
-             API and os_input has no modifier-chord injection — the \
-             CloseRequested flow cannot be driven from this lane yet \
-             (adapter surface extension is a follow-up slice)"
-                .to_string(),
-        );
-        outcome
-            .evidence
-            .push("window:close:api-not-exposed".to_string());
-        Ok(outcome)
-    });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
+/// The armed-Defer leg: a second `CloseRequested` is observed and
+/// the window stays open close-pending.
+fn close_defer_leg(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+) -> Result<(), String> {
+    gui.arm_close_response(window, CloseDecision::Defer);
+    step(
+        steps,
+        "request_close_defer",
+        gui.request_close(window),
+        |()| Value::Null,
+    )?;
+    wait_event_count(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::CloseRequested,
+        2,
+        "close_requested_defer",
+    )?;
+    assert_event_absent(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::Destroyed,
+        "defer_pending",
     )
+}
+
+/// The deferred-approve leg plus terminal-retirement probes: the
+/// pending close is answered through `respond_close`, the window
+/// is destroyed, and the retired id answers honest errors only.
+fn close_approve_retire_leg(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+) -> Result<(), String> {
+    step(
+        steps,
+        "respond_close_approve",
+        gui.respond_close(window, CloseDecision::Approve),
+        |()| Value::Null,
+    )?;
+    wait_event_count(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::Destroyed,
+        1,
+        "destroyed",
+    )?;
+    if gui.windows().contains(&window) {
+        return Err("approve: window still listed after Destroyed".to_string());
+    }
+    steps.push(json!({ "step": "destroyed", "verdict": "pass" }));
+
+    // Terminal retirement — the destroyed id is dead: a further
+    // close request is an honest no-op, `respond_close` and
+    // `window_geometry` are defined errors, and no
+    // `CloseRequested` may follow `Destroyed` in its log.
+    step(
+        steps,
+        "request_close_retired",
+        gui.request_close(window),
+        |()| Value::Null,
+    )?;
+    gui.settle().map_err(|error| error.to_string())?;
+    let events = gui.window_events(window);
+    if events
+        .iter()
+        .skip_while(|event| **event != WindowLifecycleEvent::Destroyed)
+        .any(|event| matches!(event, WindowLifecycleEvent::CloseRequested))
+    {
+        return Err("retired: CloseRequested observed after Destroyed".to_string());
+    }
+    if gui.respond_close(window, CloseDecision::Approve).is_ok() {
+        steps.push(json!({
+            "step": "respond_close_retired",
+            "verdict": "fail",
+            "error": "respond_close succeeded on a destroyed window",
+        }));
+        return Err("retired: respond_close on destroyed window must fail".to_string());
+    }
+    steps.push(json!({ "step": "respond_close_retired", "verdict": "pass" }));
+    if gui.window_geometry(window).is_ok() {
+        steps.push(json!({
+            "step": "geometry_retired",
+            "verdict": "fail",
+            "error": "window_geometry succeeded on a destroyed window",
+        }));
+        return Err("retired: window_geometry on destroyed window must fail".to_string());
+    }
+    steps.push(json!({ "step": "geometry_retired", "verdict": "pass" }));
+    Ok(())
+}
+
+/// The unanswered-default leg: a `request_close` with no armed
+/// decision takes the driver's `Approve` default and destroys the
+/// window.
+fn close_default_leg(
+    gui: &mut RealOsGuiTest,
+    steps: &mut Vec<Value>,
+    window: WindowId,
+) -> Result<(), String> {
+    step(
+        steps,
+        "request_close_default",
+        gui.request_close(window),
+        |()| Value::Null,
+    )?;
+    wait_event_count(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::CloseRequested,
+        1,
+        "close_requested_default",
+    )?;
+    wait_event_count(
+        gui,
+        steps,
+        window,
+        WindowLifecycleEvent::Destroyed,
+        1,
+        "destroyed_default",
+    )
+}
+
+/// The close-case attempt: drives every close-decision route on
+/// the two non-sentinel windows — `window_b` takes armed `Veto`,
+/// armed `Defer`, `respond_close(Approve)`, and terminal-retirement
+/// probes; `window_c` takes the unanswered default `Approve`.
+/// `window_a` stays the sentinel the later editor/session cases
+/// build on (the GPUI platform loop exits when its last window
+/// closes) and must observe no close lifecycle. Returns the
+/// observation extras on success — the same sequence shape the
+/// window-surface lifecycle test proved on real windows.
+fn close_body(
+    gui: &mut RealOsGuiTest,
+    window_a: WindowId,
+    window_b: Option<WindowId>,
+    window_c: Option<WindowId>,
+) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+    let windows = gui.windows();
+    steps.push(json!({
+        "step": "window_count",
+        "verdict": if windows.len() >= 3 { "pass" } else { "fail" },
+        "count": windows.len(),
+        "windows": windows.iter().map(ToString::to_string).collect::<Vec<_>>(),
+    }));
+
+    let attempt = (|| -> Result<Value, String> {
+        if windows.len() < 3 {
+            return Err("session mounted fewer than 3 windows".to_string());
+        }
+        let wb = window_b.ok_or_else(|| "second window id not recorded".to_string())?;
+        let wc = window_c.ok_or_else(|| "third window id not recorded".to_string())?;
+        for window in [window_a, wb, wc] {
+            if !windows.contains(&window) {
+                return Err(format!("mounted window {window} missing from windows()"));
+            }
+        }
+
+        // Honest-error probe: answering a close that was never
+        // requested is a defined refusal, not a silent no-op.
+        match gui.respond_close(wb, CloseDecision::Approve) {
+            Ok(()) => {
+                steps.push(json!({
+                    "step": "respond_close_without_pending",
+                    "verdict": "fail",
+                    "error": "respond_close succeeded with no pending close",
+                }));
+                return Err("respond_close without a pending close must fail".to_string());
+            }
+            Err(error) => steps.push(json!({
+                "step": "respond_close_without_pending",
+                "verdict": "pass",
+                "detail": error.to_string(),
+            })),
+        }
+
+        close_veto_leg(gui, &mut steps, wb)?;
+        close_defer_leg(gui, &mut steps, wb)?;
+        close_approve_retire_leg(gui, &mut steps, wb)?;
+        close_default_leg(gui, &mut steps, wc)?;
+
+        // Terminal state — only sentinel A remains; its log must
+        // carry no close lifecycle, and B/C logs must end at
+        // Destroyed with the exact expected close subsequence.
+        let remaining = gui.windows();
+        if remaining != vec![window_a] {
+            return Err(format!(
+                "expected only sentinel window A to remain, got {remaining:?}"
+            ));
+        }
+        steps.push(json!({
+            "step": "sentinel_only",
+            "verdict": "pass",
+            "windows": remaining.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        }));
+        let a_events = gui.window_events(window_a);
+        if a_events.contains(&WindowLifecycleEvent::CloseRequested)
+            || a_events.contains(&WindowLifecycleEvent::Destroyed)
+        {
+            return Err("sentinel window A observed close lifecycle".to_string());
+        }
+        steps.push(json!({ "step": "sentinel_isolated", "verdict": "pass" }));
+        let b_sequence = close_sequence(gui, wb);
+        if b_sequence.as_slice() != ["close_requested", "close_requested", "destroyed"] {
+            return Err(format!("window B close sequence {b_sequence:?} unexpected"));
+        }
+        let c_sequence = close_sequence(gui, wc);
+        if c_sequence.as_slice() != ["close_requested", "destroyed"] {
+            return Err(format!("window C close sequence {c_sequence:?} unexpected"));
+        }
+        steps.push(json!({
+            "step": "close_sequences",
+            "verdict": "pass",
+            "window_b": b_sequence.as_slice(),
+            "window_c": c_sequence.as_slice(),
+        }));
+
+        Ok(json!({
+            "window_a": window_a.to_string(),
+            "window_b": wb.to_string(),
+            "window_c": wc.to_string(),
+            "windows_after": remaining.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            "close_sequence_b": b_sequence,
+            "close_sequence_c": c_sequence,
+            "lifecycle_a": lifecycle_summary(gui, window_a),
+            "lifecycle_b": lifecycle_summary(gui, wb),
+            "lifecycle_c": lifecycle_summary(gui, wc),
+        }))
+    })();
+
+    steps_outcome(
+        &steps,
+        attempt,
+        "three real OS windows; window B drove armed Veto → armed \
+         Defer → respond_close(Approve) → Destroyed plus terminal-\
+         retirement probes, window C drove the unanswered default \
+         Approve → Destroyed, sentinel A observed no close lifecycle \
+         and remained the only window",
+        &["window:close:lifecycle:real-window"],
+    )
+}
+
+/// `real-window-close`: drives the full close-decision matrix on
+/// the two non-sentinel windows — window B takes armed `Veto`,
+/// armed `Defer`, `respond_close(Approve)`, and terminal-retirement
+/// probes; window C takes the unanswered default `Approve`. Window
+/// A stays the sentinel every later case builds on.
+fn real_window_close_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window_a = ctx.window;
+    let window_b = ctx.window_b;
+    let window_c = ctx.window_c;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(close_body(gui, window_a, window_b, window_c))
+    });
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 // ---------------------------------------------------------------------
@@ -6055,9 +6650,9 @@ fn real_editor_resize_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             observe_editor_resize_lifecycle,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -6084,9 +6679,9 @@ fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             observe_editor_redock_lifecycle,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -6338,9 +6933,9 @@ fn real_session_terminate_case(
             plugin_error,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -6812,9 +7407,9 @@ fn real_session_degraded_case(
             plugin_error,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -6877,9 +7472,9 @@ fn real_session_recovery_case(
             plugin_error,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -6938,9 +7533,9 @@ fn real_session_timeout_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec)
             plugin_error,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -7121,9 +7716,9 @@ fn real_editor_visibility_case(
             plugin_error,
         ))
     });
-    finalize_real(
+    finalize_case(
         report,
-        ctx.env,
+        ctx,
         EnvironmentKind::RealWindow,
         artifact,
         Map::new(),
@@ -7155,13 +7750,7 @@ fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
             .push("session:crash:in-process-lane-nonviable".to_string());
         Ok(outcome)
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 /// `real-session-hang`: the fixture's hang fault mode
@@ -7188,13 +7777,7 @@ fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
             .push("session:hang:in-process-lane-nonviable".to_string());
         Ok(outcome)
     });
-    finalize_real(
-        report,
-        ctx.env,
-        EnvironmentKind::RealWindow,
-        None,
-        Map::new(),
-    )
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 #[cfg(test)]

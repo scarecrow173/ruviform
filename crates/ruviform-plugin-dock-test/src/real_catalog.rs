@@ -57,7 +57,12 @@ pub struct RealCatalogRow {
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
 /// per case — executable where a real oracle exists, honestly
-/// `Unsupported` where the adapter exposes no API. The AC3 rows
+/// `Unsupported` where the adapter exposes no API. The catalog-flip
+/// slice turned `real-window-dpi`/`real-window-close` into real
+/// verdicts on the window-surface observation API
+/// (`window_geometry`/`window_events`/`request_close`/
+/// `respond_close`/`arm_close_response`); `real-window-ime` stays
+/// `Unsupported` (`Ime` unclaimed, Issue #389 scope). The AC3 rows
 /// (`real-editor-resize`, `real-editor-redock`) judge editor ops
 /// through non-pixel oracles (session events, child-HWND contract,
 /// session state) only. The AC1/AC6 remainder rows
@@ -137,7 +142,7 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-close",
         scenario: SCENARIO,
-        required: &[ScenarioCapability::SemanticAction],
+        required: &[ScenarioCapability::MultiWindow],
     },
     RealCatalogRow {
         case: "real-editor-resize",

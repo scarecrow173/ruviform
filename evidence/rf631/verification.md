@@ -1047,3 +1047,92 @@ SAFETY comment）、`ospix.rs`（SelectObject 失敗の error 化・
   （env 実効を HWND exstyle で再確認）、PNG artifact 22 枚再生成。
 - verdict 分布は review 前 run と同一 — 修正は観測 schema の
   正直化と hang 耐性のみで、verdict 経路・既存 case の判定は不変。
+
+---
+
+# Slice 追記: Issue #631 real-window catalog flip（close/dpi 実判定化）
+
+- Date: 2026-11-17
+- Lane JSONL repo_sha: `f42e6c71`（実装 HEAD・未コミット差分を含む working tree で実走）
+- 対象: `real-window-close`/`real-window-dpi` の Unsupported stub →
+  window-surface slice の観測 API（`window_events`/`window_geometry`/
+  `request_close`/`arm_close_response`/`respond_close`）による実判定化。
+  catalog 21 real rows の verdict 分布を flip。jsonl.rs に AC4 stretch
+  として `receipts`・決定的 `case_seed` を追加し、real lane の
+  `environment.scale_factor` を実測値へ配線。
+
+## Static lanes（全 pass）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `mise run check ruviform-plugin-dock-test`（default） | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run lint ruviform-plugin-dock-test`（default） | pass（`-D warnings`） |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test`（default） | pass（console 14 + plugin-dock 4 + jsonl unit 2） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass（unit 10 + console 14 + plugin-dock 4） |
+| `mise run test-ui-plugin-dock-console` | pass |
+| `mise run test-ui-plugin-dock`（headless scenario） | pass |
+| `mise run test-ui-plugin-dock-lab`（interactive GPUI lab） | pass（pass×7・unsupported×1・not_run×1 — 既存分布と同一） |
+| `mise run test-ui-scenario-contract` | pass（gpui lane 7 tests） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+
+## `test-ui-plugin-dock-real` 実走 verdict（21 case、interactive Windows desktop）
+
+| case | verdict | 備考 |
+| --- | --- | --- |
+| real-window-mount | pass | |
+| real-native-slot | pass | |
+| real-editor-attach | pass | |
+| real-capture | pass | |
+| real-dcomp-pixel | **fail** | 既知の DComp topmost occlusion（Issue #532）— 前 slice と同一の正直な Fail を維持。Pass に変換しない |
+| real-dcomp-foreground | pass | |
+| real-dcomp-present | pass | |
+| real-multiwindow-focus | pass | |
+| real-os-input | pass | |
+| **real-window-dpi** | **pass**（flip） | `window_geometry` live 観測（origin/物理 px/`scale_factor=1.0`）+ `window_events` の `Created`/`Ready`/`Resized` 最終遷移との一致 + 破棄後 dead-window geometry query の fail を検証。`environment.scale_factor` は実測値。DPI **変更**駆動（mixed-DPI move）は変更 API 不在のため `dpi_change_driven:false` を正直に記録 |
+| real-window-ime | unsupported | `Ime` capability 未 claim（#389 領域）— 変更なし |
+| **real-window-close** | **pass**（flip） | 3 window 構成: B が armed Veto → armed Defer → `respond_close(Approve)` → `Destroyed` + 退役後 probe、C が未応答 default Approve → `Destroyed`、sentinel A は close lifecycle なしで生存。20 step 全 pass |
+| real-editor-resize | unsupported | 変更なし（#389 verb 領域） |
+| real-editor-redock | unsupported | 変更なし |
+| real-session-terminate | pass | |
+| real-session-degraded | pass | |
+| real-session-recovery | pass | |
+| real-session-timeout | pass | |
+| real-editor-visibility | unsupported | 変更なし |
+| real-session-crash | unsupported | 変更なし（out-of-process 化は別 slice） |
+| real-session-hang | unsupported | 変更なし |
+
+lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — Issue #532 の
+既知 occlusion であり lane defect ではない（baseline jsonl でも同 verdict）。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+- `plugin-dock-real-headless.jsonl` 再生成: 21 case 全て `not_run` +
+  `environment_kind=deterministic-backend`。flip は headless 形状を
+  変えない — close/dpi 行も blocked-probe detail を維持。
+
+## JSONL evidence field 追加（AC4 stretch・lockfile 変更なし）
+
+- 全 case 行に `case_seed`（run_id+case からの決定的 16-hex digest、
+  case 間で異なることを unit test で固定）と `receipts`
+  （`CommandReceipt` 直列化、現在の lane では空配列 — receipt を
+  発行する case がまだ無いため正直な空）を追加。既存 field の
+  rename/remove なし。`targets` は従来どおり除外。
+- real lane の `environment.scale_factor` が固定 `null` から
+  `finalize_real` extra 経由の実測値（本 run: `1.0`）へ配線。
+- `real-window-dpi` の observed に `window_geometry_sha256`
+  （HWND 相当の window id + origin + 物理 geometry + scale factor の
+  canonical 文字列 digest）を追加。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-window-ime`・`real-editor-resize`/`redock`/`visibility`・
+  `real-session-crash`/`hang` の `Unsupported` は据え置き —
+  capability claim・verb・out-of-process 化は #389 / 別 slice 領域。
+- `real-dcomp-pixel` の `Fail` は Issue #532 未解決のまま正直に保持。
+- AC4 の未実装 field（GPU 情報・semantic tree 直列化・pixel diff
+  evidence 同梱・window/plugin hash の完全 digest 化）は残件 —
+  lockfile/manifest 変更を要する手段を使わない制約内で実施した分のみ。
