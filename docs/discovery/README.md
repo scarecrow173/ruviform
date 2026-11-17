@@ -29,10 +29,12 @@ Directory: `docs/discovery`
 | DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DSC-630abiValidatorRerun01 | Issue #630 外部 ABI validator 再実走 slice — post-#735 surface の調査と declared-expectation 設計判断 | final | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | DSC-630abiValidator01 | Issue #630 外部 ABI validator slice — provisioning 調査と validator 指摘の診断 | final | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
+| DSC-630clapEditorVerbs01 | Issue #630 CLAP editor verb 実バイナリ coverage — slice 調査記録 | final | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DSC-630presetDiscoveryReeval01 | Issue #630 preset-discovery 外部検証再評価 — upstream fix pin 調査 | final | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | DSC-630presetSpawnFault01 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 調査記録 | final | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | DISC-Kd82mQxVnR4tYw6pLc3sJa | Issue #631 real-command-receipt case | draft | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| DISC-Mx41kYpNvT8wQc6rLd9sJh | Issue #631 headless-command-receipt case | draft | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | DISC-EQytwTTrhPQ8wwzjh4tGK3 | Issue #631 real-window-close/dpi catalog flip | draft | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | DISC-034YJ08C2FLjqUQpNN0PcG | Issue #631 RealOsGuiTest window-close/DPI 観測面 | draft | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | DSC-720tupleV201 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 現状 pin 箇所の棚卸しと設計論点の調査 | final | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |

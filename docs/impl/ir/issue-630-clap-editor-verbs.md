@@ -71,6 +71,12 @@ relations:
   superseded-by: []
   related:
     - "docs/adr/issue-630-clap-editor-verbs.md"
+metadata:
+  experiments:
+    adopted:
+      - "docs/impl/exp/issue-630-clap-editor-verbs.md"
+    rejected: []
+
 ---
 
 # Issue #630 CLAP editor verb 実バイナリ coverage slice — 実装記録
