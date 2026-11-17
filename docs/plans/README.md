@@ -153,6 +153,7 @@ Directory: `docs/plans`
 | PLAN-UmRPBDr4lZ2y8Aj9H6tdYe | Issue #377 実装計画 — QueryBinding adopt-on-join | approved | [issue-377-query-binding-epoch.md](./issue-377-query-binding-epoch.md) |
 | PLAN-034UhlBN58rtCJqfZMTYgt | Issue #378 oracle late-create binding epoch 実装計画 | approved | [issue-378-oracle-late-create-epoch.md](./issue-378-oracle-late-create-epoch.md) |
 | PLAN-034YtAeTZbhyJdAJhfmsZp | Issue #389 editor-session real-session-terminate 実装計画 | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
+| PLAN-rf389-ime-verbs-01 | Issue #389 adapter editor verbs 実装計画 | approved | [issue-389-ime-verbs.md](./issue-389-ime-verbs.md) |
 | PLAN-034WXSRQARP7ZVwXSyqHsA | Issue #389 Parent Lease 移行 plan | approved | [issue-389-parent-lease-plan.md](./issue-389-parent-lease-plan.md) |
 | PLAN-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder 実装計画 | approved | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | PLAN-034XGryAYYlLjlEdp2DGUn | Issue #389 dock-test session-lifecycle 実装計画 | approved | [issue-389-session-lifecycle.md](./issue-389-session-lifecycle.md) |

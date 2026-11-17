@@ -37,6 +37,7 @@ Directory: `docs/tasks`
 | TASK-ibEQJ0Q4JzJ0UtqiKM5W5u | Issue #388/#389 Native Dock 契約タスク（boundary / native_slot / editor_session） | completed | [issue-388-389-native-dock-contract.md](./issue-388-389-native-dock-contract.md) |
 | TASK-rf388DockWindowing01 | Issue #388 slice 3 タスク — clip/focus/redock windowing 実測 | in-progress | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | TASK-034YtASlLiwI44BLXyY1zl | Issue #389 editor-session real-session-terminate 実装タスク | in-progress | [issue-389-editor-session.md](./issue-389-editor-session.md) |
+| TASK-rf389-editor-verbs-01 | Issue #389 adapter editor verbs 実装タスク（set_size/set_visibility/reattach production chain + rf631 lane flip） | in-progress | [issue-389-ime-verbs.md](./issue-389-ime-verbs.md) |
 | TASK-034WYaQlaDnroaK9zoe9D3 | Issue #389 Parent Lease 移行タスク | in-progress | [issue-389-parent-lease-task.md](./issue-389-parent-lease-task.md) |
 | TASK-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder 実装タスク | in-progress | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
 | TASK-034UnqS8L3S2tF4h6u8LJd | Issue #389 Plugin Editor Session hardening タスク（timeout/degrade/GraphicsLost/DComp 記録） | in-progress | [issue-389-session-hardening.md](./issue-389-session-hardening.md) |
