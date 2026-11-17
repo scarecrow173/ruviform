@@ -127,12 +127,12 @@ error channel なし callback の fail-closed 記録。
 | `mise run test ruviform-plugin-clap` | 0 | pass（unit+integration+doc） |
 | `mise run check-l1-real-plugin` | 0 | pass |
 | `mise run lint-l1-real-plugin` | 0 | pass |
-| `mise run test-l1-real-plugin` | （実行後記入） | （実行後記入） |
+| `mise run test-l1-real-plugin` | 0 | pass（adapter `l1_real_adapter_e2e` + fixture 全 E2E lane） |
 | `node --test ci/plugin-abi-validator/tests/` | 0 | 21 tests pass |
-| `mise run test-plugin-abi-validator`（引数なし） | （実行後記入） | NotRun 期待（fail-closed 設計） |
+| `mise run test-plugin-abi-validator`（引数なし） | 1 | verdict NotRun — validator パス未指定の fail-closed 設計どおり。実走は明示パス指定で実施（`evidence/rf630/abi-validator/run.json` は実行で上書きされるため実行後に restore） |
 | `node run.mjs --clap-validator … --vst3-validator … --clap-production` | 0 | verdict Passed — production_gain 26p/17s/1w/0f + fixture 全 leg + VST3 235/235。`evidence/rf732/abi-validator/` |
 | `node run.mjs … --clap-production`（修正前・red 記録） | 1 | verdict Failed — production leg 10 failed。`evidence/rf732/abi-validator-red/` |
-| `mise exec -- prek run --all-files` | （実行後記入） | （実行後記入） |
+| `mise exec -- prek run --all-files` | 0 | pass |
 
 ## review-protocol 結果
 
