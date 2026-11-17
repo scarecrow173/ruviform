@@ -272,6 +272,8 @@ Directory: `docs/impl/ir`
 | IMPL-692LuauBackend0001 | Issue #692 s2 ruviform-script-luau analyzer backend | completed | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | IMPL-692ScriptPort0001 | Issue #692 ruviform-script neutral contract port | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | IMPL-034YJnaTZDWSZddB4rqGfu | Issue #707 MIDI input cancellation fault slice | completed | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
+| IMPL-716RuntimeBackend0001 | Issue #716 runtime ScriptBackend — 実装記録 | completed | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| IMPL-720tupleV207 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 実装記録 | completed | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

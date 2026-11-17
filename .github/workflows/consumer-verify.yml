@@ -9,7 +9,7 @@ name: consumer-verify
 # Issue #294 拡張（候補 tuple 証拠契約）:
 # - 各 Consumer lane は checkout 後に `git rev-parse HEAD` で**解決 SHA** を
 #   捕捉し、任意入力の期待 SHA（`*_expected_sha`）と fail-closed 照合する。
-#   tuple=(ruviform SHA, consumer SHA, contract "consumer-verify-tuple/v1") と
+#   tuple=(ruviform SHA, consumer SHA, contract "consumer-verify-tuple/v2") と
 #   全 lane 結果は ci/consumer-verify/evidence.mjs が構造化 JSON artifact
 #   （全終端経路で `if: always()` 出力）と Job Summary に記録する。
 # - `*_ref` は branch/tag に加え repo 上に存在する 40-hex SHA も受理する
@@ -706,7 +706,7 @@ jobs:
           if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
             --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
             # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
-            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"audiolens"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
+            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v2","consumer":{"name":"audiolens"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -1247,7 +1247,7 @@ jobs:
           if ! node "$EV" finalize --file "$LANES_FILE" --out "$EVIDENCE_FILE" \
             --summary "$GITHUB_STEP_SUMMARY" --status-out "$GITHUB_OUTPUT"; then
             # finalize 自身の失敗でも最小証拠を残す（artifact 全終端経路の保証）
-            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v1","consumer":{"name":"synvelis"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
+            printf '{"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple/v2","consumer":{"name":"synvelis"},"status":"fail","statusReason":"evidence_finalize_error"}\n' > "$EVIDENCE_FILE"
             echo "status=fail" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -1284,7 +1284,7 @@ jobs:
           {
             echo "# Cross-Repo Consumer Verify — $RUVIFORM_REV"
             echo ""
-            echo "## 候補 tuple（contract: consumer-verify-tuple/v1）"
+            echo "## 候補 tuple（contract: consumer-verify-tuple/v2）"
             echo ""
             echo "| element | value |"
             echo "|---|---|"

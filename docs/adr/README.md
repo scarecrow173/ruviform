@@ -50,6 +50,7 @@ Directory: `docs/adr`
 | ADR-JwwKl26JnYjSWNJAuhGJs5 | Consumer-neutral Workflow/CLI orchestration契約の採否（Issue #553 RF-AUTX-01） | accepted | [issue-553-workflow-cli-contract.md](./issue-553-workflow-cli-contract.md) |
 | ADR-034Xe9xZEqz5ftcu5yCqXB | 言語非依存 Script Backend/Analyzer 契約（Issue #558 RF-SCRIPT-00） | accepted | [issue-558-script-backend-contract.md](./issue-558-script-backend-contract.md) |
 | ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
+| ADR-GUIvRTewPsVAJEv3wqlUBg | Issue #716 runtime 依存選定 — mlua Rust API（#692 AC4 再評価） | accepted | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | ADR-034IO02s3n3KHsxnHckpRn | ライセンス・公開方針 | accepted | [licensing-and-distribution-policy.md](./licensing-and-distribution-policy.md) |
 | ADR-034QfjWFfUXvgvaObuCUwS | M2 typed graph audio runtime placement, stateful RT ownership, and activation/retirement for Issue #195 | proposed | [m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md](./m2-typed-graph-audio-runtime-placement-stateful-rt-ownership-and-activation-reti.md) |
 | ADR-034INZsD434t5cQ7gBp7XN | メディアI/Oバックエンドの抽象境界分離 | accepted | [media-io-backend-abstraction.md](./media-io-backend-abstraction.md) |

@@ -76,6 +76,7 @@ Directory: `docs/tasks`
 | TASK-034YaXXtkSHtOycwJibVwz | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | in-progress | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TASK-034YJ3y9Bg5CeSmMMjs3g1 | Issue #631 T1 — RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | TASK-034ZkLmNpQrStUvWxYzIj5 | Issue #692 T1 — ruviform-script 中立契約 port crate 実装・検証・docs chain | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
+| TASK-Tl2K23IPFpdnJ46b7lJJAc | Issue #716 runtime ScriptBackend — タスク分解 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -369,6 +370,7 @@ Directory: `docs/tasks`
 | TASK-aN7eM2gEouRJ8oS3WbU4Ee | Issue #650 bench-smoke lane coverage 拡張 — mise.toml/dev-env doc/evidence 是正 | done | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | TASK-034YJlja5SyGAbJySCQZfM | Issue #707 — MIDI input cancellation fault タスク | done | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
+| TASK-720tupleV205 | Issue #720 consumer-verify-tuple contract v1→v2 bump — task | done | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

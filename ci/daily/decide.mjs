@@ -37,7 +37,7 @@
 //
 // Tuple mode (Issue #294, `--mode tuple` / `DAILY_MODE=tuple`): the unit of
 // verification is the candidate tuple
-//   (ruviform main SHA, consumer main SHAs..., "consumer-verify-tuple/v1")
+//   (ruviform main SHA, consumer main SHAs..., "consumer-verify-tuple/v2")
 // evaluated against `consumer-verify.yml` run history. Workflow run records
 // do not expose dispatch inputs, so the tuple each run verified is recovered
 // from its `consumer-evidence-<consumer>-attempt-<n>` artifacts. A run only
@@ -46,6 +46,14 @@
 // the recovered tuple matches all candidate components exactly. Missing,
 // expired, malformed, or inconsistent evidence is "unverifiable" — never
 // verified, never silently ignored for retry accounting.
+//
+// Contract bumps are hard cutovers (Issue #720): the contract string is
+// matched exactly and there is no dual-accept window, so evidence emitted
+// under an older contract (e.g. consumer-verify-tuple/v1) is a proven
+// different tuple — non-target, contributing nothing. The consumer
+// deliberately does not inspect evidence `schemaVersion`/`lanes`: the
+// contract string is the negotiated version axis between producer and
+// consumer, and evidence-internal vocabulary stays producer-side.
 //
 // Usage:
 //   GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo node ci/daily/decide.mjs
@@ -56,7 +64,7 @@
 //   # tuple mode:
 //   ... node ci/daily/decide.mjs --mode tuple --workflow consumer-verify.yml
 //       [--consumer-repo audiolens=owner/repo[,synvelis=owner/repo]]
-//       [--tuple-contract consumer-verify-tuple/v1] [--max-evidence-runs 60]
+//       [--tuple-contract consumer-verify-tuple/v2] [--max-evidence-runs 60]
 //
 // Exit codes: 0 every completed outcome (including budget-exhausted /
 // hold-unknown / history-truncated / main-moved / dispatched-unconfirmed
@@ -1421,7 +1429,7 @@ export function resolveConfig(argv = process.argv, env = process.env) {
     consumers: parseConsumerRepos(
       env.DAILY_CONSUMER_REPOS ?? "audiolens=scarecrow173/audio-lens,synvelis=scarecrow173/synvelis",
     ),
-    tupleContract: env.DAILY_TUPLE_CONTRACT ?? "consumer-verify-tuple/v1",
+    tupleContract: env.DAILY_TUPLE_CONTRACT ?? "consumer-verify-tuple/v2",
     maxAutoDispatches: 2,
     maxPages: 10,
     maxRechecks: 2,
