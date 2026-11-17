@@ -204,10 +204,13 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
   provisioning 確立。
 - `.github/**` CI/runner 統合（定期 opt-in 実行）— 後続の
   外部 gate。POLICIES §5 の opt-in lane 規範に対応。
-- Test Runtime 完全結線（`ruviform-audio-device` →
-  `ruviform-audio-test` dev-dep）— Coordinator 承認待ち。
-  再開条件: 依存承認。verdict→RunMetadata 対応付けの spec
-  決定は本 design に記録。
+- Test Runtime 完全結線 — **解消済み（AC3 wiring slice）**:
+  依存方向は逆方向 dev-dep（`ruviform-audio-test` → 両 device
+  crate、test target のみ）を
+  `docs/designs/issue-629-test-runtime-wiring.md` §1 で裁定・
+  採用。device→audio-test dev-dep は不承認のまま。verdict→
+  `RunMetadata` 対応付けは同 design §2・`tests/os_endpoint.rs`
+  に記録・実装済み。provisioned 実走 Pass は外部 gate に残る。
 - `EnvironmentKind::RealAbiTestPlugin` の serde 綴り
   `real-abi-test-plugin` ↔ schema `test-plugin` の gap —
   破壊的変更のため後続 slice で serde 移行方針（rename+alias

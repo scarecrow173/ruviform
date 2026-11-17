@@ -206,8 +206,10 @@ pub struct RunMetadata {
 }
 
 impl RunMetadata {
-    /// Creates a deterministic-backend OS-L1 run record — the only
-    /// combination this slice produces.
+    /// Creates a deterministic-backend OS-L1 run record — the
+    /// shorthand for [`EnvironmentKind::DeterministicBackend`] +
+    /// [`VerificationLevel::OsL1`]. Cases declared at other levels or
+    /// environments use [`Self::for_environment`] (Issue #629 AC3).
     #[must_use]
     pub fn deterministic(
         case_id: impl Into<String>,
@@ -222,6 +224,47 @@ impl RunMetadata {
             result: CaseResult::NotRun,
             level: VerificationLevel::OsL1,
             environment_kind: EnvironmentKind::DeterministicBackend,
+            oracle: oracle.into(),
+            parameters,
+            repo: repo.into(),
+            sha: sha.into(),
+            os: String::new(),
+            arch: String::new(),
+            expected: String::new(),
+            observed: String::new(),
+            evidence: Vec::new(),
+        }
+    }
+
+    /// Creates a run record for a case declared at an explicit
+    /// verification `level` in an explicit `environment_kind` — e.g.
+    /// `ext-l3`/`virtual-os-endpoint` endpoint cases or
+    /// `os-l1`/`deterministic-backend` deterministic legs (Issue #629
+    /// AC3 wiring). The record starts as `NotRun`; callers mark the
+    /// actual outcome via [`Self::with_result`] so an unexecuted case
+    /// can never be recorded as `Pass` by construction.
+    ///
+    /// `requirement` is caller-declared (typically
+    /// [`CaseRequirement::Required`]); OS/arch/expected/observed/
+    /// evidence start empty and are filled by the `with_*` builders.
+    #[must_use]
+    #[expect(clippy::too_many_arguments)]
+    pub fn for_environment(
+        case_id: impl Into<String>,
+        requirement: CaseRequirement,
+        level: VerificationLevel,
+        environment_kind: EnvironmentKind,
+        oracle: impl Into<String>,
+        parameters: RunParameters,
+        repo: impl Into<String>,
+        sha: impl Into<String>,
+    ) -> Self {
+        Self {
+            case_id: case_id.into(),
+            requirement,
+            result: CaseResult::NotRun,
+            level,
+            environment_kind,
             oracle: oracle.into(),
             parameters,
             repo: repo.into(),

@@ -261,9 +261,14 @@ module doc（「`test-midi-real-device` が `#[ignore]` を収集
   provisioning 確立。
 - `.github/**` CI/runner 統合（定期 opt-in 実行）— 後続の
   外部 gate。POLICIES §5 の opt-in lane 規範に対応。
-- AC3 typed 結線（`ruviform-audio-device` →
-  `ruviform-audio-test` dev-dep、逆方向も未裁定）—
-  Coordinator 承認待ち。
+- AC3 typed 結線 — **解消済み（AC3 wiring slice）**:
+  逆方向 dev-dep（`ruviform-audio-test` → 両 device crate、
+  test target のみ）を
+  `docs/designs/issue-629-test-runtime-wiring.md` §1 で裁定・
+  採用し、verdict→`RunMetadata` 対応付けを
+  `crates/ruviform-audio-test/tests/os_endpoint.rs` に実装。
+  device→audio-test dev-dep は不承認のまま。wiring test の
+  canonical lane 登録（`mise.toml`）は後続 slice。
 - 採用 endpoint の確定と再現 Case 実装 — provisioning
   実測後。runbook は候補別手順のみで採用を決めない。
 - consumer 側の独立 Oracle での実受入判定（Synvelis
