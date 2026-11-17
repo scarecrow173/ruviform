@@ -225,10 +225,14 @@ observed 側の oracle は被試験 adapter の内部状態に依存しない
   oracle は device verifier に残す — wiring test の oracle は
   contract 級（marker/peak/monotonic/domain/non-finite/
   callback counts）に限定する。
-- `#[ignore]` wiring test には canonical lane がない
-  （`mise.toml` は本 slice 範囲外）。self-run は直接 cargo
-  実行の補助証拠として記録し、lane 登録は後続 slice の
-  未対応作業とする。
+- `#[ignore]` wiring test の canonical lane は本 slice 時点
+  で未登録だった（`mise.toml` は本 slice 範囲外）。self-run
+  は直接 cargo 実行の補助証拠として記録した — 後続の
+  os-endpoint-lane slice（`docs/designs/
+  issue-629-os-endpoint-lane.md`）で `mise run
+  test-os-endpoint-wiring`（`cargo test -p
+  ruviform-audio-test --test os_endpoint -- --ignored
+  --test-threads=1`）として登録済み。
 - provisioned 環境でのみ `pass` が出る設計のため、本ホストの
   self-run は `not-run` のみを記録する — これは仕様どおりで
   あり Pass の欠落ではない。
