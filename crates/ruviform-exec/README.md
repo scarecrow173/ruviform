@@ -2,8 +2,9 @@
 
 Ruviform メディア基盤の非 RT 実行基盤: スレッド優先度機構と、
 `OfflineDriver` によるバッチ/並列駆動・進捗/キャンセルトークン。
-並列ワーカーは `run_parallel` 内部の scoped スレッドに留まり、独立した
-スレッドプール・executor API は持たない。RT プリミティブは持たない。
+並列ワーカーは `run_parallel` 内部の scoped スレッド、`OfflineJob` の
+専用スレッド、および `JobExecutor` の bounded ワーカープールで駆動する。
+RT プリミティブは持たない。
 
 ## 責務
 
@@ -22,8 +23,15 @@ Ruviform メディア基盤の非 RT 実行基盤: スレッド優先度機構�
   `Progress`）・`JobState`/`JobEvent`（ポーリング + 有界イベントチャネルの
   二系統観測）・`cancel`/`wait`/`detach` のライフサイクル制御を提供する
   薄い接着層。`Progress` の同期リスナー（push 進捗）も本モジュールが
-  利用する。ジョブレジストリ・永続化・executor・exit code は持たない
+  利用する。ジョブレジストリ・永続化・exit code は持たない
   （利用アプリ所有）。
+- bounded 非 RT ジョブ executor（`executor` モジュール、Issue #744）:
+  `JobExecutor` が固定 worker 数 + 有界キューで `QueuedJob` を駆動し、
+  `OfflineJob` と同一の observe/cancel/join surface を pool worker 上で
+  提供する。`workers + queue_capacity` が in-flight 上限、協調 cancel・
+  結果 join・`SubmitError` の fail-closed・shutdown 時の全 job cancel +
+  worker join を保証する。Job Registry・job ID・永続化・retry・優先度
+  scheduling は持たない（利用アプリ所有）。
 
 ## 層・許可依存
 
@@ -48,3 +56,4 @@ Ruviform メディア基盤の非 RT 実行基盤: スレッド優先度機構�
 - RT 基盤実装 ADR: docs/adr/rt-foundation-primitives-implementation.md
 - Issue #24 オフライン実行ドライバ: docs/designs/offline-execution-driver.md, docs/adr/offline-determinism-scope.md
 - Issue #155 非同期ジョブ面・headless 利用境界: docs/designs/issue-155-headless-cli-foundation.md
+- Issue #744 bounded 非 RT JobExecutor（API 契約: Issue #727 design）: docs/designs/issue-744-job-executor.md
