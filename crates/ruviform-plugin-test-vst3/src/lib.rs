@@ -89,6 +89,7 @@ mod factory;
 mod fault;
 mod gain;
 mod instrument;
+mod preset;
 mod stateful;
 mod strings;
 

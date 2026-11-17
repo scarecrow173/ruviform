@@ -64,7 +64,7 @@ fn load_library() -> ClapLibrary {
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5, "the entry exposes five plugins");
+    assert_eq!(factories.len(), 6, "the entry exposes six plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -141,8 +141,8 @@ fn discovers_suite_plugins_through_production_host() {
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        5,
-        "the entry exposes exactly five plugin descriptors"
+        6,
+        "the entry exposes exactly six plugin descriptors"
     );
     let gain = descriptors[0];
     assert_eq!(gain.name, "test_gain");
@@ -180,7 +180,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -199,7 +199,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -339,7 +339,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn reports_stateful_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[2].create();
     let params = plugin.params();
     assert_eq!(
@@ -557,7 +557,7 @@ fn instrument_note_lifecycle_releases_to_silence() {
 fn editor_reports_no_params() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 5);
+    assert_eq!(factories.len(), 6);
     let plugin = factories[4].create();
     assert!(
         plugin.params().is_empty(),
