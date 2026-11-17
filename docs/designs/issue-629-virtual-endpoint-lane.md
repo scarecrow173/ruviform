@@ -259,3 +259,22 @@ issue-629-wasapi-endpoint.md`）で WASAPI streaming verifier
   `mise.toml` の TOML 検査を兼ねる）— Pass。
 - [ ] MSRV lane — NotRun（daily CI 管轄、task spec 指定どおり
   未実行）。
+
+## 追記（2026-11-18）— AC6 残部の解消: `test-os-endpoint-wiring` lane 登録
+
+Issue #629 AC6 の headless 残部 — AC3 wiring slice
+（`docs/designs/issue-629-test-runtime-wiring.md`）で追加された
+`crates/ruviform-audio-test/tests/os_endpoint.rs` の `#[ignore]`
+wiring leg 2 件（`audio_virtual_endpoint_round_trip`・
+`midi_virtual_endpoint_loopback`）用の canonical opt-in lane —
+を os-endpoint-lane slice
+（`docs/designs/issue-629-os-endpoint-lane.md`）で `mise.toml`
+に登録した。canonical 起動式は `mise run
+test-os-endpoint-wiring`（`cargo test -p ruviform-audio-test
+--test os_endpoint -- --ignored --test-threads=1`、feature gate
+なし — device crate は dev-dep で test target のみに載る）。
+本 slice の audio 側 lane（`test-audio-virtual-endpoint`）と
+closeout slice の MIDI 側 lane（`test-midi-virtual-endpoint`）
+に続き、AC6 の headless lane 登録はこれで完了。provisioned
+runner での wiring leg 実走 Pass・`.github/**` CI/runner 統合は
+外部 gate として残る（fail-closed の NotRun を維持）。

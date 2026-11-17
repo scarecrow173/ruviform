@@ -653,3 +653,23 @@ Endpoint の Pass は以下を保証しない — consumer・利用者が
 これらは「問題は可能な範囲で共通仮想 Fixture へ回帰再現を
 還元し、再現不可なら未保証範囲を記録する」POLICIES §2.1
 の方針に従い、本節で未保証として記録する。
+
+## 10. 追記（2026-11-18）— wiring leg canonical lane の登録
+
+§1 の canonical lane 一覧に続く残部として、AC3 wiring slice
+（`docs/designs/issue-629-test-runtime-wiring.md`）で追加された
+`crates/ruviform-audio-test/tests/os_endpoint.rs` の `#[ignore]`
+leg 2 件（`audio_virtual_endpoint_round_trip`・
+`midi_virtual_endpoint_loopback`）の canonical lane が
+os-endpoint-lane slice（`docs/designs/
+issue-629-os-endpoint-lane.md`）で `mise.toml` に登録された —
+`mise run test-os-endpoint-wiring`（`cargo test -p
+ruviform-audio-test --test os_endpoint -- --ignored
+--test-threads=1`）。本 runbook の provisioning 手順・
+capability probe 判定・lane 検証手順・NotRun 解釈は本 lane にも
+そのまま適用される — provisioned pair が揃えば wiring leg が
+実際に endpoint を stream した run のみ
+`level=ext-l3`/`environment_kind=virtual-os-endpoint` の
+`RunMetadata` を emit する（fail-closed 契約は device
+verifier と同一）。詳細は
+`docs/designs/issue-629-os-endpoint-lane.md` を参照。
