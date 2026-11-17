@@ -60,7 +60,11 @@ export const SHA_RE = /^[0-9a-f]{40}$/;
 export const REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 export const REF_REJECT_RE = /(\.\.|^\/|\/$|\.lock$)/;
 export const OUTCOMES = ["pass", "fail", "not_run", "unsupported", "skipped"];
-export const CONTRACT = "consumer-verify-tuple/v1";
+// Tuple contract id (Issue #720): v2 reflects the Case schema v2 evidence
+// vocabulary already emitted under schemaVersion 2. decide.mjs matches this
+// string exactly — the bump is a hard cutover with no dual-accept window,
+// so evidence emitted under v1 is a proven different tuple (non-target).
+export const CONTRACT = "consumer-verify-tuple/v2";
 export const SCHEMA_VERSION = 2;
 // Case schema v2 (Issue #294 first slice / #627 contract §2): the result
 // axis stays `outcome` (requirement is orthogonal — never folded into one
