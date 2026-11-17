@@ -1,0 +1,27 @@
+experiment log audit: docs/impl/exp
+Files: 65
+[error] docs/impl/exp/issue-253-midi-event-contract.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-parent-lease-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-parent-lease-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-real-session-lifecycle-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-real-session-lifecycle-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-real-session-lifecycle-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-session-lifecycle-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-389-session-lifecycle-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-630-abi-validator-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-630-abi-validator-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-630-preset-spawn-fault-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-630-test-fault.jsonl: Unexpected schema: experiment_event_v1
+[error] docs/impl/exp/issue-630-test-stateful.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-630-test-stateful.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-716-runtime-backend-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/issue-720-consumer-tuple-v2-exp.jsonl: Invalid event type: result
+[error] docs/impl/exp/linux-container-device-and-arch-verification.jsonl: Invalid event type: end
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[error] docs/impl/exp/plugin-gui-attach-e1-e2.jsonl: Invalid event shape: Invalid input: expected string, received undefined, Invalid input: expected number, received undefined, Invalid input: expected string, received undefined, Invalid input: expected string, received undefined
+[warning] docs/impl/exp/README.md: docs/impl/exp/README.md has no row for issue-744-job-executor-exp.jsonl
+[info] docs/impl/exp/README.md: docs/impl/exp/README.md row order differs from the deterministic index order
