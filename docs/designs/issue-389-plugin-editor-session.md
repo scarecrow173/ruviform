@@ -376,9 +376,9 @@ Capability Matrix）を現行コードに照らして再検証し、発見した
 
 | 経路 | Dock（Docked open） | Floating | Resize | Hide/Show | Reparent | Close | 根拠・状態 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| L0 / VST3（Windows） | Supported（`open_gui` 実装・`kPlatformTypeHWND`・`createView("editor")`） | Unsupported（`InProcessEditorOps` が非 Docked を明示拒否） | Unsupported（verb なし） | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-vst3/src/host.rs` L2614/L2675。実外部 VST3 module の HWND attach 証拠は `evidence/rf389-vst3-editor/`（task `issue-389-vst3-l0-editor-attach` completed）。`createView` null の plugin（test_gain 等）は honest `Unsupported`（dock-test `editor-attach` 実測） |
+| L0 / VST3（Windows） | Supported（`open_gui` 実装・`kPlatformTypeHWND`・`createView("editor")`） | Unsupported（`InProcessEditorOps` が非 Docked を明示拒否） | Supported（`canResize`→`checkSizeConstraint`→`onSize`・plugin decline は honest `Unsupported` — 改訂 4） | Supported（hide=`removed()` detach / show=`setFrame`+`attached` 再構成 — 改訂 4） | Supported（remove+新 parent attach・失敗時 old parent best-effort restore — 改訂 4） | Supported（`close_gui` 実装） | `ruviform-plugin-vst3/src/host.rs`。実外部 VST3 module の HWND attach 証拠は `evidence/rf389-vst3-editor/`（task `issue-389-vst3-l0-editor-attach` completed）。`createView` null の plugin（test_gain 等）は honest `Unsupported`（dock-test `editor-attach` 実測）。verb の real-window effect oracle は `evidence/rf631/plugin-dock-real-scenario.jsonl` の `real-editor-resize`/`real-editor-redock`/`real-editor-visibility`（全て pass — 改訂 4） |
 | L0 / VST3（非 Windows） | Unsupported（`EDITOR_PLATFORM_TYPE=None`） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | 非 Windows attach は未実装 |
-| L0 / CLAP | Supported（`clack-extensions` `gui` ext `PluginGui` 経由の `open_gui`/`close_gui`）※ ext 非対応 plugin は honest `Unsupported` | Unsupported（同上・非 Docked 明示拒否） | Unsupported | Unsupported | Unsupported | Supported（`close_gui` 実装） | `ruviform-plugin-clap/src/host.rs` L1092/L1150。`clap.gui` ext を持たない plugin/fixture は `Unsupported`（`open_gui_without_gui_extension_is_unsupported`）。実外部 CLAP 証拠は `evidence/rf389-clap-editor/`（task `issue-389-clap-l0-editor-attach` done） |
+| L0 / CLAP | Supported（`clack-extensions` `gui` ext `PluginGui` 経由の `open_gui`/`close_gui`）※ ext 非対応 plugin は honest `Unsupported` | Unsupported（同上・非 Docked 明示拒否） | Supported（`can_resize`/`set_size` — 改訂 4） | Supported（`hide`/`show` — 改訂 4） | Supported（`set_parent` — 改訂 4） | Supported（`close_gui` 実装） | `ruviform-plugin-clap/src/host.rs`。`clap.gui` ext を持たない plugin/fixture は `Unsupported`（`open_gui_without_gui_extension_is_unsupported`）。実外部 CLAP 証拠は `evidence/rf389-clap-editor/`（task `issue-389-clap-l0-editor-attach` done）。verb は headless contract で検証済み（実 CLAP binary の verb lane は未実施 — VST3 lane のみ real-window oracle あり） |
 | L0 / AU（macOS） | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | ADR `plugin-architecture-clap-vst3`: AU は初期対象外。adapter crate なし |
 | L0 / Ruviform 製 GPUI Plugin | NotRun | NotRun | NotRun | NotRun | NotRun | NotRun | plugin 側 GPUI editor の adapter・実装なし |
 | L1 out-of-process（全規格） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `L1EditorOps` 全 op 拒否・`l1/mod.rs` の `OpenGui`/`CloseGui` 拒否 |
@@ -508,3 +508,61 @@ container HWND → `ParentSlotLease` → `InProcessEditorOps` redeem
   21 row 全て `not_run` + `observed.environment_blocked` を記録
   （violation 0）。catalog と executable entry の同期は
   `real_catalog_matches_entries` test が gate。
+
+## 改訂 4: adapter editor verbs slice（2026-11-18・rf389-ime-verbs）
+
+`InProcessEditorOps` の `set_size`/`set_visibility`/`reattach` が
+返していた defined `EditorOpError::Unsupported` refusal
+（placeholder — 「No `HostCommand` resize verb exists yet」）を
+解消し、3 verb を production chain へ実装した slice
+（`docs/specs|designs|plans|tasks|test-specs|impl/*/discovery/
+issue-389-ime-verbs.*`）。
+
+- **seam**: plugin-core `GuiSize` + `Plugin`/`ErasedPlugin` の
+  `set_gui_size`/`set_gui_visibility`/`set_gui_parent` hook
+  （default `Unsupported` — additive）→ `HostCommand::
+  SetGuiSize`/`SetGuiVisibility`/`SetGuiParent`（L0 surface のみ）
+  → `InProcessHost` dispatch（Plain/Shared slot）→ composite
+  L0 routing（`OutOfProcess` slot は `l0_only_gui_verb` guard で
+  defined `Unsupported` — `wire::Command` 未定義・`to_wire`
+  unreachable 回避）→ VST3/CLAP adapter。
+- **VST3**: `canResize`→`checkSizeConstraint`→`onSize`、
+  hide=`removed()`/show=`setFrame`+`attached` 再構成
+  （`IPlugView` に hide/show verb が無いため hide は detach
+  同義 — plugin UI state 喪失は format 制約として明示）、
+  `set_gui_parent`=remove+新 parent attach（失敗時 old parent
+  best-effort restore）。
+- **CLAP**: `can_resize`/`set_size`・`hide`/`show`・`set_parent`。
+- **reattach の lease**: `InProcessEditorOps` の `LeaseRedeemer`
+  で `ParentSlotLease`→`ParentLease` を redeem してから
+  `SetGuiParent` を発行 — `open` と同一 seam、stale/forged
+  lease は op 発行前に拒否。
+- **fixture**: test-vst3 `test_editor` を実 resize 可能化
+  （`canResize=kResultTrue`、`onSize` が child HWND を
+  `SetWindowPos` で resize、attach generation を window title
+  `rvf-test-editor-attach-{n}` に刻印）。
+- **lane**: `real-editor-resize`/`real-editor-redock`/
+  `real-editor-visibility` を refusal/deferred から実実行 +
+  OS-level effect oracle へ flip。`EditorOpVerification.
+  effect_confirmed` + `EditorOpIdentity` を追加し、accepted +
+  lifecycle verified + effect confirmed のみ `Pass`。
+
+### reconcile 結果
+
+- R5 capability matrix の L0/VST3（Windows）・L0/CLAP 行の
+  Resize/Hide-Show/Reparent を `Unsupported` → `Supported` へ
+  更新（plugin decline は引き続き honest `Unsupported`）。
+  L1 out-of-process 行・非 Windows VST3 行は不変。
+- 実走証拠: `evidence/rf631/plugin-dock-real-scenario.jsonl`
+  で 3 row とも `pass`（interactive Windows）—
+  resize は child `GetWindowRect == 800×600`、redock は旧
+  child HWND 全 `IsWindow==0` + 新 attach generation title
+  前進、visibility は hide→全 child 破棄 `Hidden{Docked}`・
+  show→新 generation 再成立 `Attached{Docked}` を実測。
+  headless `editor_session` 54/54、fail-closed blocked-probe
+  22 row `not_run`+`environment_blocked` violation 0。
+- 残存: L1 wire GUI verb（`wire::Command`・`WIRE_VERSION`・
+  `Hello.capabilities` GUI bit — issue `#115` scope）、
+  `AttachMode::Floating`、plugin→host GUI request、crash/hang
+  受入、`#532` 画素 gate、consumer gate — issue #389 は
+  OPEN のまま。

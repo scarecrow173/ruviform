@@ -70,13 +70,17 @@ pub struct RealCatalogRow {
 /// applied/rejected `result` events posted through `post_event`
 /// settle the binding phases while the decoded `CommandReceipt`s
 /// land in the report's `receipts`. The AC3 rows
-/// (`real-editor-resize`, `real-editor-redock`) judge editor ops
-/// through non-pixel oracles (session events, child-HWND contract,
-/// session state) only. The AC1/AC6 remainder rows
+/// (`real-editor-resize`, `real-editor-redock`,
+/// `real-editor-visibility`) judge editor ops through non-pixel
+/// oracles — session events, child-HWND contract/state, plus the
+/// verbs' own OS-level effect oracles (child `GetWindowRect`
+/// geometry for resize, hide→destroy/show→recreate for visibility,
+/// attach-generation title advance for redock) — never pixels.
+/// The AC1/AC6 remainder rows
 /// (`real-session-terminate` and the Issue #389 lifecycle
 /// remainder: `real-session-degraded`, `real-session-recovery`,
-/// `real-session-timeout`, `real-editor-visibility`,
-/// `real-session-crash`, `real-session-hang`) judge the session
+/// `real-session-timeout`, `real-session-crash`, `real-session-hang`)
+/// judge the session
 /// lifecycle paths through session events, child-HWND, and session
 /// state oracles only — crash/hang stay honest `Unsupported`
 /// boundary rows because the in-process lane cannot survive the

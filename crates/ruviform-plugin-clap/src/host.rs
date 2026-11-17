@@ -137,7 +137,9 @@ use clack_common::events::{EventFlags, EventHeader, Match, Pckn};
 use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::{ClapId, FixedPoint};
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
-use clack_extensions::gui::{GuiApiType, GuiConfiguration, PluginGui, Window};
+use clack_extensions::gui::{
+    GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, PluginGui, Window,
+};
 use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
 use clack_extensions::state::PluginState;
 use clack_host::entry::{PluginEntry, PluginEntryError};
@@ -153,7 +155,7 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, HostError,
+    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, GuiSize, HostError,
     ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
     TransportInfo, erase,
@@ -1395,6 +1397,80 @@ impl Plugin for ClapPlugin {
         };
         self.teardown_gui(gui);
         Ok(())
+    }
+
+    /// `set_gui_size` → `can_resize` gate → `set_size` — CLAP's
+    /// honest resize negotiation: a plugin that reports
+    /// `can_resize == false` gets the defined `Unsupported`, and a
+    /// declined `set_size` is `PluginFailed`. `GuiSize` logical
+    /// units truncate to the `u32` pixels `clap.ext.gui` speaks —
+    /// the same documented unit deviation the attach path carries.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open or the plugin
+    /// reports it cannot resize; [`HostError::PluginFailed`] when a
+    /// GUI call declines.
+    fn set_gui_size(&mut self, size: GuiSize) -> Result<(), HostError> {
+        let (Some(gui), Some(instance)) = (self.gui.as_ref(), self.instance.as_mut()) else {
+            return Err(HostError::Unsupported);
+        };
+        let handle = instance.plugin_handle();
+        if !gui.can_resize(&handle) {
+            return Err(HostError::Unsupported);
+        }
+        gui.set_size(
+            &handle,
+            ClapGuiSize {
+                width: size.width as u32,
+                height: size.height as u32,
+            },
+        )
+        .map_err(|_| HostError::PluginFailed)
+    }
+
+    /// `set_gui_visibility` → `hide`/`show` — CLAP's real
+    /// hide/show verbs; the embedded window stays alive but
+    /// invisible, unlike the VST3 detach/re-compose path.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open;
+    /// [`HostError::PluginFailed`] when a GUI call declines.
+    fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError> {
+        let (Some(gui), Some(instance)) = (self.gui.as_ref(), self.instance.as_mut()) else {
+            return Err(HostError::Unsupported);
+        };
+        let handle = instance.plugin_handle();
+        let result = if visible {
+            gui.show(&handle)
+        } else {
+            gui.hide(&handle)
+        };
+        result.map_err(|_| HostError::PluginFailed)
+    }
+
+    /// `set_gui_parent` → `set_parent` — re-embeds the live GUI
+    /// under a freshly redeemed parent HWND. Whether the plugin
+    /// accepts re-embedding an already-parented GUI is its own
+    /// honest answer (a decline surfaces as `PluginFailed`).
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open;
+    /// [`HostError::PluginFailed`] when `set_parent` declines.
+    #[expect(unsafe_code)]
+    fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError> {
+        let (Some(gui), Some(instance)) = (self.gui.as_ref(), self.instance.as_mut()) else {
+            return Err(HostError::Unsupported);
+        };
+        let handle = instance.plugin_handle();
+        // SAFETY: the payload is the session-redeemed parent HWND the
+        // caller keeps alive for the GUI's lifetime — the same
+        // contract `open_gui`'s `set_parent` runs under.
+        let window = unsafe { Window::from_win32_hwnd(parent.payload() as *mut c_void) };
+        // SAFETY: `window` wraps the live redeemed HWND above.
+        unsafe { gui.set_parent(&handle, window) }.map_err(|_| HostError::PluginFailed)
     }
 }
 

@@ -187,8 +187,8 @@ use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, HostError,
-    ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiSize,
+    HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
     PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
     ProcessStatus, TransportInfo, erase,
 };
@@ -1760,6 +1760,14 @@ struct Vst3Plugin {
     /// The bridge-owned `IPlugFrame` handed to `setFrame` — kept for
     /// the view's open lifetime and released with it.
     plug_frame: Option<ComPtr<IPlugFrame>>,
+    /// The redeemed parent lease + platform the open view last
+    /// attached to — `set_gui_parent`/`set_gui_visibility` re-`attach`
+    /// after a `removed()` need both.
+    gui_parent: Option<(ParentLease, vst3::Steinberg::FIDString)>,
+    /// `true` while the open view is `attached` — `false` after a
+    /// hide/`removed` that left the view open but detached, so
+    /// `close_view` never double-`removed`s.
+    gui_attached: bool,
     /// The component↔controller connection pair, when both objects
     /// expose `IConnectionPoint` (distributed plugins only). Held so
     /// `Drop` can `disconnect` before `terminate` — the VST3 contract
@@ -1862,6 +1870,8 @@ impl Vst3Plugin {
             handler: None,
             view: None,
             plug_frame: None,
+            gui_parent: None,
+            gui_attached: false,
             component_cp: None,
             controller_cp: None,
             gui_seq: 0,
@@ -1938,11 +1948,18 @@ impl Vst3Plugin {
             // release and runs on the owning UI thread. `setFrame(0)`
             // clears the plugin's frame pointer defensively (some
             // plugins hold it without addref) before our release.
-            let result = unsafe { view.removed() };
-            debug_assert_eq!(result, kResultOk, "view.removed() declined");
+            // `gui_attached` gates the call — a hidden view was
+            // already `removed()` by `set_gui_visibility`, and a
+            // second `removed` is not part of the VST3 contract.
+            if self.gui_attached {
+                let result = unsafe { view.removed() };
+                debug_assert_eq!(result, kResultOk, "view.removed() declined");
+            }
             let _ = unsafe { view.setFrame(ptr::null_mut()) };
             drop(view);
         }
+        self.gui_attached = false;
+        self.gui_parent = None;
         drop(self.plug_frame.take());
     }
 
@@ -3097,6 +3114,8 @@ impl Plugin for Vst3Plugin {
         }
         self.gui_seq = self.gui_seq.wrapping_add(1);
         self.plug_frame = Some(frame);
+        self.gui_parent = Some((parent, platform));
+        self.gui_attached = true;
         self.view = Some(view);
         Ok(GuiHandle::new(self.gui_seq))
     }
@@ -3112,6 +3131,128 @@ impl Plugin for Vst3Plugin {
             return Err(HostError::Unsupported);
         }
         self.close_view();
+        Ok(())
+    }
+
+    /// `set_gui_size` → `canResize` gate → `checkSizeConstraint` →
+    /// `onSize` — the plugin is asked whether it can resize, its
+    /// constraint hook may adjust the rect, and `onSize` carries the
+    /// final size. `GuiSize` logical units map 1:1 onto `ViewRect`
+    /// pixels — the same documented unit deviation the attach path
+    /// already carries (DPI scaling is a later concern).
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open or the plugin
+    /// declines resize via `canResize`; [`HostError::PluginFailed`]
+    /// when a view call declines.
+    #[expect(unsafe_code)]
+    #[expect(clippy::cast_possible_truncation)]
+    fn set_gui_size(&mut self, size: GuiSize) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: `view` is a live `IPlugView`; all calls run on the
+        // caller's UI thread per the open_gui thread contract.
+        if unsafe { view.canResize() } != kResultTrue {
+            return Err(HostError::Unsupported);
+        }
+        let mut rect = ViewRect {
+            left: 0,
+            top: 0,
+            right: size.width.round() as i32,
+            bottom: size.height.round() as i32,
+        };
+        if unsafe { view.checkSizeConstraint(&raw mut rect) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        if unsafe { view.onSize(&raw mut rect) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        Ok(())
+    }
+
+    /// `set_gui_visibility` — `IPlugView` has no hide/show verb, so
+    /// hide is `removed()` and show is `setFrame` + `attached`
+    /// re-composition under the stored parent: the plugin's editor
+    /// surface is genuinely detached/reattached (UI state held by the
+    /// plugin's window is lost on hide — documented in the design).
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open or this
+    /// platform has no implemented GUI API; [`HostError::PluginFailed`]
+    /// when a view call declines.
+    #[expect(unsafe_code)]
+    fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        let Some((parent, platform)) = self.gui_parent else {
+            return Err(HostError::PluginFailed);
+        };
+        if visible == self.gui_attached {
+            return Ok(());
+        }
+        if !visible {
+            // SAFETY: live `IPlugView` on the caller's UI thread.
+            if unsafe { view.removed() } != kResultOk {
+                return Err(HostError::PluginFailed);
+            }
+            self.gui_attached = false;
+            return Ok(());
+        }
+        if let Some(frame) = self.plug_frame.as_ref()
+            && unsafe { view.setFrame(frame.as_ptr()) } != kResultOk
+        {
+            return Err(HostError::PluginFailed);
+        }
+        let parent_ptr = parent.payload() as *mut c_void;
+        // SAFETY: live `IPlugView` + live parent HWND on the caller's
+        // UI thread — the same contract `open_gui` runs under.
+        if unsafe { view.attached(parent_ptr, platform) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_attached = true;
+        Ok(())
+    }
+
+    /// `set_gui_parent` → `removed()` + `attached(new parent)` —
+    /// re-parents the open view under a freshly redeemed lease. On an
+    /// attach failure the old parent is re-attached best-effort so a
+    /// declined re-parent never leaves the view detached.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open or this
+    /// platform has no implemented GUI API; [`HostError::PluginFailed`]
+    /// when a view call declines.
+    #[expect(unsafe_code)]
+    fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        let Some(platform) = EDITOR_PLATFORM_TYPE else {
+            return Err(HostError::Unsupported);
+        };
+        let previous = self.gui_parent;
+        if self.gui_attached && unsafe { view.removed() } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_attached = false;
+        let parent_ptr = parent.payload() as *mut c_void;
+        // SAFETY: live `IPlugView` + redeemed parent HWND on the
+        // caller's UI thread — the `open_gui` attach contract.
+        if unsafe { view.attached(parent_ptr, platform) } != kResultOk {
+            // Best-effort restore: a declined re-parent must not
+            // strand the view detached under a dead lease.
+            if let Some((old_parent, _)) = previous {
+                let _ = unsafe { view.attached(old_parent.payload() as *mut c_void, platform) };
+            }
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_parent = Some((parent, platform));
+        self.gui_attached = true;
         Ok(())
     }
 }

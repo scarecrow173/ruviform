@@ -10,7 +10,7 @@
 //! so that both the host and an out-of-process plugin runner can name
 //! them without a host↔runner dependency.
 
-use crate::boundary::{GuiHandle, HostError, ParentLease};
+use crate::boundary::{GuiHandle, GuiSize, HostError, ParentLease};
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
@@ -210,6 +210,44 @@ pub trait Plugin: PluginProcessor {
     fn close_gui(&mut self) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
+
+    /// Resizes the GUI opened by [`Plugin::open_gui`] to `size`.
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins whose editor
+    /// cannot be resized decline the command.
+    fn set_gui_size(&mut self, _size: GuiSize) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
+    /// Shows (`visible = true`) or hides the GUI opened by
+    /// [`Plugin::open_gui`].
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins without a
+    /// hide/show surface decline the command.
+    fn set_gui_visibility(&mut self, _visible: bool) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
+    /// Re-parents the GUI opened by [`Plugin::open_gui`] under a new
+    /// generation-bound parent lease (dock move / re-dock).
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins that cannot
+    /// re-parent their editor decline the command.
+    fn set_gui_parent(&mut self, _parent: ParentLease) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
 }
 
 /// One registered plugin type: descriptor plus instance construction.
@@ -296,6 +334,12 @@ pub trait ErasedPlugin {
     fn open_gui(&mut self, parent: ParentLease) -> Result<GuiHandle, HostError>;
     /// [`Plugin::close_gui`].
     fn close_gui(&mut self) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_size`].
+    fn set_gui_size(&mut self, size: GuiSize) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_visibility`].
+    fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_parent`].
+    fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError>;
     /// [`PluginProcessor::drain_output_reports`].
     ///
     /// **RT contract:** non-RT only.
@@ -355,6 +399,15 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn close_gui(&mut self) -> Result<(), HostError> {
         self.0.close_gui()
+    }
+    fn set_gui_size(&mut self, size: GuiSize) -> Result<(), HostError> {
+        self.0.set_gui_size(size)
+    }
+    fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError> {
+        self.0.set_gui_visibility(visible)
+    }
+    fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError> {
+        self.0.set_gui_parent(parent)
     }
     fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
         self.0.drain_output_reports(out);

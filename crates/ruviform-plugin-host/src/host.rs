@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, Event, EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    BusDescriptor, Event, EventList, GuiSize, Lifecycle, LifecycleError, LifecycleEvent,
+    LifecycleState, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -273,6 +273,11 @@ impl InProcessHost {
             HostCommand::RestoreState { handle, bytes } => self.restore_state(handle, &bytes),
             HostCommand::OpenGui { handle, parent } => self.open_gui(handle, parent),
             HostCommand::CloseGui { handle } => self.close_gui(handle),
+            HostCommand::SetGuiSize { handle, size } => self.set_gui_size(handle, size),
+            HostCommand::SetGuiVisibility { handle, visible } => {
+                self.set_gui_visibility(handle, visible)
+            }
+            HostCommand::SetGuiParent { handle, parent } => self.set_gui_parent(handle, parent),
         }
     }
 
@@ -1092,6 +1097,65 @@ impl InProcessHost {
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.close_gui().map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_size(
+        &mut self,
+        handle: PluginHandle,
+        size: GuiSize,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_size(size)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.set_gui_size(size).map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_visibility(
+        &mut self,
+        handle: PluginHandle,
+        visible: bool,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_visibility(visible)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin
+                        .set_gui_visibility(visible)
+                        .map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_parent(
+        &mut self,
+        handle: PluginHandle,
+        parent: crate::ParentLease,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_parent(parent)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.set_gui_parent(parent).map(|()| HostReply::Ok)
                 })
             }
         }

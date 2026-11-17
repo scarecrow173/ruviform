@@ -79,6 +79,11 @@ struct ViewState {
     /// The last reported size — `getSize` echoes it, `onSize`
     /// replaces it.
     size: ViewRect,
+    /// Attach generation — stamped into the child HWND's window text
+    /// (`rvf-test-editor-attach-{n}`) so an observer can prove a
+    /// detach/`removed` + `attached` cycle really recreated the
+    /// surface (an HWND value alone can be reused by Windows).
+    attach_seq: u32,
 }
 
 /// `test_editor`'s plug view — one instance per
@@ -105,6 +110,7 @@ impl TestEditorView {
                     right: DEFAULT_WIDTH,
                     bottom: DEFAULT_HEIGHT,
                 },
+                attach_seq: 0,
             }),
         }
     }
@@ -146,7 +152,9 @@ impl IPlugViewTrait for TestEditorView {
             // intervening `removed` is a protocol violation.
             return kResultFalse;
         }
-        match win32::attach(parent) {
+        state.attach_seq = state.attach_seq.wrapping_add(1);
+        let title = format!("rvf-test-editor-attach-{}", state.attach_seq);
+        match win32::attach(parent, &title) {
             Some(hwnd) => {
                 state.hwnd = Some(hwnd);
                 kResultOk
@@ -216,7 +224,15 @@ impl IPlugViewTrait for TestEditorView {
             return kResultFalse;
         };
         // SAFETY: in-param — read the caller's rect once.
-        state.size = unsafe { *new_size };
+        let rect = unsafe { *new_size };
+        state.size = rect;
+        // The fixture's child HWND fills the reported size — the
+        // observable effect a real-window lane can verify through
+        // `GetWindowRect` (the plugin owns its window; the host only
+        // reports the size).
+        if let Some(hwnd) = state.hwnd {
+            win32::resize(hwnd, rect.right - rect.left, rect.bottom - rect.top);
+        }
         kResultOk
     }
 
@@ -250,12 +266,14 @@ impl IPlugViewTrait for TestEditorView {
         kResultOk
     }
 
-    /// The host bridge's `IPlugFrame::resizeView` honestly refuses
-    /// (`kResultFalse` — container geometry belongs to the slot), so
-    /// the symmetric honest answer here is `kResultFalse` too.
+    /// The fixture's editor genuinely resizes — `onSize` moves the
+    /// child HWND to the reported rect, so the honest answer is
+    /// `kResultTrue`. (Plugin-initiated `resizeView` on the host's
+    /// `IPlugFrame` still declines — container geometry belongs to
+    /// the slot — but that is the opposite direction.)
     #[expect(unsafe_code)]
     unsafe fn canResize(&self) -> tresult {
-        kResultFalse
+        kResultTrue
     }
 
     /// Accepts the proposed rect unchanged — the fixture has no size
@@ -294,7 +312,8 @@ mod win32 {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
-        GetClientRect, IsWindow, RegisterClassW, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+        GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WNDCLASSW,
+        WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     /// Solid-fill color — green, distinct from the `PoC` probe's red so
@@ -397,12 +416,14 @@ mod win32 {
     /// parent's client area. `parent` must be a live window handle on
     /// the calling thread (the `open_gui` thread-affinity contract);
     /// null, dead, or non-window handles are rejected before any
-    /// Win32 mutation.
+    /// Win32 mutation. `title` becomes the window text — the
+    /// attach-generation tag an observer reads back through
+    /// `GetWindowTextW`.
     ///
     /// # Returns
     /// `Some` child HWND handle (`usize`) on success, `None` on any
     /// defined rejection — the caller maps `None` to `kResultFalse`.
-    pub(super) fn attach(parent: *mut c_void) -> Option<usize> {
+    pub(super) fn attach(parent: *mut c_void, title: &str) -> Option<usize> {
         // SAFETY: `IsWindow` is a pure handle-validity query — safe on
         // any pointer value including null.
         if parent.is_null() || unsafe { IsWindow(parent) } == 0 {
@@ -412,16 +433,17 @@ mod win32 {
             return None;
         }
         let class = class_name();
-        // SAFETY: `parent` passed the `IsWindow` gate; the class is
-        // registered; the returned HWND is owned by this view until
-        // `destroy`.
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `parent` passed the `IsWindow` gate; the class and
+        // title outlive the synchronous call; the returned HWND is
+        // owned by this view until `destroy`.
         let child = unsafe {
             let mut rc = RECT::default();
             GetClientRect(parent, &raw mut rc);
             CreateWindowExW(
                 0,
                 class.as_ptr(),
-                ptr::null(),
+                title_w.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
                 0,
                 0,
@@ -437,6 +459,26 @@ mod win32 {
             None
         } else {
             Some(child as usize)
+        }
+    }
+
+    /// Resizes the child HWND to `width`×`height` device pixels,
+    /// keeping its position and z-order — the observable effect of
+    /// the plugin's `onSize` hook. Best-effort: a dead handle is a
+    /// harmless `SetWindowPos` error.
+    pub(super) fn resize(hwnd: usize, width: i32, height: i32) {
+        // SAFETY: `hwnd` is the child this module created; `SetWindowPos`
+        // on an already-dead handle is a defined no-op error.
+        unsafe {
+            SetWindowPos(
+                hwnd as HWND,
+                ptr::null_mut(),
+                0,
+                0,
+                width,
+                height,
+                SWP_NOMOVE | SWP_NOZORDER,
+            );
         }
     }
 
@@ -458,9 +500,11 @@ mod win32 {
 mod win32 {
     use std::ffi::c_void;
 
-    pub(super) fn attach(_parent: *mut c_void) -> Option<usize> {
+    pub(super) fn attach(_parent: *mut c_void, _title: &str) -> Option<usize> {
         None
     }
+
+    pub(super) fn resize(_hwnd: usize, _width: i32, _height: i32) {}
 
     pub(super) fn destroy(_hwnd: usize) {}
 }
@@ -547,9 +591,9 @@ mod tests {
         }
     }
 
-    /// `canResize` honestly refuses (the host bridge's
-    /// `resizeView` refuses symmetrically); `checkSizeConstraint`
-    /// accepts a valid rect and rejects null.
+    /// `canResize` honestly accepts (the fixture's `onSize` resizes
+    /// the child HWND); `checkSizeConstraint` accepts a valid rect
+    /// and rejects null.
     #[expect(unsafe_code)]
     #[test]
     fn resize_verbs_are_honest() {
@@ -562,7 +606,7 @@ mod tests {
         };
         // SAFETY: `rect` is a valid in/out-param.
         unsafe {
-            assert_eq!(view.canResize(), kResultFalse);
+            assert_eq!(view.canResize(), kResultTrue);
             assert_eq!(view.checkSizeConstraint(&raw mut rect), kResultOk);
             assert_eq!(view.checkSizeConstraint(ptr::null_mut()), kInvalidArgument);
         }

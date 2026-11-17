@@ -20,8 +20,8 @@
 use ruviform_plugin_core::{PluginDescriptor, ProcessConfig};
 
 pub use ruviform_plugin_core::{
-    FailureCause, GuiHandle, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
-    PluginHandle,
+    FailureCause, GuiHandle, GuiSize, HostError, ParentLease, ParentSlotLease,
+    PluginEditorSessionId, PluginHandle,
 };
 
 /// A non-RT host operation expressed as serializable plain data.
@@ -100,6 +100,37 @@ pub enum HostCommand {
     CloseGui {
         /// Target instance.
         handle: PluginHandle,
+    },
+    /// Resize the plugin GUI to `size`.
+    ///
+    /// L0-only: no `wire::Command` encoding exists yet (Issue #115
+    /// owns the out-of-process GUI verb scope), so composite
+    /// dispatch answers the defined `HostError::Unsupported` for
+    /// `OutOfProcess` slots instead of reaching `to_wire`.
+    SetGuiSize {
+        /// Target instance.
+        handle: PluginHandle,
+        /// Requested logical size.
+        size: GuiSize,
+    },
+    /// Show (`visible = true`) or hide the plugin GUI.
+    ///
+    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`].
+    SetGuiVisibility {
+        /// Target instance.
+        handle: PluginHandle,
+        /// `true` shows the GUI, `false` hides it.
+        visible: bool,
+    },
+    /// Re-parent the plugin GUI under a new generation-bound parent
+    /// lease (dock move / re-dock).
+    ///
+    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`].
+    SetGuiParent {
+        /// Target instance.
+        handle: PluginHandle,
+        /// Redeemed parent lease for the new parent surface.
+        parent: ParentLease,
     },
 }
 
