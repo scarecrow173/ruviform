@@ -338,8 +338,12 @@ probe 側は `main` → `print_environment` → `win::run()`:
   evidence — 後続 slice。再開条件: 専用 runner での provisioning
   確立。
 - #628 `PcmFixture`/`oracle`/`RunMetadata` との実結線 —
-  `ruviform-audio-test` dev-dep 承認が前提（本 slice は coordinator
-  不承認で見送り）。再開条件: 依存承認 + lane 設計確定。
+  **解消済み（AC3 wiring slice）**: 依存方向は逆方向 dev-dep
+  （`ruviform-audio-test` → 両 device crate）を
+  `docs/designs/issue-629-test-runtime-wiring.md` §1 で裁定・
+  採用し、`tests/os_endpoint.rs` で verdict→`RunMetadata`
+  対応付けと deterministic signal/Event 供給を実装した。
+  device→audio-test の dev-dep は不承認のまま不変。
 - AC6 lane 登録本体のうち mise task 登録（`test-audio-virtual-
   endpoint`）は 5th slice で解消済み — 専用 lint lane は追加せず
   既存 `lint-audio-real-input`（`--all-targets --features
