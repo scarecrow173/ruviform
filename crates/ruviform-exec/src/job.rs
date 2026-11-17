@@ -69,7 +69,7 @@ use crate::{CancellationToken, Progress};
 
 /// Event-stream capacity: enough to absorb a short burst of chunk
 /// completions while a consumer drains.
-const EVENT_CAPACITY: usize = 64;
+pub(crate) const EVENT_CAPACITY: usize = 64;
 
 /// Coarse lifecycle state of an [`OfflineJob`].
 ///
@@ -81,6 +81,11 @@ const EVENT_CAPACITY: usize = 64;
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum JobState {
+    /// The job is accepted and waiting in the executor's bounded queue;
+    /// the operation body has not started. Reported only by
+    /// [`QueuedJob`](crate::QueuedJob) — [`OfflineJob`] spawns its body
+    /// immediately and never reports `Queued`.
+    Queued,
     /// The operation body is executing.
     #[default]
     Running,
@@ -159,6 +164,12 @@ pub enum JobError<E> {
     /// `catch_unwind` (the panic message still reaches the default
     /// panic hook / stderr).
     Panicked,
+    /// The job was cancelled before its operation body started — the
+    /// body never ran, so there is no operation error to preserve.
+    /// Reported only by [`QueuedJob`](crate::QueuedJob) for jobs
+    /// cancelled while still queued; [`OfflineJob`] always runs its
+    /// body and never produces this variant.
+    Cancelled,
 }
 
 impl<E: std::fmt::Display> std::fmt::Display for JobError<E> {
@@ -166,6 +177,7 @@ impl<E: std::fmt::Display> std::fmt::Display for JobError<E> {
         match self {
             Self::Operation(e) => write!(f, "{e}"),
             Self::Panicked => f.write_str("operation panicked"),
+            Self::Cancelled => f.write_str("operation cancelled"),
         }
     }
 }
@@ -174,7 +186,7 @@ impl<E: std::error::Error + 'static> std::error::Error for JobError<E> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Operation(e) => Some(e),
-            Self::Panicked => None,
+            Self::Panicked | Self::Cancelled => None,
         }
     }
 }
@@ -198,6 +210,12 @@ pub struct JobScope {
 }
 
 impl JobScope {
+    /// Crate-internal constructor — the executor module builds the
+    /// scope for [`QueuedJob`](crate::QueuedJob) submissions.
+    pub(crate) fn new(cancel: CancellationToken, progress: Progress) -> Self {
+        Self { cancel, progress }
+    }
+
     /// The shared cancellation token — pass to the driver or poll
     /// directly.
     #[must_use]
@@ -247,9 +265,43 @@ pub struct OfflineJob<T, E> {
     result: Option<Result<T, JobError<E>>>,
 }
 
-const STATE_RUNNING: u8 = 0;
-const STATE_CANCELLING: u8 = 1;
-const STATE_FINISHED: u8 = 2;
+pub(crate) const STATE_QUEUED: u8 = 3;
+pub(crate) const STATE_RUNNING: u8 = 0;
+pub(crate) const STATE_CANCELLING: u8 = 1;
+pub(crate) const STATE_FINISHED: u8 = 2;
+
+/// Single mapping from the internal `AtomicU8` lifecycle encoding to
+/// [`JobState`] — shared by [`OfflineJob`] and
+/// [`QueuedJob`](crate::QueuedJob) so both handles report identical
+/// state vocabulary.
+pub(crate) fn state_from_u8(value: u8) -> JobState {
+    match value {
+        STATE_RUNNING => JobState::Running,
+        STATE_CANCELLING => JobState::Cancelling,
+        STATE_QUEUED => JobState::Queued,
+        _ => JobState::Finished,
+    }
+}
+
+/// Shared cancel body for [`OfflineJob`] and
+/// [`QueuedJob`](crate::QueuedJob): sets the token, then moves
+/// `Queued`/`Running` → `Cancelling`. `Finished` and an
+/// already-`Cancelling` state are left alone.
+pub(crate) fn request_cancel(cancel: &CancellationToken, state: &AtomicU8) {
+    cancel.cancel();
+    let mut current = state.load(Ordering::Acquire);
+    while matches!(current, STATE_QUEUED | STATE_RUNNING) {
+        match state.compare_exchange(
+            current,
+            STATE_CANCELLING,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => break,
+            Err(actual) => current = actual,
+        }
+    }
+}
 
 impl<T, E> OfflineJob<T, E> {
     /// Observed lifecycle state — non-blocking atomic read.
@@ -257,11 +309,7 @@ impl<T, E> OfflineJob<T, E> {
     /// **RT contract:** non-RT only.
     #[must_use]
     pub fn state(&self) -> JobState {
-        match self.state.load(Ordering::Acquire) {
-            STATE_RUNNING => JobState::Running,
-            STATE_CANCELLING => JobState::Cancelling,
-            _ => JobState::Finished,
-        }
+        state_from_u8(self.state.load(Ordering::Acquire))
     }
 
     /// `true` when [`state`](Self::state) reports `Finished`.
@@ -277,21 +325,7 @@ impl<T, E> OfflineJob<T, E> {
     ///
     /// **RT contract:** non-RT only.
     pub fn cancel(&self) {
-        Self::request_cancel(&self.cancel, &self.state);
-    }
-
-    /// Shared [`cancel`](Self::cancel) body — also invoked by the
-    /// `spawn_with_cancel_after` progress trigger inside the worker.
-    fn request_cancel(cancel: &CancellationToken, state: &AtomicU8) {
-        cancel.cancel();
-        // Only the Running state can become Cancelling; Finished and an
-        // already-set Cancelling are left alone.
-        let _ = state.compare_exchange(
-            STATE_RUNNING,
-            STATE_CANCELLING,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        );
+        request_cancel(&self.cancel, &self.state);
     }
 
     /// The shared cancellation token — cloneable, e.g. to hand a signal
@@ -426,7 +460,7 @@ impl<T: Send + 'static, E: Send + 'static> OfflineJob<T, E> {
             // make before calling `cancel()` — but on the emitting
             // thread, so the next cooperative check always observes it.
             if cancel_after.is_some_and(|n| completed >= n) {
-                Self::request_cancel(&trigger_cancel, &trigger_state);
+                request_cancel(&trigger_cancel, &trigger_state);
             }
         });
 

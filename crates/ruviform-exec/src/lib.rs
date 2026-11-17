@@ -1,10 +1,13 @@
 //! `ruviform-exec` — non-RT execution infrastructure for the Ruviform media
 //! foundation: the OS thread-priority mechanism, `OfflineDriver`'s
 //! offline batch / parallel driving with progress / cancellation tokens,
-//! and [`OfflineJob`]'s async-driving wrapper (spawn–observe–cancel–join)
-//! for UI/CLI shells that cannot block on a synchronous run. Worker
-//! threads are scoped inside `OfflineDriver::run_parallel` or one per
-//! `OfflineJob`; no standalone thread-pool or executor API is provided.
+//! [`OfflineJob`]'s async-driving wrapper (spawn–observe–cancel–join)
+//! for UI/CLI shells that cannot block on a synchronous run, and
+//! [`JobExecutor`]'s bounded non-RT worker pool for queued job execution
+//! (Issue #744). `OfflineDriver::run_parallel` workers stay scoped per
+//! call and `OfflineJob` keeps one thread per job; [`JobExecutor`] is
+//! the shared bounded pool — job registries, scheduling policy and
+//! persistence remain application concerns.
 //!
 //! Holds no RT primitives. As part of its "hide OS thread details"
 //! responsibility it owns the thread-priority mechanism —
@@ -48,10 +51,12 @@
 // `docs/adr/public-enum-non-exhaustive-policy.md`.
 #![allow(clippy::module_name_repetitions)]
 
+pub mod executor;
 pub mod job;
 pub mod offline;
 mod thread_priority;
 
+pub use executor::{ExecutorConfig, ExecutorError, JobExecutor, QueuedJob, SubmitError};
 pub use job::{JobError, JobEvent, JobOutcome, JobScope, JobState, OfflineJob};
 pub use offline::{CancellationToken, OfflineConfig, OfflineDriver, OfflineError, Progress};
 pub use thread_priority::{
