@@ -30,6 +30,7 @@ Directory: `docs/discovery`
 | DSC-630abiValidator01 | Issue #630 外部 ABI validator slice — provisioning 調査と validator 指摘の診断 | final | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DISC-034YJ08C2FLjqUQpNN0PcG | Issue #631 RealOsGuiTest window-close/DPI 観測面 | draft | [issue-631-window-surface.md](./issue-631-window-surface.md) |
+| DSC-720tupleV201 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 現状 pin 箇所の棚卸しと設計論点の調査 | final | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
@@ -74,5 +75,6 @@ Directory: `docs/discovery`
 | DISC-034YaXLgv895taUPDbx0B6 | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 — 調査記録 | resolved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | DISC-qxX0PvQy0Qu34AwzZ69G5e | Issue #692 s2 Luau analyzer backend — 調査記録 | resolved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | DISC-034ZkLmNpQrStUvWxYzKl6 | Issue #692 ruviform-script port crate — 調査記録 | resolved | [issue-692-script-port.md](./issue-692-script-port.md) |
+| DISC-uyGbmYQxvwiFeiFkGWSPO7 | Issue #716 runtime ScriptBackend — 調査記録 | resolved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

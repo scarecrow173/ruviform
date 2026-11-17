@@ -1,7 +1,7 @@
 ---
 id: "IMPL-716RuntimeBackend0001"
-type: "ir"
-status: "implemented"
+type: "impl"
+status: "completed"
 title: "Issue #716 runtime ScriptBackend — 実装記録"
 created: "2026-11-17"
 updated: "2026-11-17"
@@ -89,6 +89,11 @@ relations:
   defers:
     - "実 OS/実 VM 経路の受入（consumer gate — synvelis#516・synvelis#267 AUTX-08）"
   deferred-by: []
+metadata:
+  experiments:
+    adopted:
+      - "docs/impl/exp/issue-716-runtime-backend-exp.jsonl"
+    rejected: []
 ---
 
 # Issue #716 runtime ScriptBackend — 実装記録
