@@ -278,6 +278,7 @@ Directory: `docs/impl/ir`
 | IMPL-034YYygeQzyUVTUGAny27w | Issue #721 post-seal temp boundary decision | completed | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | IMPL-722vst3LifecycleAudit07 | Issue #722 production VST3 adapter lifecycle 監査 — 実装記録 | completed | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | IMPL-034Z04w3xKvYC8XSP2bAGu | Issue #725 serde 語彙 Phase A — 実装記録 | completed | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| IMPL-034Z0uHvTxRFpgNslvN5XM | Issue #727 bounded non-RT job executor placement decision | completed | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | IMPL-732clapLifecycleAudit07 | Issue #732 production CLAP adapter lifecycle 監査 — 実装記録 | completed | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |

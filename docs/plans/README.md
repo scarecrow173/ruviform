@@ -229,6 +229,7 @@ Directory: `docs/plans`
 | PLAN-034YYuiRq03qc7utzYExKJ | Issue #721 post-seal temp 境界確定 — implementation plan | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | PLAN-722vst3LifecycleAudit04 | Issue #722 production VST3 adapter lifecycle 監査 — 実装計画 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | PLAN-034YZYv4eOit5JDno5u0gR | Issue #725 serde 語彙 Phase A — 実装計画 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| PLAN-034Z0ufhfy1zqe3TvK5xrp | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | PLAN-732clapLifecycleAudit04 | Issue #732 production CLAP adapter lifecycle 監査 — 実装計画 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
