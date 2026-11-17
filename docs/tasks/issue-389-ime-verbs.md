@@ -86,7 +86,7 @@ flip する。L1/out-of-process は refusal-only を維持する。
 - `crates/ruviform-plugin-test-vst3/src/editor_view.rs`
 - `crates/ruviform-plugin-dock-test/src/{real_dock,real_catalog,lib}.rs`
 - `crates/ruviform-plugin-dock-test/README.md`
-- `docs/tasks/issue-389-editor-verbs.md`・`docs/impl/ir/`
+- `docs/tasks/issue-389-ime-verbs.md`・`docs/impl/ir/`
 - `evidence/rf389/`・`evidence/rf631/`
 
 ## Done When
@@ -123,4 +123,4 @@ flip する。L1/out-of-process は refusal-only を維持する。
 - `mise run test-ui-plugin-dock-real` — 実走。3 row が `pass`
   （effect oracle 確認済み）、`real-dcomp-pixel` の既知 `fail`
   （#532・対象外）で設計通り exit 1。
-- 記録: `evidence/rf389/verification-editor-verbs.md`。
+- 記録: `evidence/rf389/verification.md`。

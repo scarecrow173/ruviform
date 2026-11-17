@@ -16,14 +16,14 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, Event, EventList, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    BusDescriptor, Event, EventList, GuiSize, Lifecycle, LifecycleError, LifecycleEvent,
+    LifecycleState, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
 use crate::l1::data::{mirror_decode, mirror_encode};
 use crate::{
-    ErasedPlugin, GuiHandle, GuiSize, HostCommand, HostError, HostInput, HostOutput, HostReply,
+    ErasedPlugin, GuiHandle, HostCommand, HostError, HostInput, HostOutput, HostReply,
     PluginFactory, PluginHandle,
 };
 

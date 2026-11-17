@@ -12,11 +12,11 @@ relations:
   changes:
     added:
       - type: "file"
-        path: "docs/tasks/issue-389-editor-verbs.md"
+        path: "docs/tasks/issue-389-ime-verbs.md"
       - type: "doc"
-        path: "docs/impl/ir/issue-389-editor-verbs.md"
+        path: "docs/impl/ir/issue-389-ime-verbs.md"
       - type: "file"
-        path: "evidence/rf389/verification-editor-verbs.md"
+        path: "evidence/rf389/verification.md"
     modified:
       - type: "file"
         path: "crates/ruviform-plugin-core/src/boundary.rs"
@@ -63,7 +63,7 @@ relations:
     moved: []
     generated: []
   implements:
-    - "docs/tasks/issue-389-editor-verbs.md"
+    - "docs/tasks/issue-389-ime-verbs.md"
   implemented-by: []
   depends-on: []
   blocks: []
@@ -80,7 +80,7 @@ relations:
   verifies: []
   verified-by: []
   references:
-    - "evidence/rf389/verification-editor-verbs.md"
+    - "evidence/rf389/verification.md"
   defers: []
   deferred-by: []
 metadata:
@@ -164,7 +164,7 @@ generation）を oracle として検証する。lease/generation boundary
 
 ## Verification
 
-`evidence/rf389/verification-editor-verbs.md` 参照。要点:
+`evidence/rf389/verification.md` 参照。要点:
 
 - headless: `editor_session` 54/54、fixture test 全 green、
   dock-test（`--features real-dock` 含む）全 green、
