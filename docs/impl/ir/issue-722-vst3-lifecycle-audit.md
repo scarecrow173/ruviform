@@ -29,6 +29,11 @@ relations:
       - type: "file"
         path: "docs/impl/ir/issue-722-vst3-lifecycle-audit.md"
     modified: []
+metadata:
+  experiments:
+    adopted:
+      - "docs/impl/exp/issue-722-vst3-lifecycle-audit-exp.jsonl"
+    rejected: []
 ---
 
 # Issue #722 実装記録

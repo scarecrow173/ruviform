@@ -252,6 +252,8 @@ Directory: `docs/test-specs`
 | TSPEC-034YJlkbKnctq9LE7na0TZ | Issue #707 — MIDI input cancellation fault test specification | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
 | TSPEC-zDBgJ4WsZM8yS7zwjSIrwW | Issue #716 runtime ScriptBackend — テスト仕様 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | TSPEC-720tupleV206 | Issue #720 consumer-verify-tuple contract v1→v2 bump — test specification | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
+| TSPEC-034YYs26BK9ql96HKlJEJQ | Issue #721 post-seal temp 境界・bench-smoke 配線 テスト仕様 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
+| TSPEC-722vst3LifecycleAudit06 | Issue #722 production VST3 adapter lifecycle 監査 — test specification | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |

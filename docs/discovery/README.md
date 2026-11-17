@@ -31,6 +31,7 @@ Directory: `docs/discovery`
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DISC-034YJ08C2FLjqUQpNN0PcG | Issue #631 RealOsGuiTest window-close/DPI 観測面 | draft | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | DSC-720tupleV201 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 現状 pin 箇所の棚卸しと設計論点の調査 | final | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
+| DSC-722vst3LifecycleAudit01 | Issue #722 production VST3 adapter lifecycle 監査 — test fixture 同型欠陥の診断 | final | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
