@@ -20,8 +20,9 @@ use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
-    ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    ErasedPlugin, Event, EventKind, EventList, GuiSize, HostError, HostInput, HostOutput,
+    ParamEvent, ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext,
+    ProcessResult,
 };
 
 const FRAMES: usize = 64;
@@ -649,4 +650,199 @@ fn non_editor_classes_decline_open_gui() {
         };
         assert_eq!(err, HostError::Unsupported);
     }
+}
+
+/// `test_editor` before any `open_gui`: the session verbs have no
+/// live GUI to act on — every one converges to the defined
+/// `Err(Unsupported)` through the production bridge (`host.rs`'s
+/// `self.gui.is_none()` gates), on every OS. The refusal leaves the
+/// instance healthy: audio still flows afterwards.
+#[test]
+fn editor_gui_verbs_decline_without_open_gui() {
+    let mut plugin = prepared_editor_plugin();
+    assert_eq!(
+        plugin.set_gui_size(GuiSize {
+            width: 800.0,
+            height: 600.0,
+        }),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(plugin.set_gui_visibility(true), Err(HostError::Unsupported));
+    assert_eq!(
+        plugin.set_gui_visibility(false),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_parent(ParentLease::new(0, 0)),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+
+    let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+}
+
+/// `test_gain`/`test_fault`/`test_stateful`/`test_instrument` ship no
+/// `clap.ext.gui` extension and hold no GUI state — the same four
+/// session verbs converge to the adapter/trait default
+/// `Err(Unsupported)`, the same defined refusal `open_gui` already
+/// reports for these classes.
+#[test]
+fn non_editor_classes_decline_gui_verbs() {
+    for mut plugin in [
+        prepared_plugin(),
+        prepared_fault_plugin(),
+        prepared_stateful_plugin(),
+        prepared_instrument_plugin(),
+    ] {
+        assert_eq!(
+            plugin.set_gui_size(GuiSize {
+                width: 800.0,
+                height: 600.0,
+            }),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(plugin.set_gui_visibility(true), Err(HostError::Unsupported));
+        assert_eq!(
+            plugin.set_gui_visibility(false),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_parent(ParentLease::new(0, 0)),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+    }
+}
+
+/// Windows-only real-HWND coverage of the `ruviform#754` CLAP editor
+/// verb chain through the production host bridge — the CLAP
+/// counterpart of the VST3 real lane. A hidden top-level parent is
+/// created with `CreateWindowExW`, `open_gui` attaches the fixture's
+/// real `WS_CHILD` HWND, and every verb is observed through Win32
+/// directly: `GetWindow(GW_CHILD)`/`GetParent`/`IsWindow` for
+/// attach/detach, `GetWindowRect` for the `set_gui_size` resize
+/// (the fixture is resize-capable — `can_resize` → `true`), and
+/// `GetWindowLongW(GWL_STYLE) & WS_VISIBLE` for hide/show (the
+/// parent stays hidden, so `IsWindowVisible`'s ancestor-chain check
+/// cannot observe the child's own visibility state). `set_gui_parent`
+/// against a second parent hits the fixture's `gui already embedded`
+/// rejection → `PluginFailed`. `#[ignore]` keeps it out of the
+/// default lane — it needs an interactive window station; run with
+/// `cargo test -p ruviform-plugin-test-clap --test host_path --
+/// --ignored`. This is verb-level coverage only — real dock,
+/// message pump, pixels, input/focus and re-open belong to the
+/// `scarecrow173/ruviform#631` real-editor lane.
+#[cfg(target_os = "windows")]
+#[ignore = "requires an interactive Windows window station — real-HWND lane"]
+#[expect(unsafe_code)]
+#[test]
+fn editor_gui_verbs_over_real_child_hwnd() {
+    use windows_sys::Win32::Foundation::{HWND, RECT};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, GW_CHILD, GWL_STYLE, GetParent, GetWindow, GetWindowLongW,
+        GetWindowRect, IsWindow, WS_OVERLAPPED, WS_VISIBLE,
+    };
+
+    // Hidden top-level parents (STATIC needs no class registration)
+    // — they exist only to own the child; no message pump is needed.
+    let class: Vec<u16> = "STATIC".encode_utf16().chain(std::iter::once(0)).collect();
+    let make_parent = || unsafe {
+        CreateWindowExW(
+            0,
+            class.as_ptr(),
+            std::ptr::null(),
+            WS_OVERLAPPED,
+            0,
+            0,
+            320,
+            240,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            GetModuleHandleW(std::ptr::null()),
+            std::ptr::null(),
+        )
+    };
+    let parent = make_parent();
+    let parent2 = make_parent();
+    assert!(
+        !parent.is_null() && !parent2.is_null(),
+        "cannot create parents"
+    );
+
+    let mut plugin = prepared_editor_plugin();
+    // `open_gui` → is_api_supported → create → set_parent → show.
+    plugin
+        .open_gui(ParentLease::new(0, parent as usize as u64))
+        .expect("open_gui attaches the real child HWND");
+
+    unsafe {
+        let child: HWND = GetWindow(parent, GW_CHILD);
+        assert!(!child.is_null(), "open_gui must create a child HWND");
+        assert_eq!(GetParent(child), parent, "child must be parented");
+        assert_ne!(IsWindow(child), 0, "child must be a live window");
+        // `show` ran during open_gui — the child's own WS_VISIBLE bit
+        // is set (the hidden parent makes IsWindowVisible unusable).
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
+        assert_ne!(style & WS_VISIBLE, 0, "child starts visible");
+
+        // `set_gui_size` → can_resize gate → set_size → SetWindowPos:
+        // the child HWND must really become 800x600.
+        plugin
+            .set_gui_size(GuiSize {
+                width: 800.0,
+                height: 600.0,
+            })
+            .expect("resize-capable fixture accepts set_gui_size");
+        let mut rc = RECT::default();
+        GetWindowRect(child, &raw mut rc);
+        assert_eq!(rc.right - rc.left, 800, "child width after resize");
+        assert_eq!(rc.bottom - rc.top, 600, "child height after resize");
+
+        // `set_gui_visibility` → hide/show → the child's own
+        // WS_VISIBLE bit flips while the HWND stays alive.
+        plugin.set_gui_visibility(false).expect("hide succeeds");
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
+        assert_eq!(style & WS_VISIBLE, 0, "hide clears WS_VISIBLE");
+        assert_ne!(IsWindow(child), 0, "hide keeps the child alive");
+        plugin.set_gui_visibility(true).expect("show succeeds");
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
+        assert_ne!(style & WS_VISIBLE, 0, "show sets WS_VISIBLE");
+
+        // `set_gui_parent` against a second parent hits the
+        // fixture's `gui already embedded` rejection — the host
+        // maps the plugin error to PluginFailed and the child stays
+        // under the first parent.
+        let Err(err) = plugin.set_gui_parent(ParentLease::new(0, parent2 as usize as u64)) else {
+            panic!("re-embedding must be rejected by the fixture");
+        };
+        assert_eq!(err, HostError::PluginFailed);
+        assert_eq!(GetParent(child), parent, "rejected reparent keeps parent");
+
+        // `close_gui` → hide + destroy → the child HWND is gone.
+        plugin.close_gui().expect("close_gui succeeds");
+        assert_eq!(IsWindow(child), 0, "close_gui destroys the child");
+        assert!(
+            GetWindow(parent, GW_CHILD).is_null(),
+            "parent has no child after close"
+        );
+        // A second close has no GUI to act on — defined Unsupported.
+        assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
+
+        let _ = DestroyWindow(parent);
+        let _ = DestroyWindow(parent2);
+    }
+
+    // The instance stays healthy after the GUI session ended.
+    let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
 }

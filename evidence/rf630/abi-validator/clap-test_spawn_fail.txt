@@ -4,7 +4,7 @@
       "test": {
         "plugin-library": {
           "test": "query-nonexistent-factory",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -13,14 +13,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3232300
+        "nanos": 3182200
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "create-id-with-trailing-garbage",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -29,14 +29,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3053200
+        "nanos": 3639600
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "scan-rtld-now",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -45,14 +45,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 1900
+        "nanos": 1300
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "scan-time",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -61,14 +61,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3352400
+        "nanos": 3423100
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "preset-discovery-crawl",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -77,14 +77,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3022500
+        "nanos": 3534600
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "preset-discovery-descriptor-consistency",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -93,14 +93,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4106800
+        "nanos": 3447500
       }
     },
     {
       "test": {
         "plugin-library": {
           "test": "preset-discovery-load",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll"
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll"
         }
       },
       "status": {
@@ -109,14 +109,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 6745800
+        "nanos": 5654900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "descriptor-consistency",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -126,14 +126,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3541600
+        "nanos": 3561200
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "features-categories",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -143,14 +143,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3189000
+        "nanos": 3257900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "features-duplicates",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -160,14 +160,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3834700
+        "nanos": 3508100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-basic-out-of-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -177,14 +177,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3620800
+        "nanos": 3492600
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-basic-in-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -194,14 +194,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4057000
+        "nanos": 10273300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-double-out-of-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -211,14 +211,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3087800
+        "nanos": 3567100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-double-in-place",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -228,14 +228,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2983100
+        "nanos": 5340500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-audio-denormals",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -245,14 +245,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3346800
+        "nanos": 3385400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-sleep-constant-mask",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -262,14 +262,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4077900
+        "nanos": 3491500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-sleep-process-status",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -279,14 +279,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3495100
+        "nanos": 5339700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-out-of-place-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -296,14 +296,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3205400
+        "nanos": 4582000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-inconsistent",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -313,14 +313,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3933800
+        "nanos": 4215800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-note-wildcard",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -330,14 +330,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2854800
+        "nanos": 5053200
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-varying-sample-rates",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -347,14 +347,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3301200
+        "nanos": 3749500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-varying-block-sizes",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -364,14 +364,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3033900
+        "nanos": 3408300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-random-block-sizes",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -381,14 +381,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3128800
+        "nanos": 4223000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "process-reset-reactivate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -398,14 +398,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3346000
+        "nanos": 3938900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-audio-ports-activation",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -415,14 +415,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3270300
+        "nanos": 5881400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-audio-ports-config",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -432,14 +432,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3505200
+        "nanos": 3364700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "layout-configurable-audio-ports",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -449,14 +449,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2921000
+        "nanos": 7230100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-events",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -466,14 +466,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2954600
+        "nanos": 3940600
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-no-cookies",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -483,14 +483,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4600000
+        "nanos": 10133100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-set-wrong-namespace",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -500,14 +500,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3427900
+        "nanos": 4213400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -517,14 +517,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3874000
+        "nanos": 5459500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-bounds",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -534,14 +534,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3065400
+        "nanos": 3268100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-sample-accurate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -551,14 +551,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3658000
+        "nanos": 2946300
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-fuzz-modulation",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -568,14 +568,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3250900
+        "nanos": 3229400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-conversions",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -585,14 +585,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 4747100
+        "nanos": 3381800
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "param-default-values",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -602,14 +602,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3516100
+        "nanos": 3116000
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-invalid-empty",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -619,14 +619,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3516200
+        "nanos": 3249100
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-invalid-random",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -636,14 +636,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3627000
+        "nanos": 3221700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-basic",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -653,14 +653,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3199900
+        "nanos": 2790700
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-binary",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -670,14 +670,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3629600
+        "nanos": 3086500
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "state-reproducibility-buffered",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -687,14 +687,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 2872100
+        "nanos": 4475600
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-null",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -704,14 +704,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3106200
+        "nanos": 3261900
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-fuzz",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -721,14 +721,14 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3270800
+        "nanos": 5111400
       }
     },
     {
       "test": {
         "plugin-instance": {
           "test": "transport-fuzz-sample-accurate",
-          "path": "G:\\orca\\workspaces\\ruviform\\rf630-preset-discovery\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-clap-editor-verbs\\target\\debug\\ruviform_plugin_test_clap.dll",
           "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
         }
       },
@@ -738,52 +738,52 @@
       },
       "duration": {
         "secs": 0,
-        "nanos": 3429000
+        "nanos": 3371700
       }
     }
   ]
 }
 
-[2m   22[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
-[2m   31[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
-[2m   49[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
-[2m   59[0m[2mms[0m [32m INFO[0m Test preset-discovery-crawl completed [2;3mclap_validator::validator[0m
-[2m   69[0m[2mms[0m [32m INFO[0m Test preset-discovery-descriptor-consistency completed [2;3mclap_validator::validator[0m
-[2m   82[0m[2mms[0m [32m INFO[0m Test preset-discovery-load completed [2;3mclap_validator::validator[0m
-[2m   91[0m[2mms[0m [1;31mERROR[0m Test descriptor-consistency failed [2;3mclap_validator::validator[0m
-[2m   99[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
-[2m  109[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
-[2m  121[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-out-of-place failed [2;3mclap_validator::validator[0m
-[2m  126[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-out-of-place failed [2;3mclap_validator::validator[0m
-[2m  136[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-in-place failed [2;3mclap_validator::validator[0m
-[2m  146[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-in-place failed [2;3mclap_validator::validator[0m
-[2m  156[0m[2mms[0m [1;31mERROR[0m Test process-audio-denormals failed [2;3mclap_validator::validator[0m
-[2m  167[0m[2mms[0m [1;31mERROR[0m Test process-sleep-constant-mask failed [2;3mclap_validator::validator[0m
-[2m  179[0m[2mms[0m [1;31mERROR[0m Test process-sleep-process-status failed [2;3mclap_validator::validator[0m
-[2m  184[0m[2mms[0m [1;31mERROR[0m Test process-note-out-of-place-basic failed [2;3mclap_validator::validator[0m
-[2m  193[0m[2mms[0m [1;31mERROR[0m Test process-note-inconsistent failed [2;3mclap_validator::validator[0m
-[2m  202[0m[2mms[0m [1;31mERROR[0m Test process-note-wildcard failed [2;3mclap_validator::validator[0m
-[2m  212[0m[2mms[0m [1;31mERROR[0m Test process-varying-sample-rates failed [2;3mclap_validator::validator[0m
-[2m  221[0m[2mms[0m [1;31mERROR[0m Test process-varying-block-sizes failed [2;3mclap_validator::validator[0m
-[2m  231[0m[2mms[0m [1;31mERROR[0m Test process-random-block-sizes failed [2;3mclap_validator::validator[0m
-[2m  239[0m[2mms[0m [1;31mERROR[0m Test process-reset-reactivate failed [2;3mclap_validator::validator[0m
-[2m  271[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-activation failed [2;3mclap_validator::validator[0m
-[2m  279[0m[2mms[0m [1;31mERROR[0m Test layout-configurable-audio-ports failed [2;3mclap_validator::validator[0m
-[2m  280[0m[2mms[0m [1;31mERROR[0m Test param-set-events failed [2;3mclap_validator::validator[0m
-[2m  280[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-config failed [2;3mclap_validator::validator[0m
-[2m  287[0m[2mms[0m [1;31mERROR[0m Test param-set-no-cookies failed [2;3mclap_validator::validator[0m
-[2m  298[0m[2mms[0m [1;31mERROR[0m Test param-set-wrong-namespace failed [2;3mclap_validator::validator[0m
-[2m  301[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-basic failed [2;3mclap_validator::validator[0m
-[2m  311[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-bounds failed [2;3mclap_validator::validator[0m
-[2m  317[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
-[2m  328[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-modulation failed [2;3mclap_validator::validator[0m
-[2m  337[0m[2mms[0m [1;31mERROR[0m Test param-conversions failed [2;3mclap_validator::validator[0m
-[2m  347[0m[2mms[0m [1;31mERROR[0m Test param-default-values failed [2;3mclap_validator::validator[0m
-[2m  354[0m[2mms[0m [1;31mERROR[0m Test state-invalid-empty failed [2;3mclap_validator::validator[0m
-[2m  364[0m[2mms[0m [1;31mERROR[0m Test state-invalid-random failed [2;3mclap_validator::validator[0m
-[2m  374[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-basic failed [2;3mclap_validator::validator[0m
-[2m  381[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-binary failed [2;3mclap_validator::validator[0m
-[2m  389[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-buffered failed [2;3mclap_validator::validator[0m
-[2m  400[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz failed [2;3mclap_validator::validator[0m
-[2m  407[0m[2mms[0m [1;31mERROR[0m Test transport-null failed [2;3mclap_validator::validator[0m
-[2m  416[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
+[2m   23[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m   33[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   54[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m   72[0m[2mms[0m [32m INFO[0m Test preset-discovery-descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m   79[0m[2mms[0m [32m INFO[0m Test preset-discovery-crawl completed [2;3mclap_validator::validator[0m
+[2m   87[0m[2mms[0m [1;31mERROR[0m Test descriptor-consistency failed [2;3mclap_validator::validator[0m
+[2m   98[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m  100[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m  111[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-out-of-place failed [2;3mclap_validator::validator[0m
+[2m  132[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-in-place failed [2;3mclap_validator::validator[0m
+[2m  132[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-out-of-place failed [2;3mclap_validator::validator[0m
+[2m  145[0m[2mms[0m [1;31mERROR[0m Test process-audio-denormals failed [2;3mclap_validator::validator[0m
+[2m  150[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-in-place failed [2;3mclap_validator::validator[0m
+[2m  158[0m[2mms[0m [1;31mERROR[0m Test process-sleep-constant-mask failed [2;3mclap_validator::validator[0m
+[2m  164[0m[2mms[0m [32m INFO[0m Test preset-discovery-load completed [2;3mclap_validator::validator[0m
+[2m  444[0m[2mms[0m [1;31mERROR[0m Test process-note-out-of-place-basic failed [2;3mclap_validator::validator[0m
+[2m  450[0m[2mms[0m [1;31mERROR[0m Test process-sleep-process-status failed [2;3mclap_validator::validator[0m
+[2m  469[0m[2mms[0m [1;31mERROR[0m Test process-varying-sample-rates failed [2;3mclap_validator::validator[0m
+[2m  486[0m[2mms[0m [1;31mERROR[0m Test process-varying-block-sizes failed [2;3mclap_validator::validator[0m
+[2m  489[0m[2mms[0m [1;31mERROR[0m Test process-random-block-sizes failed [2;3mclap_validator::validator[0m
+[2m  502[0m[2mms[0m [1;31mERROR[0m Test process-note-wildcard failed [2;3mclap_validator::validator[0m
+[2m  505[0m[2mms[0m [1;31mERROR[0m Test process-note-inconsistent failed [2;3mclap_validator::validator[0m
+[2m  529[0m[2mms[0m [1;31mERROR[0m Test process-reset-reactivate failed [2;3mclap_validator::validator[0m
+[2m  554[0m[2mms[0m [1;31mERROR[0m Test param-set-events failed [2;3mclap_validator::validator[0m
+[2m  556[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-activation failed [2;3mclap_validator::validator[0m
+[2m  559[0m[2mms[0m [1;31mERROR[0m Test layout-configurable-audio-ports failed [2;3mclap_validator::validator[0m
+[2m  561[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-config failed [2;3mclap_validator::validator[0m
+[2m  562[0m[2mms[0m [1;31mERROR[0m Test param-set-no-cookies failed [2;3mclap_validator::validator[0m
+[2m  818[0m[2mms[0m [1;31mERROR[0m Test param-set-wrong-namespace failed [2;3mclap_validator::validator[0m
+[2m  838[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-basic failed [2;3mclap_validator::validator[0m
+[2m  843[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-bounds failed [2;3mclap_validator::validator[0m
+[2m  855[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
+[2m  866[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-modulation failed [2;3mclap_validator::validator[0m
+[2m  869[0m[2mms[0m [1;31mERROR[0m Test param-conversions failed [2;3mclap_validator::validator[0m
+[2m  877[0m[2mms[0m [1;31mERROR[0m Test param-default-values failed [2;3mclap_validator::validator[0m
+[2m  888[0m[2mms[0m [1;31mERROR[0m Test state-invalid-empty failed [2;3mclap_validator::validator[0m
+[2m  895[0m[2mms[0m [1;31mERROR[0m Test state-invalid-random failed [2;3mclap_validator::validator[0m
+[2m 1139[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-basic failed [2;3mclap_validator::validator[0m
+[2m 1150[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-binary failed [2;3mclap_validator::validator[0m
+[2m 1159[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-buffered failed [2;3mclap_validator::validator[0m
+[2m 1169[0m[2mms[0m [1;31mERROR[0m Test transport-null failed [2;3mclap_validator::validator[0m
+[2m 1181[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz failed [2;3mclap_validator::validator[0m
+[2m 1189[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
