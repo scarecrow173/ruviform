@@ -788,7 +788,7 @@ fn editor_gui_verbs_over_real_child_hwnd() {
         assert_ne!(IsWindow(child), 0, "child must be a live window");
         // `show` ran during open_gui — the child's own WS_VISIBLE bit
         // is set (the hidden parent makes IsWindowVisible unusable).
-        let style = GetWindowLongW(child, GWL_STYLE) as u32;
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
         assert_ne!(style & WS_VISIBLE, 0, "child starts visible");
 
         // `set_gui_size` → can_resize gate → set_size → SetWindowPos:
@@ -807,11 +807,11 @@ fn editor_gui_verbs_over_real_child_hwnd() {
         // `set_gui_visibility` → hide/show → the child's own
         // WS_VISIBLE bit flips while the HWND stays alive.
         plugin.set_gui_visibility(false).expect("hide succeeds");
-        let style = GetWindowLongW(child, GWL_STYLE) as u32;
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
         assert_eq!(style & WS_VISIBLE, 0, "hide clears WS_VISIBLE");
         assert_ne!(IsWindow(child), 0, "hide keeps the child alive");
         plugin.set_gui_visibility(true).expect("show succeeds");
-        let style = GetWindowLongW(child, GWL_STYLE) as u32;
+        let style = GetWindowLongW(child, GWL_STYLE).cast_unsigned();
         assert_ne!(style & WS_VISIBLE, 0, "show sets WS_VISIBLE");
 
         // `set_gui_parent` against a second parent hits the
