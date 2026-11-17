@@ -219,6 +219,9 @@ NOT_PROVISIONED/NotRun を維持する。
   #115/#117/#126・AudioLens #127 — consumer 責務）。
 - `EnvironmentKind` の `real-abi-test-plugin`↔`test-plugin`
   serde 語彙 gap（#389 占有中 — 本 slice では触れない）。
+  status: rf#725 Phase A で deserialize alias `test-plugin`
+  受容を適用済み・emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - production コード変更・新規 dependency/feature/`unsafe`・
   test target 分割・関数移動・docs index 再生成。
 
@@ -304,6 +307,9 @@ NOT_PROVISIONED/NotRun を維持する。
   #115/#117/#126・AudioLens #127）— consumer 責務。
 - `EnvironmentKind` の `real-abi-test-plugin`↔`test-plugin`
   serde 語彙 gap — #389 占有解除後または Coordinator 調整。
+  status: rf#725 Phase A で consumer 影響評価と deserialize
+  alias `test-plugin` 受容を適用済み — emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - 実体は `docs/designs/issue-629-provisioning-runbook.md`
   の Deferred Design Concerns に記録する。
 
