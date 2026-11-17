@@ -1068,6 +1068,39 @@ run = "cargo test -p ruviform-midi-device -p ruviform-audio-plugin-bridge -- --i
 description = "Run the `#[ignore]`-gated MIDI loopback verifier (`-p ruviform-midi-device --test loopback -- --ignored`) — requires a provisioned virtual MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); also collects `real_device_silent_output_smoke` (GS Wavetable Synth); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
 run = "cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1"
 
+# OS-endpoint wiring lane (Issue #629 AC6 residual / AC3 wiring
+# follow-up): the two `#[ignore]` legs in
+# `crates/ruviform-audio-test/tests/os_endpoint.rs`
+# (`audio_virtual_endpoint_round_trip` — provisioned virtual audio
+# render↔capture pair, VB-CABLE / VAC family;
+# `midi_virtual_endpoint_loopback` — provisioned MIDI loopback
+# pair, loopMIDI / Windows MIDI Services loopback) drive the
+# production device boundary through the Test Runtime supply →
+# independent oracle → `RunMetadata` path, so the lane selects
+# `--test os_endpoint -- --ignored` explicitly — same entry
+# shape as `test-audio-virtual-endpoint` /
+# `test-midi-virtual-endpoint`. The deterministic legs in the
+# same target already run under the default
+# `cargo test -p ruviform-audio-test` path and are not gated by
+# this lane. No feature gate exists — the device crates are
+# dev-deps of `ruviform-audio-test` and only appear on the test
+# target's compile graph, so no `--features` flag is needed
+# (unlike the audio-device lanes). With no endpoint pair
+# provisioned the legs emit `run_metadata` JSON +
+# `verdict: NotRun` and exit honestly (fail-closed, never a
+# Pass; `level=ext-l3`/`environment_kind=virtual-os-endpoint`
+# is claimed only by runs that actually opened and streamed an
+# endpoint). Provisioning-dependent manual lane: never in CI;
+# run records live under `evidence/rf629/`.
+# `--test-threads=1` serializes real endpoint/port opens like
+# the other virtual-endpoint lanes. Lint coverage needs no
+# dedicated lane: the default `lint ruviform-audio-test`
+# (`cargo clippy --locked --all-targets -p`) already lints the
+# `os_endpoint` test target.
+[tasks.test-os-endpoint-wiring]
+description = "Run the `#[ignore]`-gated OS-endpoint wiring legs (`-p ruviform-audio-test --test os_endpoint -- --ignored`) — requires a provisioned virtual audio endpoint pair (VB-CABLE/VAC family) and/or MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
+run = "cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1"
+
 # RF-SCRIPT-01 PoC（Issue #559）— poc/script-coexist は `[workspace]` を持つ
 # 独立 workspace のため、ルートの `check`/`lint`/`test`（`-p <package>`）
 # では対象にできない。poc/ui・poc/plugin-gui と同じ隔離 PoC 先例に従い、

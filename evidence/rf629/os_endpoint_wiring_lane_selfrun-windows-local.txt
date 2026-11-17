@@ -1,0 +1,32 @@
+# Issue #629 AC6 residual / AC3 wiring follow-up — test-os-endpoint-wiring canonical lane self-run
+# host: Windows 11 x86_64, unprovisioned virtual endpoints -> #[ignore] wiring legs emit run_metadata + verdict: NotRun (fail-closed)
+# canonical lane = 'mise run test-os-endpoint-wiring'; direct cargo --nocapture run below is auxiliary evidence only (verdict/run_metadata lines are inside libtest capture)
+
+=== canonical lane: mise run test-os-endpoint-wiring ===
+[test-os-endpoint-wiring] $ cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 2 tests
+test audio_virtual_endpoint_round_trip ... ok
+test midi_virtual_endpoint_loopback ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.06s
+
+
+=== auxiliary evidence: mise exec -- cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --nocapture ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 2 tests
+os_endpoint: audio render→capture wiring verifier
+  host: WASAPI
+run_metadata: {"case_id":"rf629.audio.virtual-endpoint.render-capture","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"marker-rms-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"","observed":"NOT_PROVISIONED — no render↔capture virtual name-stem pair","evidence":[]}
+verdict: NotRun — NOT_PROVISIONED (no render↔capture virtual name-stem pair; provision VB-CABLE/VAC-style endpoints first)
+test audio_virtual_endpoint_round_trip ... ok
+enumerated: 0 input ports, 1 output ports
+run_metadata: {"case_id":"rf629.midi.virtual-endpoint.loopback","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"ordered-subsequence+stamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence round-trip","observed":"NOT_PROVISIONED — no bidirectional name match","evidence":[]}
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match)
+test midi_virtual_endpoint_loopback ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.04s
