@@ -220,6 +220,7 @@ Directory: `docs/specs`
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034Y3nW74RKYWUkLfv81MG | Issue #631 real-editor-attach（test_editor 実 IPlugView による real-editor-attach Pass 化 — 実 child HWND の OS 観測・detach 収束・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | SPEC-034YqGGPYfozoUitsF1nl3 | Issue #631 real-row 拡充（AC1 残り能力の catalog 化 + AC3 非画素 editor case + headless fail-closed 実証） | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
+| SPEC-f5oEE57iTJs4gZ26iTRyvD | Issue #631 real-window-close/dpi catalog flip | approved | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | SPEC-034XTOYvrNP8RQ01gP2AGt | Issue #631 Real-window native-slot dock lane（RealOsGuiTest 実 OS window 上の NativeSlot → container HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) 実走記録） | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | SPEC-034XVTiZqMMaDcOo7LyHws | Issue #631 Plugin-dock scenario catalog + driver projection（driver 非依存 ScenarioEntry カタログ + run_scenario projection） | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | SPEC-034XWNER8Uft0DiZcXZEtb | Issue #631 Headless Scenario Console（plugin-dock-console bin — merge 済 catalog の headless consumer） | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
@@ -235,6 +236,7 @@ Directory: `docs/specs`
 | SPEC-034YXxVwj3nAIfWDF2rZcG | Issue #721 post-seal temp 改竄境界 — bench-smoke 配線照合と現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | SPEC-722vst3LifecycleAudit02 | Issue #722 production VST3 adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | SPEC-034YZVNYlydMg2rp3mE6v7 | Issue #725 EnvironmentKind serde 語彙 gap 解消 Phase A — deserialize alias 受容 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| SPEC-726clapValidatorPanic02 | Issue #726 clap-validator 0.4.1 param-fuzz panic — 根因判断と leg 扱い確定 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | SPEC-034Z0tP43L1BILteVZhtDI | Issue #727 bounded 非 RT job executor primitive の責務判断と配置 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |

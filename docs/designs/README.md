@@ -252,6 +252,7 @@ Directory: `docs/designs`
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034Y3o3I0foDX68pAnpDEx | Issue #631 real-editor-attach 設計（test_editor descriptor 選択・child HWND OS 観測・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | DESIGN-034YqGS0FcTkFNpOd08X6E | Issue #631 real-row 拡充 設計 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
+| DESIGN-C5zglV9oBGR7aXBneJDeUT | Issue #631 real-window-close/dpi catalog flip 設計 | approved | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | DESIGN-034XTP681X6oGd0SwnvpbS | Issue #631 Real-window native-slot dock lane 設計 | approved | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |
 | DESIGN-034XVTqsKVWAgXMI3CBA6o | Issue #631 Plugin-dock scenario catalog + driver projection 設計 | approved | [issue-631-scenario-catalog.md](./issue-631-scenario-catalog.md) |
 | DESIGN-034XWNVav0w3OewvNDtAcm | Issue #631 Headless Scenario Console 設計 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
@@ -267,6 +268,7 @@ Directory: `docs/designs`
 | DESIGN-034YYnXY7447GWCMHE4dOI | Issue #721 post-seal temp 改竄境界 — 現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | DESIGN-722vst3LifecycleAudit03 | Issue #722 production VST3 adapter lifecycle 契約監査 — 設計 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | DESIGN-034YZXlJnaKqZu7Z6E9Lmy | Issue #725 EnvironmentKind serde 語彙移行方針 — Phase A deserialize alias | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| DESIGN-726clapValidatorPanic03 | Issue #726 clap-validator param-fuzz panic — 設計と判断記録 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | DESIGN-034Z0tS0DTi5T7v5ov5cWH | Issue #727 bounded 非 RT job executor — ruviform-exec 内 executor primitive の API 設計 | approved | [issue-727-bounded-nonrt-job-executor.md](./issue-727-bounded-nonrt-job-executor.md) |
 | DESIGN-732clapLifecycleAudit03 | Issue #732 production CLAP adapter lifecycle 監査 — 設計 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |

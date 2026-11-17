@@ -139,8 +139,8 @@ rf#630 の ABI-validator lane と rf#732 の `--clap-production` leg
   `descriptor-consistency` は success を維持。
 - **upstream 報告**: free-audio/clap-validator の issue list
   （open+closed）に同件なし。master `5bc2ef3` に修正なし。
-  報告文ドラフトを evidence に記録し、実起票は Coordinator
-  hand-off（worker 権限外）。
+  報告文ドラフトを evidence に記録し、Coordinator が起票済み:
+  https://github.com/free-audio/clap-validator/issues/44
 
 ## Related Experiments
 

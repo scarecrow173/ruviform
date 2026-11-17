@@ -75,9 +75,8 @@ verdict 語彙は変更していない。
   in the validator" と自ら panic を認めている。
 - master HEAD に未修正で残存、既存 Issue/PR になし。
 - 報告文ドラフト: `evidence/rf726/upstream-report-draft.md`。
-  **実起票は worker 権限外** — Coordinator が確認のうえ
-  free-audio/clap-validator へ投稿し、Issue URL を本リポジトリの
-  docs/PR に追記する（残 gate）。
+  **実起票済み**: https://github.com/free-audio/clap-validator/issues/44
+  （Coordinator がドラフト内容を確認のうえ投稿）。
 
 ### AC3 leg の扱い → **現行維持（leg 定義は無変更）**
 

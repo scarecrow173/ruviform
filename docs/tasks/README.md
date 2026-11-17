@@ -368,6 +368,7 @@ Directory: `docs/tasks`
 | TASK-034Z9pVw6xJmZ5sNtQeUgD | Issue #630 test_instrument slice — task | done | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TASK-034Y4fNMwyna1imxqrp1rF | Issue #630 test_stateful slice — task | done | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | TASK-034XEbSIxHaIKblAZevx7R | Issue #631 T1 — Plugin-dock scenario skeleton（ruviform-plugin-dock-test） | done | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
+| TASK-R7rbYG8Ew6lrrKHrYcKDbA | Issue #631 T1 — real-window-close/dpi catalog flip | done | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TASK-aN7eM2gEouRJ8oS3WbU4Ee | Issue #650 bench-smoke lane coverage 拡張 — mise.toml/dev-env doc/evidence 是正 | done | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TASK-jf1GeH9DzuEjHri0o8EqrT | Issue #692 s2 Luau analyzer backend — タスク | done | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
@@ -375,6 +376,7 @@ Directory: `docs/tasks`
 | TASK-720tupleV205 | Issue #720 consumer-verify-tuple contract v1→v2 bump — task | done | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | TASK-034YYxvzrqG58pQIKDaukG | Issue #721 post-seal temp 境界確定 — bench-smoke 照合・README 補強・検証 | done | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | TASK-722vst3LifecycleAudit05 | Issue #722 production VST3 adapter lifecycle 監査 — task | done | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| TASK-726clapValidatorPanic05 | Issue #726 clap-validator param-fuzz panic — task | done | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | TASK-034Z0uGBWlESDKh8X21tPy | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | done | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | TASK-732clapLifecycleAudit05 | Issue #732 production CLAP adapter lifecycle 監査 — task | done | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
