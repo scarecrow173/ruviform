@@ -798,6 +798,22 @@ fn unit_f64(value: u32) -> f64 {
     f64::from(value) / f64::from(u32::MAX)
 }
 
+/// One `GuiSize` logical-unit component → the `u32` pixel count
+/// `clap.ext.gui` `set_size` speaks.
+///
+/// Boundary contract (Issue #759): the value rounds to the nearest
+/// pixel and saturates into `[0, u32::MAX]` — negative, NaN and
+/// non-finite inputs map to `0`; values above `u32::MAX` map to
+/// `u32::MAX`. Saturation keeps `set_gui_size` total: a degenerate
+/// size reaches the plugin's `set_size` as the nearest representable
+/// pixel count and the plugin's own accept/decline judges it — the
+/// same round-then-saturate approach the VST3 adapter applies to
+/// `ViewRect`.
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn gui_size_component(value: f64) -> u32 {
+    value.round().clamp(0.0, f64::from(u32::MAX)) as u32
+}
+
 /// The PCKN targeting for a channel-voice note event: channel and
 /// key concrete, port/note-id wild (this bridge declares no note
 /// ports and tracks no note identity — `Match::All` is the honest
@@ -1403,8 +1419,9 @@ impl Plugin for ClapPlugin {
     /// honest resize negotiation: a plugin that reports
     /// `can_resize == false` gets the defined `Unsupported`, and a
     /// declined `set_size` is `PluginFailed`. `GuiSize` logical
-    /// units truncate to the `u32` pixels `clap.ext.gui` speaks —
-    /// the same documented unit deviation the attach path carries.
+    /// units round to the nearest `u32` pixel `clap.ext.gui`
+    /// speaks, saturating into `[0, u32::MAX]` — the boundary
+    /// contract `gui_size_component` documents (Issue #759).
     ///
     /// # Errors
     ///
@@ -1422,8 +1439,8 @@ impl Plugin for ClapPlugin {
         gui.set_size(
             &handle,
             ClapGuiSize {
-                width: size.width as u32,
-                height: size.height as u32,
+                width: gui_size_component(size.width),
+                height: gui_size_component(size.height),
             },
         )
         .map_err(|_| HostError::PluginFailed)
@@ -1945,5 +1962,21 @@ mod tests {
         assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
         // `drop` then runs `close_gui`-equivalent teardown — a defined
         // no-op here — before the pinned instance descent.
+    }
+
+    /// `gui_size_component` boundary contract (Issue #759): round to
+    /// the nearest pixel, saturate into `[0, u32::MAX]` — negative,
+    /// NaN and non-finite inputs map to `0`; values above `u32::MAX`
+    /// map to `u32::MAX`.
+    #[test]
+    fn gui_size_component_saturates_at_pixel_bounds() {
+        assert_eq!(gui_size_component(800.4), 800);
+        assert_eq!(gui_size_component(800.5), 801);
+        assert_eq!(gui_size_component(-3.0), 0);
+        assert_eq!(gui_size_component(f64::NAN), 0);
+        assert_eq!(gui_size_component(f64::INFINITY), u32::MAX);
+        assert_eq!(gui_size_component(f64::NEG_INFINITY), 0);
+        assert_eq!(gui_size_component(f64::from(u32::MAX) + 0.4), u32::MAX);
+        assert_eq!(gui_size_component(1e30), u32::MAX);
     }
 }
