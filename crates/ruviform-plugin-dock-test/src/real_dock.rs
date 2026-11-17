@@ -4,7 +4,7 @@
 //! dcomp-pixel/foreground-probe/presentation-probe slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-one
+//! windows* through [`RealOsGuiTest`] and records the twenty-two
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -36,6 +36,12 @@
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
 //! |                         |             | effective な実 OS pointer/key 注入が `Injected`     |
+//! | `real-command-receipt`  | `RealOs`    | `Pass`/`Fail`/`NotRun` — fader fixture の            |
+//! |                         |             | Begin→Preview→Commit が receipt-expecting intent を  |
+//! |                         |             | mint し、`post_event` の applied/rejected `result`   |
+//! |                         |             | が `command_id` で binding を Applied→Observed /     |
+//! |                         |             | Rejected に settle。decode 済み `CommandReceipt` を   |
+//! |                         |             | report.receipts へ populate（AC1 link + AC4）        |
 //! | `real-window-dpi`       | `RealOs`    | `Pass`/`Fail`/`NotRun` — live `window_geometry` +   |
 //! |                         |             | lifecycle `Resized`/`ScaleFactorChanged` 整合を      |
 //! |                         |             | 観測判定（DPI 変更経路は未駆動 — 観測のみ）           |
@@ -91,7 +97,9 @@ use ruviform_plugin_host::{
     SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
+use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
 use ruviform_ui::dock::ViewInstanceId;
+use ruviform_ui::ipc::{ErrorBody, Event};
 use ruviform_ui::native_slot::{
     LogicalRect, SlotCapabilities, SlotGeometry, SlotLease, SlotSpec, SlotVisibility, Support,
     SurfaceSlotId,
@@ -108,9 +116,10 @@ use ruviform_ui_test::scenario::plugin_dock::{
 };
 use ruviform_ui_test::scenario::visual::{CaptureOutcome, VisualGuiTest};
 use ruviform_ui_test::{
-    CaseId, RunId, ScenarioCapability, ScenarioDriver, ScenarioEntry, ScenarioError, ScenarioId,
-    ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioTarget,
-    ScenarioVerdict, SemanticGuiTest, TargetQuery, run_entries, run_scenario, settle_until,
+    CaseId, MintedIntent, RunId, ScenarioCapability, ScenarioDriver, ScenarioEntry, ScenarioError,
+    ScenarioId, ScenarioOutcome, ScenarioReport, ScenarioSpec, ScenarioSpecExtras, ScenarioTarget,
+    ScenarioVerdict, SemanticGuiTest, TargetQuery, parity_gesture_scenario, run_entries,
+    run_scenario, settle_until, sv_fader_dock_fixture,
 };
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -179,6 +188,12 @@ struct RealDockContext<'a> {
     /// remaining cases build on. `None` only if the session
     /// mounted fewer than three windows.
     window_c: Option<WindowId>,
+    /// The fourth mounted window id — `real-command-receipt`'s
+    /// command-minting fader view (`sv_fader_dock_fixture`). The
+    /// dock spec mounts no command bindings, so the receipt case
+    /// gets its own window rather than disturbing A/B/C. `None`
+    /// only if the session mounted fewer than four windows.
+    window_d: Option<WindowId>,
     /// The primary window's live scale factor measured once at
     /// session start through `window_geometry` — stamped into
     /// every case's `environment.scale_factor` (AC4 evidence;
@@ -186,6 +201,9 @@ struct RealDockContext<'a> {
     session_scale_factor: Option<f64>,
     /// The mounted view instance id.
     view: ViewInstanceId,
+    /// The fourth window's view instance id — the fader-dock
+    /// fixture `real-command-receipt` drives.
+    view_d: ViewInstanceId,
     /// Lane environment snapshot (borrowed — the session is
     /// short-lived).
     env: &'a LaneEnvironment,
@@ -232,6 +250,7 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 ///
 /// # Panics
 /// Same contract as [`run_all`].
+#[expect(clippy::too_many_lines)]
 #[must_use]
 pub fn run_all_with_pixel_artifacts(
     env: &LaneEnvironment,
@@ -245,6 +264,7 @@ pub fn run_all_with_pixel_artifacts(
     let view = ViewInstanceId::new(631).expect("view instance id 631 is non-zero");
     let view_b = ViewInstanceId::new(632).expect("view instance id 632 is non-zero");
     let view_c = ViewInstanceId::new(633).expect("view instance id 633 is non-zero");
+    let view_d = ViewInstanceId::new(634).expect("view instance id 634 is non-zero");
     let mut epochs = AttachEpochAllocator::new();
     let mut host = ViewHost::new(view, epochs.mint());
     host.mount(plugin_dock_view_spec())
@@ -260,15 +280,24 @@ pub fn run_all_with_pixel_artifacts(
         .mount(plugin_dock_view_spec())
         .expect("plugin dock view spec mounts");
     host_c.drain_events();
+    // Window D hosts the command-minting fader fixture — the dock
+    // spec carries no command bindings, so `real-command-receipt`
+    // needs a view whose controls mint receipt-expecting intents.
+    let mut host_d = ViewHost::new(view_d, epochs.mint());
+    host_d
+        .mount(sv_fader_dock_fixture().spec)
+        .expect("fader dock fixture spec mounts");
+    host_d.drain_events();
 
-    // Three mounts: window A stays the sentinel every later case
+    // Four mounts: window A stays the sentinel every later case
     // builds on (the GPUI platform loop exits when its last window
     // closes), window B gives `real-multiwindow-focus` a
     // focus-transfer target and `real-window-close` its
     // veto/defer/approve target, window C is the close case's
-    // default-approve target. B/C are offset right of A so the
-    // windows never overlap (an OS click on A's panel center must
-    // land on A).
+    // default-approve target, and window D hosts the fader fixture
+    // `real-command-receipt` drives. B/C/D are offset right of A so
+    // the windows never overlap (an OS click on A's panel center
+    // must land on A).
     let window_spec_b = WindowSpec {
         title: "ruviform plugin-dock B".to_string(),
         position: Some(LogicalPosition::new(1450, 80)),
@@ -277,6 +306,11 @@ pub fn run_all_with_pixel_artifacts(
     let window_spec_c = WindowSpec {
         title: "ruviform plugin-dock C".to_string(),
         position: Some(LogicalPosition::new(2900, 80)),
+        ..WindowSpec::default()
+    };
+    let window_spec_d = WindowSpec {
+        title: "ruviform fader-dock D".to_string(),
+        position: Some(LogicalPosition::new(4350, 80)),
         ..WindowSpec::default()
     };
     let outcome = RealOsGuiTest::run(
@@ -299,6 +333,13 @@ pub fn run_all_with_pixel_artifacts(
                     theme: None,
                 },
             },
+            RealWindowMount {
+                window: window_spec_d,
+                view: ViewMount {
+                    host: host_d,
+                    theme: None,
+                },
+            },
         ],
         RealWindowOptions::default(),
         |gui| {
@@ -313,6 +354,7 @@ pub fn run_all_with_pixel_artifacts(
             };
             let window_b = windows.next();
             let window_c = windows.next();
+            let window_d = windows.next();
             // The session's primary-window scale factor, measured
             // once — stamped into every case's `environment.
             // scale_factor` (AC4; a failed read stays the honest
@@ -329,8 +371,10 @@ pub fn run_all_with_pixel_artifacts(
                 window,
                 window_b,
                 window_c,
+                window_d,
                 session_scale_factor,
                 view,
+                view_d,
                 env,
                 plugin: plugin.as_ref().ok(),
                 plugin_error: plugin_error.as_ref(),
@@ -445,7 +489,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 21] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 22] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -518,6 +562,13 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 21] {
             required: &[ScenarioCapability::RealOsPointerOrKeyboard],
             spec_extras: real_window_extras,
             run: real_os_input_case,
+        },
+        ScenarioEntry {
+            case: "real-command-receipt",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::SemanticAction],
+            spec_extras: real_window_extras,
+            run: real_command_receipt_case,
         },
         ScenarioEntry {
             case: "real-window-dpi",
@@ -1025,7 +1076,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 22] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1079,7 +1130,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 22] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -5684,6 +5735,244 @@ fn real_os_input_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Sce
 }
 
 // ---------------------------------------------------------------------
+// case: real-command-receipt (AC1 Command→Receipt link + AC4 receipts)
+// ---------------------------------------------------------------------
+
+/// The component key `real-command-receipt` drives on window D — the
+/// `sv_fader_dock_fixture` walk key, a command-minting fader.
+const RECEIPT_FADER_KEY: &str = "fader-ch1";
+
+/// The receipt-expecting `Commit` minted for `gesture_id`, if the
+/// drained intents carry one — the command→receipt correlation key
+/// this case exists to prove. `expect_receipt` plus the gesture id
+/// pin the match so a stray intent from another window's view can
+/// never be mistaken for this command.
+fn commit_for_gesture<'a>(
+    intents: &'a [MintedIntent],
+    gesture_id: &str,
+) -> Option<&'a MintedIntent> {
+    intents.iter().find(|minted| {
+        minted.expect_receipt
+            && matches!(
+                &minted.intent,
+                CommandIntent::Commit { gesture_id: g, .. } if g == gesture_id
+            )
+    })
+}
+
+/// The `control_id` a `Commit` intent carries — the binding id the
+/// later `Notify` projection must name to reach the same binding.
+fn commit_control_id(minted: &MintedIntent) -> Option<String> {
+    match &minted.intent {
+        CommandIntent::Commit { control_id, .. } => Some(control_id.clone()),
+        _ => None,
+    }
+}
+
+/// The command→receipt attempt on window D's fader view: two
+/// `Begin → Preview → Commit` gestures mint receipt-expecting
+/// intents, `result` events carrying the minted `command_id`s are
+/// posted back through `post_event` — `applied` for the first
+/// command (then an authoritative `Notify` projection), `result_err`
+/// for the second — and the binding phases plus the decoded
+/// [`CommandReceipt`]s are the verdict inputs. Receipts are decoded
+/// with the same [`CommandReceipt::from_result`] `deliver_event`
+/// runs, so a recorded receipt is exactly what the view applied —
+/// never a hand-built stand-in. Collected receipts escape through
+/// `receipts` even on the failure path: whatever the view accepted
+/// is honest evidence.
+#[expect(clippy::too_many_lines)]
+fn command_receipt_body(
+    gui: &mut RealOsGuiTest,
+    window: Option<WindowId>,
+    view: ViewInstanceId,
+) -> ScenarioOutcome {
+    let mut steps = Vec::new();
+    let mut receipts = Vec::new();
+    let key = ComponentKey(RECEIPT_FADER_KEY.to_string());
+    let attempt = (|| -> Result<Value, String> {
+        let window = window.ok_or_else(|| "fourth window id not recorded".to_string())?;
+        let target = step(
+            &mut steps,
+            "resolve_target",
+            gui.resolve_target(&TargetQuery::new(window, view).component(key.clone())),
+            |_| Value::Null,
+        )?;
+
+        // -- command 1: commit → applied receipt → observed projection --
+        let (intents, _snapshot) = step(
+            &mut steps,
+            "gesture_apply",
+            parity_gesture_scenario(gui, &target, &key, "rc-apply", ValueInput::Plain(0.7)),
+            |(intents, _)| json!({ "intents": intents.len() }),
+        )?;
+        let commit = commit_for_gesture(&intents, "rc-apply")
+            .ok_or_else(|| "gesture_apply: no receipt-expecting Commit minted".to_string())?;
+        let command_id = commit.command_id.clone();
+        let control_id = commit_control_id(commit)
+            .ok_or_else(|| "commit intent carried no control_id".to_string())?;
+        steps.push(json!({
+            "step": "commit_minted",
+            "verdict": "pass",
+            "command_id": command_id,
+            "control_id": control_id,
+        }));
+
+        // The receipt the consumer gateway posts back — decoded by
+        // the same `from_result` the view's `deliver_event` runs, so
+        // the recorded receipt is exactly what the binding applies.
+        let applied_event = Event::result_ok(
+            command_id.clone(),
+            json!({ "status": "applied", "revision": 1 }),
+        );
+        let applied_receipt = CommandReceipt::from_result(&applied_event)
+            .ok_or_else(|| "applied result did not decode to a receipt".to_string())?;
+        if applied_receipt.command_id != command_id {
+            return Err("decoded receipt command_id diverged from the minted id".to_string());
+        }
+        receipts.push(applied_receipt);
+        step(
+            &mut steps,
+            "post_applied_receipt",
+            gui.post_event(&target, &applied_event),
+            |()| json!({ "command_id": command_id }),
+        )?;
+        step(&mut steps, "settle_applied", gui.settle(), |()| Value::Null)?;
+        let applied_snapshot = step(
+            &mut steps,
+            "observe_applied",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if applied_snapshot.phase != CommandPhase::Applied {
+            return Err(format!(
+                "applied receipt did not settle the binding: phase {:?}",
+                applied_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_applied", "verdict": "pass" }));
+
+        // Authoritative projection through the same event path —
+        // the receipt-routed binding must also accept state.
+        let notify = Event::Notify {
+            seq: 1,
+            data: json!({
+                "control_id": control_id,
+                "revision": 2,
+                "value": { "normalized": 0.7 },
+            }),
+        };
+        step(
+            &mut steps,
+            "post_projection",
+            gui.post_event(&target, &notify),
+            |()| Value::Null,
+        )?;
+        step(&mut steps, "settle_projection", gui.settle(), |()| {
+            Value::Null
+        })?;
+        let observed_snapshot = step(
+            &mut steps,
+            "observe_projection",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if observed_snapshot.phase != CommandPhase::Observed || observed_snapshot.observed.is_none()
+        {
+            return Err(format!(
+                "projection did not reach Observed: phase {:?}",
+                observed_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_observed", "verdict": "pass" }));
+
+        // -- command 2: commit → rejected receipt --
+        let (intents2, _snapshot2) = step(
+            &mut steps,
+            "gesture_reject",
+            parity_gesture_scenario(gui, &target, &key, "rc-reject", ValueInput::Plain(0.4)),
+            |(intents, _)| json!({ "intents": intents.len() }),
+        )?;
+        let commit2 = commit_for_gesture(&intents2, "rc-reject")
+            .ok_or_else(|| "gesture_reject: no receipt-expecting Commit minted".to_string())?;
+        let command_id2 = commit2.command_id.clone();
+        steps.push(json!({
+            "step": "commit_minted_rejected",
+            "verdict": "pass",
+            "command_id": command_id2,
+        }));
+        let rejected_event = Event::result_err(
+            command_id2.clone(),
+            ErrorBody::new("command_rejected", "consumer refused the commit"),
+        );
+        let rejected_receipt = CommandReceipt::from_result(&rejected_event)
+            .ok_or_else(|| "rejected result did not decode to a receipt".to_string())?;
+        receipts.push(rejected_receipt);
+        step(
+            &mut steps,
+            "post_rejected_receipt",
+            gui.post_event(&target, &rejected_event),
+            |()| json!({ "command_id": command_id2 }),
+        )?;
+        step(&mut steps, "settle_rejected", gui.settle(), |()| {
+            Value::Null
+        })?;
+        let rejected_snapshot = step(
+            &mut steps,
+            "observe_rejected",
+            gui.observe(&target, &key),
+            component_snapshot_json,
+        )?;
+        if rejected_snapshot.phase != CommandPhase::Rejected {
+            return Err(format!(
+                "rejected receipt did not settle the binding: phase {:?}",
+                rejected_snapshot.phase
+            ));
+        }
+        steps.push(json!({ "step": "phase_rejected", "verdict": "pass" }));
+
+        Ok(json!({
+            "window": window.to_string(),
+            "view": view.to_string(),
+            "component": RECEIPT_FADER_KEY,
+            "semantic_tree": {
+                RECEIPT_FADER_KEY: component_snapshot_json(&rejected_snapshot),
+            },
+        }))
+    })();
+
+    let mut outcome = steps_outcome(
+        &steps,
+        attempt,
+        "real OS window hosted the fader fixture; Begin→Preview→Commit \
+         minted receipt-expecting intents whose command_ids were \
+         answered through post_event — applied settled Applied→Observed \
+         and rejected settled Rejected, with the decoded receipts \
+         recorded on the report",
+        &["real-window:command-receipt:fader-ch1"],
+    );
+    outcome.receipts = receipts;
+    outcome
+}
+
+/// `real-command-receipt`: the AC1 Command→Receipt link plus AC4
+/// receipt population on a real OS window. Window D mounts the
+/// command-minting `sv_fader_dock_fixture` view; semantic dispatch
+/// mints receipt-expecting `Commit` intents, `result` events carrying
+/// the minted `command_id`s return through `post_event`, and the
+/// binding phases plus decoded [`CommandReceipt`]s prove the link —
+/// the first command takes the applied→observed path, the second the
+/// rejected path.
+fn real_command_receipt_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window_d;
+    let view = ctx.view_d;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(command_receipt_body(gui, window, view))
+    });
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
+}
+
+// ---------------------------------------------------------------------
 // cases: real-window-dpi / real-window-ime / real-window-close
 // (AC1 — dpi/close flipped to real verdicts on the window-surface
 // observation API; ime stays Unsupported — `Ime` unclaimed, #389)
@@ -6058,14 +6347,15 @@ fn close_default_leg(
 }
 
 /// The close-case attempt: drives every close-decision route on
-/// the two non-sentinel windows — `window_b` takes armed `Veto`,
+/// the two target windows — `window_b` takes armed `Veto`,
 /// armed `Defer`, `respond_close(Approve)`, and terminal-retirement
 /// probes; `window_c` takes the unanswered default `Approve`.
-/// `window_a` stays the sentinel the later editor/session cases
-/// build on (the GPUI platform loop exits when its last window
-/// closes) and must observe no close lifecycle. Returns the
-/// observation extras on success — the same sequence shape the
-/// window-surface lifecycle test proved on real windows.
+/// `window_a` and every other non-target window stay alive (the
+/// GPUI platform loop exits when its last window closes) and must
+/// observe no close lifecycle. Returns the observation extras on
+/// success — the same sequence shape the window-surface lifecycle
+/// test proved on real windows.
+#[expect(clippy::too_many_lines)]
 fn close_body(
     gui: &mut RealOsGuiTest,
     window_a: WindowId,
@@ -6116,27 +6406,38 @@ fn close_body(
         close_approve_retire_leg(gui, &mut steps, wb)?;
         close_default_leg(gui, &mut steps, wc)?;
 
-        // Terminal state — only sentinel A remains; its log must
-        // carry no close lifecycle, and B/C logs must end at
-        // Destroyed with the exact expected close subsequence.
+        // Terminal state — every non-target window survives (the
+        // sentinel plus any fixture windows later cases still
+        // need); no survivor's log may carry close lifecycle, and
+        // B/C logs must end at Destroyed with the expected close
+        // subsequence.
+        let survivors: Vec<WindowId> = windows
+            .iter()
+            .copied()
+            .filter(|window| *window != wb && *window != wc)
+            .collect();
         let remaining = gui.windows();
-        if remaining != vec![window_a] {
+        if remaining != survivors {
             return Err(format!(
-                "expected only sentinel window A to remain, got {remaining:?}"
+                "expected non-target windows {survivors:?} to remain, got {remaining:?}"
             ));
         }
         steps.push(json!({
-            "step": "sentinel_only",
+            "step": "survivors_only",
             "verdict": "pass",
             "windows": remaining.iter().map(ToString::to_string).collect::<Vec<_>>(),
         }));
-        let a_events = gui.window_events(window_a);
-        if a_events.contains(&WindowLifecycleEvent::CloseRequested)
-            || a_events.contains(&WindowLifecycleEvent::Destroyed)
-        {
-            return Err("sentinel window A observed close lifecycle".to_string());
+        for survivor in &survivors {
+            let survivor_events = gui.window_events(*survivor);
+            if survivor_events.contains(&WindowLifecycleEvent::CloseRequested)
+                || survivor_events.contains(&WindowLifecycleEvent::Destroyed)
+            {
+                return Err(format!(
+                    "non-target window {survivor} observed close lifecycle"
+                ));
+            }
         }
-        steps.push(json!({ "step": "sentinel_isolated", "verdict": "pass" }));
+        steps.push(json!({ "step": "survivors_isolated", "verdict": "pass" }));
         let b_sequence = close_sequence(gui, wb);
         if b_sequence.as_slice() != ["close_requested", "close_requested", "destroyed"] {
             return Err(format!("window B close sequence {b_sequence:?} unexpected"));
@@ -6171,17 +6472,18 @@ fn close_body(
         "three real OS windows; window B drove armed Veto → armed \
          Defer → respond_close(Approve) → Destroyed plus terminal-\
          retirement probes, window C drove the unanswered default \
-         Approve → Destroyed, sentinel A observed no close lifecycle \
-         and remained the only window",
+         Approve → Destroyed, every non-target window observed no \
+         close lifecycle and survived",
         &["window:close:lifecycle:real-window"],
     )
 }
 
 /// `real-window-close`: drives the full close-decision matrix on
-/// the two non-sentinel windows — window B takes armed `Veto`,
+/// the two target windows — window B takes armed `Veto`,
 /// armed `Defer`, `respond_close(Approve)`, and terminal-retirement
-/// probes; window C takes the unanswered default `Approve`. Window
-/// A stays the sentinel every later case builds on.
+/// probes; window C takes the unanswered default `Approve`. Every
+/// non-target window (sentinel A plus the command-receipt fader
+/// window D) survives untouched.
 fn real_window_close_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
     let window_a = ctx.window;
     let window_b = ctx.window_b;
@@ -7827,11 +8129,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 21, "twenty-one real-dock cases");
+        assert_eq!(reports.len(), 22, "twenty-two real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 22] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -7864,7 +8166,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 21] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 22] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

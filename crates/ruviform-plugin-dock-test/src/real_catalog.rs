@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The twenty-one real-window dock cases in run order — metadata
+/// The twenty-two real-window dock cases in run order — metadata
 /// only. The AC1 remainder rows (`real-multiwindow-focus`,
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
@@ -62,7 +62,14 @@ pub struct RealCatalogRow {
 /// verdicts on the window-surface observation API
 /// (`window_geometry`/`window_events`/`request_close`/
 /// `respond_close`/`arm_close_response`); `real-window-ime` stays
-/// `Unsupported` (`Ime` unclaimed, Issue #389 scope). The AC3 rows
+/// `Unsupported` (`Ime` unclaimed, Issue #389 scope). The
+/// command-receipt slice added `real-command-receipt`: the AC1
+/// Command→Receipt link plus AC4 receipt population — a real
+/// window hosts the command-minting fader fixture, semantic
+/// dispatch mints receipt-expecting `Commit` intents, and
+/// applied/rejected `result` events posted through `post_event`
+/// settle the binding phases while the decoded `CommandReceipt`s
+/// land in the report's `receipts`. The AC3 rows
 /// (`real-editor-resize`, `real-editor-redock`) judge editor ops
 /// through non-pixel oracles (session events, child-HWND contract,
 /// session state) only. The AC1/AC6 remainder rows
@@ -128,6 +135,11 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
         case: "real-os-input",
         scenario: SCENARIO,
         required: &[ScenarioCapability::RealOsPointerOrKeyboard],
+    },
+    RealCatalogRow {
+        case: "real-command-receipt",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::SemanticAction],
     },
     RealCatalogRow {
         case: "real-window-dpi",

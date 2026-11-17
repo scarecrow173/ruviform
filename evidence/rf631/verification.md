@@ -1136,3 +1136,109 @@ lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — Issue #53
 - AC4 の未実装 field（GPU 情報・semantic tree 直列化・pixel diff
   evidence 同梱・window/plugin hash の完全 digest 化）は残件 —
   lockfile/manifest 変更を要する手段を使わない制約内で実施した分のみ。
+
+---
+
+# Slice 追記: Issue #631 real-command-receipt（AC1 Command→Receipt link + AC4 receipts populate）
+
+- Date: 2026-11-17
+- Lane JSONL repo_sha: `1d18e297`（base `origin/main`・working tree 差分を含む実走）
+- 対象: `real-command-receipt` case を real lane に追加 — 実 Window の
+  fader fixture（`sv_fader_dock_fixture`、第 4 window D /
+  `ViewInstanceId` 634）で Begin→Preview→Commit gesture が mint した
+  receipt-expecting intent の `command_id` に対し、driver-neutral
+  `post_event` で実 `Event::Result`（applied/rejected）と
+  `Event::Notify` projection を投入。`CommandReceipt::from_result`
+  decode 済み receipt を `ScenarioOutcome.receipts`→JSONL `receipts`
+  field へ populate（catalog 22 real rows）。あわせて
+  `real-window-close` の終端 assert を「非対象 window 全生存」へ
+  一般化（window D 追加への対応 — 初回実走の fail を観測して修正）。
+
+## Static lanes（全 pass）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `mise run check ruviform-plugin-dock-test`（default） | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run lint ruviform-plugin-dock-test`（default） | pass（`-D warnings`） |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass（`-D warnings`） |
+| `mise run lint ruviform-plugin-dock-test --features lab-gui` | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test`（default） | pass（console 14 + plugin-dock 4 + unit） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass（unit 10 + console 14 + plugin-dock 4） |
+| `mise run test ruviform-plugin-dock-test --features lab-gui` | pass（lab 7 + console 14 + plugin-dock 4） |
+| `mise run test-ui-plugin-dock-console` | pass（`--list` 30 行 = headless 8 + real 22） |
+| `mise run test-ui-plugin-dock`（headless scenario） | pass |
+| `mise run test-ui-plugin-dock-lab` | window 起動→WM_CLOSE で clean exit 0。Run all→Quit の dogfooding は operator 操作必須（computer-use/UIA 不可）— catalog 投影は console `--list` + `catalog_rows_cover_headless_and_real` で検証。残件として記録 |
+| `mise run test-ui-scenario-contract` | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | pass |
+
+## `test-ui-plugin-dock-real` 実走 verdict（22 case、interactive Windows desktop）
+
+| case | verdict | 備考 |
+| --- | --- | --- |
+| real-window-mount | pass | |
+| real-native-slot | pass | |
+| real-editor-attach | pass | |
+| real-capture | pass | |
+| real-dcomp-pixel | **fail** | 既知の DComp topmost occlusion（Issue #532）— 前 slice と同一の正直な Fail を維持。Pass に変換しない |
+| real-dcomp-foreground | pass | |
+| real-dcomp-present | pass | |
+| real-multiwindow-focus | pass | |
+| real-os-input | pass | |
+| **real-command-receipt** | **pass**（新規） | window D の fader fixture で Begin→Preview→Commit が receipt-expecting intent を mint（`command_id` 記録）。`post_event` で applied `Event::Result`（`revision:1`）→ `CommandPhase::Applied` → `Event::Notify` projection（`revision:2`）→ `CommandPhase::Observed`、第 2 gesture の rejected `Event::Result`（detail 付き）→ `CommandPhase::Rejected` を実観測。`receipts` に decode 済み `CommandReceipt` 2 件（applied + rejected）を populate — AC1 link + AC4 evidence の初の非空 receipts |
+| real-window-dpi | pass | 変更なし |
+| real-window-ime | unsupported | `Ime` capability 未 claim（#389 領域）— 変更なし |
+| real-window-close | pass | 終端 assert を survivor 一般化後に再確認 — B/C 破壊後に非対象 window（A+D）が全生存・close lifecycle 非観測。初回実走では window D を想定しない旧 assert で fail → 一般化で修正 |
+| real-editor-resize | unsupported | 変更なし（#389 verb 領域） |
+| real-editor-redock | unsupported | 変更なし |
+| real-session-terminate | pass | |
+| real-session-degraded | pass | |
+| real-session-recovery | pass | |
+| real-session-timeout | pass | |
+| real-editor-visibility | unsupported | 変更なし |
+| real-session-crash | unsupported | 変更なし（out-of-process 化は別 slice） |
+| real-session-hang | unsupported | 変更なし |
+
+lane exit 1 の原因は `real-dcomp-pixel` の `Fail` 1 件のみ — Issue #532 の
+既知 occlusion であり lane defect ではない。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+- `plugin-dock-real-headless.jsonl` 再生成: 22 case 全て `not_run` +
+  `environment_kind=deterministic-backend` + receipts 空。
+  `real-command-receipt` も `environment_blocked` の fail-closed 形状を
+  維持 — headless/blocked で `environment_kind=real-window` を名乗らない。
+
+## AC1/AC4 evidence（本 slice）
+
+- `real-command-receipt` の `receipts` が JSONL に非空で出る:
+  `{"command_id":"view-634:a4:m1:fader-ch1:3","status":"applied",
+  "revision":1}` と `{"command_id":"view-634:a4:m1:fader-ch1:6",
+  "status":"rejected","detail":"consumer refused the commit"}`。
+  両 receipt は view へ配送した `Event::Result` を
+  `CommandReceipt::from_result` で decode したもの — minted
+  `command_id` で相関、合成値なし。
+- `observed.steps` に gesture intent 数・`command_id`/`control_id`・
+  phase 遷移（`phase_applied`/`phase_observed`/`phase_rejected`）・
+  committed/display/observed 値を step 単位で記録。
+  `semantic_tree` に fader snapshot を同梱。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-window-ime`・`real-editor-resize`/`redock`/`visibility`・
+  `real-session-crash`/`hang` の `Unsupported` は据え置き —
+  capability claim・verb・out-of-process 化は #389 / 別 slice 領域。
+- `real-dcomp-pixel` の `Fail` は Issue #532 未解決のまま正直に保持。
+- HEADLESS_MATRIX 側 command-receipt 行は ruviform#725 lease
+  （`tests/plugin_dock.rs`/`Cargo.toml`）解除後の後続 slice。
+- `test-ui-plugin-dock-lab` の Run all→Quit dogfooding は operator
+  操作必須 — computer-use/UIA 不可のため window 起動→clean exit の
+  み確認。catalog 投影（30 行）は console `--list` + unit test で
+  検証済み。実走 JSONL 追記は operator 実行時の残件。
+- AC4 の未実装 field（GPU 情報・semantic tree 全量・pixel diff
+  evidence 同梱・window/plugin hash の完全 digest 化）は残件。
+- consumer 投影（Synvelis/AudioLens 実 GUI）は synvelis#114/#176・
+  audio-lens#127 gate として NotRun のまま。
