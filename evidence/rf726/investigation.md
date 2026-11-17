@@ -89,7 +89,10 @@ raw 出力: `filter-runs/<name>.stdout.txt` / `.stderr.txt`。
 ## upstream 状態照合（free-audio/clap-validator）
 
 - issue list（open+closed）再照合: panic 伝播/JSON 未出力の既存報告なし。
-  open は #43（native absolute path preset file）のみ。
+  open は約 12 件あるが panic 関連はなく、`#11`
+  （preset-discovery-load crash・timeout 系症状と重複の可能性）は
+  本件とは別経路。`#41`/`#42` の fix は master に存在するが 0.4.1
+  未収録（上記ドラフト参照）。
 - master HEAD `5bc2ef3` の source に buggy code が残存:
   - `src/cli/sandbox.rs`:98 `.expect("Failed to deserialize the output from
     the sandboxed operation")` — 未修正。

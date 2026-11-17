@@ -94,10 +94,10 @@ validator should still emit its JSON report for the remaining tests.
   status → `SandboxError::Crashed` path works).
 - Separately observed on 0.4.1: `preset-discovery-crawl`/`preset-discovery-load`
   time out after 45 s for a plugin that does not implement preset
-  discovery; the deadlock fix from issue #41 appears to be merged on
+  discovery; the deadlock fix from issue `#41` appears to be merged on
   master but is not in the 0.4.1 binary.
 - `param-set-events`/`param-set-no-cookies` failures on 0.4.1 match the
-  symptom fixed by issue #42 (already on master, unreleased).
+  symptom fixed by issue `#42` (already on master, unreleased).
 - The 45 s `wait_timeout` path returns `SandboxError::Timeout` but does
   not kill the timed-out child process; orphaned children were observed
   still running (and holding the plugin DLL locked) after the run.
