@@ -77,6 +77,7 @@ Directory: `docs/tasks`
 | TASK-034YJ3y9Bg5CeSmMMjs3g1 | Issue #631 T1 — RealOsGuiTest window-close/DPI 観測面 | completed | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | TASK-034ZkLmNpQrStUvWxYzIj5 | Issue #692 T1 — ruviform-script 中立契約 port crate 実装・検証・docs chain | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | TASK-Tl2K23IPFpdnJ46b7lJJAc | Issue #716 runtime ScriptBackend — タスク分解 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| TASK-034YZZNkTftEQV1BWT8vGc | Issue #725 serde 語彙 Phase A — task | in-progress | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
 | TASK-034QefuVxwLiU0xGxi496X | T-3 PoC ex_001-006 + index/lockfile + full verification evidence | completed | [t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md](./t-3-poc-ex-001-006-index-lockfile-full-verification-evidence.md) |
@@ -362,6 +363,7 @@ Directory: `docs/tasks`
 | TASK-630abiValidator05 | Issue #630 外部 ABI validator slice — task | done | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
 | TASK-034Y14fuNy9GI2NIIXyz1U | Issue #630 adapter-state-bridge slice — task | done | [issue-630-adapter-state-bridge.md](./issue-630-adapter-state-bridge.md) |
 | TASK-034XVtnIJFkGrODb3uToEC | Issue #630 — test plugin L1 out-of-process runner slice | done | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| TASK-630presetSpawnFault05 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — task | done | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | TASK-3bwAN8UwWS5HsnXVLLCAap | Issue #630 test_fault slice — task | done | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TASK-034Z9pVw6xJmZ5sNtQeUgD | Issue #630 test_instrument slice — task | done | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TASK-034Y4fNMwyna1imxqrp1rF | Issue #630 test_stateful slice — task | done | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
@@ -373,6 +375,7 @@ Directory: `docs/tasks`
 | TASK-720tupleV205 | Issue #720 consumer-verify-tuple contract v1→v2 bump — task | done | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | TASK-034YYxvzrqG58pQIKDaukG | Issue #721 post-seal temp 境界確定 — bench-smoke 照合・README 補強・検証 | done | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | TASK-722vst3LifecycleAudit05 | Issue #722 production VST3 adapter lifecycle 監査 — task | done | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| TASK-732clapLifecycleAudit05 | Issue #732 production CLAP adapter lifecycle 監査 — task | done | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |

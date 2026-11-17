@@ -211,6 +211,7 @@ Directory: `docs/specs`
 | SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| SPEC-630presetSpawnFault02 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — spec | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | SPEC-034Y10F0GbD81g2dJSmyyY | Issue #630 test_editor slice — VST3 plugin-side IPlugView (AC-4 real child HWND fixture) | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | SPEC-GhY5geFlPWhmRfRdTwHkzA | Issue #630 test_fault slice — in-band armed fault plugin + L1 Crash/Hang/Timeout/Isolation E2E | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | SPEC-034Z9kQm4xVtW2sLpNbRcA | Issue #630 test_instrument slice — deterministic MIDI/transport synth fixture + L1 real-ABI oracle | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
@@ -233,6 +234,8 @@ Directory: `docs/specs`
 | SPEC-720tupleV202 | Issue #720 consumer-verify-tuple contract v1→v2 bump — spec | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | SPEC-034YXxVwj3nAIfWDF2rZcG | Issue #721 post-seal temp 改竄境界 — bench-smoke 配線照合と現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | SPEC-722vst3LifecycleAudit02 | Issue #722 production VST3 adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| SPEC-034YZVNYlydMg2rp3mE6v7 | Issue #725 EnvironmentKind serde 語彙 gap 解消 Phase A — deserialize alias 受容 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |

@@ -243,6 +243,7 @@ Directory: `docs/designs`
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| DESIGN-630presetSpawnFault03 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 設計 | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | DESIGN-034Y11NzSzQKwkY0SHh8oe | Issue #630 test_editor slice — 設計 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | DESIGN-8g91MtjlYytEayPOtT2g3e | Issue #630 test_fault slice — 設計 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | DESIGN-034Z9mRw8yTgX3vLqPcSeB | Issue #630 test_instrument slice — 設計 | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
@@ -265,6 +266,8 @@ Directory: `docs/designs`
 | DESIGN-720tupleV203 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 設計 | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | DESIGN-034YYnXY7447GWCMHE4dOI | Issue #721 post-seal temp 改竄境界 — 現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | DESIGN-722vst3LifecycleAudit03 | Issue #722 production VST3 adapter lifecycle 契約監査 — 設計 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| DESIGN-034YZXlJnaKqZu7Z6E9Lmy | Issue #725 EnvironmentKind serde 語彙移行方針 — Phase A deserialize alias | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| DESIGN-732clapLifecycleAudit03 | Issue #732 production CLAP adapter lifecycle 監査 — 設計 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | DESIGN-034X9FMLEAxQoslIlJ3YBV | Linux 配布設計（Issue #127・CI 照合確定版） | approved | [linux-distribution-design.md](./linux-distribution-design.md) |
 | DESIGN-034JO1BQYrzMQsaFmL3YkF | workspace MSRV 引上げの適用範囲と検証設計 | approved | [msrv-raise-design.md](./msrv-raise-design.md) |
 | DESIGN-034JRarHKPb6eKlZqW9WeO | オフライン実行ドライバ設計 | approved | [offline-execution-driver.md](./offline-execution-driver.md) |

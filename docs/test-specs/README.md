@@ -232,6 +232,7 @@ Directory: `docs/test-specs`
 | TSPEC-034ZCLAPED6ts6ceM3kQ2x | Issue #630 CLAP test_editor slice — test specification | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | TSPEC-034XTBjvQhJKJMQHxSptND | Issue #630 CLAP test_gain — テスト仕様 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TSPEC-034XVt9RlIlSHn2EWXDisA | Issue #630 L1 runner — テスト仕様 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| TSPEC-630presetSpawnFault06 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — test specification | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | TSPEC-034Y13OOyL62lZ84qd2ILq | Issue #630 test_editor slice — test specification | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TSPEC-1jGomS13d3GgO1MNrOleAi | Issue #630 test_fault slice — test specification | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TSPEC-034Z9qCx7vBnM3rTsWfXyE | Issue #630 test_instrument slice — test specification | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
@@ -254,6 +255,8 @@ Directory: `docs/test-specs`
 | TSPEC-720tupleV206 | Issue #720 consumer-verify-tuple contract v1→v2 bump — test specification | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | TSPEC-034YYs26BK9ql96HKlJEJQ | Issue #721 post-seal temp 境界・bench-smoke 配線 テスト仕様 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | TSPEC-722vst3LifecycleAudit06 | Issue #722 production VST3 adapter lifecycle 監査 — test specification | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| TSPEC-034YZZbBgKzfmFfSLl9ai4 | Issue #725 serde 語彙 Phase A — test specification | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| TSPEC-732clapLifecycleAudit06 | Issue #732 production CLAP adapter lifecycle 監査 — test specification | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
