@@ -78,6 +78,7 @@ Directory: `docs/tasks`
 | TASK-034ZkLmNpQrStUvWxYzIj5 | Issue #692 T1 — ruviform-script 中立契約 port crate 実装・検証・docs chain | completed | [issue-692-script-port.md](./issue-692-script-port.md) |
 | TASK-Tl2K23IPFpdnJ46b7lJJAc | Issue #716 runtime ScriptBackend — タスク分解 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
 | TASK-034YZZNkTftEQV1BWT8vGc | Issue #725 serde 語彙 Phase A — task | in-progress | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| TASK-034Z7dTQ1avXmDsygN9lTA | Issue #725 serde 語彙 Phase B — task | in-progress | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | TASK-034Z78J47Pz01PXhvix6fI | Issue #744 JobExecutor 実装 — task | completed | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | TASK-034QeftbDcuNOqRCo3KycI | T-1 ruviform-graph crate skeleton + ids/port/graph types + builder | completed | [t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md](./t-1-ruviform-graph-crate-skeleton-ids-port-graph-types-builder.md) |
 | TASK-034Qefu64sxmR4DaHbCFGf | T-2 Validator + StableHandleMap + GraphProject | completed | [t-2-validator-stablehandlemap-graphproject.md](./t-2-validator-stablehandlemap-graphproject.md) |
@@ -369,6 +370,7 @@ Directory: `docs/tasks`
 | TASK-3bwAN8UwWS5HsnXVLLCAap | Issue #630 test_fault slice — task | done | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | TASK-034Z9pVw6xJmZ5sNtQeUgD | Issue #630 test_instrument slice — task | done | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TASK-034Y4fNMwyna1imxqrp1rF | Issue #630 test_stateful slice — task | done | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| TASK-Gh04pUabNC7uKg9tWx5zOf | Issue #631 T1 — real-command-receipt case | done | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | TASK-034XEbSIxHaIKblAZevx7R | Issue #631 T1 — Plugin-dock scenario skeleton（ruviform-plugin-dock-test） | done | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TASK-R7rbYG8Ew6lrrKHrYcKDbA | Issue #631 T1 — real-window-close/dpi catalog flip | done | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | TASK-034XEUr2TZSWvSNX2TudTp | Issue #646 ruviform-numeric bench profile compile fix — lib.rs/corr.rs/docs 是正 | done | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |

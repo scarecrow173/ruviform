@@ -212,6 +212,7 @@ Directory: `docs/plans`
 | PLAN-034Z9nTs5uHkY4wMrPdVfC | Issue #630 test_instrument slice — 実装計画 | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034Y4f3N8mEveC8nUJLKFw | Issue #630 test_stateful slice — 実装計画 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| PLAN-Fd93oTzaMRA6jFk8sVw4Ne | Issue #631 real-command-receipt case 実装計画 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034Y3odXzCYwJRpyjtWZgK | Issue #631 real-editor-attach 実装計画 | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | PLAN-034YqGSA93gczwU51UuDt3 | Issue #631 real-row 拡充 実装計画 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
@@ -231,6 +232,7 @@ Directory: `docs/plans`
 | PLAN-034YYuiRq03qc7utzYExKJ | Issue #721 post-seal temp 境界確定 — implementation plan | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | PLAN-722vst3LifecycleAudit04 | Issue #722 production VST3 adapter lifecycle 監査 — 実装計画 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | PLAN-034YZYv4eOit5JDno5u0gR | Issue #725 serde 語彙 Phase A — 実装計画 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| PLAN-034Z7dMg41lvFaBPkz4Um6 | Issue #725 serde 語彙 Phase B — 実装計画 | approved | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | PLAN-726clapValidatorPanic04 | Issue #726 clap-validator param-fuzz panic — 実装計画 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | PLAN-034Z0ufhfy1zqe3TvK5xrp | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | PLAN-732clapLifecycleAudit04 | Issue #732 production CLAP adapter lifecycle 監査 — 実装計画 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |

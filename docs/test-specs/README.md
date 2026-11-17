@@ -239,6 +239,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Z9qCx7vBnM3rTsWfXyE | Issue #630 test_instrument slice — test specification | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034Y4fXVmWB9YKK3r9ty7n | Issue #630 test_stateful slice — test specification | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| TSPEC-Ji15qVcbOD8vLh0tYx6aPg | Issue #631 real-command-receipt case のテスト仕様 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034Y3opmTfAWO3534oKOoH | Issue #631 real-editor-attach テスト仕様（child HWND OS 観測・detach 収束・thread-affinity の判定） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TSPEC-034YqGZs8qcuHItS5Ep1JW | Issue #631 real-row 拡充 テスト仕様 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
@@ -258,6 +259,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YYs26BK9ql96HKlJEJQ | Issue #721 post-seal temp 境界・bench-smoke 配線 テスト仕様 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | TSPEC-722vst3LifecycleAudit06 | Issue #722 production VST3 adapter lifecycle 監査 — test specification | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | TSPEC-034YZZbBgKzfmFfSLl9ai4 | Issue #725 serde 語彙 Phase A — test specification | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| TSPEC-034Z7dUHf47CjwtsI34B6k | Issue #725 serde 語彙 Phase B — test specification | approved | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | TSPEC-726clapValidatorPanic06 | Issue #726 clap-validator param-fuzz panic — test specification | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | TSPEC-034Z0uy4qJcLIsiQTm3jM5 | Issue #727 bounded 非 RT job executor 責務判断・API 契約 テスト仕様 | approved | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | TSPEC-732clapLifecycleAudit06 | Issue #732 production CLAP adapter lifecycle 監査 — test specification | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |

@@ -250,6 +250,7 @@ Directory: `docs/designs`
 | DESIGN-034Z9mRw8yTgX3vLqPcSeB | Issue #630 test_instrument slice — 設計 | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | DESIGN-034XC4o1eLquthCFAcOrS8 | Issue #630 Test Plugin Suite — VST3 test_gain first slice 設計 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | DESIGN-034Y4dCo7zV1IwCz9gEIi0 | Issue #630 test_stateful slice — 設計 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| DESIGN-Hc82nSyZlQ9tIe5oRu3yMd | Issue #631 real-command-receipt case 設計 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034Y3o3I0foDX68pAnpDEx | Issue #631 real-editor-attach 設計（test_editor descriptor 選択・child HWND OS 観測・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | DESIGN-034YqGS0FcTkFNpOd08X6E | Issue #631 real-row 拡充 設計 | approved | [issue-631-real-row.md](./issue-631-real-row.md) |
@@ -269,6 +270,7 @@ Directory: `docs/designs`
 | DESIGN-034YYnXY7447GWCMHE4dOI | Issue #721 post-seal temp 改竄境界 — 現行契約維持の設計判断 | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | DESIGN-722vst3LifecycleAudit03 | Issue #722 production VST3 adapter lifecycle 契約監査 — 設計 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | DESIGN-034YZXlJnaKqZu7Z6E9Lmy | Issue #725 EnvironmentKind serde 語彙移行方針 — Phase A deserialize alias | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| DESIGN-034Z7dLBI0cjzvj59p11n2 | Issue #725 serde 語彙 Phase B — emit flip 設計 | approved | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | DESIGN-726clapValidatorPanic03 | Issue #726 clap-validator param-fuzz panic — 設計と判断記録 | approved | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | DESIGN-034Z0tS0DTi5T7v5ov5cWH | Issue #727 bounded 非 RT job executor — ruviform-exec 内 executor primitive の API 設計 | approved | [issue-727-bounded-nonrt-job-executor.md](./issue-727-bounded-nonrt-job-executor.md) |
 | DESIGN-732clapLifecycleAudit03 | Issue #732 production CLAP adapter lifecycle 監査 — 設計 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
