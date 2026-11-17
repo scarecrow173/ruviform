@@ -203,6 +203,7 @@ Directory: `docs/specs`
 | SPEC-034XVlYdozn65zqMmYFFb5 | Issue #629 MIDI loopback round-trip verifier and probe refresh (3rd slice) | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | SPEC-034XTfa1sD2K4NXS4eKDfn | Issue #629 MIDI output path — WinMM midiOut* backend (2nd slice) | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | SPEC-9bPUGYlLtIw7dXbS3LAyex | Issue #629 provisioning runbook and MIDI virtual lane separation (closeout-prep slice) | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
+| SPEC-e9Hp1wpFJhAUcwotfrV2Sh | Issue #629 AC3 Test Runtime complete wiring — verdict to RunMetadata and deterministic signal/Event supply (headless slice) | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | SPEC-034YnyKRDisxQAnJdC2wTj | Issue #629 virtual endpoint lane registration and Test Runtime wiring check (5th slice) | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | SPEC-034XCi8anHlk3T9rYA7ysb | Issue #629 first slice — Windows virtual endpoint survey and capability probe | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | SPEC-034YaVh88vUiMap5dBbjln | Issue #629 WASAPI streaming verifier and endpoint probe extension (4th slice) | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -212,6 +213,7 @@ Directory: `docs/specs`
 | SPEC-034ZCLAPED2sl2ceM3kQ2x | Issue #630 CLAP slice — test_editor plugin（clap.ext.gui plugin 側 fixture） | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | SPEC-034XTAfC3ThbkSW16xLQ7k | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap (CLAP test_gain) | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | SPEC-034XVqPg6BgUwKye5dwTPA | Issue #630 L1 runner slice — test plugin L1 out-of-process path (ruviform-plugin-test-{vst3,clap}) | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| SPEC-630presetDiscoveryReeval02 | Issue #630 preset-discovery 外部検証再評価 slice — spec | approved | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | SPEC-630presetSpawnFault02 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — spec | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | SPEC-034Y10F0GbD81g2dJSmyyY | Issue #630 test_editor slice — VST3 plugin-side IPlugView (AC-4 real child HWND fixture) | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | SPEC-GhY5geFlPWhmRfRdTwHkzA | Issue #630 test_fault slice — in-band armed fault plugin + L1 Crash/Hang/Timeout/Isolation E2E | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |

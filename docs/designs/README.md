@@ -235,6 +235,7 @@ Directory: `docs/designs`
 | DESIGN-034XVm5dXwieJHapZCsdrZ | Issue #629 MIDI loopback round-trip verifier and probe refresh design | approved | [issue-629-midi-loopback.md](./issue-629-midi-loopback.md) |
 | DESIGN-034XTfmMpVaGOisECUyZkj | Issue #629 MIDI output path design — midi_output port + WinMM midiOut* backend | approved | [issue-629-midi-output.md](./issue-629-midi-output.md) |
 | DESIGN-E2nW52u7DBe6EqaWvY1PRi | Issue #629 provisioning runbook and MIDI virtual lane separation design | approved | [issue-629-provisioning-runbook.md](./issue-629-provisioning-runbook.md) |
+| DESIGN-ItrgZQG5ROZFAEevhfFR9H | Issue #629 AC3 Test Runtime wiring design — dependency direction adjudication and verdict to RunMetadata mapping | approved | [issue-629-test-runtime-wiring.md](./issue-629-test-runtime-wiring.md) |
 | DESIGN-034YnAzVIIwmdeNr0QJCE0 | Issue #629 virtual endpoint lane registration design | approved | [issue-629-virtual-endpoint-lane.md](./issue-629-virtual-endpoint-lane.md) |
 | DESIGN-034XCdHjAQMtFJ2ymLlI2M | Issue #629 virtual endpoint probe design | approved | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DESIGN-034YaVs6WbghWj1JKJNZjZ | Issue #629 WASAPI streaming verifier and endpoint probe extension design | approved | [issue-629-wasapi-endpoint.md](./issue-629-wasapi-endpoint.md) |
@@ -244,6 +245,7 @@ Directory: `docs/designs`
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| DESIGN-630presetDiscoveryReeval03 | Issue #630 preset-discovery 外部検証再評価 slice — 設計 | approved | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | DESIGN-630presetSpawnFault03 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 設計 | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | DESIGN-034Y11NzSzQKwkY0SHh8oe | Issue #630 test_editor slice — 設計 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | DESIGN-8g91MtjlYytEayPOtT2g3e | Issue #630 test_fault slice — 設計 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |

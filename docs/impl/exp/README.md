@@ -75,6 +75,7 @@ Directory: `docs/impl/exp`
 | [issue-629-midi-loopback-exp.jsonl](./issue-629-midi-loopback-exp.jsonl) |
 | [issue-629-midi-output-exp.jsonl](./issue-629-midi-output-exp.jsonl) |
 | [issue-629-provisioning-runbook-exp.jsonl](./issue-629-provisioning-runbook-exp.jsonl) |
+| [issue-629-test-runtime-wiring-exp.jsonl](./issue-629-test-runtime-wiring-exp.jsonl) |
 | [issue-629-virtual-endpoint-lane-exp.jsonl](./issue-629-virtual-endpoint-lane-exp.jsonl) |
 | [issue-629-wasapi-endpoint-exp.jsonl](./issue-629-wasapi-endpoint-exp.jsonl) |
 | [issue-630-abi-validator-exp.jsonl](./issue-630-abi-validator-exp.jsonl) |
@@ -83,6 +84,7 @@ Directory: `docs/impl/exp`
 | [issue-630-clap-test-editor-exp.jsonl](./issue-630-clap-test-editor-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
+| [issue-630-preset-discovery-reeval-exp.jsonl](./issue-630-preset-discovery-reeval-exp.jsonl) |
 | [issue-630-preset-spawn-fault-exp.jsonl](./issue-630-preset-spawn-fault-exp.jsonl) |
 | [issue-630-test-editor-slice.jsonl](./issue-630-test-editor-slice.jsonl) |
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |

@@ -49,6 +49,7 @@ Directory: `docs/adr`
 | ADR-034UevIyecjzQ9iBQ9W2SG | Issue #478 Fader/Knob の縦寸法契約 — grow+min_h slot | proposed | [issue-478-fader-knob-vertical-size-contract.md](./issue-478-fader-knob-vertical-size-contract.md) |
 | ADR-JwwKl26JnYjSWNJAuhGJs5 | Consumer-neutral Workflow/CLI orchestration契約の採否（Issue #553 RF-AUTX-01） | accepted | [issue-553-workflow-cli-contract.md](./issue-553-workflow-cli-contract.md) |
 | ADR-034Xe9xZEqz5ftcu5yCqXB | 言語非依存 Script Backend/Analyzer 契約（Issue #558 RF-SCRIPT-00） | accepted | [issue-558-script-backend-contract.md](./issue-558-script-backend-contract.md) |
+| ADR-SAljZ24QzAaSgusRPiWYAy | Issue #630 clap-validator preset-discovery 検証を upstream commit build pin で実施 | accepted | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | ADR-7Qk2mXvLp9RwTd4YsN8bF | issue-630-test-spawn-fault-runner-argv | accepted | [issue-630-test-spawn-fault-runner-argv.md](./issue-630-test-spawn-fault-runner-argv.md) |
 | ADR-Km83rTzcPE9wLj6uVx7yHq | issue-631-command-receipt fixture mount 形態 | accepted | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
