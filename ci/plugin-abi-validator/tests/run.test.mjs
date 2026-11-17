@@ -65,6 +65,18 @@ test("parseArgs reads explicit tool paths and flags", () => {
   assert.equal(opts.evidenceDir, "c:/ev");
 });
 
+test("parseArgs reads the production CLAP options", () => {
+  const opts = parseArgs([
+    "--clap-production",
+    "--clap-production-dll", "c:/dlls/prod-clap.dll",
+  ]);
+  assert.equal(opts.clapProduction, true);
+  assert.equal(opts.clapProductionDll, "c:/dlls/prod-clap.dll");
+  const off = parseArgs([]);
+  assert.equal(off.clapProduction, false);
+  assert.equal(off.clapProductionDll, null);
+});
+
 test("parseArgs rejects unknown arguments", () => {
   assert.throws(() => parseArgs(["--bogus"]), /unknown argument/);
   assert.throws(() => parseArgs(["--clap-validator"]), /missing value/);
@@ -304,4 +316,47 @@ test("run() records tool + artifact digests when present", () => {
   // VST3 artifact missing → NotRun even though the tool resolved.
   const vst3Leg = report.legs.find((x) => x.kind === "vst3-sdk-validator");
   assert.equal(vst3Leg.status, "NotRun");
+});
+
+// -- production CLAP leg (Issue #732) -------------------------------------
+
+test("run() without --clap-production never emits a production leg", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rf732-noprod-"));
+  const report = run({
+    clapValidator: null,
+    vst3Validator: null,
+    validatorDir: null,
+    clapDll: join(dir, "missing-clap.dll"),
+    vst3Dll: join(dir, "missing-vst3.dll"),
+    build: false,
+    evidenceDir: dir,
+  });
+  assert.equal(report.legs.some((l) => l.plugin === "production_gain"), false);
+  assert.equal(report.artifacts.clapProductionDll, null);
+});
+
+test("run() --clap-production records an honest NotRun leg for a missing artifact", () => {
+  const dir = mkdtempSync(join(tmpdir(), "rf732-prod-"));
+  const clap = join(dir, "clap-validator.exe");
+  writeFileSync(clap, "fake");
+  const report = run({
+    clapValidator: clap,
+    vst3Validator: null,
+    validatorDir: null,
+    clapDll: join(dir, "missing-clap.dll"),
+    clapProduction: true,
+    clapProductionDll: join(dir, "missing-prod.dll"),
+    vst3Dll: join(dir, "missing-vst3.dll"),
+    build: false,
+    evidenceDir: dir,
+  });
+  const prod = report.legs.find((l) => l.plugin === "production_gain");
+  assert.ok(prod);
+  assert.equal(prod.status, "NotRun");
+  assert.match(prod.details, /missing-prod\.dll/);
+  assert.match(prod.details, /--clap-production-dll/);
+  assert.equal(prod.pluginId, "org.ruviform.clap-gain-poc");
+  assert.equal(report.artifacts.clapProductionDll.missing, true);
+  // Fail-closed: a NotRun canonical leg keeps the verdict non-Passed.
+  assert.notEqual(report.evaluation.verdict, "Passed");
 });
