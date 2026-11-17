@@ -1,0 +1,286 @@
+{
+  "schema": "rf630-abi-validator-run/1",
+  "startedAt": "2026-11-17T06:14:58.552Z",
+  "finishedAt": "2026-11-17T06:15:08.256Z",
+  "repo": {
+    "root": "G:\\orca\\workspaces\\ruviform\\rf732-clap-audit",
+    "head": "84a68f25d5afd1b1f201018d76894d25b122f150",
+    "platform": "win32/x64",
+    "osRelease": "MINGW64_NT-10.0-26300 3.6.7-fb42d713.x86_64",
+    "node": "v26.12.1"
+  },
+  "tools": {
+    "clapValidator": {
+      "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe",
+      "sha256": "825439ad3ff98770a24656013eeb11591407687b97058e1db9549c4f7d53e38a"
+    },
+    "vst3Validator": {
+      "path": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\vst3sdk-build\\bin\\Release\\validator.exe",
+      "sha256": "5889a89685cd0362941659011ec82d8584e0ebb39d77030d1a2b2cbd2d68a4fd"
+    }
+  },
+  "artifacts": {
+    "clapDll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "sha256": "efbd34e7a9279a27adad20af61a1656a8b6ef14167a5a765e0377fa385c9b85a"
+    },
+    "clapProductionDll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_clap.dll",
+      "sha256": "573cfbe29d160e021dbdcb5fdd197d6651bb51294262c685fa7605fd2647bde2"
+    },
+    "vst3Dll": {
+      "path": "G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_vst3.dll",
+      "sha256": "87d5ddf0e9f4d55fb0d4288d565a7a96ff05dde1490c04e6059bda0e86955284"
+    },
+    "vst3Package": "ruviform-plugin-test-vst3",
+    "vst3Bundle": "ruviform-plugin-test-vst3.vst3"
+  },
+  "build": {
+    "ran": true,
+    "command": "cargo build -p ruviform-plugin-test-clap -p ruviform-plugin-test-vst3 -p ruviform-plugin-clap",
+    "exitCode": 0,
+    "ok": true,
+    "tail": "Compiling ruviform-media-core v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-media-core)\n   Compiling clap-sys v0.5.0\n   Compiling bitflags v2.13.2\n   Compiling windows-link v0.2.1\n   Compiling com-scrape-types v0.1.1\n   Compiling ruviform-video-core v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-video-core)\n   Compiling ruviform-audio-core v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-audio-core)\n   Compiling clack-common v0.2.0\n   Compiling vst3 v0.3.0\n   Compiling windows-sys v0.61.2\n   Compiling ruviform-plugin-core v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-plugin-core)\n   Compiling clack-plugin v0.2.0\n   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-plugin-test-vst3)\n   Compiling clack-extensions v0.2.0\n   Compiling ruviform-plugin-clap v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-plugin-clap)\n   Compiling ruviform-plugin-test-clap v0.1.0 (G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\crates\\ruviform-plugin-test-clap)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.28s\nmbx[cache]: 12 hits, 0 misses, 1 not looked up, 3 incremental, 3 bypassed; 0 B downloaded, 0 B uploaded, 3.4 MiB stored locally\nmbx[savings]: 2d 22h of compilation avoided across 3813 builds. imagine the fan noise. now stop."
+  },
+  "legs": [
+    {
+      "kind": "clap-validator",
+      "plugin": "test_gain",
+      "pluginId": "org.ruviform-test.clap-test-gain",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-gain G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 575,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 26,
+        "skipped": 17,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [
+        "The plugin took 4.21x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 17,
+      "status": "Passed",
+      "details": "26 passed, 17 skipped, 1 warning(s), 0 failed"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_fault",
+      "pluginId": "org.ruviform-test.clap-test-fault",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --exclude param-(set|fuzz) --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 393,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 19,
+        "skipped": 17,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [
+        "The plugin took 2.22x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 17,
+      "status": "Passed",
+      "details": "19 passed, 17 skipped, 1 warning(s), 0 failed",
+      "exclusion": {
+        "pattern": "param-(set|fuzz)",
+        "reason": "test_fault's stepped Fault parameter intentionally arms abort/exit/hang modes; param-mutating validator cases would crash the sandboxed child by design. The fatal surface is covered by the L1 out-of-process fault lane instead."
+      }
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_stateful",
+      "pluginId": "org.ruviform-test.clap-test-stateful",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-stateful G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 534,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 31,
+        "skipped": 12,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [
+        "The plugin took 4.07x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 12,
+      "status": "Passed",
+      "details": "31 passed, 12 skipped, 1 warning(s), 0 failed"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_instrument",
+      "pluginId": "org.ruviform-test.clap-test-instrument",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-instrument G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 550,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 30,
+        "skipped": 14,
+        "warning": 0,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [],
+      "skipped": 14,
+      "status": "Passed",
+      "details": "30 passed, 14 skipped, 0 warning(s), 0 failed"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_editor",
+      "pluginId": "org.ruviform-test.clap-test-editor",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-editor G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 537,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "success": 17,
+        "skipped": 26,
+        "warning": 1,
+        "failed": 0,
+        "crashed": 0
+      },
+      "failedCases": [],
+      "warnings": [
+        "The plugin took 3.07x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 26,
+      "status": "Passed",
+      "details": "17 passed, 26 skipped, 1 warning(s), 0 failed"
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "test_fault",
+      "pluginId": "org.ruviform-test.clap-test-fault",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform-test.clap-test-fault G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_test_clap.dll",
+      "durationMs": 709,
+      "exitCode": 101,
+      "signal": null,
+      "counts": null,
+      "failedCases": [],
+      "warnings": [],
+      "skipped": 0,
+      "status": "Unsupported",
+      "details": "unfiltered run: Unsupported — validator exited 101 without a JSON report (tool-side termination) (expected: fatal fault modes are armed by param-mutating cases)",
+      "informational": true
+    },
+    {
+      "kind": "clap-validator",
+      "plugin": "production_gain",
+      "pluginId": "org.ruviform.clap-gain-poc",
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\clap-validator.exe validate --json --plugin-id org.ruviform.clap-gain-poc G:\\orca\\workspaces\\ruviform\\rf732-clap-audit\\target\\debug\\ruviform_plugin_clap.dll",
+      "durationMs": 538,
+      "exitCode": 1,
+      "signal": null,
+      "counts": {
+        "success": 16,
+        "skipped": 17,
+        "warning": 1,
+        "failed": 10,
+        "crashed": 0
+      },
+      "failedCases": [
+        {
+          "test": "process-varying-sample-rates",
+          "code": "failed",
+          "details": "Error while processing with 1234.57hz sample rate\n'clap_plugin::activate()' returned false."
+        },
+        {
+          "test": "param-set-events",
+          "code": "failed",
+          "details": "Failure while fetching the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-set-no-cookies",
+          "code": "failed",
+          "details": "Failure while fetching the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-set-wrong-namespace",
+          "code": "failed",
+          "details": "Failure while fetching the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-fuzz-basic",
+          "code": "failed",
+          "details": "Could not fetch the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-fuzz-bounds",
+          "code": "failed",
+          "details": "Could not fetch the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-fuzz-sample-accurate",
+          "code": "failed",
+          "details": "Could not fetch the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-fuzz-modulation",
+          "code": "failed",
+          "details": "Could not fetch the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-conversions",
+          "code": "failed",
+          "details": "Failure while fetching the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        },
+        {
+          "test": "param-default-values",
+          "code": "failed",
+          "details": "Failure while fetching the parameters\nThe module name for parameter 'Gain' (stable ID 0) starts with a leading slash: '/'."
+        }
+      ],
+      "warnings": [
+        "The plugin took 3.99x longer to process denormals, you should set flush-to-zero flags or avoid denormals in some other way."
+      ],
+      "skipped": 17,
+      "status": "Failed",
+      "details": "10 failed, 0 crashed test case(s)"
+    },
+    {
+      "kind": "vst3-sdk-validator",
+      "plugin": "ruviform-plugin-test-vst3.vst3",
+      "pluginId": null,
+      "command": "C:\\Users\\akiyoshi\\AppData\\Local\\ruviform\\plugin-abi-validator\\vst3sdk-build\\bin\\Release\\validator.exe C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-3hKBL3\\ruviform-plugin-test-vst3.vst3",
+      "durationMs": 388,
+      "exitCode": 0,
+      "signal": null,
+      "counts": {
+        "passed": 235,
+        "failed": 0
+      },
+      "failedCases": [],
+      "warnings": [],
+      "skipped": 0,
+      "status": "Passed",
+      "details": "235 passed, 0 failed",
+      "bundle": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-3hKBL3\\ruviform-plugin-test-vst3.vst3",
+      "innerBinary": "C:\\Users\\akiyoshi\\AppData\\Local\\Temp\\rf630-vst3-3hKBL3\\ruviform-plugin-test-vst3.vst3\\Contents\\x86_64-win\\ruviform-plugin-test-vst3.vst3",
+      "package": "ruviform-plugin-test-vst3"
+    }
+  ],
+  "evaluation": {
+    "verdict": "Failed",
+    "exitCode": 1,
+    "summary": {
+      "total": 7,
+      "passed": 6,
+      "failed": 1,
+      "notRun": 0,
+      "unsupported": 0
+    }
+  }
+}
