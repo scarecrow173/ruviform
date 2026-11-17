@@ -142,6 +142,7 @@ Directory: `docs/specs`
 | SPEC-rf388DockWindowing01 | Issue #388 NativeSurfaceSlot slice 3 — Windows/VST3/L0 ancestor clip・keyboard/focus routing・re-dock/float 2-phase の実測仕様 | approved | [issue-388-native-dock-windowing-slice3.md](./issue-388-native-dock-windowing-slice3.md) |
 | SPEC-zrIXGa6QONDm4o1DVVUwaz | Issue #388 Driver-neutral NativeSurfaceSlot 契約（早期 Gate 設計・契約実装） | approved | [issue-388-native-surface-slot.md](./issue-388-native-surface-slot.md) |
 | SPEC-034YtuGM7OKrg9UOnR4L7V | Issue #389 editor-session real-session-terminate（real-window session lifecycle L2 case） | approved | [issue-389-editor-session.md](./issue-389-editor-session.md) |
+| SPEC-rf389-ime-verbs-01 | Issue #389 adapter editor verbs（InProcessEditorOps set_size/set_visibility/reattach production chain + rf631 lane verb 行 flip） | approved | [issue-389-ime-verbs.md](./issue-389-ime-verbs.md) |
 | SPEC-034WXSykXHx9U87oel8vLy | Issue #389 GuiParentToken → 型付き Parent Lease 公開 API 移行 | approved | [issue-389-parent-lease.md](./issue-389-parent-lease.md) |
 | SPEC-ynejrtwiz2jIJrf3DwFtAK | Issue #389 Driver-neutral PluginEditorSession（state / typed HostPort / L0-L1 接続設計） | approved | [issue-389-plugin-editor-session.md](./issue-389-plugin-editor-session.md) |
 | SPEC-rf389-real-session-lifecycle-01 | Issue #389 real session lifecycle remainder（real-window session lifecycle L2 cases） | approved | [issue-389-real-session-lifecycle.md](./issue-389-real-session-lifecycle.md) |
