@@ -29,6 +29,11 @@
 //       <dir>/vst3-validator[.exe]
 //   --clap-dll <path>         | env CLAP_TEST-dll — default
 //       <repo>/target/debug/ruviform_plugin_test_clap.dll
+//   --clap-production         additionally validate the production
+//       ruviform-plugin-clap cdylib (Issue #732) — opt-in so the
+//       default fixture lane contract is unchanged
+//   --clap-production-dll <path>  | env CLAP_PRODUCTION_DLL — default
+//       <repo>/target/debug/ruviform_plugin_clap.dll
 //   --vst3-dll <path>         | env VST3_TEST_DLL — default
 //       <repo>/target/debug/ruviform_plugin_test_vst3.dll
 //   --vst3-package <name>     cargo package built for the VST3 leg —
@@ -88,6 +93,18 @@ export const CLAP_PLUGINS = [
   { id: "org.ruviform-test.clap-test-editor", name: "test_editor" },
 ];
 
+// Issue #732: the production CLAP adapter lives in a separate cdylib
+// (`ruviform_plugin_clap.dll`, plugin id `org.ruviform.clap-gain-poc`),
+// so it cannot share `--clap-dll` with the fixture suite — running the
+// fixture plugin ids against it would only produce NotFound noise.
+// The production leg is opt-in via --clap-production; the package name
+// is fixed (not derived) because the leg is declared, not discovered.
+export const CLAP_PRODUCTION_PACKAGE = "ruviform-plugin-clap";
+export const CLAP_PRODUCTION_DLL = "ruviform_plugin_clap.dll";
+export const CLAP_PRODUCTION_PLUGINS = [
+  { id: "org.ruviform.clap-gain-poc", name: "production_gain" },
+];
+
 const USAGE = `Usage: node ci/plugin-abi-validator/run.mjs [options]
 
 Options:
@@ -95,6 +112,8 @@ Options:
   --vst3-validator <path>   Steinberg VST3 SDK validator executable
   --validator-dir <dir>     directory containing clap-validator[.exe] and vst3-validator[.exe]
   --clap-dll <path>         ruviform_plugin_test_clap.dll (default: <repo>/target/debug/...)
+  --clap-production         also run clap-validator against the production ruviform-plugin-clap cdylib
+  --clap-production-dll <path>  production CLAP cdylib (default: <repo>/target/debug/ruviform_plugin_clap.dll)
   --vst3-dll <path>         VST3 cdylib to validate (default: <repo>/target/debug/ruviform_plugin_test_vst3.dll)
   --vst3-package <name>     cargo package built for the VST3 leg (default: derived from --vst3-dll stem)
   --no-build                skip building the fixture crates with cargo
@@ -109,6 +128,8 @@ export function parseArgs(argv) {
     vst3Validator: process.env.VST3_VALIDATOR || null,
     validatorDir: process.env.RUVIFORM_ABI_VALIDATOR_DIR || null,
     clapDll: process.env.CLAP_TEST_DLL || null,
+    clapProduction: false,
+    clapProductionDll: process.env.CLAP_PRODUCTION_DLL || null,
     vst3Dll: process.env.VST3_TEST_DLL || null,
     vst3Package: null,
     build: true,
@@ -134,6 +155,12 @@ export function parseArgs(argv) {
         break;
       case "--clap-dll":
         opts.clapDll = next();
+        break;
+      case "--clap-production":
+        opts.clapProduction = true;
+        break;
+      case "--clap-production-dll":
+        opts.clapProductionDll = next();
         break;
       case "--vst3-dll":
         opts.vst3Dll = next();
@@ -412,9 +439,15 @@ function notRunLeg(kind, name, pluginId, reason) {
   };
 }
 
-function buildFixtureArtifacts(opts, vst3Package) {
+function buildFixtureArtifacts(opts, vst3Package, clapProduction) {
   if (!opts.build) return { ran: false, status: "skipped (--no-build)" };
-  const packages = [...new Set(["ruviform-plugin-test-clap", vst3Package])];
+  const packages = [
+    ...new Set([
+      "ruviform-plugin-test-clap",
+      vst3Package,
+      ...(clapProduction ? [CLAP_PRODUCTION_PACKAGE] : []),
+    ]),
+  ];
   const args = ["build", ...packages.flatMap((p) => ["-p", p])];
   const proc = spawnSync("cargo", args, {
     cwd: REPO_ROOT,
@@ -438,77 +471,100 @@ export function run(opts) {
 
   const tools = resolveValidators(opts);
   const clapDll = resolve(opts.clapDll || join(REPO_ROOT, "target", "debug", "ruviform_plugin_test_clap.dll"));
+  const clapProduction = opts.clapProduction === true;
+  const clapProdDll = resolve(
+    opts.clapProductionDll || join(REPO_ROOT, "target", "debug", CLAP_PRODUCTION_DLL),
+  );
   const vst3Dll = resolve(opts.vst3Dll || join(REPO_ROOT, "target", "debug", "ruviform_plugin_test_vst3.dll"));
   const vst3Names = vst3NamesFromDll(vst3Dll);
   const vst3Package = opts.vst3Package || vst3Names.package;
   const vst3BundleName = `${vst3Package}.vst3`;
   const vst3Label = vst3BundleName;
 
-  const build = buildFixtureArtifacts(opts, vst3Package);
+  const build = buildFixtureArtifacts(opts, vst3Package, clapProduction);
 
   const legs = [];
 
   // -- CLAP legs ---------------------------------------------------------
-  if (!tools.clap) {
-    for (const plugin of CLAP_PLUGINS) {
-      legs.push(
-        notRunLeg(
-          "clap-validator",
-          plugin.name,
-          plugin.id,
-          "clap-validator binary not found — provision the pinned release " +
-            "(see docs/specs/issue-630-abi-validator.md) or pass --clap-validator / CLAP_VALIDATOR",
-        ),
-      );
-    }
-  } else if (!existsSync(clapDll)) {
-    for (const plugin of CLAP_PLUGINS) {
-      legs.push(
-        notRunLeg(
-          "clap-validator",
-          plugin.name,
-          plugin.id,
-          `artifact missing: ${clapDll} — run without --no-build or pass --clap-dll`,
-        ),
-      );
-    }
-  } else if (build.ran && !build.ok) {
-    for (const plugin of CLAP_PLUGINS) {
-      legs.push(
-        notRunLeg(
-          "clap-validator",
-          plugin.name,
-          plugin.id,
-          `fixture build failed (exit ${build.exitCode}) — see build.tail in run.json`,
-        ),
-      );
-    }
-  } else {
-    for (const plugin of CLAP_PLUGINS) {
-      const extraArgs = plugin.exclude ? ["--exclude", plugin.exclude] : [];
-      const leg = runClapLeg({
-        validator: tools.clap,
-        dll: clapDll,
-        plugin,
-        extraArgs,
-      });
-      if (plugin.exclude) leg.exclusion = { pattern: plugin.exclude, reason: plugin.excludeReason };
-      legs.push(leg);
-      writeFileSync(join(evidenceDir, `clap-${plugin.name}.txt`), leg.rawOutput || "");
-      delete leg.rawOutput;
-    }
-    // Informational unfiltered fault run — records the intentional
-    // crash surface without affecting the verdict.
-    const fault = CLAP_PLUGINS.find((p) => p.exclude);
-    if (fault) {
-      const leg = runClapLeg({ validator: tools.clap, dll: clapDll, plugin: fault });
-      leg.informational = true;
-      leg.details =
-        `unfiltered run: ${leg.status} — ${leg.details || ""} ` +
-        `(expected: fatal fault modes are armed by param-mutating cases)`;
-      legs.push(leg);
-      writeFileSync(join(evidenceDir, `clap-${fault.name}-unfiltered.txt`), leg.rawOutput || "");
-      delete leg.rawOutput;
+  // One leg set per CLAP target: the rf#630 fixture suite (always) and,
+  // with --clap-production, the production ruviform-plugin-clap cdylib.
+  // The informational unfiltered fault run stays fixture-only — the
+  // production adapter has no intentional-crash surface.
+  const clapTargets = [
+    { dll: clapDll, plugins: CLAP_PLUGINS, fixture: true, dllOption: "--clap-dll" },
+  ];
+  if (clapProduction) {
+    clapTargets.push({
+      dll: clapProdDll,
+      plugins: CLAP_PRODUCTION_PLUGINS,
+      fixture: false,
+      dllOption: "--clap-production-dll",
+    });
+  }
+  for (const target of clapTargets) {
+    if (!tools.clap) {
+      for (const plugin of target.plugins) {
+        legs.push(
+          notRunLeg(
+            "clap-validator",
+            plugin.name,
+            plugin.id,
+            "clap-validator binary not found — provision the pinned release " +
+              "(see docs/specs/issue-630-abi-validator.md) or pass --clap-validator / CLAP_VALIDATOR",
+          ),
+        );
+      }
+    } else if (!existsSync(target.dll)) {
+      for (const plugin of target.plugins) {
+        legs.push(
+          notRunLeg(
+            "clap-validator",
+            plugin.name,
+            plugin.id,
+            `artifact missing: ${target.dll} — run without --no-build or pass ${target.dllOption}`,
+          ),
+        );
+      }
+    } else if (build.ran && !build.ok) {
+      for (const plugin of target.plugins) {
+        legs.push(
+          notRunLeg(
+            "clap-validator",
+            plugin.name,
+            plugin.id,
+            `fixture build failed (exit ${build.exitCode}) — see build.tail in run.json`,
+          ),
+        );
+      }
+    } else {
+      for (const plugin of target.plugins) {
+        const extraArgs = plugin.exclude ? ["--exclude", plugin.exclude] : [];
+        const leg = runClapLeg({
+          validator: tools.clap,
+          dll: target.dll,
+          plugin,
+          extraArgs,
+        });
+        if (plugin.exclude) leg.exclusion = { pattern: plugin.exclude, reason: plugin.excludeReason };
+        legs.push(leg);
+        writeFileSync(join(evidenceDir, `clap-${plugin.name}.txt`), leg.rawOutput || "");
+        delete leg.rawOutput;
+      }
+      if (target.fixture) {
+        // Informational unfiltered fault run — records the intentional
+        // crash surface without affecting the verdict.
+        const fault = CLAP_PLUGINS.find((p) => p.exclude);
+        if (fault) {
+          const leg = runClapLeg({ validator: tools.clap, dll: target.dll, plugin: fault });
+          leg.informational = true;
+          leg.details =
+            `unfiltered run: ${leg.status} — ${leg.details || ""} ` +
+            `(expected: fatal fault modes are armed by param-mutating cases)`;
+          legs.push(leg);
+          writeFileSync(join(evidenceDir, `clap-${fault.name}-unfiltered.txt`), leg.rawOutput || "");
+          delete leg.rawOutput;
+        }
+      }
     }
   }
 
@@ -577,6 +633,11 @@ export function run(opts) {
     },
     artifacts: {
       clapDll: existsSync(clapDll) ? { path: clapDll, sha256: sha256File(clapDll) } : { path: clapDll, missing: true },
+      clapProductionDll: clapProduction
+        ? existsSync(clapProdDll)
+          ? { path: clapProdDll, sha256: sha256File(clapProdDll) }
+          : { path: clapProdDll, missing: true }
+        : null,
       vst3Dll: existsSync(vst3Dll) ? { path: vst3Dll, sha256: sha256File(vst3Dll) } : { path: vst3Dll, missing: true },
       vst3Package,
       vst3Bundle: vst3BundleName,

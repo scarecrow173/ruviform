@@ -96,6 +96,10 @@ headless）。
   `test-plugin` の差は破壊的変更のため解消せず、既知 gap と
   して enum doc・design・PR 本文に記録する。schema 語彙と
   一致しない spelling を「一致済み」と主張しない。
+  status: rf#725 Phase A で deserialize alias `test-plugin`
+  受容を適用済み・emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）— emit 側の
+  語彙は依然として一致していないため「解消済み」とは記さない。
 - **R9 stale 参照ゼロ**: 「mise lane 未登録」を示す記述は
   canonical lane `mise run test-audio-virtual-endpoint` への
   参照に更新される。survey doc Evidence 節は append-only
@@ -122,6 +126,9 @@ headless）。
 - **E4 既知 gap**: Given `RealAbiTestPlugin` When `as_str` を
   確認 Then `real-abi-test-plugin`（schema `test-plugin` との
   既知 gap）が維持され、gap が docs に記録される。
+  status: rf#725 Phase A で `as_str`/emit は不変のまま
+  deserialize alias `test-plugin` のみ追加 — emit flip は第2
+  slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - **E5 stale 参照**: Given verifier module doc・probe verdict・
   wasapi-endpoint design・survey doc When lane 記述を確認
   Then canonical lane `mise run test-audio-virtual-endpoint`
@@ -144,3 +151,6 @@ headless）。
   consumer 照合 — 全て後続 slice / 外部 gate。
 - `real-abi-test-plugin`↔`test-plugin` の serde 移行 — 後続
   slice の判断事項。
+  status: rf#725 Phase A で deserialize alias `test-plugin`
+  受容を適用済み — emit flip は第2 slice
+  （`docs/designs/issue-725-serde-vocab-phase-a.md`）。

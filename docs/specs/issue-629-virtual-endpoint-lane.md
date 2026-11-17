@@ -193,6 +193,10 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   解消 — 破壊的変更のため本 slice では行わず、既知 gap と
   して docs に記録し後続 slice の serde 移行判断へ hand-off
   （Coordinator 回答 (A)）。
+  status: rf#725 Phase A で consumer 影響評価
+  （`evidence/rf725/consumer-impact-assessment.md`）と
+  deserialize alias `test-plugin` 受容を適用済み — emit flip
+  は第2 slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - consumer 照合（AC7 — `scarecrow173/synvelis#115`/`#117`/
   `#126`・`scarecrow173/audio-lens#127`）。
 - MIDI 側 lane（`test-midi-real-device` は登録済み・変更なし）。
@@ -248,7 +252,9 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   RunMetadata JSON save/load の merge 済み API と結線 IF の
   照合結果、verifier verdict→RunMetadata 対応付けの spec
   決定、`real-abi-test-plugin`↔`test-plugin` の既知語彙 gap
-  が docs に記録される。
+  が docs に記録される（status: rf#725 Phase A で deserialize
+  alias `test-plugin` 受容を適用済み・emit flip は第2 slice —
+  `docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - [ ] `EnvironmentKind` に `VirtualOsEndpoint`・
   `PhysicalDevice` が additive 追加され、serde
   `kebab-case` が schema 語彙（`virtual-os-endpoint`・
@@ -276,6 +282,10 @@ AC3 の headless 部分（#628 Test Runtime 結線 IF の照合・
   `real-abi-test-plugin` ↔ schema `test-plugin` の gap —
   破壊的変更のため後続 slice で serde 移行方針（rename+alias
   等）とともに決定。再開条件: consumer 影響評価 + 承認。
+  status: rf#725 Phase A で consumer 影響評価
+  （`evidence/rf725/consumer-impact-assessment.md`）と
+  deserialize alias `test-plugin` 受容を適用済み — emit flip
+  は第2 slice（`docs/designs/issue-725-serde-vocab-phase-a.md`）。
 - reconnect/xrun/permission 実測（AC5）・consumer 照合
   （AC7）— 後続。
 - 実体は `docs/designs/issue-629-virtual-endpoint-lane.md`

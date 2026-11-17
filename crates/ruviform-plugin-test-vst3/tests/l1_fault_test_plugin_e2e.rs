@@ -43,8 +43,8 @@ use ruviform_plugin_core::{
     ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, ProcessStatus,
 };
 use ruviform_plugin_host::{
-    ChildExit, HostCommand, HostNotification, HostReply, OutOfProcessIsolation, OutOfProcessSpec,
-    PluginHandle, PluginHost,
+    ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessIsolation,
+    OutOfProcessSpec, PluginHandle, PluginHost,
 };
 
 /// This crate's cdylib file name —
@@ -809,4 +809,281 @@ fn real_test_fault_l1_error_is_defined_rejection() {
     host.execute(HostCommand::Deactivate { handle }).unwrap();
     host.execute(HostCommand::Destroy { handle }).unwrap();
     assert_eq!(host.lifecycle_state(handle), None);
+}
+
+// ---------------------------------------------------------------------------
+// Spawn / pre-Hello fault injection — `--ruviform-test-fault=MODE` argv
+// ---------------------------------------------------------------------------
+
+/// The causes a pre-`Hello` child death may surface as — pipe EOF
+/// (`Transport`), `try_wait` observation (`ExitObserved`), or a
+/// channel-disconnect/reap `Internal`, whichever the supervisor
+/// records first. `Timeout`/`Handshake` stay strict — the hang and
+/// mismatch tests assert those modes separately.
+const PRE_HELLO_DEATH: &[FailureCause] = &[
+    FailureCause::Transport,
+    FailureCause::ExitObserved,
+    FailureCause::Internal,
+];
+
+/// The `test_spawn_fail` descriptor id — `SPAWN_FAIL_CID`'s `uid(...)`
+/// derivation (`factory.rs`); the class is listed by the scan but its
+/// `createInstance` always declines.
+fn expected_spawn_fail_id() -> &'static str {
+    cid_hex(vst3::uid(
+        0x5E2A_9F14,
+        0x7C3D_8B61,
+        0xA4E9_1F27,
+        0xD8B3_6C05,
+    ))
+}
+
+/// The `test_spawn_fail` descriptor the child synthesizes from the
+/// class scan — listed, but `createInstance` rejects it.
+fn expected_spawn_fail_descriptor() -> PluginDescriptor {
+    PluginDescriptor {
+        id: expected_spawn_fail_id(),
+        name: "test_spawn_fail",
+        vendor: "Ruviform Test",
+        version: "0.0.0",
+        features: &["Fx"],
+    }
+}
+
+/// An `OutOfProcessSpec` on the real runner carrying `args` — the
+/// spawn-fault argv channel.
+fn spec_with_args(expected: PluginDescriptor, args: &[&str]) -> OutOfProcessSpec {
+    let mut spec = OutOfProcessSpec::new(expected, runner_program());
+    spec.args = args.iter().map(OsString::from).collect();
+    spec
+}
+
+/// Runs `Instantiate` expecting the defined pre-mint
+/// `Err(HostError::SpawnFailed{cause, diagnostics_id})` rejection whose
+/// cause is one of `causes`; returns the diagnostics id for record
+/// queries.
+fn instantiate_spawn_failed(
+    host: &mut PluginHost,
+    plugin_id: &str,
+    causes: &[FailureCause],
+) -> u64 {
+    match host.execute(HostCommand::Instantiate {
+        plugin_id: plugin_id.to_owned(),
+    }) {
+        Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) => {
+            assert!(
+                causes.contains(&cause),
+                "unexpected FailureCause {cause:?} — expected one of {causes:?}"
+            );
+            diagnostics_id
+        }
+        other => panic!("expected SpawnFailed, got {other:?}"),
+    }
+}
+
+/// `bad-fixture`: the runner resolves a guaranteed-missing fixture
+/// path, `Vst3Library::load` fails, and the child exits 1 before
+/// `Hello` — `SpawnFailed` with a retained diagnostics record whose
+/// stderr carries the load-failure diagnostic.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_bad_fixture_is_spawn_failed() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec_with_args(
+        expected,
+        &["--ruviform-test-fault=bad-fixture"],
+    ))
+    .unwrap();
+
+    let diagnostics_id = instantiate_spawn_failed(
+        &mut host,
+        expected.id,
+        &[
+            FailureCause::Transport,
+            FailureCause::ExitObserved,
+            FailureCause::Internal,
+        ],
+    );
+    match host.diagnostics_query(diagnostics_id) {
+        DiagnosticQuery::Found(record) => {
+            let stderr = String::from_utf8_lossy(&record.stderr.bytes);
+            assert!(
+                stderr.contains("cannot load fixture"),
+                "diagnostics stderr missing the load diagnostic: {stderr}"
+            );
+        }
+        other => panic!("diagnostics record missing: {other:?}"),
+    }
+    // Pre-mint failure: nothing registered, no notification, the
+    // route itself stays usable.
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// `exit:N`: the child loads the fixture then exits before `Hello` —
+/// `SpawnFailed` converges on the transport/exit observation, never a
+/// hang.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_exit_before_hello() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec_with_args(expected, &["--ruviform-test-fault=exit:3"]))
+        .unwrap();
+
+    instantiate_spawn_failed(&mut host, expected.id, PRE_HELLO_DEATH);
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// `abort`: the child loads the fixture then aborts before `Hello` —
+/// same defined convergence as `exit`.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_abort_before_hello() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec_with_args(expected, &["--ruviform-test-fault=abort"]))
+        .unwrap();
+
+    instantiate_spawn_failed(&mut host, expected.id, PRE_HELLO_DEATH);
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// `stderr:N`: the child emits marker bytes on stderr then exits —
+/// the retained diagnostics record proves the parent's stderr capture
+/// works on the pre-`Hello` path.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_stderr_is_captured() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec_with_args(
+        expected,
+        &["--ruviform-test-fault=stderr:4096"],
+    ))
+    .unwrap();
+
+    let diagnostics_id = instantiate_spawn_failed(&mut host, expected.id, PRE_HELLO_DEATH);
+    match host.diagnostics_query(diagnostics_id) {
+        DiagnosticQuery::Found(record) => {
+            assert!(
+                record
+                    .stderr
+                    .bytes
+                    .windows(b"ruviform-test-vst3-spawn-fault-stderr".len())
+                    .any(|w| w == b"ruviform-test-vst3-spawn-fault-stderr"),
+                "diagnostics stderr missing the spawn-fault marker"
+            );
+        }
+        other => panic!("diagnostics record missing: {other:?}"),
+    }
+}
+
+/// `hang`: the child loads the fixture then parks before `Hello` —
+/// the parent's `command_timeout` decides `SpawnFailed{Timeout}` and
+/// the wedged child is killed and reaped, never left running.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_hang_before_hello_times_out() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut spec = spec_with_args(expected, &["--ruviform-test-fault=hang"]);
+    spec.command_timeout = Duration::from_millis(500);
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec).unwrap();
+
+    let diagnostics_id = instantiate_spawn_failed(&mut host, expected.id, &[FailureCause::Timeout]);
+    match host.diagnostics_query(diagnostics_id) {
+        DiagnosticQuery::Found(_) => {}
+        other => panic!("diagnostics record missing: {other:?}"),
+    }
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// Unrecognized argv: any argument the fault parser does not claim
+/// falls through to `run`, whose argv grammar rejects it as a usage
+/// error (exit 2) — still a defined pre-`Hello` failure through the
+/// real binary.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_usage_rejection_is_spawn_failed() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec_with_args(expected, &["--definitely-not-a-real-flag"]))
+        .unwrap();
+
+    instantiate_spawn_failed(&mut host, expected.id, PRE_HELLO_DEATH);
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// Descriptor mismatch: the spec's descriptor does not field-match
+/// the child's class scan — a defined `Handshake` rejection, not a
+/// transport failure.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_descriptor_mismatch_is_handshake() {
+    assert_fixture_present();
+
+    let mut mismatched = expected_fault_descriptor();
+    mismatched.name = "test_fault_typo";
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(mismatched, runner_program()))
+        .unwrap();
+
+    instantiate_spawn_failed(&mut host, mismatched.id, &[FailureCause::Handshake]);
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// `test_spawn_fail`: the class scans cleanly (descriptor field-match
+/// succeeds, wire `CreateInstance` mints a dormant handle) but the
+/// real ABI `createInstance` declines inside `init` — `Initialize`
+/// reports the defined `PluginFailed` rejection. The pooled child
+/// stays healthy: a healthy plugin on the same host still drives to
+/// `Processing`.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_spawn_l1_create_instance_rejection() {
+    assert_fixture_present();
+
+    let spawn_fail = expected_spawn_fail_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(spawn_fail, runner_program()))
+        .unwrap();
+    host.register_out_of_process(OutOfProcessSpec::new(
+        expected_gain_descriptor(),
+        runner_program(),
+    ))
+    .unwrap();
+
+    // Wire `CreateInstance` is dormant for both bridges — the handle
+    // mints; the ABI create runs at `Initialize`.
+    let handle = instantiate(&mut host, spawn_fail.id);
+    assert_eq!(
+        host.execute(HostCommand::Initialize { handle }),
+        Err(HostError::PluginFailed),
+        "the listed-but-uncreatable class must decline at init"
+    );
+    // `Destroy` is the escape for the failed instance.
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+
+    // A healthy plugin on the same host instantiates and initializes.
+    let gain = instantiate(&mut host, expected_gain_id());
+    host.execute(HostCommand::Initialize { handle: gain })
+        .unwrap();
+    host.execute(HostCommand::Destroy { handle: gain }).unwrap();
+    assert!(host.try_recv_notification().is_none());
 }

@@ -253,6 +253,25 @@ impl PluginAudioPortsImpl for GainMainThread<'_> {
 // Params extension
 // ---------------------------------------------------------------------------
 
+/// The wire metadata reported for the single gain parameter.
+///
+/// `module` must be empty: clap-validator rejects a module path with
+/// a leading `/` ("module name ... starts with a leading slash"), and
+/// the rf#630 fixture reports `module: b""` for the same reason —
+/// empty is the root module, not a "/"-rooted path.
+fn gain_param_info() -> clack_extensions::params::ParamInfo<'static> {
+    clack_extensions::params::ParamInfo {
+        id: ClapId::new(GAIN_PARAM.id.0),
+        flags: ParamInfoFlags::IS_AUTOMATABLE | ParamInfoFlags::REQUIRES_PROCESS,
+        cookie: Cookie::empty(),
+        name: GAIN_PARAM.name.as_bytes(),
+        module: b"",
+        min_value: GAIN_PARAM.min_value,
+        max_value: GAIN_PARAM.max_value,
+        default_value: GAIN_PARAM.default_value,
+    }
+}
+
 impl PluginMainThreadParams for GainMainThread<'_> {
     fn count(&self) -> u32 {
         1
@@ -262,16 +281,7 @@ impl PluginMainThreadParams for GainMainThread<'_> {
         if param_index != 0 {
             return;
         }
-        info.set(&clack_extensions::params::ParamInfo {
-            id: ClapId::new(GAIN_PARAM.id.0),
-            flags: ParamInfoFlags::IS_AUTOMATABLE | ParamInfoFlags::REQUIRES_PROCESS,
-            cookie: Cookie::empty(),
-            name: GAIN_PARAM.name.as_bytes(),
-            module: b"/",
-            min_value: GAIN_PARAM.min_value,
-            max_value: GAIN_PARAM.max_value,
-            default_value: GAIN_PARAM.default_value,
-        });
+        info.set(&gain_param_info());
     }
 
     fn get_value(&self, param_id: ClapId) -> Option<f64> {
@@ -592,6 +602,28 @@ mod tests {
     /// the legal path every test starts from.
     fn activated(shared: &GainShared, max_frames: u32) -> GainAudioProcessor<'_> {
         GainAudioProcessor::activate_inner(shared, &config(max_frames)).unwrap()
+    }
+
+    // -- Params wire metadata -------------------------------------------------
+
+    #[test]
+    fn param_info_reports_validator_clean_metadata() {
+        // clap-validator rejects a module path with a leading '/'
+        // ("module name ... starts with a leading slash") — the wire
+        // metadata must carry an empty module (root), matching the
+        // rf#630 fixture contract (`module: b""`).
+        let info = gain_param_info();
+        assert!(
+            info.module.is_empty(),
+            "module must be empty, got {:?}",
+            info.module
+        );
+        assert_eq!(info.name, b"Gain");
+        assert_eq!(info.min_value, GAIN_PARAM.min_value);
+        assert_eq!(info.max_value, GAIN_PARAM.max_value);
+        assert_eq!(info.default_value, GAIN_PARAM.default_value);
+        assert!(info.flags.contains(ParamInfoFlags::IS_AUTOMATABLE));
+        assert!(info.flags.contains(ParamInfoFlags::REQUIRES_PROCESS));
     }
 
     // -- Lifecycle mapping through GainClapPlugin's own objects --------------

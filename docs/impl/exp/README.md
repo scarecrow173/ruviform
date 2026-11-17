@@ -82,6 +82,7 @@ Directory: `docs/impl/exp`
 | [issue-630-clap-test-editor-exp.jsonl](./issue-630-clap-test-editor-exp.jsonl) |
 | [issue-630-clap-test-plugin.jsonl](./issue-630-clap-test-plugin.jsonl) |
 | [issue-630-l1-runner.jsonl](./issue-630-l1-runner.jsonl) |
+| [issue-630-preset-spawn-fault-exp.jsonl](./issue-630-preset-spawn-fault-exp.jsonl) |
 | [issue-630-test-editor-slice.jsonl](./issue-630-test-editor-slice.jsonl) |
 | [issue-630-test-fault.jsonl](./issue-630-test-fault.jsonl) |
 | [issue-630-test-instrument.jsonl](./issue-630-test-instrument.jsonl) |
@@ -101,6 +102,7 @@ Directory: `docs/impl/exp`
 | [issue-716-runtime-backend-exp.jsonl](./issue-716-runtime-backend-exp.jsonl) |
 | [issue-720-consumer-tuple-v2-exp.jsonl](./issue-720-consumer-tuple-v2-exp.jsonl) |
 | [issue-721-post-seal-temp-exp.jsonl](./issue-721-post-seal-temp-exp.jsonl) |
+| [issue-725-serde-vocab-phase-a-exp.jsonl](./issue-725-serde-vocab-phase-a-exp.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |

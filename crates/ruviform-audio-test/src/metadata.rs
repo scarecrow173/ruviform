@@ -87,12 +87,15 @@ pub enum VerificationLevel {
 /// Serialized as the Case Schema v1 `kebab-case` vocabulary — the
 /// same spelling [`EnvironmentKind::as_str`] returns.
 ///
-/// Known vocabulary gap: `RealAbiTestPlugin` keeps its historical
-/// `real-abi-test-plugin` wire spelling, which differs from the Case
-/// Schema v1 `test-plugin` value. Aligning it is a breaking serde
-/// change (consumers already emit the current spelling in evidence)
-/// and is deferred to a later slice together with a serde migration
-/// decision.
+/// Known vocabulary gap (Issue #725 Phase A): `RealAbiTestPlugin`
+/// keeps its historical `real-abi-test-plugin` wire spelling on the
+/// emit side (`as_str()` and serde serialize), which differs from
+/// the Case Schema v1 `test-plugin` value. Phase A adds
+/// `#[serde(alias = "test-plugin")]` so deserialize accepts both
+/// spellings; the emit flip to `test-plugin` is deferred to a
+/// second slice together with the `ruviform-plugin-dock-test`
+/// updates it requires (serde migration decision recorded in
+/// `docs/designs/issue-725-serde-vocab-phase-a.md`).
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -104,6 +107,13 @@ pub enum EnvironmentKind {
     /// Plugin suite via `Vst3Library`/`InProcessHost`). Only a run
     /// that actually executed the binary may claim this — mock or
     /// headless plugin success stays `DeterministicBackend`.
+    ///
+    /// Serde vocabulary migration (Issue #725 Phase A): deserialize
+    /// accepts both the historical `real-abi-test-plugin` spelling
+    /// and the Case Schema v1 `test-plugin` spelling; serialize and
+    /// [`EnvironmentKind::as_str`] still emit `real-abi-test-plugin`
+    /// until the emit flip in the second slice.
+    #[serde(alias = "test-plugin")]
     RealAbiTestPlugin,
     /// A real OS window / GUI session produced the evidence (GUI-L2
     /// lanes). Reserved for real-window driver runs — a headless or

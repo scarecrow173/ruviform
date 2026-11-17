@@ -205,6 +205,7 @@ Directory: `docs/plans`
 | PLAN-034ZCLAPED4pl4ceM3kQ2x | Issue #630 CLAP test_editor slice — 実装計画 Implementation Plan | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | PLAN-034XTBbXfYIHXWJ12juqo7 | Issue #630 CLAP test_gain 実装計画 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | PLAN-034XVsD1tGn1Q9zdYY4pHW | Issue #630 L1 runner slice 実装計画 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
+| PLAN-630presetSpawnFault04 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 実装計画 | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | PLAN-034Y13aQ1WvmdD4BN426PS | Issue #630 test_editor slice — 実装計画 | approved | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | PLAN-DLESE2YF8AQ5RSEOnkUhaZ | Issue #630 test_fault slice — 実装計画 | approved | [issue-630-test-fault.md](./issue-630-test-fault.md) |
 | PLAN-034Z9nTs5uHkY4wMrPdVfC | Issue #630 test_instrument slice — 実装計画 | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
@@ -227,6 +228,8 @@ Directory: `docs/plans`
 | PLAN-720tupleV204 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 実装計画 | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | PLAN-034YYuiRq03qc7utzYExKJ | Issue #721 post-seal temp 境界確定 — implementation plan | approved | [issue-721-post-seal-temp.md](./issue-721-post-seal-temp.md) |
 | PLAN-722vst3LifecycleAudit04 | Issue #722 production VST3 adapter lifecycle 監査 — 実装計画 | approved | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
+| PLAN-034YZYv4eOit5JDno5u0gR | Issue #725 serde 語彙 Phase A — 実装計画 | approved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
+| PLAN-732clapLifecycleAudit04 | Issue #732 production CLAP adapter lifecycle 監査 — 実装計画 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

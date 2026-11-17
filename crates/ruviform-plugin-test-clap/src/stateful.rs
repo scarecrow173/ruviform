@@ -43,7 +43,7 @@
 //! three atomic mirror ops per block and never allocates.
 
 use core::fmt::Write as _;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::io::{Read, Write};
 
 use clack_common::events::io::{InputEvents, OutputEvents};
@@ -57,6 +57,9 @@ use clack_extensions::audio_ports::{
 use clack_extensions::params::{
     HostParams, ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, ParamRescanFlags,
     PluginAudioProcessorParams, PluginMainThreadParams, PluginParams,
+};
+use clack_extensions::preset_discovery::prelude::{
+    HostPresetLoad, Location, PluginPresetLoad, PluginPresetLoadImpl,
 };
 use clack_extensions::state::{PluginState, PluginStateImpl};
 use clack_plugin::extensions::PluginExtensions;
@@ -74,6 +77,7 @@ use ruviform_plugin_core::{
 
 use crate::block::{self, AtomicLifecycle, BlockScratch, BlockViews, ParamMirror};
 use crate::gain::{GAIN_PARAM, TestGainProcessor};
+use crate::preset::preset_by_load_key;
 
 // ---------------------------------------------------------------------------
 // State blob codec
@@ -91,7 +95,7 @@ pub(crate) const STATE_BLOB_LEN: usize = 16;
 
 /// Serializes the plain gain into the fixture's 16-byte state blob —
 /// deterministic and byte-exact for a given value.
-fn encode_state_blob(plain: f64) -> [u8; STATE_BLOB_LEN] {
+pub(crate) fn encode_state_blob(plain: f64) -> [u8; STATE_BLOB_LEN] {
     let mut blob = [0u8; STATE_BLOB_LEN];
     blob[0..4].copy_from_slice(&STATE_MAGIC.to_le_bytes());
     blob[4..8].copy_from_slice(&STATE_VERSION.to_le_bytes());
@@ -219,7 +223,8 @@ impl Plugin for TestStatefulClapPlugin {
         builder
             .register::<PluginAudioPorts>()
             .register::<PluginParams>()
-            .register::<PluginState>();
+            .register::<PluginState>()
+            .register::<PluginPresetLoad>();
     }
 }
 
@@ -428,6 +433,19 @@ impl PluginStateImpl for TestStatefulMainThread<'_> {
             return Err(PluginError::Message("state blob has trailing data"));
         }
         let gain = decode_state_blob(&blob).ok_or(PluginError::Message("malformed state blob"))?;
+        self.apply_restored_gain(gain);
+        Ok(())
+    }
+}
+
+impl TestStatefulMainThread<'_> {
+    /// Stores a restored plain gain into the mirror and owes the host
+    /// a `VALUES` params rescan when the value changed — the shared
+    /// tail of `clap.ext.state` `load` and `clap.ext.preset-load`,
+    /// both of which restore parameter state outside param events.
+    ///
+    /// **RT contract:** non-RT only — runs on the main thread.
+    fn apply_restored_gain(&self, gain: f64) {
         let previous = self.shared.gain_mirror.load();
         self.shared.gain_mirror.store(gain);
         // CLAP contract: parameter values changed outside param events
@@ -440,6 +458,71 @@ impl PluginStateImpl for TestStatefulMainThread<'_> {
         {
             params.rescan(&host, ParamRescanFlags::VALUES);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Preset-load extension (main thread)
+// ---------------------------------------------------------------------------
+
+impl PluginPresetLoadImpl for TestStatefulMainThread<'_> {
+    /// `clap.ext.preset-load` `from_location` — restores a catalog
+    /// preset's gain for `Location::Plugin` plus a known `load_key`,
+    /// through the same store+rescan law `clap.ext.state` `load`
+    /// applies. File locations (never declared by the provider's
+    /// indexer), a missing key and unknown keys are defined
+    /// rejections; every outcome is reported back to the host
+    /// through `clap.ext.preset-load`'s `loaded`/`on_error` host
+    /// callbacks when the host implements them.
+    ///
+    /// **RT contract:** non-RT only — runs on the main thread.
+    ///
+    /// # Errors
+    ///
+    /// `PluginError::Message` — non-`Plugin` location, missing or
+    /// unknown `load_key`.
+    fn load_from_location(
+        &self,
+        location: Location,
+        load_key: Option<&CStr>,
+    ) -> Result<(), PluginError> {
+        let result = self.restore_catalog_preset(location, load_key);
+        if let Some(host) = self.host
+            && let Some(preset_load) = host.get_extension::<HostPresetLoad>()
+        {
+            match &result {
+                Ok(()) => preset_load.loaded(&host, location, load_key),
+                Err(PluginError::Message(message)) => {
+                    let message = CString::new(*message).ok();
+                    preset_load.on_error(&host, location, load_key, 0, message.as_deref());
+                }
+                Err(PluginError::Error(_)) => {
+                    preset_load.on_error(&host, location, load_key, 0, None);
+                }
+            }
+        }
+        result
+    }
+}
+
+impl TestStatefulMainThread<'_> {
+    /// The `clap.ext.preset-load` dispatch core — `Location::Plugin`
+    /// plus a catalog `load_key` maps to its preset gain, restored
+    /// through [`Self::apply_restored_gain`].
+    fn restore_catalog_preset(
+        &self,
+        location: Location,
+        load_key: Option<&CStr>,
+    ) -> Result<(), PluginError> {
+        let Location::Plugin = location else {
+            return Err(PluginError::Message(
+                "preset load supports built-in presets only",
+            ));
+        };
+        let load_key = load_key.ok_or(PluginError::Message("preset load requires a load key"))?;
+        let preset = preset_by_load_key(load_key)
+            .ok_or(PluginError::Message("preset load: unknown preset"))?;
+        self.apply_restored_gain(preset.gain);
         Ok(())
     }
 }

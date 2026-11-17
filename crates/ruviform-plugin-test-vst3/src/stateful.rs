@@ -77,7 +77,7 @@ use vst3::Steinberg::{
 };
 use vst3::{ComRef, uid};
 
-use crate::component::{ComponentStateSurface, TestComponent};
+use crate::component::ComponentStateSurface;
 use crate::gain::{GAIN_PARAM, apply_gain};
 
 /// `test_stateful`'s controller class ID — a fresh `uid` for the
@@ -350,32 +350,6 @@ impl PluginProcessor for TestStatefulProcessor {
     }
 }
 
-// ---------------------------------------------------------------------------
-// The component — the shared `TestComponent` shell with the state arm
-// ---------------------------------------------------------------------------
-
-/// `test_stateful`'s component — the shared [`TestComponent`] shell
-/// over [`TestStatefulProcessor`], bound to the [`SharedGain`] cell
-/// through [`TestComponent::with_state`]. The associated `CID`/`new`
-/// keep the same surface shape as the other fixture components.
-pub(crate) type TestStatefulComponent = TestComponent<TestStatefulProcessor>;
-
-impl TestComponent<TestStatefulProcessor> {
-    /// The component class ID — a fresh `uid` for the test suite,
-    /// distinct from every other fixture and adapter CID.
-    pub(crate) const CID: TUID = uid(0x8D2F_6B94, 0xA1C5_3E07, 0xF4B8_9D26, 0xC7E3_5A81);
-
-    pub(crate) fn new() -> Self {
-        let gain = SharedGain::new(GAIN_PARAM.default_value);
-        Self::with_state(
-            STATEFUL_CONTROLLER_CID,
-            GAIN_PARAM.id,
-            TestStatefulProcessor::new(gain.clone()),
-            gain,
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,6 +363,7 @@ mod tests {
     use vst3::{Class, ComPtr, ComWrapper};
 
     use crate::controller::ParamController;
+    use crate::preset::TestStatefulComponent;
     use crate::sdk_enum_i32;
 
     /// A Vec-backed `IBStream` for the state-verb tests — the same

@@ -271,8 +271,11 @@ impl ParamMirror {
 ///
 /// Defined rejections (→ `Err`, which the adapter reports as
 /// `ActivateFailed`): non-finite or non-positive sample rate,
-/// fractional rate (the neutral `SampleRate` is integer Hz), rate
-/// above `u32::MAX`, zero `max_frames`, or `min > max`.
+/// rate above `u32::MAX`, zero `max_frames`, or `min > max`.
+/// Fractional rates are *rounded* to integer Hz — CLAP `activate`
+/// carries an f64 rate and hosts may report fractional values
+/// (the rf#630 fixture's contract; clap-validator's
+/// `process-varying-sample-rates` activates at 1234.57 Hz).
 ///
 /// **RT contract:** non-RT only — called from `activate`.
 pub(crate) fn to_process_config(
@@ -282,15 +285,13 @@ pub(crate) fn to_process_config(
     if !rate.is_finite()
         || rate <= 0.0
         || rate > f64::from(u32::MAX)
-        || rate.fract() != 0.0
         || audio_config.max_frames_count == 0
     {
         return Err(PluginError::Message("unsupported audio configuration"));
     }
-    // Range-checked above: the cast is a defined truncation of an
-    // integer-valued f64 inside u32 bounds.
+    // Range-checked above: rounding stays inside u32 bounds.
     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let sample_rate = SampleRate::new(rate as u32)
+    let sample_rate = SampleRate::new(rate.round() as u32)
         .map_err(|_| PluginError::Message("unsupported sample rate"))?;
     ProcessConfig::new(
         sample_rate,
@@ -1236,16 +1237,33 @@ mod tests {
     }
 
     #[test]
+    fn to_process_config_rounds_fractional_sample_rate() {
+        // CLAP `activate` carries an f64 sample rate and hosts may
+        // report fractional values — clap-validator's
+        // `process-varying-sample-rates` case activates at 1234.57 Hz.
+        // The neutral `SampleRate` is integer Hz, so the adapter rounds
+        // (the rf#630 fixture's contract) instead of rejecting a rate
+        // the host legitimately offered.
+        for (rate, expected) in [(1234.57, 1235), (44_100.5, 44_101)] {
+            let config = to_process_config(&PluginAudioConfiguration {
+                sample_rate: rate,
+                min_frames_count: 1,
+                max_frames_count: 512,
+            })
+            .unwrap_or_else(|_| panic!("sample rate {rate} must be accepted"));
+            assert_eq!(config.sample_rate().get(), expected);
+        }
+    }
+
+    #[test]
     fn to_process_config_rejects_invalid_activation() {
-        // Non-finite, non-positive, fractional and over-u32 sample
-        // rates are all defined rejects — the neutral SampleRate is
-        // integer Hz.
+        // Non-finite, non-positive and over-u32 sample rates are
+        // defined rejects — fractional rates round (see above).
         for rate in [
             0.0,
             -1.0,
             f64::NAN,
             f64::INFINITY,
-            44_100.5,
             f64::from(u32::MAX) + 1.0,
         ] {
             assert!(
