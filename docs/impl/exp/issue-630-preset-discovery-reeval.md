@@ -9,13 +9,13 @@ owners: ["scarecrow173"]
 relations:
   source:
     - "docs/impl/ir/issue-630-preset-discovery-reeval.md"
-    - "docs/impl/exp/issue-630-preset-discovery-reeval.jsonl"
+    - "docs/impl/exp/issue-630-preset-discovery-reeval-exp.jsonl"
   changes:
     added:
       - type: "file"
         path: "docs/impl/exp/issue-630-preset-discovery-reeval.md"
       - type: "file"
-        path: "docs/impl/exp/issue-630-preset-discovery-reeval.jsonl"
+        path: "docs/impl/exp/issue-630-preset-discovery-reeval-exp.jsonl"
   implements:
     - "docs/impl/ir/issue-630-preset-discovery-reeval.md"
   implemented-by: []
@@ -29,7 +29,7 @@ relations:
 # Issue #630 preset-discovery 外部検証再評価 slice — 実験記録
 
 詳細な時系列イベントは companion JSONL
-`docs/impl/exp/issue-630-preset-discovery-reeval.jsonl`
+`docs/impl/exp/issue-630-preset-discovery-reeval-exp.jsonl`
 （`experiment_event.v1`）を参照。
 
 ## 要約

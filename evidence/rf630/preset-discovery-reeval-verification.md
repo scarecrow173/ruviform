@@ -28,6 +28,42 @@ deadlock（upstream free-audio/clap-validator issue #41）を理由に
 は `%LOCALAPPDATA%/ruviform/plugin-abi-validator/clap-validator.exe`
 に残置。本 slice では `pin-47e2424/` を `CLAP_VALIDATOR` に指定した。
 
+### validator provenance / provisioning
+
+- clap-validator:
+  - source: `%LOCALAPPDATA%/ruviform/plugin-abi-validator/src/clap-validator-upstream`
+    （upstream `https://github.com/free-audio/clap-validator`、HEAD
+    `47e242404df89f3c8454aaf1c02bb0caca6db2ce`、
+    `git describe --tags --always --dirty` = `0.4.1-5-g47e2424`）。
+  - build/provision: upstream checkout で
+    `cargo build --release --bin clap-validator` を実行し、生成された
+    `target/release/clap-validator.exe` を
+    `%LOCALAPPDATA%/ruviform/plugin-abi-validator/pin-47e2424/clap-validator.exe`
+    へ配置。Cargo dependency や commit 済み binary ではなく、runner には
+    `CLAP_VALIDATOR` / `--clap-validator`（または `--validator-dir` を
+    pin directory に向ける規約）で供給する。
+  - version/license: `clap-validator.exe --version` は
+    `clap-validator 0.4.1` を出力する。license は upstream `Cargo.toml`
+    の `license = "MIT"` と `LICENSE`（MIT、Copyright 2022 Robbert van der
+    Helm）。`--version` は 0.4.1 release と同じ文字列のため、pin の識別は
+    source commit / `git describe` / SHA-256 で行う。
+- VST3 validator:
+  - source: `%LOCALAPPDATA%/ruviform/plugin-abi-validator/vst3sdk`
+    （`https://github.com/steinbergmedia/vst3sdk.git`、HEAD
+    `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`、
+    `git describe --tags --always --dirty` = `v3.8.1_build_84`、commit
+    subject `VST3 SDK 3.8.1`）。
+  - build/provision: SDK source を CMake + Visual Studio 17 2022 / MSVC で
+    Release build し、`vst3sdk-build/bin/Release/validator.exe` を
+    `VST3_VALIDATOR` / `--vst3-validator` で供給する（CMakeCache:
+    `CMAKE_BUILD_TYPE=Release`、generator `Visual Studio 17 2022`、
+    `CMAKE_HOME_DIRECTORY=.../vst3sdk`）。
+  - version/license: `validator.exe --version` は
+    `VST 3.8.1 Plug-in Validator` と
+    `Program by Steinberg (Built on Nov 17 2026)` を出力する。license は
+    root `vst3sdk/LICENSE.txt` の MIT License（Copyright 2026 Steinberg
+    Media Technologies GmbH）。
+
 ## canonical 実走
 
 ```sh
