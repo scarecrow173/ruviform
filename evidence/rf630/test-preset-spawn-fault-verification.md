@@ -39,11 +39,33 @@ Pre-existing `test_fault` in-band fault tests (abort/exit/hang/error/bundled/ded
 
 ## Verification run
 
-- `cargo fmt --all -- --check` — clean.
-- `cargo clippy -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --all-targets -- -D warnings` — clean.
-- `mise run test-l1-real-plugin` — **all green**: unit tests (68/84/66/91 + bin tests), `l1_real_adapter_e2e` 3+3, `l1_real_test_plugin_e2e` 10+10, `l1_fault_test_plugin_e2e` 16+16, `l1_stateful` 2+2.
-- `mise exec -- prek run --all-files` — all hooks pass.
-- Unit tests per crate: VST3 91 passed/1 ignored; CLAP 66 passed/1 ignored (preset ABI tests included).
+- `cargo fmt --all -- --check` — clean (auxiliary; canonical entry is `mise run fmt-check`).
+- `cargo clippy -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --all-targets -- -D warnings` — clean (auxiliary per-crate lint; canonical CI gate is `mise run lint*`).
+- `cargo test -p ruviform-plugin-test-vst3` / `-p ruviform-plugin-test-clap` — unit tests pass (auxiliary; canonical lane is `mise run test*` / `test-l1-real-plugin`).
+- `mise run test-l1-real-plugin` — **all green** (canonical): unit tests (68/84/66/91 + bin tests), `l1_real_adapter_e2e` 3+3, `l1_real_test_plugin_e2e` 10+10, `l1_fault_test_plugin_e2e` 16+16, `l1_stateful` 2+2.
+- `mise run test-rt` — **pass** (canonical; RT/no-allocation lane, no RT-path changes in this slice).
+- `mise exec -- prek run --all-files` — all hooks pass (canonical).
+
+Unit tests per crate: VST3 91 passed/1 ignored; CLAP 66 passed/1 ignored (preset ABI tests included).
+
+### Verification scope (honest distinctions)
+
+- **canonical mise vs auxiliary cargo**: `mise.toml` tasks
+  (`test-l1-real-plugin`, `test-rt`, `prek`) are the canonical
+  verification entry points shared with CI. Direct `cargo fmt` /
+  `clippy` / `test` invocations were auxiliary per-crate checks,
+  not substitutes for the canonical lanes.
+- **local vs integration**: all verification above ran on the local
+  worktree at commit `c38f2b0c`. Post-merge integration
+  verification on `origin/main` is **not run** — merge is the
+  Coordinator's decision.
+- **validator opt-in re-run**: **NotRun**. The preset surface
+  changes fixture ABI surface, but re-running the external ABI
+  validators (clap-validator / VST3 SDK validator via
+  `ci/plugin-abi-validator/run.mjs`) is owned by the separate
+  abi-validator slice and was not executed here.
+- **notrun lanes**: `*-msrv` / `*-full` lanes and non-Windows OS
+  runs are outside this slice.
 
 One transient parallel-load flake observed (`exit_before_hello` cause race) — hardened by accepting the defined `Internal` liveness cause alongside `Transport`/`ExitObserved` for pre-`Hello` death; `Timeout`/`Handshake` remain strict.
 
