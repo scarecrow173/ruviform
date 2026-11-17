@@ -11,10 +11,24 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/389"
   changes:
     added:
-      - type: "file"
+      - type: "doc"
+        path: "docs/specs/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/designs/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/plans/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/test-specs/issue-389-ime-verbs.md"
+      - type: "doc"
         path: "docs/tasks/issue-389-ime-verbs.md"
       - type: "doc"
         path: "docs/impl/ir/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/impl/exp/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/impl/exp/issue-389-ime-verbs-exp.jsonl"
+      - type: "doc"
+        path: "docs/discovery/issue-389-ime-verbs.md"
       - type: "file"
         path: "evidence/rf389/verification.md"
     modified:
@@ -33,8 +47,6 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-host/src/host.rs"
       - type: "file"
-        path: "crates/ruviform-plugin-host/src/lib.rs"
-      - type: "file"
         path: "crates/ruviform-plugin-host/tests/editor_session.rs"
       - type: "file"
         path: "crates/ruviform-plugin-vst3/src/host.rs"
@@ -47,9 +59,9 @@ relations:
       - type: "file"
         path: "crates/ruviform-plugin-dock-test/src/real_catalog.rs"
       - type: "file"
-        path: "crates/ruviform-plugin-dock-test/src/lib.rs"
-      - type: "file"
         path: "crates/ruviform-plugin-dock-test/README.md"
+      - type: "doc"
+        path: "docs/designs/issue-389-plugin-editor-session.md"
       - type: "file"
         path: "evidence/rf631/plugin-dock-real-scenario.jsonl"
       - type: "file"
@@ -65,21 +77,28 @@ relations:
   implements:
     - "docs/tasks/issue-389-ime-verbs.md"
   implemented-by: []
-  depends-on: []
+  depends-on:
+    - "docs/plans/issue-389-ime-verbs.md"
   blocks: []
   supersedes: []
   superseded-by: []
   related:
-    - "docs/specs/issue-389-plugin-editor-session.md"
-    - "docs/designs/issue-389-plugin-editor-session.md"
-    - "docs/tasks/issue-389-real-session-lifecycle.md"
+    - "docs/specs/issue-389-ime-verbs.md"
+    - "docs/designs/issue-389-ime-verbs.md"
+    - "docs/test-specs/issue-389-ime-verbs.md"
+    - "docs/discovery/issue-389-ime-verbs.md"
+    - "docs/impl/exp/issue-389-ime-verbs.md"
   refines: []
   refined-by: []
-  derives-from: []
+  derives-from:
+    - "docs/tasks/issue-389-ime-verbs.md"
   derived-by: []
-  verifies: []
-  verified-by: []
+  verifies:
+    - "docs/test-specs/issue-389-ime-verbs.md"
+  verified-by:
+    - "docs/test-specs/issue-389-ime-verbs.md"
   references:
+    - "docs/impl/exp/issue-389-ime-verbs-exp.jsonl"
     - "evidence/rf389/verification.md"
   defers: []
   deferred-by: []

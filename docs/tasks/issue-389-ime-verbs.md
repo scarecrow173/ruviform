@@ -8,20 +8,28 @@ updated: "2026-11-18"
 owners: []
 relations:
   source:
-    - "docs/specs/issue-389-plugin-editor-session.md"
-    - "docs/designs/issue-389-plugin-editor-session.md"
+    - "docs/specs/issue-389-ime-verbs.md"
+    - "docs/designs/issue-389-ime-verbs.md"
+    - "docs/plans/issue-389-ime-verbs.md"
+    - "docs/test-specs/issue-389-ime-verbs.md"
   changes:
-    added: []
+    added:
+      - type: "doc"
+        path: "docs/tasks/issue-389-ime-verbs.md"
+      - type: "doc"
+        path: "docs/impl/ir/issue-389-ime-verbs.md"
     modified: []
     deleted: []
     renamed: []
     moved: []
     generated: []
   implements:
-    - "docs/specs/issue-389-plugin-editor-session.md"
-  implemented-by: []
+    - "docs/plans/issue-389-ime-verbs.md"
+  implemented-by:
+    - "docs/impl/ir/issue-389-ime-verbs.md"
   depends-on:
-    - "docs/designs/issue-389-plugin-editor-session.md"
+    - "docs/plans/issue-389-ime-verbs.md"
+    - "docs/designs/issue-389-ime-verbs.md"
   blocks: []
   supersedes: []
   superseded-by: []
@@ -31,12 +39,13 @@ relations:
   refines: []
   refined-by: []
   derives-from:
-    - "docs/specs/issue-389-plugin-editor-session.md"
-  derived-by: []
+    - "docs/specs/issue-389-ime-verbs.md"
+  derived-by:
+    - "docs/impl/ir/issue-389-ime-verbs.md"
   verifies:
-    - "docs/test-specs/issue-389-real-session-lifecycle.md"
+    - "docs/test-specs/issue-389-ime-verbs.md"
   verified-by:
-    - "docs/test-specs/issue-389-real-session-lifecycle.md"
+    - "docs/test-specs/issue-389-ime-verbs.md"
   references:
     - "evidence/rf389/"
   defers: []
@@ -65,8 +74,10 @@ flip する。L1/out-of-process は refusal-only を維持する。
 
 ## Upstream Documents
 
-- `docs/specs/issue-389-plugin-editor-session.md`
-- `docs/designs/issue-389-plugin-editor-session.md`
+- `docs/specs/issue-389-ime-verbs.md`
+- `docs/designs/issue-389-ime-verbs.md`
+- `docs/plans/issue-389-ime-verbs.md`
+- `docs/test-specs/issue-389-ime-verbs.md`
 - `docs/tasks/issue-389-real-session-lifecycle.md`（lane 先例）
 
 ## Dependencies
@@ -84,8 +95,11 @@ flip する。L1/out-of-process は refusal-only を維持する。
 - `crates/ruviform-plugin-vst3/src/host.rs`
 - `crates/ruviform-plugin-clap/src/host.rs`
 - `crates/ruviform-plugin-test-vst3/src/editor_view.rs`
-- `crates/ruviform-plugin-dock-test/src/{real_dock,real_catalog,lib}.rs`
+- `crates/ruviform-plugin-dock-test/src/{real_dock,real_catalog}.rs`
 - `crates/ruviform-plugin-dock-test/README.md`
+- `docs/specs/issue-389-ime-verbs.md`・`docs/designs/`・
+  `docs/plans/`・`docs/test-specs/`・`docs/discovery/`・
+  `docs/impl/exp/`（`issue-389-ime-verbs.*`）
 - `docs/tasks/issue-389-ime-verbs.md`・`docs/impl/ir/`
 - `evidence/rf389/`・`evidence/rf631/`
 
