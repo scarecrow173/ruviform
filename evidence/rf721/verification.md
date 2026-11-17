@@ -68,6 +68,21 @@ cargo 1.99.1 / criterion 0.8.2（bench-smoke 実行時の bench 出力
   （既存 suite 回帰なし・採用契約の pin 維持）。
 - 補助証拠（canonical = mise）: cargo 直接実行は未使用。
 
+## merge 後の再検証
+
+- `git merge origin/main`（merge commit `25a76b2e`、upstream は
+  #716/#720/#722 系 doc chain・script-luau・plugin-vst3・managed
+  index 再生成を含む。競合なし・本 slice の変更ファイルとは非交差）
+  後に上記 8 lane を全て再実行し、**全て exit 0** を確認:
+  `fmt-check` / `check` / `lint` / `test ruviform-io-file` /
+  `check-io-e2e` / `lint-io-e2e` / `test-io-e2e` / `bench-smoke`。
+- merge 後 `test-io-e2e` ログでも `post_seal_temp_*` 2 試験が
+  `ok`、`bench-smoke` で `io_composition` 6 case が `Testing ...`
+  で実行されることを再確認。
+- merge により `Cargo.lock`・docs index 等の upstream 生成物差分が
+  取り込まれたが、本 slice の対象クレート（`ruviform-io-file`・
+  `ruviform-io-e2e`）のソースには upstream 変更なし。
+
 ## NotRun / Unsupported（POLICIES.md §4 による分離）
 
 - NotRun: `mise run check-full` / `lint-full` / `test-full` /
