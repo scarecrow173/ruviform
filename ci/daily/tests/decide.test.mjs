@@ -27,6 +27,7 @@ import {
   markdownSummary,
   parseConsumerRepos,
   parseLsRemote,
+  resolveConfig,
 } from "../decide.mjs";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "..", "decide.mjs");
@@ -777,7 +778,7 @@ test("cli: budget-exhausted emits ::warning:: annotation and exits 0", () => {
 //
 // The tuple under test is
 //   (ruviform main SHA, audiolens main SHA, synvelis main SHA,
-//    "consumer-verify-tuple/v1")
+//    "consumer-verify-tuple/v2")
 // Run records do not expose dispatch inputs, so the tuple a run verified is
 // recovered from consumer-evidence-<name>-attempt-<n> artifacts. These tests
 // pin the fail-closed matrix: verified requires success + all consumers pass
@@ -788,7 +789,7 @@ const AL_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const SV_SHA = "cccccccccccccccccccccccccccccccccccccccc";
 const AL_REPO = "o/audio-lens";
 const SV_REPO = "o/synvelis";
-const CONTRACT = "consumer-verify-tuple/v1";
+const CONTRACT = "consumer-verify-tuple/v2";
 const CONSUMERS = [
   { name: "audiolens", repo: AL_REPO },
   { name: "synvelis", repo: SV_REPO },
@@ -861,6 +862,16 @@ async function executeTupleFixture(fixture, overrides = {}) {
   });
   return { ...result, calls: client.calls };
 }
+
+test("resolveConfig: tupleContract defaults to consumer-verify-tuple/v2 (Issue #720)", () => {
+  // The default IS the contract daily-ci.yml relies on — a drifted default
+  // would silently verify against the wrong evidence vocabulary.
+  const cfg = resolveConfig(["node", "decide.mjs"], {});
+  assert.equal(cfg.tupleContract, "consumer-verify-tuple/v2");
+  // env/flag overrides remain the escape hatch for a future bump.
+  const overridden = resolveConfig(["node", "decide.mjs"], { DAILY_TUPLE_CONTRACT: "consumer-verify-tuple/v1" });
+  assert.equal(overridden.tupleContract, "consumer-verify-tuple/v1");
+});
 
 // decideTuple decision matrix ----------------------------------------------
 
@@ -1019,9 +1030,14 @@ test("classifyRunEvidence: ruviform rev mismatch -> non-target", () => {
   assert.equal(cls.kind, "non-target");
 });
 
-test("classifyRunEvidence: contract version mismatch -> non-target", () => {
+test("classifyRunEvidence: legacy v1 contract evidence -> non-target (Issue #720 hard cutover)", () => {
   const r = run({ id: 42 });
-  const evs = coveringPair(42, { al: { contract: "consumer-verify-tuple/v2" }, sv: { contract: "consumer-verify-tuple/v2" } });
+  // Issue #720 migration policy: contract bumps are hard cutovers — there is
+  // no dual-accept window. Evidence emitted under consumer-verify-tuple/v1
+  // is a proven different tuple even when every other component matches, so
+  // it contributes nothing (non-target). This is the suite's only intentional
+  // v1 literal — it pins the legacy boundary, not a live contract.
+  const evs = coveringPair(42, { al: { contract: "consumer-verify-tuple/v1" }, sv: { contract: "consumer-verify-tuple/v1" } });
   const cls = classifyRunEvidence({ run: r, evidences: evs, candidate: CANDIDATE, contract: CONTRACT });
   assert.equal(cls.kind, "non-target");
 });
@@ -1393,6 +1409,6 @@ test("executeTuple: markdownSummary renders tuple section", async () => {
   });
   const md = markdownSummary(report);
   assert.match(md, /daily-ci-tuple outcome: skip-verified/);
-  assert.match(md, /contract `consumer-verify-tuple\/v1`/);
+  assert.match(md, /contract `consumer-verify-tuple\/v2`/);
   assert.match(md, /audiolens=pass/);
 });

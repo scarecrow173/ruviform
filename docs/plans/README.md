@@ -223,6 +223,8 @@ Directory: `docs/plans`
 | PLAN-mJPkr5kJdau9iCE3oIHTKf | Issue #692 s2 Luau analyzer backend — 実装計画 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
 | PLAN-034ZkLmNpQrStUvWxYzGh4 | Issue #692 実施計画 — ruviform-script 中立契約 port crate 新設・検証・docs chain | approved | [issue-692-script-port.md](./issue-692-script-port.md) |
 | PLAN-034YJjLMWS9oGq5V9aJPaf | Issue #707 — MIDI input cancellation fault implementation plan | approved | [issue-707-midi-cancellation.md](./issue-707-midi-cancellation.md) |
+| PLAN-DEnlx1Y8rOJvquR4lNGQFt | Issue #716 runtime ScriptBackend — 実装計画 | approved | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
+| PLAN-720tupleV204 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 実装計画 | approved | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | PLAN-034N3PvP9HH1MlVyewXBHB | Issue #123 実施計画 — Issue #76 フォローアップ: L1 内部クリーンアップ | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
 | PLAN-034IvX2cFeBjPV4UMfDJ2x | テンプレート由来ドキュメント・識別子のRuviform固有化の実装 | approved | [replace-template-derived-docs-with-ruviform.md](./replace-template-derived-docs-with-ruviform.md) |
 | PLAN-034VnMw6PrT9NBJxWK4N1L | Implement Issue #253 L1 wire report verb | approved | [rf-midi-l1-report-verb-plan.md](./rf-midi-l1-report-verb-plan.md) |

@@ -227,8 +227,12 @@ for (const [name, job] of [
       "task-absent not_run row missing for boundary guard");
     assert.ok(/GUI-SEMANTIC fake driver contract[^\n]*"not_run" "[^"]*RF #390/.test(job),
       "task-absent not_run row missing for fake driver contract");
-    // Consumer 側通常 View/Domain headless は未接続のまま owner 付き not_run
-    assert.ok(/GUI-CONTRACT consumer-side[^\n]*"not_run" "[^"]*#1(66|75)/.test(job),
+    // Consumer 側通常 View/Domain headless は未接続のまま owner 付き not_run。
+    // owner の issue 番号は #629-#631 系の実走で更新され得るため、pin するのは
+    // 「owner 帰属（#<issue> 参照）を持つ not_run 行であること」までとする
+    // （70b48304 の owner 修正で #166/#175→#127/#176/#177 へ変わり、旧 pin
+    // `#1(66|75)` が main 上で stale 化していた — Issue #720 で修復）。
+    assert.ok(/GUI-CONTRACT consumer-side[^\n]*"not_run" "[^"]*#[0-9]+/.test(job),
       "consumer-side GUI contract must stay a not_run row with owners");
     // capability-absent 固定行は維持 — Case schema v2 では実 window capability
     // を GUI-L2|real-window|Required と正直に分類する（outcome は unsupported のまま）
@@ -425,7 +429,7 @@ test("contract: summary keeps not-run-is-not-pass enforcement + tuple table", ()
   assert.ok(/all not_run\/unsupported|no consumer lane produced evidence/.test(summary));
   assert.ok(/unsupported/.test(summary), "unknown/unsupported statuses must not pass");
   assert.ok(/resolved_sha/.test(summary), "tuple table lost resolved sha");
-  assert.ok(/consumer-verify-tuple\/v1/.test(summary), "contract id missing from summary");
+  assert.ok(/consumer-verify-tuple\/v2/.test(summary), "contract id missing from summary");
 });
 
 test("contract: evidence.mjs checkout is the dispatch ref (no candidate ref)", () => {
@@ -499,9 +503,9 @@ for (const [name, job] of [
     assert.ok(segments.length >= 5, `expected >=5 direct lane call sites, got ${segments.length}`);
   });
 
-  test(`contract: ${name} fallback evidence uses schemaVersion 2 + contract v1`, () => {
-    assert.ok(/"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple\/v1"/.test(job),
-      "finalize-failure fallback must emit schemaVersion 2 with contract v1");
+  test(`contract: ${name} fallback evidence uses schemaVersion 2 + contract v2`, () => {
+    assert.ok(/"schemaVersion":2,"kind":"consumer-verify-evidence","contract":"consumer-verify-tuple\/v2"/.test(job),
+      "finalize-failure fallback must emit schemaVersion 2 with contract v2");
     assert.ok(!/"schemaVersion":1/.test(job), "stale schemaVersion 1 fallback remains");
   });
 }
