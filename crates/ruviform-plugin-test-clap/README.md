@@ -92,10 +92,13 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
   host parent; `destroy` frees it. An opaque `ParentLease` payload
   (e.g. `ParentLease::new(0, 0)`) is *not* a window and is rejected
   — never treated as one.
-- Size verbs are honest: `get_size` reports the fixed 640x480,
-  `can_resize`/`adjust_size`/`get_resize_hints` decline resize,
-  `set_size` rejects, `set_scale` accepts only finite positive
-  factors, `set_transient` rejects (floating unsupported).
+- Size verbs are honest: `get_size` reports the current size
+  (640x480 initially), `can_resize` accepts and `set_size` records
+  the requested size and resizes the attached child HWND —
+  `adjust_size`/`get_resize_hints` decline (no constraints declared),
+  `set_size` before `create` rejects, `set_scale` accepts only
+  finite positive factors, `set_transient` rejects (floating
+  unsupported).
 - Win32 calls are confined to `src/editor.rs`'s
   `#[cfg(target_os = "windows")]` `win32` module behind
   `#[expect(unsafe_code)]` + SAFETY comments — the crate's only

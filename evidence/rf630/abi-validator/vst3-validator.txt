@@ -1,6 +1,6 @@
 * Loading module...
 
-	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-FYKKRK\ruviform-plugin-test-vst3.vst3
+	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-80DHsq\ruviform-plugin-test-vst3.vst3
 
 * Check valid bundle structure...
 

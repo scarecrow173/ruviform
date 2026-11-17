@@ -39,13 +39,16 @@
 //!   gate and is rejected, never treated as a window;
 //! - `show`/`hide` toggle the child's visibility; `destroy` is
 //!   idempotent and frees the child HWND;
-//! - size verbs are honest: `get_size` reports the fixed 640x480,
-//!   `can_resize`/`adjust_size`/`get_resize_hints` decline resize
-//!   (the trait defaults), `set_size` is a defined rejection,
-//!   `set_transient` rejects (floating unsupported), `set_scale`
-//!   acknowledges a finite positive factor (CLAP permits ignoring
-//!   it — the Win32 child uses physical pixels), `suggest_title`
-//!   is a documented no-op.
+//! - size verbs are honest: `get_size` reports the current size
+//!   (640x480 until `set_size`), `can_resize` accepts and `set_size`
+//!   records the requested size and resizes the attached child
+//!   HWND — the VST3 `test_editor` `canResize`/`onSize` counterpart;
+//!   `adjust_size`/`get_resize_hints` keep the trait defaults (no
+//!   constraints to declare), `set_size` before `create` is a
+//!   defined rejection, `set_transient` rejects (floating
+//!   unsupported), `set_scale` acknowledges a finite positive
+//!   factor (CLAP permits ignoring it — the Win32 child uses
+//!   physical pixels), `suggest_title` is a documented no-op.
 //!
 //! ## Windows child window
 //!
@@ -108,8 +111,9 @@ use crate::fault::pass_through;
 // GUI constants + state
 // ---------------------------------------------------------------------------
 
-/// The editor's fixed size — `get_size` reports this deterministically;
-/// resize is declined (`can_resize` → `false`, `set_size` rejects).
+/// The editor's initial size — `get_size` reports the current size
+/// (this default until `set_size` replaces it); resize is accepted
+/// (`can_resize` → `true`, `set_size` resizes the child HWND).
 const DEFAULT_GUI_SIZE: GuiSize = GuiSize {
     width: 640,
     height: 480,
@@ -126,7 +130,7 @@ const EMBEDDED_WIN32: GuiConfiguration<'static> = GuiConfiguration {
 /// Interior-mutable GUI state — every [`PluginGuiImpl`] method takes
 /// `&self`, so the fields live behind `RefCell` (the VST3
 /// `editor_view.rs` `ViewState` precedent).
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct GuiState {
     /// `create` ran and `destroy` has not — state verbs gate on this.
     created: bool,
@@ -134,6 +138,19 @@ struct GuiState {
     /// `set_parent`). Only ever `Some` on Windows — the non-Windows
     /// `win32` shim never produces one.
     hwnd: Option<usize>,
+    /// The current editor size — `get_size` reports it, `set_size`
+    /// replaces it (and resizes the child HWND when attached).
+    size: GuiSize,
+}
+
+impl Default for GuiState {
+    fn default() -> Self {
+        Self {
+            created: false,
+            hwnd: None,
+            size: DEFAULT_GUI_SIZE,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,8 +410,11 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         Ok(())
     }
 
-    /// Frees the GUI: destroys the child HWND (if any) and resets the
-    /// created edge — idempotent, so a host `destroy` after a failed
+    /// Frees the GUI: destroys the child HWND (if any), resets the
+    /// created edge and the size state — a recreated GUI starts at
+    /// the default size again, the same fresh-view semantics the
+    /// VST3 fixture's per-`createView` state gives — and is
+    /// idempotent, so a host `destroy` after a failed
     /// `set_parent`/`show` rollback is safe.
     fn destroy(&self) {
         let Ok(mut state) = self.gui.try_borrow_mut() else {
@@ -404,6 +424,7 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
             win32::destroy(hwnd);
         }
         state.created = false;
+        state.size = DEFAULT_GUI_SIZE;
     }
 
     /// A finite positive scale is acknowledged and intentionally not
@@ -418,19 +439,42 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         Ok(())
     }
 
-    /// The fixed editor size — deterministic 640x480.
+    /// The current editor size — 640x480 until `set_size` replaces it.
     fn get_size(&self) -> Option<GuiSize> {
-        Some(DEFAULT_GUI_SIZE)
+        self.gui.try_borrow().ok().map(|state| state.size)
     }
 
-    // The editor is fixed-size: `can_resize`/`get_resize_hints`/
-    // `adjust_size` keep the trait defaults (`false`/`None`/`None`)
-    // — an honest decline, not a fabricated accept.
+    // `adjust_size`/`get_resize_hints` keep the trait defaults
+    // (`None`/`None`) — the fixture declares no resize constraints.
 
-    /// `set_size` is a defined rejection — the fixture editor does
-    /// not resize (consistent with `can_resize == false`).
-    fn set_size(&self, _size: GuiSize) -> Result<(), PluginError> {
-        Err(PluginError::Message("editor gui is fixed-size"))
+    /// The fixture's editor genuinely resizes — `set_size` moves the
+    /// attached child HWND to the requested size, so `can_resize`
+    /// answers `true` (the VST3 `canResize` counterpart).
+    fn can_resize(&self) -> bool {
+        true
+    }
+
+    /// `set_size` records the requested size — `get_size` echoes it
+    /// afterwards — and resizes the attached child HWND when one
+    /// exists. A `set_size` before `create` is a host protocol
+    /// violation and a defined rejection.
+    fn set_size(&self, size: GuiSize) -> Result<(), PluginError> {
+        let mut state = self
+            .gui
+            .try_borrow_mut()
+            .map_err(|_| PluginError::Message("gui state re-entered"))?;
+        if !state.created {
+            return Err(PluginError::Message("set_size before create"));
+        }
+        state.size = size;
+        if let Some(hwnd) = state.hwnd {
+            win32::resize(
+                hwnd,
+                i32::try_from(size.width).unwrap_or(i32::MAX),
+                i32::try_from(size.height).unwrap_or(i32::MAX),
+            );
+        }
+        Ok(())
     }
 
     /// Embeds the GUI: the supplied [`Window`] must be a Win32 window
@@ -527,8 +571,8 @@ mod win32 {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
-        GetClientRect, IsWindow, RegisterClassW, SW_HIDE, SW_SHOW, ShowWindow, WNDCLASSW, WS_CHILD,
-        WS_CLIPSIBLINGS, WS_VISIBLE,
+        GetClientRect, IsWindow, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOMOVE, SWP_NOZORDER,
+        SetWindowPos, ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     /// Solid-fill color — blue, distinct from the VST3 fixture's
@@ -688,6 +732,26 @@ mod win32 {
         }
     }
 
+    /// Resizes the child HWND to `width`×`height` pixels, keeping
+    /// its position and z-order — the observable effect of `set_size`.
+    /// Best-effort: a dead handle is a harmless `SetWindowPos` error.
+    pub(super) fn resize(hwnd: usize, width: i32, height: i32) {
+        // SAFETY: `hwnd` is the child this module created;
+        // `SetWindowPos` on an already-dead handle is a defined
+        // no-op error.
+        unsafe {
+            SetWindowPos(
+                hwnd as HWND,
+                ptr::null_mut(),
+                0,
+                0,
+                width,
+                height,
+                SWP_NOMOVE | SWP_NOZORDER,
+            );
+        }
+    }
+
     /// Destroys the child HWND — `DestroyWindow` on an
     /// already-dead handle is a harmless error, so this is
     /// idempotent-safe.
@@ -702,7 +766,7 @@ mod win32 {
 
 /// Non-Windows shim — no HWND surface exists off Windows, so
 /// `attach` always answers `None` (the caller's defined rejection)
-/// and `destroy`/`set_visible` are unreachable but defined.
+/// and `destroy`/`set_visible`/`resize` are unreachable but defined.
 #[cfg(not(target_os = "windows"))]
 mod win32 {
     use std::ffi::c_void;
@@ -712,6 +776,8 @@ mod win32 {
     }
 
     pub(super) fn set_visible(_hwnd: usize, _visible: bool) {}
+
+    pub(super) fn resize(_hwnd: usize, _width: i32, _height: i32) {}
 
     pub(super) fn destroy(_hwnd: usize) {}
 }
@@ -892,18 +958,23 @@ mod tests {
         );
     }
 
-    /// Size verbs are honest: `get_size` reports the fixed 640x480,
-    /// resize is declined (`can_resize`/`get_resize_hints`/
-    /// `adjust_size` defaults), `set_size` is a defined rejection,
+    /// Size verbs are honest: `get_size` reports the current size
+    /// (640x480 until `set_size`), `can_resize` accepts, `set_size`
+    /// records the requested size and resizes the attached child —
+    /// `adjust_size`/`get_resize_hints` keep the no-constraint
+    /// defaults, `set_size` before `create` is a defined rejection,
     /// `set_scale` accepts only finite positive factors, and
     /// `set_transient` always rejects (floating is unsupported).
     #[test]
     fn size_and_transient_verbs_are_honest() {
         let main = main_thread();
         assert_eq!(main.get_size(), Some(DEFAULT_GUI_SIZE));
-        assert!(!main.can_resize());
+        assert!(main.can_resize());
         assert_eq!(main.get_resize_hints(), None);
         assert_eq!(main.adjust_size(DEFAULT_GUI_SIZE), None);
+        // `set_size` before `create` is a protocol violation on every
+        // platform — and off Windows `create` itself declines, so the
+        // verb stays a defined rejection there too.
         assert!(main.set_size(DEFAULT_GUI_SIZE).is_err());
         assert!(main.set_scale(1.0).is_ok());
         assert!(main.set_scale(2.5).is_ok());
@@ -913,6 +984,19 @@ mod tests {
         assert!(main.set_scale(f64::INFINITY).is_err());
         let transient = Window::from_generic_ptr(GuiApiType::WIN32, ptr::null_mut());
         assert!(main.set_transient(transient).is_err());
+        // On Windows, `create` → `set_size` records the size
+        // `get_size` echoes and resizes the attached child.
+        #[cfg(target_os = "windows")]
+        {
+            assert!(main.create(EMBEDDED_WIN32).is_ok());
+            let bigger = GuiSize {
+                width: 800,
+                height: 600,
+            };
+            assert!(main.set_size(bigger).is_ok());
+            assert_eq!(main.get_size(), Some(bigger));
+            main.destroy();
+        }
     }
 
     /// `create` validates the negotiated configuration and records

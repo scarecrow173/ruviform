@@ -13,9 +13,9 @@
 //!   independent oracle → `RunMetadata`" path at
 //!   `environment_kind=deterministic-backend`, `level=os-l1` —
 //!   OS-L1 evidence only, never a real-OS claim.
-//! - **Virtual OS endpoint legs** (`#[ignore]`, manual opt-in — no
-//!   canonical lane exists yet; `mise.toml` is out of this slice's
-//!   scope): drive the real `DeviceEnumerator`/`Device` streams and
+//! - **Virtual OS endpoint legs** (`#[ignore]`, manual opt-in —
+//!   canonical lane: `mise run test-os-endpoint-wiring`): drive
+//!   the real `DeviceEnumerator`/`Device` streams and
 //!   MIDI ports. The Test Runtime supplies the stimulus —
 //!   `PcmFixture::fill_view` fills the production
 //!   `AudioBufferViewMut` inside the output callback, and
