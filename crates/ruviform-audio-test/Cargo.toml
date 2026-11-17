@@ -55,6 +55,18 @@ serde_json = "1"
 #   （先例: crates/ruviform-audio-device/tests/mock_input_backend.rs）。
 #   test-only crate の dev-dependency で本番 graph に波及しない。
 assert_no_alloc = "1.1"
+# - ruviform-audio-device / ruviform-midi-device: Issue #629 AC3
+#   Test Runtime 結線（`tests/os_endpoint.rs`）が deterministic
+#   signal/Event を供給する被試験側として本番 device adapter 入口
+#   （`DeviceEnumerator`/`Device`/port trait）を参照するため。
+#   依存方向の裁定（docs/designs/issue-629-test-runtime-wiring.md
+#   §1）で逆方向 dev-dep を採用 — device→audio-test は前回不承認
+#   のため不可。dev-dep のため lib compile graph と consumer の
+#   dependency resolution を汚染しない（先例:
+#   ruviform-audio-plugin-bridge→ruviform-midi-device、
+#   ruviform-plugin-test-vst3→両 device crate）。crate cycle なし。
+ruviform-audio-device = { path = "../ruviform-audio-device" }
+ruviform-midi-device = { path = "../ruviform-midi-device" }
 
 [lints]
 workspace = true
