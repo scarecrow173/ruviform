@@ -11,6 +11,7 @@ use std::process::Command;
 
 use ruviform_ui_test::ScenarioReport;
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 
 use crate::artifact::PLUGIN_PATH_ENV;
 
@@ -60,6 +61,7 @@ fn case_line(report: &ScenarioReport) -> String {
             "case".to_string(),
             report.case.as_ref().map_or(Value::Null, |case| json!(case)),
         ),
+        ("case_seed".to_string(), json!(case_seed(report))),
         ("driver".to_string(), json!(report.driver)),
         (
             "capabilities".to_string(),
@@ -79,6 +81,7 @@ fn case_line(report: &ScenarioReport) -> String {
             report.observed.clone().unwrap_or(Value::Null),
         ),
         ("evidence".to_string(), json!(report.evidence)),
+        ("receipts".to_string(), json!(report.receipts)),
         (
             "environment".to_string(),
             report.environment.clone().unwrap_or(Value::Null),
@@ -108,6 +111,21 @@ fn case_line(report: &ScenarioReport) -> String {
     serde_json::to_string(&Value::Object(object)).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Deterministic per-case evidence seed — SHA-256 over
+/// `run_id|scenario|case`, first 16 hex chars. The lane's cases are
+/// deterministic (no RNG), so this is a stable case *identity* for
+/// evidence correlation (AC4), not a random seed.
+fn case_seed(report: &ScenarioReport) -> String {
+    let case = report.case.as_ref().map_or("", |case| case.as_str());
+    let canonical = format!(
+        "{}|{}|{case}",
+        report.run_id.as_str(),
+        report.scenario.as_str()
+    );
+    let digest = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+    digest[..16].to_string()
+}
+
 /// The repo commit: `GITHUB_SHA` (CI) → `git rev-parse HEAD` → `None`
 /// (recorded as honest `null`, never guessed).
 #[must_use]
@@ -123,4 +141,55 @@ pub fn repo_sha() -> Option<String> {
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .map(|sha| sha.trim().to_string())
         .filter(|sha| !sha.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use ruviform_ui::behavior::{CommandReceipt, ReceiptStatus, Revision};
+    use ruviform_ui_test::{CaseId, RunId, ScenarioDriver, ScenarioId, ScenarioVerdict};
+
+    use super::*;
+
+    fn report_with_case() -> ScenarioReport {
+        let mut report = ScenarioReport::new(
+            RunId::new("run-1"),
+            ScenarioId::new("scenario-1"),
+            Some(CaseId::new("case-1")),
+            ScenarioDriver::Fake,
+        );
+        report.verdict = ScenarioVerdict::Pass;
+        report
+    }
+
+    #[test]
+    fn case_line_carries_receipts_and_case_seed() {
+        let mut report = report_with_case();
+        report.receipts.push(CommandReceipt {
+            command_id: "cmd-1".to_string(),
+            status: ReceiptStatus::Applied,
+            revision: Some(Revision::Num(7)),
+            detail: Some("applied".to_string()),
+        });
+
+        let line = case_line(&report);
+        let value: Value = serde_json::from_str(&line).expect("case line is JSON");
+
+        assert_eq!(value["case_seed"], json!(case_seed(&report)));
+        assert_eq!(value["case_seed"].as_str().map(str::len), Some(16));
+        let receipts = value["receipts"].as_array().expect("receipts array");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0]["command_id"], json!("cmd-1"));
+        assert_eq!(receipts[0]["status"], json!("applied"));
+        assert_eq!(receipts[0]["revision"], json!(7));
+    }
+
+    #[test]
+    fn case_seed_is_deterministic_and_case_scoped() {
+        let a = report_with_case();
+        let mut b = report_with_case();
+        b.case = Some(CaseId::new("case-2"));
+
+        assert_eq!(case_seed(&a), case_seed(&report_with_case()));
+        assert_ne!(case_seed(&a), case_seed(&b));
+    }
 }
