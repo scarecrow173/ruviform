@@ -7,8 +7,10 @@
 //   * clap-validator (free-audio/clap-validator, pinned release binary)
 //     against `ruviform_plugin_test_clap.dll` — one run per plugin id.
 //   * Steinberg VST3 SDK `validator` (built from the pinned SDK source
-//     revision) against a staged `ruviform-plugin-test-vst3.vst3`
-//     bundle wrapping `ruviform_plugin_test_vst3.dll`.
+//     revision) against a staged `.vst3` bundle wrapping the cdylib
+//     named by `--vst3-dll` (default: the `ruviform-plugin-test-vst3`
+//     fixture; pass e.g. `target/debug/ruviform_plugin_vst3.dll` to
+//     validate the production adapter instead).
 //
 // This lane is opt-in and NOT a CI-required gate: it exists so the
 // suite's ABI conformance is proven by tools independent of the
@@ -29,7 +31,10 @@
 //       <repo>/target/debug/ruviform_plugin_test_clap.dll
 //   --vst3-dll <path>         | env VST3_TEST_DLL — default
 //       <repo>/target/debug/ruviform_plugin_test_vst3.dll
-//   --no-build                skip `cargo build` of both fixture crates
+//   --vst3-package <name>     cargo package built for the VST3 leg —
+//       default: derived from the --vst3-dll file stem
+//       (`ruviform_plugin_vst3.dll` → `ruviform-plugin-vst3`)
+//   --no-build                skip `cargo build` of the fixture crates
 //   --evidence-dir <dir>      default <repo>/evidence/rf630/abi-validator
 //
 // Fail-closed contract: a missing validator binary, missing artifact,
@@ -54,7 +59,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -90,8 +95,9 @@ Options:
   --vst3-validator <path>   Steinberg VST3 SDK validator executable
   --validator-dir <dir>     directory containing clap-validator[.exe] and vst3-validator[.exe]
   --clap-dll <path>         ruviform_plugin_test_clap.dll (default: <repo>/target/debug/...)
-  --vst3-dll <path>         ruviform_plugin_test_vst3.dll (default: <repo>/target/debug/...)
-  --no-build                skip building both fixture crates with cargo
+  --vst3-dll <path>         VST3 cdylib to validate (default: <repo>/target/debug/ruviform_plugin_test_vst3.dll)
+  --vst3-package <name>     cargo package built for the VST3 leg (default: derived from --vst3-dll stem)
+  --no-build                skip building the fixture crates with cargo
   --evidence-dir <dir>      evidence output directory
                             (default: <repo>/evidence/rf630/abi-validator)
   -h, --help                show this help
@@ -104,6 +110,7 @@ export function parseArgs(argv) {
     validatorDir: process.env.RUVIFORM_ABI_VALIDATOR_DIR || null,
     clapDll: process.env.CLAP_TEST_DLL || null,
     vst3Dll: process.env.VST3_TEST_DLL || null,
+    vst3Package: null,
     build: true,
     evidenceDir: null,
     help: false,
@@ -130,6 +137,9 @@ export function parseArgs(argv) {
         break;
       case "--vst3-dll":
         opts.vst3Dll = next();
+        break;
+      case "--vst3-package":
+        opts.vst3Package = next();
         break;
       case "--no-build":
         opts.build = false;
@@ -278,13 +288,25 @@ export function runClapLeg({ validator, dll, plugin, extraArgs = [] }) {
   });
 }
 
+// Derives the cargo package name for a VST3 cdylib path: the cdylib
+// file stem with `_` → `-` (`ruviform_plugin_vst3.dll` →
+// `ruviform-plugin-vst3`, `ruviform_plugin_test_vst3.dll` →
+// `ruviform-plugin-test-vst3`). The staged bundle name is the package
+// name + `.vst3` — the VST3 layout requires the inner binary name to
+// match the bundle folder name.
+export function vst3NamesFromDll(dllPath) {
+  const stem = basename(dllPath).replace(/\.[^.]*$/, "");
+  const pkg = stem.replace(/_/g, "-");
+  return { package: pkg, bundle: `${pkg}.vst3` };
+}
+
 // Normalizes a finished VST3 SDK validator invocation. Pure.
-export function normalizeVst3Leg({ proc, validator, bundle, durationMs }) {
+export function normalizeVst3Leg({ proc, validator, bundle, durationMs, name }) {
   const args = [bundle];
   const raw = `${proc.stdout || ""}\n${proc.stderr || ""}`;
   const leg = {
     kind: "vst3-sdk-validator",
-    plugin: "vst3 suite bundle",
+    plugin: name || "vst3 suite bundle",
     pluginId: null,
     command: [validator, ...args].join(" "),
     durationMs,
@@ -320,7 +342,7 @@ export function normalizeVst3Leg({ proc, validator, bundle, durationMs }) {
 }
 
 // Runs the Steinberg SDK validator against a staged .vst3 bundle.
-export function runVst3Leg({ validator, bundle }) {
+export function runVst3Leg({ validator, bundle, name }) {
   const started = Date.now();
   const proc = spawnSync(validator, [bundle], {
     encoding: "utf8",
@@ -332,14 +354,15 @@ export function runVst3Leg({ validator, bundle }) {
     validator,
     bundle,
     durationMs: Date.now() - started,
+    name,
   });
 }
 
 // Stages the VST3 cdylib as a spec-compliant Windows bundle:
 // <name>.vst3/Contents/x86_64-win/<name>.vst3 — the inner binary name
-// must match the bundle folder name.
-export function stageVst3Bundle(dllPath, stageRoot) {
-  const bundleName = "ruviform-plugin-test-vst3.vst3";
+// must match the bundle folder name. `bundleName` defaults to the
+// test-fixture bundle for backward compatibility.
+export function stageVst3Bundle(dllPath, stageRoot, bundleName = "ruviform-plugin-test-vst3.vst3") {
   const bundleDir = join(stageRoot, bundleName);
   const innerDir = join(bundleDir, "Contents", "x86_64-win");
   mkdirSync(innerDir, { recursive: true });
@@ -389,15 +412,10 @@ function notRunLeg(kind, name, pluginId, reason) {
   };
 }
 
-function buildFixtureArtifacts(opts) {
+function buildFixtureArtifacts(opts, vst3Package) {
   if (!opts.build) return { ran: false, status: "skipped (--no-build)" };
-  const args = [
-    "build",
-    "-p",
-    "ruviform-plugin-test-clap",
-    "-p",
-    "ruviform-plugin-test-vst3",
-  ];
+  const packages = [...new Set(["ruviform-plugin-test-clap", vst3Package])];
+  const args = ["build", ...packages.flatMap((p) => ["-p", p])];
   const proc = spawnSync("cargo", args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
@@ -421,8 +439,12 @@ export function run(opts) {
   const tools = resolveValidators(opts);
   const clapDll = resolve(opts.clapDll || join(REPO_ROOT, "target", "debug", "ruviform_plugin_test_clap.dll"));
   const vst3Dll = resolve(opts.vst3Dll || join(REPO_ROOT, "target", "debug", "ruviform_plugin_test_vst3.dll"));
+  const vst3Names = vst3NamesFromDll(vst3Dll);
+  const vst3Package = opts.vst3Package || vst3Names.package;
+  const vst3BundleName = `${vst3Package}.vst3`;
+  const vst3Label = vst3BundleName;
 
-  const build = buildFixtureArtifacts(opts);
+  const build = buildFixtureArtifacts(opts, vst3Package);
 
   const legs = [];
 
@@ -495,7 +517,7 @@ export function run(opts) {
     legs.push(
       notRunLeg(
         "vst3-sdk-validator",
-        "vst3 suite bundle",
+        vst3Label,
         null,
         "VST3 SDK validator binary not found — build `validator` from the " +
           "pinned SDK source revision (see docs/specs/issue-630-abi-validator.md) " +
@@ -506,7 +528,7 @@ export function run(opts) {
     legs.push(
       notRunLeg(
         "vst3-sdk-validator",
-        "vst3 suite bundle",
+        vst3Label,
         null,
         `artifact missing: ${vst3Dll} — run without --no-build or pass --vst3-dll`,
       ),
@@ -515,7 +537,7 @@ export function run(opts) {
     legs.push(
       notRunLeg(
         "vst3-sdk-validator",
-        "vst3 suite bundle",
+        vst3Label,
         null,
         `fixture build failed (exit ${build.exitCode}) — see build.tail in run.json`,
       ),
@@ -523,10 +545,11 @@ export function run(opts) {
   } else {
     const stageRoot = mkdtempSync(join(tmpdir(), "rf630-vst3-"));
     try {
-      const { bundleDir, innerPath } = stageVst3Bundle(vst3Dll, stageRoot);
-      const leg = runVst3Leg({ validator: tools.vst3, bundle: bundleDir });
+      const { bundleDir, innerPath } = stageVst3Bundle(vst3Dll, stageRoot, vst3BundleName);
+      const leg = runVst3Leg({ validator: tools.vst3, bundle: bundleDir, name: vst3Label });
       leg.bundle = bundleDir;
       leg.innerBinary = innerPath;
+      leg.package = vst3Package;
       legs.push(leg);
       writeFileSync(join(evidenceDir, "vst3-validator.txt"), leg.rawOutput || "");
       delete leg.rawOutput;
@@ -555,6 +578,8 @@ export function run(opts) {
     artifacts: {
       clapDll: existsSync(clapDll) ? { path: clapDll, sha256: sha256File(clapDll) } : { path: clapDll, missing: true },
       vst3Dll: existsSync(vst3Dll) ? { path: vst3Dll, sha256: sha256File(vst3Dll) } : { path: vst3Dll, missing: true },
+      vst3Package,
+      vst3Bundle: vst3BundleName,
     },
     build,
     legs,
