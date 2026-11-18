@@ -52,7 +52,7 @@ use ruviform_ui::native_slot::{
     LogicalRect, NativeSurfaceSlot, SlotCapabilities, SlotGeometry, SlotLease, SlotSpec,
     SlotVisibility, Support, SurfaceSlotId,
 };
-use ruviform_ui::view::{ComponentKey, ComponentSnapshot};
+use ruviform_ui::view::{ComponentKey, ComponentSnapshot, ComponentSpec, ViewSpec};
 use ruviform_ui_test::scenario::plugin_dock::{
     PLUGIN_DOCK_SCENARIO, PLUGIN_DOCK_SLOT_KEY, PluginArtifactEvidence, plugin_dock_view_spec,
 };
@@ -1000,6 +1000,70 @@ fn component_snapshot_json(snapshot: &ComponentSnapshot) -> Value {
     })
 }
 
+/// Full `observed.semantic_tree` evidence (AC4): walks `spec`'s
+/// mounted component tree with the same flattening
+/// `ViewHost::validate_spec` uses — `Panel` children recurse, and
+/// `Tabs` contribute each tab's alias key plus the child's
+/// canonical key — then observes every key through the
+/// driver-neutral port. Components that fail to resolve or observe
+/// record `null`: best-effort evidence, never a verdict input, and
+/// never a fabricated snapshot.
+pub(crate) fn semantic_tree_json<G: SemanticGuiTest>(
+    gui: &mut G,
+    window: WindowId,
+    view: ViewInstanceId,
+    spec: &ViewSpec,
+) -> Map<String, Value> {
+    fn observe_key<G: SemanticGuiTest>(
+        gui: &mut G,
+        window: WindowId,
+        view: ViewInstanceId,
+        key: &ComponentKey,
+    ) -> Value {
+        let snapshot = (|| {
+            let target = gui
+                .resolve_target(&TargetQuery::new(window, view).component(key.clone()))
+                .ok()?;
+            gui.observe(&target, key).ok()
+        })();
+        snapshot
+            .as_ref()
+            .map_or(Value::Null, component_snapshot_json)
+    }
+
+    fn walk<G: SemanticGuiTest>(
+        gui: &mut G,
+        window: WindowId,
+        view: ViewInstanceId,
+        node: &ComponentSpec,
+        tree: &mut Map<String, Value>,
+    ) {
+        let key = node.key().clone();
+        tree.insert(key.to_string(), observe_key(gui, window, view, &key));
+        match node {
+            ComponentSpec::Panel(panel) => {
+                for child in &panel.children {
+                    walk(gui, window, view, child, tree);
+                }
+            }
+            ComponentSpec::Tabs(tabs) => {
+                for tab in &tabs.tabs {
+                    tree.insert(
+                        tab.key.to_string(),
+                        observe_key(gui, window, view, &tab.key),
+                    );
+                    walk(gui, window, view, &tab.child, tree);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut tree = Map::new();
+    walk(gui, window, view, &spec.root, &mut tree);
+    tree
+}
+
 /// The command→receipt attempt on the fader fixture: two
 /// `Begin → Preview → Commit` gestures mint receipt-expecting
 /// intents, `result` events carrying the minted `command_id`s are
@@ -1170,9 +1234,12 @@ fn command_receipt_body(gui: &mut FakeGuiTest) -> ScenarioOutcome {
             "window": window.to_string(),
             "view": view.to_string(),
             "component": RECEIPT_FADER_KEY,
-            "semantic_tree": {
-                RECEIPT_FADER_KEY: component_snapshot_json(&rejected_snapshot),
-            },
+            "semantic_tree": Value::Object(semantic_tree_json(
+                &mut *gui,
+                window,
+                view,
+                &sv_fader_dock_fixture().spec,
+            )),
         }))
     })();
 

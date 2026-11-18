@@ -173,7 +173,7 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # editor-pixel question stays deferred). Real OS windows — run
 # unattended (writes only target/ + evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]
-description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, honest Unsupported for DPI/IME/close) and AC3 non-pixel editor op rows (resize/re-dock); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail

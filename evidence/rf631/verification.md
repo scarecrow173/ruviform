@@ -1343,3 +1343,144 @@ gesture を駆動し、minted `command_id` 相関の applied
   NotRun のまま。
 - docs index（`docs/**/README.md`）は未同期 — Coordinator が
   統合時に `doc-maintenance` で再生成する。
+
+# Slice 追記: Issue #631 AC4 evidence-fields（window hash 全行・capture/artifact digest・semantic tree 全量・README 修復）
+
+- Date: 2026-11-18
+- OS: Windows (x86_64) — interactive desktop 実走
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA（evidence header）: `e4eb117f9916838a0a67388304275ffb41a35bb2`
+  （`origin/main` と同一 — 本 slice の commit 前ベース。
+  working tree の未 commit 差分を含む実走）
+- Doc chain: `docs/{discovery,specs,designs,plans,tasks,
+  test-specs,adr}/issue-631-evidence-fields.md`
+
+## 実装概要（本 slice の evidence field）
+
+- `environment.window_identities`: session 開始時に window A–D
+  各々の `{window_id, title, geometry, sha256}` を 1 回だけ計算
+  （canonical 文字列 = window id・mount title・origin・physical
+  px・scale_factor → `Sha256::digest`、`real-window-dpi` の
+  `window_geometry_sha256` 方式踏襲）し、`finalize_case` の
+  merged extras で全 22 real case の `environment` に刻印。
+  geometry 読取失敗 window は `sha256: null`（捏造なし）。
+  `blocked_reports`/`blocked_probe`（session 不在）には刻まない。
+- `capture_sha256`: 全 pixel capture step/observed row に実
+  RGBA8 画素バイトの SHA-256 を記録 — `real-capture`・
+  `real-dcomp-pixel`（`screen_pixels`/`printwindow_pixels`/
+  `windowdc_pixels`）・`real-dcomp-foreground`（`fg_observe_*`
+  の `screen` object）・`real-dcomp-present`（`pres_capture`/
+  `pres_screen`）。capture backend/width/height は従来どおり併記。
+- `artifact: {path, sha256}`: `save_pixel_artifact` を
+  `(width, height, rgba)` 一般化し、書き込んだ PNG bytes の
+  SHA-256 を返す。`--pixel-artifacts` を `real-capture` にも
+  拡張（opt-in 維持 — canonical lane は PNG を書かない）。
+- `observed.semantic_tree` 全量化: `scenario.rs` に
+  `SemanticGuiTest` generic の `semantic_tree_json` を追加
+  （`ViewHost::validate_spec` と同じ walk — Panel children
+  再帰 + Tabs alias/canonical 両 key、観測失敗は `null`）。
+  適用: real `real-window-mount`・`real-command-receipt`、
+  headless `command-receipt`。
+- README verdict 表修復: `real-window-dpi`/`real-window-close`
+  の stale `Unsupported` 行を実 verdict 記述に更新、
+  `real-command-receipt` 行を catalog 順（`real-os-input` と
+  `real-window-dpi` の間）に追加。bin doc の
+  `--pixel-artifacts` 対象に `real-capture` 追記。`mise.toml`
+  `test-ui-plugin-dock-real` description の stale 文言
+  （"honest Unsupported for DPI/IME/close"）を実挙動に修正
+  （canonical 引数不変）。
+
+## Lane results（全て実走）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `mise run check ruviform-plugin-dock-test` | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass（`-D warnings` clean） |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run lint ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run test ruviform-plugin-dock-test` | pass（unit 15 + console 14 + plugin_dock 4 — 新規 unit 5 件含む） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run test ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run test-ui-plugin-dock` | pass — `plugin-dock-scenario.jsonl` 再生成（9 case、`command-receipt` の semantic_tree 全量を含む） |
+| `mise run test-ui-plugin-dock-console` | pass — `plugin-dock-console.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-lab` | pass（exit 0 — interactive window が Ready 到達、閉じて clean exit） |
+| `mise run test-ui-plugin-dock-real` | **exit 1（設計どおり）** — `real-dcomp-pixel` の既知 `Fail`（`ruviform#532` DComp topmost occlusion）が唯一の Fail。`plugin-dock-real-scenario.jsonl` を新 field 込みで再生成 |
+| `mise run test-ui-plugin-dock-real-headless` | pass（exit 0 — 22 row 全て `not_run`+`environment_blocked`、session-scoped field 非記録を維持。`plugin-dock-real-headless.jsonl` 再生成） |
+| `mise run test-ui-scenario-contract` | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | pass |
+
+## `test-ui-plugin-dock-real` 実走 verdict（22 case、interactive Windows desktop）
+
+| case | verdict |
+| --- | --- |
+| `real-window-mount` | pass |
+| `real-native-slot` | pass |
+| `real-editor-attach` | pass |
+| `real-capture` | pass |
+| `real-dcomp-pixel` | **fail**（既知 `ruviform#532` — screen-composited green 0.0、正直な regression signal） |
+| `real-dcomp-foreground` | pass |
+| `real-dcomp-present` | pass |
+| `real-multiwindow-focus` | pass |
+| `real-os-input` | pass |
+| `real-command-receipt` | pass |
+| `real-window-dpi` | pass |
+| `real-window-ime` | unsupported |
+| `real-window-close` | pass |
+| `real-editor-resize` | pass |
+| `real-editor-redock` | pass |
+| `real-session-terminate` | pass |
+| `real-session-degraded` | pass |
+| `real-session-recovery` | pass |
+| `real-session-timeout` | pass |
+| `real-editor-visibility` | pass |
+| `real-session-crash` | unsupported |
+| `real-session-hang` | unsupported |
+
+## AC4 evidence field の実測記録（`plugin-dock-real-scenario.jsonl`）
+
+- `environment.window_identities`: 全 22 real case 行に window
+  A–D 4 件の identity が同一 session census として記録
+  （`w1`/`ruviform`、`w2`/`ruviform plugin-dock B`、
+  `w3`/`ruviform plugin-dock C`、`w4`/`ruviform fader-dock D`、
+  各々 `geometry` + 64hex `sha256`、失敗なし）。
+- `capture_sha256`: `real-capture` observed に 1 件、
+  `real-dcomp-pixel` 3 step、`real-dcomp-foreground` 5 step
+  （`fg_observe_*` の `screen` object 内）、`real-dcomp-present`
+  14 step に記録。backend/width/height 併記を確認。
+- `artifact`: canonical lane は `--pixel-artifacts` 非指定のため
+  `artifact`/`artifact_error` ともに非出現（opt-in 設計どおり）。
+  `{path, sha256}` shape は unit test
+  `save_pixel_artifact_records_path_and_sha256` で検証。
+- `observed.semantic_tree`: `real-window-mount` は
+  `plugin.dock`/`plugin.editor` 2 key、`real-command-receipt` は
+  `panel`/`mixer-tabs`/`Ch 1`/`Ch 2`/`fader-ch1`/`fader-ch2`
+  6 key（tab alias + canonical を含む全 mount key）。headless
+  `command-receipt`（`plugin-dock-scenario.jsonl`・
+  `plugin-dock-console.jsonl`）も同じ 6 key を記録。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+- 22 row 全て `not_run` + `observed.environment_blocked`、
+  `environment_kind` は `real-window` を名乗らず、
+  `window_identities`/`capture_sha256`/`artifact` は非記録
+  （session 不在のため — fail-closed 形状を維持）。exit 0。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-dcomp-pixel` の `Fail`（`ruviform#532`）は据え置き —
+  pixel Pass は別 gate。
+- GPU 情報（AC4 残 field）は `windows-sys` feature 追加または
+  GPUI renderer-info API が必要で本 slice 対象外 —
+  missing_issue 候補として IR/PR に記録。
+- lease 外 stale コメント（`bin/plugin-dock-console.rs:9` の
+  'twenty-one catalog rows'、`src/lib.rs:53-54` の
+  DPI/IME/close `Unsupported` 記述）は残件化。
+- canonical `--pixel-artifacts` 化は採用しない（PNG binary
+  churn — `docs/adr/issue-631-evidence-fields.md` 記録）。
+  opt-in artifacts + canonical digest を維持。
+- docs index（`docs/**/README.md`）は未同期 — Coordinator が
+  統合時に `doc-maintenance` で再生成する。

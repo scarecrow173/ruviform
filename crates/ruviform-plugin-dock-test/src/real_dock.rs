@@ -143,8 +143,8 @@ use crate::real_catalog::{LANE, SCENARIO};
 pub use crate::real_catalog::RUN_ID;
 use crate::scenario::{
     activate_test_gain, editor_size, events_debug, fail, finalize, host_error_outcome, not_run,
-    register_factories, rejecting_editor_ops, session_closed_concluded, session_failed_unsupported,
-    session_id_json,
+    register_factories, rejecting_editor_ops, semantic_tree_json, session_closed_concluded,
+    session_failed_unsupported, session_id_json,
 };
 
 /// The resolved plugin binary + its evidence identity — only the
@@ -202,6 +202,15 @@ struct RealDockContext<'a> {
     /// every case's `environment.scale_factor` (AC4 evidence;
     /// `None` keeps the honest `null` when unmeasured).
     session_scale_factor: Option<f64>,
+    /// Session-scoped per-window identity census (AC4 window hash)
+    /// — one record per mounted window (id, mount title,
+    /// session-start `window_geometry`, canonical-string SHA-256),
+    /// stamped into every real case's
+    /// `environment.window_identities` by `finalize_case`. A window
+    /// whose geometry read failed records `sha256: null` — the
+    /// identity is never fabricated. `blocked_reports` never sees
+    /// this field: no session exists there.
+    window_identities: Value,
     /// The mounted view instance id.
     view: ViewInstanceId,
     /// The fourth window's view instance id — the fader-dock
@@ -316,6 +325,15 @@ pub fn run_all_with_pixel_artifacts(
         position: Some(LogicalPosition::new(4350, 80)),
         ..WindowSpec::default()
     };
+    // Mount titles in window order (A–D) — the window-identity
+    // digest's canonical input; `WindowSpec::default().title` is
+    // window A's "ruviform".
+    let window_titles = [
+        WindowSpec::default().title,
+        window_spec_b.title.clone(),
+        window_spec_c.title.clone(),
+        window_spec_d.title.clone(),
+    ];
     let outcome = RealOsGuiTest::run(
         vec![
             RealWindowMount {
@@ -366,6 +384,23 @@ pub fn run_all_with_pixel_artifacts(
                 .window_geometry(window)
                 .ok()
                 .map(|geometry| geometry.scale_factor);
+            // Session-scoped window identities (AC4 window hash) —
+            // one canonical-string digest per mounted window from
+            // its session-start geometry, window id, and mount
+            // title; `finalize_case` stamps the census into every
+            // real case's `environment.window_identities`.
+            let window_identities = Value::Array(
+                [
+                    Some((window, window_titles[0].as_str())),
+                    window_b.map(|w| (w, window_titles[1].as_str())),
+                    window_c.map(|w| (w, window_titles[2].as_str())),
+                    window_d.map(|w| (w, window_titles[3].as_str())),
+                ]
+                .into_iter()
+                .flatten()
+                .map(|(w, title)| window_identity_entry(w, title, gui.window_geometry(w).ok()))
+                .collect(),
+            );
             // The session-scoped catalog — `real_entries` rows run
             // through `run_entries` against the live context.
             let entries = real_entries();
@@ -376,6 +411,7 @@ pub fn run_all_with_pixel_artifacts(
                 window_c,
                 window_d,
                 session_scale_factor,
+                window_identities,
                 view,
                 view_d,
                 env,
@@ -481,6 +517,10 @@ fn finalize_case(
     if let Some(scale_factor) = ctx.session_scale_factor {
         merged.insert("scale_factor".to_string(), json!(scale_factor));
     }
+    merged.insert(
+        "window_identities".to_string(),
+        ctx.window_identities.clone(),
+    );
     finalize_real(report, ctx.env, kind, artifact, merged)
 }
 
@@ -1064,6 +1104,55 @@ fn component_snapshot_json(snapshot: &ComponentSnapshot) -> Value {
     })
 }
 
+/// One session-scoped window-identity record (AC4 window hash) —
+/// `window_id`/`title` are always recorded; `geometry` is the
+/// session-start [`OsWindowGeometry`] and `sha256` the digest of a
+/// canonical string over window id, title, origin, physical client
+/// px, and scale factor (the `real-window-dpi`
+/// `window_geometry_sha256` convention, session-scoped instead of
+/// per-case). A failed geometry read records `null`s — the
+/// identity is never fabricated.
+fn window_identity_entry(
+    window: WindowId,
+    title: &str,
+    geometry: Option<OsWindowGeometry>,
+) -> Value {
+    let base = json!({
+        "window_id": window.to_string(),
+        "title": title,
+    });
+    let Some(geometry) = geometry else {
+        let mut entry = base;
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("geometry".to_string(), Value::Null);
+            obj.insert("sha256".to_string(), Value::Null);
+        }
+        return entry;
+    };
+    let canonical = format!(
+        "ruviform-plugin-dock-test window-identity v1|{window}|{title}|{},{},{},{},{}",
+        geometry.origin_x,
+        geometry.origin_y,
+        geometry.width,
+        geometry.height,
+        geometry.scale_factor,
+    );
+    let digest = format!("{:x}", Sha256::digest(canonical.as_bytes()));
+    let mut entry = base;
+    if let Some(obj) = entry.as_object_mut() {
+        obj.insert("geometry".to_string(), geometry_json(&geometry));
+        obj.insert("sha256".to_string(), json!(digest));
+    }
+    entry
+}
+
+/// SHA-256 hex of raw RGBA8 pixel bytes — the canonical
+/// `capture_sha256` evidence digest (AC4): identical captures
+/// produce identical digests across runs without storing pixels.
+fn rgba_sha256(rgba: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(rgba))
+}
+
 /// The fail-closed reports for a session that never started —
 /// `NotRun` + `observed.environment_blocked`, the
 /// `test-ui-real-scenario` precedent. `environment_kind` stays the
@@ -1200,29 +1289,13 @@ fn real_window_mount_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let key = slot_key();
         let target = gui.resolve_target(&TargetQuery::new(window, view).component(key.clone()))?;
-        let snapshot = gui.observe(&target, &key)?;
-        // AC4 semantic-tree evidence — best-effort `ComponentSnapshot`
-        // projection of the dock panel and slot: observation only,
-        // never a verdict input; an unobservable component records
-        // `null` rather than a fabricated tree.
-        let panel_key = ComponentKey("plugin.dock".to_string());
-        let panel_snapshot = (|| {
-            let panel_target = gui
-                .resolve_target(&TargetQuery::new(window, view).component(panel_key.clone()))
-                .ok()?;
-            gui.observe(&panel_target, &panel_key).ok()
-        })();
-        let mut tree = Map::new();
-        tree.insert(
-            "plugin.dock".to_string(),
-            panel_snapshot
-                .as_ref()
-                .map_or(Value::Null, component_snapshot_json),
-        );
-        tree.insert(
-            PLUGIN_DOCK_SLOT_KEY.to_string(),
-            component_snapshot_json(&snapshot),
-        );
+        gui.observe(&target, &key)?;
+        // AC4 semantic-tree evidence — the full mounted
+        // `plugin_dock_view_spec` walk (every component key the host
+        // mounted, tab aliases included): observation only, never a
+        // verdict input; an unobservable component records `null`
+        // rather than a fabricated tree.
+        let tree = semantic_tree_json(&mut *gui, window, view, &plugin_dock_view_spec());
         let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
         outcome.detail = Some(format!(
             "real OS window mounts plugin_dock_view_spec; NativeSlot \
@@ -2600,6 +2673,7 @@ fn real_editor_attach_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
 fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
     let window = ctx.window;
     let view = ctx.view;
+    let pixel_artifacts = ctx.pixel_artifacts;
     let report = run_scenario(&mut *ctx.gui, spec, |gui| {
         let target = gui.resolve_target(&TargetQuery::new(window, view))?;
         match gui.capture_frame(&target)? {
@@ -2613,11 +2687,40 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
                     image.width(),
                     image.height(),
                 ));
-                outcome.observed = Some(json!({
+                // AC4 — the captured RGBA bytes' digest is canonical
+                // evidence; the opt-in `--pixel-artifacts` PNG adds
+                // `{path, sha256}` on top (never a verdict input).
+                let mut observed = json!({
                     "width": image.width(),
                     "height": image.height(),
                     "backend": backend,
-                }));
+                    "capture_sha256": rgba_sha256(image.pixels()),
+                });
+                if let Some(dir) = pixel_artifacts
+                    && let Some(obj) = observed.as_object_mut()
+                {
+                    match save_pixel_artifact(
+                        dir,
+                        "real-capture-window",
+                        image.width(),
+                        image.height(),
+                        image.pixels(),
+                    ) {
+                        Ok(artifact) => {
+                            obj.insert(
+                                "artifact".to_string(),
+                                json!({
+                                    "path": artifact.path.display().to_string(),
+                                    "sha256": artifact.sha256,
+                                }),
+                            );
+                        }
+                        Err(error) => {
+                            obj.insert("artifact_error".to_string(), json!(error));
+                        }
+                    }
+                }
+                outcome.observed = Some(observed);
                 outcome
                     .evidence
                     .push("real-capture:window-pixels".to_string());
@@ -2684,23 +2787,35 @@ fn green_fraction(green: u64, total: u64) -> f64 {
     f64::from(g) / f64::from(t)
 }
 
+/// A written pixel-artifact PNG — the path plus the SHA-256 of the
+/// exact bytes written (AC4 `{path, sha256}` evidence).
+struct PixelArtifact {
+    /// Where the PNG landed.
+    path: PathBuf,
+    /// SHA-256 hex of the written PNG bytes.
+    sha256: String,
+}
+
 /// Writes one captured frame as PNG under `dir` — opt-in artifact
-/// evidence for `real-dcomp-pixel`. The directory is created on
-/// demand; the returned path lands in the step row. A write failure
-/// is returned to the caller, which records it as a note — it never
-/// changes a verdict.
+/// evidence for the pixel cases and `real-capture`. The directory
+/// is created on demand; the returned `{path, sha256}` lands in the
+/// step/observed row. A write failure is returned to the caller,
+/// which records it as a note — it never changes a verdict.
 fn save_pixel_artifact(
     dir: &Path,
     name: &str,
-    capture: &ospix::PixelCapture,
-) -> Result<PathBuf, String> {
+    width: u32,
+    height: u32,
+    rgba: &[u8],
+) -> Result<PixelArtifact, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let image = RgbaImage::new(capture.width, capture.height, capture.rgba.clone())
-        .map_err(|e| format!("RgbaImage::new: {e}"))?;
+    let image =
+        RgbaImage::new(width, height, rgba.to_vec()).map_err(|e| format!("RgbaImage::new: {e}"))?;
     let png = image.to_png().map_err(|e| format!("to_png: {e}"))?;
+    let sha256 = format!("{:x}", Sha256::digest(&png));
     let path = dir.join(format!("{name}.png"));
-    std::fs::write(&path, png).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(path)
+    std::fs::write(&path, &png).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(PixelArtifact { path, sha256 })
 }
 
 /// The aggregated screen-pixel outcome — this case's verdict input
@@ -2828,17 +2943,24 @@ struct PixelScan {
 }
 
 /// Records the opt-in PNG artifact for one capture into its step
-/// row — `artifact` on success, `artifact_error` on failure; a write
-/// failure never changes a verdict.
+/// row — `artifact: {path, sha256}` on success, `artifact_error` on
+/// failure; a write failure never changes a verdict.
 fn record_pixel_artifact(
     row: &mut Value,
     dir: Option<&Path>,
     name: &str,
-    capture: &ospix::PixelCapture,
+    width: u32,
+    height: u32,
+    rgba: &[u8],
 ) {
     let Some(dir) = dir else { return };
-    match save_pixel_artifact(dir, name, capture) {
-        Ok(path) => row["artifact"] = json!(path.display().to_string()),
+    match save_pixel_artifact(dir, name, width, height, rgba) {
+        Ok(artifact) => {
+            row["artifact"] = json!({
+                "path": artifact.path.display().to_string(),
+                "sha256": artifact.sha256,
+            });
+        }
         Err(error) => row["artifact_error"] = json!(error),
     }
 }
@@ -2914,12 +3036,15 @@ fn observe_one_child_pixels(
                 "total_pixels": total,
                 "green_fraction": fraction,
                 "threshold": GREEN_VISIBLE_FRACTION,
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
                 &mut row,
                 artifacts,
                 &format!("real-dcomp-pixel-screen-{index}"),
-                capture,
+                capture.width,
+                capture.height,
+                &capture.rgba,
             );
             steps.push(row);
         }
@@ -3242,12 +3367,15 @@ fn record_windowdc_pixels(
                 "green_fraction": fraction,
                 "note": "child's own window-DC surface via GetDC+BitBlt — \
                         NOT the on-screen composition; diagnostic only",
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
                 &mut row,
                 artifacts,
                 &format!("real-dcomp-pixel-windowdc-{index}"),
-                &capture,
+                capture.width,
+                capture.height,
+                &capture.rgba,
             );
             steps.push(row);
         }
@@ -3286,12 +3414,15 @@ fn record_printwindow_pixels(
                 "green_fraction": fraction,
                 "note": "child's own raster via PrintWindow — NOT \
                         the on-screen composition; diagnostic only",
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
                 &mut row,
                 artifacts,
                 &format!("real-dcomp-pixel-printwindow-{index}"),
-                &capture,
+                capture.width,
+                capture.height,
+                &capture.rgba,
             );
             steps.push(row);
         }
@@ -3799,12 +3930,15 @@ fn record_foreground_observation(
                 "total_pixels": total,
                 "green_fraction": fraction,
                 "threshold": GREEN_VISIBLE_FRACTION,
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
                 &mut row,
                 artifacts,
                 &format!("real-dcomp-foreground-{stage}-{index}"),
-                capture,
+                capture.width,
+                capture.height,
+                &capture.rgba,
             );
             row
         }
@@ -4586,8 +4720,16 @@ fn record_present_capture(
                 "green_pixels": green,
                 "total_pixels": total,
                 "green_fraction": fraction,
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
-            record_pixel_artifact(&mut row, artifacts, artifact_name, capture);
+            record_pixel_artifact(
+                &mut row,
+                artifacts,
+                artifact_name,
+                capture.width,
+                capture.height,
+                &capture.rgba,
+            );
             steps.push(row);
         }
         Err(error) => steps.push(json!({
@@ -4805,12 +4947,15 @@ fn probe_one_child_presentation(
                 "total_pixels": total,
                 "green_fraction": fraction,
                 "threshold": GREEN_VISIBLE_FRACTION,
+                "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
                 &mut row,
                 artifacts,
                 &format!("real-dcomp-present-screen-{index}"),
-                capture,
+                capture.width,
+                capture.height,
+                &capture.rgba,
             );
             steps.push(row);
             Some(capture.clone())
@@ -6003,9 +6148,12 @@ fn command_receipt_body(
             "window": window.to_string(),
             "view": view.to_string(),
             "component": RECEIPT_FADER_KEY,
-            "semantic_tree": {
-                RECEIPT_FADER_KEY: component_snapshot_json(&rejected_snapshot),
-            },
+            "semantic_tree": Value::Object(semantic_tree_json(
+                &mut *gui,
+                window,
+                view,
+                &sv_fader_dock_fixture().spec,
+            )),
         }))
     })();
 
@@ -8699,6 +8847,128 @@ mod tests {
                 entry.case
             );
         }
+    }
+
+    /// AC4 window hash — the session-scoped identity digest is
+    /// deterministic over (window id, title, geometry): identical
+    /// inputs hash identically, any canonical-input change
+    /// diverges, and a failed geometry read records honest nulls
+    /// rather than a fabricated identity.
+    #[test]
+    fn window_identity_entry_deterministic() {
+        let window = WindowId::new(7).expect("window id 7 is non-zero");
+        let geometry = OsWindowGeometry {
+            origin_x: 10,
+            origin_y: -20,
+            width: 640,
+            height: 480,
+            scale_factor: 1.5,
+        };
+        let a = window_identity_entry(window, "title", Some(geometry));
+        let b = window_identity_entry(window, "title", Some(geometry));
+        assert_eq!(a, b, "same canonical input must hash identically");
+        assert_eq!(a["window_id"], "w7");
+        assert_eq!(a["title"], "title");
+        assert_eq!(a["geometry"]["width"], 640);
+        let digest = a["sha256"].as_str().expect("sha256 recorded");
+        assert_eq!(digest.len(), 64);
+        assert!(digest.chars().all(|c| c.is_ascii_hexdigit()));
+
+        // Any canonical-input change diverges the digest.
+        let moved = OsWindowGeometry {
+            origin_x: 11,
+            ..geometry
+        };
+        let c = window_identity_entry(window, "title", Some(moved));
+        assert_ne!(a["sha256"], c["sha256"], "geometry change diverges");
+        let retitled = window_identity_entry(window, "other", Some(geometry));
+        assert_ne!(a["sha256"], retitled["sha256"], "title change diverges");
+
+        // A failed geometry read records honest nulls — never a
+        // fabricated identity.
+        let missing = window_identity_entry(window, "title", None);
+        assert_eq!(missing["geometry"], Value::Null);
+        assert_eq!(missing["sha256"], Value::Null);
+        assert_eq!(missing["window_id"], "w7");
+    }
+
+    /// `rgba_sha256` is the canonical capture digest — deterministic
+    /// over the raw RGBA8 bytes and sensitive to any pixel change.
+    #[test]
+    fn rgba_sha256_deterministic() {
+        let a = rgba_sha256(&[0, 0, 0, 255]);
+        assert_eq!(a, rgba_sha256(&[0, 0, 0, 255]));
+        assert_ne!(a, rgba_sha256(&[1, 0, 0, 255]));
+        assert_eq!(a.len(), 64);
+    }
+
+    /// `save_pixel_artifact` writes the PNG and returns
+    /// `{path, sha256}` where the digest is the SHA-256 of the
+    /// exact bytes on disk — the AC4 artifact evidence shape.
+    #[test]
+    fn save_pixel_artifact_records_path_and_sha256() {
+        let dir = std::env::temp_dir().join(format!(
+            "plugin-dock-real-artifact-test-{}",
+            std::process::id()
+        ));
+        let rgba = vec![0u8; 4 * 4 * 4];
+        let artifact =
+            save_pixel_artifact(&dir, "test-frame", 4, 4, &rgba).expect("artifact written");
+        assert!(artifact.path.ends_with("test-frame.png"));
+        assert!(artifact.path.exists());
+        assert_eq!(artifact.sha256.len(), 64);
+        let written = std::fs::read(&artifact.path).expect("png readable");
+        assert_eq!(
+            artifact.sha256,
+            format!("{:x}", Sha256::digest(&written)),
+            "recorded digest must match the bytes on disk"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// AC4 semantic tree — the walk covers every key the host
+    /// mounted from the fader fixture spec: the panel, the tabs
+    /// strip, both tab aliases, and both canonical fader keys.
+    #[test]
+    fn semantic_tree_walk_covers_all_mounted_keys() {
+        let mut gui = ruviform_ui_test::FakeGuiTest::new();
+        let window = gui.open_window();
+        let view = ViewInstanceId::new(1).expect("view id 1 is non-zero");
+        let spec = sv_fader_dock_fixture().spec.clone();
+        gui.mount_view(window, view, spec.clone())
+            .expect("fader fixture spec mounts");
+        let tree = semantic_tree_json(&mut gui, window, view, &spec);
+        for key in [
+            "panel",
+            "mixer-tabs",
+            "Ch 1",
+            "fader-ch1",
+            "Ch 2",
+            "fader-ch2",
+        ] {
+            assert!(tree.contains_key(key), "semantic_tree missing `{key}`");
+        }
+        assert!(
+            tree["fader-ch1"].is_object(),
+            "fader-ch1 must carry a snapshot object"
+        );
+    }
+
+    /// The dock spec's tree is the panel + slot pair — the walk
+    /// derives the same two keys the mount case previously listed
+    /// by hand, now from the spec itself.
+    #[test]
+    fn semantic_tree_walk_covers_dock_spec() {
+        let mut gui = ruviform_ui_test::FakeGuiTest::new();
+        let window = gui.open_window();
+        let view = ViewInstanceId::new(1).expect("view id 1 is non-zero");
+        let spec = plugin_dock_view_spec();
+        gui.mount_view(window, view, spec.clone())
+            .expect("dock spec mounts");
+        let tree = semantic_tree_json(&mut gui, window, view, &spec);
+        assert_eq!(tree.len(), 2, "panel + slot only: {tree:?}");
+        assert!(tree.contains_key("plugin.dock"));
+        assert!(tree.contains_key(PLUGIN_DOCK_SLOT_KEY));
     }
 
     fn rect(left: i32, top: i32, width: u32, height: u32) -> ospix::ScreenRect {
