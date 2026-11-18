@@ -94,6 +94,7 @@ Directory: `docs/impl/exp`
 | [issue-630-test-instrument.jsonl](./issue-630-test-instrument.jsonl) |
 | [issue-630-test-stateful.jsonl](./issue-630-test-stateful.jsonl) |
 | [issue-631-command-receipt-exp.jsonl](./issue-631-command-receipt-exp.jsonl) |
+| [issue-631-evidence-fields-exp.jsonl](./issue-631-evidence-fields-exp.jsonl) |
 | [issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl](./issue-631-gpui-test-lab-scenario-console-gui-v1.jsonl) |
 | [issue-631-headless-command-receipt-exp.jsonl](./issue-631-headless-command-receipt-exp.jsonl) |
 | [issue-631-real-editor-attach.jsonl](./issue-631-real-editor-attach.jsonl) |

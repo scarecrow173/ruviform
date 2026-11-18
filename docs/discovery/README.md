@@ -34,6 +34,7 @@ Directory: `docs/discovery`
 | DSC-630presetDiscoveryReeval01 | Issue #630 preset-discovery 外部検証再評価 — upstream fix pin 調査 | final | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | DSC-630presetSpawnFault01 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 調査記録 | final | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
 | DISC-Kd82mQxVnR4tYw6pLc3sJa | Issue #631 real-command-receipt case | draft | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| DISC-x7Kp2mQwR9vTn4bYc6dF | Issue #631 AC4 evidence-fields 完成 slice | draft | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | DISC-Mx41kYpNvT8wQc6rLd9sJh | Issue #631 headless-command-receipt case | draft | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | DISC-EQytwTTrhPQ8wwzjh4tGK3 | Issue #631 real-window-close/dpi catalog flip | draft | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | DISC-034YJ08C2FLjqUQpNN0PcG | Issue #631 RealOsGuiTest window-close/DPI 観測面 | draft | [issue-631-window-surface.md](./issue-631-window-surface.md) |

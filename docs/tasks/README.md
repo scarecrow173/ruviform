@@ -71,6 +71,7 @@ Directory: `docs/tasks`
 | TASK-034XTBfPlK12MmvsP1OkhW | Issue #630 T2 — CLAP test_gain plugin（ruviform-plugin-test-clap） | completed | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
 | TASK-034Y13NY1bznQbU0TgCsEn | Issue #630 test_editor slice — task | completed | [issue-630-test-editor.md](./issue-630-test-editor.md) |
 | TASK-svPo0nW2IkDcLaMNhbmbaX | Issue #630 T1 — VST3 test_gain plugin（ruviform-plugin-test-vst3 first slice） | in-progress | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
+| TASK-k9Jm2vXc8Qp4wRt6yHb3Ns | Issue #631 AC4 evidence-fields 完成 | in-progress | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | TASK-034Y3oeCjY3yeLsdZlZF32 | Issue #631 real-editor-attach — test_editor 実 IPlugView child HWND attach/detach 実走 | in-progress | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
 | TASK-034YqGYxiVHh080aoR6oju | Issue #631 T1 — real-row 拡充（AC1 catalog + AC3 非画素 + headless fail-closed） | in-progress | [issue-631-real-row.md](./issue-631-real-row.md) |
 | TASK-034XTPgAXjEOXFWn2Rv1Iy | Issue #631 T1 — Real-window native-slot dock lane | in-progress | [issue-631-real-window-dock.md](./issue-631-real-window-dock.md) |

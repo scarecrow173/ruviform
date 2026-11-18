@@ -245,6 +245,7 @@ Directory: `docs/test-specs`
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034Y4fXVmWB9YKK3r9ty7n | Issue #630 test_stateful slice — test specification | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | TSPEC-Ji15qVcbOD8vLh0tYx6aPg | Issue #631 real-command-receipt case のテスト仕様 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| TSPEC-f2Kd9wLq4Zx7mNv3bRc5Ty | Issue #631 AC4 evidence-fields 完成のテスト仕様 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | TSPEC-Lp73tXeQgD9wMz5sUv8iNc | Issue #631 headless-command-receipt case のテスト仕様 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | TSPEC-034XEbbePtPeJtXIR2bxrL | Issue #631 Plugin-dock scenario skeleton のテスト仕様 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | TSPEC-034Y3opmTfAWO3534oKOoH | Issue #631 real-editor-attach テスト仕様（child HWND OS 観測・detach 収束・thread-affinity の判定） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |

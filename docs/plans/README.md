@@ -218,6 +218,7 @@ Directory: `docs/plans`
 | PLAN-Ef1lMq6niXu1LcH2meLOrU | Issue #630 VST3 test_gain first slice 実装計画 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | PLAN-034Y4f3N8mEveC8nUJLKFw | Issue #630 test_stateful slice — 実装計画 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | PLAN-Fd93oTzaMRA6jFk8sVw4Ne | Issue #631 real-command-receipt case 実装計画 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| PLAN-p7Xv3kNm5Qw8rTs4yHb6Jd | Issue #631 AC4 evidence-fields 完成 — 実装計画 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | PLAN-Wq03yXcMnB7pLr9tKv5gJd | Issue #631 headless-command-receipt case 実装計画 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | PLAN-034XEbS62sWmGaedjSv85f | Issue #631 Plugin-dock scenario skeleton 実装計画 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | PLAN-034Y3odXzCYwJRpyjtWZgK | Issue #631 real-editor-attach 実装計画 | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |

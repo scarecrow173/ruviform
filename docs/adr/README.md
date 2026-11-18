@@ -53,6 +53,7 @@ Directory: `docs/adr`
 | ADR-SAljZ24QzAaSgusRPiWYAy | Issue #630 clap-validator preset-discovery 検証を upstream commit build pin で実施 | accepted | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | ADR-7Qk2mXvLp9RwTd4YsN8bF | issue-630-test-spawn-fault-runner-argv | accepted | [issue-630-test-spawn-fault-runner-argv.md](./issue-630-test-spawn-fault-runner-argv.md) |
 | ADR-Km83rTzcPE9wLj6uVx7yHq | issue-631-command-receipt fixture mount 形態 | accepted | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| ADR-w8Mn4vXc2Qp6rTs9yHb5Js | issue-631-evidence-fields opt-in artifacts・semantic tree helper 配置 | accepted | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | ADR-Ns84uYadQF1xOk7tWx9jMe | issue-631-headless-command-receipt fixture・body 配置 | accepted | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
 | ADR-GUIvRTewPsVAJEv3wqlUBg | Issue #716 runtime 依存選定 — mlua Rust API（#692 AC4 再評価） | accepted | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
