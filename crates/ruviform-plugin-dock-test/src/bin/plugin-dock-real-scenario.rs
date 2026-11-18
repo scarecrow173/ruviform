@@ -8,11 +8,14 @@
 //! header line followed by one `case` line per [`ScenarioReport`].
 //! Output goes to `--out <path>` or stdout.
 //!
-//! `--pixel-artifacts <dir>` is opt-in: the `real-dcomp-pixel`,
-//! `real-dcomp-foreground`, and `real-dcomp-present` cases then write
-//! each captured frame as a PNG under `<dir>` (created on demand).
-//! Without it the cases record pixel statistics only — the
-//! canonical lane never writes artifacts.
+//! `--pixel-artifacts <dir>` is opt-in: the `real-capture`,
+//! `real-dcomp-pixel`, `real-dcomp-foreground`, and
+//! `real-dcomp-present` cases then write each captured frame as a
+//! PNG under `<dir>` (created on demand), recording
+//! `artifact: {path, sha256}` alongside the canonical
+//! `capture_sha256` pixel digest. Without it the cases record
+//! digests and statistics only — the canonical lane never writes
+//! artifacts.
 //!
 //! `--blocked-probe` is the headless fail-closed proof (Issue #631
 //! real-row slice): it generates the same fail-closed report

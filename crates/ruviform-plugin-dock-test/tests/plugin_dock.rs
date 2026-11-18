@@ -158,6 +158,32 @@ fn assert_command_receipt(report: &ruviform_ui_test::ScenarioReport) {
             .any(|r| r.status == ruviform_ui::behavior::ReceiptStatus::Rejected),
         "a rejected receipt must be recorded"
     );
+
+    // AC4 — `observed.semantic_tree` walks the whole mounted fader
+    // fixture spec: the panel, the tabs strip, both tab aliases,
+    // and both canonical fader keys. Each entry is a snapshot
+    // object or an honest `null` — never a fabricated tree.
+    let observed = report.observed.as_ref().expect("observed recorded");
+    let tree = observed["semantic_tree"]
+        .as_object()
+        .expect("semantic_tree object");
+    for key in [
+        "panel",
+        "mixer-tabs",
+        "Ch 1",
+        "fader-ch1",
+        "Ch 2",
+        "fader-ch2",
+    ] {
+        assert!(
+            tree.contains_key(key),
+            "semantic_tree missing `{key}`: {tree:?}"
+        );
+    }
+    assert!(
+        tree["fader-ch1"].is_object(),
+        "fader-ch1 must carry a snapshot object"
+    );
 }
 
 /// With the real cdylib resolvable, the honest-verdict contract
