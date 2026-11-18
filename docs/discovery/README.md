@@ -90,5 +90,6 @@ Directory: `docs/discovery`
 | DISC-034YZUNuibc7hwIC9PXWm9 | Issue #725 EnvironmentKind serde 語彙 gap — consumer 影響評価と移行方針（Phase A） | resolved | [issue-725-serde-vocab-phase-a.md](./issue-725-serde-vocab-phase-a.md) |
 | DISC-034Z7dvDpqTYOW3pCKWH8I | Issue #725 EnvironmentKind serde 語彙 gap 解消 Phase B — emit flip | resolved | [issue-725-serde-vocab-phase-b.md](./issue-725-serde-vocab-phase-b.md) |
 | DISC-034Z78u4glu94S3wActSDq | Issue #744 bounded non-RT JobExecutor — 実装 slice の探索・設計確定 | resolved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
+| DISC-034ZhjBMAgFhy2Ry7D4Z5S | Issue #759 plugin-clap host.rs f64 as u32 cast — clippy lint lane 破損の診断と境界契約 | resolved | [issue-759-clippy-cast.md](./issue-759-clippy-cast.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |

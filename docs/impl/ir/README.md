@@ -292,6 +292,7 @@ Directory: `docs/impl/ir`
 | IMPL-034Z0uHvTxRFpgNslvN5XM | Issue #727 bounded non-RT job executor placement decision | completed | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | IMPL-732clapLifecycleAudit07 | Issue #732 production CLAP adapter lifecycle 監査 — 実装記録 | completed | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | IMPL-034Z78UHtD5xUTmbZ2lpQh | Issue #744 JobExecutor 実装記録 | completed | [issue-744-job-executor.md](./issue-744-job-executor.md) |
+| IMPL-034ZhkUf1QEsjVLxXSiGbt | Issue #759 plugin-clap host.rs f64 as u32 cast — lint lane 修復 | completed | [issue-759-clippy-cast.md](./issue-759-clippy-cast.md) |
 | IMPL-034LPNEgk770ZFr8yU3823 | Issue #76 L1 core contracts + wire codec — Task 1 implementation | completed | [issue-76-l1-core-wire-task-1-implementation.md](./issue-76-l1-core-wire-task-1-implementation.md) |
 | IMPL-034LT7uOCDj9JkF6u9Ut0L | Issue #76 L1 proxy control plane — Task 3 implementation | completed | [issue-76-l1-proxy-control-plane-task-3-implementation.md](./issue-76-l1-proxy-control-plane-task-3-implementation.md) |
 | IMPL-034LVAYFtNda72goeeCUwD | Issue #76 L1 shm data plane + RT legs — Task 4 implementation | completed | [issue-76-l1-shm-data-plane-task-4-implementation.md](./issue-76-l1-shm-data-plane-task-4-implementation.md) |

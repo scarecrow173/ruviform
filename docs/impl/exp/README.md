@@ -115,6 +115,7 @@ Directory: `docs/impl/exp`
 | [issue-726-clap-validator-panic-exp.jsonl](./issue-726-clap-validator-panic-exp.jsonl) |
 | [issue-727-job-executor-exp.jsonl](./issue-727-job-executor-exp.jsonl) |
 | [issue-744-job-executor-exp.jsonl](./issue-744-job-executor-exp.jsonl) |
+| [issue-759-clippy-cast-exp.jsonl](./issue-759-clippy-cast-exp.jsonl) |
 | [linux-container-device-and-arch-verification.jsonl](./linux-container-device-and-arch-verification.jsonl) |
 | [plugin-dock-scenario-skeleton-probes.jsonl](./plugin-dock-scenario-skeleton-probes.jsonl) |
 | [plugin-gui-attach-e1-e2.jsonl](./plugin-gui-attach-e1-e2.jsonl) |

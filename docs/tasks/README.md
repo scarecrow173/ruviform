@@ -389,6 +389,7 @@ Directory: `docs/tasks`
 | TASK-726clapValidatorPanic05 | Issue #726 clap-validator param-fuzz panic — task | done | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | TASK-034Z0uGBWlESDKh8X21tPy | Issue #727 bounded 非 RT job executor — 責務判断決裁・API 設計・検証 | done | [issue-727-job-executor.md](./issue-727-job-executor.md) |
 | TASK-732clapLifecycleAudit05 | Issue #732 production CLAP adapter lifecycle 監査 — task | done | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| TASK-034ZhkreemsrkXWFBQhQEX | Issue #759 plugin-clap host.rs f64 as u32 cast — lint lane 修復 | done | [issue-759-clippy-cast.md](./issue-759-clippy-cast.md) |
 | TASK-034MrsLrqKnu9N3YfxnSGl | L0 Shared スロット + endpoint inner（SharedSlot/SendCore・3 段 lock・epoch attach・catch_unwind 収束） | done | [l0-shared-slot-and-endpoint-inner.md](./l0-shared-slot-and-endpoint-inner.md) |
 | TASK-034NlPHWwEG0sAKxw5XB88 | L1 bundle child final verification（Full Gate・AC 証拠・IR・closeout） | done | [l1-bundle-child-final-verification.md](./l1-bundle-child-final-verification.md) |
 | TASK-034NlQnJQdVWzhM6WxhAM2 | L1 bundle E2E + Failed 粒度検証（decision table・inert・doorbell・fan-out・dedicated 非回帰） | done | [l1-bundle-e2e-and-granularity-verification.md](./l1-bundle-e2e-and-granularity-verification.md) |
