@@ -205,7 +205,7 @@ fn host_block_transport(
     out_right: &mut [f32],
     events: EventList<'_>,
     transport: Option<TransportInfo>,
-) -> Result<ProcessResult, HostError> {
+) -> (Result<ProcessResult, HostError>, LegDeltas) {
     let in_left = [0.0_f32; FRAMES];
     let in_right = [0.0_f32; FRAMES];
     let input = [&in_left[..], &in_right[..]];
@@ -214,7 +214,67 @@ fn host_block_transport(
     let mut out_list = [&mut *out_left, &mut *out_right];
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
-    host.process(handle, &inputs, &mut outputs, events, transport)
+    let counters = |h: &PluginHost| {
+        h.audio_counters(handle)
+            .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+    };
+    let before = counters(host);
+    let result = host.process(handle, &inputs, &mut outputs, events, transport);
+    let after = counters(host);
+    (
+        result,
+        LegDeltas {
+            passthrough: after.0 - before.0,
+            dropped: after.1 - before.1,
+        },
+    )
+}
+
+/// Per-call L1 leg counter deltas observed around one `process` —
+/// the instrument oracle's provenance record for the delivered
+/// block. `passthrough_submits` increments when the leg substitutes
+/// hold-last/silence output instead of a matched child block;
+/// `dropped_submits` increments when this call's input block (audio
+/// plus queued events) never reached the child at all — later
+/// matched outputs then reflect a child state the test's event
+/// script did not produce.
+#[derive(Clone, Copy, Default)]
+struct LegDeltas {
+    /// `passthrough_submits` delta: `> 0` ⇒ substituted output.
+    passthrough: u64,
+    /// `dropped_submits` delta: `> 0` ⇒ this call's submit dropped.
+    dropped: u64,
+}
+
+/// `lookahead_blocks` of the instrument route — `OutOfProcessSpec::
+/// new` keeps the `SpawnSpec` default of 2, so a matched block
+/// delivered at call `c` is the child's rendering of source block
+/// `c - L1_LOOKAHEAD`.
+const L1_LOOKAHEAD: u64 = 2;
+
+/// Arrived blocks required after a landed note-off before a matched
+/// tail block is assertable as exact silence. The fixture's release
+/// is 2400 frames ≈ 4.7 blocks of [`FRAMES`]; once the note-off's own
+/// block has rendered, four more arrived blocks complete it and a
+/// fifth guarantees the whole block is silent — 6 keeps margin.
+const RELEASE_ARRIVED_BLOCKS: u64 = 6;
+
+/// Cap on note-off resends — each resend is one extra call carrying
+/// the event; if none lands within the window the release oracle
+/// reports an honest failure instead of looping forever.
+const NOTE_OFF_RESEND_CALLS: u32 = 8;
+
+/// Calls per transport phase in `transport_clicks` — 4 phases of
+/// [`TRANSPORT_PHASE_CALLS`] calls each.
+const TRANSPORT_PHASE_CALLS: u32 = 12;
+
+/// Blocks the child actually rendered strictly inside `(a, b]` —
+/// `drops[i]` is call `i`'s `dropped_submits` delta, so the span minus
+/// its drops is the arrived-block count.
+fn arrived_between(drops: &[u64], a: u64, b: u64) -> u64 {
+    let lo = usize::try_from(a + 1).expect("call index fits usize");
+    let hi = usize::try_from(b).expect("call index fits usize");
+    (b - a) - drops[lo..=hi].iter().sum::<u64>()
 }
 
 /// Neutral MIDI event constructor for the instrument oracle —
@@ -625,24 +685,30 @@ fn real_test_plugin_l1_instrument_note_lifecycle() {
     let list = EventList::new(&events, FRAMES_U32).unwrap();
     let mut reference: Option<Vec<f32>> = None;
     let mut delivered = 0_u32;
-    for _ in 0..12_u32 {
+    for call in 0..12_u32 {
         let mut out_left = vec![0.0_f32; FRAMES];
         let mut out_right = vec![0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
-            Ok(ProcessResult::CONTINUE)
-        );
-        // The pipeline writes defined silence on underrun — an
-        // all-zero block is indistinguishable from silence, but a
-        // sounding block always has `out[0] == -1`, so all-zero ⇒
-        // underrun here.
-        if out_left.iter().all(|&s| s == 0.0) {
+        let (result, deltas) =
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None);
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        // Substituted output replays an older `last_output` block —
+        // defined, but not this call's child rendering, so the
+        // content asserts and the delivered count apply to matched
+        // blocks only (`passthrough_submits` delta == 0).
+        if deltas.passthrough > 0 {
             continue;
         }
         delivered += 1;
         // Frame 0: phase 0 → triangle −1 → −1 × vel 1 × gain 1 × vol 1.
-        assert_eq!(out_left[0].to_bits(), (-1.0_f32).to_bits());
+        assert_eq!(
+            out_left[0].to_bits(),
+            (-1.0_f32).to_bits(),
+            "call {call}: matched block must retrigger at frame 0 \
+             (passthrough={} dropped={})",
+            deltas.passthrough,
+            deltas.dropped
+        );
         // Dual mono — every output channel identical.
         assert_eq!(out_left, out_right);
         match &reference {
@@ -650,7 +716,7 @@ fn real_test_plugin_l1_instrument_note_lifecycle() {
             Some(expected) => {
                 assert_eq!(
                     &out_left, expected,
-                    "delivered blocks must be deterministic"
+                    "call {call}: delivered blocks must be deterministic"
                 );
             }
         }
@@ -667,8 +733,19 @@ fn real_test_plugin_l1_instrument_note_lifecycle() {
 }
 
 /// `test_instrument` release oracle: note-ons for the first calls,
-/// then note-offs — the fixed 2400-frame release decays linearly and
-/// the tail of the run is exact silence on every delivered block.
+/// then the note-off — resent until one submit lands — then empty
+/// blocks. The fixed 2400-frame release decays linearly to exact
+/// silence. Substituted blocks (`passthrough_submits` delta > 0)
+/// replay an older `last_output` and are defined but not assertable;
+/// a matched block (`delta == 0`) is the child's rendering of source
+/// call `call - L1_LOOKAHEAD` — `next_block` consumes a seq per
+/// process call even when the submit drops, so seq space is call
+/// space. A dropped submit loses its events with it, so a lone
+/// note-off could silently never arrive and leave the voice
+/// sustaining: the note-off is therefore resent — law-abiding, every
+/// `NoteOff` re-arms the same release — until `dropped_submits`
+/// reports a landing, bounded by `NOTE_OFF_RESEND_CALLS`; if none
+/// lands the tail oracle fails honestly instead of looping.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
 fn real_test_plugin_l1_instrument_note_off_releases_to_silence() {
@@ -680,59 +757,106 @@ fn real_test_plugin_l1_instrument_note_off_releases_to_silence() {
     let off = [note_off(0, 69)];
     let off_list = EventList::new(&off, FRAMES_U32).unwrap();
     let empty = EventList::empty(FRAMES_U32);
-    // 8 sounding blocks, ONE note-off, then empty blocks: the fixture
-    // law restarts the 2400-frame release on every NoteOff, so a
-    // repeated note-off would hold the voice in release forever. The
-    // release completes ~5 blocks (4096 frames) after the note-off
-    // block; delivered blocks lag their input call by
-    // `lookahead_blocks`, so the sounding proof only counts calls
-    // whose every possible source call is on-phase (retriggers →
-    // `out[0] == -1`), and the silence tail only asserts once every
-    // in-flight source call is many blocks past the completed release.
+    // 8 sounding blocks, then the note-off resend window (calls 8
+    // through 8 + NOTE_OFF_RESEND_CALLS - 1), then empty blocks.
+    // `drops[call]` records that call's `dropped_submits` delta so the
+    // tail oracle can measure release progress in *arrived* blocks —
+    // dropped submits stretch the release over more call seqs.
     let mut sounding = 0_u32;
+    let mut tail_verified = 0_u32;
+    let mut drops = [0_u64; 44];
+    let mut off_pending = true;
+    let mut off_landed: Option<u64> = None;
     for call in 0..44_u32 {
-        let list = match call.cmp(&8) {
-            core::cmp::Ordering::Less => on_list,
-            core::cmp::Ordering::Equal => off_list,
-            core::cmp::Ordering::Greater => empty,
+        let list = if call < 8 {
+            on_list
+        } else if off_pending && call < 8 + NOTE_OFF_RESEND_CALLS {
+            off_list
+        } else {
+            empty
         };
         let mut out_left = vec![0.0_f32; FRAMES];
         let mut out_right = vec![0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
-            Ok(ProcessResult::CONTINUE)
-        );
-        if out_left.iter().all(|&s| s == 0.0) {
-            continue; // underrun or legitimately silent
+        let (result, deltas) =
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None);
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        drops[call as usize] = deltas.dropped;
+        if off_pending && (8..8 + NOTE_OFF_RESEND_CALLS).contains(&call) && deltas.dropped == 0 {
+            off_landed = Some(u64::from(call));
+            off_pending = false;
         }
-        // Calls 4..=8: for any lookahead in 1..=3 the source call is
-        // ≤7 — unambiguously on-phase, so a delivered block retriggered
-        // at frame 0.
-        if (4..=8).contains(&call) {
+        // Calls 4..=8: every deliverable block is a retrigger — a
+        // matched source is a note-on call, and a substituted replay
+        // can only echo an earlier on-phase `last_output` — so any
+        // non-zero block here must retrigger at frame 0.
+        if (4..=8).contains(&call) && !out_left.iter().all(|&s| s == 0.0) {
             assert_eq!(
                 out_left[0].to_bits(),
                 (-1.0_f32).to_bits(),
-                "call {call}: sounding block must retrigger at frame 0"
+                "call {call}: sounding block must retrigger at frame 0                  (passthrough={} dropped={})",
+                deltas.passthrough,
+                deltas.dropped
             );
             sounding += 1;
         }
-        // Calls 36..=43: every possible source call is ≥28 blocks past
-        // the first note-off — the release is complete, so a delivered
-        // (non-underrun) block must be exact silence.
+        // Substituted output replays `last_output` — defined, but a
+        // stale block crossing the release boundary, so no content
+        // assert applies below.
+        if deltas.passthrough > 0 {
+            continue;
+        }
+        // Calls 36..=43, matched only: source call is 34..=41 — many
+        // blocks past the note-off. The release is complete only in
+        // rendered space: the note-off must have landed and enough
+        // submits after it must have arrived for the 2400-frame
+        // release to finish, so the tail asserts matched blocks with
+        // `arrived_between >= RELEASE_ARRIVED_BLOCKS`.
         if (36..=43).contains(&call) {
+            let Some(landed) = off_landed else {
+                continue;
+            };
+            let Some(source) = u64::from(call).checked_sub(L1_LOOKAHEAD) else {
+                continue;
+            };
+            if source <= landed {
+                continue;
+            }
+            if arrived_between(&drops, landed, source) < RELEASE_ARRIVED_BLOCKS {
+                continue; // release still decaying in rendered space
+            }
             let bad = out_left
                 .iter()
                 .position(|&s| s != 0.0)
                 .unwrap_or(usize::MAX);
             assert!(
                 bad == usize::MAX && out_right.iter().all(|&s| s == 0.0),
-                "call {call}: release tail must be exact silence, first nonzero at {bad}: {:?}",
-                &out_left[bad.min(FRAMES - 1)..(bad + 4).min(FRAMES)]
+                "call {call}: release tail must be exact silence,                  first nonzero at {bad}: {:?}                  (dropped={} off_landed={landed} arrived={})",
+                &out_left[bad.min(FRAMES - 1)..(bad + 4).min(FRAMES)],
+                deltas.dropped,
+                arrived_between(&drops, landed, source)
             );
+            tail_verified += 1;
         }
     }
     assert!(sounding >= 2, "the note never sounded through the ABI");
+    assert!(
+        tail_verified >= 2,
+        "release tail never verified — note-off landed at {off_landed:?}"
+    );
+    // A Failed child emits defined silence that classifies as
+    // "matched" (`passthrough_submits` never moves on the early
+    // return), so the release-tail oracle needs the same explicit
+    // liveness proof the attach-path twins carry. The settle sleep
+    // covers the driver's ~200µs exit-poll convergence.
+    thread::sleep(Duration::from_millis(5));
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing),
+        "the plugin instance must still be Processing — a Failed \
+         child emits defined silence indistinguishable from \
+         matched output"
+    );
 
     host.execute(HostCommand::StopProcessing { handle })
         .unwrap();
@@ -758,57 +882,72 @@ fn real_test_plugin_l1_instrument_cc_and_offset_gating() {
     let full_list = EventList::new(&full, FRAMES_U32).unwrap();
 
     // Phase 1 (calls 0..8): note-on at offset 100 + CC7 volume 0 →
-    // silence. Phase 2 (calls 8..16): same note-on, CC7 max → offset
-    // gating visible. Delivered blocks lag by `lookahead_blocks`, so
-    // assertions use latency-margin windows and the transition calls
-    // are left unasserted.
+    // silence. Phase 2 (calls 8..22): same note-on, CC7 max → offset
+    // gating visible. Every call resends the full event set, so a
+    // dropped submit only delays convergence — matched blocks
+    // (`passthrough_submits` delta == 0) render source call
+    // `call - L1_LOOKAHEAD` exactly, so every matched block's phase
+    // is known: muted sources must be silent, full sources must
+    // retrigger at offset 100. Substituted blocks replay
+    // `last_output` and are skipped for content asserts. The run is
+    // extended past the old 16-call window so the `verified` gate
+    // keeps a comfortable matched-sample count under substitution.
     let mut verified = 0_u32;
     let mut reference: Option<Vec<f32>> = None;
-    for call in 0..16_u32 {
+    for call in 0..22_u32 {
         let list = if call < 8 { muted_list } else { full_list };
         let mut out_left = vec![0.0_f32; FRAMES];
         let mut out_right = vec![0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None),
-            Ok(ProcessResult::CONTINUE)
-        );
-        // Muted window: every possible source call is muted-phase —
-        // assert unconditionally (underrun zeros and the voice's
-        // `-0.0` both satisfy `== 0.0`; any real signal fails).
-        if (3..=7).contains(&call) {
+        let (result, deltas) =
+            host_block_transport(&mut host, handle, &mut out_left, &mut out_right, list, None);
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        // Substituted output replays `last_output` — defined, but not
+        // this call's child rendering, so no content assert applies.
+        if deltas.passthrough > 0 {
+            continue;
+        }
+        let Some(source) = u64::from(call).checked_sub(L1_LOOKAHEAD) else {
+            continue;
+        };
+        if source < 8 {
+            // Muted-phase source: every landed block up to it carried
+            // CC7 = 0, so the child state at render time is muted —
+            // the block must be exact silence (`-0.0` satisfies
+            // `== 0.0`; any real signal fails).
             assert!(
                 out_left.iter().all(|&s| s == 0.0) && out_right.iter().all(|&s| s == 0.0),
-                "call {call}: CC7=0 must silence"
+                "call {call} source {source}: CC7=0 must silence \
+                 (dropped={})",
+                deltas.dropped
             );
             continue;
         }
-        if out_left.iter().all(|&s| s == 0.0) {
-            continue; // underrun or legitimately silent
+        // Full-phase source: the block itself carries CC7 max + the
+        // offset-100 note-on, so the child state at render time is
+        // unambiguous regardless of earlier drops. The voice is
+        // stateful: retriggered at offset 100 every block, it
+        // sustains into the next block's frames 0..100 — so the
+        // oracle pins the retrigger frame itself (`-1` extreme)
+        // and bit-identical post-offset segments across matched
+        // blocks (frames 100..511 restart from phase 0 each block).
+        assert_eq!(
+            out_left[100].to_bits(),
+            (-1.0_f32).to_bits(),
+            "call {call} source {source}: offset frame sounds \
+             (dropped={})",
+            deltas.dropped
+        );
+        assert_eq!(out_left, out_right);
+        match &reference {
+            None => reference = Some(out_left[100..].to_vec()),
+            Some(expected) => assert_eq!(
+                &out_left[100..],
+                expected.as_slice(),
+                "call {call}: post-offset segment must be deterministic"
+            ),
         }
-        if (12..=15).contains(&call) {
-            // Every possible source call is full-phase. The voice is
-            // stateful: retriggered at offset 100 every block, it
-            // sustains into the next block's frames 0..100 — so the
-            // oracle pins the retrigger frame itself (`-1` extreme)
-            // and bit-identical post-offset segments across delivered
-            // blocks (frames 100..511 restart from phase 0 each block).
-            assert_eq!(
-                out_left[100].to_bits(),
-                (-1.0_f32).to_bits(),
-                "call {call}: offset frame sounds"
-            );
-            assert_eq!(out_left, out_right);
-            match &reference {
-                None => reference = Some(out_left[100..].to_vec()),
-                Some(expected) => assert_eq!(
-                    &out_left[100..],
-                    expected.as_slice(),
-                    "call {call}: post-offset segment must be deterministic"
-                ),
-            }
-            verified += 1;
-        }
+        verified += 1;
     }
     assert!(verified >= 2, "the full-volume phase never delivered");
 
@@ -856,67 +995,79 @@ fn real_test_plugin_l1_instrument_transport_clicks() {
         sig_den: 4,
     });
 
-    // Phases of 8 calls each: stopped → click@100 → seek click@500 →
-    // looped click@250. Delivered blocks lag their source call by
-    // `lookahead_blocks`, so each phase asserts only inside a window
-    // where every possible source call (lookahead 1..=3) is inside
-    // that phase; transition calls stay unasserted. An all-zero
-    // block is skipped: it is either defined silence or a
-    // pass-through replay whose `last_output` was itself silent —
-    // indistinguishable, and asserting on it would flake.
+    // Phases of 12 calls each: stopped → click@100 → seek click@500 →
+    // looped click@250. A matched block (`passthrough_submits` delta
+    // == 0) is the child's rendering of source call
+    // `call - L1_LOOKAHEAD` exactly, so every matched block's source
+    // phase is known — each phase asserts on the source's own click
+    // (or silence for the stopped phase) with no transition windows.
+    // Substituted blocks replay `last_output` — under load an
+    // arbitrarily old block, including a previous phase's click — so
+    // they carry no content assert. The transport snapshot rides its
+    // submit, so a matched block's source phase is exact; every call
+    // resends the snapshot, so dropped submits only delay
+    // convergence. The run is extended past the old 32-call window so
+    // the `verified` gate keeps a comfortable matched-sample count
+    // under substitution.
+    let phase_transports = [stopped, click_at_100, click_at_500, looped];
+    let click_frames = [100_usize, 500, 250]; // source phases 1..=3
     let mut verified = [0_u32; 4];
-    for call in 0..32_u32 {
-        let (transport, phase) = match call {
-            c if c < 8 => (Some(stopped), 0_usize),
-            c if c < 16 => (Some(click_at_100), 1),
-            c if c < 24 => (Some(click_at_500), 2),
-            _ => (Some(looped), 3),
-        };
+    for call in 0..4 * TRANSPORT_PHASE_CALLS {
+        let transport = Some(phase_transports[(call / TRANSPORT_PHASE_CALLS) as usize]);
         let mut out_left = vec![0.0_f32; FRAMES];
         let mut out_right = vec![0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block_transport(
-                &mut host,
-                handle,
-                &mut out_left,
-                &mut out_right,
-                empty,
-                transport
-            ),
-            Ok(ProcessResult::CONTINUE)
+        let (result, deltas) = host_block_transport(
+            &mut host,
+            handle,
+            &mut out_left,
+            &mut out_right,
+            empty,
+            transport,
         );
-        if out_left.iter().all(|&s| s == 0.0) {
-            continue; // underrun — or the stopped phase's defined silence
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        // Substituted output replays `last_output` — defined, but not
+        // this call's child rendering, so no content assert applies.
+        if deltas.passthrough > 0 {
+            continue;
         }
-        let (window, frame) = match phase {
-            0 => (3..=8, None),
-            1 => (11..=16, Some(100_usize)),
-            2 => (19..=24, Some(500_usize)),
-            _ => (27..=31, Some(250_usize)),
+        let Some(source) = u64::from(call).checked_sub(L1_LOOKAHEAD) else {
+            continue;
         };
-        if !window.contains(&call) {
-            continue; // transition zone — source call ambiguous
+        let source_phase = usize::try_from(source / u64::from(TRANSPORT_PHASE_CALLS))
+            .expect("phase index fits usize");
+        let all_zero = out_left.iter().all(|&s| s == 0.0) && out_right.iter().all(|&s| s == 0.0);
+        if source_phase == 0 {
+            // Stopped-transport source: no voice was ever triggered,
+            // so the matched block must be exact silence.
+            assert!(
+                all_zero,
+                "call {call} source {source}: stopped transport must be silent \
+                 (dropped={})",
+                deltas.dropped
+            );
+            continue;
         }
-        match frame {
-            None => panic!("call {call}: stopped transport must be silent"),
-            Some(frame) => {
-                assert_eq!(
-                    out_left[frame].to_bits(),
-                    0.5_f32.to_bits(),
-                    "call {call}: click impulse at frame {frame}"
-                );
-                assert!(
-                    out_left
-                        .iter()
-                        .enumerate()
-                        .all(|(i, &s)| i == frame || s == 0.0),
-                    "call {call}: click block must be silent outside frame {frame}"
-                );
-                assert_eq!(out_left, out_right);
-                verified[phase] += 1;
-            }
-        }
+        let frame = click_frames[source_phase - 1];
+        // A matched playing-transport block always carries its click —
+        // an all-zero block here is a child-side defect, not an
+        // underrun, and fails honestly.
+        assert_eq!(
+            out_left[frame].to_bits(),
+            0.5_f32.to_bits(),
+            "call {call} source {source}: click impulse at frame {frame} \
+             (dropped={})",
+            deltas.dropped
+        );
+        assert!(
+            out_left
+                .iter()
+                .enumerate()
+                .all(|(i, &s)| i == frame || s == 0.0),
+            "call {call} source {source}: click block must be silent outside frame {frame}"
+        );
+        assert_eq!(out_left, out_right);
+        verified[source_phase] += 1;
     }
     assert!(
         verified[1..].iter().all(|&n| n >= 2),
@@ -943,7 +1094,10 @@ fn real_test_plugin_l1_instrument_transport_clicks() {
 // ---------------------------------------------------------------------------
 
 mod attach_integration {
-    use super::{FRAMES, FRAMES_U32, assert_fixture_present, config, instrument_host};
+    use super::{
+        FRAMES, FRAMES_U32, L1_LOOKAHEAD, LegDeltas, NOTE_OFF_RESEND_CALLS, RELEASE_ARRIVED_BLOCKS,
+        arrived_between, assert_fixture_present, config, instrument_host,
+    };
     use ruviform_audio::typed::{
         Compiler, CompilerConfig, DEFAULT_ALIGNMENT, GraphRuntime, RtRuntime,
     };
@@ -966,6 +1120,7 @@ mod attach_integration {
         MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey,
         ScheduleBudget, TimeBase, TimestampProvenance,
     };
+    use ruviform_plugin_core::LifecycleState;
     use ruviform_plugin_core::{BusDescriptor, BusDirection, BusRole};
     use ruviform_plugin_host::{EndpointBounds, PluginHandle, PluginHost};
     use ruviform_rt::RtContext;
@@ -1061,7 +1216,8 @@ mod attach_integration {
     /// Source → plugin → Sink typed graph, plus the non-RT halves the
     /// driver pumps per block.
     struct AttachRig {
-        _host: PluginHost,
+        host: PluginHost,
+        handle: PluginHandle,
         _runtime: GraphRuntime,
         rt: RtRuntime,
         control: PluginNodeControl,
@@ -1133,7 +1289,8 @@ mod attach_integration {
             .expect("compiles");
         runtime.publish(compiled).expect("publish");
         AttachRig {
-            _host: host,
+            host,
+            handle,
             _runtime: runtime,
             rt,
             control: attached.control,
@@ -1247,15 +1404,45 @@ mod attach_integration {
     /// exceed the lookahead span, and a result observed after its
     /// `expected` seq is *discarded* as stale — losing call 0's
     /// output entirely rather than merely delaying it.
-    fn pump_block(rig: &mut AttachRig, midi: &mut MidiDriver, block_index: u64) -> Vec<Vec<f32>> {
+    fn pump_block(
+        rig: &mut AttachRig,
+        midi: &mut MidiDriver,
+        block_index: u64,
+    ) -> (Vec<Vec<f32>>, LegDeltas) {
         let upto = (block_index + 1) * BLOCK as u64 - 1;
         midi.feed.pump_into_port(&midi.port, upto);
         rig.input_tx.pump(&mut *midi.input).expect("input pump");
         feed_source(&mut rig.rt, rig.src_out);
         let pace_ms = if block_index < 4 { 25 } else { 5 };
         std::thread::sleep(std::time::Duration::from_millis(pace_ms));
+        let counters = |h: &PluginHost| {
+            h.audio_counters(rig.handle)
+                .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+        };
+        let before = counters(&rig.host);
         rig.rt.process(BLOCK, &RtContext::mint()).expect("process");
-        drain_sink(&mut rig.rt, rig.sink_in)
+        let after = counters(&rig.host);
+        (
+            drain_sink(&mut rig.rt, rig.sink_in),
+            LegDeltas {
+                passthrough: after.0 - before.0,
+                dropped: after.1 - before.1,
+            },
+        )
+    }
+
+    /// A failed child converges the endpoint to defined silence that
+    /// the `passthrough_submits` oracle reads as "matched" — the
+    /// lifecycle state is the attach leg's only honest liveness
+    /// proof, asserted after every run.
+    fn assert_liveness(rig: &AttachRig) {
+        assert_eq!(
+            rig.host.lifecycle_state(rig.handle),
+            Some(LifecycleState::Processing),
+            "the plugin instance must still be Processing — a Failed \
+             child emits defined silence indistinguishable from \
+             matched output"
+        );
     }
 
     fn is_silent(block: &[Vec<f32>]) -> bool {
@@ -1280,8 +1467,11 @@ mod attach_integration {
         let mut midi = MidiDriver::open(vec![cue(100, 0, note_on(69))]);
 
         let mut drained: Vec<Vec<Vec<f32>>> = Vec::new();
+        let mut deltas = Vec::new();
         for i in 0..10_u64 {
-            drained.push(pump_block(&mut rig, &mut midi, i));
+            let (block, d) = pump_block(&mut rig, &mut midi, i);
+            drained.push(block);
+            deltas.push(d);
         }
 
         // The stamped attack is the oracle: the first sounding
@@ -1314,11 +1504,14 @@ mod attach_integration {
             "voice frame 0 = triangle -1 at full velocity/gain/volume"
         );
         assert_eq!(left, right, "dual mono");
-        // The voice keeps sounding — sustained delivery, not a
-        // one-off block.
+        // The voice keeps sounding — sustained *matched* delivery,
+        // not a one-off block or a `last_output` replay chain.
+        let sustained = (sounding..drained.len())
+            .filter(|&i| !is_silent(&drained[i]) && deltas[i].passthrough == 0)
+            .count();
         assert!(
-            drained[sounding..].iter().filter(|b| !is_silent(b)).count() >= 2,
-            "sustained delivery expected after the first sounding block"
+            sustained >= 2,
+            "sustained matched delivery expected after the first sounding block"
         );
 
         // The input leg really carried the event: one stamp mapped,
@@ -1327,6 +1520,7 @@ mod attach_integration {
         let input = rig.control.snapshot().input;
         assert_eq!(input.mapped, 1, "the note-on stamp must map");
         assert_eq!(input.delivered, 1, "the note-on must reach a block");
+        assert_liveness(&rig);
         assert_eq!(input.late, 0);
         assert_eq!(input.rejected, 0);
         assert_eq!(input.anchor_rejected, 0);
@@ -1334,10 +1528,19 @@ mod attach_integration {
         assert_eq!(input.dropped_backend, 0);
     }
 
-    /// `NoteOff` traverses the same attach leg: one note-off (the
-    /// fixture law re-arms the 2400-frame release per `NoteOff`, so
-    /// exactly one is sent) decays to exact silence well inside the
-    /// run — the tail blocks are all-zero on both channels.
+    /// `NoteOff` traverses the same attach leg. A dropped L1 submit
+    /// loses the block's staged events with it, so a single note-off
+    /// cue could silently never reach the child and leave the voice
+    /// sustaining — the fixture law re-arms the same 2400-frame
+    /// release on every `NoteOff`, so the cue is resent once per
+    /// block over `NOTE_OFF_RESEND_CALLS` blocks (bounded: the last
+    /// *landed* resend starts the final release, and the tail oracle
+    /// fails honestly if none lands). Substituted blocks
+    /// (`passthrough_submits` delta > 0) replay `last_output` and are
+    /// skipped; matched blocks render source call
+    /// `block_index - L1_LOOKAHEAD` and the tail asserts only once
+    /// enough submits after the landed note-off have arrived for the
+    /// release to complete in rendered space.
     #[test]
     #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
     fn attach_midi_note_off_releases_to_silence() {
@@ -1347,14 +1550,29 @@ mod attach_integration {
             .set_clock_anchor(Some(anchor()))
             .expect("anchor");
         // note-on at frame 0 (voice frame 0 → `-1.0` at sample 0),
-        // ONE note-off at tick 1500 — release completes ~frame 3900,
-        // ~5 blocks later; 18 blocks leaves a wide delivered-silence
-        // margin past the 2-block L1 lookahead.
-        let mut midi = MidiDriver::open(vec![cue(0, 0, note_on(69)), cue(1500, 1, note_off(69))]);
+        // then the note-off resent at tick 1500 + 512·k — one cue per
+        // block for blocks 2..=9, each at the same in-block offset.
+        let mut cues = vec![cue(0, 0, note_on(69))];
+        for k in 0..NOTE_OFF_RESEND_CALLS {
+            cues.push(cue(
+                1500 + 512 * i64::from(k),
+                u64::from(k) + 1,
+                note_off(69),
+            ));
+        }
+        let mut midi = MidiDriver::open(cues);
 
+        // 26 blocks: the resend window ends at block 9, the last
+        // landed resend's release completes ~6 arrived blocks later,
+        // and the tail keeps a wide matched-silence margin past the
+        // 2-block L1 lookahead even with dropped submits stretching
+        // the release in call space.
         let mut drained: Vec<Vec<Vec<f32>>> = Vec::new();
-        for i in 0..18_u64 {
-            drained.push(pump_block(&mut rig, &mut midi, i));
+        let mut deltas = Vec::new();
+        for i in 0..26_u64 {
+            let (block, d) = pump_block(&mut rig, &mut midi, i);
+            drained.push(block);
+            deltas.push(d);
         }
 
         let sounding = drained
@@ -1369,19 +1587,59 @@ mod attach_integration {
         );
         assert_eq!(first[0], first[1], "dual mono");
 
-        for (i, block) in drained[drained.len() - 5..].iter().enumerate() {
+        // The last landed note-off resend — cue k rides block 2 + k,
+        // and its events arrived iff that block's submit did not
+        // drop. No landing in the whole window is an honest failure:
+        // the release oracle below then verifies nothing.
+        let drops: Vec<u64> = deltas.iter().map(|d| d.dropped).collect();
+        let pts: Vec<u64> = deltas.iter().map(|d| d.passthrough).collect();
+        let off_landed = (2..=9_u64)
+            .rev()
+            .find(|&j| drops[usize::try_from(j).expect("block index fits usize")] == 0)
+            .expect("at least one note-off resend must land");
+
+        // Every matched block whose source call is past the landed
+        // note-off AND far enough in arrived-block space that the
+        // 2400-frame release has completed must be exact silence.
+        let mut tail_verified = 0_u32;
+        for (idx, block) in drained.iter().enumerate() {
+            let i = u64::try_from(idx).expect("block index fits u64");
+            if pts[idx] > 0 {
+                continue; // substituted `last_output` replay
+            }
+            let Some(source) = i.checked_sub(L1_LOOKAHEAD) else {
+                continue;
+            };
+            if source <= off_landed {
+                continue; // renders at/before the note-off — may sound
+            }
+            if arrived_between(&drops, off_landed, source) < RELEASE_ARRIVED_BLOCKS {
+                continue; // release still decaying in rendered space
+            }
             assert!(
                 is_silent(block),
-                "tail block {} must be exact silence after the release completed",
-                drained.len() - 5 + i
+                "block {i} (source {source}) must be exact silence                  after the release completed — first samples: {:?}",
+                &block[0][..block[0].len().min(8)]
             );
+            tail_verified += 1;
         }
+        assert!(
+            tail_verified >= 2,
+            "release tail never verified — last landed note-off block {off_landed}"
+        );
 
-        // Both events traversed the leg cleanly — the silence tail is
-        // a released voice, not an input path that never delivered.
+        // Every scripted event traversed the leg cleanly — the
+        // silence tail is a released voice, not an input path that
+        // never delivered. `delivered` counts node-side block-list
+        // emission; the L1 drop oracle above covers the last hop.
         let input = rig.control.snapshot().input;
-        assert_eq!(input.mapped, 2, "note-on + note-off must map");
-        assert_eq!(input.delivered, 2, "both events must reach blocks");
+        assert_eq!(input.mapped, 1 + u64::from(NOTE_OFF_RESEND_CALLS));
+        assert_eq!(
+            input.delivered,
+            1 + u64::from(NOTE_OFF_RESEND_CALLS),
+            "note-on + every note-off resend must reach blocks"
+        );
+        assert_liveness(&rig);
         assert_eq!(input.late, 0);
         assert_eq!(input.rejected, 0);
         assert_eq!(input.dropped_capacity, 0);
@@ -1403,7 +1661,7 @@ mod attach_integration {
         let mut midi = MidiDriver::open(vec![cue(0, 0, cc(7, 0)), cue(100, 1, note_on(69))]);
 
         for i in 0..10_u64 {
-            let block = pump_block(&mut rig, &mut midi, i);
+            let (block, _deltas) = pump_block(&mut rig, &mut midi, i);
             assert!(
                 is_silent(&block),
                 "block {i}: CC7=0 must silence the voice — got {:?}",
@@ -1417,6 +1675,7 @@ mod attach_integration {
         let input = rig.control.snapshot().input;
         assert_eq!(input.mapped, 2, "CC + note-on must map");
         assert_eq!(input.delivered, 2, "both events must reach blocks");
+        assert_liveness(&rig);
         assert_eq!(input.late, 0);
         assert_eq!(input.rejected, 0);
         assert_eq!(input.dropped_capacity, 0);
