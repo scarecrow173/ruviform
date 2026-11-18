@@ -273,6 +273,7 @@ Directory: `docs/impl/ir`
 | IMPL-034XCLHSacLbmd5EOUazlw | VST3 test_gain plugin fixture (issue-630 first slice) | completed | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | IMPL-034Y4g5Cx7ToOHTcgE2U9x | Issue #630 test_stateful slice — 実装記録 | completed | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | IMPL-Pe62sVfdQG9xKm3wNz8cRl | Add real-command-receipt case to the real dock lane | completed | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
+| IMPL-x7Qw2eRt5Yb8nKj3Hs6Pf | Issue #631 AC4 evidence-fields 完成（window hash・capture/artifact digest・semantic tree 全量） | completed | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | IMPL-Qt95vZbeRG2yPl8uXy0kNf | Add command-receipt case to the headless dock lane | completed | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | IMPL-034XEbTj64ladkAkB3T5ww | Plugin-dock scenario skeleton (issue-631 first slice) | completed | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | IMPL-034Z08gK0V0GGSoPCC5Vvl | Flip real-window close/dpi catalog rows to real verdicts | completed | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
