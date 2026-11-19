@@ -20,7 +20,7 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
 - typed plain パラメータチャネル: `PlainParamValue`, `PlainParamInfo`,
   `PlainParamInfoOwned` — 規格中立の typed 制御（normalized wire 経路ではない。
   `PlainParamInfoOwned` は `String`/`Vec` ストレージを持つ所有形 — video L1
-  wire 経路（`GetParamInfo`/`ParamInfo`）がそのまま運ぶ返り値型）
+  wire 経路（`GetParamInfo`/`ParamInfo`）がそのまま受け渡す返り値型）
 - 動画プラグイン契約: `VideoProcessConfig`, `VideoPluginInstance` —
   **全操作 NONRT**（`render` 含む、audio `process` の RT 契約とは別経路）。
   adapter が登録する object-safe erased 面は `video_plugin` モジュール —
@@ -28,7 +28,7 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
   （audio 側の `Plugin` ↔ `ErasedPlugin`/`PluginFactory`/`erase` と同型の対応）
 - ホスト境界語彙（`boundary` モジュール）: `PluginHandle`,
   `GuiHandle`, `ParentLease`（generation 付き不透明 parent-window
-  lease — `Plugin::open_gui`/`HostCommand`/wire が運ぶ plugin 側
+  lease — `Plugin::open_gui`/`HostCommand`/wire が受け渡す plugin 側
   語彙。OS handle は adapter 内部に閉じ込める）, `PluginEditorSessionId`,
   `ParentSlotLease`（Issue #389 の session 面 opaque parent 語彙 —
   redeem seam が `ParentLease` へ変換する session 側対応物）、`HostError`

@@ -77,7 +77,7 @@ runner bin `ruviform-plugin-vst3-l1-runner`（`[[bin]] required-features =
 （`target/<profile>/`）で解決し、スキャン済み factory を
 `ruviform_plugin_export::run(factories)` へ渡す。wire v2 の `run` argv 規約は
 `<runner>` のみ（v1 の `--ruviform-shm-key`/`--ruviform-plugin-id` bootstrap
-flag は廃止 — plugin id/shm key は `CreateInstance` payload が運び、
+flag は廃止 — plugin id/shm key は `CreateInstance` payload が持ち、
 `--ruviform-*` を含む任意引数は usage reject → exit 2）。`spec.args` は空を
 維持し、plugin path を argv で受け渡す機構はない（load 失敗は `eprintln!` +
 exit 1 pre-Hello → 親 spawn `Err(HostError::Ipc)`）。factory 選択は
