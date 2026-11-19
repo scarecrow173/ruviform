@@ -77,7 +77,7 @@ fresh binding は `last_observed = None` から始まり、**remount 前に
 発行された古い revision の projection が一度だけ受理され得る**
 （次の新しい projection で自己修復するが、その一度の誤適用は
 controlled display に stale 値を書き込み得る）。`detach` →
-`attach` では binding が存続するため `last_observed` guard が効く
+`attach` では binding が存続するため `last_observed` guard が機能する
 が、投影が detached 中に drop される点は契約として固定する必要が
 ある。
 
@@ -159,7 +159,7 @@ correlation 強化 — **受理済み revision の高水位マーク
 floor は受理時のみ更新する。棄却された projection は floor を
 動かさない（古い値で floor を巻き戻さない）。binding の
 `last_observed` と floor は binding 存続中は同じ値を取るため、
-floor が実効的に効くのは binding 再生成後（`last_observed =
+floor が実効的に機能するのは binding 再生成後（`last_observed =
 None`）の最初の projection に対してである。
 
 ### epoch 境界ごとの保証

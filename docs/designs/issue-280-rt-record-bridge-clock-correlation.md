@@ -75,7 +75,7 @@ RT 安全であることを実測で示した。
 
 1. `rt_bridge` が既存 `ruviform_rt::channel`（SPSC 有界リング）を再利用する
    輸送契約と、その RT/非 RT 境界。
-2. `record` モジュールが運ぶ Clock Context・Correlation link/book・
+2. `record` モジュールが保持する Clock Context・Correlation link/book・
    固定長 `EventRecord` の語彙。
 3. OBS-02 の「`ruviform-observability` は他 ruviform クレートに依存しない」
    という AC-6 を、本 Issue 限りで「**下向きの葉 primitive への一方向依存のみ
@@ -346,7 +346,7 @@ pub struct EventRecord {
 - `EventRecord` は `Copy + Send + 'static` で `bridge<EventRecord>` にそのまま
   使える。raw PCM/signal のような可変長・生バッファは `EventRecord` に
   入らない（`Copy` + `value: u64` の固定形で構造的に排除）。`confidentiality`
-  は「record が運ぶ情報の機密分類」であり、PCM/signal を無条件でログ化
+  は「record が保持する情報の機密分類」であり、PCM/signal を無条件でログ化
   しないという issue の方針は「`EventRecord` には buffer を持たせない」
   構造側で担保する。
 

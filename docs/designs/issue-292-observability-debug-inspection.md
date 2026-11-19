@@ -841,10 +841,10 @@ pub struct DebugReport {
   `withheld_confidential` に計数（diagnostics report と同じ
   非流出規則）。`max_items`/`max_bytes`/`deadline` で
   `ExportTruncation` に構造化記録。
-- `DebugReport`/`InspectionSnapshot`/`SessionRecord` が運ぶ型は
+- `DebugReport`/`InspectionSnapshot`/`SessionRecord` が保持する型は
   全て closed vocabulary（`EventRecord` metadata・`MetricValue`・
   `DiagnosticFinding` 要約・`&'static str`）であり、Secrets/
-  Media/Path/Credential/Prompt/stderr を運ぶフィールドは存在
+  Media/Path/Credential/Prompt/stderr を保持するフィールドは存在
   しない — 型レベルで非含有を保証する。
 
 ### engine.rs — DebugInspector / DebugConfig / DebugHealth
@@ -1014,7 +1014,7 @@ pub struct DebugHealth {
 - `#[non_exhaustive]` は全公開 enum に付与。`InvariantCheck::
   code`/`SessionRequest::label`/section `key`/`domain` 系は
   `&'static str` で cardinality を静的に制限。`summary`/`String`
-  系は非 RT 構築のみで、path/bytes/token を運ぶ専用フィールドは
+  系は非 RT 構築のみで、path/bytes/token を保持する専用フィールドは
   存在しない。
 
 ## Risks and Trade-offs

@@ -123,7 +123,7 @@ static ALLOC: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
   そのままコンパイルできる。
 - dev/test profile では従来どおり `AllocDisabler` が global
   allocator として arm され、`rt_` テストの alloc 検知が維持
-  される。プロファイルで「検査が効く/効かない」が切り替わるのは
+  される。プロファイルで検査の有効/無効が切り替わるのは
   `assert_no_alloc` crate の設計どおりであり、22 サイトの先例と
   同一の意味論。
 

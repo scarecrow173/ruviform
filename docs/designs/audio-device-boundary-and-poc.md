@@ -423,7 +423,7 @@ impl core::error::Error for DeviceError {}
 #### コールバック形状と `RtContext` の扱い（重要な決定）
 
 - コールバックは **`AudioBufferViewMut<'a, f32>` を値渡し**で受け取る。ベースラインの例（`out: &mut AudioBuffer`）からの意図的変更: コールバックに必要な capability は「事前確保済み領域への書込み＋形状の問い合わせ」であり、所有権を持つ `AudioBuffer` ではなく借用 view がこの概念に正確に対応する。view は RT-suitable な借用のみを持ち、確保系コンストラクタが型上到達できない
-- **`RtContext` パラメータは置かない**。根拠: (a) ベースラインの発行規則では `RtContext` を発行するのは RT 区間を開始した駆動者＝`ruviform-audio`（adapter のコールバック内で発行）であり、ポート経由で adapter が `RtContext` を渡す形は発行主体モデルと矛盾する、(b) mint API は `ruviform-rt` 未実装で本 Issue のスコープ外、(c) `publish = false` のワークスペース内部 API のため、将来 mint が実装されてもシグネチャ追加または `OutputCallbackInfo` フィールド追加で対応可能であり「配線を阻害しない」要件は情報コンテナの用意で満たせる。engine が mint に必要な情報（デバイスタイムスタンプ）は `OutputCallbackInfo` が既に運ぶ
+- **`RtContext` パラメータは置かない**。根拠: (a) ベースラインの発行規則では `RtContext` を発行するのは RT 区間を開始した駆動者＝`ruviform-audio`（adapter のコールバック内で発行）であり、ポート経由で adapter が `RtContext` を渡す形は発行主体モデルと矛盾する、(b) mint API は `ruviform-rt` 未実装で本 Issue のスコープ外、(c) `publish = false` のワークスペース内部 API のため、将来 mint が実装されてもシグネチャ追加または `OutputCallbackInfo` フィールド追加で対応可能であり「配線を阻害しない」要件は情報コンテナの用意で満たせる。engine が mint に必要な情報（デバイスタイムスタンプ）は `OutputCallbackInfo` が既に保持する
 - `OutputCallbackInfo` を裸のタイムスタンプではなく struct にしたのはこの拡張点を明示するため（フィールド追加は内部変更として吸収可能）
 
 #### エラー型の選択（`media_core::Error` 再利用 vs `DeviceError`）

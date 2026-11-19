@@ -81,7 +81,7 @@ bounds を狭めないとき `None` とする。純粋関数
    push したことを `GetWindowRgnBox(container)` で検証 +
    screenshot。window を戻して clip 解除を確認。
 3. **clip_direct** — `surface.set_clip(slot, Some(部分 rect))`
-   を port 直叩きし、region box と pixel で clip が効くことを
+   を port 直叩きし、region box と pixel で clip が適用されていることを
    検証後 `set_clip(None)` で解除。
 4. **focus_keys** — `request_focus` → container focus 確認 →
    `keybd_event` でキー送出 → `WH_GETMESSAGE` hook の

@@ -302,7 +302,7 @@ ResourceExhausted{detail}, Backend{detail} }` — poc 語彙を port。
 `cancel_token()`・`close()` を持つ。`CancelToken` は公開
 `CancelToken::new()`/`Default` で生成可能な `Arc<AtomicBool>` 共有
 フラグ（backend が session 内に保持し `cancel()`/`cancel_token()` で
-共有 — 別スレッド evaluate 中の協調的 cancel を可能にする poc 設計を
+共有 — 別スレッド evaluate 中に協調的 cancel できる poc 設計を
 維持。`from_flag` は公開しない）。
 
 ### D11. resolve アルゴリズム（C1 fail-closed を製品へ厳密化）

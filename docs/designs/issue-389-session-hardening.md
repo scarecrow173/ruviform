@@ -157,7 +157,7 @@ pub struct SessionDeadlinePolicy {
   - `Creating`/`Recovering` → `complete_attach(request, Err(Timeout))`
     → `Failed{Timeout}` + `Failed` event。
   - `Detaching` → `complete_detach(request, Err(Timeout))` → 同上。
-  - `Closing` → `complete_close` は error を運ばないため
+  - `Closing` → `complete_close` は error を持たないため
     `mark_failed(Timeout)` 直接 → `Failed{Timeout}` + `Failed` event
     （`editor_live` は維持 — adapter が実際に close したか不明なため）。
   - いずれも後続の `complete_*` は state 不一致で `StaleRequest`

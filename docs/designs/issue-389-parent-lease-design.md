@@ -65,7 +65,7 @@ metadata:
 `ParentLease` は **認証ではなく opaque vocabulary** である。
 stale/revoked/forged lease の拒否は引き続き redeem 時の ledger
 検証（`SurfaceSlotRegistry::validate_lease` → `SlotError`）が
-権威であり、`generation` はその結果を型として運ぶための世代情報。
+権威であり、`generation` はその結果を型として保持するための世代情報。
 同一プロセス trust boundary 内の語彙であり、trust boundary を
 越える場合は別途認証が必要（`SlotLease` の既存契約と同じ）。
 
@@ -107,7 +107,7 @@ composition 側（`ruviform-poc-native-dock`）の redeemer は:
 
 これにより「検証済み lease のみが `ParentLease` になる」不変条件が
 redeem seam に集約される。`plugin-host` 自身は generation の
-意味を解釈しない（opaque に運ぶだけ）。
+意味を解釈しない（opaque に受け渡すだけ）。
 
 ### D4: wire `OpenGui` の符号化変更
 
