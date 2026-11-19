@@ -232,7 +232,7 @@ linux/freebsd/macos 限定で Windows 非対象（platform.rs:16-18）。
   新しい publishable 版がない（F6）ため patch base は 0.2.2 のみ。
 - `topmost=false` は GPUI visual tree 全体を child HWND 背面へ移す。
   plugin HWND が GPUI UI の上に描かれる方向だが、全 child window に
-  グローバルに効く点と、NOREDIRECTIONBITMAP window での non-topmost
+  グローバルに作用する点と、NOREDIRECTIONBITMAP window での non-topmost
   表示可否は fixture 実測が必要（断定禁止 — 先行 discovery OQ と同じ
   未検証状態を維持）。
 
