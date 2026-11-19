@@ -96,7 +96,7 @@ Issue スコープ（原文）:
 
 - フレーム形式: `[u32 LE payload_len][u8 kind][payload]`（L13-16）。kind バイトは L831-836 に固定列挙 — `Hello=0`/`Command=1`/`Reply=2`/`BlockIn=3`/`BlockDone=4`/`Shutdown=5`。
 - `Message`（L259-301）: `Command { seq: u64, cmd }`（L272-277）・`Reply { seq, result }`（L280-285）・`BlockIn { seq }`（L287-290）・`BlockDone { seq, result }`（L292-297）・`Shutdown`（L298-300）。**いずれの variant もインスタンス識別子を持たない** — `Command` のドキュメントが明示する（L303-308: "no variant carries a `PluginHandle` — a runner child is a singleton instance"）。
-- `Command`（L316-348）: `Scan`/`Initialize`/`Activate{config}`/`StartProcessing`/`StopProcessing`/`Deactivate`/`SaveState`/`RestoreState{bytes}`/`OpenGui{parent}`/`CloseGui` の 10 動詞 — codec tag は L892-935 の `push_u8(0..9)` で密に連番。**handle を入れる位置の候補**: (i) `Message::Command`/`BlockIn`/`BlockDone` のペイロード先頭に `instance` フィールド（envelope 化）、(ii) 各 `Command` variant への per-verb フィールド、（iii) kind バイト側での子/インスタンススコープ分割。`Scan` は子スコープ（インスタンス非依存）なので scope 表現の設計が必要。
+- `Command`（L316-348）: `Scan`/`Initialize`/`Activate{config}`/`StartProcessing`/`StopProcessing`/`Deactivate`/`SaveState`/`RestoreState{bytes}`/`OpenGui{parent}`/`CloseGui` の 10 動詞 — codec tag は L892-935 の `push_u8(0..9)` で密に連番。**handle を入れる位置の候補**: (i) `Message::Command`/`BlockIn`/`BlockDone` のペイロード先頭に `instance` フィールド（envelope 化）、(ii) 各 `Command` variant への per-verb フィールド、(iii) kind バイト側での子/インスタンススコープ分割。`Scan` は子スコープ（インスタンス非依存）なので scope 表現の設計が必要。
 - `Reply` の相関は `seq` のみ（L280-285）— handle なし。`BlockIn`/`BlockDone` の doorbell も `seq` のみ（L286-297）。
 - decode は untrusted 入力の検証境界 — 宣言長・reserved フィールド・count 上限を `WIRE_MAX_*` で拒否（L51-61・L780-827 の trailing-bytes 検査を含む）。`decode_message` は任意の `u16` version を受理し、等値判定は proxy 側（L29-37）。
 - `WIRE_VERSION: u16 = 1`（L88）。`WIRE_MAX_*` 定数は L90-114（`WIRE_MAX_FRAMES=8192`・`WIRE_MAX_CHANNELS=16`・`WIRE_MAX_EVENTS=1024`・`WIRE_MAX_PAYLOAD=16MiB`・`WIRE_MAX_STRING_BYTES=4096`・`WIRE_MAX_ELEMENTS=1024`・`WIRE_MAX_STATE_BYTES=16MiB`）— **全てメッセージ/フレーム単位の上限であり、子あたり・インスタンスあたりの上限語彙は存在しない**。
@@ -237,7 +237,7 @@ runner 側の segment 発見経路（(a) 採用時の派生論点）:
 | (b) 既存動詞の再利用（例: `Initialize{instance,…}` が「無ければ作る」） | 動詞数を増やさない | 語彙写像が曖昧化・`Instantiate`/`Destroy` の意味が lifecycle 動詞に潜む — design の明示性を損なう | no |
 | (c) argv 駆動（起動時に N 固定でキーと plugin_id を列挙） | wire 変更最小 | 動的インスタンス増減を排除 — `Instantiate`/`Destroy` が動的な以上この形は要求を満たさない | no |
 
-`Shutdown` の意味確定: 「子が空（全 instance destroy 済み）になった時、子を自発 exit させるか、host が明示 `Shutdown` を送るか」— 現行は host 送信（`destroy` L1296-）。**host が「最後の instance を destroy した後に `Shutdown`」を送る形が現行语义の自然な延長**で推奨方向（子の自律終了は新語彙を要し不要と見積もる）。
+`Shutdown` の意味確定: 「子が空（全 instance destroy 済み）になった時、子を自発 exit させるか、host が明示 `Shutdown` を送るか」— 現行は host 送信（`destroy` L1296-）。**host が「最後の instance を destroy した後に `Shutdown`」を送る形が現行の意味の自然な延長**で推奨方向（子の自律終了は新語彙を要し不要と見積もる）。
 
 ### 軸 8: `WIRE_VERSION` 取り扱い
 
@@ -305,14 +305,14 @@ runner 側の segment 発見経路（(a) 採用時の派生論点）:
 - `instance` envelope の sentinel/scope 表現（`Scan`/`CreateInstance`/`Shutdown` 等の子スコープ動詞を `u32::MAX` or variant 側で区別するか）
 - `Reply`/`BlockDone` に instance echo を載せるか（(a) seq 子ワイドなら Reply 不要・ただし flagged `Reply{seq,Err}` = BlockIn 拒否経路の demux 要確認 — BlockIn reject reply に instance が要るか、BlockDone 系エラーを別表現にするか）
 - `CreateInstance` payload の確定形（`plugin_id` を String で運ぶか・depth を payload 化 or spec 共有前提か・`shm_key` の String 表現幅上限 — `WIRE_MAX_STRING_BYTES` 既存上限で足りるか）
-- 子の空時挙動（最後の `DestroyInstance` で host が `Shutdown` を送る vs 子が自発 exit — 推奨は host 送信の現行语义延長）
+- 子の空時挙動（最後の `DestroyInstance` で host が `Shutdown` を送る vs 子が自発 exit — 推奨は host 送信の現行の意味延長）
 - `WIRE_MAX_INSTANCES`（仮）の値・handle reuse 規則（単調のみ vs 再利用）
 - pool key の同一性規則（program+args 一致必須か）・pool の寿命（最後の instance destroy で子を畳むか keep-alive するか）
 - `spawn` 時 handshake の再設計 — `Scan` は子 spawn 時 1 回か、`CreateInstance` 毎の plugin_id 正当性を別途照合するか（`Scan` は child-scope のままで、`CreateInstance{plugin_id}` が `Err(UnknownPluginId)` で reject される形が自然と見込む）
 - dedicated 経路と bundle 経路で `l1/` 内部をどう共通化するか（`Shared` 分解後の両経路の共通部品化 — 無理に共通化せず dedicated を現行のまま残し bundle を別型にする案も）
 - wire v2 でも dedicated route は wire v2 を話すか（host/runner 同一リビジョン配布なら v2 一択 — v1 互換は #119 により不要）
 - GUI（`OpenGui`）: `GuiHandle` 空間は現状子単位 — bundle で instance 紐付けが要るか（runner registry が instance→gui を記録する形で十分か）
-- `kill_child`（`#[doc(hidden)]` 検証 API）の bundle 版形 — handle 指定で所属子を kill（現行语义そのまま・子に紐づく全 instance が死ぬ）
+- `kill_child`（`#[doc(hidden)]` 検証 API）の bundle 版形 — handle 指定で所属子を kill（現行の意味そのまま・子に紐づく全 instance が死ぬ）
 
 ## Promotion Candidates
 

@@ -51,7 +51,7 @@ relations:
 - RT スレッドへの OS 優先度付与（MMCSS/time-constraint/SCHED_FIFO 系）をどの機構で提供するか（ベースライン L486「スレッド優先度付与の具体機構（audio_thread_priority 型）」の解消）
 - `RtContext` capability の発行経路と `Processor` 契約の型形（trait 分離方法）をどう定義するか
 
-> **位置づけ**: 本書は推論経路と一次情報を記録するものであり、最終決定を含めない。「傾向・推奨」節の各項目はすべて仮説であり、決定は ADR（[rt-foundation-primitives-implementation.md](../adr/rt-foundation-primitives-implementation.md)）、要求は spec（[implement-rt-foundation.md](../specs/implement-rt-foundation.md)）に昇華される。
+> **位置づけ**: 本書は推論経路と一次情報を記録するものであり、最終決定を含めない。「傾向・推奨」節の各項目はすべて仮説であり、決定は ADR（[rt-foundation-primitives-implementation.md](../adr/rt-foundation-primitives-implementation.md)）、要求は spec（[implement-rt-foundation.md](../specs/implement-rt-foundation.md)）に委ねる。
 
 ## Key Issues and Assumptions
 
@@ -157,12 +157,12 @@ relations:
 - **promotion 失敗の semantics**: 優先度付与が拒否/降格された場合に、呼び出し側へ返す情報の粒度（エラー分類・フォールバック方針・再試行可否）は API 設計で固定すべきか、呼び出し側ポリシーに委ねるべきかが未確定。→ 方針確定: 失敗は `Result` + 分類エラー型で表出し best-effort（致命ではない）。`default-features = false` 構成では非特権の標準デスクトップ Linux で失敗しうる挙動をドキュメント化（ADR で決定）。
 - **`basedrop` 非採用の再評価条件**: retire channel を SPSC 上に自前構成する方針で、RT 側 `try_push` が満杯で失敗した場合の退役オブジェクト扱い（RT 側 drop は禁止のため、満杯時は非 RT 側での事前確保済み予備スロット等の設計）が API 設計で必要。複雑化した場合は basedrop 系への差替を再評価する。→ 解決済み: drop-on-full は RT 側 dealloc になるため拒否し、チャネル容量を構築時に固定（伸長なし）の上で事前確保済み予備容量 + `core::mem::forget` leak-on-full フォールバックを採用（ADR で決定）。複雑化時の basedrop 系再評価の条件のみ残る。
 - **満杯時方針の API 表現**: 「ドロップ/統合」方針を API 単位で定義する際の型形（`PushError` への分類 enum、コールバック、上書き式リングの使い分け基準）は spec/plan で具体化する。→ 解決済み: 汎用のリングレベル方針 enum は採用せず、`try_push` が満杯時に値を返す `TryPushError<T>` 型で呼び出し側ポリシー（drop/coalesce/keep）に委譲し、latest-wins は consumer 側 drain-latest ヘルパーで提供（ADR で決定）。
-- **`RtContext` の中身**: 現行はプレースホルダー（`_private`）。オフライン発行で「RT 制約を適用しない」区別を型で持つか（フラグ・ variant）を API 設計で確定する。→ 解決済み: 単一の opaque 型とし実行時モードフラグ/variant は持たない（「同一 API 内部で if rt 分岐しない」原則を維持）。オフライン発行コンテキストでの制約緩和は発行駆動者に紐づく契約・ドキュメントレベルの記述（ADR で決定）。
+- **`RtContext` の中身**: 現行はプレースホルダー（`_private`）。オフライン発行で「RT 制約を適用しない」区別を型で持つか（フラグ・variant）を API 設計で確定する。→ 解決済み: 単一の opaque 型とし実行時モードフラグ/variant は持たない（「同一 API 内部で if rt 分岐しない」原則を維持）。オフライン発行コンテキストでの制約緩和は発行駆動者に紐づく契約・ドキュメントレベルの記述（ADR で決定）。
 
 ## Promotion Candidates
 
-- [x] spec-doc needed: `ruviform-rt` 公開 API の確定要件を [implement-rt-foundation.md](../specs/implement-rt-foundation.md)（本書 `relations.derived-by`）として昇華済み
-- [x] adr-doc needed: 実装方式・依存採否（SPSC= rtrb・退避=SPSC 上自前・スナップショット=arc-swap・優先度=audio_thread_priority・mint=doc-hidden・Processor=二 trait）の決定を [rt-foundation-primitives-implementation.md](../adr/rt-foundation-primitives-implementation.md)（本書 `relations.derived-by`）として昇華済み
+- [x] spec-doc needed: `ruviform-rt` 公開 API の確定要件を [implement-rt-foundation.md](../specs/implement-rt-foundation.md)（本書 `relations.derived-by`）として移行済み
+- [x] adr-doc needed: 実装方式・依存採否（SPSC= rtrb・退避=SPSC 上自前・スナップショット=arc-swap・優先度=audio_thread_priority・mint=doc-hidden・Processor=二 trait）の決定を [rt-foundation-primitives-implementation.md](../adr/rt-foundation-primitives-implementation.md)（本書 `relations.derived-by`）として移行済み
 - [ ] 今後の昇格候補: 実装 plan・test-spec は spec 承認後に作成（`implemented-by`/`verified-by` で接続予定）
 
 ## Sources and Relations
