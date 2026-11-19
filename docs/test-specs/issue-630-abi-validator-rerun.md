@@ -44,7 +44,7 @@ relations:
   あれば Failed。
 - Example: JSON report が無い（validator 異常終了）場合は
   expectation を適用せず generic verdict（Unsupported/Failed）
-  に落ちる。
+  に分類される。
 
 ### Rule: library-level exclusion は理由つきで leg に記録されなければならない
 

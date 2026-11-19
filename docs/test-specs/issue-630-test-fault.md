@@ -69,7 +69,7 @@ relations:
   exactly once (exit status あり)、以降 command `Err(Failed)`、
   process `Ok(CONTINUE)`+silence、`Destroy` ok。
 - **voluntary_exit_reports_code**: `exit.code == Some(42)` —
-  param encoding が exit code を end-to-end で運ぶ。
+  param encoding が exit code を end-to-end で伝搬する。
 - **exit_zero_is_failure**: `exit(0)` も `Failed` + `Some(0)`。
 - **hang_converges_on_timeout**: `command_timeout=500ms`、
   audio leg `Ok(CONTINUE)` 継続、`SaveState` → `Err(Ipc)`、

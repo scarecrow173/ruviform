@@ -59,7 +59,7 @@ relations:
   `vanish` 中の device は列挙から除外、default は明示 index → 先頭
   capable → `Ok(None)` の順で解決される。
 
-### Rule: enumerate fault は全メソッドに効く
+### Rule: enumerate fault は全メソッドに適用される
 
 - Given `set_enumerate_error(Some(DeviceError::Backend("permission_denied")))`
 - When いずれの列挙メソッドを呼ぶ
