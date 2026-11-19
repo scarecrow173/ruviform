@@ -123,6 +123,6 @@ Linux 配布設計の CI 照合確定版 — 既存 Ubuntu CI lane の対象 rev
 
 ## Risk
 
-- この spec の保証が落ちると、「CI が通った」ことが「Linux で配布できる」ことに誤読され、未検証の distro・形式・実機 capability を前提にした製品判断が生まれる。
+- この spec の保証が失われると、「CI が通った」ことが「Linux で配布できる」ことに誤読され、未検証の distro・形式・実機 capability を前提にした製品判断が生まれる。
 - `P(L0)` と実機 `Pass` の混同は、Native Plugin Dock・IME・DPI 等の実機依存機能の Fail をリリース後まで検出できないリスクを生む。
 - SHA を欠く CI 引用は、後続のコード変更で無効化された証拠を有効なまま参照し続ける事故を招く。

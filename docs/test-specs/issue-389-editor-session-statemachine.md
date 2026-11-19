@@ -96,9 +96,9 @@ double close・timeout・OS unsupported・host crash が状態機械を
   orphan として可視であり続ける）、`ops.close` の `Ok` 配送
   または termination で偽。adapter editor 非生存の session
   は `complete_close` で収束し adapter を呼ばない。
-- async `complete_close` は error を運ばない — `ops.close` 拒否は
+- async `complete_close` は error を持たない — `ops.close` 拒否は
   配送せず request を Closing のまま残し、deadline timeout で
-  `Failed{Timeout}` へ落ちる。収束は後続の `close` 再試行
+  `Failed{Timeout}` に収束する。収束は後続の `close` 再試行
   （sync/async 経路）が担う — 現行 contract の定義済み挙動。
 - session id が registry に存在しない配送は `stale_drops`、
   request 不一致の `complete_*` は `StaleRequest` を返し

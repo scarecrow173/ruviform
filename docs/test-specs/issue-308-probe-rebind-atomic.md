@@ -60,7 +60,7 @@ Generation 切替時の Probe 再 Binding — 全件整合・部分失敗契約�
 - 高速連続 publish（gen1→2→3）と `on_publish` を連続実行しても、telemetry/chunk の `meta.generation` が当時の active plan generation と一致しない record は 0 件。slot の中身が別 plan の PCM を誤って観測しない。
 - `unbound`/`stale_commands` counter が stale 系 command の drop を正直に計数する。
 
-### Rule: unresolved point は明示 — 静かに消えない
+### Rule: unresolved point は明示 — 静黙に消えない
 
 - publish で point が解決不能になった probe は `RebindReceipt.unbound` に列挙され、commit 時に `StatusKind::RebindDropped` が発行される。他 probe の binding は影響を受けない。
 

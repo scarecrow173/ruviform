@@ -50,7 +50,7 @@ console GUI slice 到着後も catalog 層の契約として残す。
 
 - **Example**: `case`/`scenario` が `CaseId`/`ScenarioId` になり、
   `required` が `BTreeSet` として verbatim コピーされ、
-  `spec_extras` の `environment`/`timeout_ms` が spec field に載る。
+  `spec_extras` の `environment`/`timeout_ms` が spec field に記録される。
 - **Example**: `spec_extras` が `none()` の entry では
   `environment`/`timeout_ms` が unset のまま。
 
@@ -86,7 +86,7 @@ console GUI slice 到着後も catalog 層の契約として残す。
 ### Rule: catalog 化で verdict が変わらない
 
 - **Example**: artifact 未解決時に `missing_artifact_fails_closed_as_not_run`
-  が NotRun を返し、pass へ化けない。
+  が NotRun を返し、pass に変換されない。
 - **Example**: `test-ui-plugin-dock` lane の JSONL verdict が
   catalog 化前と同一（editor-attach=unsupported、dock-pixels=not_run
   等）。
@@ -119,7 +119,7 @@ console GUI slice 到着後も catalog 層の契約として残す。
 
 ## Risk
 
-- catalog 表と実行経路が分離すると「表にあるが走らない/走るが表にない」
+- catalog 表と実行経路が分離すると「表にあるが実行されない/実行されるが表にない」
   drift が起き得る → cells↔report 対応テストと `run_all` の `run_matrix`
   単一経路化で抑止。drift が混入すれば verdict 偽装か lane 破壊として
   検出される。

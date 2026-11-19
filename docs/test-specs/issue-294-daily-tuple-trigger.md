@@ -104,6 +104,6 @@ Daily scheduler tuple 判定 — candidate tuple 解決・consumer-verify run �
 
 - tuple 判定が「run conclusion success = verified」と誤実装されると、片 consumer 未検証や証拠欠落の tuple を verified と誤記し daily trigger が止まる — Issue #294 の中核契約（fail-closed）を破壊する。
 - in-flight 抑制や unverifiable 計上を省略すると重複 dispatch・retry 暴走・偽 skip が起きる。
-- dispatch payload の input 名・値が consumer-verify.yml の契約とずれると expected-SHA guard が fail-closed で落ちるか、誤 tuple を検証する。
-- 証拠回復が artifact 命名・schema の暗黙依存を持つと、consumer-verify 側の正当な変更で daily が静かに unverifiable 化し続ける — 契約 test で検出可能にする。
+- dispatch payload の input 名・値が consumer-verify.yml の契約とずれると expected-SHA guard が fail-closed で失敗するか、誤 tuple を検証する。
+- 証拠回復が artifact 命名・schema の暗黙依存を持つと、consumer-verify 側の正当な変更で daily が静黙に unverifiable 化し続ける — 契約 test で検出可能にする。
 - daily-ci.yml の job 追加が既存 `decide` job や trigger/権限を退行させると ci.yml 側の daily 検証が止まる — 契約 test で固定。

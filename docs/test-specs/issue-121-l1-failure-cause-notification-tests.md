@@ -74,7 +74,7 @@ pin `FailureCause` 語彙・分類境界・first-observed 収束・`InstanceFail
 
 ## Feature
 
-`FailureCause`（`Copy`・`#[non_exhaustive]`・7 variant）が `HostNotification::InstanceFailed` に `cause` field として載り、pre-mint 失敗は `Err(HostError::SpawnFailed{cause, diagnostics_id})` で返る。`HostError`/`HostNotification`/`ChildExit`/`FailureCause` は wire codec 対象外のまま（`WIRE_VERSION`・tag 不変）。
+`FailureCause`（`Copy`・`#[non_exhaustive]`・7 variant）が `HostNotification::InstanceFailed` に `cause` field として加わり、pre-mint 失敗は `Err(HostError::SpawnFailed{cause, diagnostics_id})` で返る。`HostError`/`HostNotification`/`ChildExit`/`FailureCause` は wire codec 対象外のまま（`WIRE_VERSION`・tag 不変）。
 
 ## Rules
 
@@ -106,13 +106,13 @@ pin `FailureCause` 語彙・分類境界・first-observed 収束・`InstanceFail
 ## Non-goals
 
 - `HostError::Ipc` への payload 追加・rich（非 `Copy`）失敗 payload
-- 全 consumer の `cause` 利用分岐 — 通知は運ぶだけで消費は caller 責務
+- 全 consumer の `cause` 利用分岐 — 通知は届けるだけで消費は caller 責務
 - wire 上での失敗原因交換（`HostNotification` は wire を通らない）
 - supervisor の cause 分岐・`InstanceLimit` 等の defined rejection の record 登録
 
 ## Risk
 
-- `Handshake`/`Protocol` を「実装位置」で分けると CreateInstance 待ち中の decode 不能 frame が実装依存で分類が揺れる — 意味ベース表の pin が必要
+- `Handshake`/`Protocol` を「実装位置」で分けると CreateInstance 待ち中の decode 不能 frame の分類が実装依存で変わる — 意味ベース表の pin が必要
 - timeout を kill 後に記録すると EOF が先に確定し `Transport` に誤分類される
 - `encode_host_error` が新 variant で catch-all を通らない形に編集されると wire tag 追加 = `WIRE_VERSION` 違反になる
 - `lint-l1-real-plugin` を検証に含め忘れると `#![cfg]` ゲートの完全 pattern 破壊が CI まで検出されない

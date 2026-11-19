@@ -88,5 +88,5 @@ ContractModel late-created query の view epoch 採用
 
 ## Risk
 
-- この保証が落ちると、将来 replay op が mid-scenario query 生成を追加した時点で oracle が旧契約（epoch 未採用）のまま残り、実装（修復済み SDK）との trace 乖離による false failure、あるいは oracle 緩和による false pass を招く。
+- この保証が失われると、将来 replay op が mid-scenario query 生成を追加した時点で oracle が旧契約（epoch 未採用）のまま残り、実装（修復済み SDK）との trace 乖離による false failure、あるいは oracle 緩和による false pass を招く。
 - query には subscription が存在しないため、binding テストの「subscription generation」に相当する観測は発行 rec・diagnostics・outcomes で代替する。これは SDK 側でも query の epoch 観測が request/diagnostics 経由であることと一致する。

@@ -57,7 +57,7 @@ CI Baseline 計測: `gh api` による 3 repo の Run/Job/Step timing 収集、l
 - **R4（統計の正直さ）**: n≧10 の集合のみ p50/p95 を報告。n<10 は観測値一覧+n+範囲をそのまま報告する。
 - **R5（fail-closed）**: 測定不能項目（log 未取得の cache 判定・needs 解決不能の critical path・権限外の contexts）は `unknown`/`NotRun`/`Unsupported` と理由付きで記録し、Pass/ゼロとみなさない。
 - **R6（必須検証 Baseline）**: required contexts と workflow job 集合が API/YAML から再導出された形で記録され、Before/After 差分監査に使える。消えた context・not-run 化 lane を差分として検出できる。
-- **R7（分類の閉じ性）**: lane 分類に落ちない step/job は `other` として report で名列挙される（分類漏れを沈黙させない）。
+- **R7（分類の閉じ性）**: lane 分類に該当しない step/job は `other` として report で名列挙される（分類漏れを隠さない）。
 - **R8（他 repo 不変）**: audio-lens/synvelis への write API 呼出・本 repo の既存 workflow/検証ファイルの変更がない。
 
 ## Examples

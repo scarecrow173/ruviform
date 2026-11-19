@@ -76,7 +76,7 @@ relations:
   する（`test-audio-virtual-endpoint`・`test-midi-virtual-
   endpoint` と同型）。
 - **R3 feature gate なし**: `ruviform-audio-test` の device
-  crate 参照は dev-dep で test target のみに載るため
+  crate 参照は dev-dep で test target のみに含まれるため
   `--features` 不要 — `run` に feature フラグを含めない。
 - **R4 対象 leg の限定**: 本 lane が新たに canonical 化す
   るのは `#[ignore]` leg 2 件（`audio_virtual_endpoint_

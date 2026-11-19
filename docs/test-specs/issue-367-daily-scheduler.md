@@ -105,4 +105,4 @@ daily scheduler の decision/dispatch/確認/報告契約 — `attemptsOn` 厳�
 
 ## Risk
 
-- 本 spec が外れると、(a) 検証済みでない main を「済み」と誤判定して回帰を見逃す、(b) 同一 SHA へ dispatch を連発して runner と履歴を汚染する、(c) race で誤 SHA を検証済み記録する、のいずれかが静かに起きる。
+- 本 spec が外れると、(a) 検証済みでない main を「済み」と誤判定して回帰を見逃す、(b) 同一 SHA へ dispatch を連発して runner と履歴を汚染する、(c) race で誤 SHA を検証済み記録する、のいずれかが静黙に起きる。

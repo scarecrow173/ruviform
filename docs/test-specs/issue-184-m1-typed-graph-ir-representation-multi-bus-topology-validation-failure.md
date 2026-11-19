@@ -61,7 +61,7 @@ Typed multi-bus Graph IR の表現・構築・検証・revision/mapping 公開�
 - ex_001: 全属性の組合せで Port を宣言し `PortSpec` の属性が保持される。
 - ex_002: Source(Main out)→Processor(Main in, Sidechain in, Main out, Send out)→Sink(Main in, Aux in) + Sidechain Source→Processor Sidechain、合流 Sink への fan-in 2 本で validate 成功。
 - ex_003: Input→Input 接続、Audio→TimedEvent 接続、SR 不一致接続、layout 相違+map 無し接続、範囲外 index map の各拒否。
-- ex_004: 不存在 node/port/owner 不整合の接続、zero-delay A→B→A、delayed edge 含む cycle、fan-in 超過、Always+min 未達の各拒否。
+- ex_004: 存在しない node/port/owner への不整合な接続、zero-delay A→B→A、delayed edge 含む cycle、fan-in 超過、Always+min 未達の各拒否。
 - ex_005: `prepare` 成功後 `mapping().node_index(id)` で runtime index を照会、`requested_revision()==published_revision()`。失敗 prepare 後は requested>published。
 - ex_006: 失敗 spec の prepare で旧 published 維持。Main-only chain を構築し node/port/connection 数・端点・RuntimeNodeIndex 順が fixture と一致。
 

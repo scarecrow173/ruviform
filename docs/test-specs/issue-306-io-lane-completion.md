@@ -109,7 +109,7 @@ IO 合成層（`ruviform-io-e2e`）の実 FS 大容量境界と性能 baseline
   （test は skip 相当で終了し、Pass/Fail を主張しない）。
 - **G01 CreateNew conflict**: incumbent 配置済み dest へ 4GiB
   staged を publish → `DestinationExists`/`NotPublished` →
-  `RecoveryHandle::cleanup` で temp 除去・incumbent 無傷。
+  `RecoveryHandle::cleanup` で temp 除去・incumbent は変更されない。
 - **G01 途中失敗**: `DiskFull` wrapper が capacity=S/3 で
   `StorageFull` → `write_all` 途中失敗 → `abort` で temp/dest
   非残存。

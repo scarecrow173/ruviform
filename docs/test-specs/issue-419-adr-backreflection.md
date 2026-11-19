@@ -134,4 +134,4 @@ Issue #419 の「Coordinator 決裁済み verdict を後継 ADR へ逆反映す�
 
 ## Risk
 
-逆反映記述の不変条件が破られると、Issue #419 の正式 status 決裁が「L1 のみ評価済み」の範囲を超えて L2/L3 を保証したと誤認される。特に CONDITIONAL を「採用/accepted」と読み替える誤り、`NotRun`/`Fail`/`Unsupported` を `Pass` に塗り替える誤り、`#532` Blocker の解消済み化、宣言 Capability を実測 Pass と混同する誤りは、製品 GUI 機能や実 Plugin 表示の不存在を隠蔽する。R-RECORD/R-VOCAB/R-SCOPE/R-HONESTY の保証が落ちると、#262 Verdict 規則と Coordinator 決裁の記録としての ADR の信頼性が損なわれる。
+逆反映記述の不変条件が破られると、Issue #419 の正式 status 決裁が「L1 のみ評価済み」の範囲を超えて L2/L3 を保証したと誤認される。特に CONDITIONAL を「採用/accepted」と読み替える誤り、`NotRun`/`Fail`/`Unsupported` を `Pass` に塗り替える誤り、`#532` Blocker の解消済み化、宣言 Capability を実測 Pass と混同する誤りは、製品 GUI 機能や実 Plugin 表示が存在しないことを隠蔽する。R-RECORD/R-VOCAB/R-SCOPE/R-HONESTY の保証が失われると、#262 Verdict 規則と Coordinator 決裁の記録としての ADR の信頼性が損なわれる。

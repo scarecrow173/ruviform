@@ -87,7 +87,7 @@ verified-end・`NotExhausted`・source I/O 失敗正規化・連結単位
   通らない。
 - R5（失敗後の底流再利用）: encoder が terminal `Failed` に
   latch した後、encoder を drop すれば底流 writer は呼出側で
-  無傷に再利用できる。部分出力 byte は呼出側所有のまま残り、
+  そのまま再利用できる。部分出力 byte は呼出側所有のまま残り、
   publish-or-discard は呼出側の責務である。
 - R6（連続 encoder の連結）: 同一 writer 上で `finish()` 済み
   encoder の後に新しい encoder を構築すると、有効な連結

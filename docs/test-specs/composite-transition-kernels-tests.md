@@ -109,7 +109,7 @@ transparent-black 充填の完結変換）。対象フォーマットは `Rgba8`
   `InvalidValue`。`CompositeOver`/`Crossfade` は寸法一致必須
   （`InvalidValue("dimensions")`）— `AffineTransform` は寸法一致を
   要求しない（変換が寸法を変える）。未知 `PixelFormat` variant は
-  `_` arm で `InvalidValue` へ graceful に落とす
+  `_` arm で `InvalidValue` を返す
 - 共有 backing 拒否: 全 3 カーネルで `plane_mut` が `None` を返す
   共有 `dst`（clone 保持中の `Arc` backing）は `InvalidValue("dst
   plane")` で書込み前に拒否

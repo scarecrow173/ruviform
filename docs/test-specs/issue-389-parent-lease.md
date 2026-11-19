@@ -27,7 +27,7 @@ metadata:
 
 ## Feature: ParentLease wire/境界契約
 
-### Rule PL-01: `ParentLease` は generation+payload を保持し opaque に運ばれる
+### Rule PL-01: `ParentLease` は generation+payload を保持し opaque に受け渡される
 
 - `ParentLease::new(generation, payload)` で生成し、
   `generation()`/`payload()` が同値を返す。
@@ -56,7 +56,7 @@ metadata:
 - redeemer が `Err` を返すと `open` は `EditorOpError` で失敗し
   `HostCommand::OpenGui` は発行されない。
 - redeemer が `ParentLease` を返すと `HostCommand::OpenGui{parent}`
-  にそのまま載る（型レベルで保証、runtime 追加検査なし）。
+  にそのまま入る（型レベルで保証、runtime 追加検査なし）。
 
 #### Example PL-03-a
 

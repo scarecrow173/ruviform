@@ -68,7 +68,7 @@ plugin processing を止めない。
   経路と同値で動く（既存互換・後方互換の既定）。
 - Rule: registrar 接続時、audio `CreateInstance` の `Creating → Live` flip に
   成功した mint だけが 4 Source を `scope=Instance` で登録する。dedicated /
-  bundled / supervisor restart の全 mint 経路に同じ規約が効く。
+  bundled / supervisor restart の全 mint 経路に同じ規約が適用される。
 - Rule: video Instance は登録しない（`InstKind::Video` は counter を持たない
   構造的不変条件）。L0 in-process 経路も対象外。
 - Rule: 4 Descriptor は `kind=Counter`・`aggregation=Cumulative`・`unit=Count`・
@@ -147,9 +147,9 @@ plugin processing を止めない。
 
 - Registrar 注入だけが行われて RT path に Registry handle が漏れると、RT
   クリティカルパスに lock/alloc を持ち込み `test-rt` レーンで検出され得る。
-- `Refused` を握りつぶすと「Collector attach 失敗でも plugin は継続」の
+- `Refused` を破棄すると「Collector attach 失敗でも plugin は継続」の
   契約は守れても degraded の観測ができず、後続 Diagnostics が原因を
   判別できない — slot 記録が唯一の正直な証跡。
 - `retire` を `remove_instance` より前に置くと `results_dropped` の
-  residual flush が quiescence 宣言後に走り、Collector 側で drain 不全の
+  residual flush が quiescence 宣言後に実行され、Collector 側で drain 不全の
   誤解釈を生む（順序が pin されるべき不変条件）。

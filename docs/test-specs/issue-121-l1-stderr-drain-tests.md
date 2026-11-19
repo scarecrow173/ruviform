@@ -56,7 +56,7 @@ relations:
 
 ## Purpose
 
-pin 全 L1 子（audio dedicated・audio bundled・video dedicated）の stderr 配管・drain・保持・snapshot 契约 — spec R-B3・AC3 と設計「stderr 保持の暫定契約」「採用案 A」節。子 stderr は失敗診断の主な一次情報源であり、drain の bounded 終了は heir/grandchild による無期限ブロック回避の責務境界。drain 実装が別の I/O 形態に置き換わっても、本 spec の契约は維持すべき不変条件。
+全 L1 子（audio dedicated・audio bundled・video dedicated）の stderr 配管・drain・保持・snapshot の契約を pin する — spec R-B3・AC3 と設計「stderr 保持の暫定契約」「採用案 A」節。子 stderr は失敗診断の主な一次情報源であり、drain の bounded 終了は heir/grandchild による無期限ブロック回避の責務境界。drain 実装が別の I/O 形態に置き換わっても、本 spec の契約は維持すべき不変条件。
 
 ## Feature
 
@@ -67,9 +67,9 @@ pin 全 L1 子（audio dedicated・audio bundled・video dedicated）の stderr 
 - **配管範囲（spec R-B3）**: 全 L1 子に piped stderr — audio dedicated・audio bundled・video dedicated を同一機構で扱う。`Stdio::inherit` は使わない。drain/record 初期化失敗時は既存 abort 経路で rollback（partial child・fd リークを残さない）。
 - **drain 非待ち（設計）**: drain は診断 consumer を待たず、retention 満杯でも読み捨て継続 — 「読めたが保持できなかった」分を `dropped_bytes` で計数。drain 開始は `Hello` wait より前 — pre-`Hello` 出力を捕捉する。
 - **ring 契約（64 KiB tail 優先）**: 新入力で古いバイトを evict（tail 保持）；1 回の read が ring 容量を超えた分は保持せず `dropped_bytes` 計数。**capture 不変条件**: `total_read_bytes = bytes.len() + dropped_bytes` — capture 開始前・deadline 後の未観測出力はいずれにも含まない。
-- **snapshot 同一時点**: `bytes`/`total_read_bytes`/`dropped_bytes`/flags を record `Mutex` 内で組み立て — drain 進行中でも buffer と counter の時点混ぜをしない。`bytes` は `Vec<u8>` のまま返す（String 変換しない — stderr は任意バイト列）。
-- **deadline（設計承認案 A・`STDERR_DRAIN_GRACE`=500 ms）**: 起算は子終了観測（reap/`try_wait`/converge）。出力継続でも延長しない（延長は heir 無期限保持を再導入）。EOF 到達で即終了。POSIX は `libc::poll` 周期起床、Windows は `windows-sys` `PeekNamedPipe`+短 sleep — 両者とも deadline は「目標」であって厳密な硬保証ではない（OS scheduling 遅延・Windows 同期 I/O 残余ブロックを明示受容）。drain 終了時に read fd を close — 生き残った heir の後続書き込みは error 化する（副作用を明示受容）。JoinHandle は detach（無期限 join しない）。
-- **flags 语义**: `eof`（drain が EOF を観測）・`drain_deadline_exceeded`（**EOF 未到達のまま** drain deadline に達し drain を自発終了させた事実 — 未読データの観測有無とは独立。pipe を保持したまま何も書かない heir でも `true` になる）・`unread_bytes_observed`（deadline 時点または最終確認で未読データを実際に観測 — `false` は「欠損なし」でなく「未読を観測していない」）。
+- **snapshot 同一時点**: `bytes`/`total_read_bytes`/`dropped_bytes`/flags を record `Mutex` 内で組み立て — drain 進行中でも buffer と counter を異なる時点の値で混ぜない。`bytes` は `Vec<u8>` のまま返す（String 変換しない — stderr は任意バイト列）。
+- **deadline（設計承認案 A・`STDERR_DRAIN_GRACE`=500 ms）**: 起算は子終了観測（reap/`try_wait`/converge）。出力継続でも延長しない（延長は heir 無期限保持を再導入）。EOF 到達で即終了。POSIX は `libc::poll` 周期起床、Windows は `windows-sys` `PeekNamedPipe`+短 sleep — 両者とも deadline は「目標」であって厳密な硬保証ではない（OS scheduling 遅延・Windows 同期 I/O 残余ブロックを明示受容）。drain 終了時に read fd を close — 残存した heir の後続書き込みは error 化する（副作用を明示受容）。JoinHandle は detach（無期限 join しない）。
+- **flags の意味**: `eof`（drain が EOF を観測）・`drain_deadline_exceeded`（**EOF 未到達のまま** drain deadline に達し drain を自発終了させた事実 — 未読データの観測有無とは独立。pipe を保持したまま何も書かない heir でも `true` になる）・`unread_bytes_observed`（deadline 時点または最終確認で未読データを実際に観測 — `false` は「欠損なし」でなく「未読を観測していない」）。
 - **heir bounded teardown（AC3）**: pipe を保持する heir/grandchild が残っても host teardown は deadline で打ち切られる — POSIX は限定条件下で制御可能、Windows は残余リスクを flag で観測可能にする（「完全に有界」の主張はしない — OS 別の保証強度を分けて記述する）。
 - **暗黙 sink なし**: stderr は他 sink（stdout/log/console）へ暗黙 echo しない — retention/query のみが出口。
 
@@ -86,7 +86,7 @@ pin 全 L1 子（audio dedicated・audio bundled・video dedicated）の stderr 
 - drain は consumer 非依存 — query を誰も呼ばなくても出力は読み続けられる
 - 500 ms grace は `DRIVER_JOIN_MARGIN`(1 s)・`command_timeout`(10 s)・heir fixture(~15 s) より十分短く teardown bound を維持する
 - snapshot は単一時点の原子組み立て — `total_read = len + dropped` が常に成立
-- 既存 `Stdio::inherit` 時代の動作（block 処理・通知・ChildExit）に無退行
+- 既存 `Stdio::inherit` 使用時の動作（block 処理・通知・ChildExit）に無退行
 
 ## Non-goals
 

@@ -103,7 +103,7 @@ mutation（トラック追加/削除・クリップ挿入/削除/移動/トリ�
 - base 正規化: `spec.range` が timeline base と異なる base を持つ
   `insert_clip` → 拒否せず `NearestEven` 変換して格納（格納 `clip.range()` は
   timeline base 揃え）
-- 拒否: duration 非正 → `InvalidRange`。`end == start` へ潰れる `range` と
+- 拒否: duration 非正 → `InvalidRange`。`end == start` に縮退する `range` と
   `out == in` の `source_range` の両方 → `InvalidRange`。
   `range.duration() > source_range.duration()` → `InvalidRange`。
   Audio トラックへ `ClipAttributes::Video` → `KindMismatch`。

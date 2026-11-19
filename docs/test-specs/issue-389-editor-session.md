@@ -107,10 +107,10 @@ emit して `Closed`+`concluded` に収束し、実 child HWND が OS
   破棄 handle は `InvalidHandle`、case `Pass`・
   `environment_kind=real-window`。
 - E2（refused open）: Given editor open が defined
-  `Unsupported` を返す環境、When case が走る、Then verdict は
+  `Unsupported` を返す環境、When case を実行する、Then verdict は
   `Unsupported` で host 破棄 step には進まない。
 - E3（headless blocked）: Given 実 Window を持たない host、
-  When `--blocked-probe` または real lane が走る、Then 新行を
+  When `--blocked-probe` または real lane を実行する、Then 新行を
   含む全 13 行が `NotRun`+`observed.environment_blocked` で
   violation 0・exit 0。
 
@@ -134,7 +134,7 @@ emit して `Closed`+`concluded` に収束し、実 child HWND が OS
 
 ## Risk
 
-- exactly-once・teardown・host 存続のいずれかの保証が落ちると、
+- exactly-once・teardown・host 存続のいずれかの保証が失われると、
   host loss 経路の session lifecycle が「見かけ上 close したが
   実は生きている/二重通知する」状態を検出できず、後続の
   crash/recovery case の土台が崩れる。

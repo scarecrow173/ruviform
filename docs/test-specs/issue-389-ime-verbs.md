@@ -102,7 +102,7 @@ real-window lane の両面で保証する。
   `Fail`。platform/observation 非対応 → `Unsupported`。
 - **Rule R5**: headless/fake evidence を real-window `Pass` に
   昇格しない。off-Windows では `unsupported` observation を
-  記録して正直に落とす。
+  記録して verdict を正直に降格させる。
 
 ## 検証コマンド
 

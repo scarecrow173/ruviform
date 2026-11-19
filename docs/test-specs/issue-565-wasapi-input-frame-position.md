@@ -36,7 +36,7 @@ relations:
 
 ### Rule T1-1: frame_position は packet 先頭 frame の device position
 
-`IAudioCaptureClient::GetBuffer` の `devicePosition`（packet 先頭 frame の device frame position）を `Some(device_position)` として `InputCallbackInfo::frame_position` に載せる。値は PCM を届ける同一 stream・同一 packet の backend 報告値であり、合成・補正しない。
+`IAudioCaptureClient::GetBuffer` の `devicePosition`（packet 先頭 frame の device frame position）を `Some(device_position)` として `InputCallbackInfo::frame_position` に格納する。値は PCM を届ける同一 stream・同一 packet の backend 報告値であり、合成・補正しない。
 
 - **Example**: `GetBuffer` が `device_position=4096, frames=480` を返した packet は `frame_position=Some(4096)` を持つ。
 

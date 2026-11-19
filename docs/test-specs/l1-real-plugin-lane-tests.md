@@ -44,7 +44,7 @@ relations:
 
 ## Purpose
 
-実規格 plugin E2E は fixture cdylib + feature `host` runner を要求するため、default `cargo test`/`mise run test` には載せられない — だが「lane を追加して誰も実行しない」は検証の偽装になる。本 spec は lane 機構自体（mise task 定義・`#[ignore]` ゲート・fixture 欠落の fail 設計・CI `l1-real-verify` job）が、**opt-in で実際に実行可能・欠落時は確実に fail・default 経路を一切汚さない**ことを pin する。目的は (a) lane が実機能する（build → `--lib --bins` unit test → `--ignored` E2E の 3 段構成で fixture+runner が揃った状態で bridge 契約層・runner bin unit test・E2E が走る）、(b) 欠落条件（fixture/bin/feature 不在）が全て fail で収束し silent skip を残さない、(c) `cargo test --workspace`・`mise run test` 等 default 経路が本変更で不変グリーンのままであることを保証する、(d) workflow_dispatch 専用の既存 ci.yml 内に `l1-real-verify` job が正しく配線される（別 workflow ファイルを作らない）。
+実規格 plugin E2E は fixture cdylib + feature `host` runner を要求するため、default `cargo test`/`mise run test` には含められない — だが「lane を追加して誰も実行しない」は検証の偽装になる。本 spec は lane 機構自体（mise task 定義・`#[ignore]` ゲート・fixture 欠落の fail 設計・CI `l1-real-verify` job）が、**opt-in で実際に実行可能・欠落時は確実に fail・default 経路を一切汚さない**ことを pin する。目的は (a) lane が実機能する（build → `--lib --bins` unit test → `--ignored` E2E の 3 段構成で fixture+runner が揃った状態で bridge 契約層・runner bin unit test・E2E が実行される）、(b) 欠落条件（fixture/bin/feature 不在）が全て fail で収束し silent skip を残さない、(c) `cargo test --workspace`・`mise run test` 等 default 経路が本変更で不変グリーンのままであることを保証する、(d) workflow_dispatch 専用の既存 ci.yml 内に `l1-real-verify` job が正しく配線される（別 workflow ファイルを作らない）。
 
 ## Feature
 
@@ -71,7 +71,7 @@ relations:
 
 ## Guarantees
 
-- lane は **opt-in で実機能する**: `mise run test-l1-real-plugin` の 3 段構成（build → `--lib --bins` unit test → `--ignored` E2E）で fixture+runner が揃い、bridge unit test 層・runner bin unit test・`#[ignore]` E2E が実際に走る — 「task はあるが実行しない」偽装を排除
+- lane は **opt-in で実機能する**: `mise run test-l1-real-plugin` の 3 段構成（build → `--lib --bins` unit test → `--ignored` E2E）で fixture+runner が揃い、bridge unit test 層・runner bin unit test・`#[ignore]` E2E が実際に実行される — 「task はあるが実行しない」偽装を排除
 - **欠落は全て fail**: fixture/bin/feature 不在は `assert!`/spawn `Err`/`exit(1)` で確実に検出 — env-gated silent skip・`return` 早期終了・`eprintln!` のみの抜けは**存在しない**
 - **default 経路は不変**: `cargo test --workspace`/`mise run test`/`check`/`lint`/`test-rt`/`verify-ci`/`verify` job は本変更で一切差分なし — `#[ignore]`+`#![cfg]`+`required-features`+optional dep の 4 層で feature `host` を default から完全分離
 - **CI は workflow_dispatch 専用・別ファイルなし**: `l1-real-verify` job は既存 ci.yml 内の additive job — 新規 workflow ファイル・push/PR trigger は作らない・3-OS matrix で platform 差を collect
@@ -82,15 +82,15 @@ relations:
 - E2E テスト内容自体（動詞経路・データ正当性・異常系）は [real-adapter-l1-e2e-tests](real-adapter-l1-e2e-tests.md) が担う — 本 spec は lane 機構の配線・ゲート・欠落挙動のみ
 - bridge 写像の検証は [adapter-host-bridge-contract-tests](adapter-host-bridge-contract-tests.md) が担う
 - `verify`/`rt-verify`/`icc-verify` 等既存 job の内容・`verify-ci`/`check-ci` 等既存 mise task の内容は変更しない — additive のみ
-- `cargo test --workspace` への本 lane の組込みは対象外（`#[ignore]` opt-in が設計意図 — default 経路に載せると fixture 必須で全開発者に強制になる）
+- `cargo test --workspace` への本 lane の組込みは対象外（`#[ignore]` opt-in が設計意図 — default 経路に含めると fixture 必須で全開発者に強制になる）
 - OFX lane（`test-ofx`・`lint-ofx`・`ofx-verify`）の変更・拡張は対象外 — 本 lane は `test-l1-real-plugin`/`lint-l1-real-plugin`/`l1-real-verify` のみ
 - `cargo test` 既定経路で `#[ignore]` を実行するための `--include-ignored` や `ignored` フラグの設定変更は対象外
 
 ## Risk
 
-- `#[ignore]` opt-in lane は実行されなければ腐る — `l1-real-verify` job（workflow_dispatch）の手動 dispatch と runbook の `mise run test-l1-real-plugin` 明記で緩和（opt-in の性質上不可避 — spec AC6・design 決定 h 整合）
+- `#[ignore]` opt-in lane は実行されなければ陳腐化する — `l1-real-verify` job（workflow_dispatch）の手動 dispatch と runbook の `mise run test-l1-real-plugin` 明記で緩和（opt-in の性質上不可避 — spec AC6・design 決定 h 整合）
 - macOS leg は raw `.dylib`（CLAP 非 bundle 解決）と VST3 `bundleEntry` 経路の初実行になる — macOS job が赤い場合は platform finding として扱い、Linux/Windows 側の回帰とは区別する（ci.yml `l1-real-verify` matrix コメントと対）
 - lane を `cargo test --test l1_real_adapter_e2e -- --ignored` 単独にまとめると `--lib --bins` unit test 層（in-process dlopen 契約 + runner bin の fixture 解決テスト）が lane に載らず、runner/cdylib の生成が `cargo test` の target 選択に依存する — explicit `cargo build` + `--lib --bins` + `--ignored` の 3 段構成を pin（`--lib` だけに絞ると runner bin の `#[cfg(test)]` が孤立するため `--bins` を併記）
 - `RUVIFORM_L1_REAL_PLUGIN_DIR` を skip 条件として誤用すると「fixture があれば実行・なければ pass」という silent skip が混入する — テスト側では assert のみ・skip 条件にしないを Rules で固定
-- `cargo test --workspace` 既定経路に `#[ignore]` テストを誤って載せると（`--include-ignored`・`#[ignore]` 忘れ等）全開発者の default gate が fixture 必須で壊れる — `#![cfg]`+`#[ignore]` の二重ゲートを pin
+- `cargo test --workspace` 既定経路に `#[ignore]` テストを誤って含めると（`--include-ignored`・`#[ignore]` 忘れ等）全開発者の default gate が fixture 必須で壊れる — `#![cfg]`+`#[ignore]` の二重ゲートを pin
 - optional dep を非 optional に誤記すると default dep 木が汚染される — `cargo tree` の dep 木監査を action 14 の gate に組込み

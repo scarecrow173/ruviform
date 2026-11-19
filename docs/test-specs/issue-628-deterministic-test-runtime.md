@@ -140,5 +140,5 @@ Deterministic Audio/MIDI Test Runtime — deterministic core
   → 独立実装・libm+tolerance・固定ベクトルで担保。
 - `assert_no_alloc` が `Arc` clone 等を検出すると RT contract 違反 →
   `run_callback` 内で `Arc` refcount bump を避ける設計を確認。
-- f64 poly sine と libm sin の差で byte 比較が落ちる → integer-domain
+- f64 poly sine と libm sin の差で byte 比較が失敗する → integer-domain
   pattern は Exact、transcendental は tolerance で分離。

@@ -150,4 +150,4 @@ A〜E Gate の各 Case について、対象 Repo/SHA・OS/Arch・feature/capabi
 
 ## Risk
 
-verdict 記録の不変条件が破られると、#419 の ADR 決裁が「L1 のみ評価済み」の範囲を超えて L2/L3 を保証したと誤認される。特に Gate D（実 Native Dock）と Gate E（Consumer Oracle）の未達を Pass に読み替える誤りは、製品 GUI 機能や実 Plugin 表示の不存在を隠蔽する。R-VERDICT/R-GATE-D/R-GATE-E/R-HANDOFF の保証が落ちると、Issue #262 の Verdict 規則（「全必須 OS/format で D・E が未達なら無条件本番採用不可」）が形骸化する。
+verdict 記録の不変条件が破られると、#419 の ADR 決裁が「L1 のみ評価済み」の範囲を超えて L2/L3 を保証したと誤認される。特に Gate D（実 Native Dock）と Gate E（Consumer Oracle）の未達を Pass に読み替える誤りは、製品 GUI 機能や実 Plugin 表示の非存在を隠蔽する。R-VERDICT/R-GATE-D/R-GATE-E/R-HANDOFF の保証が失われると、Issue #262 の Verdict 規則（「全必須 OS/format で D・E が未達なら無条件本番採用不可」）が形骸化する。

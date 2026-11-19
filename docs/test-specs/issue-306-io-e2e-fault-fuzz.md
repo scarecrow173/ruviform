@@ -187,7 +187,7 @@ publish せず、(c) OS/FS capability を実測値として記録すること。
 
 ## Risk
 
-- fixture が公開 API の変更に追随できず腐る → 変更は leaf
+- fixture が公開 API の変更に追随できず陳腐化する → 変更は leaf
   dev-deps のみで production API に触れないため影響は test の
   み。API 変更時は test の fail として検出される。
 - OS/FS 差で link 作成・dirsync が失敗 → skip/失敗を正直に記録

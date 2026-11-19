@@ -148,4 +148,4 @@ adapter で嘘の `pass` を出さない」契約を Fake・GPUI の両側で
   「preflight は宣言、golden_check は実測」を固定する。
 - slice 3 で `capture_frame` が `Captured` を返す実装を入れた際、
   本 spec の verdict 写像・evidence emit・stale 契約がそのまま
-  効くこと — 退行検出が本 spec の役割。
+  適用されること — 退行検出が本 spec の役割。

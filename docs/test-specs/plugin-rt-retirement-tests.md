@@ -51,7 +51,7 @@ spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と app
 
 ## Feature
 
-2 系統の測定面 — **endpoint/L0-L1 RT 面**: `PluginEndpoint::{process, process_audio}`（L0 `try_lock`+`catch_unwind` 経路・L1 leg `process` + arm drain）・`RtLeg::arm_apply`・endpoint `Drop` の `return_tx.try_push`（cap 1）・host `process`/`&mut` entry の drain-before-early-return 順序。**audio 退役面**: `RtPlan::active`（`current` slot の `try_read` 成功で displaced `cached` を `Arc::ptr_eq` で判定し実差替のみ `retirer.retire`）・`impl Drop for RtPlan`（`self.cached.take()` — `current` slot 側を touch しない）・`PlanSwap` の `Arc<Mutex<DropCollector<Arc<GraphPlan>>>>`（`Clone`/公開形維持）+ `swap(&self)`/`drain_retired(&self)`/`retired_overflows(&self)`/`with_retire_capacity`・`Session::drain_retired(&self)`/`Session::retired_overflows(&self)` passthrough（T5 で budget — `Session` 経由の観測点）・`Session` teardown の field 順序（collector が retirer より後に死ぬ）。
+2 系統の測定面 — **endpoint/L0-L1 RT 面**: `PluginEndpoint::{process, process_audio}`（L0 `try_lock`+`catch_unwind` 経路・L1 leg `process` + arm drain）・`RtLeg::arm_apply`・endpoint `Drop` の `return_tx.try_push`（cap 1）・host `process`/`&mut` entry の drain-before-early-return 順序。**audio 退役面**: `RtPlan::active`（`current` slot の `try_read` 成功で displaced `cached` を `Arc::ptr_eq` で判定し実差替のみ `retirer.retire`）・`impl Drop for RtPlan`（`self.cached.take()` — `current` slot 側を touch しない）・`PlanSwap` の `Arc<Mutex<DropCollector<Arc<GraphPlan>>>>`（`Clone`/公開形維持）+ `swap(&self)`/`drain_retired(&self)`/`retired_overflows(&self)`/`with_retire_capacity`・`Session::drain_retired(&self)`/`Session::retired_overflows(&self)` passthrough（T5 で budget — `Session` 経由の観測点）・`Session` teardown の field 順序（collector が retirer より後に破棄される）。
 
 ## Rules
 
@@ -64,7 +64,7 @@ spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と app
 - **`rt_fn_node_pull_no_alloc`**: `FnMut` closure ノードを持つ `GraphPlan` の `RtPlan` pull 経路を窓内駆動 — `pull` → closure 呼出し → `process_audio` が alloc なし
 - **退役の非 RT drop 保証（AC8）**: plan-swap/node removal/removal-plan で退役した `GraphPlan` 内の node（=`PluginEndpoint`→L0 `Arc<Mutex<SendCore>>` + epoch CAS・L1 `RtLeg` + `return_tx.try_push`）・`Arc<Staging>` arm・SPSC endpoint は**全て** collector スレッドの `DropCollector` drain か collector drop で破棄 — RT callback 経路（`RtPlan::active`・pull・`RtPlan::drop`）で destructor が走らないことを DropFlag + `assert_no_alloc` で検証
 - **drain-on-every-non-RT-entry**: `PlanSwap::swap(&self)`・`PlanSwap::drain_retired(&self)`・`Session::swap(&self)`・`Session::drain_retired(&self)`・`Session` 終了/teardown で collector が drain される（`&self` シグネチャ — non-RT entry）— drain 後に `PlanSwap::retired_overflows(&self)`/`Session::retired_overflows(&self)` が 0 を返す（leak-on-full `mem::forget` 飽和の観測点 — AC・`Session` 経由は T5 passthrough で budget）。swap を走らせない session でも teardown で退役物が回収される
-- **tier 境界（`&self` defined non-drain / `&mut` drain / wait-free `process`）**: `lifecycle_state`/`latency_frames`/`L1Instance::try_recv_notification`（`&self`）は drain しない観測点 — `&mut` entry（`execute`/`prepare_endpoint`/`destroy`/composite `try_recv_notification`）でのみ `pending_arm` resend・`return_rx` pop・`arm_collector.drain()`・leg 復元の仕上げ（re-arm + per-attach field clear）が走る — host `process` は wait-free 部分のみ（resend + `return_rx` pop → `self.rt` 復元 **のみ** — `arm_collector.drain()` も `clear_endpoint_fields` も除く）で `rt.is_none()` early-return より前に drain（destructor 実行を RT 契約経路に入れない・stale channel ends は non-RT drain が片付ける）
+- **tier 境界（`&self` defined non-drain / `&mut` drain / wait-free `process`）**: `lifecycle_state`/`latency_frames`/`L1Instance::try_recv_notification`（`&self`）は drain しない観測点 — `&mut` entry（`execute`/`prepare_endpoint`/`destroy`/composite `try_recv_notification`）でのみ `pending_arm` resend・`return_rx` pop・`arm_collector.drain()`・leg 復元の仕上げ（re-arm + per-attach field clear）が実行される — host `process` は wait-free 部分のみ（resend + `return_rx` pop → `self.rt` 復元 **のみ** — `arm_collector.drain()` も `clear_endpoint_fields` も除く）で `rt.is_none()` early-return より前に drain（destructor 実行を RT 契約経路に入れない・stale channel ends は non-RT drain が片付ける）
 - **bounded 性**: arm channel cap 2・`Retirer` cap 4・`return_tx` cap 1 — endpoint drain は 1 pass ≤ arm_capacity+1（=3）pop・`Full` は `pending_arm`（latest-wins）/leg drop に倒す。capacity 超過の arm は適用せず retire + pass-through 収束（`leg.pass_through(outputs)` + `Ok(CONTINUE)` — **`Err(Ipc)` は `process`/`process_audio` の公開 `Err` として露出しない** — 公開面の dims 拒否は `armed_frame_capacity`/`bound.channels` pre-gate の `Err(Prepare(UnsupportedConfig))`）
 
 ## Examples
@@ -79,7 +79,7 @@ spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と app
 ## Guarantees
 
 - 測定窓内の endpoint `process`/`process_audio`・`arm_apply`・plan `active`/退役参照経路は 0 alloc（`assert_no_alloc` abort しない）— fixture/warm-up alloc は窓外
-- 退役 `GraphPlan` 連鎖（node→endpoint→`SendCore`/`RtLeg`/`Arc<Staging>`/SPSC endpoint）の destructor は collector スレッドで走る — RT callback では `retire` push のみ
+- 退役 `GraphPlan` 連鎖（node→endpoint→`SendCore`/`RtLeg`/`Arc<Staging>`/SPSC endpoint）の destructor は collector スレッドで実行される — RT callback では `retire` push のみ
 - `retired_overflows()`（`PlanSwap`/`Session` passthrough）は drain 後 0 — leak-on-full 飽和が起きても観測点が残る
 - `&self` query は drain しない（defined non-drain）・host `process` は `arm_collector.drain()` を走らせない（destructor は RT 契約違反）— 境界が test で pin される
 - 全て mock/`env!`-closed（`l1-test-worker` は crate 内）— cpal・実デバイス・OS 特有 API に依存せず CI 3 OS で実行可能
@@ -96,6 +96,6 @@ spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と app
 ## Risk
 
 - `arm_apply`/`process` の窓内 alloc（`resize` の realloc・`catch_unwind` の payload box・`Retirer`/`try_push` 内蔵 alloc）が見落とされる → `assert_no_alloc` で機械検出（fixture 確保は窓外）
-- 退役 Drop が RT callback で走っても単体では検出しにくい → DropFlag probe + drain 後立証 + `retired_overflows()==0` の三組で固定
+- 退役 Drop が RT callback で実行されても単体では検出しにくい → DropFlag probe + drain 後立証 + `retired_overflows()==0` の三組で固定
 - `&self`/`&mut`/wait-free の tier 境界が実装で崩れる（`&self` で `&mut` プリミティブに触れる・`process` で destructor drain）→ 観測点テストで pin
 - `rt_` 名フィルタが 0 件一致で成功に見える → plan/task の「実一致件数記録」規則で補完

@@ -77,7 +77,7 @@ real-window lane（`rf631.plugin-dock-real`）の session lifecycle
   child HWND 契約 + close 収束 `[Degraded{Docked}, Closed]` で
   のみ `Pass`。`OpenOutcome::Attached` や event 不一致は `Fail`。
 - R4: recovery — `open(Floating)` が `Ops(Unsupported)` refusal
-  で `Failed{Unsupported}`（`editor_live=false`）に落ちることを
+  で `Failed{Unsupported}`（`editor_live=false`）に収束することを
   step で確認後、`recover(Docked)` が `Ok` →
   `Recovered{Docked}` + child contract + events ちょうど
   `[Failed{Unsupported}, Recovered{Docked}, Closed]` でのみ
@@ -128,7 +128,7 @@ real-window lane（`rf631.plugin-dock-real`）の session lifecycle
   `set_visibility(false)`、Then `Ops(Unsupported)` refusal・
   `Attached` 維持・event 不変・case `Unsupported`。
 - E5（crash/hang 境界）: Given in-process lane、When crash/hang
-  case が走る、Then GUI/session 非接触で `Unsupported`・
+  case を実行する、Then GUI/session 非接触で `Unsupported`・
   detail に非生存根拠を明記。
 - E6（headless blocked）: Given 実 Window を持たない host、
   When `--blocked-probe`、Then 全 21 行が `NotRun`+
@@ -159,7 +159,7 @@ real-window lane（`rf631.plugin-dock-real`）の session lifecycle
 
 ## Risk
 
-- degrade/recover/timeout のいずれかの保証が落ちると、session
+- degrade/recover/timeout のいずれかの保証が失われると、session
   lifecycle の異常・回復・期限経路が「見かけ上動いたが実は
   誤 event/誤 state」を検出できず、Issue #389 の real-window
   受入を誤って前進させる。

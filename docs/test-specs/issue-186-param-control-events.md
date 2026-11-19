@@ -51,7 +51,7 @@ Parameter control events — per-param capability, TargetId binding, timed deliv
 
 - Rule: `check_param_write` は design §1 行列に厳密一致し、`READONLY`→`ReadOnly`、非`AUTOMATABLE` への `TimedEvent`→`NotAutomatable`、`Immediate`/`PerNote`→`UnsupportedMeans` を返す。
 - Rule: 未解決/Defunct/旧 generation の Target への配送要求は defined rejection で、silent fallback・誤 target 適用をしない。
-- Rule: Timed `ParamEvent` は `frame_offset` が `event_engine_frame - call_start` に一致し、イベントは非減少 offset・安定 source 順で `EventList` に載る。同一 offset 同一 param は last-wins。
+- Rule: Timed `ParamEvent` は `frame_offset` が `event_engine_frame - call_start` に一致し、イベントは非減少 offset・安定 source 順で `EventList` に入る。同一 offset 同一 param は last-wins。
 - Rule: `ParamValue` は normalized [0,1]、NaN/inf 拒否・有限範囲外 clamp の既存規約を変えない。
 - Rule: `BeatPosition`→frame 変換は `TempoMap::beat_to_media`（単一 NearestEven 丸め）に従い、Loop occurrence ごとにイベントが再発火し、tempo 変更は `TempoMapRevision` で identity 分離される。
 - Rule: 容量超過は defined fault（`EventBudgetExceeded`/`EventScratchOverflow`/`VaultExceeded`/`QueueFull`）。opt-in coalescing は同一 param 連続値のみ latest-wins。

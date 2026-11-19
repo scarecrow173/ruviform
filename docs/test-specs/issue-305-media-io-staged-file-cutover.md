@@ -138,9 +138,9 @@ readback 検証 → `publish`）を満たすことを pin する。旧 API が
 ## Risk
 
 - `PublishFailure` を crate 外で構築できないため失敗注入が
-  実 FS 依存になり、OS 間で失敗種別が揺れる可能性 — 実 FS 失敗の
+  実 FS 依存になり、OS 間で失敗種別が変わる可能性 — 実 FS 失敗の
   方が契約に近い証拠であり許容するが、`NotPublished`+dest 無変更の
   本質を assert する形に限定する。
 - `verify` hook が `&mut SealedFile` を受ける設計は hook が
-  `open_readback` を呼べない環境（Unsupported）で `Verify` 失敗へ
-  落ちる — 検証未完のまま publish しない既定で安全側。
+  `open_readback` を呼べない環境（Unsupported）で `Verify` 失敗を
+  返す — 検証未完のまま publish しない既定で安全側。

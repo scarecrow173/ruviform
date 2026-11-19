@@ -62,7 +62,7 @@ reader demux は着信 frame を `instance` の live/registered-but-not-live/pos
 - **instance scope 収束**（`converge_instance(i)`）: live `i` に対する帰属可能違反のみ — 未登録/未知 `(i,seq)` の `BlockDone`・`i` 宛 flagged `Reply`（waiter なし・seq 不整合）→ `InstShared` のみ `Failed` mirror + waiter/doorbell/result 解放 + `InstanceFailed{handle, exit:{None,None}}` 通知・兄弟 instance は生存継続・`Inner.terminal` 等の子 state は変更しない（invariant）
 - **inert drop**: registered-but-not-live（`CreateInstance` 送信後 reply 未到達）・`i ∉ instances`（撤去済み・未登録）の着信 → 静黙 drop。違反・`Failed`・通知なし
 - **non-event**: `Shutdown` 送信済み後の着信 frame → 正常 teardown として無視（収束不変）
-- **defined rejection**: per-command `Err(HostError)` reply（`InvalidHandle`・`UnknownPluginId`・`InstanceLimit` 等）→ その command の `Err` 応答として返すだけで `Failed` 化しない（`kill_child` で意図的に子を殺す以外で `Failed` が発生しないパス）
+- **defined rejection**: per-command `Err(HostError)` reply（`InvalidHandle`・`UnknownPluginId`・`InstanceLimit` 等）→ その command の `Err` 応答として返すだけで `Failed` 化しない（`kill_child` で意図的に子を終了させる以外で `Failed` が発生しないパス）
 - **notification 粒度**: 子死亡 → 影響各 live instance へ `InstanceFailed{handle, exit}` が 1 つずつ（N 通知列・`exit` 同値）・per-instance 収束は `ChildExit{None,None}` 1 通知・`Failed` 通知は once（重複なし）・mid-`CreateInstance` 死亡は通知なし（handle 未 mint）・mid-`DestroyInstance` 死亡は通知あり（`Destroy` は `Ok`）
 - **`Destroying` doorbell window**: `DestroyInstance{i}` 送信 serialize → entry `Destroying` 化 → 新 submit は `mark_failed` → in-flight doorbell（drain 済み `BlockIn{i,seq}`）は通常完了 → reply 受領で entry 撤去・残 seq は `mark_failed` 解放・wire handle reuse（destroy→create 同一 `i`）時に stale doorbell が新 ring へ届かない
 - **dedicated 退化**: `Dedicated` isolation では本表が 1:1 写像へ退化（子死亡 = 単一 instance `Failed`）— 既存 singleton 契約と観測的に同じ
@@ -98,7 +98,7 @@ reader demux は着信 frame を `instance` の live/registered-but-not-live/pos
 
 ## Risk
 
-- 判定表の行漏れ → inert frame を違反と誤判定して子を殺す or 真の違反を静黙 drop して waiters が timeout まで宙吊りになる
+- 判定表の行漏れ → inert frame を違反と誤判定して子を終了させる or 真の違反を静黙 drop して waiters が timeout まで宙吊りになる
 - `converge_instance` が子 state を誤って変更 → 兄弟 instance が連鎖 `Failed` して bundle の粒度意義が失われる
 - `Destroying` gate 未実装 → in-flight doorbell と撤去の race で stale seq が新 instance の ring に混入する
 - notification の重複/欠落 → observer が `Failed` を見逃す or 二重処理する

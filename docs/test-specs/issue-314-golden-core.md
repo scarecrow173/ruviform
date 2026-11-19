@@ -52,7 +52,7 @@ relations:
 
 ## Feature: GoldenKey / EnvironmentMeta（key.rs）
 
-### Rule: key の全要素が同一性に効く
+### Rule: key の全要素が同一性を構成する
 
 - Example: story/theme/state/driver/os/gpu/scale/font/revision のいずれか
   1 要素だけを変えた 2 つの `GoldenKey` は `canonical()`・`file_stem()`

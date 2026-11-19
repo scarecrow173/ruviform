@@ -67,7 +67,7 @@ relations:
 ### Rule: 未認識 argv は fail-closed でなければならない
 
 - Example: 未知の `--ruviform-test-fault=` 値・任意の余分 argv は
-  `run()` の usage rejection に落ち、fixture は spawn されない。
+  `run()` の usage rejection に分類され、fixture は spawn されない。
 
 ### Rule: create 拒否 fixture は scan を壊してはならない
 

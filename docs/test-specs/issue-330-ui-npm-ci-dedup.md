@@ -53,8 +53,8 @@ UI npm 依存の install が lockfile 単位で 1 回に集約され、verify（
 
 ## Rules
 
-- Rule: 同一 `ui-verify` ジョブ内で `npm ci` は package-lock ごとに最大 1 回。`mise run setup-ui` 後の verify 系タスクの `depends` 解決では install は `sources up-to-date, skipping` となり npm ci 本体は走らない。
-- Rule: Fresh checkout（node_modules 非存在）では verify タスク単独実行でも `depends` 経由で install が走り検証が完走する。`outputs`（`node_modules/.package-lock.json`）欠落は常に install を stale にする。
+- Rule: 同一 `ui-verify` ジョブ内で `npm ci` は package-lock ごとに最大 1 回。`mise run setup-ui` 後の verify 系タスクの `depends` 解決では install は `sources up-to-date, skipping` となり npm ci 本体は実行されない。
+- Rule: Fresh checkout（node_modules 非存在）では verify タスク単独実行でも `depends` 経由で install が実行され検証が完走する。`outputs`（`node_modules/.package-lock.json`）欠落は常に install を stale にする。
 - Rule: `ui/browser-test` の typecheck・実行は `build-ui-showcase` 完了後の `ui/showcase/dist` を参照する（`@rvf/showcase` paths 契約）。同一 source revision では showcase dist は 1 度だけ emit される。
 - Rule: verify 系タスク（check/test）に freshness は付与しない — 検証は常に実行される。
 - Rule: `ui/showcase/test/deps.test.ts` の DAG audit（src import 方向・bare specifier 禁止・dev dep allowlist）は変更しない。
@@ -81,4 +81,4 @@ UI npm 依存の install が lockfile 単位で 1 回に集約され、verify（
 
 ## Risk
 
-- これら保証を落とすと、stale node_modules / stale dist による偽緑、または install 失敗と検証失敗の識別不能が入り得る。freshness は mise 標準機能の fail-safe 側（不明なら run）に寄せてあるため、崩れた場合の症状は「効率低下」に留まり検証欠落にならない設計。
+- これら保証を失うと、stale node_modules / stale dist による偽緑、または install 失敗と検証失敗の識別不能が入り得る。freshness は mise 標準機能の fail-safe 側（不明なら run）に寄せてあるため、崩れた場合の症状は「効率低下」に留まり検証欠落にならない設計。

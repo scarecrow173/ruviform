@@ -91,7 +91,7 @@ relations:
 
 ### Rule: Label/Table は mount と reconcile で stable key を保つ
 
-- Example: `status` を落としても `events` の identity は残り、`status` は `Removed` になる。
+- Example: `status` を spec から除いても `events` の identity は残り、`status` は `Removed` になる。
   - 検査: `ui_dvr_02_parity_label_table_mount_reconcile`（`driver_parity`）、`rvf_view_parity_label_table_renders`（gpui-test で描画が通る）。
 
 ## 既存挙動の非回帰

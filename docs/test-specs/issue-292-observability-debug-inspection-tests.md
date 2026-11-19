@@ -120,7 +120,7 @@ external export 認可で未認可要求を拒否する。Logging/Tracing OFF
   `Inconclusive` は `NotEvaluable`/`Info` の `DiagnosticFinding`
   とする。`Satisfied` は Evidence のみで finding を生成しない。
   finding は `(domain, code)` upsert で bounded。retention 無効
-  （max=0）は `skipped` 計数で報告し握り潰さない。
+  （max=0）は `skipped` 計数で報告し破棄しない。
 - **Session 状態機械**: `Disabled→Prepared→Active→Draining→
   Stopped` のみ許可し、`Stopped→Prepared` は新 generation の
   再 prepare。`prepare`/`request_stop`/`abandon` は
@@ -152,10 +152,10 @@ external export 認可で未認可要求を拒否する。Logging/Tracing OFF
   除外し `withheld_confidential` に計数（値を伏せる方式ではない）。
   `ExportLimits` の items/bytes/deadline 超過は
   `ExportTruncation` に構造化記録される。`DebugReport`/
-  `InspectionSnapshot`/`SessionRecord` が運ぶ型は closed
+  `InspectionSnapshot`/`SessionRecord` が持つ型は closed
   vocabulary（`EventRecord` metadata・`MetricValue`・finding 要約・
   `&'static str`）のみで、Secrets/Media/Path/Credential/Prompt/
-  stderr を運ぶフィールドは型として存在しない。
+  stderr を持つフィールドは型として存在しない。
 - **非 RT only**: debug の公開操作は全て非 RT（alloc/lock/
   vector 操作を伴う）。RT callback 経路に触れる API は存在
   しない。RT 隣接値型（`SessionRecord`/`DrainedRecord`/

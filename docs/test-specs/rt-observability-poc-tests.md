@@ -48,7 +48,7 @@ relations:
 
 ## Purpose
 
-Issue #104 PoC の計測ハーネスが保証すべき計測の信頼性意図——「測定窓内の挙動のみを計測し、ハーネス自身が計測対象を汚染しない」「計測データが #103 設計の『要 PoC』判定に使える品質（分散記録・環境メタデータ・有効データ条件）を持つ」「alloc 検出カバレッジ隙間を機構レベルで実証する」——を、設計 [foundation-observability-minimal-api](../designs/foundation-observability-minimal-api.md)（rt_bridge 形状・Counter 選定・PoC-gated verdict）と [shared-foundations-and-modularization-policy](../designs/shared-foundations-and-modularization-policy.md)（RT/非 RT 観測データフロー・PoC と採否）から固定する。ハーネスが「計測は走るが数字が信用できない」状態でレポートだけが残る退行を防ぐ。廃止してよいのは、Issue #104 の計測成果物が #103 の要 PoC 判定へ反映完了した後に PoC ハーネス自体を除去するとき、または RT 観測の計測方法論を変更する ADR / 設計改訂が行われたとき。
+Issue #104 PoC の計測ハーネスが保証すべき計測の信頼性意図——「測定窓内の挙動のみを計測し、ハーネス自身が計測対象を汚染しない」「計測データが #103 設計の『要 PoC』判定に使える品質（分散記録・環境メタデータ・有効データ条件）を持つ」「alloc 検出カバレッジ隙間を機構レベルで実証する」——を、設計 [foundation-observability-minimal-api](../designs/foundation-observability-minimal-api.md)（rt_bridge 形状・Counter 選定・PoC-gated verdict）と [shared-foundations-and-modularization-policy](../designs/shared-foundations-and-modularization-policy.md)（RT/非 RT 観測データフロー・PoC と採否）から固定する。ハーネスが「計測は実行されるが数字が信用できない」状態でレポートだけが残る退行を防ぐ。廃止してよいのは、Issue #104 の計測成果物が #103 の要 PoC 判定へ反映完了した後に PoC ハーネス自体を除去するとき、または RT 観測の計測方法論を変更する ADR / 設計改訂が行われたとき。
 
 ## Feature
 
@@ -98,7 +98,7 @@ Issue #104 PoC の計測ハーネスが保証すべき計測の信頼性意図�
 
 - 測定窓の純粋性を欠くと、計測値がハーネスの alloc コストを含み「prepared counter / rt_bridge の RT コスト」が過大評価され、#103 の採否判定を誤方向に導く
 - self-consistency を機械検証しないと「ハーネスが計測対象を汚染している」退化が検出されず、得られた数字の証拠性が失われる
-- カバレッジ隙間を実証しないと「alloc 検出が効く」という誤前提が残り、将来 backend 所有スレッド上の RT 経路で未検出の alloc が混入する
+- カバレッジ隙間を実証しないと「alloc 検出が機能する」という誤前提が残り、将来 backend 所有スレッド上の RT 経路で未検出の alloc が混入する
 - バックエンド候補を workspace 依存へ混入させると `Cargo.lock` が汚染され、評価のために実装が伴ってしまう（採否未定の依存をリポジトリが抱える状態）
 - 環境メタデータ・分散記録を欠くと単発値の絶対値を採否根拠に誤用し、環境ノイズを実差分と取り違える
 - バッチ反復なしの ns 級単発計測は criterion 分解能を下回り、「差なし」と「検出限界以下」を区別できない報告になる

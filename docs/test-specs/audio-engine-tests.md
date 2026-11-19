@@ -49,7 +49,7 @@ Issue #25 音声エンジンの公開契約テスト仕様。pull 駆動・ミ�
 
 - ユニットテストは `src/` 内 `#[cfg(test)] mod tests`（クレート慣例）
 - モック `OutputStream`/`Device` でデバイス非依存に駆動
-- RT テストは `rt_` 接頭辞（`mise run test-rt` が拾う）
+- RT テストは `rt_` 接頭辞（`mise run test-rt` が選択する）
 
 ## Examples
 

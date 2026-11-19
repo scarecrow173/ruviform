@@ -63,7 +63,7 @@ host-side bridge（子プロセス内で実 `.clap`/`.vst3` cdylib を dlopen �
 - VST3 params 表は `IEditController::getParameterCount`/`getParameterInfo` → `ParamInfo`（fixture: 1 param・`ParamId(0)`・`[0.0, 1.0]`・default `1.0`・`unit: ""`）
 - 両規格: `save_state`/`restore_state`/`open_gui`/`close_gui` は `Plugin` 既定の `Err(HostError::Unsupported)` を継承 — bridge は規格 state/GUI 動詞を**一切呼ばない**（VST3 controller の `setState`/`getState` は `kResultOk` no-op stub であり、呼ぶと偽の state 成功を観測する — 呼出し自体を禁止）
 - intern-once: `PluginDescriptor`/`ParamInfo` の `&'static` 境界は `Library::load` scan 時 + factory 構築時に限り `String::leak`/`Vec::leak` で実体化 — `descriptors()`/`params()`/`descriptor()` は intern 済み値を返すのみ・per-call/per-instance 増殖なし
-- defined rejection: 不在 path・規格 entry 欠落バイナリ・scan 失敗・lifecycle 非 Ok（`kResultFalse`/`kResultErr`/`kNotImplemented`）・dlopen 失敗は全て `Err(ClapHostError)`/`Err(Vst3HostError)` または `Plugin` 側 `Err(HostError)` で収束 — panic・abort・UB・応答なしハングなし
+- defined rejection: 存在しない path・規格 entry 欠落バイナリ・scan 失敗・lifecycle 非 Ok（`kResultFalse`/`kResultErr`/`kNotImplemented`）・dlopen 失敗は全て `Err(ClapHostError)`/`Err(Vst3HostError)` または `Plugin` 側 `Err(HostError)` で収束 — panic・abort・UB・応答なしハングなし
 - unsafe は `host` module 内 scoped `#[expect(unsafe_code)]` + SAFETY のみ（`PluginEntry::load`・`libloading` symbol 解決・COM vtable 呼出し・ProcessData 組立）
 
 ## Examples
@@ -72,7 +72,7 @@ host-side bridge（子プロセス内で実 `.clap`/`.vst3` cdylib を dlopen �
 - Given 同 fixture、When `Vst3Library::load` → `descriptors()`、Then component のみ 1 要素・`id` が `GainComponent::CID` bytes derive の platform 別 hex と一致（regression pin literal: Windows `"3d2c1b5a5f4e7b6a8c9d0e1f2a3b4c5d"` / その他 `"5a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d"`）・controller クラスが採用されない
 - Given `Vst3Plugin` が `Initialize` 済、When `prepare(config)` → `start_processing` → `process_host` → `stop_processing` → instance drop、Then 規格層で `setActive(true)` → `setupProcessing` → `setProcessing(true)` → `process` → `setProcessing(false)` → `setActive(false)` → `terminate` の順で駆動（`setActive(false)`/`terminate` は `Drop` 駆動 — 中立 `Deactivate` に plugin hook なし・fixture の `Activated`/`Processing` 状態機械が拒否しない順序）
 - Given `ClapPlugin`/`Vst3Plugin` が任意 lifecycle 状態、When `save_state`/`restore_state`/`open_gui`/`close_gui`、Then 常に `Err(HostError::Unsupported)` — 規格 state/GUI 動詞を子プロセス内で一度も呼ばない（state stub の `kResultOk` no-op を「成功」と誤観測しない）
-- Given 不在 path・`GetPluginFactory`/`clap_entry` 欠落 fixture・規格外バイナリ、When `Library::load`/`descriptors()`/`create()`、Then `Err(ClapHostError)`/`Err(Vst3HostError)` — panic しない・partial instance が残らない
+- Given 存在しない path・`GetPluginFactory`/`clap_entry` 欠落 fixture・規格外バイナリ、When `Library::load`/`descriptors()`/`create()`、Then `Err(ClapHostError)`/`Err(Vst3HostError)` — panic しない・partial instance が残らない
 - Given `descriptors()` を複数回呼出、Then 同一値（`PartialEq`）かつ load 時 scan の cached 値を返す — 呼出毎の再 scan/leak 増殖なし（intern-once の once 性）
 
 ## Guarantees

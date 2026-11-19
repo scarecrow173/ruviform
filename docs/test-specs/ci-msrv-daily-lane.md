@@ -47,7 +47,7 @@ relations:
 
 ## Purpose
 
-MSRV 検証がローカル必須レーンから日次 CI lane へ移るにあたり、(1) `ci.yml` の `msrv-verify` job が 4 タスクを `rust@1.89.0` で実際に実行し、(2) その結果が `ci-summary` の fail-closed 集約と tracker 伝播経路に既存 job と同一の形で乗り、(3) 既存 lane の検証意図を一切弱めないことを保証する。
+MSRV 検証がローカル必須レーンから日次 CI lane へ移るにあたり、(1) `ci.yml` の `msrv-verify` job が 4 タスクを `rust@1.89.0` で実際に実行し、(2) その結果が `ci-summary` の fail-closed 集約と tracker 伝播経路に既存 job と同一の形で含まれ、(3) 既存 lane の検証意図を一切弱めないことを保証する。
 
 ## Feature
 
@@ -55,7 +55,7 @@ ci MSRV lane — `ci.yml` の `msrv-verify` job と `ci-summary` 集計・`ci/su
 
 ## Rules
 
-- INV-1(4 タスク実行): `msrv-verify` job は `test-ofx-msrv`・`test-ui-test-msrv`・`test-observability-msrv`・`test-io-msrv` の 4 タスクを全て実行し、各タスクは `mise exec rust@1.89.0` 経由で MSRV toolchain 上で走る。各 step は `if: ${{ !cancelled() }}` とし、先行タスク失敗時も後続タスクが実行される（cancel 時のみ停止）。
+- INV-1(4 タスク実行): `msrv-verify` job は `test-ofx-msrv`・`test-ui-test-msrv`・`test-observability-msrv`・`test-io-msrv` の 4 タスクを全て実行し、各タスクは `mise exec rust@1.89.0` 経由で MSRV toolchain 上で実行される。各 step は `if: ${{ !cancelled() }}` とし、先行タスク失敗時も後続タスクが実行される（cancel 時のみ停止）。
 - INV-2(宣言 lane): `ci-summary.needs`・`summary.mjs` `REQUIRED_JOBS`・`REQUIRED_CHECKOUT_LEGS`・`summary.test.mjs` 列挙の 4 箇所が `msrv-verify` で一致し、needs からの削除・evidence 欠落が fail-closed で検出される。
 - INV-3(sha evidence): `msrv-verify` は `CHECKOUT_LEG=msrv-verify` で `checkout-sha-msrv-verify-attempt-<n>` artifact を upload し、他 lane と同一の実測 sha を供給する。
 - INV-4(lane evidence): `if: always()` の step で `GITHUB_STEP_SUMMARY` に run/attempt・commit・宣言 rust-version・4 step outcome を記録する（失敗時も証跡が残る）。

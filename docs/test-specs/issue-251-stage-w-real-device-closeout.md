@@ -82,7 +82,7 @@ input/output stream が同一 `ClockDomainId` を報告し `same_clock_domain` �
 
 WASAPI 上では非同一 domain pair は構成不能（全 stream が `MONOTONIC`）のため、
 contract 判定を lane 内で実測する: `same_clock_domain(domain, UNKNOWN) == false`、
-`same_clock_domain(UNKNOWN, UNKNOWN) == false` — `UNKNOWN` 側に倒れる
+`same_clock_domain(UNKNOWN, UNKNOWN) == false` — `UNKNOWN` 側に分類される
 rejection/fallback verdict を記録する。実 hardware の非同一 pair は `NotRun` と記録する。
 
 ## Feature: format 不一致の明示検証

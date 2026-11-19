@@ -111,7 +111,7 @@ Cleanup は作成時 identity と照合した降下削除のみを行う。
   foreign dir・inode 再利用）は削除せず retained 報告。
   `remove_root` は empty のみ。`CleanupReceipt`/`CleanupFailure` が
   実績/残留を分離報告。Drop の best-effort cleanup は失敗を
-  握りつぶす。
+  破棄する。
 - R9（OS 別 primitive）: unix は `openat`/`O_NOFOLLOW`/`O_DIRECTORY`
   `O_CREAT|O_EXCL`、windows は `NtCreateFile`/`NtOpenFile`/
   `NtDeleteFile` + `RootDirectory`/`OBJ_DONT_REPARSE`/

@@ -53,7 +53,7 @@ Issue #20 で導入するメディア I/O 抽象境界の振る舞い契約—�
 ## Rules
 
 - **demux/mux と decode/encode は別の抽象として分離する**。`Demuxer`（コンテナ→packet）/ `Muxer`（packet→コンテナ）/ `Decoder`（packet→frame）/ `Encoder`（frame→packet）は 4 系統の別 trait であり、単一の「読み出し」「書き出し」抽象への併合を禁止する。抽象的な流れは `Demuxer` → `Packet` → `Decoder` → `AudioFrame` / `VideoFrame`、mux/encode はその逆方向（`Encoder` → `Packet` → `Muxer`）とする。
-- **`Packet` はストリーム参照・PTS/DTS・フラグ・所有バイト列を持つ値型**。`StreamId` 等で media-core のストリームを参照し、キーフレーム等の符号化単位属性フラグと符号化バイト列を運ぶ。本契約のバイト列表現は所有型とし、借用 / zero-copy backing は将来評価へ送る。
+- **`Packet` はストリーム参照・PTS/DTS・フラグ・所有バイト列を持つ値型**。`StreamId` 等で media-core のストリームを参照し、キーフレーム等の符号化単位属性フラグと符号化バイト列を持つ。本契約のバイト列表現は所有型とし、借用 / zero-copy backing は将来評価へ送る。
 - **codec 記述型は codec 識別・opaque パラメータ・format 写像の 3 責務を持つ**。media-io が新設する codec 記述型は、Ruviform 管理の codec ID/名による識別、codec private data の opaque バイト列保持、`AudioFormat` / `VideoFormat` への写像を担う。media-core の `StreamDescriptor` / `StreamKind` は codec 非依存の既存型をそのまま再利用し、codec 依存に改変しない。PCM PoC が通らない写像経路は合成データ・単体テストでカバーする。
 - **音声デコード出力は `AudioFrame` で PTS/duration を運搬する**。`AudioBuffer` + `MediaTime` PTS + `Option<MediaDuration>` duration を束ねる専用の名前付き型を media-io に置き、`VideoFrame` の PTS+duration 形状と対称にする（タプル返却は採用しない）。audio-core は非改変とし、デコーダの音声出力は境界で planar f32 正準に変換した `AudioBuffer` を運搬する。
 - **エラーは media-io 固有 `Error` / `Result` に正規化し、正常終端は `Option` で返す**。バックエンド由来の詳細は正規化分類（I/O 失敗・非対応・破損/不正データ・EOS 等）として内包し、外部エラー型・外部型名を公開 API に露出しない（詳細は `std::error::Error::source` 経由の型消去診断まで）。パケット・フレーム読み出しの正常終端（EOS）は `Err` ではなく `Option` / 専用終端表現で返し、`Error` の EOS 分類はハード終端・途中切断等の異常系に限定する。上流値型 `Error`（`InvalidValue` / `TimeOverflow` 等）は media-io `Error` の対応分類へ正規化写像する。

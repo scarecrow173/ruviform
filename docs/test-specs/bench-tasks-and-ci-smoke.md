@@ -54,7 +54,7 @@ Issue #19 PoC のベンチ検証が保証すべき運用意図——「全量計
 - **`mise run bench` は全量計測入口**: spec 受け入れ基準「`mise run bench` で候補別・サイズ別の計測が実行できる」の正本。`bench` タスクは「ベンチマーク未実装のため実質 no-op」から脱却し、`cargo bench --workspace` の実計測を実行して全 matrix（8 カーネル × 約 10 impl × 7 サイズ × 入力バリアント ≈400–560 ケース）を対象とする。
 - **`bench-smoke` は CI/短時間スモーク**: `cargo bench -p ruviform-math -- --test`。criterion の `--test` モードは各ベンチを計測せず 1 反復だけ実行して完走性を検証するため、短時間（分数オーダー）で終わる。
 - **CI bench ジョブはスモークのみ実行**: `.github/workflows/ci.yml` の `bench` ジョブ（`ubuntu-latest`・`workflow_dispatch` 専用）は `mise run bench` ではなく `mise run bench-smoke` を呼ぶ。CI で全量計測は実行しない（実行時間・ノイズのため）。全量計測は Windows x64 主計測環境でのローカル手動実行に分離する。
-- **cargo 呼び出しは mise 経由**: 部分計測（quick-run filter）は `mise exec -- cargo bench -p ruviform-math -- <filter>`（例: `dot`・`1024`）とし、検証・計測入口として裸の `cargo` を使わない（AGENTS.md「cargo コマンドは直接実行せず `mise run` / `mise exec --` 経由」の規約）。
+- **cargo 呼び出しは mise 経由**: 部分計測（quick-run filter）は `mise exec -- cargo bench -p ruviform-math -- <filter>`（例: `dot`・`1024`）とし、検証・計測入口として `cargo` を直接呼ばない（AGENTS.md「cargo コマンドは直接実行せず `mise run` / `mise exec --` 経由」の規約）。
 - **実行時間予算を削減設定で制御**: 全 matrix は criterion 既定設定（warmup・measurement・sample 100）で 1 時間超が見込まれるため、PoC 用 `BenchmarkGroup` 設定（`warm_up_time` / `measurement_time` / `sample_size` 削減）で全量 ≈20–30 分以内を目安に短縮し、quick-run filter で更に絞り込める。採用した設定値と予想・実測の所要時間は experiment log の環境メタデータに記録する。
 - **マルチランは「run → 集約 → 次 run」順**: criterion の `estimates.json` は run ごとに上書きされるため、分散記録のための 2–3 run は各 run 完了直後に `estimates.json` を集約（jsonl へ退避）してから次 run を実行する。
 - **experiment log は hook 適合形式**: `docs/impl/exp/dsp-simd-poc-<yyyymmdd>-<seq>.jsonl` は 1 行 = 1 計測点の JSON Lines とし、LF 改行・末尾改行ありで生成してコミット対象とする（prek の end-of-file-fixer / mixed-line-ending 系 hook を通過する形式）。環境メタデータ（OS・CPU 型名・コア数・rustc 版・criterion 版・`Level::new()` / `pulp::Arch::new()` 検出結果）を run 冒頭で標準出力に出し、experiment log 文書へ転記する。
@@ -73,7 +73,7 @@ Issue #19 PoC のベンチ検証が保証すべき運用意図——「全量計
 ## Guarantees
 
 - `mise run bench` が実際に全量計測を実行する入口として機能し続ける（no-op 記述の残置・タスク名だけの存在を防ぐ）。
-- CI でベンチハーネスの破損が短時間・決定的に検出される（スモーク lane がハーネスの腐敗を防ぐ）。
+- CI でベンチハーネスの破損が短時間・決定的に検出される（スモーク lane がハーネスの劣化を防ぐ）。
 - 全量計測が CI をブロックしない（スモーク分離により CI 実行時間・計測ノイズの問題を回避）。
 - 計測結果が環境メタデータつき・hook 適合・コミット可能な形式で残り、採否 ADR の根拠データとして再利用できる。
 - 部分計測（quick-run filter）とマルチラン集約の手順が規約として固定され、実装者がコマンドを再発明しなくてよい。
@@ -88,8 +88,8 @@ Issue #19 PoC のベンチ検証が保証すべき運用意図——「全量計
 
 ## Risk
 
-- スモーク分離を欠くと、CI で全量計測（既定設定で 1h 超）が走りジョブが実質使用不能になるか、逆に CI 検証を外してハーネス破損が未検出のまま残る。
-- `bench` タスクの記述が実態と乖離すると、検証入口の信頼が崩れ「`mise run bench` が通った」という報告の意味が失われる。
+- スモーク分離を欠くと、CI で全量計測（既定設定で 1h 超）が実行されジョブが実質使用不能になるか、逆に CI 検証を外してハーネス破損が未検出のまま残る。
+- `bench` タスクの記述が実態と乖離すると、検証入口の信頼が崩れ「`mise run bench` が成功した」という報告の意味が失われる。
 - 実行時間予算の削減設定がなければ全量計測が現実的に実行不能になり、採否判断の計測データ自体が得られない。
 - jsonl が hook 非適合（CRLF・末尾改行なし）だとコミット時にフック失敗または無言の整形差分が混入し、experiment log の証拠性が損なわれる。
 - マルチランの集約順序を誤ると `estimates.json` の上書きで前回 run の生データを失い、分散記録が成立しない。
