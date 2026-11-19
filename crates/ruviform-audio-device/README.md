@@ -12,7 +12,7 @@
   `DeviceError` に正規化される。第 2 のバックエンド（cubeb 等）は feature
   スイッチではなく*別のアダプタクレート*になる。
 - 例外 — Windows/WASAPI 入力の native path（Issue #565）: cpal の公開
-  callback metadata は `frame_position` を運べない（WASAPI の
+  callback metadata は `frame_position` を渡せない（WASAPI の
   `IAudioCaptureClient::GetBuffer` device position は cpal 内部で破棄
   される）ため、Windows かつ host = WASAPI の入力ストリームのみ
   `src/wasapi_input.rs` が cpal をバイパスしてネイティブに駆動し、
