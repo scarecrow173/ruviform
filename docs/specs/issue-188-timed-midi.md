@@ -148,7 +148,7 @@ Synvelis #12 の P0 MIDI 録音/再生が Ruviform 側の「高精度入力 time
 - engine 層の録音 tap（TimedInputEvent を消費者へ投影する観測 API）。
 - `NoteLedger` の controller chase 拡張（CC64/全 CC reset、plugin preset restore 時の state re-send）。
 - MIDI2/UMP の per-note controller・16bit velocity の全精度対応（canonical MSB-justified 値で両表現を保持するが、規格側写像は adapter が判断）。
-- Synex / System message の語彙・wire 化。
+- SysEx / System message の語彙・wire 化。
 
 ## Sources and Relations
 
