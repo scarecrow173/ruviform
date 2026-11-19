@@ -95,7 +95,7 @@ floor（Issue #410 P2 slice）。
   リセット）を跨いで維持される。これにより remount 前の古い
   revision が fresh binding に誤適用されない。
 - Rule: `detach` → `attach` では binding が存続するため
-  `last_observed` guard が効き、detached 中の projection は
+  `last_observed` guard が機能し、detached 中の projection は
   `attached=false` で drop、reattach 後は revision guard で
   古い projection を drop する。
 - Rule: floor は受理された projection の revision にのみ更新

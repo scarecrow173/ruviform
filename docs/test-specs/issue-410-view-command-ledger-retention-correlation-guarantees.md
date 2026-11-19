@@ -129,5 +129,5 @@ View command ledger の bounded retention と correlation semantics
 ## Risk
 
 - eviction 優先度や drop 退役の契約が将来の変更で崩れると、
-  receipt が静かに unrouted 化するか ledger が再び無制限化する。
+  receipt が検知されないまま unrouted 化するか ledger が再び無制限化する。
   本 test spec の Rule がその回帰を検出する。

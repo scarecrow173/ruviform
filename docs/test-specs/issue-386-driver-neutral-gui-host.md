@@ -74,7 +74,7 @@ Fake Driver と GPUI Driver で**同一の意味論**を持つこと、および
 - `resize`/`focus`/`destroy_window` は不明/破棄済み `WindowId`
   で `UiError::Host`、capability 未対応要求は `UiError::Unsupported`。
 
-### R3: GPUI Driver の同一 meaning（feature `gpui`）
+### R3: GPUI Driver の同一の意味論（feature `gpui`）
 
 - `#[gpui::test]` + `TestAppContext` で、同一シナリオ
   （create 2 window → Ready → request_close → Veto → Approve →

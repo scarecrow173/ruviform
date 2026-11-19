@@ -49,9 +49,9 @@ metadata:
 fake ops による**決定的な contract test** で固定する。実機・実
 plugin・実 GPU を使わない — ここで保証するのは状態機械と語彙の
 契約であり、実 Native Dock / pixel compositing の PASS ではない。
-実装が設計から乖離した場合（degrade が `Attached` に化ける、
+実装が設計から乖離した場合（degrade が `Attached` と誤分類される、
 timeout が terminal event を重複させる、GPU cause が `Internal`
-に潰れる）に退行を検出するために存在し、契約語彙が安定した後も
+に縮退する）に退行を検出するために存在し、契約語彙が安定した後も
 残す。
 
 ## Feature
@@ -71,7 +71,7 @@ Plugin Editor Session の hardening — bounded request timeout・
   同じ終端 — `Failed{Timeout}` state + `Failed{Timeout}` event —
   に収束する。`Creating`/`Recovering`/`Detaching` は
   `complete_attach`/`complete_detach` の Err 経路、`Closing` は
-  `mark_failed` 経路（`complete_close` は error を運ばない）。
+  `mark_failed` 経路（`complete_close` は error を持たない）。
   いずれも後続 `complete_*` は `StaleRequest` で拒否され、
   terminal event は重複しない。
 - **SH-R3 (no premature fire)**: deadline 未到達の `tick` は
@@ -151,12 +151,12 @@ SH-xx case は `crates/ruviform-plugin-host/tests/editor_session.rs`
 
 ## Risk
 
-- degrade が `Attached` に化ける退行 → Native Dock PASS の水増し。
+- degrade が `Attached` と誤分類される退行 → Native Dock PASS の水増し。
   SH-09/SH-14 が event 排他を pin する。
 - timeout が terminal event を重複/欠落させる退行 → driver の
   復旧判断を誤らせる。SH-01 の `StaleRequest` 確認が pin する。
-- `Closing` timeout で `editor_live` を落とし adapter `close` を
+- `Closing` timeout で `editor_live` を偽にし adapter `close` を
   skip する退行 → plugin editor が孤児化。SH-04 が再 close 経路を
   pin する。
-- GPU cause が `Internal` に潰れる退行 → failure 分類の喪失。
+- GPU cause が `Internal` に縮退する退行 → failure 分類の喪失。
   SH-16/SH-17 が pin する。

@@ -84,4 +84,4 @@ Plugin-dock scenario session lifecycle cases — 実バイナリ経路の sessio
 
 ## Risk
 
-- verdict 正直性の保証が落ちると、fake slot 上の契約適合を実 Plugin/native dock の Pass と誤認する証拠が生まれる — Issue #389 の受入判定を歪める。
+- verdict 正直性の保証が失われると、fake slot 上の契約適合を実 Plugin/native dock の Pass と誤認する証拠が生まれる — Issue #389 の受入判定を歪める。

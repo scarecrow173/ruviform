@@ -96,9 +96,9 @@ double close・timeout・OS unsupported・host crash が状態機械を
   orphan として可視であり続ける）、`ops.close` の `Ok` 配送
   または termination で偽。adapter editor 非生存の session
   は `complete_close` で収束し adapter を呼ばない。
-- async `complete_close` は error を運ばない — `ops.close` 拒否は
+- async `complete_close` は error を持たない — `ops.close` 拒否は
   配送せず request を Closing のまま残し、deadline timeout で
-  `Failed{Timeout}` へ落ちる。収束は後続の `close` 再試行
+  `Failed{Timeout}` に収束する。収束は後続の `close` 再試行
   （sync/async 経路）が担う — 現行 contract の定義済み挙動。
 - session id が registry に存在しない配送は `stale_drops`、
   request 不一致の `complete_*` は `StaleRequest` を返し
@@ -166,7 +166,7 @@ SM-xx case は `crates/ruviform-plugin-host/tests/editor_session_driver.rs`
 | SM-09a | SM-R1/R2 | Attached → `hang(Detach)` → reparent → `advance` → `tick_all` | `Failed{Timeout}`。`Detached` event なし。`ops.reattach` 未呼出 |
 | SM-09b | SM-R1/R2 | Attached → reparent → `hang(Reattach)` → pump（detach 配送・`Detached` 発火・Reattach は queue 残留）→ `advance` → `tick_all` | `Detached` 発火済み・`Reattached` なしで `Failed{Timeout}`（re-attach request の deadline）。遅延配送は `StaleRequest` |
 | SM-10 | SM-R3 | `open_by_mode`: Docked=`Unsupported`・Floating=`Ok` → open(Docked)→pump → `degrade(Floating)`→pump | `Failed{Unsupported}` → `Attached{Floating}` + events `[Failed{Unsupported}, Degraded{Floating}]`。`Attached`/`Recovered` event なし — degrade は requested-mode attach と区別される |
-| SM-11 | SM-R2/R3 | 全 lifecycle op `Unsupported`・caps 全 `Unsupported` の defined-refusal adapter → probe(caps) → open→pump → close | caps は全 `Unsupported`（`Ok(caps)` で返る — 実 `L1EditorOps` は caps も `Err` を返す点で別形）。open は `Failed{Unsupported}`。editor 非生存の close は adapter 非呼出しで `Closed` 収束 — defined refusal が fake success に化けない |
+| SM-11 | SM-R2/R3 | 全 lifecycle op `Unsupported`・caps 全 `Unsupported` の defined-refusal adapter → probe(caps) → open→pump → close | caps は全 `Unsupported`（`Ok(caps)` で返る — 実 `L1EditorOps` は caps も `Err` を返す点で別形）。open は `Failed{Unsupported}`。editor 非生存の close は adapter 非呼出しで `Closed` 収束 — defined refusal を fake success にしない |
 | SM-12 | SM-R5 | idA open→Attached → reparent（Detach pending 保持）→ `crash(HostLost)` → pump（遅延配送は stale）→ 再 `crash` | `Terminated{HostLost}` exactly once + `Closed` state。遅延配送は stale。2 回目 crash は event を増やさない |
 | SM-13 | SM-R5 | `hang(Open)` → open → `crash(GraphicsLost)` → `unhang`→pump | in-flight open 中の crash で `Terminated{GraphicsLost}` 1 件 → `Closed`。遅延 attach 配送は `StaleRequest` で二重終端なし |
 | SM-14 | SM-R5 | instance A: open→Attached→`close`→pump（`Closed`）。instance B: open→`crash(B)` | A は `Closed` event・`session_for_instance(A)` は `end_session` まで残存。B は `Terminated{HostLost}`・binding 即時解放 — window close と instance destroy が別終端として区別される |

@@ -64,7 +64,7 @@ relations:
 
 ### Rule: reconcile は stable key を保つ
 
-- Example: 落ちた key は `Removed`、残存 key（knob）は identity を保つ。
+- Example: 削除された key は `Removed`、残存 key（knob）は identity を保つ。
   - 検査（Fake）: `ui_dvr_02_parity_new_kinds_mount_reconcile`。
   - 検査（GPUI）: `rvf_view_parity_new_kinds_mount_reconcile`（`mise run test-ui-gpui`）。
 

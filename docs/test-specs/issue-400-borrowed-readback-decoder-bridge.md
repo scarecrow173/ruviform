@@ -82,7 +82,7 @@ metadata:
   API 側で retry・合成・黙殺しない。
 - R-4（scope 完了保証）: `f` が `Ok` / `Err` / panic のいずれで終わっても
   呼び出しは戻る（serve が無限待ちしない）。panic は caller へ伝搬
-  する（error へ潰さない）。unwrap で catch した場合に panic payload
+  する（error へ変換しない）。unwrap で catch した場合に panic payload
   が元の panic と一致すること。
 - R-5（escape 不能）: `f` に渡すのは `&mut dyn Demuxer`。compile 上、
   scope 外に所有値を持ち出せない（型検査で保証。test では型制約を
