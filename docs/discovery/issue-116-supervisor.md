@@ -136,7 +136,7 @@ Issue [#116](https://github.com/scarecrow173/ruviform/issues/116) は Issue [#31
 | (b) `PluginHost` composite メソッド（例: `restart_failed(handle) -> Result<PluginHandle>` + `poll_supervision()`） | API が `PluginHost` に 1 メソッドで収まる・crate 外依存ゼロ | **core に再起動語彙を持ち込む** — AC4「core は自動再起動しない」の境界が「opt-in メソッドがある」と読み取りにくくなる。`PluginHost` が handle→plugin_id 逆引きと recipe 簿記を新たに内部保有する必要（現状は route/slot しか持たない）。`PluginHost::execute` 経由の全コマンドに recipe 追跡が混入する | no — core 境界を汚す |
 | (c) consumer パターン文書のみ（docs/designs か test-specs で標準手順を記述し、各 consumer が自前で実装） | コード追加ゼロ — 最小 diff | 全 consumer が同一の（通知 drain → Destroy → Instantiate → replay）を再実装 — **構造的問題の兆候そのもの**（同じドメインルールが複数 caller に分散）。attempt/backoff/exactly-once の落とし穴（通知 drain 前の Destroy で通知喪失・mid-create 死・`ChildExit{None,None}`）を各 caller が踏む | no — 機械手順が DRY 化できない |
 
-推奨方向: **(a) host util 層** — `supervisor` 相当の opt-in モジュールを `ruviform-plugin-host` に置く（拡張層ルール内・`PluginHost` の公開面のみ利用・依存追加なし）。core `PluginHost` の型・フィールド・`execute`/`try_recv_notification` 语义は一切変更しない（AC4 維持）。`PluginHost` を `&mut` で借りる形なら `!Send`/`!Sync` 制約も満たす（supervisor 自体も `!Send` で良い — 同一スレッドの非 RT ループ）。
+推奨方向: **(a) host util 層** — `supervisor` 相当の opt-in モジュールを `ruviform-plugin-host` に置く（拡張層ルール内・`PluginHost` の公開面のみ利用・依存追加なし）。core `PluginHost` の型・フィールド・`execute`/`try_recv_notification` の意味は一切変更しない（AC4 維持）。`PluginHost` を `&mut` で借りる形なら `!Send`/`!Sync` 制約も満たす（supervisor 自体も `!Send` で良い — 同一スレッドの非 RT ループ）。
 
 ### 軸 2: 再起動スコープ（同 route のみ vs 他 route への migrate）
 
@@ -214,7 +214,7 @@ Issue [#116](https://github.com/scarecrow173/ruviform/issues/116) は Issue [#31
 
 ## Tentative Conclusions and Hypotheses
 
-- **confirmed**: `PluginHost` core への自動再起動ロジック導入は **不可** — #31（再起動は呼出し側判断）と AC4（自動再起動なし）の双方を破る。core の語彙（`Failed`/`InstanceFailed`/`Err(Failed)`/通知语义）は不変
+- **confirmed**: `PluginHost` core への自動再起動ロジック導入は **不可** — #31（再起動は呼出し側判断）と AC4（自動再起動なし）の双方を破る。core の語彙（`Failed`/`InstanceFailed`/`Err(Failed)`/通知の意味）は不変
 - **confirmed**: supervisor 面は `ruviform-plugin-host` 内の **opt-in util 層**（`supervisor` モジュール or `SupervisedPluginHost` ラッパ）が推奨 — `PluginHost` 公開 API のみで機械的復旧手順を集約でき、core 無変更で AC4 を維持。crate テストでは既存 `l1-test-worker` + `#[path]` harness がそのまま使える
 - **confirmed**: 再起動スコープは **同 `plugin_id`（同 route）のみ** — route 横断 migrate は `Instantiate` の登録時 claim モデルと矛盾し YAGNI。supervisor 側に handle→plugin_id の帳簿が要る（core に逆引き面なし）
 - **confirmed**: 再 spawn 経路は **`Destroy{failed}` → `Instantiate{plugin_id}`** の既存 2 コマンド — `Failed` は `Destroy` 可能、`Instantiate` は pool evict を自動処理して fresh 子に載る。handle は毎回新規 mint（generation++）— supervisor は新 handle を event で caller に渡し論理インスタンス→handle 写像を更新しなければならない
@@ -223,7 +223,7 @@ Issue [#116](https://github.com/scarecrow173/ruviform/issues/116) は Issue [#31
 - **confirmed**: supervisor は **caller 駆動 poll 型**（`poll(&mut host, now: Instant) -> Vec<SupervisionEvent>`）— `!Send`/`!Sync` 制約・non-RT ループ両立・スレッド不要・`Instant` inject 可能で backoff テスト容易。内部タイマー・新スレッドは作らない
 - **hypothesis**: 最小 useful ポリシー形状は `Policy { max_attempts, base_delay, max_delay }` 相当 + attempt カウンタ（論理インスタンス単位・respawn で継承・成功後一定期間生存で reset 可）— 値は **OPEN**（YAGNI 観点では「1 回即時リトライ」でも成立するかが user 確認論点）
 - **hypothesis**: endpoint/RT 側の再配線（`prepare_endpoint` 再 attach・RT 所有者への差し替え）は caller 責務 — supervisor は `Restarted{old,new}` を返すだけ。これは `prepare_endpoint` が `&mut` borrow を要し RT 所有者が別スレッドにいる構造的必然
-- **hypothesis**: `Err(Failed)` 語彙は supervisor の give up 報告に再利用しない — give up は `SupervisionEvent::GaveUp` 相当で返し、core の `Failed` は「子死亡で live インスタンスが terminal」语义のまま残す（supervisor が諦めた時点でそのインスタンスの slot は既に解放済み — 「`Failed` だが `Destroy` 可能」语义とは別物）
+- **hypothesis**: `Err(Failed)` 語彙は supervisor の give up 報告に再利用しない — give up は `SupervisionEvent::GaveUp` 相当で返し、core の `Failed` は「子死亡で live インスタンスが terminal」という意味のまま残す（supervisor が諦めた時点でそのインスタンスの slot は既に解放済み — 「`Failed` だが `Destroy` 可能」という意味とは別物）
 
 ## Open Questions
 
@@ -233,7 +233,7 @@ Issue [#116](https://github.com/scarecrow173/ruviform/issues/116) は Issue [#31
 
 - **supervisor util の crate 位置と公開形**: `ruviform-plugin-host` 内 `supervisor` モジュールの新設を決定するか（公開 API 追加 — 新規モジュール + `SupervisionEvent`/`Policy`/`Recipe` 型。公開 enum 追加は `#[non_exhaustive]` 方針で後方互換）。`docs/adr/` での確定記録が要る
 - **「自動再起動なし」契約の解釈範囲**: supervisor util の存在自体が AC4 を破らないことの確認 — 「`PluginHost` core は自律的に再起動しない（caller が明示的に util を呼んだ時のみ）」と設計文書に明記するか
-- **give up 後の语义**: supervisor が max_attempts 到達後の論理インスタンスを caller 側にどう報告するか（`SupervisionEvent::GaveUp` 相当）— `Err(Failed)` を再利用しないことを ADR/design で明確化するか
+- **give up 後の意味**: supervisor が max_attempts 到達後の論理インスタンスを caller 側にどう報告するか（`SupervisionEvent::GaveUp` 相当）— `Err(Failed)` を再利用しないことを ADR/design で明確化するか
 
 ### design 確定対象（実装設計 — ADR ほどの重さは不要）
 

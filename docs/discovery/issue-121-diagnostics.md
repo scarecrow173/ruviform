@@ -77,7 +77,7 @@ Issue [#121](https://github.com/scarecrow173/ruviform/issues/121) は **#76 clos
 
 1. **underrun メトリクス** — pass-through submit・dropped submit・`RESULT_FAILED` の観測面（`HostNotification` / composite を surface 候補として再評価）
 2. **子 stderr 配管** — `Stdio::inherit` → bounded piped stderr drain + 診断経路（#76 design L323 deferred item の re-engagement）
-3. **失敗原因 payload** — `WireError`→`HostError::Ipc` collapse で失われる原因詳細を通知型の payload として運ぶ
+3. **失敗原因 payload** — `WireError`→`HostError::Ipc` collapse で失われる原因詳細を通知型の payload に載せる
 
 Issue 本文は本 Issue を「`ruviform-observability`（#101 foundation）の最初の consumer 候補」と位置づけ、「#104 PoC verdict（counter pair・`rt_bridge` 形状）との整合」を要求条件とする。
 
@@ -183,7 +183,7 @@ pass-through / dropped submit / `RESULT_FAILED` は全て **`l1/data.rs` の `Rt
 ### 主要な構造的不整合（この Issue が解く対象）
 
 1. **3 種の underrun（pass-through submit・dropped submit・`RESULT_FAILED`）に観測手段が全くない** — RT 側でも非 RT 側でも計数されず、RT 契約により「観測できるのは共有 atomic か pull 型 query のみ」という制約がある。
-2. **失敗原因の喪失は最早地点（reader の `io::Error` drop）で発生し、下流（waiter `Err(Ipc)`・`ChildExit` 通知）は全て畳み込み済み** — payload を運ぶには converge 呼出し点に原因値を通す配線が要る（現行 `converge_child(shared, Option<ChildExit>)` の引数は exit status のみ）。
+2. **失敗原因の喪失は最早地点（reader の `io::Error` drop）で発生し、下流（waiter `Err(Ipc)`・`ChildExit` 通知）は全て畳み込み済み** — payload に載せるには converge 呼出し点に原因値を通す配線が要る（現行 `converge_child(shared, Option<ChildExit>)` の引数は exit status のみ）。
 3. **stderr が診断の唯一の生の情報源でありながら管理されていない** — inherit は「診断をホストプロセスの stderr に混ぜる」形で、収集・保持・構造化の経路がない。piped に転じると bounded-buffer deadlock と 3 スレッド目という新コストが発生する。
 4. **通知は「失敗の発生」の exactly-once イベントで、連続量（counts）とは器が違う** — underrun をイベント化すると unbounded mpsc と O(slots) drain を高頻度に打つ形になり器に合わない。counts は pull 型スナップショットが自然。
 5. **leg は endpoint checkout で move する** — 計装値を leg フィールドに置くと checkout 中は host から観測不能になる（`EndpointUnavailable` と同じ「processing surface が移動した」状況）。共有 atomic（`rt_state` 先例）が置き場の自然解。

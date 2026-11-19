@@ -107,4 +107,4 @@ Issue #182 は「任意の制作 View をタブ化・分割・切り離し・再
 
 ## Conclusion
 
-新規契約はすべて `ruviform-ui` 側に収まる（backend 型を持たない UI 基盤基盤層の責務: 「Generic Dock/Window/Reusable View State を UI 層へ」— target architecture 合意）。adapter 側の必須変更は `WindowConfig.position` のみ（tao `with_position` への直通）。WindowHandle への新 trait メソッド追加は不要（位置は生成時パラメータとして運ぶ）。
+新規契約はすべて `ruviform-ui` 側に収まる（backend 型を持たない UI 基盤層の責務: 「Generic Dock/Window/Reusable View State を UI 層へ」— target architecture 合意）。adapter 側の必須変更は `WindowConfig.position` のみ（tao `with_position` への直通）。WindowHandle への新 trait メソッド追加は不要（位置は生成時パラメータとして渡す）。

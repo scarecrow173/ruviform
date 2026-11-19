@@ -75,6 +75,6 @@ clap-validator は 5 plugin 全て canonical leg Passed（0 failed）。
   zero-diff を維持。VST3 component の lifecycle 契約は fixture 側でのみ
   修正した。production adapter に同型の疑義がある場合は Coordinator 判断へ。
 - `test_fault` の fatal fault mode は param-mutating validator case と
-  本質的に相性が悪い（設計上クラッシュする）。除外は「検証を弱める」のではなく
+  相性が悪い（設計上クラッシュする）。除外は「検証を弱める」のではなく
   「fixture の意図的 fault surface を一般 param suite の対象外とする」宣言的
   scoping であり、理由を run.json と本書に記録する。

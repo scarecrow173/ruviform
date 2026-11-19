@@ -85,7 +85,7 @@ metadata:
 
 Ruviform の GUI 技術方針は 2026-10 の Issue #1 / #28 で **WebView ファースト・ハイブリッド**（[ui-architecture-webview-hybrid.md](ui-architecture-webview-hybrid.md)）と **wry+tao / Solid / WebGL2 実測採用**（[ui-tech-selection-poc.md](ui-tech-selection-poc.md)）として確定し、`crates/ruviform-ui`・`crates/ruviform-ui-webview`・`ui/*` TypeScript パッケージの headless 実装まで進んだ。2026-11-07 の 3repo 横断レビュー（Issue #384・#257・#385 冒頭の確定仕様 v2）で、GUI 方針は **Design First + GPUI Native First + DTCG Design Contract + Native Component Lab** への移行が合意された。
 
-この移行で問題となるのは、現行 `ruviform-ui` の公開契約が WebView の実装前提（JS eval・URL navigation・DOM/Canvas/WebGL の RenderTier）を内部に抱えている点である。GPUI を標準 Driver として採用するにあたり、単に JS を GPUI 呼出しへ置換すると、今度は `gpui::Window/Entity/Context/Hsla/Pixels` が共通契約へ逆流し、Consumer（Synvelis・AudioLens）の通常画面と Domain まで GPUI に結合する。両 Consumer を Driver 交換に耐える構造へ移すため、**GUI の構造的正本を Driver-neutral な契約層へ再配置する決定**が必要になった。
+この移行では、現行 `ruviform-ui` の公開契約が WebView の実装前提（JS eval・URL navigation・DOM/Canvas/WebGL の RenderTier）を内部に抱えていることが問題になる。GPUI を標準 Driver として採用するにあたり、単に JS を GPUI 呼出しへ置換すると、今度は `gpui::Window/Entity/Context/Hsla/Pixels` が共通契約へ逆流し、Consumer（Synvelis・AudioLens）の通常画面と Domain まで GPUI に結合する。両 Consumer を Driver 交換に耐える構造へ移すため、**GUI の構造的正本を Driver-neutral な契約層へ再配置する決定**が必要になった。
 
 旧 2 ADR はいずれも `accepted` のまま現行コードの採用方針として矛盾するため、明示的な supersede と履歴保存を行い、後継の技術採用判断を実機 PoC 証拠へ接続する正本をここに置く。
 
