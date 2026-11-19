@@ -49,7 +49,7 @@ metadata:
 `observability::logging` の非 RT writer に queue-full drop・partial write・write/rotation 失敗・
 flush 失敗を Health で**区別して計測**する責務がある(Issue #276 受入)。
 `tracing_appender::non_blocking` は bounded channel を提供するが、queue-full 時の drop を
-内部で握りつぶし、drop 数・失敗分類・worker join の観測手段を公開していない。
+内部で吸収し、drop 数・失敗分類・worker join の観測手段を公開していない。
 また sink 初期化の成否を `Required` / `BestEffort` で分離する必要がある。
 
 ## Considered Options
@@ -75,7 +75,7 @@ Chosen option: "自前の有界 `sync_channel` + 単一 worker thread writer", b
 * Affected paths: `crates/ruviform-observability/src/logging/writer.rs`(新規)、
   `build.rs` / `health.rs`(接続)、`Cargo.toml`(optional deps)。
 * Constraints: `tracing`/`tracing-subscriber`/`tracing-appender` 以外の新規実行時依存を
-  追加しない。worker は `catch_unwind` せず panic 時は自然死 — sender 側は `Disconnected` で
+  追加しない。worker は `catch_unwind` せず panic 時はそのまま終了する — sender 側は `Disconnected` で
   Failed を検出する。`unsafe` 不使用。
 
 ## Verification
