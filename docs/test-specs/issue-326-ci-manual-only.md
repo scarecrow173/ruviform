@@ -2,7 +2,7 @@
 id: "TSPEC-nB4WC4Q4CYMJmm6HVksOwr"
 type: "test-spec"
 status: "approved"
-title: "Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証"
+title: "Issue #326 ci.yml dispatch 専用化 test specification — trigger 非存在契約・dispatch 契約維持・PR 起動ゼロ実証"
 created: "2026-11-06"
 updated: "2026-11-06"
 owners: []
