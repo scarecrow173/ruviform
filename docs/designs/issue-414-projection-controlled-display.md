@@ -60,7 +60,7 @@ relations:
 | 状態 | 保持場所 | 意味 |
 | --- | --- | --- |
 | **Observed** | `CommandBinding.last_observed`（`StateProjection`） | consumer が authoritative に push した domain truth。revision guard で stale を排除。`CommandPhase::Observed` はこれが存在することを示す。domain state が変わったことの証明。 |
-| **Applied** | `CommandBinding` の receipt ledger（`last_receipt` / head record rank） | gateway が報告した command 進捗（`accepted`/`queued`/`applied`/terminal）。domain 変更の報告であり、値そのものを持たない。`Applied` ≠ `Observed`。 |
+| **Applied** | `CommandBinding` の receipt ledger（`last_receipt` / head record rank） | gateway が報告した command 進捗（`accepted`/`queued`/`applied`/terminal）。domain 変更の報告であり、値そのものを運ばない。`Applied` ≠ `Observed`。 |
 | **Controlled Display** | `InteractionControl.committed_value` / gesture preview（`value()`） | renderer が実際に描く値。gesture 中は local preview、idle 時は committed。 |
 
 `ViewHost::observe` の `ComponentSnapshot` はこの区別をそのまま

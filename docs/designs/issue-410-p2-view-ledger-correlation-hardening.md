@@ -229,7 +229,7 @@ None`）の最初の projection に対してである。
 | 1 | consumer が revision domain をリセットし、floor が全 projection を永久 reject して display が凍結 | low | high | 契約として「revision は attach epoch 内で単調」を明記。binding 内の既存 guard と同じ失敗型であり新規リスクではない。envelope epoch segment（deferred）が来れば delivery path 側でより強く検証可能 |
 | 2 | floor が binding の `last_observed` と二重管理になり不整合 | low | low | floor は受理時のみ更新され binding の `last_observed` と同じ advance 規則・同じ値を取る。binding 存続中は floor 判定が binding guard を包含するため実効差分は remount 直後のみ |
 | 3 | `Str` revision の unordered 性で floor が誤判定 | low | low | `b != a` の既存近似を共有。順序保証が必要な consumer は `Num` を使う契約を文書化 |
-| 4 | `binding_mut()` 経由の迂回で floor が機能しない | low | low | canonical entry point を契約化し doc comment に明記。receipt 側の同型境界と一貫 |
+| 4 | `binding_mut()` 経由の迂回で floor が効かない | low | low | canonical entry point を契約化し doc comment に明記。receipt 側の同型境界と一貫 |
 | 5 | floor map が host 生存中に増え続ける | very low | low | key は `control_id` で spec 規模に bound され、mount 毎に消えないのは attach epoch あたりの distinct control 数まで。`bindings`/`mounted` と同程度のメモリ特性 |
 
 ## Review Record（wraparound / reentrant borrow 契約）

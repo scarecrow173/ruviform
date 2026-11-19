@@ -38,7 +38,7 @@ relations:
 | --- | --- |
 | `LabelSpec { key, text, visual, a11y }` | 静的テキスト。`text` は consumer 解決済みの表示文字列 |
 | `TableSpec { key, columns: Vec<String>, rows: Vec<Vec<Option<CellValue>>>, visual, a11y }` | 読み取り専用の表。列見出しと行。`None` は欠損セル |
-| `CellValue::{Text(String), Number(f64)}` | 解決済みセル値。`serde(untagged)` で JSON の文字列・数値をそのまま格納する |
+| `CellValue::{Text(String), Number(f64)}` | 解決済みセル値。`serde(untagged)` で JSON の文字列・数値をそのまま運ぶ |
 | `A11yNode { role, name, value, children }` | contract が導出する a11y 木。renderer はこの木を消費する |
 | `ComponentSpec::Label` / `ComponentSpec::Table` | enum 追加。serde tag は `label` / `table` |
 | `A11yRole::{Text, Table, Row, ColumnHeader, Cell}` | a11y role 追加（`non_exhaustive` enum への追加のため非破壊） |

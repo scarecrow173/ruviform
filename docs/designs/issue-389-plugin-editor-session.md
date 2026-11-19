@@ -362,7 +362,7 @@ Capability Matrix）を現行コードに照らして再検証し、発見した
 | --- | --- | --- |
 | `PluginInstanceId`（= `PluginHandle`） | `InProcessHost`（plugin-host） | DSP instance の寿命。session はこれを握らず、destroy 時は `notify_terminated` を受けるだけ |
 | `PluginEditorSessionId` | `PluginEditorSessions`（plugin-host registry） | slot+generation で mint/recycle。stale id は `UnknownSession` |
-| `ParentSlotLease` | 発行側（UI 側 `SurfaceSlotRegistry` / `GpuiSurfaceAdapter`） | opaque 値。session は保持するだけで解釈しない |
+| `ParentSlotLease` | 発行側（UI 側 `SurfaceSlotRegistry` / `GpuiSurfaceAdapter`） | opaque 値。session は運ぶだけで解釈しない |
 | `SurfaceSlotId` / `WindowId` / `ViewInstanceId` | `ruviform-ui`（dock/window 所有） | plugin-host の型には現れない。composition root が `lease` へ写像する |
 | raw parent（`ParentLease` / HWND・NSView 等） | OS adapter（`LeaseRedeemer` の出力側） | redemption 直後に `OpenGui` へ渡すのみ。session 面に現れない。`GuiParentToken` は削除済み（改訂 2） |
 | widget teardown | UI driver（Dock/Window 側） | `Terminated` を受けて後始末。DSP/RT の停止を伴わない |
@@ -395,7 +395,7 @@ capability として宣言しない（実装 Issue が必要）。
 | fake driver の Open/Attach/Reparent/Detach/Close・stale generation・double close・timeout・OS unsupported・crash の terminal-event | **達成（契約層）** | `tests/editor_session.rs` 28 件。Reparent は `reattach` で検証。crash は `HostLost` で代用（GPU host 固有 cause は未定義・未達） |
 | 代表実 Plugin/Format の L0/L1 capability・GUI hang で DAW/RT を巻き込まない実機受入 | **部分達成** | L0 VST3/CLAP の `open_gui`/`close_gui` は実外部 module で検証済み（`evidence/rf389-vst3-editor/`・`evidence/rf389-clap-editor/`）。dock-test は test_gain 実 binary で session 契約を実走検証（`evidence/rf389-dock/`）。GUI hang・DAW/RT 巻き込みの実機受入は依然 NotRun |
 | Floating / Recovery の安全 fallback（Floating へ明示的に degrade） | **部分達成** | session 面に `open_or_degrade`（`OpenOutcome::Degraded` + `Degraded` event）と mode 指定の `recover` が実装済み（session-hardening）。dock-test `open-or-degrade` case が実 binary で double-refusal → `Ops(Unsupported)`・degrade event 0 件を実測（`evidence/rf389-dock/`）。L0 Floating attach 自体は依然 `Unsupported`、実 editor への degrade attach は NotRun |
-| GPUI 型・raw native handle の公開 API 非露出 | **達成（session 面）** | `GuiParentToken` は完全削除済み（`crates/**/*.rs` 0 hit — 改訂 2）。session 面は `ParentSlotLease` opaque のみを保持し、`ParentLease` は adapter-internal seam（`#[doc(hidden)] new`）。`editor_session.rs` 名前検査（ES-23）と `check-ui-driver-boundary` で確認 |
+| GPUI 型・raw native handle の公開 API 非露出 | **達成（session 面）** | `GuiParentToken` は完全削除済み（`crates/**/*.rs` 0 hit — 改訂 2）。session 面は `ParentSlotLease` opaque のみを運び、`ParentLease` は adapter-internal seam（`#[doc(hidden)] new`）。`editor_session.rs` 名前検査（ES-23）と `check-ui-driver-boundary` で確認 |
 | `SurfaceSlotId`/`WindowId`/`ViewInstanceId` の分離 | **設計文書で分離（型は未追加）** | R4 のとおり UI 側所有。plugin-host に写像用の型を増やさない（YAGNI）。consumer の composition 実装は別 Issue |
 | 同一 Plugin Instance の Dock/Float/Hidden 同一意味論 | **部分達成** | 状態機械上は同一（R3）。実装は L0 Docked のみ |
 | Native Dock の可否（#388 Driver capability への委譲） | **委譲のまま未解決** | #388 gate は OPEN。本 PR は Native Dock PASS を主張しない |
