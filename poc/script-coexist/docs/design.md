@@ -97,7 +97,7 @@ codec は backend ごとに VM の最良表現を使い、ScriptValue 境界で
 
 - tag は `{"$rv": <kind>, …}` 形式。`$rv` を含む Record の pull は tag
   として decode し、未知/不正 tag は `ScriptError::Type` で Fail Closed。
-  tag 内の i64 は 10 進文字列で運び、parse 失敗・範囲外は
+  tag 内の i64 は 10 進文字列で持ち、parse 失敗・範囲外は
   `ValueOutOfRange`。
 - pull 方向: VM の function/thread/coroutine/userdata/fnptr/blob 以外の
   独自型 → `ScriptError::Unsupported`（VM 固有型の越境禁止）。
