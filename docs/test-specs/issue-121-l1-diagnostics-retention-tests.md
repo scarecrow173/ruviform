@@ -56,7 +56,7 @@ relations:
 
 ## Purpose
 
-pin host bounded retention・`diagnostics_id` 採番/識別契约・失敗レコード登録責任 — spec R-B4・AC4 と設計「生成前失敗の diagnostics ID」「registry の所有・受け渡し」節。query が `found/evicted/not-found` を区別でき、並行 spawn で ID 欠番が発生しない構造的前提を記録する。retention 形態が変わっても識別语义は維持すべき契約。
+host bounded retention・`diagnostics_id` の採番・識別の契約・失敗レコード登録責任を pin する — spec R-B4・AC4 と設計「生成前失敗の diagnostics ID」「registry の所有・受け渡し」節。query が `found/evicted/not-found` を区別でき、並行 spawn で ID 欠番が発生しない構造的前提を記録する。retention 形態が変わっても識別の意味は維持すべき契約。
 
 ## Feature
 
@@ -65,9 +65,9 @@ pin host bounded retention・`diagnostics_id` 採番/識別契约・失敗レコ
 ## Rules
 
 - **採番タイミング（設計確定）**: diagnostics ID は失敗レコードの retention 登録時に lock 内で連続発行 — **spawn/create 試行前の相関 ID 発行はしない**。試行前採番では成功試行・並行 spawn の登録順逆転で欠番が生じ、`id ≤ watermark → evicted` 判定が未登録 ID を evicted と誤認する。登録の直列化により並行 spawn でも欠番は発生しない。ID は再利用しない。
-- **識別语义**: `id ≤ evicted_watermark` → `Evicted`（FIFO eviction は登録順 = ID 順で watermark が成立）；`evicted_watermark < id ≤ issued_max` で retention 不在 → 内部不整合；`id > issued_max` → `NotFound`（未発行 ID）。上限超過は最古 evict + `evicted_records: u64` 計数。
+- **識別の意味**: `id ≤ evicted_watermark` → `Evicted`（FIFO eviction は登録順 = ID 順で watermark が成立）；`evicted_watermark < id ≤ issued_max` で retention 不在 → 内部不整合；`id > issued_max` → `NotFound`（未発行 ID）。上限超過は最古 evict + `evicted_records: u64` 計数。
 - **登録対象・所有**: 失敗レコードのみ登録 — 成功 spawn の in-flight レコードは active capture として残り、finalize 時に失敗なら登録（この時点で採番）、成功・正常終了なら破棄。`Shared` は spawn 内で drop されるため**登録は `Err` を返す関数自身が行い**、`Arc` が registry へ移り record が生存する。global/static registry は採用しない — per-host の bounded retention と ID 空間を維持。テスト経路は `DiagRegistry::new()` の fresh registry（テスト間で漏れない）。
-- **minted 失敗**: 同一 ID 空間で採番 + handle ベースの検索 index — 通知に ID field は追加しない（minted は handle が相関、2 系統相関を防ぐ）。`cause` が必要な consumer は handle → 診断レコード query で引く。
+- **minted 失敗**: 同一 ID 空間で採番 + handle ベースの検索 index — 通知に ID field は追加しない（minted は handle が相関、2 系統相関を防ぐ）。`cause` が必要な consumer は handle → 診断レコード query で照合する。
 - **`SpawnFailed` 境界（設計 pin）**: 定義済み拒否は variant を保持し `SpawnFailed` で包まない・レコードも登録しない — `Err(HostError::InstanceLimit)`（unflattened 契約）・spec-validation `Err(Ipc)`。live 子への pooled `create_instance` `Reply::Err` → `SpawnFailed{cause: Handshake}` + 試行レコード（その時点の子 stderr の frozen snapshot copy — live 子の active レコードは mutate を継続・分離）。
 - **`phase`（設計）**: 失敗レコードは `phase`（pre-spawn 検証 / OS spawn / drain 初期化 / mint・handshake）と `cause` を区別して記録 — stderr の有無は phase 依存。cleanup 失敗は `cleanup_error` 副次診断（主 cause 不変）。
 - **観測保証の限定（AC4 再定義）**: caller が `Result` を破棄・task cancel・RPC 切断で `Err` を消費しない場合は失敗が観測されないことを明示的に除外 — retention は追加の query 面であって guaranteed delivery ではない。

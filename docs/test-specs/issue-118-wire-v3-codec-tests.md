@@ -71,7 +71,7 @@ wire v3 codec は video lifecycle 動詞・frame descriptor・plain param 動詞
 - `PlainParamValue` codec: kind tag ∈ 0-3（宣言順 `Double,Integer,Boolean,Choice`）・`Double` は **finite 必須**（NaN/Inf は decode で `Malformed` 拒否 — `plain_param.rs`「finiteness は boundary 責務」の写像）・`Boolean` の値 byte は strict `{0,1}`
 - `PlainParamInfoOwned` codec: `id` + `name`/`unit`（各 `WIRE_MAX_STRING_BYTES`）+ `min_value`/`max_value`/`default_value` は finite 必須・`min ≤ max`・`default_value ∈ [min,max]`（kind 別値の f64 比較）・`Choice` 時 `choices` 非空で default index in-range・他 kind は `choices` 空・`choices` 件数 ≤ `WIRE_MAX_ELEMENTS`。**`display_*` は strict-finite を要求しない**（UI hint — 非有限を受理するのは decode の意図的 leniency）
 - `ColorInfo` codec: 4 enum（宣言順 tag・未知 tag defined 拒否）+ `has_hdr` presence tag strict `{0,1}` + optional `MasteringDisplayInfo`（24 B）/content light level（4 B）— 全 presence tag は `{0,1}` 以外 `Malformed`
-- `HostError::InvalidValue` は encode/decode の両方向で tag 10 と round-trip する（wildcard arm が `UnsupportedVariant`/`Malformed` へ潰さない — 「定義済み拒否が子死亡に化ける」退行防止。`EndpointUnavailable` は引き続き local-only で encode は `UnsupportedVariant` 拒否）
+- `HostError::InvalidValue` は encode/decode の両方向で tag 10 と round-trip する（wildcard arm が `UnsupportedVariant`/`Malformed` へ畳まない — 「定義済み拒否が子死亡に変換される」退行防止。`EndpointUnavailable` は引き続き local-only で encode は `UnsupportedVariant` 拒否）
 - decode は untrusted 入力の検証境界 — `WIRE_MAX_VIDEO_*` 超過の dims/plane count/stride・不正 `instance`・不正 tag・truncated payload・reserved 非零を panic・無制限 alloc なしで拒否する
 - `Hello.capabilities` は v3 でも **reserved-zero**（非零 decode 拒否を維持 — kind 広告を capabilities bit に載せる形は採用されない）。`Hello.version != 3` は handshake 失敗
 - `wire::vshm` 定盤: `MAGIC = "RVLV"`・`HEADER_LEN = 28`・header field（`in_off == 28`・`out_off == 28 + in_bytes`・`reserved == 0`）・`frame_bytes(config)`/`segment_len` byte math（canonical packing — `stride=row_bytes`・`offset(p)=Σlen`）・`WIRE_VIDEO_MAX_SEGMENT_BYTES = 28 + 2×WIRE_VIDEO_MAX_FRAME_BYTES`
@@ -85,7 +85,7 @@ wire v3 codec は video lifecycle 動詞・frame descriptor・plain param 動詞
 - `VideoFrameDesc` 拒否行列: `plane_count=0`/`plane_count=5`・`plane_count` と `format.plane_count()` 不一致（`Rgba8` で `plane_count=3`）・`stride=WIRE_VIDEO_MAX_STRIDE+1` → defined 拒否
 - presence strictness: `has_duration=2`・`has_hdr=0xFF`・`Boolean` 値 byte `>1` → `Malformed`
 - `PlainParamValue::Double` の非有限値（NaN/±Inf）→ `Malformed`・`PlainParamInfoOwned` の非有限 `min`/`max`/`default`・`min>max`・`default ∉ [min,max]`・`Choice` で `choices` 空 or index out-of-range → defined 拒否・非有限 `display_*` → **受理**
-- `InvalidValue` 両方向 pin: `Reply{seq, instance, Err(InvalidValue)}` の encode→decode が `InvalidValue` を返す（tag 10 — wildcard arm に落ちない）
+- `InvalidValue` 両方向 pin: `Reply{seq, instance, Err(InvalidValue)}` の encode→decode が `InvalidValue` を返す（tag 10 — wildcard arm に分類されない）
 - `vshm` byte math const test: `frame_bytes(3840×2160 Rgba8) == 33_177_600`・`frame_bytes(3840×2160 Yuv420p) == 12_441_600`・`frame_bytes(1920×1080 Rgba8) == 8_294_400`・`segment_len = 28 + 2×frame_bytes`・`segment_len(8K RgbaF16)` ≈ 506 MiB ≤ `WIRE_VIDEO_MAX_SEGMENT_BYTES`
 - `Hello{version: 2, capabilities: 0}` は `version != 3` で handshake 失敗・`Hello{version: 3, capabilities: 1}` は capabilities 非零で拒否（v3 でも維持）
 
@@ -109,7 +109,7 @@ wire v3 codec は video lifecycle 動詞・frame descriptor・plain param 動詞
 
 - video 動詞/Reply の tag・payload 順序の誤り → 全 video frame が parse ずれで壊れる
 - `VideoFrameDesc`/`VideoProcessConfig` の bound 漏れ → hostile dims が巨大 alloc・segment サイズ計算の乗数として攻撃面化
-- `Double` finiteness・presence strictness の抜け → 非有限/非 {0,1} 値が wire を通り契約違反が未定義化（decode 拒否→子死経路）
-- `InvalidValue` の wildcard arm 見落とし → `id ∈ parameters()` 拒否等の defined 拒否が `Malformed`/`UnsupportedVariant` 化けて子が誤収束
+- `Double` finiteness・presence strictness の抜け → 非有限/非 {0,1} 値が wire を通り契約違反が未定義化（decode 拒否→子死亡経路）
+- `InvalidValue` の wildcard arm 見落とし → `id ∈ parameters()` 拒否等の defined 拒否が `Malformed`/`UnsupportedVariant` に変換されて子が誤収束
 - `vshm` byte math の誤り → in/out 領域サイズ不整合で frame が region を溢れる or segment が必要量を下回る
 - canonical packing と codec bounds の混同 → codec が region-fit を検証しようとして config 無しで検証不能になり検証責務が宙吊りになる

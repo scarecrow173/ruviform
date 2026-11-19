@@ -47,7 +47,7 @@ relations:
 
 ## Purpose
 
-GPUI adapter の `gpui`/`gpui-test`/`uitest` feature 検証が Windows/Linux のみであった欠落を macOS lane で埋め、(1) `ui-gpui-verify-macos` job が `ui-gpui-verify` と同一範囲を macOS で実際に実行し、(2) その結果が `ci-summary` の fail-closed 集約に既存 job と同一の形で乗り、(3) `test-full` の Native Build/Link 包含が検証され `windowed_test_app` bin の空白が `test-ui-gpui` 拡張で塞がれ、(4) 既存 lane の検証意図を一切弱めないことを保証する。
+GPUI adapter の `gpui`/`gpui-test`/`uitest` feature 検証が Windows/Linux のみであった欠落を macOS lane で埋め、(1) `ui-gpui-verify-macos` job が `ui-gpui-verify` と同一範囲を macOS で実際に実行し、(2) その結果が `ci-summary` の fail-closed 集約に既存 job と同一の形で含まれ、(3) `test-full` の Native Build/Link 包含が検証され `windowed_test_app` bin の空白が `test-ui-gpui` 拡張で塞がれ、(4) 既存 lane の検証意図を一切弱めないことを保証する。
 
 ## Feature
 
@@ -85,6 +85,6 @@ ci OS-L1 lane — `ci.yml` の `ui-gpui-verify-macos` job と `ci-summary` 集�
 
 ## Risk
 
-- macOS での gpui compile が CI 初走行で失敗する可能性 — `check-ui-gpui`（型）と `test-ui-gpui`（link/test）の step 単位で切り分け、crate 側原因なら別 Issue へ。
-- `uitest` feature 併用の compile 相互作用 — cfg 衝突なし確認済みだが CI 実走で確定。失敗時は `test-ui-gpui` を `gpui-test` のみに戻し bin build を専用 step へ退避する fallback を検討。
+- macOS での gpui compile が CI 初回実行で失敗する可能性 — `check-ui-gpui`（型）と `test-ui-gpui`（link/test）の step 単位で切り分け、crate 側原因なら別 Issue へ。
+- `uitest` feature 併用の compile 相互作用 — cfg 衝突なし確認済みだが CI 実行で確定。失敗時は `test-ui-gpui` を `gpui-test` のみに戻し bin build を専用 step へ退避する fallback を検討。
 - macOS runner の `abandoned`（取得 timeout）— 分離 job のため他 lane 証拠は保全され、fail-closed で検出・再実行可能。

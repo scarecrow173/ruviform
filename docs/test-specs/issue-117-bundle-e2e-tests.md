@@ -72,7 +72,7 @@ bundle 制御面の E2E oracle — `OutOfProcessIsolation` 公開面・pool 選�
 - **host 側写像**: `Scan`-verified id で `Err(UnknownPluginId)` → host が `Err(Ipc)` へ fold。`Err(InstanceLimit)` `Instantiate`/`CreateInstance` → `Err(InstanceLimit)` 伝搬。`Destroy` → `DestroyInstance`（`Failed`+live child でも送信・terminal child なら local removal のみ・`Ok`）
 - **shutdown-on-empty + eviction**: live=0 で `Shutdown`+grace+reap + pool evict。`converge_child` で terminal 子を pool から除去
 - **rollback**: fresh-spawn `CreateInstance` 失敗 → 子ごと teardown+remove（兄弟なし）。shared-child `CreateInstance` 失敗 → instance entry rollback のみ（健康な兄弟は生存）
-- **last-ref teardown**: `L1Instance` drop / route teardown で最後の参照が外れた子を最終 referrer が bounded teardown（`Shutdown`+grace or kill→reap→join）。live 兄弟を持つ子は殺さない
+- **last-ref teardown**: `L1Instance` drop / route teardown で最後の参照が外れた子を最終 referrer が bounded teardown（`Shutdown`+grace or kill→reap→join）。live 兄弟を持つ子は終了させない
 - **live_count semantics**: `live_count` は registered 全件（`Failed` 未 `Destroy` 含む）を数える — pool 選択 predicate が使う値
 - **handle minting/reuse**: lowest-free wire handle を `Inner` 排他内で採番。destroy→create 同一 `i` 時、`Destroying` gate が新 doorbell を止め `mark_failed` で解放し、stale doorbell が新 ring へ届かない
 - **argv v2**: spawn は `<runner>` + `spec.args` のみ・`--ruviform-shm-key`/`--ruviform-plugin-id` は `CreateInstance` payload（host は送らない・runner/worker は usage reject exit 2 維持）
@@ -111,8 +111,8 @@ bundle 制御面の E2E oracle — `OutOfProcessIsolation` 公開面・pool 選�
 ## Risk
 
 - pool 選択 predicate の deadlock or 選択ミス → `get_mut` 中に子が teardown され instance が孤立する or 全 instance が単一子へ集中して spawn コスト削減の意義が失われる
-- shared-child `CreateInstance` 失敗時に子を殺す → 健康な兄弟 instance が連鎖 `Failed` 化（rollback 判定軸の誤り）
-- last-ref teardown 未実装 → 孤児子プロセスが残留する or live 兄弟を持つ子を殺す
-- `live_count` の semantics 誤り（`Failed` 未 `Destroy` entry を含めない）→ pool が満杯子へ集中して `InstanceLimit` に達する or 死に子へ mint を試みる
+- shared-child `CreateInstance` 失敗時に子を終了させる → 健康な兄弟 instance が連鎖 `Failed` 化（rollback 判定軸の誤り）
+- last-ref teardown 未実装 → 孤児子プロセスが残留する or live 兄弟を持つ子を終了させる
+- `live_count` の semantics 誤り（`Failed` 未 `Destroy` entry を含めない）→ pool が満杯子へ集中して `InstanceLimit` に達する or 死亡した子へ mint を試みる
 - argv v2 で `--ruviform-*` を受ける旧 worker/runner と新 host が不整合 → handshake が永遠に失敗する
 - `Dedicated` で bundle 機構が漏洩 → opt-in 隔離の意味が失われる

@@ -63,7 +63,7 @@ Cross-Repo 候補 revision の Consumer 互換検証 lane。
 - Given `ruviform_rev=abc`、When dispatch、Then preflight fail、両 verify job は `fail (preflight failed)`
 - Given 候補 SHA `41772a7…`、When audio-lens lane、Then Cargo.lock の ruviform.git source は全て同 SHA
 - Given synvelis が `rev` 未指定の既定ブランチ追従 dep、When 候補 SHA `a014b3f…`、Then manifest に `rev` が注入され lock の全 15 source が `?rev=<候補>#<候補>` に解決し `mise run check`/`test` が実行される（ローカル scratch 実測済み）
-- Given workspace `Cargo.toml` を持たない `synvelis_ref`、When dispatch、Then `not run (no buildable workspace)` で他 lane は走らない
+- Given workspace `Cargo.toml` を持たない `synvelis_ref`、When dispatch、Then `not run (no buildable workspace)` で他 lane は実行されない
 
 ## Guarantees
 

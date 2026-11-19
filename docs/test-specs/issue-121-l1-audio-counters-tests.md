@@ -68,7 +68,7 @@ relations:
 
 ## Purpose
 
-pin `ruviform-observability` counter pair 在 L1 audio 経路の計数语义 — spec R-B1/R-B2・AC1/AC2 と設計「audio counter の定義」節の 4 counter・計装点・寿命規則。これらは #76 closeout の underrun/dropped-submit/`RESULT_FAILED` 可観測化要求であり、将来の refactoring で counter pair 形状や計装点が変わっても保持すべき不変条件を記録する。実装が完全に別の観測機構に置き換わった場合のみ退役。
+`ruviform-observability` counter pair が L1 audio 経路で持つ計数の意味を pin する — spec R-B1/R-B2・AC1/AC2 と設計「audio counter の定義」節の 4 counter・計装点・寿命規則。これらは #76 closeout の underrun/dropped-submit/`RESULT_FAILED` 可観測化要求であり、将来の refactoring で counter pair 形状や計装点が変わっても保持すべき不変条件を記録する。実装が完全に別の観測機構に置き換わった場合のみ退役。
 
 ## Feature
 
@@ -80,8 +80,8 @@ pin `ruviform-observability` counter pair 在 L1 audio 経路の計数语义 —
 - **`results_dropped` の意味限定（設計レビュー確定）**: `results_dropped` と `results_failed_observed` の差を「観測前の消失量」と解釈してはいけない — 両者は異なる事象を数える。`results_dropped` は「enqueue 失敗で破棄された result 数」のみで、全消失量は計れない。
 - **寿命（設計・spec R-B1）**: counter は `InstShared` の `Arc` で leg swap・endpoint checkout・`arm`/`arm_apply` で値を保持し、re-mint で新 counter（0 開始）、destroy 後は query が not-found。per-instance 計数の死後保持はしない（死後診断は stderr retention の責務）。
 - **RT 制約（spec R-B2・AC2）**: writer は `fetch_add(Relaxed)` のみ — `RtLeg::process`/`drain_to`/`push_result` 経路で alloc・lock・blocking・log write を混入させない。既存 `rt_l1_*` assert_no_alloc 窓は無退行。
-- **読み出し语义**: 複数 counter の `Relaxed` 逐次読みは同一時点の整合 snapshot を保証しない — API doc に明記。`u64` `fetch_add` は wrap 仕様（構成上到達不能・~10³ 年）。
-- **video 非混入**: audio counter は video route に載らない（spec R-B6 — video 側は stderr/cause parity のみ）。
+- **読み出しの意味**: 複数 counter の `Relaxed` 逐次読みは同一時点の整合 snapshot を保証しない — API doc に明記。`u64` `fetch_add` は wrap 仕様（構成上到達不能・~10³ 年）。
+- **video 非混入**: audio counter は video route に適用されない（spec R-B6 — video 側は stderr/cause parity のみ）。
 
 ## Examples
 

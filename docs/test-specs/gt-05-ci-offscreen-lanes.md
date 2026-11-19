@@ -45,7 +45,7 @@ relations:
 
 GPUI driver lane の CI 収載と Linux offscreen pixel lane が、
 「実 pixel 証拠」と「semantic/draw-plan/環境不通の区別」を
-崩さないことを保証する。pixel lane は CI で走るため、lane 定義・
+崩さないことを保証する。pixel lane は CI で実行されるため、lane 定義・
 window 解決・capture verdict の契約をここに固定する。OS 固有の
 実機依存（Windows interactive・X display）は Docker/CI でのみ
 検証されるため、機構の正しさは unit test と実測の両方で担保する。
