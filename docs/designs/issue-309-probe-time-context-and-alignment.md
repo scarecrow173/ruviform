@@ -68,7 +68,7 @@ Issue #185 の probe 基盤は `RecordMeta { probe, node, port, generation, samp
 
 - `ruviform-media-core::timed_input`: `ClockDomainId`（`UNKNOWN`/`SAMPLE_CLOCK`/`MONOTONIC`）、`InputStamp`、`TimestampProvenance`（`Carried`/`Derived`/`Estimated`）、`ClockAnchor`、`map_stamp_to_frame`、`MapRejection`（`UnmappedDomain`/`BaseMismatch`/`EpochMismatch`/`BeforeAnchor`/`Overflow`）
 - `ruviform-media-core::transport_schedule`: `ClockEpochId`、`EngineFrame`（`same_epoch`/`checked_offset`）
-- `ruviform-observability::record::ClockContext`（`InputStamp`+`ClockEpochId`、別 epoch 比較不可を型で保証）— OBS-05（#280）の RT bridge record が運ぶ語彙
+- `ruviform-observability::record::ClockContext`（`InputStamp`+`ClockEpochId`、別 epoch 比較不可を型で保証）— OBS-05（#280）の RT bridge record が保持する語彙
 - `ruviform-audio-core::device`: `same_clock_domain`（equal かつ非 `UNKNOWN` のみ真）、`OutputCallbackInfo`/`InputCallbackInfo`/`StreamLatency`
 
 ## Design Decisions

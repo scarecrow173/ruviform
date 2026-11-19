@@ -60,7 +60,7 @@ relations:
 | 状態 | 保持場所 | 意味 |
 | --- | --- | --- |
 | **Observed** | `CommandBinding.last_observed`（`StateProjection`） | consumer が authoritative に push した domain truth。revision guard で stale を排除。`CommandPhase::Observed` はこれが存在することを示す。domain state が変わったことの証明。 |
-| **Applied** | `CommandBinding` の receipt ledger（`last_receipt` / head record rank） | gateway が報告した command 進捗（`accepted`/`queued`/`applied`/terminal）。domain 変更の報告であり、値そのものを運ばない。`Applied` ≠ `Observed`。 |
+| **Applied** | `CommandBinding` の receipt ledger（`last_receipt` / head record rank） | gateway が報告した command 進捗（`accepted`/`queued`/`applied`/terminal）。domain 変更の報告であり、値そのものを持たない。`Applied` ≠ `Observed`。 |
 | **Controlled Display** | `InteractionControl.committed_value` / gesture preview（`value()`） | renderer が実際に描く値。gesture 中は local preview、idle 時は committed。 |
 
 `ViewHost::observe` の `ComponentSnapshot` はこの区別をそのまま
@@ -71,7 +71,7 @@ relations:
 
 `StateProjection` → `last_observed` の経路のみ存在し、
 Observed → Controlled Display の辺が存在しなかった。
-`apply_receipt` も ledger のみ更新する（Applied は値を運ばない
+`apply_receipt` も ledger のみ更新する（Applied は値を持たない
 ため display を更新しないのは正しい）。
 
 ## 正規経路
@@ -140,7 +140,7 @@ truth に復元する。次の projection を待たずに表示が default に
   `detach_all` が gesture を終了させる際に staged truth は flush
   される（display は最後の observed を示す）。
 - reattach：次の advancing projection が通常通り display を更新。
-- receipt：`apply_receipt` は ledger のみ — Applied は値を運ば
+- receipt：`apply_receipt` は ledger のみ — Applied は値を持た
   ないため display を更新しない（Observed のみが display truth）。
 - availability：`apply_external` は availability を見ない —
   disabled/read-only control も authoritative state の表示は

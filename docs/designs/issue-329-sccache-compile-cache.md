@@ -155,7 +155,7 @@ MSRV lane は ruviform `ci.yml` に存在しない(consumer 側 lane)。将来�
 | GHA cache service 障害/rate limit | stats の storage error 欄・post-run annotations | store 欠落(ビルドは続行) | 一過性なら放置。継続なら `CI_SCCACHE_DISABLE=1` |
 | sccache server 起動失敗 | env check `sccache --version`・compile log | sccache client は server 不可時に compiler 直接実行へ fallback | `CI_SCCACHE_DISABLE=1` または `SCCACHE_GHA_VERSION` bump |
 | 破損 entry | 内容アドレスで一致しない限り参照されない・v0.19.0 は storage error を可視化 | miss 扱い→再コンパイル | `gh cache delete` / version bump |
-| 緊急無効化 | — | — | Settings → Variables `CI_SCCACHE_DISABLE=1`(merge 不要・次 run から効く) |
+| 緊急無効化 | — | — | Settings → Variables `CI_SCCACHE_DISABLE=1`(merge 不要・次 run から有効) |
 | 完全 rollback | — | — | `git revert` で step 除去。永続形式・依存追加なし(生成 cache は自然失効) |
 
 ## Consumer 展開の前提(AL #148 / SV #147)

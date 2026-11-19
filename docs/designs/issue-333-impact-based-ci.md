@@ -131,7 +131,7 @@ metadata: {}
 | `repo-config` | `.gitattributes`・`.gitignore`・`.editorconfig`・`apm.yml`・`apm.lock.yaml`・`.agents/**`・`.claude/**`・その他ルート直下の隠しファイル/設定 | **Full CI**（共通設定・曖昧さ回避） |
 | `crate:<name>` | `crates/<name>/**`（`<name>` は workspace member 名と照合） | `verify` + `<name>` が lane-owner である lane + 逆依存 crate の lane（後述） |
 | `ui-pkg:<name>` | `ui/<name>/**`（`<name>` は ui/ 直下の npm パッケージ） | `ui-verify` + 逆依存パッケージ経由（全て `ui-verify` に収斂） |
-| `docs` | `docs/**`・ルート `*.md`（`README.md`/`AGENTS.md` 等）・`LICENSE*` | `verify` のみ（prek の言語非依存 hook が唯一効く lane） |
+| `docs` | `docs/**`・ルート `*.md`（`README.md`/`AGENTS.md` 等）・`LICENSE*` | `verify` のみ（prek の言語非依存 hook が唯一有効な lane） |
 | `poc` | `poc/**` | `verify` のみ（workspace 外・cargo lane は到達しない・prek のみ意味を持つ） |
 | `unknown` | 上記いずれにも一致しないパス | **Full CI** |
 

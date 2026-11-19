@@ -77,7 +77,7 @@ fresh binding は `last_observed = None` から始まり、**remount 前に
 発行された古い revision の projection が一度だけ受理され得る**
 （次の新しい projection で自己修復するが、その一度の誤適用は
 controlled display に stale 値を書き込み得る）。`detach` →
-`attach` では binding が存続するため `last_observed` guard が効く
+`attach` では binding が存続するため `last_observed` guard が機能する
 が、投影が detached 中に drop される点は契約として固定する必要が
 ある。
 
@@ -159,7 +159,7 @@ correlation 強化 — **受理済み revision の高水位マーク
 floor は受理時のみ更新する。棄却された projection は floor を
 動かさない（古い値で floor を巻き戻さない）。binding の
 `last_observed` と floor は binding 存続中は同じ値を取るため、
-floor が実効的に効くのは binding 再生成後（`last_observed =
+floor が実効的に機能するのは binding 再生成後（`last_observed =
 None`）の最初の projection に対してである。
 
 ### epoch 境界ごとの保証
@@ -229,7 +229,7 @@ None`）の最初の projection に対してである。
 | 1 | consumer が revision domain をリセットし、floor が全 projection を永久 reject して display が凍結 | low | high | 契約として「revision は attach epoch 内で単調」を明記。binding 内の既存 guard と同じ失敗型であり新規リスクではない。envelope epoch segment（deferred）が来れば delivery path 側でより強く検証可能 |
 | 2 | floor が binding の `last_observed` と二重管理になり不整合 | low | low | floor は受理時のみ更新され binding の `last_observed` と同じ advance 規則・同じ値を取る。binding 存続中は floor 判定が binding guard を包含するため実効差分は remount 直後のみ |
 | 3 | `Str` revision の unordered 性で floor が誤判定 | low | low | `b != a` の既存近似を共有。順序保証が必要な consumer は `Num` を使う契約を文書化 |
-| 4 | `binding_mut()` 経由の迂回で floor が効かない | low | low | canonical entry point を契約化し doc comment に明記。receipt 側の同型境界と一貫 |
+| 4 | `binding_mut()` 経由の迂回で floor が機能しない | low | low | canonical entry point を契約化し doc comment に明記。receipt 側の同型境界と一貫 |
 | 5 | floor map が host 生存中に増え続ける | very low | low | key は `control_id` で spec 規模に bound され、mount 毎に消えないのは attach epoch あたりの distinct control 数まで。`bindings`/`mounted` と同程度のメモリ特性 |
 
 ## Review Record（wraparound / reentrant borrow 契約）

@@ -182,7 +182,7 @@ cache hit → install（marker のみ残存なら skip）→ launch 検証 NG
 
 ## Risks and Trade-offs
 
-- リスク: `PLAYWRIGHT_BROWSERS_PATH` pin が install/test の片方にしか効かないと参照先不一致になる。対策: job `env` で統一し、両方が同じ値を見ることを workflow 構造で保証。
+- リスク: `PLAYWRIGHT_BROWSERS_PATH` pin が install/test の片方にしか適用されないと参照先不一致になる。対策: job `env` で統一し、両方が同じ値を見ることを workflow 構造で保証。
 - リスク: cache restore が古い Playwright 版の dir を持ち込み disk を圧迫。対策: restore-keys を付けない exact-key のみ（version 変更時は古 dir ごと復元されない）。
 - リスク: archive 破損・部分復元で marker だけ残り install が skip。対策: launch 検証 step（marker ではなく実 launch で判定）→ 全削除再 install。
 - リスク: `browsers.json` のスキーマ変更（`browsers[].revision` 以外への移行）。対策: key 算出の失敗を job fail にして黙認しない・`--dry-run` 等の代替源は Deferred。

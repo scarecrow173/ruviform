@@ -282,5 +282,5 @@ recorder.toJsonl(): string     // 収録分の JSONL 出力
 - **zod/JSON Schema の導入:** Issue が必須採用を先決しない + 本パッケージの「依存ゼロ」規律と衝突。手続き型 validator で足りる。
 - **ui/binding への同居:** recorder/replay はテスト基盤であり binding の product src に混ぜると dist 配布面が汚れる。別パッケージで isolation。
 - **記録済み応答を expectation に使う方式:** Issue が明示禁止（「記録済み応答を再生して PASS としない」）。独立 ContractModel を採用。
-- **fixture の Rust crate 内コピー:** 単一正本原則に反するため相対パス参照を採用（`include_str!` で埋め込まず実行時読み — fixture 差分がそのままテストに効く）。
+- **fixture の Rust crate 内コピー:** 単一正本原則に反するため相対パス参照を採用（`include_str!` で埋め込まず実行時読み — fixture 差分がそのままテストに反映される）。
 - **常時稼働 Event Store / Observability 基盤:** Issue 非対象。recorder は pull 型（明示 `toJsonl`）で常駐しない。

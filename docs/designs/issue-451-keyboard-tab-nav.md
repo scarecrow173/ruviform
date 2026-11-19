@@ -65,7 +65,7 @@ key down (focused tab header)
 | --- | --- | --- |
 | A | 契約に key 入力 API（`ViewHost::press_tab_key(name)`）を足す | 却下。契約に GPUI の key 名語彙が入り、driver-neutral を崩す。他 driver の入力要件も未確定 |
 | B | 移動規則を `ruviform-ui` に置く | 却下（現時点）。key 名の共通語彙がなく、消費者もない。webview が key 入力を持つ時点で昇格を検討する |
-| C（採用） | 描画層で key を解釈し、既存の `select_tab` を呼ぶ | 採用。契約変更なし。pointer と同じ経路で receipt と revert が効く |
+| C（採用） | 描画層で key を解釈し、既存の `select_tab` を呼ぶ | 採用。契約変更なし。pointer と同じ経路で receipt と revert が機能する |
 
 ## 4. フォーカスの扱い
 
