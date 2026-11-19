@@ -157,7 +157,7 @@ runner backlog は chunking のためだけに存在する。plugin の `drain_o
 
 ## 未確定・保留事項
 
-以下は素材が記録する gap・open question・未解決事項である。
+以下は記録上の gap・open question・未解決事項である。
 
 - Issue #188 の残件（OS MIDI backend adapter・VST3 IEventList 翻訳・controller/param chase・note_expression/midi_sysex 語彙）は follow-up として記録されているが、後続 Issue での消化状況は対象文書からは不明である。
 - Issue #629 の残受入（provisioned runner での実 provisioning・driver install・license 判断・wiring leg 実走 Pass・CI/runner 統合・AC7 consumer 実受入）は全て外部 gate であり、コードからは検証不能である。文書上「外部 gate/後続 slice」として残っており、現在も未完了かどうかは文書からは判断できない。
@@ -167,4 +167,4 @@ runner backlog は chunking のためだけに存在する。plugin の `drain_o
 - `DeviceError` に `InvalidArgument` 相当 variant がなく、`Backend`/`UnsupportedConfig` も厳密には caller-contract 違反を表さないため、shared `DeviceError`（lease 外・影響大）への variant 追加は行わず写像の限界を記録に残した (Issue #629)。
 - `MidiInput::read` が `Err` と stats を同時に返せない契約上、audio 側「error callback + data callback」併存観測は失敗 read と stats 付き成功 read に分解される。この分解の妥当性は Issue close 判定で問われ得るリスクとして記録された (Issue #707)。
 - capability matrix は ❓/⚠️ 項目と Open Questions #1-#7 を実測待ちとして明記し、採用 endpoint の確定は provisioning 実測後の ADR/decision として後続 slice に送られた (Issue #629)。
-- `docs/plans`・`docs/tasks` 配下の文書は今回の対象に含まれず未読であり、タスク文書側にのみ記載された決定・却下理由があれば本書に未反映の可能性がある。exp/*.jsonl イベントログの中身も未読（対応する exp .md の要約のみを根拠にした）。
+- 計画文書・タスク文書側にのみ記載された決定・却下理由があれば本書に未反映の可能性がある。実験イベントログ（jsonl）の個別行も未読であり、対応する記録文書の要約のみを根拠にした。

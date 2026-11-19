@@ -111,7 +111,7 @@ route_graph は main 上に既存の `broken-relation:*` が多数ある baselin
 
 ## 未確定・保留事項
 
-素材の記録には、次の未解決事項・未確認事項が残されている。
+記録には、次の未解決事項・未確認事項が残されている。
 
 Issue #456 の spec/design/test-spec 文書（docs/specs・docs/designs 配下）は未読であり、二段 receipt の契約詳細は spec 側にある可能性がある。
 
