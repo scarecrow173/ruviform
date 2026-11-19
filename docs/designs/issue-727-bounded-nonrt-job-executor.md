@@ -351,7 +351,7 @@ QueuedJob<T,E> handle: state()/events()/try_wait()/wait()/detach()
 
 ## Risks and Trade-offs
 
-- **協調 cancel の限界**: cancel は body が観測するまで効か
+- **協調 cancel の限界**: cancel は body が観測するまで作用し
   ない。無限 loop・長時間の非協調区間を持つ job は shutdown
   を block する。→ contract で明示し、consumer（synvelis）
   の job 定義側で checkpoint 義務を負う。強制 preemption は

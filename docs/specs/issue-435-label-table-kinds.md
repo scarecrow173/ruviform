@@ -44,7 +44,7 @@ relations:
 
 ## 背景
 
-AudioLens の製品画面（Job / Run / Analysis / Source の要約）は、状態テキスト・stage 表・events 表・ラベルを表示する（scarecrow173/audio-lens#166 AL-G3）。現行 `ComponentSpec`（#387・#421）は Panel / Tabs / Fader / Seek / Knob / Toggle / Waveform / Meter / TimeAxis / NativeSlot のみで、文字情報の運び手は Panel の `title` と `A11ySpec.label` / `value_text` だけだった。行と列を持つ表は表現できず、AudioLens が独自規約で詰めると契約の迂回（重複実装）になる。
+AudioLens の製品画面（Job / Run / Analysis / Source の要約）は、状態テキスト・stage 表・events 表・ラベルを表示する（scarecrow173/audio-lens#166 AL-G3）。現行 `ComponentSpec`（#387・#421）は Panel / Tabs / Fader / Seek / Knob / Toggle / Waveform / Meter / TimeAxis / NativeSlot のみで、文字情報を表現する手段は Panel の `title` と `A11ySpec.label` / `value_text` だけだった。行と列を持つ表は表現できず、AudioLens が独自規約で詰めると契約の迂回（重複実装）になる。
 
 ## 目的
 

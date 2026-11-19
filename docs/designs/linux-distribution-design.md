@@ -88,7 +88,7 @@ relations:
 
 ## Context and Positioning
 
-本設計は Issue #127「Linux 共通配布設計」の**確定版**であり、先行版 `docs/designs/issue-127-linux-dist-design.md`（PR #529・#573 で統合）を `refines` 関係で更新したものである。docs のみの設計タスクであり、コード・テスト・CI・依存・パッケージ成果物の変更は行わない。先行版と本版が矛盾する場合は本版を正とする。
+本設計は Issue #127「Linux 共通配布設計」の**確定版**であり、先行版 `docs/designs/issue-127-linux-dist-design.md`（PR #529・#573 で統合）を `refines` 関係で更新した。docs のみの設計タスクであり、コード・テスト・CI・依存・パッケージ成果物の変更は行わない。先行版と本版が矛盾する場合は本版を正とする。
 
 本 slice で新たに確定した事実:
 
@@ -305,7 +305,7 @@ Issue #127 の AC に対応し、責務を明確に分離する。**Ruviform は
 
 旧 WebView/WebKitGTK 4.1 固有の runtime/Browser 検証（`docs/adr/ui-tech-selection-poc.md`・`poc/ui/RESULTS.md`・`docs/impl/exp/linux-container-device-and-arch-verification.jsonl` seq 10 の #57 Linux GTK 経路検証）は、**GPUI 配布の現行必須条件ではない**。
 
-- `wry` + `tao` + `libwebkit2gtk-4.1-0` + GTK3 という**旧 Driver** の依存・能力・制約を記録したものである。
+- `wry` + `tao` + `libwebkit2gtk-4.1-0` + GTK3 という**旧 Driver** の依存・能力・制約の記録である。
 - GPUI（`gpui 0.2.2`）は WebKitGTK/GTK に依存しない。GPUI の Linux 依存は §2 の通り全く別系統である。
 - 旧知見を GPUI の distro 下限・依存・capability の根拠にしてはならない。
 - `ui-verify (ubuntu-latest)` lane の成功は旧 WebView 経路を含む UI lane の成功であり、**GPUI 配布の必須条件の証拠としては扱わない**。

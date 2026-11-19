@@ -120,8 +120,8 @@ Slot の実装詳細を共通 Plugin Host 契約に漏らさず、L0/L1 と GUI
 
 - 共通 API に `gpui`/`wry`/`tao`/`HWND`/`NSView`/X11 を露出しない。
 - plugin 系 ↔ ui 系の相互依存禁止（session は `ParentSlotLease` を
-  opaque に運び、`SurfaceSlotId`/`WindowId`/`ViewInstanceId` の
-  具象型は消費側が写像する）。
+  opaque な値として受け渡し、`SurfaceSlotId`/`WindowId`/
+  `ViewInstanceId` の具象型は消費側が写像する）。
 - RT/Audio thread からの UI 呼出・ブロッキング・alloc・OS GUI API
   禁止。View close/hang で DSP/Graph/Project/RT を暗黙停止しない。
 - 既存 Audio/RT wire の互換性を暗黙変更しない。

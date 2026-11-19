@@ -55,7 +55,7 @@ AudioLens の Jobs / Run / Dataset 画面は Table で一覧を表示するが�
 ## 目的
 
 - `Table` に行選択の契約を追加する。選択は `ViewEvent::Intent` として発行し、選択状態を `ComponentSnapshot` で観測できるようにする。
-- 値を伴わない操作の component `Button` を追加する。intent は target・action・params を運び、accepted / applied の区別は既存の receipt 契約（`CommandBinding`）に従う。
+- 値を伴わない操作の component `Button` を追加する。intent は target・action・params を持ち、accepted / applied の区別は既存の receipt 契約（`CommandBinding`）に従う。
 - いずれも driver-neutral な headless 契約として定義する。同一 spec に対し Fake（`ViewHost`）と GPUI の intent・snapshot が一致することを parity fixture で検査する。
 
 ## 受入条件（Issue #448 本文に対応）

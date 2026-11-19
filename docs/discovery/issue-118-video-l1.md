@@ -165,7 +165,7 @@ Issue [#118](https://github.com/scarecrow173/ruviform/issues/118) は **audio `p
 | (d) descriptor over pipe + payload in shm の hybrid — doorbell を `BlockIn` 類似の新メッセージではなく **`Command`/`Reply` が frame descriptor（seq・dims・format・time・slot index）を運び payload は segment 経由** | (a) と直交しない設計 — doorbell を Command 語語彙に畳むと request/reply 相関が既存 seq に統一できる（新 doorbell kind を増やさない）。`Reply` 到来時点で out-slot 準備済みという単純契約 | descriptor が Command payload 化する分 codec 差分は同等。audio の doorbell/queue パターンと造形がずれる（doorbell は RT 由来の非同期 submit 向き — video は同期 request/response なので Command 畳みの方が自然） | **yes**（(a) とセット — 「descriptor in Command + payload in dedicated segment」が実質の推奨形） |
 | (e) child-scope の共有 video segment（1 child = 1 segment・複数 instance で分割） | segment 数を減らせる | #117 の per-instance 所有・scope 帰属・`Failed` 粒度（instance 単位の shm 撤去）と衝突 — 1 instance の `Failed` 収束で segment を unlink すると兄弟を殺す | no |
 
-推奨方向: **(a)+(d)** — per-instance 専用 video segment（host-owned・`shm_key` attach）に frame payload を置き、`Command`/`Reply` が descriptor を運ぶ request/response 形。doorbell を新 kind にするか Command に畳むかは design 決定（descriptor が request 語彙の一部なら新 doorbell kind は不要）。**OPEN — design 確定対象**（attach タイミング: `CreateInstance` payload 拡張で第 2 key を渡すか、`initialize` reply 経路で segment を後付けするか — 後者は「`initialize` 応答後に再度 attach 命令が要る」複雑化）。
+推奨方向: **(a)+(d)** — per-instance 専用 video segment（host-owned・`shm_key` attach）に frame payload を置き、`Command`/`Reply` が descriptor を載せる request/response 形。doorbell を新 kind にするか Command に畳むかは design 決定（descriptor が request 語彙の一部なら新 doorbell kind は不要）。**OPEN — design 確定対象**（attach タイミング: `CreateInstance` payload 拡張で第 2 key を渡すか、`initialize` reply 経路で segment を後付けするか — 後者は「`initialize` 応答後に再度 attach 命令が要る」複雑化）。
 
 ### 軸 2: render 契約の形（同期 request/response vs async queue）
 
@@ -245,7 +245,7 @@ Issue [#118](https://github.com/scarecrow173/ruviform/issues/118) は **audio `p
 - **confirmed**: video L1 は **「audio wire v2 基盤語彙（envelope/scope/seq/Failed/notify/pool）を共有しつつ、data-plane・verb・registry・erased surface は video 専用の新系統」**という二層構成が構造整合的 — audio wire を「拡張」ではなく「同梱する新面」として扱う。
 - **confirmed**: frame payload は pipe に載せられない（size + multiplexing）— **per-instance 専用 shm segment への descriptor+payload 分離が唯一の構造整合解**（軸 1）。audio `BlockIn` 型 doorbell か `Command` descriptor 畳みかは design。
 - **confirmed**: `CreateInstance` 時点では frame サイズが未確定（config は `initialize` で届く）→ **video segment の attach は `initialize` 前後の何らかの語彙で行う必要がある**（`CreateInstance` 拡張で上限宣言→固定 segment・または `initialize` 後の attach 命令 — **OPEN・design 確定対象**）。
-- **hypothesis**: request/response 同期 render + depth=1 slot 対が v1 の最简形 — `command_timeout` 分離（video timeout）と「timeout=Failed」の写像は audio と同型で足りる。
+- **hypothesis**: request/response 同期 render + depth=1 slot 対が v1 の最も簡素な形 — `command_timeout` 分離（video timeout）と「timeout=Failed」の写像は audio と同型で足りる。
 - **hypothesis**: video route は **Dedicated のみ許可**（または Bundled opt-in で HoL 文書化）が初期の安全側 — Bundled+video で HoL を受け入れるかは **人間判断を仰ぐ**。
 - **confirmed**: GPU/zero-copy/texture interop は初期範囲外（上流 ADR 確定済み）— v1 は copy-in/copy-out。将来の backing 抽象（shm direct-view）は video-core 側の別 Issue 級拡張。
 - **confirmed**: `WIRE_VERSION` bump（2→3）が必要 — 新動詞・新 shm layout・`WIRE_MAX_VIDEO_*` bound は全て bump 内に閉じ込める（#119 単一最新方針）。

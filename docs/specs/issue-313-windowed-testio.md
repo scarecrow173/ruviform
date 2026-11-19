@@ -108,7 +108,7 @@ adapter を書けない。
 
 - Issue #313 の残件として S1 doc が明示したのが windowed
   `TestIo`/`rvf.uitest.v1` 配線であり、`rvf.uitest.v1` の op
-  契約・`TestIo` の語彙・`FakeDriver` の neutral 语义が全て
+  契約・`TestIo` の語彙・`FakeDriver` の neutral 語彙が全て
   main に揃った。
 - #465「driver-neutral lane が正本」と整合するには、`TestIo`
   の legacy 語彙を残したまま第 3 の経路を生やすのでなく、

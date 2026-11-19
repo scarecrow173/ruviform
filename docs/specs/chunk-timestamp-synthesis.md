@@ -87,7 +87,7 @@ PR #47 レビュー指摘（Issue #59）。現行は全 chunk に同一 instant 
 
 - chunk k（先頭フレーム `f_k`）の instant オフセットは `f_k / sample_rate` 秒を `DEVICE_CLOCK_TIMEBASE`（ナノ秒）整数 tick に変換した値 — 半端フレーム以下の誤差は tick 粒度で丸める（`MediaDuration` → `checked_add` 経路に集約）
 - オフセットは `callback`・`playback` の両方に同量適用（chunk 先頭フレームの「打鍵時刻」と「DAC 到達時刻」は同量だけ遅れる）
-- 合成不能（`checked_add` が `Err`）時はその instant を未合成のまま渡す — timestamp が失われるより元値が残る方が悪くない
+- 合成不能（`checked_add` が `Err`）時はその instant を未合成のまま渡す — timestamp が失われるより元の値が残る方がましである
 - 単一 chunk（`n <= max_chunk`）ではオフセット 0 — 既存テストの挙動を変えない
 - RT 契約維持: 合成は整数演算のみ・確保なし・`Copy` 値型のまま
 - `sample_rate` 保持は `DataCallbackState` のフィールド追加（`u32` — `negotiated.stream.sample_rate` は cpal `SampleRate(u32)`）

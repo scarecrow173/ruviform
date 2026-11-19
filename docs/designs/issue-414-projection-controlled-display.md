@@ -71,7 +71,7 @@ relations:
 
 `StateProjection` → `last_observed` の経路のみ存在し、
 Observed → Controlled Display の辺が存在しなかった。
-`apply_receipt` も ledger のみ更新する（Applied は値を運ばない
+`apply_receipt` も ledger のみ更新する（Applied は値を持たない
 ため display を更新しないのは正しい）。
 
 ## 正規経路
@@ -140,7 +140,7 @@ truth に復元する。次の projection を待たずに表示が default に
   `detach_all` が gesture を終了させる際に staged truth は flush
   される（display は最後の observed を示す）。
 - reattach：次の advancing projection が通常通り display を更新。
-- receipt：`apply_receipt` は ledger のみ — Applied は値を運ば
+- receipt：`apply_receipt` は ledger のみ — Applied は値を持た
   ないため display を更新しない（Observed のみが display truth）。
 - availability：`apply_external` は availability を見ない —
   disabled/read-only control も authoritative state の表示は

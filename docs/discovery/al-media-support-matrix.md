@@ -39,7 +39,7 @@ AVI のタイムスタンプ規則（al-media 実装由来）: stream ごとの
 `dwScale` 進行、`dwSampleSize` 音声は `body_bytes * dwScale / dwSampleSize`
 （剰余保持）。`LIST rec `（OpenDML マルチセグメント）・`movi` 先行配置は
 未対応で明示失敗。MP4 は `mdhd` timescale を time base とし `stts` で
-per-sample tick を運ぶ（VFR 保持）。`stss` sync sample・`ctts` offset・
+per-sample tick を刻印する（VFR 保持）。`stss` sync sample・`ctts` offset・
 `delay`(elst) 等の trim 事実は `Packet`/`StreamFacts` へ写像される。
 
 ## Ruviform 側の対応と差分

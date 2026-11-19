@@ -76,7 +76,7 @@ relations:
 WAI-ARIA の slider / spinbutton パターンと、既存のホイール入力（Shift = fine step）に倣う。
 
 - `left` / `down`: 1 ステップ減少。`right` / `up`: 1 ステップ増加。
-- `shift` 併用: fine step（`InputModifiers.fine`、記述子の `fine_step` が効く）。
+- `shift` 併用: fine step（`InputModifiers.fine`、記述子の `fine_step` が適用される）。
 - `pageup` / `pagedown`: 10 ステップ分の大きな刻み（`shift` 併用で fine 10 ステップ）。
 - `home` / `end`: 最小値 / 最大値へのジャンプ（`ValueInput::Extreme`）。
 - `control` / `alt` / `platform` / `function` 修飾、未定義キー: 無視（propagation を止めない）。

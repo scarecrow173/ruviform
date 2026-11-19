@@ -250,7 +250,7 @@ relations:
 - [ ] AC-6: scoped Dispatch 内の `tracing` span context が emit
   event に反映されることを検証し、Context 未設定でも安全な挙動を
   確認する。async/task 間伝播の完全対応は NotRun として記録する。
-- [ ] AC-7: 本スリス対象外（tracestate/Baggage・span 生成・
+- [ ] AC-7: 本スライス対象外（tracestate/Baggage・span 生成・
   runner への record drain 配線・両 Consumer 検証・Confidential
   値秘匿）は PR 本文と impl record に NotRun/残件として明記し、
   Issue #278 は Open のまま残る。

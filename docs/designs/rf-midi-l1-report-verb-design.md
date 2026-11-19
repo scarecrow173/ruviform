@@ -66,7 +66,7 @@ consumer に届く。
 control-plane の `wire::Command`/`wire::Reply` 語彙で runner child
 と話し、data plane は shm slot + doorbell で動く。report drain は
 plugin の非 RT 状態を読む操作なので、data plane ではなく
-**control-plane の command/reply verb** として運ぶのが既存の
+**control-plane の command/reply verb** として定義するのが既存の
 責務分割と一致する — `SaveState`/`GetParam` 等と同じ「instance
 scoped verb → bounded reply」の形である。
 
