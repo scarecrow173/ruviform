@@ -137,7 +137,7 @@ Directory: `docs/test-specs`
 | TSPEC-034VgdafmAWO2nuE3QoYTj | Issue #314 slice 4 follow-up — real-scenario lane + matrix test-spec | approved | [issue-314-real-scenario-lane.md](./issue-314-real-scenario-lane.md) |
 | TEST-314rwEt8pC4wHxJ7nQ3rS | Issue #314 slice 4 residual — real-window adapter test-spec | approved | [issue-314-real-window-adapter.md](./issue-314-real-window-adapter.md) |
 | TSPEC-034V2hpT0kkEMk2hJtieRh | Issue #314 slice 6 — Consumer-shaped semantic oracle fixtures のテスト仕様 | approved | [issue-314-semantic-oracle.md](./issue-314-semantic-oracle.md) |
-| TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 不存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
+| TSPEC-nB4WC4Q4CYMJmm6HVksOwr | Issue #326 ci.yml dispatch 専用化 test specification — trigger 非存在契約・dispatch 契約維持・PR 起動ゼロ実証 | approved | [issue-326-ci-manual-only.md](./issue-326-ci-manual-only.md) |
 | TSPEC-034RBMKdNX5HX6vExF2WlS | Issue #327 CI計測Baseline 検証仕様 | approved | [issue-327-cross-repo-ci-baseline.md](./issue-327-cross-repo-ci-baseline.md) |
 | TSPEC-oHAlZzKO4OjFLCg0SpIiws | Issue #328 テスト仕様 — CI concurrency の不変条件と証拠 | approved | [issue-328-ci-pr-concurrency.md](./issue-328-ci-pr-concurrency.md) |
 | TSPEC-8FPRKgybhQfr9n7cWGNJoz | Issue #329 テスト仕様 — sccache 導入の不変条件・ケース・証拠 | approved | [issue-329-sccache-compile-cache.md](./issue-329-sccache-compile-cache.md) |
