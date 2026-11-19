@@ -15,7 +15,7 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 # The VST3-specific L1 child-process runner (Issue #114, task
-# `docs/tasks/real-adapter-runner-bins.md`): dlopens the fixture cdylib
+# `docs/evidence/plugin-l1-evidence.md`): dlopens the fixture cdylib
 # through the `host` bridge and hands the scanned factories to
 # `ruviform_plugin_export::run`. `required-features` keeps the binary
 # out of the default build — it exists only under `--features host`.
@@ -29,7 +29,7 @@ required-features = ["host"]
 # module in-process via `libloading`, scans its class table and drives
 # the raw `vst3`-crate COM objects onto the neutral
 # `PluginFactory`/`Plugin` contracts for the L1 out-of-process runner
-# (Issue #114, task `docs/tasks/vst3-host-bridge.md`).
+# (Issue #114, task `docs/evidence/plugin-l1-evidence.md`).
 host = ["dep:libloading", "dep:ruviform-plugin-export"]
 
 [dependencies]

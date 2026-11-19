@@ -86,8 +86,8 @@ Presentation Driver の横断設計正本）の要求に対し、**蓄積済み�
 本 spec / plan / task / test-spec はこの docs 成果物を対象リポジトリの
 文書チェーンとして記録する内部文書である。チェーン:
 [design](../designs/issue-257-driver-neutral-ui-contract.md)・
-[plan](../plans/issue-257-driver-neutral-ui-contract.md)・
-[task](../tasks/issue-257-driver-neutral-ui-contract.md)・
+plan `docs/plans/issue-257-driver-neutral-ui-contract.md`・
+task `docs/tasks/issue-257-driver-neutral-ui-contract.md`・
 [test-spec](../test-specs/issue-257-driver-neutral-ui-contract.md)。
 
 ## Why Now

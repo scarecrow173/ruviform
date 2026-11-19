@@ -85,5 +85,5 @@ demux + decode のみの実装。
 
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（メディア I/O バックエンド行）
 - 抽象境界 ADR: docs/adr/media-io-backend-abstraction.md
-- Issue #20（第一バックエンド PoC）: docs/impl/ir/implement-io-symphonia-backend-poc.md
+- Issue #20（第一バックエンド PoC）: docs/evidence/media-io-evidence.md
 - Issue #151（観測・非破壊 PCM 契約）: docs/adr/media-observation-non-destructive-pcm.md, docs/specs/issue-151-media-observation-contract.md

@@ -69,8 +69,8 @@ policy の対応索引を、実在する正本への参照で構成し、
 する。対象 spec は
 [spec](../specs/issue-192-synvelis-driven-target-architecture-migration.md)、
 実施記録は
-[task](../tasks/issue-192-synvelis-driven-target-architecture-migration.md) /
-[plan](../plans/issue-192-synvelis-driven-target-architecture-migration.md)
+task `docs/tasks/issue-192-synvelis-driven-target-architecture-migration.md` /
+plan `docs/plans/issue-192-synvelis-driven-target-architecture-migration.md`
 を参照。コード変更を伴わない docs 成果物のため、検証は
 文書検査（link/relation 解決・参照先の実在確認・内容の
 突合・lint）で行う。本 test-spec は umbrella tracking

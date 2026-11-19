@@ -60,8 +60,8 @@ Cross-Consumer 受入・Rollback RB0〜RB6・GUI lane・WebView
 構成されている」ことを検証する。対象 spec は
 [spec](../specs/issue-193-migration-execution-plan.md)、
 実施記録は
-[task](../tasks/issue-193-migration-execution-plan.md) /
-[plan](../plans/issue-193-migration-execution-plan.md)
+task `docs/tasks/issue-193-migration-execution-plan.md` /
+plan `docs/plans/issue-193-migration-execution-plan.md`
 を参照。コード変更を伴わない docs 成果物のため、検証は
 文書検査（link/relation 解決・参照先の実在確認・内容の
 突合・lint）で行う。本 test-spec は Execution Plan

@@ -158,9 +158,9 @@ Reader/Writer/Entry API・安全な展開（Secure Extraction）・
   変動し得る snapshot として記録）。
 
 文書チェーン: [spec](../specs/issue-286-io-04-zip-tar-archive.md)・
-[plan](../plans/issue-286-io-04-zip-tar-archive.md)・
+plan `docs/plans/issue-286-io-04-zip-tar-archive.md`・
 [test-spec](../test-specs/issue-286-io-04-zip-tar-archive.md)・
-[task](../tasks/issue-286-io-04-zip-tar-archive.md)。
+task `docs/tasks/issue-286-io-04-zip-tar-archive.md`。
 
 ## Scope
 

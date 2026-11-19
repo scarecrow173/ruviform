@@ -9,7 +9,7 @@ owners: []
 relations:
   source:
     - "docs/specs/issue-198-sequential-offline-render.md"
-    - "docs/plans/implement-issue-198-sequential-offline-render.md"
+    - "docs/knowledge/typed-graph-and-offline-render.md"
   changes:
     added: []
     modified: []

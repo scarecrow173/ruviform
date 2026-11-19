@@ -209,7 +209,7 @@ flex-shrink への暗黙依存を明示契約に置き換える。
 
 - 設計詳細: [design](../designs/issue-478-fader-knob-height-contract.md)
 - 検証契約: [test-spec](../test-specs/issue-478-fader-knob-height-contract.md)
-- 実装計画: [plan](../plans/implement-issue-478-fader-knob-height-contract.md)
+- 実装計画: plan `docs/plans/implement-issue-478-fader-knob-height-contract.md`
 - 先行契約: [#450 canvas サイズ規則](../designs/issue-450-control-canvas-size.md)、
   [#453 canvas 寸法監査](../designs/issue-453-canvas-size-audit.md)
 - driver-neutral 境界: [ADR #384](driver-neutral-gui-gpui-driver-webview-first-issue-384.md)

@@ -11,7 +11,7 @@ relations:
   source:
     - "docs/specs/issue-628-close-out.md"
     - "docs/designs/issue-628-close-out.md"
-    - "docs/plans/issue-628-close-out.md"
+    - "docs/knowledge/docs-operations-and-agent-workflow.md"
   changes:
     added:
       - type: "file"

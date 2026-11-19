@@ -1,6 +1,6 @@
 //! `ruviform-plugin-clap-l1-runner` — the CLAP-specific L1
 //! child-process runner (Issue #114, task
-//! `docs/tasks/real-adapter-runner-bins.md`).
+//! `docs/evidence/plugin-l1-evidence.md`).
 //!
 //! The binary is compile-time fixed: it embeds no factories of its
 //! own. It dlopens the workspace-built CLAP fixture cdylib

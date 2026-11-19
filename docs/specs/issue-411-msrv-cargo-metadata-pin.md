@@ -104,6 +104,6 @@ manifest の依存選定を、MSRV 1.89 と整合する既存 crate 系列へ
 ## Links
 
 - Design: [issue-411-msrv-cargo-metadata-pin](../designs/issue-411-msrv-cargo-metadata-pin.md)
-- Plan: [issue-411-msrv-cargo-metadata-pin](../plans/issue-411-msrv-cargo-metadata-pin.md)
+- Plan: issue-411-msrv-cargo-metadata-pin `docs/plans/issue-411-msrv-cargo-metadata-pin.md`
 - Test Spec: [issue-411-msrv-cargo-metadata-pin](../test-specs/issue-411-msrv-cargo-metadata-pin.md)
-- Task: [issue-411-msrv-cargo-metadata-pin](../tasks/issue-411-msrv-cargo-metadata-pin.md)
+- Task: issue-411-msrv-cargo-metadata-pin `docs/tasks/issue-411-msrv-cargo-metadata-pin.md`

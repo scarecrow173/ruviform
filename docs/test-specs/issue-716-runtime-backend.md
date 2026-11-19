@@ -11,7 +11,7 @@ relations:
   source:
     - "docs/specs/issue-716-runtime-backend.md"
     - "docs/designs/issue-716-runtime-backend.md"
-    - "docs/tasks/issue-716-runtime-backend.md"
+    - "docs/knowledge/scripting-luau.md"
   changes:
     added: []
     modified: []

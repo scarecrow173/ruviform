@@ -11,7 +11,7 @@ relations:
   source:
     - "docs/specs/issue-628-pipeline-wiring.md"
     - "docs/designs/issue-628-pipeline-wiring.md"
-    - "docs/plans/issue-628-pipeline-wiring.md"
+    - "docs/knowledge/docs-operations-and-agent-workflow.md"
   changes:
     added:
       - type: "file"

@@ -147,6 +147,6 @@ GitHub Issue #41 で定義された Issue #18 フォローアップの成果物�
 - 一次ソース: GitHub Issue [#41 [impl] Issue #18 フォローアップ: 公開 enum non_exhaustive 方針の適用と時間演算修正](https://github.com/scarecrow173/ruviform/issues/41)（`relations.source`）。Issue #18 / PR #39 の追加レビューに基づくフォローアップとしてスコープ・既存 Issue 対応表を規定。
 - 上流文書（`relations.derives-from`）: [設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（時間モデル・データモデルの決定事項）、[RT 契約 ADR](../adr/realtime-contract-and-verification-policy.md)（API 単位の RT 保証ラベル規則）、[公開 enum ADR](../adr/public-enum-non-exhaustive-policy.md)（本 spec が適用する統一ポリシーの正本）。
 - 前提（`relations.depends-on`）: [implement-media-data-model-api.md](implement-media-data-model-api.md)（`SPEC-034J5FYaYfeL5zkzb4sIV4`・implemented。本 spec が修正対象とする API 表面を確定した先行 spec）。
-- 派生（`relations.derived-by`）: [実装 plan](../plans/issue-18-followup-enum-and-time-fix.md)。検証意図は [test spec](../test-specs/followup-enum-compat-and-time-arithmetic.md)（`relations.verified-by` 相互リンク）が保持する。
+- 派生（`relations.derived-by`）: 実装 plan `docs/plans/issue-18-followup-enum-and-time-fix.md`。検証意図は [test spec](../test-specs/followup-enum-compat-and-time-arithmetic.md)（`relations.verified-by` 相互リンク）が保持する。
 - 関連（`relations.related`）: [`AGENTS.md`](../../AGENTS.md)（暫定規約 — enum ポリシーの転記先）。
 - 参考（`relations.references`）: [Issue #18](https://github.com/scarecrow173/ruviform/issues/18)（データモデル実装の親 Issue）、[PR #39](https://github.com/scarecrow173/ruviform/pull/39)（マージ済み実装）。

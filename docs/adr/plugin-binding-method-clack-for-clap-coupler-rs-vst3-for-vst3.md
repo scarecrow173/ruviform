@@ -148,6 +148,6 @@ Chosen option: **CLAP = `clack` 0.2.0 系採用（clack-plugin/-common/-extensio
 ## More Information
 
 * 実測根拠: [discovery `evaluate-plugin-binding-options.md`](../discovery/evaluate-plugin-binding-options.md) の PoC Findings 節（CLAP T3・VST3 T4）
-* 実装記録: [T3 IR](../impl/ir/poc-clap-binding-adapter.md)・[T4 IR](../impl/ir/poc-vst3-binding-adapter.md)
-* 上位文書: [plugin ADR](plugin-architecture-clap-vst3.md)（binding 方式を本評価へ保留した決定）、[spec](../specs/implement-plugin-foundation.md)、[plan](../plans/implement-plugin-foundation.md) T5
+* 実装記録: T3 IR `docs/impl/ir/poc-clap-binding-adapter.md`・T4 IR `docs/impl/ir/poc-vst3-binding-adapter.md`
+* 上位文書: [plugin ADR](plugin-architecture-clap-vst3.md)（binding 方式を本評価へ保留した決定）、[spec](../specs/implement-plugin-foundation.md)、plan `docs/plans/implement-plugin-foundation.md` T5
 * T6 への確認残件: `vst3` MSRV 1.85 単独ビルド・macOS/Linux エントリのクロスビルド・イベント整列の安定化・生成バインディング SDK 出自のライセンス継続調査

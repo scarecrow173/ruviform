@@ -260,4 +260,4 @@ pending/faults/receipts は事前確保 Vec、境界走査は stack iterator）�
 - [spec](../specs/issue-190-transport-span-scheduler.md)、
   [ADR](../adr/transport-span-scheduler-applied-receipt.md)、
   [discovery](../discovery/issue-190-generic-transport-span-scheduler-applied-receipt-clock-plan-generation.md)
-  に derive。下流は [plan](../plans/implement-issue-190-transport-span-scheduler.md)。
+  に derive。下流は plan `docs/plans/implement-issue-190-transport-span-scheduler.md`。

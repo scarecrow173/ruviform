@@ -11,7 +11,7 @@ relations:
   source:
     - "docs/specs/issue-707-midi-cancellation.md"
     - "docs/designs/issue-707-midi-cancellation.md"
-    - "docs/plans/issue-707-midi-cancellation.md"
+    - "docs/knowledge/audio-device-and-midi.md"
   changes:
     added:
       - type: "file"

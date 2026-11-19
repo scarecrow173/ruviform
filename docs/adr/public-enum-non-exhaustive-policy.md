@@ -138,6 +138,6 @@ Issue #18（データモデル実装・PR #39）のレビューで、3 クレー
 * 一次ソース: GitHub Issue [#41 [impl] Issue #18 フォローアップ: 公開 enum non_exhaustive 方針の適用と時間演算修正](https://github.com/scarecrow173/ruviform/issues/41)（スコープ 1「公開 enum `#[non_exhaustive]` 統一方針」は決定済み・再裁定不要と明記）
 * 経緯: Issue #18 / PR #39 レビュー finding C5（`tmp/issue-18/review-b.md`・`tmp/issue-18/judgment.md`）。当時は `publish = false` 内部クレート方針として文書化済み判断と裁定されたが、本 ADR で統一ポリシーとして上書き確定した
 * 上流ドキュメント: [設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（`relations.derives-from`。データモデルの公開 API 方針の正本）
-* 派生ドキュメント（`relations.derived-by`）: [spec](../specs/issue-18-followup-enum-and-time-fix.md)・[plan](../plans/issue-18-followup-enum-and-time-fix.md) — 本ポリシーの適用を含むフォローアップ実装
+* 派生ドキュメント（`relations.derived-by`）: [spec](../specs/issue-18-followup-enum-and-time-fix.md)・plan `docs/plans/issue-18-followup-enum-and-time-fix.md` — 本ポリシーの適用を含むフォローアップ実装
 * 外部参照（`relations.references`）: [Rust Reference — the `non_exhaustive` attribute](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)、[Cargo SemVer compatibility — enum variants](https://doc.rust-lang.org/cargo/reference/semver.html#enum-new)
 * 関連（`relations.related`）: [`AGENTS.md`](../../AGENTS.md)（暫定規約に本ポリシーが転記される）

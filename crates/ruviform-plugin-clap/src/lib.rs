@@ -54,7 +54,7 @@
 //! documentation + review responsibilities per
 //! `docs/adr/realtime-contract-and-verification-policy.md`. `PoC`
 //! findings are recorded in
-//! `docs/impl/ir/poc-clap-binding-adapter.md`.
+//! `docs/evidence/plugin-format-evidence.md`.
 //!
 //! ## Host bridge (`feature = "host"`)
 //!
@@ -70,7 +70,7 @@
 //! + SAFETY justifications.
 //!
 //! Contract source: `docs/specs/implement-plugin-foundation.md`,
-//! `docs/plans/implement-plugin-foundation.md` (task T3).
+//! `docs/knowledge/plugin-format-adapters.md` (task T3).
 
 mod adapt;
 mod gain;

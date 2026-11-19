@@ -97,7 +97,7 @@ GUI Testing v1.0 / RF-GT-02（Issue #257 の合意済み分解、実装未着手
 - **AC-4:** セキュリティレビュー（allowlist、redaction、容量上限、収集 ON/OFF、CI artifact 内容）合格。→ 4 + impl record のセキュリティ節
 - **AC-5:** Ruviform 単体と両 Consumer 向け mock fixture が CI で再現、#294 へ接続するための証拠項目を記録。→ 6, 7 + mise/CI レーン
 
-検証規則・判定語彙・fault matrix 個別行は [テスト仕様](../test-specs/issue-311-ipc-conformance-replay.md)、実装順序は [実装計画](../plans/issue-311-ipc-conformance-replay.md)、詳細設計は [設計](../designs/issue-311-ipc-conformance-replay.md) に展開する。
+検証規則・判定語彙・fault matrix 個別行は [テスト仕様](../test-specs/issue-311-ipc-conformance-replay.md)、実装順序は 実装計画 `docs/plans/issue-311-ipc-conformance-replay.md`、詳細設計は [設計](../designs/issue-311-ipc-conformance-replay.md) に展開する。
 
 ## Non-goals
 

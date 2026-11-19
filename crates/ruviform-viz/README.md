@@ -61,6 +61,6 @@ Ruviform の汎用インタラクティブ可視化プリミティブを担う�
 ## 関連
 
 - 設計: docs/designs/issue-157-viz-primitives.md
-- 実装記録・ベンチマーク: docs/impl/ir/issue-157-viz-primitives.md
+- 実装記録・ベンチマーク: docs/evidence/dsp-simd-evidence.md
 - 依存先: `ruviform-numeric`（Issue #150）、`ruviform-media-core`、
   `ruviform-exec`（Issue #21）、`ruviform-ui`（Issue #156 — adapter 側が接続）

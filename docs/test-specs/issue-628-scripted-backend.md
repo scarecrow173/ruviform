@@ -12,7 +12,7 @@ relations:
     - "https://github.com/scarecrow173/ruviform/issues/628"
     - "docs/specs/issue-628-scripted-backend.md"
     - "docs/designs/issue-628-scripted-backend.md"
-    - "docs/plans/issue-628-scripted-backend.md"
+    - "docs/knowledge/docs-operations-and-agent-workflow.md"
   changes:
     added:
       - type: "file"

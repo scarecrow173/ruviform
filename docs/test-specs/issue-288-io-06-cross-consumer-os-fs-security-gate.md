@@ -66,8 +66,8 @@ Issue #288 の Gate 設計正本（[design](../designs/issue-288-io-06-cross-con
 実在する正本への参照で構成され、設計合意とテスト完了を混同していない」
 ことを検証する。対象 spec は
 [spec](../specs/issue-288-io-06-cross-consumer-os-fs-security-gate.md)、
-実施記録は [task](../tasks/issue-288-io-06-cross-consumer-os-fs-security-gate.md) /
-[plan](../plans/issue-288-io-06-cross-consumer-os-fs-security-gate.md) を参照。
+実施記録は task `docs/tasks/issue-288-io-06-cross-consumer-os-fs-security-gate.md` /
+plan `docs/plans/issue-288-io-06-cross-consumer-os-fs-security-gate.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・参照先の実在確認・内容の突合・lint）で行う。
 本 test-spec は Gate の**設計文書の正しさ**を対象とし、各 Gate 行が

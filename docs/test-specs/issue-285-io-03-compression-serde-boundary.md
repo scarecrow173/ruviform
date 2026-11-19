@@ -68,8 +68,8 @@ Resource Budget・Error 契約・Feature/Backend 確定値・Consumer
 構成し、設計合意と実装/検証の完了を混同していない」ことを
 検証する。対象 spec は
 [spec](../specs/issue-285-io-03-compression-serde-boundary.md)、
-実施記録は [task](../tasks/issue-285-io-03-compression-serde-boundary.md) /
-[plan](../plans/issue-285-io-03-compression-serde-boundary.md) を参照。
+実施記録は task `docs/tasks/issue-285-io-03-compression-serde-boundary.md` /
+plan `docs/plans/issue-285-io-03-compression-serde-boundary.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・参照先の実在確認・内容の突合・lint）で
 行う。本 test-spec は横断設計文書の正しさを対象とし、

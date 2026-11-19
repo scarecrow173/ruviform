@@ -136,7 +136,7 @@ Issue #18・API brief・設計ベースラインの決定事項に基づく。�
 - 一次ソース: GitHub Issue [#18 [impl] データモデル実装（media-core / audio-core / video-core の API 確定）](https://github.com/scarecrow173/ruviform/issues/18)（`relations.source`）。Issue #1 設計ベースライン「後続実装 Issue の提案一覧」から起票された。
 - 上流文書（`relations.derives-from`）: [設計ベースライン](../designs/ruviform-architecture-design-baseline.md)（「データモデル」節の決定事項・Phase 1 完了目安・後続実装 Issue 一覧）と [RT 契約 ADR](../adr/realtime-contract-and-verification-policy.md)（API 単位の RT 保証ラベル付け規則）。
 - 前提（`relations.depends-on`）: spec [establish-rust-dev-foundation.md](establish-rust-dev-foundation.md)（`SPEC-034IcwhwIFSNUNKtX7KK0Q`）が確立した Rust 開発基盤（workspace・lint・mise 検証タスク）を本 spec の検証基盤として利用する。
-- 派生（`relations.derived-by`）: [実装 plan](../plans/implement-issue-18-data-model.md)。検証意図は [test spec](../test-specs/media-data-model-api.md)（`relations.verified-by` 相互リンク）が保持する。
+- 派生（`relations.derived-by`）: 実装 plan `docs/plans/implement-issue-18-data-model.md`。検証意図は [test spec](../test-specs/media-data-model-api.md)（`relations.verified-by` 相互リンク）が保持する。
 - 関連（`relations.related`）: リポジトリルートの [`AGENTS.md`](../../AGENTS.md)（暫定開発規約・unsafe 原則禁止・lint ゲート）。
 - 事後注記（`relations.refined-by`）: 上記 Deferred Design Concerns の「`#[non_exhaustive]` 適用範囲」行（公開時に再評価と記録した延期判断）は、[ADR-034J6OnZouPI8HQy6cIg9D](../adr/public-enum-non-exhaustive-policy.md)（全公開 enum への enum レベル `#[non_exhaustive]` 統一方針）として前倒しで確定・適用された。
 - 参考（`relations.references`）: 親 Issue [#1](https://github.com/scarecrow173/ruviform/issues/1)（設計ベースラインの一次ソース）。

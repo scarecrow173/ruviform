@@ -1,5 +1,5 @@
 //! Plugin → graph E2E (Issue #113 task 6 —
-//! `docs/tasks/plugin-graph-e2e-and-rt-lane.md`, oracle
+//! `docs/evidence/plugin-l1-evidence.md`, oracle
 //! `docs/test-specs/plugin-graph-e2e-tests.md`).
 //!
 //! The adhesion the spec pins: a `Send` `PluginEndpoint` moves into

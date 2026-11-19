@@ -24,7 +24,7 @@ relations:
     - "https://github.com/scarecrow173/audio-lens/issues/127"
     - "https://github.com/scarecrow173/synvelis/issues/28"
     - "docs/designs/issue-193-migration-execution-plan.md"
-    - "docs/plans/issue-193-migration-execution-plan.md"
+    - "docs/knowledge/docs-operations-and-agent-workflow.md"
     - "POLICIES.md"
   changes:
     added:

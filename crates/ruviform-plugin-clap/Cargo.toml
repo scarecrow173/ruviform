@@ -15,7 +15,7 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 # The CLAP-specific L1 child-process runner (Issue #114, task
-# `docs/tasks/real-adapter-runner-bins.md`): dlopens the fixture cdylib
+# `docs/evidence/plugin-l1-evidence.md`): dlopens the fixture cdylib
 # through the `host` bridge and hands the scanned factories to
 # `ruviform_plugin_export::run`. `required-features` keeps the binary
 # out of the default build — it exists only under `--features host`.

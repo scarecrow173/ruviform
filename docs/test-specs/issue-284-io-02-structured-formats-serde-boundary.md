@@ -67,8 +67,8 @@ Error 契約・Feature/Backend 確定値・Consumer 利用面・証拠項目
 対応を、実在する per-format 正本への参照で構成し、設計合意と
 実装/検証の完了を混同していない」ことを検証する。対象 spec は
 [spec](../specs/issue-284-io-02-structured-formats-serde-boundary.md)、
-実施記録は [task](../tasks/issue-284-io-02-structured-formats-serde-boundary.md) /
-[plan](../plans/issue-284-io-02-structured-formats-serde-boundary.md) を参照。
+実施記録は task `docs/tasks/issue-284-io-02-structured-formats-serde-boundary.md` /
+plan `docs/plans/issue-284-io-02-structured-formats-serde-boundary.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・参照先の実在確認・内容の突合・lint）で
 行う。本 test-spec は横断設計文書の正しさを対象とし、

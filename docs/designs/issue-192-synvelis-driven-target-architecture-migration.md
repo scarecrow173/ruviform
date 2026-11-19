@@ -225,9 +225,9 @@ snapshot（2026-11-09 時点）を記録する。
   判定は各 Issue と gate 証拠を正とする。
 
 文書チェーン: [spec](../specs/issue-192-synvelis-driven-target-architecture-migration.md)・
-[plan](../plans/issue-192-synvelis-driven-target-architecture-migration.md)・
+plan `docs/plans/issue-192-synvelis-driven-target-architecture-migration.md`・
 [test-spec](../test-specs/issue-192-synvelis-driven-target-architecture-migration.md)・
-[task](../tasks/issue-192-synvelis-driven-target-architecture-migration.md)。
+task `docs/tasks/issue-192-synvelis-driven-target-architecture-migration.md`。
 
 ## Scope
 

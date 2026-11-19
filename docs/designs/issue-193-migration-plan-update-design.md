@@ -65,7 +65,7 @@ relations:
 計画正本
 [docs/designs/issue-193-migration-execution-plan.md](issue-193-migration-execution-plan.md)
 （以下「計画設計正本」）と
-[docs/plans/issue-193-migration-execution-plan.md](../plans/issue-193-migration-execution-plan.md)
+`docs/plans/issue-193-migration-execution-plan.md`
 （以下「計画実行正本」）は、Issue #193 本文の
 Migration Execution Plan v1.0 を 2026-11-09 時点の
 snapshot として正本化したものである。その後の Issue 状態

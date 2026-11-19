@@ -171,7 +171,7 @@ GitHub Issue [#29 [impl] プラグイン基盤（plugin-core + CLAP/VST3 adapter
 
 ## PoC Findings — VST3 / T4 実測（2026-10-21 追記）
 
-`crates/ruviform-plugin-vst3`（task `TASK-034JgsHeZt7Bm40uBMo9wg`・IR [../impl/ir/poc-vst3-binding-adapter.md](../impl/ir/poc-vst3-binding-adapter.md)）の実測結果。方式 ADR（T5）の入力として記録する。
+`crates/ruviform-plugin-vst3`（task `TASK-034JgsHeZt7Bm40uBMo9wg`・IR `docs/impl/ir/poc-vst3-binding-adapter.md`）の実測結果。方式 ADR（T5）の入力として記録する。
 
 ### ビルド要件（Open Question の解消）
 

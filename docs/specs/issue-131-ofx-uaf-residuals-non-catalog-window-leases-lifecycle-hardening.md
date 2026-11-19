@@ -141,5 +141,5 @@ Issue #124 が `rv_ofx_catalog_open` の foreign-call window に導入した防�
 
 - [GitHub Issue #131](https://github.com/scarecrow173/ruviform/issues/131) — 一次ソース（`relations.source`）
 - [Issue #124 spec](issue-124-ofx-cross-window-h-exposure.md) — 親 spec（residuals 記録・今回の修正で境界記述を一部 supersede）
-- [Issue #124 IR](../impl/ir/issue-124-ofx-host-window-lease-clip-props-clone-implementation.md) — lease/poison/deferred-reclaim モデルの前例
+- Issue #124 IR `docs/impl/ir/issue-124-ofx-host-window-lease-clip-props-clone-implementation.md` — lease/poison/deferred-reclaim モデルの前例
 - [ofx-host-adapter design](../designs/ofx-host-adapter.md) — 上流設計（approved・status 不変で記述のみ更新）

@@ -9,7 +9,7 @@ owners: []
 relations:
   source:
     - "docs/designs/viewlink-authoritative-generation.md"
-    - "docs/plans/viewlink-authoritative-generation.md"
+    - "docs/knowledge/gui-view-contracts-and-testing.md"
   changes:
     added: []
     modified:

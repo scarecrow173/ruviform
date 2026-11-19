@@ -9,7 +9,7 @@ owners: ["scarecrow173"]
 relations:
   source:
     - "docs/designs/issue-377-query-binding-epoch.md"
-    - "docs/plans/issue-377-query-binding-epoch.md"
+    - "docs/knowledge/gui-view-contracts-and-testing.md"
   changes:
     added: []
     modified:

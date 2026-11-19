@@ -117,8 +117,8 @@ WebView-first / SolidJS / DOM・CustomEvent 前提の記述に優先する。
 （2026-11-08 補足どおり）。
 
 文書チェーン: [spec](../specs/issue-257-driver-neutral-ui-contract.md)・
-[plan](../plans/issue-257-driver-neutral-ui-contract.md)・
-[task](../tasks/issue-257-driver-neutral-ui-contract.md)・
+plan `docs/plans/issue-257-driver-neutral-ui-contract.md`・
+task `docs/tasks/issue-257-driver-neutral-ui-contract.md`・
 [test-spec](../test-specs/issue-257-driver-neutral-ui-contract.md)。
 
 ## Scope
@@ -150,7 +150,7 @@ Issue 状態。
 | 後継 ADR（Driver-neutral GUI / GPUI 標準 Driver 仮決定） | [driver-neutral-gui-gpui-driver-webview-first-issue-384.md](../adr/driver-neutral-gui-gpui-driver-webview-first-issue-384.md)（status: proposed = 仮決定。最終採否は #262/#419） |
 | spec | [issue-384-driver-neutral-gui-architecture.md](../specs/issue-384-driver-neutral-gui-architecture.md)（approved） |
 | 契約詳細設計（ID 体系・crate 配置・公開 API ルール・移行表） | [issue-384-driver-neutral-gui-contract.md](issue-384-driver-neutral-gui-contract.md)（approved） |
-| plan / task | [rf384-rf385-…plan](../plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md) / [implement-rf384-rf385-…task](../tasks/implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md) |
+| plan / task | rf384-rf385-…plan `docs/plans/rf384-rf385-driver-neutral-gui-contract-ruviform-ui-theme-dtcg-interpreter-issue.md` / implement-rf384-rf385-…task `docs/tasks/implement-rf384-rf385-driver-neutral-contract-docs-ruviform-ui-theme-crate.md` |
 | 実装 crate | `crates/ruviform-ui`（契約層）・`ruviform-ui-gpui`（GPUI adapter）・`ruviform-ui-webview`（legacy adapter）・`ruviform-ui-test`（Fake/test）・`ruviform-ui-theme` |
 | 境界 guard | `mise run check-ui-driver-boundary`（`crates/ruviform-ui-test/src/driver_boundary.rs` + `src/bin/gui_boundary_guard.rs`、#390） |
 
@@ -172,8 +172,8 @@ composition root・明示 driver extension・driver crate 自身のみ。
 | 項目 | 正本 |
 | --- | --- |
 | spec / design / test-spec | [specs/issue-386-driver-neutral-gui-host.md](../specs/issue-386-driver-neutral-gui-host.md) / [designs/issue-386-driver-neutral-gui-host.md](issue-386-driver-neutral-gui-host.md) / [test-specs/issue-386-driver-neutral-gui-host.md](../test-specs/issue-386-driver-neutral-gui-host.md) |
-| plan / tasks | [plans/implement-issue-386-…](../plans/implement-issue-386-driver-neutral-gui-host.md) / `docs/tasks/t1..t5-*-issue-386.md` |
-| inventory / IR | [discovery/issue-386-…inventory](../discovery/issue-386-driver-neutral-gui-host-inventory.md) / [impl/ir/issue-386-…](../impl/ir/issue-386-driver-neutral-gui-host.md) |
+| plan / tasks | plans/implement-issue-386-… `docs/plans/implement-issue-386-driver-neutral-gui-host.md` / `docs/tasks/t1..t5-*-issue-386.md` |
+| inventory / IR | [discovery/issue-386-…inventory](../discovery/issue-386-driver-neutral-gui-host-inventory.md) / impl/ir/issue-386-… `docs/impl/ir/issue-386-driver-neutral-gui-host.md` |
 | 実装 PR | #394（`driver.rs` 契約 + `ruviform-ui-gpui` 最小 Window fixture）、#422（Fake/GPUI 共通 lifecycle fixture + 旧 API 移行表） |
 
 契約型（`crates/ruviform-ui/src/`、実在確認済み）:
@@ -222,7 +222,7 @@ composition root・明示 driver extension・driver crate 自身のみ。
 | 項目 | 正本 |
 | --- | --- |
 | spec / design / test-spec | [specs/issue-387-component-view-specs.md](../specs/issue-387-component-view-specs.md) / [designs/issue-387-component-view-specs.md](issue-387-component-view-specs.md) / [test-specs/issue-387-component-renderer.md](../test-specs/issue-387-component-renderer.md) |
-| plan / tasks | [plans/implement-issue-387-…](../plans/implement-issue-387-component-renderer.md) / `docs/tasks/t1..t4-*-issue-387.md` |
+| plan / tasks | plans/implement-issue-387-… `docs/plans/implement-issue-387-component-renderer.md` / `docs/tasks/t1..t4-*-issue-387.md` |
 | inventory | [discovery/issue-387-…inventory](../discovery/issue-387-component-view-inventory.md) |
 | 実装 PR | #406（view/behavior 契約 + headless behavior + GPUI renderer/mount seam + NativeSlot glue）、#420（Knob/Toggle/Meter/TimeAxis） |
 
@@ -238,7 +238,7 @@ GPUI renderer（`crates/ruviform-ui-gpui/src/render.rs`、crate-private）
 | 項目 | 正本 |
 | --- | --- |
 | spec / design / test-spec | [specs/issue-390-driver-contract-lab.md](../specs/issue-390-driver-contract-lab.md) / [designs/issue-390-driver-contract-lab.md](issue-390-driver-contract-lab.md) / [test-specs/issue-390-driver-boundary-lab.md](../test-specs/issue-390-driver-boundary-lab.md) |
-| plan / task / report / inventory | [plans/issue-390-…](../plans/issue-390-driver-contract-lab.md) / [tasks/issue-390-…](../tasks/issue-390-driver-contract-lab.md) / [reports/issue-390-driver-lab.md](../reports/issue-390-driver-lab.md) / [discovery/issue-390-…inventory](../discovery/issue-390-driver-contract-lab-inventory.md) |
+| plan / task / report / inventory | plans/issue-390-… `docs/plans/issue-390-driver-contract-lab.md` / tasks/issue-390-… `docs/tasks/issue-390-driver-contract-lab.md` / [reports/issue-390-driver-lab.md](../reports/issue-390-driver-lab.md) / [discovery/issue-390-…inventory](../discovery/issue-390-driver-contract-lab-inventory.md) |
 | 実装 | `crates/ruviform-ui-test/src/driver_boundary.rs`(+`driver_boundary/sig.rs`)・`driver_lab.rs`・`fake_driver.rs`・`fake.rs`・`fake_native_slot.rs`・`lifecycle.rs`・`headless.rs`・`fixtures/driver-lab/{boundary,cases,stories}.json` |
 | 実装 PR | #396（Boundary Guard + Driver Lab registry）、#425（fake 実行 fixture・manifest 実態化・境界 pin） |
 | 検証 lane | `mise run check-ui-driver-boundary` / `test-ui-driver-contract` / `test-ui-parity` / `test-ui-native-slot` / `test-ui-component-view` / `test-ui-golden` |
@@ -251,7 +251,7 @@ case（UI-DVR-01..08）と story registry（`LAB-*`）が manifest の正本。
 | 項目 | 正本 |
 | --- | --- |
 | spec / design / test-spec | [specs/issue-464-…](../specs/issue-464-consumer-neutral-gui-scenario-contract.md) / [designs/issue-464-…](issue-464-consumer-neutral-gui-scenario-contract.md) / [test-specs/issue-464-…](../test-specs/issue-464-consumer-neutral-gui-scenario-contract.md) |
-| plan / task | [plans/issue-464-…](../plans/issue-464-consumer-neutral-gui-scenario-contract.md) / [tasks/issue-464-…](../tasks/issue-464-consumer-neutral-gui-scenario-contract.md) |
+| plan / task | plans/issue-464-… `docs/plans/issue-464-consumer-neutral-gui-scenario-contract.md` / tasks/issue-464-… `docs/tasks/issue-464-consumer-neutral-gui-scenario-contract.md` |
 | 実装 | `crates/ruviform-ui-test/src/scenario.rs`（`SemanticGuiTest`・`TargetQuery`/`ScenarioTarget`・`ScenarioCapability`/`ScenarioDriver`・`ScenarioVerdict`/`ScenarioError`/`ScenarioReport`・`GuiAction`・`MintedIntent`・`begin`/`preview`/`commit`/`cancel` helper・`parity_gesture_scenario`）・`scenario/fake.rs`（`FakeGuiTest`）・`scenario/visual.rs`（`VisualGuiTest`）。GPUI adapter: `crates/ruviform-ui-gpui/src/gpui_driver/scenario.rs`（`GpuiGuiTest`、`gpui-test` feature 限定）+ `gpui_driver/observe.rs`（`GpuiObserver`） |
 | 実装 PR | ruviform #477。Consumer 採用: AudioLens PR #188（merged、#464 Step C） |
 | 検証 lane | `mise run test-ui-scenario-contract` / `-fake` / `-gpui` |

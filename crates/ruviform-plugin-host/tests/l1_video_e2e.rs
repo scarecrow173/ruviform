@@ -1,8 +1,8 @@
 //! Public-surface E2E for the video L1 path (Issue #118 T4 —
-//! `docs/tasks/l1-video-fixture-and-e2e.md`; oracles
+//! `docs/evidence/plugin-l1-evidence.md`; oracles
 //! `docs/test-specs/issue-118-video-e2e-tests.md` and
 //! `docs/test-specs/issue-118-video-failed-parity-tests.md`; Issue
-//! #121 T11 — `docs/tasks/verify-l1-video-diagnostics-parity.md`,
+//! #121 T11 — `docs/evidence/plugin-l1-evidence.md`,
 //! oracle `docs/test-specs/issue-121-l1-parity-nonregression-tests.md`).
 //!
 //! [`PluginHost::video`] is the only surface under test — the

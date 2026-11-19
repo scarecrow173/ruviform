@@ -116,4 +116,4 @@ PR #350（squash merge `2ee375dd6c9adfada68eb0a6706b2a096948e7ea`）は AGENTS.m
 
 - 一次ソース: owner 指示（PR #350 フォローアップの是正タスク・対応 Issue なし）と [PR #350](https://github.com/scarecrow173/ruviform/pull/350)（過剰縮小が判明した先行変更）。
 - 関連（`relations.related`）: [`AGENTS.md`](../../AGENTS.md)（復元・分離対象）、[`docs/development-environment.md`](../development-environment.md)（分離先）。
-- 派生（`relations.derived-by`）: [実装 plan](../plans/agents-verification-entry-split.md)。
+- 派生（`relations.derived-by`）: 実装 plan `docs/plans/agents-verification-entry-split.md`。

@@ -78,8 +78,8 @@ Loss の非偽装・両 Consumer 利用面・受入 Gate 9 項目との
 RT・Cross-Consumer 受入の完了を混同していない」ことを
 検証する。対象 spec は
 [spec](../specs/issue-275-observability-integration-design.md)、
-実施記録は [task](../tasks/issue-275-observability-integration-design.md) /
-[plan](../plans/issue-275-observability-integration-design.md) を参照。
+実施記録は task `docs/tasks/issue-275-observability-integration-design.md` /
+plan `docs/plans/issue-275-observability-integration-design.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・参照先の実在確認・内容の突合・
 lint）で行う。本 test-spec は横断設計文書の正しさを

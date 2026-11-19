@@ -44,7 +44,7 @@ relations:
 
 ## Purpose
 
-Issue #20 で導入するメディア I/O 抽象境界の振る舞い契約——demux/mux と decode/encode の 4 系統分離、`Packet` / codec 記述型 / `AudioFrame` の値型、エラー正規化と EOS=Option 終端、能力交渉の両機構、外部型非露出、非 RT 専用ラベル、symphonia PoC の end-to-end 検証——の「なぜテストが存在するか」を保持する。[spec](../specs/implement-media-io-abstraction-and-first-backend-poc.md) の受け入れ基準 AC1–AC11 と [plan](../plans/issue-20-i-o-poc.md) の検証方針を、実装の改変や第二バックエンド追加の際に「どの振る舞いを守るべきか」「そのテストはまだ必要か」を判断できる形で固定する。廃止してよいのは、対象契約自体を変更する ADR / spec 改訂が行われたとき（例: I/O 抽象境界の再編、外部型露出方針の変更、RT 契約ラベル体系の見直し）。
+Issue #20 で導入するメディア I/O 抽象境界の振る舞い契約——demux/mux と decode/encode の 4 系統分離、`Packet` / codec 記述型 / `AudioFrame` の値型、エラー正規化と EOS=Option 終端、能力交渉の両機構、外部型非露出、非 RT 専用ラベル、symphonia PoC の end-to-end 検証——の「なぜテストが存在するか」を保持する。[spec](../specs/implement-media-io-abstraction-and-first-backend-poc.md) の受け入れ基準 AC1–AC11 と plan `docs/plans/issue-20-i-o-poc.md` の検証方針を、実装の改変や第二バックエンド追加の際に「どの振る舞いを守るべきか」「そのテストはまだ必要か」を判断できる形で固定する。廃止してよいのは、対象契約自体を変更する ADR / spec 改訂が行われたとき（例: I/O 抽象境界の再編、外部型露出方針の変更、RT 契約ラベル体系の見直し）。
 
 ## Feature
 

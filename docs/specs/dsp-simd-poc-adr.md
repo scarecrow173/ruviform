@@ -115,7 +115,7 @@ GitHub Issue #19 で定義された PoC の成果物として、`ruviform-math` 
 - [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` / `bench` と `prek run --all-files` がグリーン
 - [x] README / AGENTS.md / `mise.toml` の記述が実態と整合している（`bench` タスクが no-op ではなくなった点を含む）
 
-充足実績: 採否 ADR は [dsp-simd-backend-adoption.md](../adr/dsp-simd-backend-adoption.md)（`ADR-034JEe7SAbksaycyrum16R`・accepted）、ベンチ結果は experiment log [dsp-simd-poc-20261021.md](../impl/exp/dsp-simd-poc-20261021.md)（2 run × 756 ケース・環境メタデータ付き）と impl record [dsp-simd-poc-benchmark.md](../impl/ir/dsp-simd-poc-benchmark.md) に記録済み。AC-6 の `mise run bench` グリーン要求は Phase F（T6）の全量計測実績（上記 experiment log の 2 run 完走）で充足済みであり、Phase H の最終検証では `mise run bench-smoke` でハーネス健全性を再確認する運用（plan V-8 の充足経路どおり）。
+充足実績: 採否 ADR は [dsp-simd-backend-adoption.md](../adr/dsp-simd-backend-adoption.md)（`ADR-034JEe7SAbksaycyrum16R`・accepted）、ベンチ結果は experiment log `docs/impl/exp/dsp-simd-poc-20261021.md`（2 run × 756 ケース・環境メタデータ付き）と impl record `docs/impl/ir/dsp-simd-poc-benchmark.md` に記録済み。AC-6 の `mise run bench` グリーン要求は Phase F（T6）の全量計測実績（上記 experiment log の 2 run 完走）で充足済みであり、Phase H の最終検証では `mise run bench-smoke` でハーネス健全性を再確認する運用（plan V-8 の充足経路どおり）。
 
 ## Deferred Design Concerns
 

@@ -69,8 +69,8 @@ finish・検証済み終了 Receipt・Secure Extraction の脅威モデル・
 IO-03・#288 matrix・#306 E2E への参照で構成し、設計合意と
 実装/検証の完了を混同していない」ことを検証する。対象 spec は
 [spec](../specs/issue-286-io-04-zip-tar-archive.md)、実施記録は
-[task](../tasks/issue-286-io-04-zip-tar-archive.md) /
-[plan](../plans/issue-286-io-04-zip-tar-archive.md) を参照。
+task `docs/tasks/issue-286-io-04-zip-tar-archive.md` /
+plan `docs/plans/issue-286-io-04-zip-tar-archive.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・参照先の実在確認・内容の突合・lint）で
 行う。本 test-spec は横断設計文書の正しさを対象とし、
