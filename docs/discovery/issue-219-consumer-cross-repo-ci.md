@@ -110,7 +110,7 @@ Cross-Repo 検証の配置:
 
 **Confirmed（実測確定）:**
 
-- Consumer manifest の `rev` を候補 SHA へ一括書換 → `cargo fetch` で全 ruviform crate が**単一候補 SHA**（`41772a7af35e42a2380c45dade841b80c0d00d70`）に再解決され、lockfile が `git+...?rev=<sha>#<sha>` で記録される。private HTTPS fetch は system git + Git Credential Manager 経由で成功（`net.git-fetch-with-cli`・`GIT_LFS_SKIP_SMUDGE` が clone 済み `.cargo/config.toml` から効く）。機構は `## Evidence` のコマンドで再現可能。
+- Consumer manifest の `rev` を候補 SHA へ一括書換 → `cargo fetch` で全 ruviform crate が**単一候補 SHA**（`41772a7af35e42a2380c45dade841b80c0d00d70`）に再解決され、lockfile が `git+...?rev=<sha>#<sha>` で記録される。private HTTPS fetch は system git + Git Credential Manager 経由で成功（`net.git-fetch-with-cli`・`GIT_LFS_SKIP_SMUDGE` が clone 済み `.cargo/config.toml` から適用される）。機構は `## Evidence` のコマンドで再現可能。
 - ruviform 側 credential（secrets/deploy keys）は現状ゼロ。Cross-Repo CI の初回実走には owner による一次設定（Deploy Key 登録 + secret 設定）が前提となり、**未設定時は CI 側が `not run` を明確に返す**設計が要る（`unknown` を `pass` と混同しないルールと整合）。
 - Synvelis は buildable な対象を持たないため、Cross-Repo Gate は「Consumer 別の証拠形式」を持つ必要がある（build 系 lane と contract/設計参照系 lane で記録形式が異なる）。
 

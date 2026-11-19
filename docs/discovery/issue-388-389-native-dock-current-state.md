@@ -62,7 +62,7 @@ GUI 関連公開 API・wire・Dock 契約・L1 実装を監査した。
 **監査確定事実（コード・テスト・approved 設計書の実測値）**:
 
 1. `GuiParentToken(u64)` は「HWND や `NSView *` を caller が整数へ縮約した
-   raw native parent」を運ぶ旧 Boundary 語彙であり、発行・世代・寿命の
+   raw native parent」を持つ旧 Boundary 語彙であり、発行・世代・寿命の
    検証機構を持たない（`crates/ruviform-plugin-core/src/boundary.rs`）。
 2. L1 の `OpenGui`/`CloseGui` は host-side short-circuit で
    `Err(HostError::Unsupported)` を返す — wire に出ず子プロセスにも

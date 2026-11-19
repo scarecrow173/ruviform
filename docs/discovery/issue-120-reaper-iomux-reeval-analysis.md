@@ -132,7 +132,7 @@ refined 再トリガ条件の一つ「stderr drain の EINTR latent bug 修正�
 - **メリット側の再評価（実施）**: 仮に同時評価した場合でも結論は不変と判断 —
   - `classify_poll` は純粋関数として C（共有 drain）でも再利用可能だが、シグネチャが call 単位結果（`rc`/`errno`）と fd 単位結果（`revents`）を結合しており、fd 配列 `poll` では分割が必要 — 再利用の価値は限定的
   - C の支配的コスト（crate 初グローバル worker・fd→状態 registry・fairness・lifecycle・EOF/deadline 契約複製・テスト隔離）は #147 で一切低下していない
-  - 利益側ゲート（実測 N>1・2N+H < 3N が効く領域）も依然未発火 — N=1 では 2N+H=3N で削減効果ゼロ
+  - 利益側ゲート（実測 N>1・2N+H < 3N が有効な領域）も依然未発火 — N=1 では 2N+H=3N で削減効果ゼロ
 - **結論**: re-defer 継続。副次発見の latent bug は #147 で修正・merged 済み、stale doc は本コミット群で修正済み — 副次発見 2 件ともクローズ
 
 ## 実測記録（2026-11-09・Windows — Issue #120 受入証跡）
