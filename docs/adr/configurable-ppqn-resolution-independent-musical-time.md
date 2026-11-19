@@ -54,7 +54,7 @@ relations:
 
 **accepted (architectural direction, 2026-11-01); implementation and API migration pending.**
 
-本ADRは[既存の固定960 ADR](musical-time-model.md)の**PPQN固定および整数Tickが音楽位置の唯一の正本である方針を置き換える**。旧ADRの履歴と、#90/#91で実装された現在の960ベースのAPIは残る。実装完了を意味しない。
+本ADRは[既存の固定960 ADR](musical-time-model.md)の**PPQN固定および整数Tickが音楽位置の唯一の正本である方針を置き換える**。旧ADRの履歴と、#90/#91で実装された現在の960ベースのAPIは残る。この置換は実装の完了を意味しない。
 
 ## Context
 
@@ -71,7 +71,7 @@ RuviformはSynvelis専用ではなく、マルチメディア処理で再利用�
 3. **Tickには分解能文脈が必要:** `Tick`の数値だけを異なるPPQN間で比較・合成しない。PPQNと組の型、または型安全な変換Contextを利用し、明示的なBeat位置変換を経由する。
 4. **Source-native fidelity:** ImportされたMIDIの元Division/PPQNとTick、録音Deviceの時刻/Clock Domain、Source-relative Metadataを可能な限り非破壊に保持。Project PPQN変更だけでは元EventをQuantize/Retimingしない。時刻に基づく明示的なQuantizeとは分離する。
 5. **Tempo/Time conversion:** Beat Position ↔ MediaTimeはTempoMapと明示丸めで変換し、特定960定数の依存を排除する。TempoMapの非RT Compile、不変Snapshot、RT有界クエリ、安定Native Anchorからの変換と境界の単回丸めを維持。**Piecewise-constant TempoMapは本変更では廃止しない。**
-6. **Adapter ownership:** CLAP/VST3などのPlugin ABIには規格固有のBeat/PPQ表現へ変換する。内部PPQNを固定と推定せず、基準拍位置・精度・丸めを利用する。汎用時間型はmedia-core側、規格写像はAdapter側、Synvelis Project/Clip/MIDI/Undoはアプリ側で所有。
+6. **Adapter ownership:** CLAP/VST3などのPlugin ABIには規格固有のBeat/PPQ表現へ変換する。内部PPQNを固定と仮定せず、基準拍位置・精度・丸めを利用する。汎用時間型はmedia-core側、規格写像はAdapter側、Synvelis Project/Clip/MIDI/Undoはアプリ側で所有。
 7. **Compatibility and migration:** 既存固定960型/処理の利用者に対し段階的な互換層、明示変換またはAPI移行方針を提供する。既存960 Projectの意味は変えず、Snap/Loop/Negative Pre-roll/Automation/Recording/Offlineで回帰試験する。
 
 ## Alternatives considered
@@ -86,7 +86,7 @@ RuviformはSynvelis専用ではなく、マルチメディア処理で再利用�
 
 ## Consequences and compatibility boundaries
 
-- 既存の`music.rs`には960の定数依存が実装されている。ADR採用後も**現在のコードは固定960のまま**であり、新しいAPIが存在するとは主張しない。
+- 既存の`music.rs`には960の定数依存が実装されている。ADR採用後も**現在のコードは固定960のまま**であり、新しいAPIが存在すると主張するものではない。
 - `MusicalTimeInfo.ppqn`やPlugin Transport変換、Bar/Beat分解、TempoMapセグメント計算に影響する。既存Call SiteとAudio/Video/CLI Consumerを監査する。
 - High-precision Source EventとProject内部Beatを分けても、MIDI Export時の選択したPPQNが元位置を表現できない場合は丸め/損失があり得る。Loss報告・Export Config・原本保持を設計する。
 - Ruviformは正確な有理数演算と無制限の分母を無条件に保証するのではなく、有限の計算能力を明示し、Overflow・容量・RT Budgetの条件を検証する。
