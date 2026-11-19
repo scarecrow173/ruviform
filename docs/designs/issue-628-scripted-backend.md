@@ -344,7 +344,7 @@ impl MidiFeed {
 - **thread 不使用**: callback は manual pump のみ。`start()` は
   delivery を「開始済み」にするだけで firing は行わない
   （先例 test の start()-firing 型ではなく、pump 型を採用 —
-  input/output の交互駆動・fault 挿入位置の制御を可能にするため）。
+  input/output の交互駆動・fault 挿入位置を制御できるようにするため）。
 - **rate change mid-stream は不可**: port 契約上 stream format は
   open 時固定。`ClockDiscontinuity` error + stream 死亡 + 別 config
   での再 open が代替経路（`Invalidate` fault + `reappear`/`open` で

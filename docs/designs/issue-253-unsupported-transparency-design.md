@@ -54,7 +54,7 @@ PR #561 の `ruviform-midi-device`（`MidiReadStats.unsupported` を
 
 ## Context
 
-`MidiReadStats` は 2 つの since-last-read 計数を運ぶ:
+`MidiReadStats` は 2 つの since-last-read 計数を保持する:
 
 - `dropped`: backend が event を受信する前に失った数（queue
   overflow・`MIM_MOREDATA` 等の driver-level loss）— 過負荷

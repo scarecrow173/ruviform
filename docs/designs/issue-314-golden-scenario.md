@@ -207,10 +207,10 @@ scenario (consumer)
 ## D2: capture outcome を `Result<RgbaImage, ScenarioError>` にしない
 
 - `ScenarioError::Unsupported{capability}` は capability のみを持ち
-  reason を運べず、`NotRun`（前提未達）を表現する variant がない。
+  reason を持てず、`NotRun`（前提未達）を表現する variant がない。
   `ScenarioError` に variant を足すと `Clone + PartialEq` derive を
   維持できない（`GoldenError` の `io::Error` と同じ問題）。
-- `CaptureOutcome` は「測定された事実」を運ぶ値型であり、error
+- `CaptureOutcome` は「測定された事実」を保持する値型であり、error
   ではない — outcome を `Result` の `Ok` に入れ、contract/tool
   error のみ `Err(ScenarioError)` にするのが #464 の
   error/verdict 分離と一致する。
@@ -237,7 +237,7 @@ scenario (consumer)
   「lane 語彙に `blocked` がない」ための既存規則（#390）を
   コード化したもので、意味は変えない。
 - `lane_status` を `ScenarioVerdict` の method にするのは、
-  この写像が scenario verdict 全般に効く規則であり、visual 層
+  この写像が scenario verdict 全般に適用される規則であり、visual 層
   固有ではないため。
 
 ## D5: adapter impl の配置

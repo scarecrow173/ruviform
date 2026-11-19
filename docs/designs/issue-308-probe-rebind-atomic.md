@@ -184,7 +184,7 @@ on_publish(runtime, spec)
 - **staged の stale 残留**: Commit を持たない attempt の staged 内容は live に影響せず、次の Begin で clear される。`staging` epoch check で attempt 外の Stage/Commit を拒否。
 - **同 generation retry**: publish は generation を進めるため通常は一意。万一同 generation で retry しても Begin が staged を clear してやり直すため冪等。
 - **`RebindDropped` の意味**: commit で「旧 live にあって staged に無い」= point 未解決（または remove 競合の順序差 — queue FIFO で最終状態は正しい）。probe 自体は broker に残り、次回 publish で復活し得る点を doc に明記。
-- **capture policy の broker/RT 乖離**: `set_capture_policy` は RT command を送らない。policy は on_publish の staged mode 決定にのみ効くため乖離は発生しない。publish を伴わない policy 変更は何も起こさない（doc 明記）。
+- **capture policy の broker/RT 乖離**: `set_capture_policy` は RT command を送らない。policy は on_publish の staged mode 決定にのみ作用するため乖離は発生しない。publish を伴わない policy 変更は何も起こさない（doc 明記）。
 - **`install(mode = Capture)` の既存 quirk**: install 直後の `capture_remaining = 0` は本 Issue の対象外（既存挙動を維持。`capture()` 経由が正規経路）。
 
 ## Alternatives Considered

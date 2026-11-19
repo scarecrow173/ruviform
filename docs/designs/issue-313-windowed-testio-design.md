@@ -152,7 +152,7 @@ malformed な inbound body は session 層で `Event::error` に応答
 
 ## 設計判断 4: `HeadlessIo` on `FakeDriver`
 
-`FakeDriver` は neutral 语义を既に提供する（bounded backlog・
+`FakeDriver` は neutral 語義を既に提供する（bounded backlog・
 drop-oldest・monotonic id・pending close・terminal `Destroyed`・
 `ipc_disconnect` suppression）が、headless の semantic 差分を
 以下で吸収する:

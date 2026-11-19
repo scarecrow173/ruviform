@@ -91,7 +91,7 @@ relations:
 
 Dock 操作は `DockWorkspace` のモデル操作であり、描画やドラッグは含まない。実 window 上で確認するのは
 「Dock の所有遷移が実 window の lifecycle と同じプロセスで成立すること」と
-「OS close が defer/approve の契約どおりに効くこと」である。
+「OS close が defer/approve の契約どおりに機能すること」である。
 
 ### 3.1 Defer が OS close を止める仕組み
 

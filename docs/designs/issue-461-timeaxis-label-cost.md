@@ -64,7 +64,7 @@ gpui 0.2.2 の text 経路を確認した結果、各 label の text 要素は `
 | label あり 256 ticks | 約 55〜57 ms |
 | 全 tick viewport 外（cull 済み） | 約 262 µs |
 
-label の文字列内容・長さはほぼ無関係で、非空 label の個数に対してほぼ 2 乗で増加する。`axis_mark_plan` の viewport cull は既に効いており（全 cull で 262 µs）、element tree の div 数ではなく text line ごとの `paint_layer` → `BoundsTree::insert` が支配的である。gpui の `LineLayoutCache` は text・font size・font runs・wrap で keyed されフレーム間で layout を再利用するため、shaping 自体は cache hit が効く。
+label の文字列内容・長さはほぼ無関係で、非空 label の個数に対してほぼ 2 乗で増加する。`axis_mark_plan` の viewport cull は既に機能しており（全 cull で 262 µs）、element tree の div 数ではなく text line ごとの `paint_layer` → `BoundsTree::insert` が支配的である。gpui の `LineLayoutCache` は text・font size・font runs・wrap で keyed されフレーム間で layout を再利用するため、shaping 自体は cache hit が有効である。
 
 ## Scope
 

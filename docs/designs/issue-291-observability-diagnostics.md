@@ -458,7 +458,7 @@ pub struct Diagnostics {
 - `#[non_exhaustive]` は全公開 enum に付与。`DiagnosticCode.name` と
   `domain`/`subject`/`origin` 系は `&'static str` で cardinality を
   静的に制限。`summary` は `String`（非 RT）だが path/bytes/token を
-  運ぶ専用フィールドは存在しない。
+  保持する専用フィールドは存在しない。
 
 ## Risks and Trade-offs
 

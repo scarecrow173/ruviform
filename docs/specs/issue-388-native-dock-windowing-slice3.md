@@ -61,8 +61,9 @@ ancestor clip・keyboard/focus routing・re-dock/float 行は `NotRun`
 
 - **ancestor clip / overhang**: slot projection が ancestor
   content mask と要素 bounds の積を clip として port に投影する
-  こと、および `set_clip` → `SetWindowRgn` が実 HWND に効くことの
-  実測。window 縮小による viewport overhang（`min_size` 強制）と、
+  こと、および `set_clip` → `SetWindowRgn` が実 HWND の
+  クリップリージョンを変更することの実測。window 縮小による
+  viewport overhang（`min_size` 強制）と、
   port 直叩きの部分 clip の 2 経路で確認する。
 - **keyboard / focus routing**: container focus 時にキーが plugin
   editor HWND に届かず container に留まること、plugin editor が

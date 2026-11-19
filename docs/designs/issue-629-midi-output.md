@@ -92,7 +92,7 @@ input-only と確認し、discovery gap #1「`midiOut*` 送信経路不在」を
 - `MidiEvent`/`MidiKind` は channel-voice 語彙のみ（SysEx/System は
   意図的に不在 — input 側も `unsupported` 計数）。output の
   `send_sysex` は語彙拡張ではなく、長い MIDI message を byte 列のまま
-  運ぶ経路として `midiOutLongMsg` に対応させる。
+  送信する経路として `midiOutLongMsg` に対応させる。
 - WinMM の output timestamp は存在しない（`midiOutShortMsg` に timestamp
   引数なし）。output port の `MidiPortCapabilities` は
   `provides_timestamps=false` / `clock_domain=None` を正直に宣言する。

@@ -102,8 +102,8 @@ Issue #185 の最小 PoC を `ruviform-audio::typed` 上に構築する。前提
 - 保持: spec（`ValidatedGraph` 由来の `GraphSpec` clone）、probe 台帳 `BTreeMap<ProbeId, ProbeEntry>`、command `Producer`、`free` 用 chunk producer、deck stats の reader half。
 - `capabilities() -> Vec<ObservationReport>`: spec の全 audio port + boundary を走査し plan binding で分類。決定的（BTreeMap/Vec 順で byte 等価）。
 - `install(point, mode) -> Result<ProbeId>`: capability 解決 → `NotObservable`/`UnknownPoint` を早期 return。binding 解決結果 `{slot, kind, schedule_index, effective_latency, generation}` を `ProbeCommand::Install`（generation-scoped）で送る。
-- `set_mode`/`capture`/`stop_capture`/`remove`: lifetime command（`SetMode`/`Remove`）を毎 callback drain 側へ。`SetMode` は mode 全体を運ぶ（冪等）。
-- `on_publish()`: `GraphRuntime::published_plan()`（新規アクセッサ）から最新 plan を取得し、全 live probe を再解決 → `Rebind{probe_id, binding, mode, generation}` を送る。`Rebind` は完全状態を運び欠落 `SetMode` を自己修復する。
+- `set_mode`/`capture`/`stop_capture`/`remove`: lifetime command（`SetMode`/`Remove`）を毎 callback drain 側へ。`SetMode` は mode 全体を保持する（冪等）。
+- `on_publish()`: `GraphRuntime::published_plan()`（新規アクセッサ）から最新 plan を取得し、全 live probe を再解決 → `Rebind{probe_id, binding, mode, generation}` を送る。`Rebind` は完全状態を含み欠落 `SetMode` を自己修復する。
 - `maintain()`: `free` channel の在庫を pool 目標数まで補充 + collector 側 recycle 待ち在庫管理。非 RT のみ・呼び出し周期は consumer 自由。
 - `probe_status(id) -> Option<ProbeStatus>`: per-probe `Counter` reader + deck status mirror（applied generation/mode/loss/unbound_blocks）の合成読み出し。
 

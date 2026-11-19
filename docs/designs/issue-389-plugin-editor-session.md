@@ -83,7 +83,7 @@ Issue #389 は規格別 Gui/View を Ruviform Window/Dock Presentation へ
 本設計は**新 Session 面を追加しつつ上記現実を変えない** — L1 は
 Unsupported のまま、L0 は ops 経由で既存 `open_gui` 経路を再利用、
 wire は変更しない（negotiation は設計のみ）。plugin ↔ ui 相互依存
-禁止のため、session は `ParentSlotLease`（opaque u64）を運び、
+禁止のため、session は `ParentSlotLease`（opaque u64）を保持し、
 `SurfaceSlotId`/OS handle 写像は消費側 composition の責務。
 
 ## 決定
@@ -157,7 +157,7 @@ Terminated{cause}` を 1 回だけ発し state を `Closed` へ収束。
 request 世代不一致・Window 破棄・Host crash が単一 terminal event
 に収束する」規範を型で強制。
 
-各遷移は `request: u64`（採番世代）を運び、stale callback（完了
+各遷移は `request: u64`（採番世代）を持ち、stale callback（完了
 request != 現行 request）は `StaleRequest` として無視 — 終端へ
 誤収束させない。
 
@@ -188,7 +188,7 @@ pub trait EditorSessionOps {
   issuer 側で検証・redeem し `ParentLease` を mint → `host.execute(
   HostCommand::OpenGui{handle,parent})`（`OpenGui.parent` の型は
   `ParentLease` — `GuiParentToken` から移行済み・改訂 2）。
-  非 `Docked` mode は L0 command surface が plain open のみ運ぶ
+  非 `Docked` mode は L0 command surface が plain open のみを持つ
   ため `Unsupported` を明示拒否（黙った docked 着地を fake
   success にしない）。`HostError::Unsupported` →
   `EditorOpError::Unsupported` 等の定義済み写像。plugin 既定

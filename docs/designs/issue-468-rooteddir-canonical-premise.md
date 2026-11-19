@@ -132,7 +132,7 @@ synvelis#186 で consumer 側 `fs::canonicalize` により解消済み。
   relative に分類 → absolute は TEXTUAL モードで `virtual_comps` を
   `canonical_comps` と照合 → prefix 内なら FD モードで root handle
   から suffix を walk → prefix 外なら `EscapesRoot`。
-- canonical 前提が効くのは「absolute target の綴り == canonical
+- canonical 前提が適用されるのは「absolute target の綴り == canonical
   anchor の成分列」という文字列契約のみ。relative target・`..` の
   chain pop・FD walk はこの前提に依存しない。
 

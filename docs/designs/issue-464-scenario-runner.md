@@ -131,7 +131,8 @@ timeout/cleanup 記録の canonical な置き場がない。本 slice はその
      宣言時は `Instant` で実測し、`elapsed_ms > budget_ms` かつ
      verdict が `Pass` なら `Fail` に落とし `detail` に timeout
      を記録する（`timed_out = true` は budget 超過時のみ）。
-   - `Err(ScenarioError::Unsupported{..})` → `Unsupported`。\n   - `Err(その他)` → `Fail`。`detail = error.to_string()`。
+   - `Err(ScenarioError::Unsupported{..})` → `Unsupported`。
+   - `Err(その他)` → `Fail`。`detail = error.to_string()`。
 5. `timeout_ms` 宣言時は pre-flight 失敗・本体 error を含む全
    経路で `report.timeout = Some(ScenarioTimeout{..})` を記録する
    （実行しなかった pre-flight 拒否も elapsed≈0 の正直な記録）。

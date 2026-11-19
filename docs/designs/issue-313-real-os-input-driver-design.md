@@ -62,7 +62,7 @@ relations:
 
 - `SemanticGuiTest::perform`/`GuiAction` の戻りは
   `Result<(), ScenarioError>`。`OsInputOutcome` の正直な語彙
-  （`Injected` の計測証拠・`EnvironmentBlocked` 判定）を運べず、
+  （`Injected` の計測証拠・`EnvironmentBlocked` 判定）を持てず、
   `run_scenario` の `verdict_for_error` が `Unsupported` 以外を
   `fail` へ潰す — **environment_blocked を fail に偽装する結果になり
   受入条件に反する**。`ScenarioError::EnvironmentBlocked` 追加は
