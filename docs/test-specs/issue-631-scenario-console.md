@@ -41,7 +41,7 @@ relations:
 
 headless Scenario Console（`plugin-dock-console` bin）が
 「catalog の capability projection を evidence に見せない」
-「selector は fail-closed」「部分実行は実際に走った case の
+「selector は fail-closed」「部分実行は実際に実行された case の
 verdict のみを記録する」「real lane は console で実行しない」
 という契約を保証する。本 spec は GUI console slice 到着後も
 console 層の契約として残す。
@@ -66,7 +66,7 @@ console 層の契約として残す。
   `lane:"real-window-dock"`・`runnable:null`・`missing:null` を
   持ち、実行を主張しない。
 - **Example**: feature なし build では exit 2 + real lane が
-  compile-in されていない旨のメッセージ（要求を静かに落とさない）。
+  compile-in されていない旨のメッセージ（要求を暗黙に棄却しない）。
 
 ## Feature: `--run` の selector 実行
 

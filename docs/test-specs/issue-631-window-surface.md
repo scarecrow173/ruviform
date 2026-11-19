@@ -69,7 +69,7 @@ interactive desktop 前提）。
 - Rule: `Resized`/`Moved`/`ScaleFactorChanged` の geometry 値は
   physical pixel — logical 値や scale 未適用値を記録しない。
 - Rule: 最終 window の破棄後は GPUI platform loop が終了し UiJob
-  pump が死ぬ — 最終破棄を観測する session は sentinel window を
+  pump が停止する — 最終破棄を観測する session は sentinel window を
   残す。
 - Rule: 実デスクトップ不在・session 開始失敗は
   `environment_blocked`/`NotRun` を記録し、fail や pass に

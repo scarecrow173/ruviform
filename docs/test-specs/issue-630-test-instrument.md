@@ -174,7 +174,7 @@ CC・click）を生成し、L1 out-of-process runner でも同一 oracle が
   flaky の直接原因だった → R7 の counter 分類で matched のみを
   assert 対象に修正。
 - **dropped submit による event 喪失**: `dropped_submits` が立つ
-  call は event ごと child に未到達 — 単発 NoteOff が落ちると
+  call は event ごと child に未到達 — 単発 NoteOff が失われると
   voice が sustain し、matched block でさえ oracle に反する出力
   になる → R7 の bounded resend で着地を確認。周期的な drop は
   production 側の調査候補として残件化（`evidence/rf763/` 参照）。
