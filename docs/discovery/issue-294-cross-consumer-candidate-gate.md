@@ -62,7 +62,7 @@ relations:
 ## ギャップ（Issue 要件との差分）
 
 1. **Consumer 解決 SHA の未捕捉**: `git clone --branch <ref>` は解決済み SHA を記録しない。Run API の `head_sha` は Ruviform 側のみで、tuple（Ruviform/AudioLens/Synvelis 各 main SHA）を run 証拠から再構成できない。→ 各 lane が clone 後に `git rev-parse HEAD` を捕捉する必要。
-2. **期待 tuple 照合の不在**: dispatch 入力に期待 Consumer SHA を渡す契約がなく、判定〜checkout 間の Consumer main 漂移を検出できない。期待 SHA 入力 + fail-closed 照合が必要。
+2. **期待 tuple 照合の不在**: dispatch 入力に期待 Consumer SHA を渡す契約がなく、判定〜checkout 間の Consumer main の移動を検出できない。期待 SHA 入力 + fail-closed 照合が必要。
 3. **構造化証拠の不在**: 証拠は Job Summary の Markdown 表のみで機械再取得不可能。「全 SHA と結果を構造化 JSON artifact/Job Summary へ記録」が必要。
 4. **Consumer ref が branch/tag 限定**: `git clone --branch` は raw SHA を受け付けない。RF #305＋SV #84 候補 PR head SHA や AL #143 候補を直接検証する経路（候補tuple連携）がない。→ fetch＋checkout FETCH_HEAD 経路で branch/tag/SHA を統一受理。
 5. **UI lane 未接続**: AudioLens `setup-ui`/`check-ui`/`test-ui`（headless tsc+happy-dom）と vendor REV 整合（`check-ruviform-rev --require-vendor`）、Synvelis `setup-ui`/`check-ui`/`test-ui`/`build-ui`（SolidJS 実 build＋assets manifest）と `check-ruviform-rev`/`test-rt`/`check-headless-deps` が workflow 未使用。「Headless pass のみで実 GUI pass にしない」「UI vendor/lockfile 整合」を両 Consumer で段階接続する余地がある。

@@ -109,7 +109,7 @@ relations:
 PoC／実機検証で確認すべき未確定点（本探索では未解決。回答者: PoC 実施者、期限: 採否 ADR の `accepted` 昇格までに要確認）:
 
 - cpal コールバック内の alloc/ブロッキング挙動の実測（assert_no_alloc 手法の転用が候補。fundsp に先例）
-- duplex（同期入出力）が ruviform の要件に入るか。入るなら cpal 単独では不十分 → trait の差替可能性設計が鍵となる（cpal PR #1229 を追跡）
+- duplex（同期入出力）が ruviform の要件に入るか。入るなら cpal 単独では不十分 → trait の差替可能性設計が必要となる（cpal PR #1229 を追跡）
 - `BufferSize::Fixed` の尊重度・可変バッファ周期の実測
 - `Send`/`Sync` の backend 間ばらつき（0.17〜 主要 backend で `Stream: Send` と改善済みとされるが要実測）
 - Windows の WASAPI exclusive/ASIO 必要性、Linux の ALSA vs PipeWire 挙動差

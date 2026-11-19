@@ -154,7 +154,7 @@ bin に置く設計を確定した（confidence: high — 全て merge 済み AP
   `Intent::new(command_id, "rvf.ui.command.v1", {command_id,
   expect_receipt, intent})` として Action channel に流れ、
   receipt は `post_event` の `Event::Result` で `data.status` が
-  `applied`/`accepted`/`rejected` を運ぶことを確認。
+  `applied`/`accepted`/`rejected` を含むことを確認。
 - 2026-11-15: `scenario.rs`/`real_catalog.rs`/`jsonl.rs`/
   `plugin-dock-console.rs` 実読 — `run_selected`/`LaneEnvironment`/
   `REAL_CATALOG`/`render_jsonl`/`repo_sha` の pub 面と console の
