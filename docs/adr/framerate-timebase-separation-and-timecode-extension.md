@@ -62,7 +62,7 @@ audio-core には `pub struct SampleRate(TimeBase)`（`crates/ruviform-audio-cor
 ## Decision Drivers
 
 * **`SampleRate(TimeBase)` 先例との一貫性**: 「TimeBase を wrap して Hz 意味を与える newtype」という既存パターンが audio-core にあり、同じ構成を動画側に適用すれば学習コスト・レビューコストが最小
-* **意味論的分離の型による固定**: fps（フレーム/秒）と timebase（1 tick の秒数）は逆数関係にあり、`TimeBase::new(30_000, 1_001)` を「29.97 fps」と「約 30 秒/tick」のどちらにも解釈できる現状は誤用の構造的温床。型で分離すれば誤用がコンパイルエラーになる
+* **意味論的分離の型による固定**: fps（フレーム/秒）と timebase（1 tick の秒数）は逆数関係にあり、`TimeBase::new(30_000, 1_001)` を「29.97 fps」と「約 30 秒/tick」のどちらにも解釈できる現状は、誤用を構造的に生む。型で分離すれば誤用がコンパイルエラーになる
 * **media-core 依存ゼロ方針**: media-core は外部依存ゼロ（std のみ）・外部型を公開 API に露出しない契約（設計ベースライン・media-io ADR 系の方針）を持ち、`vtc` 等の外部型採用はこれと衝突する
 * **既存変換インフラの再利用**: `i128`/`u128` 中間精度・`scaled_fraction`/`round_quotient`/`convert_value_wide` ヘルパを持つ既存の整数演算基盤をそのまま使える形が望ましい
 * **`#[non_exhaustive]` ポリシー整合**: 拡張設計は enum ADR（`public-enum-non-exhaustive-policy.md`）に整合し、`Error` の将来 variant 追加余地を残す必要がある
