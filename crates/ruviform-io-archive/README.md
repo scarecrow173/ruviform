@@ -18,7 +18,7 @@ IO-IMP-10（Issue #304）の secure `extract` モジュールを提供する。
 - `EntryKind` / `ArchiveEntryInfo` — 形式が実際に記録するメタデータの
   共通ビュー（`File`/`Directory`/`SymbolicLink`/`HardLink`/`Special`）。
   TAR の link target は `link_name()` で raw bytes のまま露出する。
-- `ArchiveReadLimits` — 解析前にも解凍中にも効く budget 群
+- `ArchiveReadLimits` — 解析前にも解凍中にも適用される budget 群
   （entries・metadata bytes・path bytes・per-entry / total uncompressed）。
 - `ArchiveReadReceipt` / `EntryReadReceipt` — 検証済み内容を正確に報告する
   typed receipt（単一 `verified: bool` ではない）。`EntryDisposition` が

@@ -38,7 +38,7 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
   （`Scan`・`Instantiate{plugin_id, config}`・lifecycle 動詞・`Render`・
   plain-param 動詞）。登録は `video().register_out_of_process(
   VideoOutOfProcessSpec)` — `VideoOutOfProcessSpec` は `isolation`・
-  `lookahead_blocks` 字段を**持たない**構造 pin で Dedicated 固定
+  `lookahead_blocks` フィールドを**持たない**構造 pin で Dedicated 固定
   （pooled video route は表現不能）。内部は `Route::OutOfProcessVideo`/
   `Slot::OutOfProcessVideo`（`DescriptorEntry` の kind-tag で audio/video
   registration を分離 — `plugin_id` は単一名前空間で cross-kind `Instantiate`
@@ -139,7 +139,7 @@ Ruviform メディア基盤のプラグインホスト層: ホストアプリケ
 （`VideoPluginHost` の全動詞・`Render` 含む）も**全操作 NONRT** —
 video instance は RT leg・endpoint 経路を持たず、`prepare_endpoint`/
 `process`/`plugin_mut` への video handle は `Err(EndpointUnavailable)`/
-`Err(Unsupported)`/`None` の defined 答え。
+`Err(Unsupported)`/`None` の定義済みの答え。
 
 ## 関連
 

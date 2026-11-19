@@ -67,7 +67,7 @@ streaming API を提供し、単一文書の Strict EOF・入力 byte budget・
 ### YAML の制約（正直な保証範囲）
 
 serde-saphyr は実 budget 機構を持つため、本クレートの YAML 制限は
-実保証として働く:
+実保証として機能する:
 
 - `max_bytes` — adapter の bounded reader（authoritative）+ backend
   reader budget の二重適用。

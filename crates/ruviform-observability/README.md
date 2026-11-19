@@ -54,7 +54,7 @@ Ruviform の共有観測基盤 — Issue #101 `foundation-observability-minimal-
 
 ### record（固定長 record 語彙 — Issue #280 / OBS-05）
 
-- `ClockContext` — record が運ぶ clock-domain stamp。
+- `ClockContext` — record が持つ clock-domain stamp。
   `ruviform_media_core::InputStamp`（domain + `ticks` + `TimeBase` +
   `TimestampProvenance`）+ `ClockEpochId` の構成で、device stamp・
   `EngineFrame` と同一 identity 空間。wall/monotonic への変換 API は
@@ -79,8 +79,8 @@ Ruviform の共有観測基盤 — Issue #101 `foundation-observability-minimal-
   `Relaxed` counter 高々 2 回）。満杯時は **drop-on-full**: record は回復
   不能に捨てられ、`dropped` counter と次に受理された record の
   `dropped_before` envelope で欠落を可視化する。
-- `RecordSink::{drain, drain_final}` — FIFO で `ReceivedRecord{record,
-  dropped_before}` を delivery（bounded by capacity）。`drain_final` は
+- `RecordSink::{drain, drain_final}` — `ReceivedRecord{record,
+  dropped_before}` を FIFO 順に配送する（bounded by capacity）。`drain_final` は
   writer quiescence（recorder が RT パスを離れた/破棄された）後に限る。
 - 計測: `recorded`（受理総数）・`dropped`（欠落総数）・`drained_total`・
   `lag() = recorded - drained_total`（consumer lag = 遅延であり欠落ではない）。

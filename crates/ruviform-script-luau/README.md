@@ -38,7 +38,7 @@ Rust API（vendored Luau 0.740 — 同一 revision）で実装する。
   closure）・record payload artifact（`ScriptArtifact::new` が
   digest を計算）を中立契約型で返す。`max_instructions` は
   mlua に API がなく `UnsupportedBudget`。host binding は
-  記述子の検証・受理のみ（実行 seam は契約に非存在）。
+  記述子の検証・受理のみ（実行 seam は契約に存在しない）。
 
 ## 層・依存境界
 

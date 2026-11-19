@@ -34,7 +34,7 @@ Ruviform メディア基盤の汎用 Reader・Decoder/Prefetch・RT 消費境界
     reject された seek / 失敗した reopen でも `Boundary` が先行するため、全ての
     `Fault`/`End` は adopt 後に観測され stale drop にならない。reopen 失敗の
     dead generation は `Boundary{gen,0}` → `Fault{gen,of_kind}` → `End{gen}` で
-    observably に終端し、`eof` を返す。`End` は合成時点で commit され、ring full で
+    観測可能な形で終端し、`eof` を返す。`End` は合成時点で commit され、ring full で
     `pending` へ requeue されても generation あたり 1 回だけ emit される。
 - Fault 契約 — `SourceFault`（truncated/corrupt/io/invalid-sample/unsupported/unseekable）と
   `FillReport`（written/underrun/faulted/eof/mismatch）で、真の無音・short-read・corrupt・

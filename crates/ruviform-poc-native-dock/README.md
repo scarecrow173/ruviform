@@ -12,7 +12,7 @@ Issue #388/#389 Native Dock 早期 Gate の利用側層 PoC harness。
   native editor（Win32 `WS_CHILD`）を attach し、`NativeSurfaceSlot` の
   declare/lease/redeem/geometry/visibility/focus/release を実 OS で
   検証する手動入口。
-- 本番 API なし。headless(feature off)では拒否 message を出して exit 2。
+- 本番 API なし。headless（feature off）では拒否 message を出して exit 2。
 
 ## 実行
 
@@ -46,7 +46,7 @@ RVF_POC_VST3_PATH='C:/Program Files/Common Files/VST3/iZotope/Vinyl.vst3' \
   経路とは別）。
 - `load` 失敗は `vst3_load=fail` を吐いて exit 3。`createView` が
   null を返す plugin（editor 非搭載）は `open=fail
-  error=Ops(Unsupported)` として honest に分類し、attach 成功とは
+  error=Ops(Unsupported)` として正直に分類し、attach 成功とは
   記録しない。
 
 証拠: `evidence/rf388-389-native-dock/`（probe）、

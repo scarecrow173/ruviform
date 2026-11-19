@@ -110,21 +110,21 @@ composition でネイティブ面が常に最背面にならない制限があ�
 1 リクエストの返却上限は `DataRegistry::max_chunk`。既定値は
 `ruviform_ui::DEFAULT_MAX_CHUNK` = **16 MiB**(16 × 1024 × 1024)で、
 アプリ側が `DataRegistry::with_max_chunk` で変更する。根拠は
-「webview 境界をまたぐ単発転送の応答・メモリ常駐を抑え、進捗可
-観測なチャンク列に分割する」pull 設計(PoC 実測 pull ~94–146
+「webview 境界をまたぐ単発転送の応答・メモリ常駐を抑え、進捗可観測な
+チャンク列に分割する」pull 設計(PoC 実測 pull ~94–146
 MB/s)であり、全量一括レスポンスを意図的に提供しない。
 
 cap を超える `len` はエラーではなく黙って切詰められる — 実際に
-届いた量は常に返却 body 長で判断すること。cap の実値と登録済
-みソース一覧は `sys.capabilities` の `data.max_chunk` /
+届いた量は常に返却 body 長で判断すること。cap の実値と登録済み
+ソース一覧は `sys.capabilities` の `data.max_chunk` /
 `data.sources` で実行時に取得できる(frontend がハードコード
 せず済む)。
 
 ### paging loop(frontend)
 
 全量が `max_chunk` を超える場合は `X-Rvf-Total` まで繰返し pull
-する。`offset` は要求した `len` ではなく**実返却バイト数**で進
-め、累積が `X-Rvf-Total` に達したら終了する。
+する。`offset` は要求した `len` ではなく**実返却バイト数**で
+進め、累積が `X-Rvf-Total` に達したら終了する。
 
 ```js
 // __rvf.dataUrl(name, offset, len) は bridge が注入する URL 生成。

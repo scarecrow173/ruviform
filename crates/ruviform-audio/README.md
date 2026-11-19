@@ -13,7 +13,7 @@ planar-f32 ミキサー、デバイスセッション調停。
   ノード（Issue #54）
 - `GraphPlan` / `PlanSwap` / `RtPlan` — 不変スナップショット +
   `RwLock`/`try_read` スワップ
-- `Session` — `OutputStream` を所有; デバイスコールバックがブロックごとに
+- `Session` — `OutputStream` を所有。デバイスコールバックがブロックごとに
   `RtContext` を mint してアクティブプランを駆動する
 
 ## 層・許可依存

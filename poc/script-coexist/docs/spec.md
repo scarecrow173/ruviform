@@ -35,7 +35,7 @@ Versioned Typed Definition・Fail-Closed を headless で実証する。
 
 ### In Scope
 
-- `poc/script-coexist/` 配下の独立ワークspace PoC crate（lib+bin+tests）。
+- `poc/script-coexist/` 配下の独立ワークスペース PoC crate（lib+bin+tests）。
 - 契約ミラー型: `ScriptLanguageId`/`ScriptBackendId`/`contract_version`/
   `BackendCapabilities`/`ScriptBackendRegistry`/`ScriptRequirement`/
   `ResolveError`、`ScriptBackend`/`ScriptSession`/`SessionConfig`/

@@ -164,7 +164,7 @@ RF294 workflow の GUI-CONTRACT 行は **2 つの独立した実判定**を
 | `e6df814` | `mise run fmt-check` | pass |
 | candidate `d907bfc` | guard `--manifest-path` 実実行 | verdict pass（3 check 全 pass、修正後 binary） |
 
-### plugin-hostTimeout の具体分類
+### plugin-host Timeout の具体分類
 
 `e6df814` での workspace `mise run test` 実実行で
 **観測・具体分類済み**（72818c5 では未発生）:

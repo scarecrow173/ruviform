@@ -55,8 +55,8 @@ opt-in 専用**であり、本番クレートは本クレートに依存しな�
 
 ## feature / 依存
 
-feature なし。依存は `ruviform-ui`(公開 API のみ)と serde/serde_
-json、Issue #390 boundary guard 用の cargo_metadata/syn/
+feature なし。依存は `ruviform-ui`(公開 API のみ)と serde/serde_json、
+Issue #390 boundary guard 用の cargo_metadata/syn/
 proc-macro2、Issue #314 golden 用の png/base64。`wry`/`tao`/GUI/RT
 依存は持ち込まない。
 `ruviform-ui-webview`・RT クレート・他 consumer は本クレートに
