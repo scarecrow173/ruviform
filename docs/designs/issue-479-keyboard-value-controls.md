@@ -86,7 +86,7 @@ key down (focused value control)
 
 - `RvfView` は `control_focus: BTreeMap<ComponentKey, FocusHandle>` を持つ。control のフォーカスハンドルは、その control を初めて描画するときに作る。
 - `Fader` / `Seek` / `Knob` は `control_element`、`Toggle` は `toggle_element` で、いずれも `track_focus` + `tab_stop(true)` + `.focus(枠線)` + `on_key_down` を付ける。`tab_stop` は FU-1b の教訓どおり **handle 自体**に付ける（gpui 0.2.2 は `track_focus` に渡した明示 handle に要素側フラグを伝播しない）。
-- 値制御は opt-in なしですべて tab stop になる。`disabled` / `read_only` / `unsupported` でも stop にはなるが、契約層が `Unavailable` を報告し intent は生まれない（pointer が効かないのと同じ正直な扱い）。
+- 値制御は opt-in なしですべて tab stop になる。`disabled` / `read_only` / `unsupported` でも stop にはなるが、契約層が `Unavailable` を報告し intent は生まれない（pointer で操作できないのと同じ正直な扱い）。
 - 未定義キー・対象外修飾のキーは `stop_propagation` せず、Tab 巡回（driver の `observe_keystrokes`）や他要素の処理を奪わない。
 - 既知の制約: control のフォーカスハンドルは unmount 時に解放しない（`tab_focus` と同じ有界リーク。strip 数・control 数に比例し spec 依存で有界）。
 
