@@ -135,7 +135,7 @@ Domain foundations:  ruviform-audio-core / ruviform-video-core / ruviform-dsp
 | `linalg` | `LeastSquares`（Householder QR + ridge）・`least_squares`・`condition_number` | non-RT only（分解・求解とも確保を伴う） |
 
 `f64` → `f32` の暗黙ダウングレードは存在しない（入力も出力も `f64` のみ）。
-精度が落ちる API は存在しないため降级 API は提供しない。
+精度が落ちる API は存在しないため降格 API は提供しない。
 
 ## Numeric Contract（明文化項目）
 
