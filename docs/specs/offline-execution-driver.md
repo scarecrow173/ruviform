@@ -97,12 +97,6 @@ relations:
 - [x] 決定論モードの保証範囲が設計文書（本 spec 由来 design/ADR）に明文化されている
 - [x] `mise run fmt-check` / `check` / `lint` / `test` / `test-rt` パス、`unsafe` なし
 
-## Deferred Design Concerns
-
-<!-- Intentionally deferred future work. Link the deferred draft doc via relations.defers. -->
-
-- <!-- concern | reason | re-engagement trigger | risk if ignored -->
-
 ## Sources and Relations
 
 - 設計ベースライン `docs/designs/ruviform-architecture-design-baseline.md` L301-320（RtContext 発行規則・オフライン実行・ワーカープール）、L357-369（オフラインデータフロー例）、保留項 L379/L523（決定論的実行の保証範囲 — 本 Issue で確定）
