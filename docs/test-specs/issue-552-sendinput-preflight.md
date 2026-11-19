@@ -125,8 +125,8 @@ read-back で実効が確認できなければ `effective=false` を返し、
 
 ## Risk
 
-blocked 判定ロジックが実効側に倒れる（false pass）と環境障害を
-見逃して lane 本体が無駄に fail する。逆に effective 側に倒れる
+blocked 判定ロジックが実効側に偏る（false pass）と環境障害を
+見逃して lane 本体が無駄に fail する。逆に effective 側に偏る
 （false blocked）と健全な環境で lane が起動しない。tolerance・
 timeout・probe_target の端処理を mock テストで固定することで
 この両方向のリスクを抑える。

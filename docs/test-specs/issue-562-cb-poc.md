@@ -126,7 +126,7 @@ allocation 非依存の fixture のみ）。
   両候補の generation は `single(1)` で同一（runtime ごとの
   counter）— 候補識別は `clock_mark.domain` /
   `runtime_instance` が担う。`effective_latency` は候補ごとに
-  record に載る（0 vs 32）。
+  record に記録される（0 vs 32）。
 - Case: `cb05_probe_cross_candidate_alignment`
 - 備考: 「固定入力同一性の宣言」は consumer が anchor で行う —
   Ruviform は同一性を推測しない（Partial の根拠、gap report 参照）。

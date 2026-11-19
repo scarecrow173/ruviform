@@ -62,7 +62,7 @@ relations:
   pass/fail を勝手に決めない。
 - 検証: unit test `outcome_verdict_is_recorded`。
 
-### Rule: timeout 予算超過の Pass は Fail に落ちる
+### Rule: timeout 予算超過の Pass は Fail に降格される
 
 - Example: `spec.timeout_ms = Some(0)` で body が時間を使う
   （または elapsed が budget を超える構成で）`Pass` を返すと、

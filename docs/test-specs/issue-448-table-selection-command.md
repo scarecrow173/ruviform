@@ -79,7 +79,7 @@ relations:
 
 ## Feature: command 起動（Button）
 
-### Rule: Button の押下は spec の target・action・params を運ぶ Action intent を発行する
+### Rule: Button の押下は spec の target・action・params を持つ Action intent を発行する
 
 - Example: `run.start` / `start` / `{"dataset": "ds-1"}` の Button を押すと、同じ 3 値を持つ Action intent が 1 件出る。phase は `pending` → receipt `accepted` で `accepted` → `applied` で `applied`。
   - 検査: `button_invoke_emits_spec_target_action_and_params`（unit）、`ui_dvr_03_parity_selection_command_intents_and_snapshot`（fake）、`observes_selection_and_command_intents_through_seam`（GPUI seam）。

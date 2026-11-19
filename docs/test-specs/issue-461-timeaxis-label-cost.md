@@ -71,7 +71,7 @@ TimeAxis は、契約上限 `MAX_TIME_AXIS_TICKS`（1,024）の label 付き tic
 ## Guarantees
 
 - label は major・minor 双方の tick に描かれ、viewport 外の tick は描かれない（cull は `axis_mark_plan` が担い不変）。
-- label の shaping は gpui `WindowTextSystem::shape_text` を通るため、`LineLayoutCache` によるフレーム間再利用が効く。
+- label の shaping は gpui `WindowTextSystem::shape_text` を通るため、`LineLayoutCache` によるフレーム間再利用が機能する。
 - label glyph は tick mark layer とは別の 1 つの共有 `paint_layer`（bounds = 全 label ink の union）に描かれ、per-line の layer insert は発生しない。
 
 ## Non-goals

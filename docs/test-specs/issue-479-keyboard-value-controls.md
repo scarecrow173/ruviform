@@ -65,7 +65,7 @@ relations:
 
 ### Rule: GPUI 側は fixture の key 名を実キー dispatch し、同じ intent・snapshot を生む
 
-- Example: `press_control_key` で fixture の `key` を送ると、command intent kinds は `["begin","commit"]` の積み重ね、committed normalized は `committedNormalized` と一致する。Fader/Seek/Knob/Toggle の 4 種で同じ規約が効く。
+- Example: `press_control_key` で fixture の `key` を送ると、command intent kinds は `["begin","commit"]` の積み重ね、committed normalized は `committedNormalized` と一致する。Fader/Seek/Knob/Toggle の 4 種で同じ規約が機能する。
   - 検査: `observes_key_op_intents_through_seam`（GPUI consumer seam）。
 
 ### Rule: `disabled` / `read_only` の control も tab stop のままだが、key 入力は `unavailable` を報告し intent を生まない

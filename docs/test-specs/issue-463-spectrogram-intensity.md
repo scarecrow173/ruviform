@@ -86,5 +86,5 @@ Spectrogram cell intensity paint color — Spectrogram painter は各 cell を
 
 ## Risk
 
-- paint 色計算を誤ると intensity が再び潰れる、または hue が
+- paint 色計算を誤ると intensity が再び縮退する、または hue が
   palette 意図とずれる。端点（0/1）と単調性のテストで検出する。
