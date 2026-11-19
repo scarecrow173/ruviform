@@ -72,7 +72,7 @@ review follow-up が 3 件の contract gap を残した:
 
 ### In Scope
 
-- `merge_call_events` の戻り値を defined truncation を運ぶ
+- `merge_call_events` の戻り値を defined truncation を保持する
   型へ変更し、`PluginNode::run_call` の call 合成を追従。
 - truncation 量の `Counter`/`NodeStatusSnapshot` 追加。
 - `InputStage` から ledger 関連 API/counter を削除し、

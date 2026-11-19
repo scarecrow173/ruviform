@@ -132,7 +132,7 @@ ownership split（Issue #113 →
   - `Drained` — drain が plugin の pending buffer に到達した
     （append 数 0 を含む。caller は `out.len()` 差分で件数を知る）。
   - `Unavailable` — この層は report を供給できない（L1 audio/
-    video）。将来 L1 wire が report を運ぶようになれば variant を
+    video）。将来 L1 wire が report を伝送するようになれば variant を
     増やすか `Drained` に集約するかはその slice が決める。
 - **`PluginEndpoint`** — 変更なし。endpoint は `Send` の RT leg
   であり、report drain は非 RT の host verb である。consumer
