@@ -86,7 +86,7 @@ mise run verify-full              # fmt-check -> lint-full -> test-full
 | パス | 役割 |
 | --- | --- |
 | `Cargo.toml` / `Cargo.lock` | Rust ワークスペース定義（共通 lint・`[profile.dev]` / `[profile.ci]`）と依存 lockfile |
-| `crates/` | 現行 28 crate（基盤、Audio/Video、Media I/O、Plugin、UI/Viz など）。最新の crate 一覧は [crates/README.md](crates/README.md) とワークスペースの [Cargo.toml](Cargo.toml)。旧 Phase 1 の 7 crate は初期の実装履歴であり、全体一覧ではない |
+| `crates/` | 現行28 crate（基盤、Audio/Video、Media I/O、Plugin、UI/Vizなど）。最新のcrate一覧は[crates/README.md](crates/README.md)とワークスペースの[Cargo.toml](Cargo.toml)。旧Phase 1の7 crateは初期の実装履歴であり、全体一覧ではない |
 | `mise.toml` / `mise.lock` | 開発ツール・検証タスクの正本と固定復元用 lockfile |
 | `apm.yml` / `apm.lock.yaml` | APM 依存パッケージ・対象エージェント・MCP の定義と lockfile |
 | `.pre-commit-config.yaml` | prek による言語非依存の Git フック |
