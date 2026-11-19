@@ -57,7 +57,7 @@ relations:
 - 同window・同値（指定）または未指定 → 冪等no-op（再購読・attach回数不変）
 - 同window・異epoch指定 → in-flight gestureのcancel（旧epochでmint）、旧subscription解放、新epochで再購読・binding再attach
 - 異window + 指定epoch → `dock-transfer` detach後に指定epoch採用
-- epoch遷移後に旧epoch listenerへのprojectionが新epochへ漏出しない（staleとして落ちる）
+- epoch遷移後に旧epoch listenerへのprojectionが新epochへ漏出しない（staleとして棄却される）
 
 ## Feature: 無効入力の原子性
 

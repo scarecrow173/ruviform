@@ -44,11 +44,11 @@ relations:
 
 ## Purpose
 
-実 `.clap`/`.vst3` cdylib を **compile-time 固定 runner**（`required-features = ["host"]`）経由で L1 子プロセスに載せ、`PluginHost`/`OutOfProcessSpec` の公開 API 経由で、L1 の全動詞経路（spawn→handshake→scan→instantiate→lifecycle→shm block processing→state verb→destroy）が既存 L1 契約どおり動くことを実規格バイナリで実証する。目的は (a) mock-only で覆えなかった「実規格 plugin への L1 適用」を実コードで検証する、(b) handshake field-equality が「子は実 scan で合成・親は const literal」という**独立 2 系の値**で実照合されることで、bridge の metadata 写像を E2E 層でも検証する、(c) `Failed`/`InstanceFailed`/pass-through/自動再起動なし の既存異常系契約が実規格バイナリでも維持されることを実証する、(d) wire/export/host/core の公開契約が**本変更で不変**であることを確認する（AC7 の E2E 側証拠）。
+実 `.clap`/`.vst3` cdylib を **compile-time 固定 runner**（`required-features = ["host"]`）経由で L1 子プロセスにロードし、`PluginHost`/`OutOfProcessSpec` の公開 API 経由で、L1 の全動詞経路（spawn→handshake→scan→instantiate→lifecycle→shm block processing→state verb→destroy）が既存 L1 契約どおり動くことを実規格バイナリで実証する。目的は (a) mock-only で覆えなかった「実規格 plugin への L1 適用」を実コードで検証する、(b) handshake field-equality が「子は実 scan で合成・親は const literal」という**独立 2 系の値**で実照合されることで、bridge の metadata 写像を E2E 層でも検証する、(c) `Failed`/`InstanceFailed`/pass-through/自動再起動なし の既存異常系契約が実規格バイナリでも維持されることを実証する、(d) wire/export/host/core の公開契約が**本変更で不変**であることを確認する（AC7 の E2E 側証拠）。
 
 ## Feature
 
-実規格バイナリ（CLAP/VST3 各 1 fixture・workspace 生成 cdylib）を compile-time 固定 runner 経由で L1 子プロセスに載せ、`PluginHost` 経由で全動詞を駆動する E2E — **規格別 runner・`spec.args` 空・`CARGO_BIN_EXE_*` 解決・fixture 既知値 const pin・既定 lookahead/timeout**。
+実規格バイナリ（CLAP/VST3 各 1 fixture・workspace 生成 cdylib）を compile-time 固定 runner 経由で L1 子プロセスにロードし、`PluginHost` 経由で全動詞を駆動する E2E — **規格別 runner・`spec.args` 空・`CARGO_BIN_EXE_*` 解決・fixture 既知値 const pin・既定 lookahead/timeout**。
 
 ## Rules
 
@@ -86,7 +86,7 @@ relations:
 - mise task・CI job・workflow の配置/構成/欠落挙動は [l1-real-plugin-lane-tests](l1-real-plugin-lane-tests.md) が担う
 - third-party/外部取得プラグインバイナリ・`.clap`/`.vst3` bundle レイアウト・任意パス指定（`RUVIFORM_L1_REAL_PLUGIN_DIR` は shell/lane の fixture override のみ — 任意プラグイン指定ではない）は対象外（deferred）
 - CLAP `state` ext・VST3 `IBStream`/`setComponentState`・GUI・VST3 拡張面（`IConnectionPoint`・note/event bus）は対象外 — state/GUI 動詞は `Err(Unsupported)` defined 応答の pin のみ
-- OFX host bridge・video wire・`VideoPluginInstance` の L1 載せは対象外 — **video L1 wire 自体は Issue #118 で実装済み**（`run_video`/wire v3 tag 12-22・`issue-118-*` test-spec が oracle）が、本 spec の対象は実規格 audio adapter（CLAP/VST3）E2E のまま（OFX host bridge は別 Issue 追跡）
+- OFX host bridge・video wire・`VideoPluginInstance` の L1 ロードは対象外 — **video L1 wire 自体は Issue #118 で実装済み**（`run_video`/wire v3 tag 12-22・`issue-118-*` test-spec が oracle）が、本 spec の対象は実規格 audio adapter（CLAP/VST3）E2E のまま（OFX host bridge は別 Issue 追跡）
 - `Failed`/`InstanceFailed`/`restart`/`pass-through`/`kill_child` の**契約自体の検証**は #113 の既存 E2E（`l1_proxy_e2e.rs`/`plugin_graph_e2e.rs`）が担う — 本 spec は実規格バイナリでの継承確認のみ（重複検証をしない）
 - RT 制約・`Send` 契約・`create_sendable` の検証は対象外（bridge unit test spec が default `None` の pin のみ行う）
 

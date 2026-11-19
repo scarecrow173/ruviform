@@ -62,11 +62,11 @@ video report verb・consumer 実装・実機検証が将来変わっても、本
 
 - **Example**: `Command::DrainOutputReports`（tag 23）を encode →
   decode すると同じ command が復元され、`Message::Command` と
-  して instance id を伴って運ばれる。`WIRE_INSTANCE_NONE` を
+  して instance id を伴って送られる。`WIRE_INSTANCE_NONE` を
   instance に持つ frame は scope 検査で reject される（registry-
   level verb ではない）。
 
-### Rule WR-02: `Reply::Reports` は canonical `Event` 列を運ぶ
+### Rule WR-02: `Reply::Reports` は canonical `Event` 列を持つ
 
 - **Example**: `EventKind::ParamValue` と `EventKind::Midi` の
   混在列を `Reply::Reports { events }`（tag 8）で encode →

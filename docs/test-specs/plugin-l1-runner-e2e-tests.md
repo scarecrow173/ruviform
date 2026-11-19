@@ -105,7 +105,7 @@ spec `docs/specs/plugin-l1-out-of-process.md`（proposed・AC6）・approved des
 
 - `run` の公開形（`ExitCode`/`Box<dyn>` ではなく generic）や argv 規約の誤定 → spawn 不能/形状不一致 — fixture E2E で固定
 - `Hello` を送らない・shm header 未検証・ハングする argv 異常 → 起動経路の定義済み拒否を固定
-- panic が子プロセスを殺す（abort）または panic で wire 破損 → catch → `Err(PluginFailed)` + 子生存を固定
+- panic が子プロセスを強制終了させる（abort）または panic で wire 破損 → catch → `Err(PluginFailed)` + 子生存を固定
 - `Lifecycle` 判定の非一致（非 `Processing` で `process_host` 受理・違法遷移を panic）→ `Err(Lifecycle(_))` を wire 返却で固定
 - `shared_memory` の unsafe 混入・公開 API 露出 → 内部 `shm` モジュール隔離を構造で固定
 - `CARGO_BIN_EXE_*` を crate 外で解決する前提に依存（cross-package bin は未提供）→ `tests/` 内 `env!`/`option_env!` で固定

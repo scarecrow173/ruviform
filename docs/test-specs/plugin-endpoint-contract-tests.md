@@ -109,5 +109,5 @@ spec `docs/specs/engine-plugin-host-integration.md`（proposed・11 AC）と app
 - verb 3 段 lock 形態の漏れ（pre-check/lock 内再読の欠落・`destroy` 例外の誤適用）→ `Failed→Activated` regression が構造的に可能になる — 本 spec の pin と unit test（poison fixture・verb-during-attach）で固定
 - seed arm の誤実装（同 generation を apply してしまい装着簿記を壊す）→ 「unapplied retire」を明示
 - `pending_arm` resend の `&mut`/`&self` tier 境界の誤り（`&self` query で drain しようとして `&mut` プリミティブに触れる・または `process` で destructor drain）→ tier 表を固定
-- `EndpointUnavailable` が wildcard でなく個別 variant として wire に載る・partial frame を残す → encode 失敗の `out` 不変を negative test で固定
+- `EndpointUnavailable` が wildcard でなく個別 variant として wire に含まれる・partial frame を残す → encode 失敗の `out` 不変を negative test で固定
 - `latency_frames` の旧式（`× block_frames / sample_rate`）残留 → 修正版式（`lookahead × activated max_frames`）を例で固定

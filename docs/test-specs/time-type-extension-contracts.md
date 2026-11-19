@@ -58,7 +58,7 @@ Issue #42 で設計され Issue #58 で実装される時間型拡張——`Fram
 - **`from_media_time` は `nominal_fps() == 0` の rate を `Err(Error::InvalidValue("frame_rate"))` で拒否する**（nominal grid が 0 に丸められる sub-fps rate はラベル格子を構成できない。現行 `sub_fps_rate_is_rejected` 契約の維持）。
 - **ドロップフレーム対応集合は `30000/1001`・`60000/1001` のみ**。`from_media_time_drop` は正規化後にこの 2 レート以外を `Err(Error::UnsupportedDropFrameRate)` で拒否する現行契約を維持する（非 NTSC 一般化・フィールドレートは保留分類）。
 - **`elapsed_frames`（`floor(t * rate)`）の厳密整数演算と負時刻拒否は不変**。負 `MediaTime`（pre-roll）は `Err(Error::InvalidValue("negative time"))`。`i128`/`u128` 中間演算・`f64` 非使用を維持する。
-- **単回変換の丸め誤差は宛先 base の 0.5 tick 以下**。`MediaTime::convert(to, Rounding::NearestEven)` は round-half-to-even で |誤差| ≤ 0.5 tick（exact-half tie はちょうど 0.5 tick で偶数側に落ちる）。
+- **単回変換の丸め誤差は宛先 base の 0.5 tick 以下**。`MediaTime::convert(to, Rounding::NearestEven)` は round-half-to-even で |誤差| ≤ 0.5 tick（exact-half tie はちょうど 0.5 tick で偶数側に丸められる）。
 - **往復変換の誤差上界は「中間 base の 0.5 tick を元 base 単位に換算した値 + 元 base の 0.5 tick」**。`t → B → 元base` の 2 ホップで、各ホップの丸め項を計上する。粗い中間 base 経由では元 base 換算で大きくなり得る（例: `1/48000` → `1/24` → `1/48000` で 1000 tick 級）が上界内に収まる。
 - **N 回連鎖の累積誤差は「Σ（各ホップ宛先 base の 0.5 tick）を共通単位に換算した値」を超えない**。同時に、アンカーからの直接変換（ポリシー遵守形）は常に宛先 base の 0.5 tick 以下に収まる対照実験として検証する。
 - **誤差測定は整数有理数で行い `f64` を中核経路に持ち込まない**。テスト判定も `i128`/`u128` 有理数比較で行う（`to_seconds_f64` は表示側の既存例外であり精度判定には使わない）。
