@@ -73,7 +73,7 @@ wire v3 codec は video lifecycle 動詞・frame descriptor・plain param 動詞
 - `ColorInfo` codec: 4 enum（宣言順 tag・未知 tag defined 拒否）+ `has_hdr` presence tag strict `{0,1}` + optional `MasteringDisplayInfo`（24 B）/content light level（4 B）— 全 presence tag は `{0,1}` 以外 `Malformed`
 - `HostError::InvalidValue` は encode/decode の両方向で tag 10 と round-trip する（wildcard arm が `UnsupportedVariant`/`Malformed` へ畳まない — 「定義済み拒否が子死亡に変換される」退行防止。`EndpointUnavailable` は引き続き local-only で encode は `UnsupportedVariant` 拒否）
 - decode は untrusted 入力の検証境界 — `WIRE_MAX_VIDEO_*` 超過の dims/plane count/stride・不正 `instance`・不正 tag・truncated payload・reserved 非零を panic・無制限 alloc なしで拒否する
-- `Hello.capabilities` は v3 でも **reserved-zero**（非零 decode 拒否を維持 — kind 広告を capabilities bit に載せる形は採用されない）。`Hello.version != 3` は handshake 失敗
+- `Hello.capabilities` は v3 でも **reserved-zero**（非零 decode 拒否を維持 — kind 広告を capabilities bit に入れる形は採用されない）。`Hello.version != 3` は handshake 失敗
 - `wire::vshm` 定盤: `MAGIC = "RVLV"`・`HEADER_LEN = 28`・header field（`in_off == 28`・`out_off == 28 + in_bytes`・`reserved == 0`）・`frame_bytes(config)`/`segment_len` byte math（canonical packing — `stride=row_bytes`・`offset(p)=Σlen`）・`WIRE_VIDEO_MAX_SEGMENT_BYTES = 28 + 2×WIRE_VIDEO_MAX_FRAME_BYTES`
 - 公開 enum（`Command`/`Reply`/`HostError`/`PlainParamValue`）は `#[non_exhaustive]` を維持する
 

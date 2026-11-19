@@ -89,7 +89,7 @@ feature 分離を、実 `Collector`/`Diagnostics` を通した contract test で
   と `domain`/`from_state`/`to_state` field で発行される。sink の
   panic は隔離され Diagnostics を巻き込まない。
 - R-10 分離: Dispatch 未設定（`Dispatch::none()`）・subscriber なし・
-  filter 全落としでも `emit` は panic せず Collector/Metrics/
+  filter による全 drop でも `emit` は panic せず Collector/Metrics/
   Diagnostics state を変更しない。`emit` は batch を消費するだけで
   `ObservationBatch`/`MetricsSnapshot` を変更しない。
 - R-11 依存: default build（feature OFF）で `tracing_export` module・
@@ -136,6 +136,6 @@ feature 分離を、実 `Collector`/`Diagnostics` を通した contract test で
 ## Risk
 
 - `Instant` に epoch anchor がない → exporter 初回観測を t0 とする
-  相対 `*_mono_us` に限定し、実時刻を装わない。
+  相対 `*_mono_us` に限定し、実時刻を偽装しない。
 - `min_interval` は `Instant` 差で評価 — host clock domain 内で
   一貫。`clock_anomaly` window でも saturating で安全側に倒す。

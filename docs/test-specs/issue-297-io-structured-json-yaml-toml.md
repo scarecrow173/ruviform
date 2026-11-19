@@ -110,5 +110,5 @@ Backend 由来の失敗を `DocumentErrorKind` に正直に分類する。
   `Syntax`。Backend upgrade で新 variant が増えた場合に kind が
   保守的既定へ落ち得る（version pin + upgrade 時レビューで緩和）。
 - `BoundedRead` の trip と Backend lookahead の相互作用で
-  `LimitExceeded`/`TrailingData` の境界が入力依存で揺れる —
+  `LimitExceeded`/`TrailingData` の境界が入力依存で変わる —
   いずれも拒否であることを保証し、kind の期待は文書化した経路で pin。

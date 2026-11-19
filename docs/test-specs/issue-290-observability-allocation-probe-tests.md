@@ -44,7 +44,7 @@ relations:
 `AllocationScope` が、Issue #290 の安全条件（GlobalAlloc 契約維持・
 allocator 経路の no-alloc/no-panic・TLS Scope のスレッド限定性）を
 実装レベルで破らないことを保証する。将来の変更で計数・委譲・
-スコープ意味論が静かに壊れた場合に検出するための契約であり、
+スコープ意味論が静黙に壊れた場合に検出するための契約であり、
 機能撤去または上位仕様の supersede 時に廃止を検討する。
 
 ## Feature

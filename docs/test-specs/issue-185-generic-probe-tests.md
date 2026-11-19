@@ -88,7 +88,7 @@ Generic Probe: Node/Port 観測点の capability 列挙・Off/Monitor/Capture �
 
 - spec AC-1〜AC-10（+AC-5b）をこの例集合が網羅する。
 - 全 record は `RecordMeta` 封筒を持ち、`generation`/`sample_position`/loss・未観測・不連続の区別が読み取れる。
-- `rt_probe_*` は `rt_` prefix で `mise run test-rt` に載る。
+- `rt_probe_*` は `rt_` prefix で `mise run test-rt` の対象に含まれる。
 
 ## Non-goals
 

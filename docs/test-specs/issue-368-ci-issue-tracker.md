@@ -133,7 +133,7 @@ metadata: {}
 ### Rule: 出力 sanitize
 
 - sha: `^[0-9a-f]{40}$` 以外は `?`（marker には書かない）。
-- URL: `https://github.com/` prefix のみ採用、他は落とす。
+- URL: `https://github.com/` prefix のみ採用、他は破棄する。
 - job 名/branch/OS: 制御文字・改行・`|`・バッククォート除去 + 100 chars 上限。
 - conclusion: allowlist 外は `unknown`。
 - run id: 非整数は受理しない。

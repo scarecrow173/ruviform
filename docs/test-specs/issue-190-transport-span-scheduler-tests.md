@@ -61,7 +61,7 @@ Synvelis §14 TT-006〜030 相当をカバーする。
 | T-006/025 | 256F callback・wrap@100・min=1 → [0,100)+[100,256)・各 call の TransportInfo 位置 | AC-2 | mock |
 | T-026a | 同上・min=128・Exact → 100F call 不生成・Preflight/RT Reject・Last-good 維持 | AC-3 | mock |
 | T-026b | 同上・min=128・Degraded → wrap 適用を ≤max_deferral の legal boundary へ延期・receipt に actual frame+degradation | AC-3/AC-11 | mock |
-| T-027 | in_block=`Unknown`/`Declared` のみ → in-block 利用せず Reject/Degraded へ倒れる（`Verified` 扱いしない） | AC-10 | mock |
+| T-027 | in_block=`Unknown`/`Declared` のみ → in-block 利用せず Reject/Degraded へ分類される（`Verified` 扱いしない） | AC-10 | mock |
 | T-028 | event @100/120/256 → process-relative offset 0/20/次callback 0・重複消失なし | AC-4 | mock |
 | T-007/029a | loop 多周で同一 source event が各 occurrence ちょうど1回・同一 occurrence 二重なし | AC-5 | mock |
 | T-029b | zero-frame flush call が block size 0 で送られる・`offset<block_frames` 維持 | AC-9 | mock |

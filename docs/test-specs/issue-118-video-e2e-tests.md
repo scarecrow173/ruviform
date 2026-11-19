@@ -113,7 +113,7 @@ video L1 の公開面 E2E oracle — `PluginHost::video()` 借用 façade 経由
 
 ## Risk
 
-- `Creating` ゲート未拡張（`l1/mod.rs` L1914-1915 が `CreateVideoInstance` を受理しない）→ create が恒に `Err(Ipc)` で video instantiate が一切動作しない — happy-path E2E が唯一の観測点
+- `Creating` ゲート未拡張（`l1/mod.rs` L1914-1915 が `CreateVideoInstance` を受理しない）→ create が常に `Err(Ipc)` で video instantiate が一切動作しない — happy-path E2E が唯一の観測点
 - `descriptors` kind-tag 欠落 → video descriptor が audio `Scan` に漏れ route kind 分離が破れる
 - cross-kind `Unsupported` arm 欠落 → audio 動詞が video slot の `L1Instance` ではなく `VideoL1Instance` を指して dispatch が panic または誤経路
 - `try_recv_notification` video arm 欠落 → `InstanceFailed` が永遠に失われる（E2E の notification 観測が唯一の検出点）

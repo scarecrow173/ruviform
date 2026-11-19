@@ -177,6 +177,6 @@ report を引き出す面が無いまま残っていた。本 test-spec は
 - `Shared` drain が endpoint の in-flight block を待つ — 非 RT
   呼出しで最大 1 block 分。RT 遅延に影響しない（RT path は
   `try_lock` のまま）。
-- L1 が将来 report を運ぶと `Unavailable` が陳腐化する —
+- L1 が将来 report を持つと `Unavailable` が陳腐化する —
   `#[non_exhaustive]` enum として拡張余地を残し、L1 wire slice
   が応答形を再設計する。

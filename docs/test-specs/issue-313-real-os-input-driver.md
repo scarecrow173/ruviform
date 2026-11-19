@@ -103,7 +103,7 @@ mise run example-ui-gpui-real-os-multiwindow-smoke
   `OsInputOutcome::Injected`・intent の atomic pair / gesture /
   receipt / `CommandPhase::Applied` が全て観測された。
 - `environment_blocked`: preflight ineffective（SendInput 未達）。
-  深追いせず証拠記録で終了。
+  それ以上追わず証拠記録で終了。
 - `unsupported`: capability 未 claim（macOS/Linux）。
 - `not_run`: focus 未達など op が `NotRun` を返したケース。
 - `fail`: `ScenarioError`（stale pin・部分注入 `UiError::Host` 等）。

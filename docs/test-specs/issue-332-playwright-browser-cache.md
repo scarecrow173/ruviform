@@ -72,7 +72,7 @@ Chromium バイナリが version/revision/OS-arch key の cache で再利用さ�
 ## Guarantees
 
 - browser 取得の最適化が「検証の skip」ではなく「バイナリの再利用 + install の存在確認」で実現されていること。
-- cache miss 経路が常に完全な install パス（install-deps + install + launch 検証 + test）を踏むこと。
+- cache miss 経路が常に完全な install パス（install-deps + install + launch 検証 + test）を通ること。
 - install/launch の失敗が prepare/validate step として、test 失敗と分離して報告されること。
 - version/revision の実変更が必ず新しい browser 取得を引き起こすこと（key の保守性）。
 
@@ -84,4 +84,4 @@ Chromium バイナリが version/revision/OS-arch key の cache で再利用さ�
 
 ## Risk
 
-- これら保証を落とすと、stale/破損 browser による偽緑・外因 download 失敗の再発・browser 準備失敗と test 失敗の識別不能が入り得る。launch 検証と exact-key fail-closed は「壊れた場合に遅くなるが間違えない」側に寄せてあるため、崩れたときの症状は効率低下に留まり検証欠落にならない設計。
+- これら保証を失うと、stale/破損 browser による偽緑・外因 download 失敗の再発・browser 準備失敗と test 失敗の識別不能が入り得る。launch 検証と exact-key fail-closed は「壊れた場合に遅くなるが間違えない」側に寄せてあるため、崩れたときの症状は効率低下に留まり検証欠落にならない設計。

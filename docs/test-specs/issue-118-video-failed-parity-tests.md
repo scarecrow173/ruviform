@@ -85,7 +85,7 @@ video L1 経路は、子死亡・pipe 破壊・protocol violation・timeout・in
 
 - video 子 kill → `Err(Ipc)` waiter wake + `lifecycle_state == Failed` + `InstanceFailed` 通知 1 回（once — `Notify` 一撃）・`Destroy` は `Ok`
 - mid-render 死亡（`--crash-after-msgs` を `VideoRender` 送信直前に合わせる）→ `Render` caller `Err(Ipc)`・out 領域非読・`Failed` + 通知
-- `--noncanonical-output`（worker が `Rendered{output}` に非 canonical stride/offset または config 不一致 dims/format を載せる）→ well-formed・一意帰属 → 対象 instance のみ `Failed`・caller `Err(Ipc)`・`InstanceFailed` 通知
+- `--noncanonical-output`（worker が `Rendered{output}` に非 canonical stride/offset または config 不一致 dims/format を入れる）→ well-formed・一意帰属 → 対象 instance のみ `Failed`・caller `Err(Ipc)`・`InstanceFailed` 通知
 - `--fail-render`（worker が `Err(PluginFailed)` を返す）→ caller `Err(PluginFailed)`・**mirror 不変（Processing のまま）**・通知なし・子生存 — audio doorbell `Err` 収束との divergence を pin
 - `--fail-initialize`（`VideoInitialize` `Err(PluginFailed)`）→ mirror は `Created`（InitFailed loop）・`Destroy` 合法
 - `--fail-deactivate`（`VideoDeactivate` `Err(PluginFailed)`）→ **mirror は Initialized commit 済 + error reply**（commit-then-advisory — audio `StopProcessing` 同型）

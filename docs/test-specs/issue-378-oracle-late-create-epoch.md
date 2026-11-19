@@ -85,5 +85,5 @@ ContractModel late-created binding の view epoch 採用
 
 ## Risk
 
-- この保証が落ちると、将来 replay op が mid-scenario binding 生成を追加した時点で oracle が旧契約（epoch 未採用）のまま残り、実装（修復済み SDK）との trace 乖離による false failure、あるいは oracle 緩和による false pass を招く。
+- この保証が失われると、将来 replay op が mid-scenario binding 生成を追加した時点で oracle が旧契約（epoch 未採用）のまま残り、実装（修復済み SDK）との trace 乖離による false failure、あるいは oracle 緩和による false pass を招く。
 - `setContext` 無条件化による attach 前登録 binding の早期 `viewId` 設定は、replay 経路では attach が ops 前に必ず走るため観測差分を生じないが、attach 前 dispatch を行う直接利用では SDK と同じ context を持つことが本 spec の前提となる。

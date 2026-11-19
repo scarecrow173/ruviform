@@ -71,7 +71,7 @@ GPUI real-window OS pixel capture and golden verification
   fallback とし、使用経路を `OsCapturedFrame::backend` に記録
   する。
 - R4: minimized/hidden window・dead handle・空 client area・
-  GDI 失敗は `UiError::Host` — verdict や `pass` に化けない。
+  GDI 失敗は `UiError::Host` — verdict や `pass` に変換されない。
 - R5: capture → `RgbaImage` → `BaselineStore` の e2e は、
   settle 後の deterministic frame に対して `blocked/
   baseline_missing`（初回）→ candidate → promote → `pass/match`
@@ -102,7 +102,7 @@ GPUI real-window OS pixel capture and golden verification
 
 - semantic observation・`DrawnPlan`・observer 出力が pixel
   証拠として `Captured` に昇格しない。
-- capture 失敗が `GoldenVerdict::Pass` に化けない
+- capture 失敗が `GoldenVerdict::Pass` に変換されない
   （`UiError` → caller が `NotRun`/`Unsupported`/`Driver`
   error として記録）。
 - `unsafe` は backend module の `#[expect(unsafe_code)]` +

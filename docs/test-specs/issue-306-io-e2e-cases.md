@@ -85,7 +85,7 @@ relations:
 - **Example**: `recovery_cleanup_failure_returns_handle_
   for_retry` — temp を directory に置換して cleanup 失敗
   → handle 返却 → 復元 → retry 成功。incumbent
-  destination 無傷。
+  destination は変更されない。
 
 ## 検証方法
 

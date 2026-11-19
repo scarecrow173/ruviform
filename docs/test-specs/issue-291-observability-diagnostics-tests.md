@@ -75,7 +75,7 @@ DiagnosticReport を非 RT で提供する。Logging/Tracing OFF で全機能が
   `confidentiality` を descriptor から引き継ぐ。
 - **Evidence/Finding の非流出性**: `EvidencePayload`/`summary` 等の
   型に任意バイト列・path・token・media bytes・prompt 全文・child
-  stderr を運ぶフィールドは存在しない。`EvidenceRef`/`EvidenceEntry`
+  stderr を持つフィールドは存在しない。`EvidenceRef`/`EvidenceEntry`
   は engine 採番の単調 id であり、retire/Removed/世代交代した source
   の evidence は `superseded=true` となり別 source へ再結合されない。
 - **Finding 確度**: `FindingCertainty::Confirmed` は閾値違反等の

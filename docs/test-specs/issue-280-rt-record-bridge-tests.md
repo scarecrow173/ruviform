@@ -47,7 +47,7 @@ Issue #280（OBS-05）の `rt_bridge` と `record` 語彙が spec AC-1〜AC-8 �
 
 `ruviform-observability` の RT → 非 RT 固定長 Record Bridge
 （`ruviform_rt::channel` SPSC 再利用・drop-on-full・envelope 欠落情報）と、
-レコードが運ぶ Clock Context・Correlation link/book・`EventRecord`。
+レコードが持つ Clock Context・Correlation link/book・`EventRecord`。
 
 ## Rules
 
@@ -83,7 +83,7 @@ Issue #280（OBS-05）の `rt_bridge` と `record` 語彙が spec AC-1〜AC-8 �
 - `rt_bridge_fifo`: capacity 分を push し `drain` が同順に `dropped_before=0`
   で返す。
 - `rt_bridge_drop_on_full`: capacity 満杯→`try_record` が `false`・`dropped=1`。
-  drain で先頭分を取り除き、次 push が `dropped_before=1` を運ぶ。
+  drain で先頭分を取り除き、次 push が `dropped_before=1` を持つ。
 - `rt_bridge_consumer_lag`: drain なしで `lag()` が増え、`recorded`/`dropped`/
   `drained_total` が一致する。
 - `rt_bridge_quiescence`: recorder drop → `drain_final` で残留を全件受領 →

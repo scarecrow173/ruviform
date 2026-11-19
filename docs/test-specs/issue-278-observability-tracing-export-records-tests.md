@@ -109,7 +109,7 @@ contract test で検証する。本書の試験は
 - R-8 未信頼入力: 構文上有効な任意の `traceparent` は相関
   field を付けるだけで、認可判定・親 Span 生成・特権昇格に
   使われない（emit は常に flat event）。
-- R-9 分離: `Dispatch::none()`・subscriber なし・filter 全落とし
+- R-9 分離: `Dispatch::none()`・subscriber なし・filter による全 drop
   でも `emit_records` は panic せず、Collector/ Metrics/
   Diagnostics/RT/Source の状態を変更しない。emit は渡された
   slice/book を読むだけ。

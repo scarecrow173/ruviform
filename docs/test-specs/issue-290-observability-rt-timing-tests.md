@@ -98,7 +98,7 @@ Callback budget 意味論と Histogram の統合試験」受入行を満たす�
 ### R4. clock 同一性の固定と明示
 
 - `TimingClock`（domain/base/provenance/epoch）は bridge 構築時に
-  固定され、`TimingRecorder` が全 record の `ClockContext` に刻む。
+  固定され、`TimingRecorder` が全 record の `ClockContext` に記録する。
 - `TimingRecord` は `TimingRecorder` のみが構築するため foreign
   clock の record は到達不能 — sink に防御的検査を置かないことを
   設計として確認する（コードレビュー観点、試験では record の
