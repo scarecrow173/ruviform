@@ -67,13 +67,13 @@ relations:
 
 ## Decision Outcome
 
-Chosen option: "案1: per-chunk offset 合成", because `sample_rate` を state に保持するだけで RT-safe・整数演算のみで実現でき、engine 側に時刻再構成の義務を負わせずに正確な instant を提供できる。案2 は実装を手抜かない代わりに利用側契約を複雑化する。案3 はデータ損失を伴い既存の bounded 分割の目的を損なう。
+Chosen option: "案1: per-chunk offset 合成", because `sample_rate` を state に保持するだけで RT-safe・整数演算のみで実現でき、engine 側に時刻再構成の義務を負わせずに正確な instant を提供できる。案2 は実装変更を避ける代わりに利用側契約を複雑化する。案3 はデータ損失を伴い既存の bounded 分割の目的を損なう。
 
 ### Consequences
 
 * Good, because `MasterClock` が chunk 分割の有無に依らず一貫した instant 系列を受け取れる
 * Good, because `sample_rate` 保持のみで実装可能（`negotiated.stream.sample_rate` は open 時に確定済み）
-* Bad, because 合成値は「バッファ内位置に基づく推定」であり真の DAC 時刻ではない — ただし近似より厳密であり、cpal が per-callback 単一 timestamp のみ提供する現実では最良の近似
+* Bad, because 合成値は「バッファ内位置に基づく推定」であり真の DAC 時刻ではない — ただし現行の同一 instant 近似より正確であり、cpal が per-callback 単一 timestamp のみ提供する現状では最良の近似
 * Bad, because `checked_add` のオーバーフロー経路が増える — フォールバック（元 instant をそのまま渡す）を明文化して対処
 
 ### Confirmation
