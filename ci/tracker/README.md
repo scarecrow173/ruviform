@@ -94,7 +94,7 @@ run はキュー中の pending を置き換える**ため、`cancel-in-progress:
 でも tracker 側の workflow_run 通知が間に落ち得る（out-of-order 配送・
 eventual consistency も同様）。そこで非 skip イベントごとに
 `GET /actions/workflows/{workflow-file}/runs?branch=main&exclude_pull_requests=true`
-でこの workflow ・ branch ・有効 event の最新 run 一覧を取得し、payload
+でこの workflow・branch・有効 event の最新 run 一覧を取得し、payload
 と marker 状態と突き合わせてから判断する。
 
 - 履歴により新しい失敗 run が見つかれば、その通知が落ちていても新しい
