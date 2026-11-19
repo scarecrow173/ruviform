@@ -137,6 +137,6 @@ Issue #131 で本 spec の残件（`catalog_open` 以外の foreign window の l
 ## Sources and Relations
 
 - [GitHub Issue #124](https://github.com/scarecrow173/ruviform/issues/124) — 一次ソース（`relations.source`）。2 項目のスコープ正本
-- [Issue #98 native OFX runtime Task 2 IR](../impl/ir/issue-98-native-ofx-runtime-task-2-implementation.md) — foreign-call window パターン・mutex 外実行・token 再解決の設計原則
-- [Issue #98 OFX render Task 3 IR](../impl/ir/issue-98-ofx-render-task-3-implementation.md) / [final verification Task 4 IR](../impl/ir/issue-98-ofx-final-verification-task-4-implementation.md) / [host closeout Task 5 IR](../impl/ir/issue-98-ofx-host-closeout-task-5-implementation.md) — 各 IR が本残件を pre-existing として記録した出典
+- Issue #98 native OFX runtime Task 2 IR `docs/impl/ir/issue-98-native-ofx-runtime-task-2-implementation.md` — foreign-call window パターン・mutex 外実行・token 再解決の設計原則
+- Issue #98 OFX render Task 3 IR `docs/impl/ir/issue-98-ofx-render-task-3-implementation.md` / final verification Task 4 IR `docs/impl/ir/issue-98-ofx-final-verification-task-4-implementation.md` / host closeout Task 5 IR `docs/impl/ir/issue-98-ofx-host-closeout-task-5-implementation.md` — 各 IR が本残件を pre-existing として記録した出典
 - [ofx-host-adapter spec](ofx-host-adapter.md)・[ofx-host-adapter design](../designs/ofx-host-adapter.md) — 上流 spec/design（approved）。host lifecycle・suite・token 設計の正本

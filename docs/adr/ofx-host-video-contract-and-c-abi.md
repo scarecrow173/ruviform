@@ -135,7 +135,7 @@ repo 観測（GET api.github.com/repos/…・観測 UTC 2026-10-23T18:45:07/18:4
 - 新クレート `crates/ruviform-plugin-ofx`（adapter → `ruviform-plugin-core`/`ruviform-video-core`/`ruviform-media-core` のみ）
 - plugin-core 側 source target: `src/descriptor.rs`（借用 `PluginDescriptorView` + `view()`）、`src/plain_param.rs`（新規・`PlainParamValue`/`PlainParamInfo`）、`src/video.rs`（新規・`VideoProcessConfig`/`VideoPluginInstance`）、core lib exports・`Cargo.toml`、crate README・allowed-deps 索引・baseline ledger（OFX 行/DAG annotation/Lifecycle Processing RT doc 明確化）。既存 core `param.rs`・event 形式は変更しない
 - adapter 側 source target: `src/lib.rs`（`OfxHost`/`OfxLibrary`/`OfxInstance`）・C bridge `ofx_bridge.c`・pinned ヘッダ取込み
-- 計画は [docs/plans/implement-issue-98-ofx-host-adapter.md](../plans/implement-issue-98-ofx-host-adapter.md)（approved）として起票済み。task・test-spec は plan approval 後に作成
+- 計画は `docs/plans/implement-issue-98-ofx-host-adapter.md`（approved）として起票済み。task・test-spec は plan approval 後に作成
 
 ## Verification
 

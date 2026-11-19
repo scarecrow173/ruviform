@@ -13,7 +13,7 @@ relations:
     - "docs/discovery/issue-629-virtual-endpoint-survey.md"
     - "docs/designs/issue-629-wasapi-endpoint.md"
     - "docs/designs/issue-629-virtual-endpoint-lane.md"
-    - "docs/plans/issue-629-midi-loopback.md"
+    - "docs/knowledge/audio-device-and-midi.md"
     - "POLICIES.md"
   changes:
     added:

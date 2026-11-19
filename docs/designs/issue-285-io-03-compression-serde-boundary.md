@@ -169,9 +169,9 @@ v0.2（2026-11-04）」と「最終整合性レビュー — 実装 Issue への
   `test-rt`/`test-io-msrv`（rust@1.89.0）が pass。
 
 文書チェーン: [spec](../specs/issue-285-io-03-compression-serde-boundary.md)・
-[plan](../plans/issue-285-io-03-compression-serde-boundary.md)・
+plan `docs/plans/issue-285-io-03-compression-serde-boundary.md`・
 [test-spec](../test-specs/issue-285-io-03-compression-serde-boundary.md)・
-[task](../tasks/issue-285-io-03-compression-serde-boundary.md)。
+task `docs/tasks/issue-285-io-03-compression-serde-boundary.md`。
 
 ## Scope
 

@@ -149,7 +149,7 @@ Issue #185 で確立した汎用 Probe の非 RT 観測面に対し、「任意�
 
 ## Sources and Relations
 
-- 本チェーンの文書: [design](../designs/issue-309-probe-time-context-and-alignment.md)・[ADR](../adr/issue-309-probe-time-context-placement-and-alignment-contract.md)・[test-spec](../test-specs/issue-309-probe-time-alignment.md)・[plan](../plans/issue-309-probe-time-context-and-alignment.md)・[task](../tasks/issue-309-probe-time-context-and-alignment.md)。
+- 本チェーンの文書: [design](../designs/issue-309-probe-time-context-and-alignment.md)・[ADR](../adr/issue-309-probe-time-context-placement-and-alignment-contract.md)・[test-spec](../test-specs/issue-309-probe-time-alignment.md)・plan `docs/plans/issue-309-probe-time-context-and-alignment.md`・task `docs/tasks/issue-309-probe-time-context-and-alignment.md`。
 - 一次要件: GitHub Issue [#309](https://github.com/scarecrow173/ruviform/issues/309)（`relations.source`/`implements`）。上流 consumer: Synvelis [#107](https://github.com/scarecrow173/synvelis/issues/107)・[#109](https://github.com/scarecrow173/synvelis/issues/109)。
 - 前提 spec（`relations.depends-on`）: [#185 generic probe](issue-185-generic-probe-rt-capture.md)（観測面の正本 — 本 spec はその時間整列可能性を refine）、[#308 probe rebind](issue-308-probe-rebind-atomic.md)（世代境界・`RebindReceipt`・`CapturePolicy`）、[#280 OBS-05](issue-280-rt-record-bridge-clock-correlation.md)（Clock 語彙・RT bridge の正本）。
 - refine 関係: 本 spec は #185 spec の「同一 generation+sample_position で整列可能」という記述を「clock/epoch/instance identity を含む整列可能性契約」へ精緻化する（`relations.refines`）。

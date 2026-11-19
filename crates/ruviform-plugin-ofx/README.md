@@ -43,4 +43,4 @@ NONRT video port の分離要求が確定した時点（L1 design の deferred �
 - vendored pinned headers: `vendor/openfx/`（`manifest.json` に sha256 記録）
 - 実装 spec/design/plan: `docs/specs/ofx-host-adapter.md`,
   `docs/designs/ofx-host-adapter.md`,
-  `docs/plans/implement-issue-98-ofx-host-adapter.md`
+  `docs/knowledge/plugin-format-adapters.md`

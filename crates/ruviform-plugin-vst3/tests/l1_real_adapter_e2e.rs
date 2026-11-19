@@ -1,7 +1,7 @@
 //! Real-adapter L1 end-to-end tests — the workspace-built VST3
 //! fixture cdylib served out-of-process by
 //! `ruviform-plugin-vst3-l1-runner` (Issue #114, task
-//! `docs/tasks/real-adapter-e2e-and-lane.md`; oracle
+//! `docs/evidence/plugin-l1-evidence.md`; oracle
 //! `docs/test-specs/real-adapter-l1-e2e-tests.md`).
 //!
 //! Every test is `#[ignore]`-gated: they require the fixture cdylib

@@ -1,5 +1,5 @@
 //! Control-plane E2E for the `pub(crate)` L1 out-of-process instance
-//! machinery (Issue #76 task 3 — `docs/tasks/l1-proxy-control-plane.md`,
+//! machinery (Issue #76 task 3 — `docs/evidence/plugin-l1-evidence.md`,
 //! oracle `docs/test-specs/plugin-l1-proxy-contract-tests.md`).
 //!
 //! `mod l1` is `pub(crate)` inside the library and cannot be reached

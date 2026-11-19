@@ -46,7 +46,7 @@ relations:
 
 ## Decision
 
-**素 wry（0.57）の `WebViewBuilder::build_as_child` でホスト提供 HWND への子 WebView attach を採用**（Windows 実機 confirm）。`raw-window-handle` adapter で HWND を包み、外部 GetMessage ループ上で attach・描画・resize・IPC が全て動作した（[RESULTS.md](../../poc/plugin-gui/RESULTS.md)・[実験ログ](../impl/exp/plugin-gui-attach-e1-e2.jsonl)）。
+**素 wry（0.57）の `WebViewBuilder::build_as_child` でホスト提供 HWND への子 WebView attach を採用**（Windows 実機 confirm）。`raw-window-handle` adapter で HWND を包み、外部 GetMessage ループ上で attach・描画・resize・IPC が全て動作した（[RESULTS.md](../../poc/plugin-gui/RESULTS.md)・実験ログ `docs/impl/exp/plugin-gui-attach-e1-e2.jsonl`）。
 
 ## Considered Options
 

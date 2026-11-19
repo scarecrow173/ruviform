@@ -65,8 +65,8 @@ Issue #257 の統合正本（[design](../designs/issue-257-driver-neutral-ui-con
 が「契約を再定義せず参照で構成され、証拠が誠実で、歴史的参照と
 未確定事項が明確に区別されている」ことを検証する。対象 spec は
 [spec](../specs/issue-257-driver-neutral-ui-contract.md)、実施記録は
-[task](../tasks/issue-257-driver-neutral-ui-contract.md) /
-[plan](../plans/issue-257-driver-neutral-ui-contract.md) を参照。
+task `docs/tasks/issue-257-driver-neutral-ui-contract.md` /
+plan `docs/plans/issue-257-driver-neutral-ui-contract.md` を参照。
 コード変更を伴わない docs 成果物のため、検証は文書検査
 （link/relation 解決・内容の突合・lint）で行う。
 

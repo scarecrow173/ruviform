@@ -1,5 +1,5 @@
 //! L1 supervisor E2E (Issue #116 task T3 —
-//! `docs/tasks/l1-supervisor-e2e.md`, oracle
+//! `docs/evidence/plugin-l1-evidence.md`, oracle
 //! `docs/test-specs/issue-116-supervisor-e2e-tests.md`).
 //!
 //! Drives the opt-in `Supervisor` against real `l1-test-worker`

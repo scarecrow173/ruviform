@@ -5,7 +5,7 @@
 //! one predictable tag match plus the selected kernel — no `dispatch!`,
 //! `Level::new()`, or feature detection runs on the RT path (measured
 //! per-call dispatch overhead ≈1.3 ns; see
-//! `docs/impl/exp/dispatched-overhead-20261021.md`).
+//! `docs/evidence/dsp-simd-evidence.md`).
 //!
 //! Two-layer structure (adoption ADR, decision 1): the scalar reference
 //! implementations in `crate::simd_poc` are the contract reference; every
@@ -169,7 +169,7 @@ impl SimdToken {
 }
 
 // ---- routing thresholds (determined values) --------------------------------
-// Provenance: `docs/impl/exp/dispatched-overhead-20261021.md` 3-run medians,
+// Provenance: `docs/evidence/dsp-simd-evidence.md` 3-run medians,
 // scalar vs forced-avx2 on i9-9900K. Scalar is routed while it is not slower
 // than the token path; these are performance heuristics, not contract.
 

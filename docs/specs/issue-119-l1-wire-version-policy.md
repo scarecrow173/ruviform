@@ -149,7 +149,7 @@ Issue #119 は新しいプロトコル機構の実装ではなく、**既に実�
 
 - Issue [#119](https://github.com/scarecrow173/ruviform/issues/119) — 一次ソース（`relations.source`）。wire バージョニング方針の記録と拒否契約検証を要求
 - [plugin-l1-out-of-process spec](plugin-l1-out-of-process.md)・[design](../designs/plugin-l1-out-of-process.md) — 方針の記録先（Issue #76 系・`derives-from`）。両文書の Deferred Design Concerns 行を本決定へ reconcile
-- [issue-76-l1-core-wire-task-1-implementation.md](../impl/ir/issue-76-l1-core-wire-task-1-implementation.md) — wire プロトコル導入の実装記録（strict-equality・reserved 拒否・上限チェックの実装根拠）
+- `docs/impl/ir/issue-76-l1-core-wire-task-1-implementation.md` — wire プロトコル導入の実装記録（strict-equality・reserved 拒否・上限チェックの実装根拠）
 - [issue-115-l1-gui-cross-process-parenting.md](../designs/issue-115-l1-gui-cross-process-parenting.md) — re-engagement 前提 (a) が本決定を要求（確定済み注記へ更新）
 - 検証: [plugin-l1-wire-codec-tests.md](../test-specs/plugin-l1-wire-codec-tests.md)・[plugin-l1-proxy-contract-tests.md](../test-specs/plugin-l1-proxy-contract-tests.md)・[plugin-l1-runner-e2e-tests.md](../test-specs/plugin-l1-runner-e2e-tests.md)（`verified-by` — 3 本とも `verifies` に本 spec を追加）
 - Refs: Issue [#76](https://github.com/scarecrow173/ruviform/issues/76)・[#115](https://github.com/scarecrow173/ruviform/issues/115)

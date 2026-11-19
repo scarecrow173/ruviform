@@ -3,7 +3,7 @@
 //! the raw `vst3`-crate COM bindings and maps descriptors, parameters
 //! and the component/controller lifecycle onto the neutral
 //! [`PluginFactory`]/[`Plugin`] contracts for the L1 out-of-process
-//! runner (Issue #114 — `docs/tasks/vst3-host-bridge.md`).
+//! runner (Issue #114 — `docs/evidence/plugin-l1-evidence.md`).
 //!
 //! ## Lifecycle mapping (neutral → VST3)
 //!

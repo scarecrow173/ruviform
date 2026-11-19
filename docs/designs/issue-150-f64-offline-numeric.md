@@ -281,7 +281,7 @@ byte-identical を `diff -q` で確認済みのため、現行カーネル・#98
   sequential scalar — SIMD 未導入の退行は想定内、幅を記録する。
 - **メモリ**: counting global allocator で構築/呼出し中 alloc を実測。
 
-記録の正本は [`docs/impl/exp/issue-150-al-math-comparison-20261031.md`](../impl/exp/issue-150-al-math-comparison-20261031.md)。要約は末尾「Comparison Results」節。
+記録の正本は `docs/impl/exp/issue-150-al-math-comparison-20261031.md`。要約は末尾「Comparison Results」節。
 
 ## Consequences
 
@@ -332,7 +332,7 @@ byte-identical を `diff -q` で確認済みのため、現行カーネル・#98
 ## Comparison Results
 
 実測記録の正本は
-[`docs/impl/exp/issue-150-al-math-comparison-20261031.md`](../impl/exp/issue-150-al-math-comparison-20261031.md)
+`docs/impl/exp/issue-150-al-math-comparison-20261031.md`
 （ハーネスソース・生出力は同ディレクトリ `data/`）。要点:
 
 - **精度**: resample は両実装で **bit-exact**（max|diff| = 0）。FFT forward は

@@ -115,7 +115,7 @@ Issue #126（video-proc RT 検証レーン）のレビューで、「`assert_no_
 ## Sources and Relations
 
 - Issue [#130](https://github.com/scarecrow173/ruviform/issues/130): 3 crate の `assert_no_alloc` 窓が `AllocDisabler` 未宣言で無検証だった問題の武装
-- 発見元・先行適用例: [issue-126-video-proc-rt-lane-implementation.md](../impl/ir/issue-126-video-proc-rt-lane-implementation.md)（#126 レビューで検出・Follow-ups に追跡対象として記録）・[video-proc-rt-verification-lane.md](video-proc-rt-verification-lane.md)（宣言形式の正本 — `crates/ruviform-video-proc/src/lib.rs` の `mod tests` 内宣言）
+- 発見元・先行適用例: `docs/impl/ir/issue-126-video-proc-rt-lane-implementation.md`（#126 レビューで検出・Follow-ups に追跡対象として記録）・[video-proc-rt-verification-lane.md](video-proc-rt-verification-lane.md)（宣言形式の正本 — `crates/ruviform-video-proc/src/lib.rs` の `mod tests` 内宣言）
 - Spec/ADR: [rt-verification-lane.md](rt-verification-lane.md)（Issue #22 レーンの親 spec）・[rt-assert-no-alloc-thread-check.md](../adr/rt-assert-no-alloc-thread-check.md)（`assert_no_alloc` 標準化の確定決定）
 - 契約: [rt-verification-contracts.md](../test-specs/rt-verification-contracts.md) Rule 1–2（allocation-free の測定窓・warm-up 外の確保は許容）— 本 spec が同 test-spec を 3 crate へ refines 適用する
 - 宣言方式の先行例: `crates/ruviform-plugin-clap/src/plugin.rs`・`crates/ruviform-plugin-vst3/src/block.rs`（1 モジュールの宣言が crate test binary 全体を武装）

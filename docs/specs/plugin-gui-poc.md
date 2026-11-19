@@ -67,4 +67,4 @@ relations:
 
 ## 関連文書
 
-- 先行 PoC: [issue-28 UI PoC](../plans/issue-28-ui-poc.md)・[ui-tech-selection-poc ADR](../adr/ui-tech-selection-poc.md)
+- 先行 PoC: issue-28 UI PoC `docs/plans/issue-28-ui-poc.md`・[ui-tech-selection-poc ADR](../adr/ui-tech-selection-poc.md)

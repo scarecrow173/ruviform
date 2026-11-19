@@ -80,7 +80,7 @@ lint は `mise run lint-l1-real-plugin`（`--features host`・`-D warnings`）�
 ## 関連
 
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md
-- 実装 spec/plan（task T3）: docs/specs/implement-plugin-foundation.md, docs/plans/implement-plugin-foundation.md
+- 実装 spec/plan（task T3）: docs/specs/implement-plugin-foundation.md, docs/knowledge/plugin-format-adapters.md
 - binding 方式 ADR: docs/adr/plugin-binding-method-clack-for-clap-coupler-rs-vst3-for-vst3.md
-- PoC 所見: docs/impl/ir/poc-clap-binding-adapter.md
+- PoC 所見: docs/evidence/plugin-format-evidence.md
 - Issue #29

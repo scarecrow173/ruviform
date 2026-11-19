@@ -122,6 +122,6 @@ Issue #99 Task 4（`docs/impl/ir/issue-99-icc-transform-task-4-implementation.md
 - 一次ソース: GitHub Issue [#125 [impl] Issue #99 フォローアップ: ICC 変換の LUT fixture coverage](https://github.com/scarecrow173/ruviform/issues/125)（`relations.source`）。Issue #99 reviewer 指摘の coverage 拡張 2 件と検証 lane を規定。
 - 上流文書（`relations.derives-from`）: [color-conversion-kernels design](../designs/color-conversion-kernels.md)（`IccTransform`/`IccIntent` 契約と moxcms 依存/feature 選択の正本）。
 - 前提（`relations.depends-on`）: [color-conversion-kernels spec](color-conversion-kernels.md)（#99 spec・implemented）。変更対象の契約面を確定した先行 spec。
-- 関連（`relations.related`）: [icc-transform-contract-tests test-spec](../test-specs/icc-transform-contract-tests.md)（本 spec が規則を追加する契約正本）、[task-4 IR](../impl/ir/issue-99-icc-transform-task-4-implementation.md)（P2 follow-up の記録元）。
-- 派生（`relations.derived-by`/`implemented-by`）: [実装 plan](../plans/implement-issue-125-icc-lut-fixture-coverage.md)。
+- 関連（`relations.related`）: [icc-transform-contract-tests test-spec](../test-specs/icc-transform-contract-tests.md)（本 spec が規則を追加する契約正本）、task-4 IR `docs/impl/ir/issue-99-icc-transform-task-4-implementation.md`（P2 follow-up の記録元）。
+- 派生（`relations.derived-by`/`implemented-by`）: 実装 plan `docs/plans/implement-issue-125-icc-lut-fixture-coverage.md`。
 - 参考（`relations.references`）: [Issue #99](https://github.com/scarecrow173/ruviform/issues/99)（親 Issue）。

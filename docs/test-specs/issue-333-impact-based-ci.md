@@ -146,4 +146,4 @@ metadata: {}
 
 - 要求: [docs/specs/issue-333-impact-based-ci.md](../specs/issue-333-impact-based-ci.md)
 - 設計: [docs/designs/issue-333-impact-based-ci.md](../designs/issue-333-impact-based-ci.md)
-- 実装計画: [docs/plans/issue-333-impact-based-ci.md](../plans/issue-333-impact-based-ci.md)
+- 実装計画: `docs/plans/issue-333-impact-based-ci.md`

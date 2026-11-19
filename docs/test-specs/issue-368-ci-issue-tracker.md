@@ -158,4 +158,4 @@ metadata: {}
 
 - 要求: [docs/specs/issue-368-ci-issue-tracker.md](../specs/issue-368-ci-issue-tracker.md)
 - 設計: [docs/designs/issue-368-ci-issue-tracker.md](../designs/issue-368-ci-issue-tracker.md)
-- 実装計画: [docs/plans/issue-368-ci-issue-tracker.md](../plans/issue-368-ci-issue-tracker.md)
+- 実装計画: `docs/plans/issue-368-ci-issue-tracker.md`

@@ -139,7 +139,7 @@ GitHub Issue #3 と上流 spec `SPEC-034Ivc5nj1AE6P2PcZU6Ki`（[../specs/replace
   * `mise.toml` — テンプレート前提コメント・task description の現状適合（タスク定義本体は変更しない）
   * `.pre-commit-config.yaml` / `.gitignore` / `.gitattributes` — レビューと必要箇所のみの修正
   * `Cargo.toml` — ライセンス表記の整合確認対象。本 Issue では変更しない
-* 従うパターン: [../designs/overview.md](../designs/overview.md) のレイヤ境界（README/AGENTS 本文の改稿は #3 の責務）、[../designs/dev-foundation.md](../designs/dev-foundation.md) の暫定開発規約、IR [../impl/ir/verify-reproducible-setup-and-work-memo.md](../impl/ir/verify-reproducible-setup-and-work-memo.md)「作業メモ（#3 転記用）」の実測済み手順を一次記録とする
+* 従うパターン: [../designs/overview.md](../designs/overview.md) のレイヤ境界（README/AGENTS 本文の改稿は #3 の責務）、[../designs/dev-foundation.md](../designs/dev-foundation.md) の暫定開発規約、IR `docs/impl/ir/verify-reproducible-setup-and-work-memo.md`「作業メモ（#3 転記用）」の実測済み手順を一次記録とする
 * 避けるパターン: 存在しない文書・実装・検証を実在/実行済みとして記載しない（`LICENSE`・公開 API・`ruviform-audio`/`ruviform-video`・RT-safe 保証・未実施の GitHub Actions ディスパッチ等）。テンプレート由来修正と無関係なインフラ基盤の再構成を行わない。不要な全置換を行わない
 * 依存関係: spec `SPEC-034Ivc5nj1AE6P2PcZU6Ki`、ADR-034IcJdtqm6TP6MylyP5J7（Issue #2 開発基盤、`depends-on`）の toolchain・CI・lockfile 追跡方針。`apm.yml` の `name`・依存・`targets` を変更する場合は `apm install` / `apm lock` で `apm.lock.yaml` を再生成し、生成物との整合を確認する
 
@@ -237,4 +237,4 @@ GitHub Issue #3 と上流 spec `SPEC-034Ivc5nj1AE6P2PcZU6Ki`（[../specs/replace
 * 上流ドキュメント: [SPEC-034Ivc5nj1AE6P2PcZU6Ki](../specs/replace-template-derived-docs-with-ruviform.md)（`relations.derives-from`）
 * 前提決定: [ADR-034IcJdtqm6TP6MylyP5J7](./rust-dev-foundation-toolchain-and-ci-profile.md)（Issue #2 開発基盤、`relations.depends-on`）
 * 関連ドキュメント: [AGENTS.md](../../AGENTS.md)、[README.md](../../README.md)、[apm.yml](../../apm.yml)（`relations.related`）
-* 参考資料: GitHub Issue [#2](https://github.com/scarecrow173/ruviform/issues/2)（前提）、[#1](https://github.com/scarecrow173/ruviform/issues/1)（詳細設計、後続）、IR [verify-reproducible-setup-and-work-memo.md](../impl/ir/verify-reproducible-setup-and-work-memo.md)（#2 実機検証の一次記録）
+* 参考資料: GitHub Issue [#2](https://github.com/scarecrow173/ruviform/issues/2)（前提）、[#1](https://github.com/scarecrow173/ruviform/issues/1)（詳細設計、後続）、IR `docs/impl/ir/verify-reproducible-setup-and-work-memo.md`（#2 実機検証の一次記録）

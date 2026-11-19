@@ -17,7 +17,7 @@
 //! Port identity is index + name only: `midiOutMessage` with
 //! `DRV_QUERYDEVICEINTERFACE` is deliberately never called — the
 //! 1st-slice probe recorded a crash on Microsoft GS Wavetable Synth
-//! (`docs/impl/exp` E2 for the issue-629 survey). Enumeration is
+//! (`docs/evidence/audio-device-midi-evidence.md` E2 for the issue-629 survey). Enumeration is
 //! infallible at the top level (`midiOutGetNumDevs` cannot fail;
 //! devices vanishing mid-scan are skipped).
 //!

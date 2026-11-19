@@ -135,9 +135,9 @@ Archive / Migration — Issue #283〜#287 の設計 Issue、実装 Issue
   （Issue 状態は変動し得る snapshot として記録）。
 
 文書チェーン: [spec](../specs/issue-288-io-06-cross-consumer-os-fs-security-gate.md)・
-[plan](../plans/issue-288-io-06-cross-consumer-os-fs-security-gate.md)・
+plan `docs/plans/issue-288-io-06-cross-consumer-os-fs-security-gate.md`・
 [test-spec](../test-specs/issue-288-io-06-cross-consumer-os-fs-security-gate.md)・
-[task](../tasks/issue-288-io-06-cross-consumer-os-fs-security-gate.md)。
+task `docs/tasks/issue-288-io-06-cross-consumer-os-fs-security-gate.md`。
 
 ## Scope
 

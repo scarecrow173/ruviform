@@ -9,7 +9,7 @@ owners: ["scarecrow173"]
 relations:
   source:
     - "docs/designs/issue-480-tab-focus-release.md"
-    - "docs/plans/issue-480-tab-focus-release.md"
+    - "docs/evidence/gui-evidence.md"
   changes:
     added: []
     modified:

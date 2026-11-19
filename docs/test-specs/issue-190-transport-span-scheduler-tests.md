@@ -87,4 +87,4 @@ Synvelis §14 TT-006〜030 相当をカバーする。
 - 検証対象: [spec](../specs/issue-190-transport-span-scheduler.md)、
   [design](../designs/issue-190-transport-span-scheduler.md)、
   [ADR](../adr/transport-span-scheduler-applied-receipt.md)。
-- 実行計画: [plan](../plans/implement-issue-190-transport-span-scheduler.md)。
+- 実行計画: plan `docs/plans/implement-issue-190-transport-span-scheduler.md`。

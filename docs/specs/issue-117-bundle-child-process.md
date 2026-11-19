@@ -223,7 +223,7 @@ Issue 要求範囲:
 - [issue-117-bundle-child-process-discovery](../discovery/issue-117-bundle-child-process-discovery.md) — 本 spec の discovery（コード観測事実・軸別選択肢比較・推奨方向）
 - [plugin-l1-out-of-process spec](plugin-l1-out-of-process.md)・[design](../designs/plugin-l1-out-of-process.md) — #76 系上流（singleton 前提の原点・deferred 行・語彙写像・`Failed`/通知/pass-through/RT 契約）
 - [issue-119-l1-wire-version-policy](issue-119-l1-wire-version-policy.md) — `WIRE_VERSION` bump 前提の確定方針（depends-on）
-- [issue-76-l1-core-wire-task-1-implementation IR](../impl/ir/issue-76-l1-core-wire-task-1-implementation.md) — wire 導入の実装記録（bundle non-goal 記録・singleton 反映の根拠）
+- issue-76-l1-core-wire-task-1-implementation IR `docs/impl/ir/issue-76-l1-core-wire-task-1-implementation.md` — wire 導入の実装記録（bundle non-goal 記録・singleton 反映の根拠）
 - [plugin-isolation-strategy ADR](../adr/plugin-isolation-strategy.md) — 階層化分離の決定（bundle/dedicated の選択面設計の前提）
 - [issue-122-shared-platform-process-ipc-eval](../designs/issue-122-shared-platform-process-ipc-eval.md) — #117 を再設計前提とする抽出延期判定
 - 検証 oracle（本 spec 実装時に `verified-by` で紐付け見込み）: `docs/test-specs/plugin-l1-wire-codec-tests.md`・`docs/test-specs/plugin-l1-proxy-contract-tests.md`・`docs/test-specs/plugin-l1-runner-e2e-tests.md`

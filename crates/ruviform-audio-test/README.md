@@ -116,7 +116,7 @@ lane is required: the crate's tests are collected by the existing
 - **`InputPump` mirrors production `InputTx::pump`** — the algorithm
   is duplicated because the production type is `pub(crate)`. Drift
   risk is accepted for this slice and noted in
-  `docs/impl/ir/issue-628-pipeline-wiring.md`.
+  `docs/evidence/docs-operations-evidence.md`.
 - **Deterministic-backend evidence is OS-L1 only** — scripted callback
   firing is manual (`pump_*_next` on the test driver thread); real
   RT-thread scheduling, real xruns, duplex, and latency are out of

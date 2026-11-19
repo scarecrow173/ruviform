@@ -190,7 +190,7 @@ Issue #3 の受け入れ条件に基づく。
 ## Sources and Relations
 
 - 一次ソース: GitHub Issue [#3 [docs] README・AGENTS・APM等のテンプレート由来部分をRuviform向けに置き換える](https://github.com/scarecrow173/ruviform/issues/3)（`relations.source` / `relations.derives-from`）。目的・着手順序・変更内容・受け入れ条件・スコープ外はすべてこの Issue を正本とする。
-- 前提（`relations.depends-on`）: spec `SPEC-034IcwhwIFSNUNKtX7KK0Q`（[establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md)、Issue #2、approved・実装済み）。その成果が本 spec で記述する実測済み手順・検証タスクの基盤となる。検証済みコマンド・前提条件・未検証 OS の一次記録は IR [`verify-reproducible-setup-and-work-memo.md`](../impl/ir/verify-reproducible-setup-and-work-memo.md) の「作業メモ（#3 転記用）」節を正本とする（`relations.references`）。
+- 前提（`relations.depends-on`）: spec `SPEC-034IcwhwIFSNUNKtX7KK0Q`（[establish-rust-dev-foundation.md](./establish-rust-dev-foundation.md)、Issue #2、approved・実装済み）。その成果が本 spec で記述する実測済み手順・検証タスクの基盤となる。検証済みコマンド・前提条件・未検証 OS の一次記録は IR `docs/impl/ir/verify-reproducible-setup-and-work-memo.md` の「作業メモ（#3 転記用）」節を正本とする（`relations.references`）。
 - 関連 Issue（外部、`relations.references`）: [#2](https://github.com/scarecrow173/ruviform/issues/2)（開発環境、前提）、[#1](https://github.com/scarecrow173/ruviform/issues/1)（詳細設計、後続。#1 の完了は本 spec の前提ではない）。
 - 関連ドキュメント・ファイル（`relations.related`）: 変更対象の `README.md`・`AGENTS.md`・`apm.yml`・`mise.toml`、レビュー対象の `.pre-commit-config.yaml`・`.gitignore`・`.gitattributes`、ライセンス表記の整合確認対象 `Cargo.toml`、AGENTS へ反映する暫定開発規約の出典 [`dev-foundation.md`](../designs/dev-foundation.md)、#3 の責務境界を記録した [`overview.md`](../designs/overview.md)。
 - 変更対象（`relations.changes.modified`）: `README.md`・`AGENTS.md`・`apm.yml`・`mise.toml` は改稿・更新を確定。`.pre-commit-config.yaml`・`.gitignore`・`.gitattributes` はレビュー対象として列挙し、レビューで Ruviform に不適切と判明した箇所のみ修正する（変更なしも許容）。

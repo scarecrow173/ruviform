@@ -11,7 +11,7 @@ relations:
   source:
     - "https://github.com/scarecrow173/ruviform/issues/692"
     - "docs/specs/issue-692-luau-backend.md"
-    - "docs/plans/issue-692-luau-backend.md"
+    - "docs/knowledge/scripting-luau.md"
   changes:
     added:
       - type: "file"

@@ -71,4 +71,4 @@ CLAP・VST3・binding クレート（`clack`, `vst3`, `clap-sys` 等）由来の
 - 設計ベースライン: docs/designs/ruviform-architecture-design-baseline.md（クレート表 A.2、「プラグインアーキテクチャ」）
 - プラグインアーキテクチャ ADR: docs/adr/plugin-architecture-clap-vst3.md
 - RT 契約 ADR: docs/adr/realtime-contract-and-verification-policy.md
-- 実装 spec/plan: docs/specs/implement-plugin-foundation.md, docs/plans/implement-plugin-foundation.md
+- 実装 spec/plan: docs/specs/implement-plugin-foundation.md, docs/knowledge/plugin-format-adapters.md

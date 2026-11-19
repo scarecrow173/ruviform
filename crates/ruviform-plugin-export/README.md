@@ -38,4 +38,4 @@
 
 ## 層構造
 
-plugin 拡張層。依存: `ruviform-plugin-core`・`ruviform-video-core`・`ruviform-media-core`（Issue #118 追加 — `ErasedVideoPlugin`/`VideoPluginFactory`/`VideoFrame`/`MediaTime` を `run_video` 面が名指すため。`ruviform-audio-core` の #113 dev-dep → prod 昇格と同経路）+ 内部 `shared_memory`。詳細は `docs/designs/plugin-l1-out-of-process.md`・`docs/designs/issue-118-video-l1.md` と `docs/tasks/plugin-export-crate-and-l1-runner.md`。
+plugin 拡張層。依存: `ruviform-plugin-core`・`ruviform-video-core`・`ruviform-media-core`（Issue #118 追加 — `ErasedVideoPlugin`/`VideoPluginFactory`/`VideoFrame`/`MediaTime` を `run_video` 面が名指すため。`ruviform-audio-core` の #113 dev-dep → prod 昇格と同経路）+ 内部 `shared_memory`。詳細は `docs/designs/plugin-l1-out-of-process.md`・`docs/designs/issue-118-video-l1.md` と `docs/evidence/plugin-l1-evidence.md`。

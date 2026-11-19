@@ -81,7 +81,7 @@ Issue #429 のスコープのうち、本 chain の初回 PR で実装しなか�
 
 | 項目 | 状態 | 根拠 |
 | --- | --- | --- |
-| `NumericInput` / `Transport` Control | 再評価済み — 新 kind 不要（composition で充足） | consumer 棚卸し（synvelis の transport 合成・audio-lens `gpui_parity` の利用 kind・`ValueDescriptor`/`ControlInput` の既存契約）で共通 semantic gap なし。[task doc の再評価記録](../tasks/issue-429-consumer-observation-seam.md)参照 |
+| `NumericInput` / `Transport` Control | 再評価済み — 新 kind 不要（composition で充足） | consumer 棚卸し（synvelis の transport 合成・audio-lens `gpui_parity` の利用 kind・`ValueDescriptor`/`ControlInput` の既存契約）で共通 semantic gap なし。task doc の再評価記録 `docs/tasks/issue-429-consumer-observation-seam.md`参照 |
 | Waveform/Meter/Spectrum の長尺・RT snapshot・gap/NaN precision・bounded memory/cancel/stale・GPU release の GPUI 検証 | 一部達成 | bound 近傍 payload（`MAX_WAVEFORM_BINS`/`MAX_METER_BINS`/`MAX_SPECTROGRAM_CELLS` ちょうど）・多チャンネル・viewport culling・gesture 中 projection・`update_view` spec 差し替え・f64 precision を `consumer_observation.rs` の seam test で検証。gap/NaN・bound 拒否・cancel/stale/out-of-order・teardown は既存 lane でカバー済み。実 GPU release は platform 制約で NotRun（#313） |
 | driver-lab manifest の UI-DVR-03/07/08 GPUI | 達成（実測一致） | PR #432/#433/#444 で統合済み。`mise run test-ui-gpui` の実測 pass と `cases.json` の gpui `pass` が一致 |
 | `LAB-SV-FADER-DOCK` / `LAB-AL-WAVEFORM-SEEK` の 2 scale factor × 2 theme × 状態遷移の GPUI 実行 | 未達（not_run のまま） | story の GPUI 実行 lab は owner = #426。`stories.json` の status は変更しない |
