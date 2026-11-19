@@ -23,8 +23,8 @@ Issue #151 で追加された観測・非破壊取得契約:
 
 - `Packet` は生 tick（`TickTimestamp` + `TimestampProvenance`）の
   `pts`/`dts`・パケット `index`・`duration` ticks・codec trim
-  （`trim_start`/`trim_end`）を運ぶ。`AudioFrame` は `MediaTimestamp`
-  （`MediaTime` + provenance）PTS を運ぶ
+  （`trim_start`/`trim_end`）を持つ。`AudioFrame` は `MediaTimestamp`
+  （`MediaTime` + provenance）PTS を持つ。
 - `NativeAudioFrame`/`PcmTransform`/`Frame::NativeAudio` — canonical
   planar `f32` とは別経路の非破壊 PCM: native 尺度の interleaved `f64`
   （全 ≤32bit 整数と `f32`/`f64` を厳密保持）+ 変換履歴 + lossy 分類

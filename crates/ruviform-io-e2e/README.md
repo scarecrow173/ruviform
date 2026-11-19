@@ -23,7 +23,7 @@ IO-01〜05 の公開 API を層横断で合成する E2E 試験専用クレー�
   失敗分類・recovery handle 所有権・publish 競合・TAR+gzip 複合
   の publish 前独立検証）を検証する（`fault_boundary.rs`）。
   `Indeterminate`・DirSync 後失敗・`TempState::Unknown` は実 OS
-  で正直に誘発不能なため実 FS fixture 化せず、opt-in
+  で誘発不能なため実 FS fixture 化せず、opt-in
   `fault-injection` feature 経由の `#[doc(hidden)]` mock facade
   による公開 API 契約試験（`fault_seam.rs`、Issue #306 G07）と
   `ruviform-io-file` の `#[cfg(test)]` mock 試験を正本とする。

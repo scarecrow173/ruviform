@@ -33,7 +33,7 @@ demux + decode のみの実装。
     本クレートの generated fixture 範囲外（capability/demux 経路のみ
     検証済み）。
 - video facts（Issue #154）: video track は `StreamFacts.video` に
-  宣言された pixel 寸法を運び、`decodable: Fact::Unsupported`。
+  宣言された pixel 寸法を持ち、`decodable: Fact::Unsupported`。
   `nominal_frame_rate` は MP4 が宣言 frame rate を持たない（`stts`
   の per-sample duration のみ）ため `None` のまま — VFR は packet
   tick 列で観測される。
@@ -41,7 +41,7 @@ demux + decode のみの実装。
   `StreamFacts`/`CodecDescriptor`/`ContainerInfo`/`BackendInfo` へ写像し、
   位置付き sniffing でコンテナ家族を同定。`Packet` は index・生 tick
   （`TimestampProvenance` 付き）・duration ticks・`trim_start`/`trim_end`
-  を運ぶ。`capabilities()` は `Features::NATIVE_AUDIO` を含めて申告する
+  を持つ。`capabilities()` は `Features::NATIVE_AUDIO` を含めて申告する。
 - PoC の既知制限（隠さずフォローアップとして記録）: 連結 Ogg は先頭リンクで
   終了、シーク不可ソースは構築時プローブで正直に報告し
   `Demuxer::seek` は `ErrorKind::Unsupported`。
@@ -51,7 +51,7 @@ demux + decode のみの実装。
   `Demuxer` を駆動するスコープ付きブリッジ。呼び出し側スレッドが
   `serve` ループとして `&mut source` を保持し、spawn した 1 本の
   worker が `sync_channel(1)` 背後の proxy 経由で `read`/`seek` を
-  逐次フォワードする — 飛行中の encoded バイトは単方向あたり
+  逐次フォワードする — 転送中の encoded バイトは単方向あたり
   ≤64KiB の 1 チャンクに有界。`f` は worker スレッド上で
   `&mut dyn Demuxer` を受け取り、その借用は `f` の外へ escape
   できない（box しても `Box<dyn Demuxer + '_>` は scope 寿命に
