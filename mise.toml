@@ -311,6 +311,17 @@ run = "cargo bench --workspace"
 description = "Smoke-test the ruviform-math, ruviform-rt, ruviform-viz, ruviform-numeric and ruviform-io-e2e benchmarks with `cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -p ruviform-numeric -p ruviform-io-e2e -- --test` (bench profile; runs each bench once without measurement; the CI bench job calls this; writes only target/)"
 run = "cargo bench -p ruviform-math -p ruviform-rt -p ruviform-viz -p ruviform-numeric -p ruviform-io-e2e -- --test"
 
+# bench-frozen is a manual/opt-in lane (Issue #807): it is not part of the CI
+# bench job, which keeps calling bench-smoke only. Modes: no arg = gated real
+# run against the pinned baseline; --selftest = inject degraded dispatch to
+# prove the gate fails; --write-baseline <path> = emit an un-promoted
+# candidate for manual review/promotion. Keep evidence (run JSONL, gate
+# verdict, decision.tsv) under evidence/<issue>/.
+[tasks.bench-frozen]
+description = "Run the frozen ruviform-math dsp SIMD A/B benchmark with `cargo bench -p ruviform-math --bench dsp_frozen -- <args>` (bench profile; in-process force_fallback vs detect ratio gate vs pinned baseline benches/frozen/dsp_baseline.json, fail-closed; manual/opt-in lane — not in the CI bench job; pass `--selftest` to prove gate failure, `--write-baseline <path>` to emit a baseline candidate; writes only target/)"
+raw_args = true
+run = "cargo bench --locked -p ruviform-math --bench dsp_frozen --"
+
 # Workspace scope (-full) is independent of execution profile. MISE_ENV=ci
 # selects the existing Cargo ci profile and disables incremental compilation;
 # ordinary local *-full uses the dev/test profile. The CI workflow keeps its
