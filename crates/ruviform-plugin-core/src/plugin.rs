@@ -10,7 +10,7 @@
 //! so that both the host and an out-of-process plugin runner can name
 //! them without a host↔runner dependency.
 
-use crate::boundary::{GuiHandle, GuiSize, HostError, ParentLease};
+use crate::boundary::{GuiHandle, GuiKeyEvent, GuiSize, HostError, ParentLease};
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
@@ -248,6 +248,34 @@ pub trait Plugin: PluginProcessor {
     fn set_gui_parent(&mut self, _parent: ParentLease) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
+
+    /// Gives (`focused = true`) or removes keyboard focus from the
+    /// GUI opened by [`Plugin::open_gui`].
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins whose editor
+    /// has no focus surface decline the command.
+    fn set_gui_focus(&mut self, _focused: bool) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
+    /// Delivers one key event to the GUI opened by
+    /// [`Plugin::open_gui`].
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins whose editor
+    /// takes no key input decline the command;
+    /// [`HostError::InvalidValue`] when the event cannot be
+    /// represented in the adapter's event vocabulary.
+    fn send_gui_key(&mut self, _event: GuiKeyEvent) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
 }
 
 /// One registered plugin type: descriptor plus instance construction.
@@ -340,6 +368,10 @@ pub trait ErasedPlugin {
     fn set_gui_visibility(&mut self, visible: bool) -> Result<(), HostError>;
     /// [`Plugin::set_gui_parent`].
     fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_focus`].
+    fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError>;
+    /// [`Plugin::send_gui_key`].
+    fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError>;
     /// [`PluginProcessor::drain_output_reports`].
     ///
     /// **RT contract:** non-RT only.
@@ -408,6 +440,12 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn set_gui_parent(&mut self, parent: ParentLease) -> Result<(), HostError> {
         self.0.set_gui_parent(parent)
+    }
+    fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError> {
+        self.0.set_gui_focus(focused)
+    }
+    fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
+        self.0.send_gui_key(event)
     }
     fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
         self.0.drain_output_reports(out);

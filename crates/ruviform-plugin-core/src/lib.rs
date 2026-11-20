@@ -101,8 +101,8 @@ mod video_plugin;
 pub mod wire;
 
 pub use boundary::{
-    FailureCause, GuiHandle, GuiSize, HostError, ParentLease, ParentSlotLease,
-    PluginEditorSessionId, PluginHandle,
+    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError,
+    ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
