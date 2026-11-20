@@ -410,6 +410,24 @@ description = "Run the frozen ruviform-math dsp SIMD A/B benchmark with `cargo b
 raw_args = true
 run = "cargo bench --locked -p ruviform-math --bench dsp_frozen --"
 
+# bench-frozen-e2e is a manual/opt-in lane (Issue #807 slice 2): the same
+# contract family as bench-frozen applied to the deterministic E2E
+# pipeline legs of ruviform-audio-test — output/session (scripted output
+# -> production Session::open -> plan.drive callback -> captured PCM) and
+# input/typed-rt (scripted input -> InputCapture -> RtRuntime
+# input_writer -> process -> output_reader). The gate checks each leg's
+# normalized wall (median rep ns / in-process ref-yardstick median) plus
+# the observed-output digest fingerprint against pinned thresholds in
+# benches/frozen/pipeline_baseline.json, fail-closed. Modes: no arg =
+# gated real run; --selftest = inject wall-floor + Xrun degradations to
+# prove the gate fails; --write-baseline <path> = emit an un-promoted
+# candidate for manual review/promotion. Keep evidence (run JSONL, gate
+# verdict, decision.tsv) under evidence/<issue>/.
+[tasks.bench-frozen-e2e]
+description = "Run the frozen ruviform-audio-test E2E pipeline benchmark with `cargo bench -p ruviform-audio-test --bench pipeline_frozen -- <args>` (bench profile; normalized-wall + frozen-digest gate vs pinned baseline benches/frozen/pipeline_baseline.json, fail-closed; manual/opt-in lane — not in the CI bench job; pass `--selftest` to prove gate failure, `--write-baseline <path>` to emit a baseline candidate; writes only target/)"
+raw_args = true
+run = "cargo bench --locked -p ruviform-audio-test --bench pipeline_frozen --"
+
 # Workspace scope (-full) is independent of execution profile. MISE_ENV=ci
 # selects the existing Cargo ci profile and disables incremental compilation;
 # ordinary local *-full uses the dev/test profile. The CI workflow keeps its
