@@ -85,8 +85,8 @@ proptest と Kani の 2 層を常設する。
 2. なければ `wsl.exe -l -q` でディストロを列挙し、`cargo` と
    `cargo kani` の両方が PATH にあるものを先着で採用する。
 3. カレントの Windows パスを `/mnt/<drive>/...` に写像し、WSL 側は
-   `CARGO_TARGET_DIR=~/.cache/rf806-kani-target` の WSL ネイティブ
-   領域で実行する（`/mnt` 越しのビルド IO を避ける）。
+   `CARGO_TARGET_DIR=$HOME/.cache/ruviform-kani/target` の WSL
+   ネイティブ領域で実行する（`/mnt` 越しのビルド IO を避ける）。
 4. どちらも見つからなければ `not_run`（`environment_blocked`）を
    報告して exit 0 — 環境欠如は fail でも pass でもない。
    真の検証失敗（CBMC が反例を返した場合）のみ `fail` + exit 1。
@@ -170,6 +170,14 @@ ruviform skill の語彙に従う。環境欠如は `not_run` +
 に対する必須 CI 結果が統合検証の証拠（本記録はそれを代替しない）。
 
 ## 昇格経路（本 slice 外）
+
+Kani（bounded model checking）への次の昇格候補:
+
+| 候補 target | 対象 crate / 契約 | Kani が向く理由 |
+| --- | --- | --- |
+| parser family | `ruviform-io-structured`（pull-based CSV 等の構造化 parse）、`ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる |
+| unsafe 局在コード | `ruviform-math`（SIMD dispatch）、`ruviform-audio-device` / `ruviform-midi-device` / `ruviform-observability` の `#[expect(unsafe_code)]` 局所箇所 | unsafe ブロックの前後条件・pointer/len 不変条件を symbolic に検証 — 通常 test では到達不能な入力経路をカバーできる（harness は unsafe 自体ではなく公開境界の契約を検証する設計にする） |
+| DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすく、全サイズ証明が必要になった段階で Lean へ再昇格できる |
 
 - ordering / state machine 系（session・dock・close 協議）は
   TLA+ 候補（`scarecrow173/ruviform#389` 系）。
