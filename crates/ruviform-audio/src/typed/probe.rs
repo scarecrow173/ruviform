@@ -954,7 +954,13 @@ impl ProbeDeck {
                 dst.copy_from_slice(&plane[..n]);
             }
         }
-        debug_assert!(self.chunks_out.try_push(chunk).is_ok());
+        // The push is real work, not a check — it must run in every
+        // profile. `chunks_out` capacity equals the pool size, so a
+        // chunk popped from `free` always has a slot; `Full` would
+        // be an internal invariant violation, not a `Result` error.
+        self.chunks_out
+            .try_push(chunk)
+            .expect("chunks_out capacity equals pool size");
         b.capture_remaining = b.capture_remaining.saturating_sub(n as u64);
         if b.capture_remaining == 0 {
             b.mode = ProbeMode::Monitor;
