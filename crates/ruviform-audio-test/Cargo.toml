@@ -70,3 +70,9 @@ ruviform-midi-device = { path = "../ruviform-midi-device" }
 
 [lints]
 workspace = true
+
+# Issue #807 slice 2: frozen E2E pipeline bench (custom main —
+# normalized-wall + frozen-digest gate vs pinned baseline).
+[[bench]]
+name = "pipeline_frozen"
+harness = false

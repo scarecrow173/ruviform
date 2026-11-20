@@ -1,0 +1,8 @@
+{
+  "schema": "rvf.e2e-frozen-baseline/v1",
+  "cells": {
+    "output/session": {"max_norm_ratio": 99.0, "expected_digest": "0x0000000000000000"},
+    "input/typed-rt": {"max_norm_ratio": 99.0, "expected_digest": "0x0000000000000000"}
+  },
+  "approval": {"promoted_on": "2026-11-21", "note": "demo"}
+}

@@ -1,0 +1,17 @@
+{
+  "schema": "rvf.e2e-frozen-baseline/v1",
+  "issue": "https://github.com/scarecrow173/ruviform/issues/807",
+  "metric": "normalized_wall_vs_ref",
+  "ref_kernel": "mix64_fill_gain",
+  "threshold_rule": "max_norm_ratio = ceil(measured_norm * 1.5, 0.01) — fails when the leg's normalized wall grows 1.5x past its pin (machine speed normalized out by the in-process ref yardstick; slack absorbs run-to-run noise)",
+  "measured_env": {"os": "windows", "arch": "x86_64", "cpu": "Intel(R) Core(TM) i9-9900K CPU @ 3.60GHz", "cores": 16, "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)", "repo_sha": "cd4213a1d665600f6adfefa0c3a90f2be9b4e4ce"},
+  "cells": {
+    "output/session": {"max_norm_ratio": 3.97, "measured_norm": 2.642, "measured_median_ns": 247000.0, "measured_ref_median_ns": 93500.0, "expected_digest": "0x4097620b5f41de6b", "errors": 0, "work_count": 229376},
+    "input/typed-rt": {"max_norm_ratio": 4.38, "measured_norm": 2.918, "measured_median_ns": 272800.0, "measured_ref_median_ns": 93500.0, "expected_digest": "0x56bd5aa5d2349eb0", "errors": 0, "work_count": 229376}
+  },
+  "limiter": {
+    "output/session": "driver pump + backend callback machinery + Session plan.drive + fixture render + captured-output record — wall normalized to the in-bench mix64 yardstick; regresses on added per-callback cost in the callback path",
+    "input/typed-rt": "driver pump + capture offer/drain + input_writer copy + typed process (GainNode) + output_reader observe — normalized likewise; regresses on added per-block cost in the capture/runtime path"
+  },
+  "approval": {"promoted_from": "evidence/rf807/e2e_baseline.candidate.json", "promoted_on": "2026-11-21", "note": "initial pin on i9-9900K; thresholds = ceil(measured_norm * 1.5, 0.01); expected_digest pins the frozen observed-PCM fingerprint"}
+}
