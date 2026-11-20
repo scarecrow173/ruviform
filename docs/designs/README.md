@@ -308,6 +308,7 @@ Directory: `docs/designs`
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
 | DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | DESIGN-ZwNUJSnzzVrmRrqQ7S6lJ9 | Issue #465 WebView 移行台帳現行化 — 4 分類スキームと証拠設計 | approved | [wv-removal-inventory-design.md](./wv-removal-inventory-design.md) |
+| DSN-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` design | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
