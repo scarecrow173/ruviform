@@ -51,7 +51,12 @@ required-features = ["uitest"]
 ruviform-ui = { path = "../ruviform-ui" }
 # - gpui: Zed's GPU-accelerated UI framework — the standard Driver
 #   backend per the Issue #384 direction. Optional: only under `gpui`.
-gpui = { version = "0.2.2", optional = true }
+#   Issue #532 pins a fork tag (the crates.io `gpui` 0.2.2 package plus
+#   a one-line change that makes the DirectComposition target
+#   non-topmost so a native child HWND composites above the GPUI
+#   content). `version` asserts the fork stays on the 0.2.2 base; the
+#   tag pins the source.
+gpui = { git = "https://github.com/scarecrow173/gpui", tag = "v0.2.2-rf1", version = "=0.2.2", optional = true }
 # - ruviform-ui-theme: Issue #387 renderer maps `ResolvedTheme` one-way
 #   into GPUI colors/lengths (second theme source of truth is never
 #   created). Optional: only needed by the gpui-gated render module.
