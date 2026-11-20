@@ -1,0 +1,157 @@
+{
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-slice2\\target\\debug\\dummy_app.exe",
+  "app_args": [],
+  "checks": [
+    {
+      "id": "spawn",
+      "verdict": "pass"
+    },
+    {
+      "id": "handshake",
+      "verdict": "pass"
+    },
+    {
+      "id": "shutdown",
+      "verdict": "pass"
+    },
+    {
+      "id": "child-exit",
+      "verdict": "pass"
+    }
+  ],
+  "child_exit": {
+    "code": 0,
+    "success": true
+  },
+  "cleanup": {
+    "app": {
+      "jobs_running": false,
+      "windows_open": 1
+    },
+    "exited": true,
+    "windows_closed": 1,
+    "windows_open": 1
+  },
+  "environment": {
+    "arch": "x86_64",
+    "environment_kind": "deterministic-backend",
+    "os": "windows"
+  },
+  "lane": "rvf-ctl-drive",
+  "repo": {
+    "sha": "e11854c28335c359a46065b08683d83cd1e67866"
+  },
+  "steps": [
+    {
+      "notices": [
+        {
+          "kind": "window.created",
+          "seq": 0,
+          "window": 1
+        }
+      ],
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 1,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.receipts",
+      "params": {
+        "limit": 16,
+        "since": 0
+      },
+      "reply": {
+        "entries": [
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "created",
+            "seq": 1,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "ready",
+            "seq": 2,
+            "window": 1
+          }
+        ],
+        "next_since": 2,
+        "truncated": false
+      },
+      "seq": 2,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.notices",
+      "params": {},
+      "reply": {
+        "notices": []
+      },
+      "seq": 3,
+      "verdict": "pass"
+    }
+  ],
+  "transport": "stdio",
+  "type": "drive",
+  "verdict": "pass",
+  "welcome": {
+    "app": {
+      "name": "dummy_app",
+      "version": "0.1.0"
+    },
+    "arch": "x86_64",
+    "backend": {
+      "name": "headless-fake"
+    },
+    "capabilities": {
+      "clock_domains": [
+        "host_tick"
+      ],
+      "dom_access": false,
+      "faults": [
+        "window_crash",
+        "ipc_disconnect"
+      ],
+      "fixture": true,
+      "input_injection": false,
+      "observation": [
+        "windows",
+        "receipts",
+        "notices"
+      ],
+      "screenshot": false
+    },
+    "os": "windows",
+    "run_id": "run-7051a041a0ae0c84",
+    "ruviform_revision": "0.1.0",
+    "session_id": "s-5903ad36c297ccb6",
+    "v": 1,
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  }
+}

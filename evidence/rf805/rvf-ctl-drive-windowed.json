@@ -1,0 +1,472 @@
+{
+  "app": "target/debug/windowed_test_app.exe",
+  "app_args": [
+    "--windows",
+    "1"
+  ],
+  "checks": [
+    {
+      "id": "spawn",
+      "verdict": "pass"
+    },
+    {
+      "id": "handshake",
+      "verdict": "pass"
+    },
+    {
+      "id": "shutdown",
+      "verdict": "pass"
+    },
+    {
+      "id": "child-exit",
+      "verdict": "pass"
+    }
+  ],
+  "child_exit": {
+    "code": 0,
+    "success": true
+  },
+  "cleanup": {
+    "app": {
+      "jobs_running": false,
+      "windows_open": 1
+    },
+    "exited": true,
+    "windows_closed": 1,
+    "windows_open": 1
+  },
+  "environment": {
+    "arch": "x86_64",
+    "environment_kind": "real-window",
+    "os": "windows"
+  },
+  "lane": "rvf-ctl-drive",
+  "repo": {
+    "sha": "e11854c28335c359a46065b08683d83cd1e67866"
+  },
+  "steps": [
+    {
+      "notices": [
+        {
+          "kind": "window.created",
+          "seq": 0,
+          "window": 1
+        }
+      ],
+      "op": "test.capabilities",
+      "params": {},
+      "reply": {
+        "clock_domains": [
+          "host_tick"
+        ],
+        "dom_access": false,
+        "faults": [
+          "window_crash",
+          "ipc_disconnect"
+        ],
+        "fixture": true,
+        "input_injection": false,
+        "observation": [
+          "windows",
+          "receipts",
+          "notices"
+        ],
+        "screenshot": true,
+        "session_id": "s-660c4fbb1e08654c",
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 1,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 2,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.fixture.prepare",
+      "params": {
+        "name": "windows",
+        "params": {
+          "count": 1,
+          "height": 240,
+          "width": 320
+        },
+        "seed": 11
+      },
+      "reply": {
+        "applied": {
+          "seed": 11,
+          "windows": [
+            2
+          ]
+        },
+        "name": "windows"
+      },
+      "seq": 3,
+      "verdict": "pass"
+    },
+    {
+      "notices": [
+        {
+          "kind": "window.created",
+          "seq": 1,
+          "window": 2
+        }
+      ],
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          },
+          {
+            "close_pending": false,
+            "height": 240,
+            "id": 2,
+            "ipc_down": false,
+            "ready": true,
+            "title": "dummy",
+            "width": 320
+          }
+        ]
+      },
+      "seq": 4,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.clock.advance",
+      "params": {
+        "domain": "host_tick",
+        "ticks": 2
+      },
+      "reply": {
+        "advanced": 2,
+        "domain": "host_tick"
+      },
+      "seq": 5,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.receipts",
+      "params": {
+        "limit": 64,
+        "since": 0
+      },
+      "reply": {
+        "entries": [
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "created",
+            "seq": 1,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "ready",
+            "seq": 3,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "focused",
+            "seq": 4,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "resized",
+            "seq": 5,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "moved",
+            "seq": 6,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 7
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 8
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 9
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 10
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "created",
+            "seq": 11,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 12
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "ready",
+            "seq": 13,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "focused",
+            "seq": 14,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "focused",
+            "seq": 15,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "resized",
+            "seq": 16,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "moved",
+            "seq": 17,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 18
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 19
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 20
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 21
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 22
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 23
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 24
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 25
+          }
+        ],
+        "next_since": 25,
+        "truncated": false
+      },
+      "seq": 6,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.screenshot",
+      "params": {
+        "window": "last"
+      },
+      "reply": {
+        "decoded_bytes": 307200,
+        "format": "rgba-raw",
+        "height": 240,
+        "width": 320
+      },
+      "seq": 7,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.window.request_close",
+      "params": {
+        "window": "last"
+      },
+      "reply": {
+        "requested": true,
+        "window": 2
+      },
+      "seq": 8,
+      "verdict": "pass"
+    },
+    {
+      "notices": [
+        {
+          "kind": "window.close_requested",
+          "seq": 2,
+          "window": 2
+        },
+        {
+          "kind": "window.destroyed",
+          "seq": 3,
+          "window": 2
+        }
+      ],
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 9,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.notices",
+      "params": {},
+      "reply": {
+        "notices": []
+      },
+      "seq": 10,
+      "verdict": "pass"
+    }
+  ],
+  "transport": "stdio",
+  "type": "drive",
+  "verdict": "pass",
+  "welcome": {
+    "app": {
+      "name": "windowed_test_app",
+      "version": "0.1.0"
+    },
+    "arch": "x86_64",
+    "backend": {
+      "detail": "gpui/windows",
+      "name": "gpui-windowed"
+    },
+    "capabilities": {
+      "clock_domains": [
+        "host_tick"
+      ],
+      "dom_access": false,
+      "faults": [
+        "window_crash",
+        "ipc_disconnect"
+      ],
+      "fixture": true,
+      "input_injection": false,
+      "observation": [
+        "windows",
+        "receipts",
+        "notices"
+      ],
+      "screenshot": true
+    },
+    "os": "windows",
+    "run_id": "run-5ad01453745992c7",
+    "ruviform_revision": "0.1.0",
+    "session_id": "s-660c4fbb1e08654c",
+    "v": 1,
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  }
+}

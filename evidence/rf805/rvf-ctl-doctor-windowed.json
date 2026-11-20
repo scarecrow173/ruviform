@@ -1,0 +1,126 @@
+{
+  "app": "target/debug/windowed_test_app.exe",
+  "app_args": [],
+  "capabilities": {
+    "clock_domains": [
+      "host_tick"
+    ],
+    "dom_access": false,
+    "faults": [
+      "window_crash",
+      "ipc_disconnect"
+    ],
+    "fixture": true,
+    "input_injection": false,
+    "observation": [
+      "windows",
+      "receipts",
+      "notices"
+    ],
+    "screenshot": true,
+    "session_id": "s-91c3b844789c1152",
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "spawn",
+      "verdict": "pass"
+    },
+    {
+      "id": "handshake",
+      "verdict": "pass"
+    },
+    {
+      "id": "capabilities",
+      "verdict": "pass"
+    },
+    {
+      "id": "shutdown",
+      "verdict": "pass"
+    },
+    {
+      "id": "child-exit",
+      "verdict": "pass"
+    }
+  ],
+  "child_exit": {
+    "code": 0,
+    "success": true
+  },
+  "cleanup": {
+    "app": {
+      "jobs_running": false,
+      "windows_open": 1
+    },
+    "exited": true,
+    "windows_closed": 1,
+    "windows_open": 1
+  },
+  "environment": {
+    "arch": "x86_64",
+    "environment_kind": "real-window",
+    "os": "windows"
+  },
+  "lane": "rvf-ctl-doctor",
+  "repo": {
+    "sha": "e11854c28335c359a46065b08683d83cd1e67866"
+  },
+  "transport": "stdio",
+  "type": "doctor",
+  "verdict": "pass",
+  "welcome": {
+    "app": {
+      "name": "windowed_test_app",
+      "version": "0.1.0"
+    },
+    "arch": "x86_64",
+    "backend": {
+      "detail": "gpui/windows",
+      "name": "gpui-windowed"
+    },
+    "capabilities": {
+      "clock_domains": [
+        "host_tick"
+      ],
+      "dom_access": false,
+      "faults": [
+        "window_crash",
+        "ipc_disconnect"
+      ],
+      "fixture": true,
+      "input_injection": false,
+      "observation": [
+        "windows",
+        "receipts",
+        "notices"
+      ],
+      "screenshot": true
+    },
+    "os": "windows",
+    "run_id": "run-bdc15f4460bb9822",
+    "ruviform_revision": "0.1.0",
+    "session_id": "s-91c3b844789c1152",
+    "v": 1,
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  }
+}
