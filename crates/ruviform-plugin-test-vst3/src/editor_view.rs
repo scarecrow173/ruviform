@@ -84,6 +84,13 @@ struct ViewState {
     /// detach/`removed` + `attached` cycle really recreated the
     /// surface (an HWND value alone can be reused by Windows).
     attach_seq: u32,
+    /// The recorded `onFocus`/`onKeyDown`/`onKeyUp` tokens —
+    /// `f:{state}`, `kd:{key:04x}:{key_code:04x}:{modifiers:04x}`,
+    /// `ku:{…}` — appended to the window title so an observer can
+    /// prove the input/focus verbs reached the editor through the
+    /// same `GetWindowTextW` channel the attach generation uses
+    /// (the fixture has no other observable output).
+    events: Vec<String>,
 }
 
 /// `test_editor`'s plug view — one instance per
@@ -111,8 +118,39 @@ impl TestEditorView {
                     bottom: DEFAULT_HEIGHT,
                 },
                 attach_seq: 0,
+                events: Vec::new(),
             }),
         }
+    }
+
+    /// Records one input/focus token and restamps the child HWND's
+    /// window text — the OS-observable effect the real-window lane's
+    /// `effect_confirmed` oracle reads through `GetWindowTextW`. A
+    /// re-entrant call rejects `kResultFalse` like every other state
+    /// mutation here.
+    fn record(&self, token: String) -> tresult {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        state.events.push(token);
+        if let Some(hwnd) = state.hwnd {
+            win32::set_title(hwnd, &state.window_title());
+        }
+        kResultOk
+    }
+}
+
+impl ViewState {
+    /// The window text stamped onto the child HWND: the attach
+    /// generation tag plus the recorded input/focus log —
+    /// `rvf-test-editor-attach-{n}[|{ev},{ev},…]`.
+    fn window_title(&self) -> String {
+        let mut title = format!("rvf-test-editor-attach-{}", self.attach_seq);
+        if !self.events.is_empty() {
+            title.push('|');
+            title.push_str(&self.events.join(","));
+        }
+        title
     }
 }
 
@@ -153,7 +191,7 @@ impl IPlugViewTrait for TestEditorView {
             return kResultFalse;
         }
         state.attach_seq = state.attach_seq.wrapping_add(1);
-        let title = format!("rvf-test-editor-attach-{}", state.attach_seq);
+        let title = state.window_title();
         match win32::attach(parent, &title) {
             Some(hwnd) => {
                 state.hwnd = Some(hwnd);
@@ -184,17 +222,18 @@ impl IPlugViewTrait for TestEditorView {
         kResultOk
     }
 
-    /// Acknowledges key-down — accepted and ignored (no input
-    /// surface).
+    /// Records the key-down — the token lands in the event log the
+    /// child HWND's window text carries (`kd:{key}:{key_code}:{mods}`
+    /// as four-digit hex), making the delivery OS-observable.
     #[expect(unsafe_code)]
-    unsafe fn onKeyDown(&self, _key: u16, _key_code: i16, _modifiers: i16) -> tresult {
-        kResultOk
+    unsafe fn onKeyDown(&self, key: u16, key_code: i16, modifiers: i16) -> tresult {
+        self.record(format!("kd:{key:04x}:{key_code:04x}:{modifiers:04x}"))
     }
 
-    /// Acknowledges key-up — accepted and ignored (no input surface).
+    /// Records the key-up — same log shape as `onKeyDown`.
     #[expect(unsafe_code)]
-    unsafe fn onKeyUp(&self, _key: u16, _key_code: i16, _modifiers: i16) -> tresult {
-        kResultOk
+    unsafe fn onKeyUp(&self, key: u16, key_code: i16, modifiers: i16) -> tresult {
+        self.record(format!("ku:{key:04x}:{key_code:04x}:{modifiers:04x}"))
     }
 
     /// Reports the current size — the default 640x480 rect until
@@ -236,11 +275,12 @@ impl IPlugViewTrait for TestEditorView {
         kResultOk
     }
 
-    /// Acknowledges focus changes — accepted and ignored. `TBool` is
-    /// `uint8` in the bindings.
+    /// Records the focus change — `f:{state}` lands in the event log
+    /// the child HWND's window text carries. `TBool` is `uint8` in
+    /// the bindings.
     #[expect(unsafe_code)]
-    unsafe fn onFocus(&self, _state: u8) -> tresult {
-        kResultOk
+    unsafe fn onFocus(&self, state: u8) -> tresult {
+        self.record(format!("f:{state}"))
     }
 
     /// Retains the host's `IPlugFrame` (or releases ours on null) —
@@ -312,8 +352,8 @@ mod win32 {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
-        GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, WNDCLASSW,
-        WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+        GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
+        SetWindowTextW, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     /// Solid-fill color — green, distinct from the `PoC` probe's red so
@@ -482,6 +522,19 @@ mod win32 {
         }
     }
 
+    /// Restamps the child HWND's window text — the event-log half of
+    /// the title an observer reads back through `GetWindowTextW`.
+    /// Best-effort: a dead handle is a harmless `SetWindowTextW`
+    /// error.
+    pub(super) fn set_title(hwnd: usize, title: &str) {
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `hwnd` is the child this module created; on a dead
+        // handle the call is a defined no-op error.
+        unsafe {
+            SetWindowTextW(hwnd as HWND, title_w.as_ptr());
+        }
+    }
+
     /// Destroys the child HWND — `DestroyWindow` on an already-dead
     /// handle is a harmless error, so this is idempotent-safe.
     pub(super) fn destroy(hwnd: usize) {
@@ -505,6 +558,8 @@ mod win32 {
     }
 
     pub(super) fn resize(_hwnd: usize, _width: i32, _height: i32) {}
+
+    pub(super) fn set_title(_hwnd: usize, _title: &str) {}
 
     pub(super) fn destroy(_hwnd: usize) {}
 }
@@ -624,6 +679,33 @@ mod tests {
             assert_eq!(view.onKeyUp('a' as u16, 0, 0), kResultOk);
             assert_eq!(view.onFocus(1), kResultOk);
         }
+    }
+
+    /// `onFocus`/`onKeyDown`/`onKeyUp` append compact tokens to the
+    /// event log in call order — the same order a `GetWindowTextW`
+    /// observer reads them off the child HWND's title (detached here,
+    /// so the log is the evidence).
+    #[expect(unsafe_code)]
+    #[test]
+    fn input_focus_verbs_record_event_tokens_in_order() {
+        let view = TestEditorView::new();
+        // SAFETY: `IPlugViewTrait` methods take `&self` — driving the
+        // view directly is the same dispatch the COM vtbl performs.
+        unsafe {
+            assert_eq!(view.onFocus(1), kResultOk);
+            assert_eq!(view.onKeyDown(0x0061, 0x41, 0x0001), kResultOk);
+            assert_eq!(view.onKeyUp(0x0061, 0x41, 0x0000), kResultOk);
+            assert_eq!(view.onFocus(0), kResultOk);
+        }
+        let state = view.state.borrow();
+        assert_eq!(
+            state.events.as_slice(),
+            &["f:1", "kd:0061:0041:0001", "ku:0061:0041:0000", "f:0"]
+        );
+        assert_eq!(
+            state.window_title(),
+            "rvf-test-editor-attach-0|f:1,kd:0061:0041:0001,ku:0061:0041:0000,f:0"
+        );
     }
 
     /// `attached` is an honest gate: wrong platform type, null parent,
