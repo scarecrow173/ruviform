@@ -1,7 +1,9 @@
 //! Stateful-test-plugin L1 end-to-end tests — this crate's own
-//! `test_stateful` VST3 cdylib served out-of-process by
+//! `test_stateful` and `test_stateful_single` VST3 cdylib classes
+//! served out-of-process by
 //! `ruviform-plugin-test-vst3-l1-runner` (Issue #630 `test_stateful`
-//! slice). Structural mirror of `l1_real_test_plugin_e2e.rs`.
+//! and single-component slices). Structural mirror of
+//! `l1_real_test_plugin_e2e.rs`.
 //!
 //! Every test is `#[ignore]`-gated: they require the fixture cdylib
 //! and the `l1-runner`-feature runner binary, which only
@@ -74,6 +76,36 @@ fn expected_descriptor() -> PluginDescriptor {
     PluginDescriptor {
         id: expected_id(),
         name: "test_stateful",
+        vendor: "Ruviform Test",
+        version: "0.0.0",
+        features: &["Fx"],
+    }
+}
+
+/// The descriptor id the child synthesizes for
+/// `test_stateful_single` — the component CID's raw 16 bytes as
+/// lowercase hex, derived at test time from `vst3::uid(...)` with the
+/// same constants `single.rs` builds `TestStatefulSingle::CID` from
+/// (see `expected_id` for the derivation contract).
+fn expected_single_id() -> &'static str {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let cid = vst3::uid(0x7A3E_5C91, 0x2D4F_8B36, 0xE9A1_6C42, 0xB5D8_3F07);
+    let mut out = String::with_capacity(32);
+    for &byte in &cid {
+        let byte = byte.cast_unsigned();
+        out.push(char::from(HEX[(byte >> 4) as usize]));
+        out.push(char::from(HEX[(byte & 0x0f) as usize]));
+    }
+    String::leak(out)
+}
+
+/// The descriptor the child synthesizes for the single-component
+/// class — same field-match contract, one `Audio Module Class` row
+/// with no controller row.
+fn expected_single_descriptor() -> PluginDescriptor {
+    PluginDescriptor {
+        id: expected_single_id(),
+        name: "test_stateful_single",
         vendor: "Ruviform Test",
         version: "0.0.0",
         features: &["Fx"],
@@ -245,6 +277,28 @@ fn component_gain(blob: &[u8]) -> f64 {
     f64::from_le_bytes(blob[12..20].try_into().unwrap())
 }
 
+/// Extracts the component payload's plain gain from a
+/// **single-component** framed blob — `[u32 comp_len][comp][u32 0]`
+/// where `comp` is the same 16-byte `["RFST"][ver=1][f64 LE]` payload
+/// and the controller payload is *empty* (`ctrl_len = 0`: the
+/// `single_component` save arm only a real single-component binary
+/// produces — 24 bytes total).
+fn single_component_gain(blob: &[u8]) -> f64 {
+    assert_eq!(
+        blob.len(),
+        24,
+        "one 16-byte component payload + two u32 lengths (ctrl_len = 0)"
+    );
+    assert_eq!(&blob[0..4], &16_u32.to_le_bytes());
+    assert_eq!(&blob[4..8], b"RFST");
+    assert_eq!(
+        &blob[20..24],
+        &0_u32.to_le_bytes(),
+        "single-component save frames an empty controller payload"
+    );
+    f64::from_le_bytes(blob[12..20].try_into().unwrap())
+}
+
 /// The `test_stateful` L1 round-trip: real `IBStream` state verbs
 /// through the production host bridge, out-of-process.
 ///
@@ -365,6 +419,171 @@ fn real_stateful_test_plugin_l1_rejects_malformed_state() {
 
     let valid = save_state(&mut host, handle);
     assert_eq!(component_gain(&valid), 1.0);
+
+    // Foreign short blob (< the 8-byte frame header) → passthrough →
+    // the component payload fails the codec → `PluginFailed`.
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: vec![0xAA, 0xBB],
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // A well-framed blob with a corrupted component magic →
+    // `PluginFailed` at `component.setState`.
+    let mut corrupt = valid.clone();
+    corrupt[4] ^= 0xFF;
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: corrupt,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // The rejected writes left the instance alive and its state
+    // surface intact — `SaveState` still returns the valid blob.
+    let still = save_state(&mut host, handle);
+    assert_eq!(still, valid, "rejected restores must not corrupt state");
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// The `test_stateful_single` L1 round-trip — the single-component
+/// class through the production host bridge's `single_component`
+/// arm, out-of-process. `getControllerClassId` reports the
+/// component's own CID → the bridge casts the shared object to
+/// `IEditController`, initializes it once, skips `IConnectionPoint`
+/// pairing, and frames saves with `ctrl_len = 0` (24 bytes).
+///
+/// Same wire-oracle shape as the distributed `test_stateful` case:
+/// save(initial, gain 1.0) → mutate to 0.75 via a `ParamValue`
+/// event → save(mutated) → mutate to 1.75 → save →
+/// restore(initial) → save == initial byte-exact → audio proves the
+/// restored gain drives the DSP — every state verb gated on
+/// delivered audio.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_single_test_plugin_l1_save_mutate_restore_save() {
+    assert_fixture_present();
+
+    let expected = expected_single_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(ruviform_plugin_core::LifecycleState::Processing)
+    );
+
+    // --- save(initial): default plain gain 1.0 — the 24-byte
+    // single-component frame (`ctrl_len = 0`) ---
+    let initial = save_state(&mut host, handle);
+    assert_eq!(single_component_gain(&initial), 1.0);
+    // Deterministic: an immediate second save is byte-identical.
+    let again = save_state(&mut host, handle);
+    assert_eq!(again, initial, "save → save is byte-identical");
+
+    // --- mutate → 0.75: normalized 0.375 → plain 0.75 @ offset 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    submit_block(
+        &mut host,
+        handle,
+        EventList::new(&events, FRAMES_U32).unwrap(),
+    );
+    // Gate: delivered ×0.75 audio proves the child processed the
+    // event block before the next state verb.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.375, -0.1875),
+        "delivered audio never showed the ×0.75 mutation"
+    );
+    let mutated = save_state(&mut host, handle);
+    assert_ne!(mutated, initial, "the mutation must change the blob");
+    assert_eq!(single_component_gain(&mutated), 0.75);
+
+    // --- mutate → 1.75: normalized 0.875 → plain 1.75 @ offset 0 ---
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.875).unwrap(),
+        }),
+    )];
+    submit_block(
+        &mut host,
+        handle,
+        EventList::new(&events, FRAMES_U32).unwrap(),
+    );
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.875, -0.4375),
+        "delivered audio never showed the ×1.75 mutation"
+    );
+    let third = save_state(&mut host, handle);
+    assert_eq!(single_component_gain(&third), 1.75);
+    assert_ne!(third, mutated);
+
+    // --- restore(initial) → save == initial, byte-exact ---
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: initial.clone(),
+    })
+    .unwrap();
+    let restored = save_state(&mut host, handle);
+    assert_eq!(
+        restored, initial,
+        "save → mutate → restore → save is byte-exact"
+    );
+
+    // Audio proves the restored gain drives the DSP: ×1.0 — `out`
+    // equals the constant input on both channels.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.5, -0.25),
+        "delivered audio never showed the restored ×1.0 gain"
+    );
+
+    // Clean teardown — the strict fixture `terminate` runs once
+    // here; a bridge double-terminate on the shared object would
+    // surface as a `PluginFailed` reply instead of `Ok`.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// Malformed state blobs on the single-component class are defined
+/// `PluginFailed` rejections — never silent accepts — and the
+/// instance survives: `SaveState` keeps working afterwards (the
+/// defined-rejection half of the single-component state contract,
+/// out-of-process).
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_single_test_plugin_l1_rejects_malformed_state() {
+    assert_fixture_present();
+
+    let expected = expected_single_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+
+    let valid = save_state(&mut host, handle);
+    assert_eq!(single_component_gain(&valid), 1.0);
 
     // Foreign short blob (< the 8-byte frame header) → passthrough →
     // the component payload fails the codec → `PluginFailed`.

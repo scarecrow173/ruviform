@@ -350,27 +350,24 @@ impl PluginProcessor for TestStatefulProcessor {
     }
 }
 
+/// A Vec-backed `IBStream` shared by the state-verb tests across
+/// the crate — the same file-like semantics the production
+/// `BridgeStream` implements (EOF-honest reads, zero-filled seek
+/// gaps, `int64` positions), minus the wire ceiling the tests do
+/// not need. `test_stateful` and `test_stateful_single` both drive
+/// their state-verb tests through it.
 #[cfg(test)]
-mod tests {
+pub(crate) mod test_stream {
     use super::*;
     use std::cell::RefCell;
 
-    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
-    use ruviform_plugin_core::{Event, ParamEvent, ParamValue};
     use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
-    use vst3::Steinberg::Vst::{IComponentTrait, IEditControllerTrait};
-    use vst3::Steinberg::{kNotImplemented, kResultFalse};
     use vst3::{Class, ComPtr, ComWrapper};
 
-    use crate::controller::ParamController;
-    use crate::preset::TestStatefulComponent;
     use crate::sdk_enum_i32;
 
-    /// A Vec-backed `IBStream` for the state-verb tests — the same
-    /// file-like semantics the production `BridgeStream` implements
-    /// (EOF-honest reads, zero-filled seek gaps, `int64` positions),
-    /// minus the wire ceiling the tests do not need.
-    struct TestStream {
+    /// See the module docs — a file-like `IBStream` test double.
+    pub(crate) struct TestStream {
         state: RefCell<TestStreamState>,
     }
 
@@ -381,7 +378,7 @@ mod tests {
 
     impl TestStream {
         /// An empty stream — the `getState` write target.
-        fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Self {
                 state: RefCell::new(TestStreamState {
                     data: Vec::new(),
@@ -392,7 +389,7 @@ mod tests {
 
         /// A stream pre-filled with `bytes` at position 0 — the
         /// `setState`/`setComponentState` read source.
-        fn from_bytes(bytes: Vec<u8>) -> Self {
+        pub(crate) fn from_bytes(bytes: Vec<u8>) -> Self {
             Self {
                 state: RefCell::new(TestStreamState {
                     data: bytes,
@@ -402,7 +399,7 @@ mod tests {
         }
 
         /// Drains the accumulated bytes — the `getState` read-out.
-        fn take_bytes(&self) -> Vec<u8> {
+        pub(crate) fn take_bytes(&self) -> Vec<u8> {
             std::mem::take(&mut self.state.borrow_mut().data)
         }
     }
@@ -525,11 +522,26 @@ mod tests {
     /// The `IBStream` COM pointer of a wrapped [`TestStream`] — the
     /// returned `ComPtr` owns a reference and must outlive the FFI
     /// call it feeds.
-    fn ib_stream(stream: &ComWrapper<TestStream>) -> ComPtr<IBStream> {
+    pub(crate) fn ib_stream(stream: &ComWrapper<TestStream>) -> ComPtr<IBStream> {
         stream
             .to_com_ptr::<IBStream>()
             .expect("TestStream must expose IBStream")
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_stream::{TestStream, ib_stream};
+    use super::*;
+
+    use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
+    use ruviform_plugin_core::{Event, ParamEvent, ParamValue};
+    use vst3::ComWrapper;
+    use vst3::Steinberg::Vst::{IComponentTrait, IEditControllerTrait};
+    use vst3::Steinberg::{kNotImplemented, kResultFalse};
+
+    use crate::controller::ParamController;
+    use crate::preset::TestStatefulComponent;
 
     /// `encode`/`decode` round-trips exactly — the determinism the
     /// save→restore→save oracle asserts.

@@ -276,6 +276,18 @@ impl<P: PluginProcessor> TestComponent<P> {
         self.input_surface = surface;
         self
     }
+
+    /// The shared lifecycle state — a read-only probe for wrappers
+    /// that layer class-specific contract strictness on the shared
+    /// machine (`test_stateful_single`'s strict `terminate`). A
+    /// borrow conflict reports `Failed`, so the caller's strict
+    /// check declines — consistent with the shared shell's
+    /// borrow-conflict → defined-rejection policy.
+    pub(crate) fn lifecycle_state(&self) -> LifecycleState {
+        self.state
+            .try_borrow()
+            .map_or(LifecycleState::Failed, |state| state.lifecycle.state())
+    }
 }
 
 /// Reads `IParameterChanges` into `events`: one [`ParamEvent`] per
