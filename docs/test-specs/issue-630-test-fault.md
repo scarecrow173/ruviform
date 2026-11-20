@@ -74,6 +74,13 @@ relations:
 - **hang_converges_on_timeout**: `command_timeout=500ms`、
   audio leg `Ok(CONTINUE)` 継続、`SaveState` → `Err(Ipc)`、
   `Failed{cause: Timeout}`、watchdog kill、`Destroy` bounded。
+  `command_timeout` は spawn hand-off・`Hello`・`Scan`・
+  `CreateInstance` の各 pre-mint wait にも共有されるため、
+  `instantiate` が `SpawnFailed{cause: Timeout}` で失敗する
+  環境 flake（pre-mint deadline 発火）は post-mint staleness
+  失敗と別 class — 分類ルール・定量・対処方針は
+  `docs/discovery/issue-841-spawn-deadline-flake.md`（ruviform#841）で
+  追跡する。
 - **bundled_crash_fans_out**: Bundled 2 instance、片方 abort →
   両方 `Failed` + 2 `InstanceFailed`。
 - **dedicated_isolation**: Dedicated で fault/gain 分離、fault
