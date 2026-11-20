@@ -152,8 +152,31 @@ fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
     }
 }
 
+/// Per-call counter deltas recorded around one `process` — the
+/// oracle's provenance record for the delivered block.
+/// `passthrough_submits` increments when the leg substitutes
+/// hold-last/silence output instead of a matched child block;
+/// `dropped_submits` increments when this call's input block —
+/// audio plus its queued events — never reached the child at all.
+/// A dropped submit also substitutes output, so `passthrough > 0`
+/// marks every non-matched block and `dropped` distinguishes event
+/// loss. Content/status asserts must count matched blocks only: a
+/// substituted block replays `last_output`, which can satisfy a
+/// pass-through sample, a `Continue` status, or a zero
+/// `tail_frames` without the child having rendered anything new.
+#[derive(Clone, Copy, Default)]
+struct LegDeltas {
+    /// `passthrough_submits` delta: `> 0` ⇒ substituted output.
+    passthrough: u64,
+    /// `dropped_submits` delta: `> 0` ⇒ this call's submit dropped.
+    dropped: u64,
+}
+
 /// One stereo block through `PluginHost::process` — `test_fault`
 /// declares the same single stereo port pair as `test_gain`.
+/// Returns the `ProcessResult` plus the leg's per-call counter
+/// deltas so callers can classify the delivered block as matched
+/// (`passthrough == 0`) or substituted (`passthrough > 0`).
 fn host_block(
     host: &mut PluginHost,
     handle: PluginHandle,
@@ -161,13 +184,26 @@ fn host_block(
     out_left: &mut [f32],
     out_right: &mut [f32],
     events: EventList<'_>,
-) -> Result<ProcessResult, HostError> {
+) -> (Result<ProcessResult, HostError>, LegDeltas) {
+    let counters = |h: &PluginHost| {
+        h.audio_counters(handle)
+            .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+    };
+    let before = counters(host);
     let input_view = PlanarBufferView::new(&input[..]).unwrap();
     let inputs = [HostInput(&input_view)];
     let mut out_list = [&mut *out_left, &mut *out_right];
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
-    host.process(handle, &inputs, &mut outputs, events, None)
+    let result = host.process(handle, &inputs, &mut outputs, events, None);
+    let after = counters(host);
+    (
+        result,
+        LegDeltas {
+            passthrough: after.0 - before.0,
+            dropped: after.1 - before.1,
+        },
+    )
 }
 
 /// One `Fault` `ParamValue` event at frame offset 0 — `normalized`
@@ -228,7 +264,10 @@ fn wait_host_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit, Fa
 
 /// Submits `blocks` clean pass-through blocks, returning how many
 /// produced non-silent (delivered) output — proves the child is
-/// actually processing before a fault is armed.
+/// actually processing before a fault is armed. Only *matched*
+/// calls count: substituted output replays an older `last_output`
+/// block — defined, but not this call's child rendering — so a
+/// stale replay must not accrue delivery evidence.
 fn drive_clean_blocks(host: &mut PluginHost, handle: PluginHandle, blocks: u32) -> u32 {
     let empty = EventList::empty(FRAMES_U32);
     let mut delivered = 0_u32;
@@ -239,17 +278,18 @@ fn drive_clean_blocks(host: &mut PluginHost, handle: PluginHandle, blocks: u32) 
         let mut out_left = [0.0_f32; FRAMES];
         let mut out_right = [0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block(
-                &mut *host,
-                handle,
-                &input,
-                &mut out_left,
-                &mut out_right,
-                empty,
-            ),
-            Ok(ProcessResult::CONTINUE)
+        let (result, deltas) = host_block(
+            &mut *host,
+            handle,
+            &input,
+            &mut out_left,
+            &mut out_right,
+            empty,
         );
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        if deltas.passthrough > 0 {
+            continue;
+        }
         if !(out_left.iter().all(|&s| sample_eq(s, 0.0))
             && out_right.iter().all(|&s| sample_eq(s, 0.0)))
         {
@@ -268,13 +308,14 @@ fn drive_clean_blocks(host: &mut PluginHost, handle: PluginHandle, blocks: u32) 
 
 /// Submits one block carrying `events` (empty slice = clean block)
 /// and returns the `ProcessResult` *plus* the delivered output
-/// channels — the oracle for the marker/state-bearing modes
-/// (`rt_alloc`'s `200.0` sample, `invalid`'s NaN block).
+/// channels and the leg's counter deltas — the oracle for the
+/// marker/state-bearing modes (`rt_alloc`'s `200.0` sample,
+/// `invalid`'s NaN block), classified per call.
 fn submit_block_full(
     host: &mut PluginHost,
     handle: PluginHandle,
     events: &[Event],
-) -> (ProcessResult, [f32; FRAMES], [f32; FRAMES]) {
+) -> (ProcessResult, [f32; FRAMES], [f32; FRAMES], LegDeltas) {
     let in_left = [0.5_f32; FRAMES];
     let in_right = [-0.25_f32; FRAMES];
     let input = [&in_left[..], &in_right[..]];
@@ -286,21 +327,23 @@ fn submit_block_full(
         EventList::new(events, FRAMES_U32).unwrap()
     };
     thread::sleep(Duration::from_millis(5));
-    let result = host_block(host, handle, &input, &mut out_left, &mut out_right, list)
-        .expect("process submit must be accepted");
-    (result, out_left, out_right)
+    let (result, deltas) = host_block(host, handle, &input, &mut out_left, &mut out_right, list);
+    let result = result.expect("process submit must be accepted");
+    (result, out_left, out_right, deltas)
 }
 
 /// Submits one block carrying `events` (empty slice = clean block)
-/// and returns the `ProcessResult` — asserts only that the submit
-/// was accepted (`Ok`); the status is the caller's oracle (an armed
-/// `error` block legitimately reports `ProcessStatus::Error`).
+/// and returns the `ProcessResult` plus the leg's counter deltas —
+/// asserts only that the submit was accepted (`Ok`); the status is
+/// the caller's oracle (an armed `error` block legitimately reports
+/// `ProcessStatus::Error`).
 fn submit_block_result(
     host: &mut PluginHost,
     handle: PluginHandle,
     events: &[Event],
-) -> ProcessResult {
-    submit_block_full(host, handle, events).0
+) -> (ProcessResult, LegDeltas) {
+    let (result, _out_left, _out_right, deltas) = submit_block_full(host, handle, events);
+    (result, deltas)
 }
 
 /// Submits one clean block — every call must stay
@@ -308,22 +351,34 @@ fn submit_block_result(
 /// host's defined choice, so callers assert on counters/lifecycle,
 /// not samples.
 fn submit_clean_block(host: &mut PluginHost, handle: PluginHandle) {
-    assert_eq!(
-        submit_block_result(host, handle, &[]),
-        ProcessResult::CONTINUE
-    );
+    let (result, _deltas) = submit_block_result(host, handle, &[]);
+    assert_eq!(result, ProcessResult::CONTINUE);
 }
 
-/// Arms the fault mode `normalized` — the L1 submit path is
-/// fire-and-forget and a busy child may drop a submit, so a single
-/// armed block is not a reliable arm (the `full_series` precedent
-/// rides the event on every block for the same reason). Repeating
-/// covers drops: crash/hang modes fire on the first block that
-/// lands, `error` stays armed until a `none` event, and post-fault
-/// submits stay defined (`Ok(CONTINUE)` or `Err(Failed)`).
+/// Cap on armed-submit resends — each resend is one call carrying
+/// the fault event; if none lands within the window the test fails
+/// honestly at the arm instead of polling an unarmed child
+/// downstream (the `NOTE_OFF_RESEND_CALLS` bound in
+/// `l1_real_test_plugin_e2e.rs`).
+const ARM_RESEND_CALLS: u32 = 8;
+
+/// Arms the fault mode `normalized`. A single armed block is not a
+/// reliable arm: the L1 submit path is fire-and-forget, and a busy
+/// slot or full channel drops the submit wholesale — events
+/// included (`dropped_submits`). The event therefore rides every
+/// call until a `dropped` delta of 0 reports a landing; re-sends
+/// are idempotent because the fixture keeps the *last* `Fault`
+/// event of a block and persists it across blocks (the `fault.rs`
+/// arming law). Crash/hang modes fire on the first block that
+/// lands, `error`/`rt_alloc`/`bad_time`/`invalid` stay armed until
+/// a `none` event, and post-fault submits stay defined
+/// (`Ok(CONTINUE)` or `Err(Failed)`). Asserts a landing within
+/// `ARM_RESEND_CALLS` — a silent unarmed run must fail here, not
+/// downstream.
 fn arm_fault(host: &mut PluginHost, handle: PluginHandle, normalized: f64) {
     let events = [fault_event(normalized)];
-    for _ in 0..4 {
+    let mut landed = false;
+    for _ in 0..ARM_RESEND_CALLS {
         let in_left = [0.5_f32; FRAMES];
         let in_right = [-0.25_f32; FRAMES];
         let input = [&in_left[..], &in_right[..]];
@@ -331,10 +386,21 @@ fn arm_fault(host: &mut PluginHost, handle: PluginHandle, normalized: f64) {
         let mut out_right = [0.0_f32; FRAMES];
         let list = EventList::new(&events, FRAMES_U32).unwrap();
         // The submit itself is accepted — the fault fires inside the
-        // child's `process()`, asynchronously.
-        let _ = host_block(host, handle, &input, &mut out_left, &mut out_right, list);
+        // child's `process()`, asynchronously. A `dropped` delta of 0
+        // means this call's block — event included — reached the
+        // child-side queue.
+        let (_result, deltas) =
+            host_block(host, handle, &input, &mut out_left, &mut out_right, list);
+        if deltas.dropped == 0 {
+            landed = true;
+            break;
+        }
         thread::sleep(Duration::from_millis(5));
     }
+    assert!(
+        landed,
+        "the armed submit never landed within {ARM_RESEND_CALLS} calls"
+    );
 }
 
 /// Lifecycle sanity + descriptor pin + clean pass-through: the
@@ -430,17 +496,15 @@ fn real_test_fault_l1_abort_fails_instance() {
     let input = [&in_left[..], &in_right[..]];
     let mut out_left = [7.0_f32; FRAMES];
     let mut out_right = [7.0_f32; FRAMES];
-    assert_eq!(
-        host_block(
-            &mut host,
-            handle,
-            &input,
-            &mut out_left,
-            &mut out_right,
-            EventList::empty(FRAMES_U32),
-        ),
-        Ok(ProcessResult::CONTINUE)
+    let (result, _deltas) = host_block(
+        &mut host,
+        handle,
+        &input,
+        &mut out_left,
+        &mut out_right,
+        EventList::empty(FRAMES_U32),
     );
+    assert_eq!(result, Ok(ProcessResult::CONTINUE));
     assert!(out_left.iter().all(|&s| sample_eq(s, 0.0)));
     assert!(out_right.iter().all(|&s| sample_eq(s, 0.0)));
 
@@ -666,18 +730,19 @@ fn real_test_fault_l1_dedicated_isolation() {
         let mut out_left = [0.0_f32; FRAMES];
         let mut out_right = [0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block(
-                &mut host,
-                gain,
-                &input,
-                &mut out_left,
-                &mut out_right,
-                empty,
-            ),
-            Ok(ProcessResult::CONTINUE)
+        let (result, deltas) = host_block(
+            &mut host,
+            gain,
+            &input,
+            &mut out_left,
+            &mut out_right,
+            empty,
         );
-        if out_left.iter().any(|&s| !sample_eq(s, 0.0)) {
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
+        // A substituted replay of an older delivered block is not
+        // evidence the isolated leg keeps rendering — count matched
+        // calls only.
+        if deltas.passthrough == 0 && out_left.iter().any(|&s| !sample_eq(s, 0.0)) {
             assert!(
                 out_left.iter().all(|&s| sample_eq(s, 0.5))
                     && out_right.iter().all(|&s| sample_eq(s, -0.25)),
@@ -733,8 +798,12 @@ fn real_test_fault_l1_error_is_defined_rejection() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut error_results = 0_u32;
     while Instant::now() < deadline && error_results < 2 {
-        let result = submit_block_result(&mut host, handle, &[fault_event(0.5)]);
-        if result.status == ProcessStatus::Error {
+        let (result, deltas) = submit_block_result(&mut host, handle, &[fault_event(0.5)]);
+        // `ProcessStatus::Error` only reaches the wire on a matched
+        // result — pass-through substitution always reports
+        // `Continue` — but classify anyway so the count's provenance
+        // stays uniform across the suite.
+        if deltas.passthrough == 0 && result.status == ProcessStatus::Error {
             error_results += 1;
         }
     }
@@ -759,7 +828,12 @@ fn real_test_fault_l1_error_is_defined_rejection() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut consecutive_continue = 0_u32;
     while Instant::now() < deadline && consecutive_continue < 6 {
-        let result = submit_block_result(&mut host, handle, &[]);
+        let (result, deltas) = submit_block_result(&mut host, handle, &[]);
+        if deltas.passthrough > 0 {
+            // Substituted — `Ok(CONTINUE)` replay, not evidence the
+            // child disarmed: neither counts nor breaks the streak.
+            continue;
+        }
         consecutive_continue = if result.status == ProcessStatus::Continue {
             consecutive_continue + 1
         } else {
@@ -808,9 +882,12 @@ fn real_test_fault_l1_rt_alloc_marks_armed_blocks() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut marked = 0_u32;
     while Instant::now() < deadline && marked < 2 {
-        let (result, out_left, out_right) =
+        let (result, out_left, out_right, deltas) =
             submit_block_full(&mut host, handle, &[fault_event(0.625)]);
-        if result.status == ProcessStatus::Continue
+        // Substituted replays can carry a stale marker — only a
+        // matched block is fresh evidence the armed child rendered.
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
             && sample_eq(out_left[0], 200.0)
             && out_left[1..].iter().all(|&s| sample_eq(s, 0.5))
             && out_right.iter().all(|&s| sample_eq(s, -0.25))
@@ -830,8 +907,9 @@ fn real_test_fault_l1_rt_alloc_marks_armed_blocks() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut clean = 0_u32;
     while Instant::now() < deadline && clean < 6 {
-        let (result, out_left, out_right) = submit_block_full(&mut host, handle, &[]);
-        if result.status == ProcessStatus::Continue
+        let (result, out_left, out_right, deltas) = submit_block_full(&mut host, handle, &[]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
             && out_left.iter().all(|&s| sample_eq(s, 0.5))
             && out_right.iter().all(|&s| sample_eq(s, -0.25))
         {
@@ -874,8 +952,11 @@ fn real_test_fault_l1_bad_time_claims_infinite_tail() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut claimed = 0_u32;
     while Instant::now() < deadline && claimed < 2 {
-        let result = submit_block_result(&mut host, handle, &[fault_event(0.75)]);
-        if result.status == ProcessStatus::Continue && result.tail_frames == u32::MAX {
+        let (result, deltas) = submit_block_result(&mut host, handle, &[fault_event(0.75)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && result.tail_frames == u32::MAX
+        {
             claimed += 1;
         }
     }
@@ -890,8 +971,13 @@ fn real_test_fault_l1_bad_time_claims_infinite_tail() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut clean = 0_u32;
     while Instant::now() < deadline && clean < 6 {
-        let result = submit_block_result(&mut host, handle, &[]);
-        if result.status == ProcessStatus::Continue && result.tail_frames == 0 {
+        let (result, deltas) = submit_block_result(&mut host, handle, &[]);
+        // A substituted call answers `Ok(CONTINUE)` with a zero tail
+        // — indistinguishable from a disarmed render until classified.
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && result.tail_frames == 0
+        {
             clean += 1;
         }
     }
@@ -927,9 +1013,12 @@ fn real_test_fault_l1_invalid_emits_nan_block() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut nan_blocks = 0_u32;
     while Instant::now() < deadline && nan_blocks < 2 {
-        let (result, out_left, out_right) =
+        let (result, out_left, out_right, deltas) =
             submit_block_full(&mut host, handle, &[fault_event(0.875)]);
-        if result.status == ProcessStatus::Continue
+        // Substituted replays can carry a stale NaN block — only a
+        // matched block is fresh evidence the armed child rendered.
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
             && out_left.iter().all(|s| s.is_nan())
             && out_right.iter().all(|s| s.is_nan())
         {
@@ -948,8 +1037,9 @@ fn real_test_fault_l1_invalid_emits_nan_block() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut clean = 0_u32;
     while Instant::now() < deadline && clean < 6 {
-        let (result, out_left, out_right) = submit_block_full(&mut host, handle, &[]);
-        if result.status == ProcessStatus::Continue
+        let (result, out_left, out_right, deltas) = submit_block_full(&mut host, handle, &[]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
             && out_left.iter().all(|&s| sample_eq(s, 0.5))
             && out_right.iter().all(|&s| sample_eq(s, -0.25))
         {

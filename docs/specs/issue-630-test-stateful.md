@@ -152,7 +152,13 @@ the real plugin ABI:
   audio proves the restored gain drives the DSP; plus a
   malformed-blob defined-rejection case. Every state verb is gated
   on *delivered audio* (distinct gain outputs self-identify
-  processed blocks through the L1 lookahead pipeline).
+  processed blocks through the L1 lookahead pipeline). The
+  delivered-audio gate counts *matched* calls only — per-call
+  `audio_counters` deltas classify `passthrough_submits > 0`
+  (substituted `last_output` replay) out — and each mutation
+  event is resent until a `dropped_submits` delta of 0 confirms
+  landing (the gain overwrite is idempotent; `ruviform#768`
+  oracle audit).
 - **`mise.toml`** — one added run line in `test-l1-real-plugin`
   selecting `--test l1_stateful_test_plugin_e2e -- --ignored`.
 - **Doc/evidence chain** for this slice.

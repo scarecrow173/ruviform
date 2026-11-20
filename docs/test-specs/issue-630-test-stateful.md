@@ -87,7 +87,13 @@ save/restore でき、restore 後の値が DSP を駆動し、malformed blob
   observation（distinct gain 1.0/0.75/1.75 が pairwise-distinct
   output を生む）の後にのみ送出する — async data plane の
   lookahead 経由で mutation event block が state verb を追い越す
-  race を排除する。
+  race を排除する。delivered-audio gate は per-call
+  `audio_counters` delta で matched call（`passthrough_submits`
+  delta == 0）のみを観測対象とし、substituted block（hold-last
+  `last_output` 再生）は分類して skip する。mutation event は
+  `dropped_submits` delta == 0 の着地確認まで bounded resend
+  （fixture law 上 gain overwrite は冪等）— 単発 submit は drop
+  で event ごと喪失し得るため。
 
 ## Examples
 
@@ -145,8 +151,13 @@ save/restore でき、restore 後の値が DSP を駆動し、malformed blob
 
 - **L1 ordering race**: async data plane の lookahead + fire-and-
   forget `process` submit で state verb が mutation event block
-  を追い越し得る → R8 の delivered-audio gate で排除。これが
-  drop されると flaky/misleading な round-trip failure を招く。
+  を追い越し得る → R8 の delivered-audio gate で排除。submit が
+  drop されると event ごと mutation が喪失し（`dropped_submits`）、
+  gate が必ず false になる flaky failure を招く → R8 の bounded
+  resend-until-landed で着地を確認する。substituted block
+  （hold-last 再生）を unclassified で計数すると stale output を
+  fresh evidence と誤認する → matched-only 分類で排除
+  （`ruviform#763` 同 class、`ruviform#768` 監査で確定）。
 - **VST3 component/controller domain ずれ**: component=plain /
   controller=normalized の変換が `setComponentState` で正しく
   行われないと restore 後の DSP gain がずれる → in-process
