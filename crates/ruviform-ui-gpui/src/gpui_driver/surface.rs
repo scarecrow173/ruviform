@@ -192,74 +192,6 @@ enum DeadKind {
     Container,
 }
 
-/// Issue #532 PoC — how the driver interposes on the compositor so a
-/// docked native child can be seen through GPUI's topmost DComp
-/// visual. Selected once per process by `RVF_SLOT_HOLE`; unset or
-/// unrecognized values mean `None` — the real-lane PoC measured both
-/// candidates unable to expose the child (`evidence/rf532/`), so the
-/// default preserves baseline behavior and each mode stays opt-in.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) enum HoleMode {
-    /// No interposition — the occluded baseline.
-    #[default]
-    None,
-    /// `SetWindowRgn` on the GPUI root HWND excluding each visible
-    /// slot rect — the window region clips the DComp content where
-    /// the child draws. Measured outcome (real lane): the child is
-    /// clipped with the band — the hole exposes the window behind,
-    /// and clicks fall through it (`real-os-input` regression).
-    Region,
-    /// Swapchain alpha hole — the scene leaves the slot rect
-    /// unpainted so the PREMULTIPLIED composition visual is
-    /// transparent there and the child shows through. Measured
-    /// outcome (real lane): the window does go transparent, but the
-    /// child is not composited beneath the topmost visual — the
-    /// hole still exposes the window behind, not the child.
-    Alpha,
-    /// Both interpositions applied at once.
-    Both,
-}
-
-impl HoleMode {
-    /// Whether the `SetWindowRgn` region-hole path runs.
-    pub(crate) fn region(self) -> bool {
-        matches!(self, Self::Region | Self::Both)
-    }
-
-    /// Whether the swapchain alpha-hole path runs — consumed by the
-    /// renderer (`native_slot_element` + covering-ancestor audit).
-    pub(crate) fn alpha(self) -> bool {
-        matches!(self, Self::Alpha | Self::Both)
-    }
-}
-
-/// The `RVF_SLOT_HOLE` selection, resolved once per process — the
-/// env var is a PoC experiment switch, not a consumer contract.
-pub(crate) fn hole_mode() -> HoleMode {
-    static MODE: std::sync::OnceLock<HoleMode> = std::sync::OnceLock::new();
-    *MODE.get_or_init(|| match std::env::var("RVF_SLOT_HOLE").ok().as_deref() {
-        Some("region") => HoleMode::Region,
-        Some("alpha") => HoleMode::Alpha,
-        Some("both") => HoleMode::Both,
-        _ => HoleMode::None,
-    })
-}
-
-/// What `SetWindowRgn` last applied to one owner window — the dedupe
-/// ledger for the region-hole mechanism. `shape` carries the frame's
-/// size and the client area's offset inside it (`off_x, off_y, w, h`
-/// in physical px): a resize must rebuild the region or the window
-/// stays cropped to stale dims.
-#[cfg(target_os = "windows")]
-#[derive(Debug, PartialEq)]
-struct AppliedRegion {
-    /// `(client_offset_x, client_offset_y, frame_w, frame_h)`.
-    shape: (i32, i32, i32, i32),
-    /// Excluded rects in client coordinates (physical px), sorted —
-    /// `(x, y, w, h)` per hole.
-    holes: Vec<(i32, i32, i32, i32)>,
-}
-
 /// Per-slot adapter bookkeeping. `container` exists exactly while a
 /// lease is live.
 struct Binding {
@@ -307,11 +239,6 @@ pub struct GpuiSurfaceAdapter {
     /// mirror the registry's `index_of` distinction (a stale id on an
     /// existing record is `StaleGeneration`, not `UnknownSlot`).
     released: BTreeSet<u32>,
-    /// `SetWindowRgn` applied state per owner window — Issue #532
-    /// region-hole PoC ledger. Windows-only: no backend means no
-    /// region mechanism exists on this target.
-    #[cfg(target_os = "windows")]
-    regions: BTreeMap<WindowId, AppliedRegion>,
 }
 
 impl GpuiSurfaceAdapter {
@@ -339,8 +266,6 @@ impl GpuiSurfaceAdapter {
             registry: SurfaceSlotRegistry::new(),
             bindings: BTreeMap::new(),
             released: BTreeSet::new(),
-            #[cfg(target_os = "windows")]
-            regions: BTreeMap::new(),
         }
     }
 
@@ -614,106 +539,6 @@ impl GpuiSurfaceAdapter {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    /// The slot's on-screen footprint for the region-hole mechanism
-    /// (Issue #532 PoC) — the client-coords rect the owner window's
-    /// `SetWindowRgn` should exclude. Only a live, visible lease
-    /// opens a hole: `clip` narrows the footprint when set (the
-    /// `project_slot_frame` ancestor-mask intersection), else the
-    /// full geometry rect. A declared-only, hidden, or
-    /// dead-container binding opens nothing.
-    #[cfg(target_os = "windows")]
-    fn hole_rect_of(&self, binding: &Binding) -> Option<PhysRect> {
-        let spec = self.registry.spec(binding.id)?;
-        if spec.visibility != SlotVisibility::Visible {
-            return None;
-        }
-        binding.container.as_ref().filter(|c| c.is_alive())?;
-        let rect = binding.clip.unwrap_or(spec.geometry.rect);
-        let hole = to_phys(rect, spec.geometry.scale_factor);
-        (hole.w > 0 && hole.h > 0).then_some(hole)
-    }
-
-    /// Reconciles every owner window's region hole with live slot
-    /// state — the Issue #532 interposition that excludes each
-    /// visible slot's rect from the GPUI root HWND's `SetWindowRgn`
-    /// region so the topmost DComp visual stops covering the native
-    /// child there. Holes follow slot state automatically: a hidden
-    /// or suppressed slot drops out of the desired set and the
-    /// window's default region is restored. The renderer calls this
-    /// once per painted frame from the slot suppression pass **only
-    /// when `hole_mode().region()` selects the mechanism** (the
-    /// `RVF_SLOT_HOLE` policy lives at the call site so this
-    /// reconcile stays deterministic); the applied ledger dedupes so
-    /// `SetWindowRgn` is reissued only on a real shape change (frame
-    /// resize counts — regions are window-relative).
-    ///
-    /// No-op off-Windows. Not a consumer op — the port never
-    /// exposes it.
-    #[cfg_attr(
-        not(target_os = "windows"),
-        expect(clippy::unused_self, reason = "no region backend on this target")
-    )]
-    pub(crate) fn sync_surface_regions(&mut self) {
-        #[cfg(target_os = "windows")]
-        self.sync_surface_regions_win32();
-    }
-
-    /// The Win32 body of [`Self::sync_surface_regions`].
-    ///
-    /// Borrow discipline: same rule as [`Self::sweep_dead`] —
-    /// `parent_of` borrows `inner` per call and never holds the guard
-    /// across `SetWindowRgn` (an OS call that may synchronously pump
-    /// `WM_*` into the window).
-    #[cfg(target_os = "windows")]
-    fn sync_surface_regions_win32(&mut self) {
-        // Desired hole rects per owner window (client coords).
-        let mut wanted: BTreeMap<WindowId, Vec<PhysRect>> = BTreeMap::new();
-        for binding in self.bindings.values() {
-            if let Some(hole) = self.hole_rect_of(binding) {
-                wanted.entry(binding.window).or_default().push(hole);
-            }
-        }
-        // A window that lost its last hole — slots hidden,
-        // suppressed, detached, or dead — gets its default region
-        // back and leaves the ledger.
-        let drained: Vec<WindowId> = self
-            .regions
-            .keys()
-            .copied()
-            .filter(|window| !wanted.contains_key(window))
-            .collect();
-        for window in drained {
-            if let Some(parent) = self.parent_of(window) {
-                let _ = backend::clear_region(parent);
-            }
-            self.regions.remove(&window);
-        }
-        for (window, mut holes) in wanted {
-            let Some(parent) = self.parent_of(window) else {
-                continue;
-            };
-            // `window_shape` fails only on a dead HWND — the window
-            // is teardown-bound; leave any applied entry for the
-            // drain pass once `inner` records the death.
-            let Some(shape) = backend::window_shape(parent) else {
-                continue;
-            };
-            holes.sort_by_key(|r| (r.x, r.y, r.w, r.h));
-            let desired = AppliedRegion {
-                shape,
-                holes: holes.iter().map(|r| (r.x, r.y, r.w, r.h)).collect(),
-            };
-            if self.regions.get(&window) == Some(&desired) {
-                continue;
-            }
-            // A failed apply keeps the stale ledger entry — the next
-            // frame retries rather than spamming the OS.
-            if backend::apply_region(parent, &desired).is_ok() {
-                self.regions.insert(window, desired);
             }
         }
     }
@@ -1150,16 +975,6 @@ impl SharedSurface {
     pub(crate) fn clip_of(&self, slot: SurfaceSlotId) -> Result<Option<LogicalRect>, SlotError> {
         Ok(self.read()?.clip_of(slot))
     }
-
-    /// [`GpuiSurfaceAdapter::sync_surface_regions`] — the Issue #532
-    /// region-hole reconcile. Crate-internal renderer seam, not a
-    /// consumer op: a borrow refusal is dropped rather than
-    /// `Backend`-mapped — the next painted frame retries the sync.
-    pub(crate) fn sync_surface_regions(&self) {
-        if let Ok(mut ops) = self.ops() {
-            ops.sync_surface_regions();
-        }
-    }
 }
 
 impl NativeSurfaceSlot for SharedSurface {
@@ -1260,19 +1075,17 @@ mod backend {
     use std::ptr;
 
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Graphics::Gdi::{
-        CombineRgn, CreateRectRgn, DeleteObject, HRGN, RGN_DIFF, SetWindowRgn,
-    };
+    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, HRGN, SetWindowRgn};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, SetFocus};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, GetWindowInfo, HWND_TOP, IsWindow, MoveWindow, SW_HIDE,
-        SW_SHOW, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOWINFO, WS_CHILD,
-        WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_VISIBLE,
+        CreateWindowExW, DestroyWindow, HWND_TOP, IsWindow, MoveWindow, SW_HIDE, SW_SHOW,
+        SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WS_CHILD, WS_CLIPCHILDREN,
+        WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     use ruviform_ui::SlotError;
 
-    use super::{AppliedRegion, PhysRect};
+    use super::PhysRect;
 
     /// The pre-registered Win32 `STATIC` class — a plain no-paint
     /// child surface. The embedded editor covers the client area.
@@ -1287,82 +1100,6 @@ mod backend {
         // SAFETY: `IsWindow` accepts any HWND value — a stale handle
         // simply reports false.
         unsafe { IsWindow(raw as HWND) != 0 }
-    }
-
-    /// `(client_offset_x, client_offset_y, frame_w, frame_h)` for the
-    /// region-hole computation (Issue #532 PoC) — `GetWindowInfo`
-    /// answers the frame rect and the client rect in screen coords in
-    /// one call; the client offset inside the frame is what shifts a
-    /// client-coords slot rect into window-region coordinates.
-    /// `None` on a dead HWND.
-    pub(super) fn window_shape(raw: usize) -> Option<(i32, i32, i32, i32)> {
-        let mut info: WINDOWINFO = unsafe { std::mem::zeroed() };
-        info.cbSize = size_of::<WINDOWINFO>() as u32;
-        // SAFETY: `info` is a valid cbSize-initialized WINDOWINFO; a
-        // stale HWND simply reports failure.
-        if unsafe { GetWindowInfo(raw as HWND, &mut info) } == 0 {
-            return None;
-        }
-        Some((
-            info.rcClient.left - info.rcWindow.left,
-            info.rcClient.top - info.rcWindow.top,
-            info.rcWindow.right - info.rcWindow.left,
-            info.rcWindow.bottom - info.rcWindow.top,
-        ))
-    }
-
-    /// Applies `applied`'s hole set as the window region of `raw`
-    /// (the GPUI root HWND — Issue #532 PoC): the region covers the
-    /// full frame minus each client-coords hole rect, so DComp
-    /// content is clipped exactly where a visible native slot draws
-    /// and the child shows through the hole.
-    ///
-    /// # Errors
-    /// [`SlotError::Backend`] when region construction or
-    /// `SetWindowRgn` fails; intermediate regions are freed on
-    /// failure rather than leaked.
-    pub(super) fn apply_region(raw: usize, applied: &AppliedRegion) -> Result<(), SlotError> {
-        let (off_x, off_y, w, h) = applied.shape;
-        // SAFETY: `CreateRectRgn` yields an owned HRGN; a successful
-        // `SetWindowRgn` transfers ownership to the OS (it must not
-        // be `DeleteObject`ed). On failure the region is still ours
-        // — free it explicitly instead of leaking.
-        unsafe {
-            let full = CreateRectRgn(0, 0, w, h);
-            if full.is_null() {
-                return Err(SlotError::Backend);
-            }
-            for &(x, y, hw, hh) in &applied.holes {
-                let hole = CreateRectRgn(off_x + x, off_y + y, off_x + x + hw, off_y + y + hh);
-                if hole.is_null() {
-                    DeleteObject(full);
-                    return Err(SlotError::Backend);
-                }
-                CombineRgn(full, full, hole, RGN_DIFF);
-                DeleteObject(hole);
-            }
-            if SetWindowRgn(raw as HWND, full, 1) == 0 {
-                DeleteObject(full);
-                return Err(SlotError::Backend);
-            }
-        }
-        Ok(())
-    }
-
-    /// Restores `raw`'s default window region —
-    /// `SetWindowRgn(hwnd, NULL)`, the documented region-clear
-    /// request. Called when a window's last slot hole disappears
-    /// (Issue #532 PoC).
-    ///
-    /// # Errors
-    /// [`SlotError::Backend`] when `SetWindowRgn` fails.
-    pub(super) fn clear_region(raw: usize) -> Result<(), SlotError> {
-        // SAFETY: `NULL` is the documented clear request and owns
-        // nothing — nothing to free on either outcome.
-        if unsafe { SetWindowRgn(raw as HWND, ptr::null_mut(), 1) } == 0 {
-            return Err(SlotError::Backend);
-        }
-        Ok(())
     }
 
     /// One native container surface (a child `HWND` of the slot's
@@ -1619,11 +1356,9 @@ mod tests {
     use std::ptr;
 
     use windows_sys::Win32::Foundation::{HWND, RECT};
-    use windows_sys::Win32::Graphics::Gdi::{
-        CreateRectRgn, DeleteObject, GetRgnBox, GetWindowRgn, PtInRegion,
-    };
+    use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, GetRgnBox, GetWindowRgn};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, MoveWindow, WS_DISABLED, WS_POPUP,
+        CreateWindowExW, DestroyWindow, WS_DISABLED, WS_POPUP,
     };
 
     use ruviform_ui::{
@@ -1633,7 +1368,7 @@ mod tests {
     };
 
     use super::backend::{self, Container};
-    use super::{AppliedRegion, GpuiSurfaceAdapter, PhysRect};
+    use super::{GpuiSurfaceAdapter, PhysRect};
     use crate::gpui_driver::{GpuiDriver, retire};
 
     /// An invisible, disabled, off-taskbar top-level window standing
@@ -1754,95 +1489,6 @@ mod tests {
             DeleteObject(probe);
             Some((r.left, r.top, r.right, r.bottom))
         }
-    }
-
-    /// `true` when the window-coords point (x, y) lies inside
-    /// `parent`'s current window region — `GetWindowRgn` copies into
-    /// `probe` so the OS-owned region is never touched. Points are
-    /// window-relative (the region's own coordinate space).
-    fn pt_in_parent_region(parent: &TestParent, x: i32, y: i32) -> bool {
-        unsafe {
-            let probe = CreateRectRgn(0, 0, 0, 0);
-            assert!(!probe.is_null());
-            let inside = GetWindowRgn(parent.0, probe) != 0 && PtInRegion(probe, x, y) != 0;
-            DeleteObject(probe);
-            inside
-        }
-    }
-
-    // Issue #532 PoC: `window_shape` + `apply_region` cut a
-    // client-coords hole out of the frame rect; `clear_region`
-    // restores the default region. `GetWindowRgn`/`PtInRegion`
-    // observe the mechanism deterministically — no compositing is
-    // needed to prove the region arithmetic.
-    #[test]
-    fn region_hole_apply_and_clear() {
-        let parent = TestParent::new();
-        // Grow the 1x1 fixture so a hole fits inside it — WS_POPUP
-        // has no chrome, so the client area equals the frame.
-        unsafe {
-            assert_ne!(MoveWindow(parent.0, 0, 0, 200, 200, 0), 0);
-        }
-        let shape = backend::window_shape(parent.raw()).expect("shape");
-        assert_eq!(shape, (0, 0, 200, 200));
-        backend::apply_region(
-            parent.raw(),
-            &AppliedRegion {
-                shape,
-                holes: vec![(50, 60, 100, 80)],
-            },
-        )
-        .unwrap();
-        assert!(
-            !pt_in_parent_region(&parent, 100, 100),
-            "hole center excluded"
-        );
-        assert!(
-            pt_in_parent_region(&parent, 10, 10),
-            "frame minus hole retained"
-        );
-        assert!(
-            pt_in_parent_region(&parent, 45, 55),
-            "left of the hole retained"
-        );
-        backend::clear_region(parent.raw()).unwrap();
-        assert_eq!(
-            region_box(parent.raw() as u64),
-            None,
-            "cleared region detaches from the window"
-        );
-    }
-
-    // Issue #532 PoC end-to-end: a visible leased slot opens a
-    // parent region hole at its client rect; hiding the slot
-    // restores the window's default region on the next reconcile.
-    #[test]
-    fn sync_surface_regions_applies_and_restores_parent_hole() {
-        let parent = TestParent::new();
-        unsafe {
-            assert_ne!(MoveWindow(parent.0, 0, 0, 400, 300, 0), 0);
-        }
-        let (driver, window) = driver_window(&parent);
-        let mut adapter = GpuiSurfaceAdapter::new(&driver);
-        let slot = adapter
-            .declare_slot(spec(window, rect(50.0, 60.0, 100.0, 80.0)))
-            .unwrap();
-        let _lease = adapter.lease_parent(slot).unwrap();
-        adapter.sync_surface_regions();
-        assert!(
-            !pt_in_parent_region(&parent, 100, 100),
-            "slot client rect holed"
-        );
-        assert!(pt_in_parent_region(&parent, 10, 10));
-        adapter
-            .set_visibility(slot, SlotVisibility::Hidden)
-            .unwrap();
-        adapter.sync_surface_regions();
-        assert_eq!(
-            region_box(parent.raw() as u64),
-            None,
-            "hidden slot restores the default region"
-        );
     }
 
     // Issue #404-1: `set_clip(None)` must issue `SetWindowRgn(NULL)`

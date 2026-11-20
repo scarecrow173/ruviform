@@ -15,6 +15,8 @@ relations:
     added:
       - type: "file"
         path: "evidence/rf532/poc-interposition-results.md"
+      - type: "file"
+        path: "evidence/rf532/option-a-results.md"
       - type: "doc"
         path: "docs/specs/issue-532-slot-compositing.md"
       - type: "doc"
@@ -24,6 +26,10 @@ relations:
         path: "crates/ruviform-ui-gpui/src/gpui_driver/surface.rs"
       - type: "file"
         path: "crates/ruviform-ui-gpui/src/render.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/Cargo.toml"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
@@ -98,3 +104,22 @@ GPUI を fork せずに `real-dcomp-pixel` を green にできるか。
 `{baseline,region,alpha3}-pixels/`。canonical run
 （`mise run test-ui-plugin-dock-real`、既定 `none`）は baseline と完全一致
 （19 pass / 1 既知 fail / 3 unsupported）。
+
+## 追補: Option-A 実施結果（fork 適用スライス）
+
+判定に従い `gpui` を `CreateTargetForHwnd(hwnd, false)` へ修正した git
+fork（tag `v0.2.2-rf1`）へ切り替え、PoC 機構を撤去し real lane を再実走
+（詳細: `evidence/rf532/option-a-results.md`）。**`real-dcomp-pixel` は
+引き続き fail（green 0.000）** で、verdict 構成・topmost ステージ画面
+capture SHA256 が baseline と完全一致 — 注入ビジュアルの z-order 変更は
+最終合成に観測可能な差を生じなかった。
+
+本 PoC 群（alpha-hole で「子画素はバンド内に存在しない」、region-hole で
+「子は親と共にクリップされる」）および dcomp-off probe（DComp 不使用でも
+screen green=0、child windowdc=1.000）と合わせると、遮蔽主体は注入
+ビジュアルではなく **GPUI ウィンドウの presentation plane 自体**
+（swapchain の合成/flip 経路が子 HWND を含むバンドを覆う）と見るのが
+全証拠と整合する。Option-A の前提「topmost ビジュアルが子を覆う」は実測で
+否定され、子 HWND の raster は正しく green（`PrintWindow` で 1.000）なのに
+画面へ到達しない。Issue #532 は open のまま、次候補は
+`option-a-results.md` に記録した。
