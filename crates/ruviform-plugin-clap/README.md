@@ -55,6 +55,29 @@ default feature 集合に含まない `host` を有効化すると、host 側 br
 既定の `Err(HostError::Unsupported)` のまま — bridge は規格 state/GUI 動詞を
 呼ばない（fixture の state 面は未実装・偽の round-trip を観測しない）。
 
+プラグイン → ホスト方向の出力イベント（Issue #842、Issue #630 残りスコープ）は
+中立レポート契約（Issue #253、`drain_output_reports`、wire `DrainOutputReports`）へ
+実装される。`process` はプラグインの `events.output` に永続 `EventBuffer` を包んだ
+`BoundedOutputBuffer` を渡す — clack 純正 `EventBuffer` の `try_push` は `Vec` を
+再確保して拒否しないため、件数上限 `MAX_EVENTS_PER_BLOCK` とイベント単体の
+バイト上限（`size_of::<TransportEvent>`）で `try_push` を `Err(TryPushError)` に
+落とす構造的 back-pressure を持たせる。バッファは `prepare` で事前確保され
+RT パスは再確保しない。`process` 終了後、バッファ内容を
+`adapt::translate_output_event` で中立 `Event` へ翻訳する — `ParamValue` は
+パラメータ探索 + 既存の正規化、`Midi`/`Midi2` は入力パスと同一の
+`translate_midi_event`、構造 note（`NoteOn`/`NoteOff`）は canonical `Midi`
+ノート写像へ畳み込む。翻訳結果は `frame_offset` で安定ソートして有界
+`pending_reports`（`MAX_EVENTS_PER_BLOCK`、未 drain 時の溢れは defined drop
+として計数）へ積み、`drain_output_reports`（非 RT、呼び出し側 `Vec` への
+`append`）で消費者へ引き渡す。未サポート/不正イベント、未知パラメータ、
+非有限の値/速度、バッファ拒否は全て defined skip として `report_stats`
+（`translated`/`skipped`/`refused`）へ正直に計数する。翻訳可能な値は忠実に
+運ぶ — `u32::MAX` スタンプは `frame_offset` が `u32` で表現可能なためそのまま
+届く（VST3 が block 境界外 offset を drop するのとは意図的に異なる選択 — 変形
+スタンプ自体が fault fixture の観測対象であり、Issue #253 契約はホストが
+offset を再解釈しない）。NaN 値は `ParamValue` が表現不能なため skip（0.0
+捏造はしない）。
+
 runner bin `ruviform-plugin-clap-l1-runner`（`[[bin]] required-features =
 ["host"]`）は compile-time 固定 — fixture cdylib
 `{DLL_PREFIX}ruviform_plugin_clap{DLL_SUFFIX}` を `RUVIFORM_L1_REAL_PLUGIN_DIR`
