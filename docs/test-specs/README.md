@@ -257,6 +257,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XWO2xGlAsmD12I1K5tl | Issue #631 Headless Scenario Console のテスト仕様 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | TSPEC-034YaYvGNtksNB54jY0Umq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 テスト仕様 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TSPEC-034YJ3x3sCrtx2chmCg7dk | Issue #631 RealOsGuiTest window-close/DPI 観測面のテスト仕様 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
+| TSPEC-01M7WJTWYS1655HDBKFJ31SN92 | Issue #631 editor input/focus verbs テスト仕様 — boundary 語彙・L0-only guard・fixture event log・title-suffix oracle の判定 | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-PwucpxWy6XmKiZkGa4xT4U | Issue #692 s2 Luau analyzer backend — テスト仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |

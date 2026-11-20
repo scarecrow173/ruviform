@@ -270,6 +270,7 @@ Directory: `docs/designs`
 | DESIGN-034XWNVav0w3OewvNDtAcm | Issue #631 Headless Scenario Console 設計 | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | DESIGN-034YaXW1QInVHHaV5zshvW | Issue #631 GPUI Test Lab / Scenario Console GUI v1 設計 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | DESIGN-034YJ0ge8DoTURTLqPKx6J | Issue #631 RealOsGuiTest window-close/DPI 観測面 設計 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
+| DESIGN-01M7WJTWYS9T4C5HCY30JGNV1V | Issue #631 editor input/focus verbs 設計 — 境界語彙・L0-only command・fixture event log・title-suffix oracle | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
 | DESIGN-034XEUiEWDih8GYy2D0ytt | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | DESIGN-EEySPRA3APW4bbQzAFGv0Y | Issue #650 bench-smoke lane coverage 拡張 — 設計 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | DESIGN-6X6G9umyA344m7SixphdpZ | Issue #692 s2 Luau analyzer backend — 設計 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |

@@ -238,6 +238,7 @@ Directory: `docs/specs`
 | SPEC-034XWNER8Uft0DiZcXZEtb | Issue #631 Headless Scenario Console（plugin-dock-console bin — merge 済 catalog の headless consumer） | approved | [issue-631-scenario-console.md](./issue-631-scenario-console.md) |
 | SPEC-034YaXUTzcBvabDver3uDY | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | SPEC-034YJ09qxi0m5ujyYTjO3u | Issue #631 RealOsGuiTest window-close/DPI 観測面 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
+| SPEC-01M7WJTWYSWBE3NTHK5GMTCT74 | Issue #631 editor input/focus verbs — EditorSessionOps set_focus/send_key、L0-only HostCommand、fixture event log による real-editor-input/focus Pass 化 | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
 | SPEC-034XEUi9KFfbJmIcNkynUU | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | SPEC-oY0DT4RkgQbMmPjZfQUKr0 | Issue #650 bench-smoke lane coverage 拡張（numeric / io-e2e）+ dev-env residual 同期 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | SPEC-WUXVb2PmGVTsr91ylmdD5J | Issue #692 s2 Luau analyzer backend — 仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
