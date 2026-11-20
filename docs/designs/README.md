@@ -314,6 +314,7 @@ Directory: `docs/designs`
 | DSN-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — 設計 | approved | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
 | DES-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe — 設計（container mutation family・verified-write・2 経路の試行順序） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | DES-034ZaaChildInventory001 | Issue #532 child-inventory probe — 設計 | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
+| DES-034ZaaRasterfix0000001 | Issue #532 raster-fix oracle + treatment arms — 設計 | approved | [issue-532-rasterfix.md](./issue-532-rasterfix.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
