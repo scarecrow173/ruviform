@@ -1073,24 +1073,102 @@ fn apply_recorded_state(
 #[expect(unsafe_code)]
 mod backend {
     use std::ptr;
+    use std::sync::Once;
+    use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, HRGN, SetWindowRgn};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, SetFocus};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, HWND_TOP, IsWindow, MoveWindow, SW_HIDE, SW_SHOW,
-        SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WS_CHILD, WS_CLIPCHILDREN,
-        WS_CLIPSIBLINGS, WS_VISIBLE,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW, HWND_TOP, IsWindow,
+        MoveWindow, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+        ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_VISIBLE,
     };
 
     use ruviform_ui::SlotError;
 
     use super::PhysRect;
 
-    /// The pre-registered Win32 `STATIC` class — a plain no-paint
-    /// child surface. The embedded editor covers the client area.
-    fn static_class() -> Vec<u16> {
-        "STATIC".encode_utf16().chain(std::iter::once(0)).collect()
+    /// The `HINSTANCE` the container class was registered under —
+    /// this process's executable (this crate is an rlib linked into
+    /// the host, never an unloadable DLL, so the class can never
+    /// outlive its module). Stored for `CreateWindowExW` so window
+    /// creation resolves the class under the same instance scope.
+    static CLASS_HINSTANCE: AtomicIsize = AtomicIsize::new(0);
+
+    /// Set once the private container class registration succeeded
+    /// (or an already-registered copy was confirmed via
+    /// `GetClassInfoW`).
+    static CLASS_REGISTERED: AtomicBool = AtomicBool::new(false);
+
+    /// The private container class — NUL-terminated
+    /// `"RuviformSlotContainer"`. The embedded editor covers the
+    /// client area, so the container itself stays a plain no-paint
+    /// child surface.
+    fn container_class() -> Vec<u16> {
+        "RuviformSlotContainer"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    /// Registers the private container class once per process. The
+    /// system `STATIC` class the container previously rode carries
+    /// `GCL_STYLE = 0x4088` (`CS_GLOBALCLASS | CS_PARENTDC |
+    /// CS_DBLCLKS`): `CS_PARENTDC` hands the window its parent's
+    /// device-context semantics, which the Issue #532 child-raster
+    /// diagnosis flagged as a suspect for the missing backing
+    /// raster under `DirectComposition`. This class registers
+    /// `style: 0` — no DC-ownership flag — and
+    /// `lpfnWndProc = DefWindowProcW`, so no crate code lives inside
+    /// the class and the class behaves like the no-paint surface the
+    /// slot contract assumes.
+    ///
+    /// A second registration attempt hits
+    /// `ERROR_CLASS_ALREADY_EXISTS`; the class is then confirmed via
+    /// `GetClassInfoW` before being accepted, never assumed.
+    fn ensure_container_class() -> bool {
+        static ONCE: Once = Once::new();
+        ONCE.call_once(|| {
+            let name = container_class();
+            // SAFETY: `GetModuleHandleW(NULL)` yields the exe
+            // instance that owns this class for the process's whole
+            // lifetime; `lpszClassName` outlives the registration
+            // via `mem::forget` (Windows does not copy it). The
+            // fallback `GetClassInfoW` is a read-only query.
+            unsafe {
+                let hinstance = GetModuleHandleW(ptr::null());
+                CLASS_HINSTANCE.store(hinstance as isize, Ordering::Relaxed);
+                let class = WNDCLASSW {
+                    style: 0,
+                    // `DefWindowProcW` — never a pointer into this
+                    // crate (same contract as the test-editor
+                    // fixture's registered class).
+                    lpfnWndProc: Some(DefWindowProcW),
+                    cbClsExtra: 0,
+                    cbWndExtra: 0,
+                    hInstance: hinstance,
+                    hIcon: ptr::null_mut(),
+                    hCursor: ptr::null_mut(),
+                    hbrBackground: ptr::null_mut(),
+                    lpszMenuName: ptr::null(),
+                    lpszClassName: name.as_ptr(),
+                };
+                if RegisterClassW(&raw const class) != 0 {
+                    CLASS_REGISTERED.store(true, Ordering::Release);
+                } else {
+                    // Possibly registered already (a second copy of
+                    // the host in this process) — verify the class
+                    // really exists before accepting it.
+                    let mut existing: WNDCLASSW = std::mem::zeroed();
+                    let exists = GetClassInfoW(hinstance, name.as_ptr(), &raw mut existing) != 0;
+                    CLASS_REGISTERED.store(exists, Ordering::Release);
+                }
+            }
+            std::mem::forget(name);
+        });
+        CLASS_REGISTERED.load(Ordering::Acquire)
     }
 
     /// `true` while `raw` names a live OS window. Only `false` is
@@ -1114,8 +1192,9 @@ mod backend {
         /// Creates the container at `rect` under `parent` (an HWND).
         ///
         /// # Errors
-        /// [`SlotError::Backend`] when `parent` is not a live window
-        /// or `CreateWindowExW` fails.
+        /// [`SlotError::Backend`] when `parent` is not a live window,
+        /// the private container class could not be registered, or
+        /// `CreateWindowExW` fails.
         pub(super) fn create(parent: usize, rect: PhysRect) -> Result<Self, SlotError> {
             // Never parent under a dead or never-created HWND — the
             // OS would fail the create anyway, and the explicit
@@ -1124,14 +1203,23 @@ mod backend {
             if !os_window_alive(parent) {
                 return Err(SlotError::Backend);
             }
+            // The private class is part of the fix contract — a
+            // registration failure must fail the create honestly,
+            // never silently fall back to `STATIC` and re-introduce
+            // the `CS_PARENTDC` semantics this change removes.
+            if !ensure_container_class() {
+                return Err(SlotError::Backend);
+            }
             // SAFETY: `parent` is a live HWND captured from gpui's own
             // window via `HasWindowHandle`; the class name is a valid
-            // NUL-terminated system class. The returned HWND is owned
-            // by this container until `DestroyWindow` in `Drop`.
+            // NUL-terminated class registered by
+            // `ensure_container_class` under `CLASS_HINSTANCE`. The
+            // returned HWND is owned by this container until
+            // `DestroyWindow` in `Drop`.
             let hwnd = unsafe {
                 CreateWindowExW(
                     0,
-                    static_class().as_ptr(),
+                    container_class().as_ptr(),
                     ptr::null(),
                     WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                     rect.x,
@@ -1140,7 +1228,7 @@ mod backend {
                     rect.h,
                     parent as *mut core::ffi::c_void,
                     ptr::null_mut(),
-                    ptr::null_mut(),
+                    CLASS_HINSTANCE.load(Ordering::Relaxed) as *mut core::ffi::c_void,
                     ptr::null(),
                 )
             };
@@ -1358,7 +1446,8 @@ mod tests {
     use windows_sys::Win32::Foundation::{HWND, RECT};
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, GetRgnBox, GetWindowRgn};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DestroyWindow, WS_DISABLED, WS_POPUP,
+        CreateWindowExW, DestroyWindow, GCL_STYLE, GetClassLongPtrW, GetClassNameW, WS_DISABLED,
+        WS_POPUP,
     };
 
     use ruviform_ui::{
@@ -1520,6 +1609,47 @@ mod tests {
             region_box(container.token()),
             None,
             "NULL region request must clear the attached region"
+        );
+    }
+
+    // Issue #532 fix arm (a): the container must be the private
+    // `RuviformSlotContainer` class — not system `STATIC` — and that
+    // class must carry no `CS_PARENTDC` bit, so the container's DC
+    // semantics stay its own.
+    #[test]
+    fn container_uses_private_class_without_parentdc() {
+        let parent = TestParent::new();
+        let container = Container::create(
+            parent.raw(),
+            PhysRect {
+                x: 0,
+                y: 0,
+                w: 64,
+                h: 64,
+            },
+        )
+        .unwrap();
+        let hwnd = container.token() as HWND;
+        // SAFETY: `hwnd` is a live window this test just created;
+        // `name` is a writable buffer for the class-name copy.
+        let (name, class_style) = unsafe {
+            let mut name = [0u16; 64];
+            let len = GetClassNameW(
+                hwnd,
+                name.as_mut_ptr(),
+                i32::try_from(name.len()).expect("buffer fits i32"),
+            );
+            assert!(len > 0, "GetClassNameW must report the class");
+            (
+                String::from_utf16_lossy(&name[..len as usize]),
+                GetClassLongPtrW(hwnd, GCL_STYLE) as u64,
+            )
+        };
+        assert_eq!(name, "RuviformSlotContainer");
+        assert_eq!(
+            class_style & 0x0080,
+            0,
+            "CS_PARENTDC (0x0080) must be absent from the private class"
         );
     }
 

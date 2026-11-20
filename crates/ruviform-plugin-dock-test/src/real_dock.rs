@@ -1,12 +1,13 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
 //! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`/
 //! `real-dcomp-present`/`real-dcomp-uncovered`/`real-dcomp-bandescape`/
-//! `real-dcomp-childinv` added by the Issue #532 dcomp-pixel/
-//! foreground-probe/presentation-probe/uncovered-baseline/band-escape/
-//! child-inventory slices).
+//! `real-dcomp-childinv`/`real-dcomp-rasterfix` added by the Issue
+//! #532 dcomp-pixel/foreground-probe/presentation-probe/
+//! uncovered-baseline/band-escape/child-inventory/fix-oracle
+//! slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-seven
+//! windows* through [`RealOsGuiTest`] and records the twenty-eight
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -57,6 +58,13 @@
 //! |                         |             | `GPUI_DISABLE_DIRECT_COMPOSITION` の正直な        |
 //! |                         |             | env-arm 記録、child-level layered/reparent retry。 |
 //! |                         |             | verdict は probe 実行+復元+lifecycle のみ          |
+//! | `real-dcomp-rasterfix`  | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — fix oracle: |
+//! |                         |             | baseline → pump(`UpdateWindow`+bounded `WM_PAINT`   |
+//! |                         |             | dispatch)→ reparent-to-desktop+drain → top-level    |
+//! |                         |             | layered の各 arm で raster(window DC)+screen green |
+//! |                         |             | を採取し検証付き復元。`Pass` はいずれかの arm の   |
+//! |                         |             | screen green ≥ 0.5 + 実行+復元+lifecycle — arm     |
+//! |                         |             | 成功だけで緑なしなら正直な `Fail`                  |
 //! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
@@ -585,7 +593,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 27] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 28] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -674,6 +682,16 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 27] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_childinv_case,
+        },
+        ScenarioEntry {
+            case: "real-dcomp-rasterfix",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_rasterfix_case,
         },
         ScenarioEntry {
             case: "real-multiwindow-focus",
@@ -1301,7 +1319,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1355,7 +1373,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -7751,6 +7769,722 @@ fn real_dcomp_childinv_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) 
 }
 
 // ---------------------------------------------------------------------
+// case: real-dcomp-rasterfix (Issue #532 fix-oracle slice)
+// ---------------------------------------------------------------------
+
+/// The raster-fix case's labels — `rf_*` step names and the PNG
+/// artifact prefix.
+const RF_LABELS: ProbeLabels = ProbeLabels {
+    step: "rf",
+    artifact: "real-dcomp-rasterfix",
+};
+
+/// Step-row names for the reparent stage's four
+/// `osmut::reparent_to_desktop` ops, in issue order.
+const RF_REPARENT_OPS: [&str; 4] = [
+    "rf_apply_reparent_exstyle",
+    "rf_apply_reparent_frame",
+    "rf_apply_reparent_parent",
+    "rf_apply_reparent_rect",
+];
+
+/// Step-row names for the layered stage's three
+/// `osmut::apply_layered` ops, in issue order.
+const RF_LAYERED_OPS: [&str; 3] = [
+    "rf_apply_layered_exstyle",
+    "rf_apply_layered_frame",
+    "rf_apply_layered_lwa",
+];
+
+/// The aggregated raster-fix probe outcome — the probe's own
+/// execution verdict inputs plus the fix-oracle data: which arm,
+/// if any, produced the user-visible screen green this case exists
+/// to prove.
+#[derive(Debug, Default)]
+struct RasterfixProbeOutcome {
+    /// `false` when the baseline could not be taken — the case then
+    /// reports `NotRun`, never a fabricated verdict.
+    evaluated: bool,
+    /// Every mutating op applied (reparent/layered arms). The
+    /// paint-drain rows are treatment data, not verdict inputs —
+    /// their `applied`/`dispatched`/`cleared` fields are recorded
+    /// but never required for `executed`.
+    executed: bool,
+    /// `osmut::restore_container` verification passed — parent,
+    /// exstyle, and screen rect back to baseline and every restore
+    /// op applied.
+    restored: bool,
+    /// First violated probe check (`name: detail`).
+    failure: Option<String>,
+    /// The arm whose stage produced user-visible screen green ≥
+    /// [`GREEN_VISIBLE_FRACTION`] — `"baseline"`/`"pump"`/
+    /// `"reparent"`/`"layered"`. `None` means every evaluated arm
+    /// left the child covered — an honestly rejected hypothesis,
+    /// never a probe-internal failure.
+    fix_arm: Option<&'static str>,
+    /// Per-stage screen (`<stage>`) and window-DC
+    /// (`<stage>_raster`) green fractions — `Value::Null` per stage
+    /// when the capture failed.
+    greens: Map<String, Value>,
+}
+
+impl RasterfixProbeOutcome {
+    /// Probe could not be evaluated — records a `not_run` row and
+    /// returns the honest outcome with the reason carried through.
+    fn not_evaluable(steps: &mut Vec<Value>, reason: &str) -> Self {
+        steps.push(json!({
+            "step": "rf_probe",
+            "verdict": "not_run",
+            "reason": reason,
+        }));
+        Self {
+            failure: Some(reason.to_string()),
+            ..Self::default()
+        }
+    }
+
+    /// Off-Windows / unsupported platform — records an
+    /// `unsupported` row; unreachable today (`NativePluginDock` is
+    /// Windows-only) but kept honest.
+    fn unsupported(steps: &mut Vec<Value>) -> Self {
+        steps.push(json!({
+            "step": "rf_probe",
+            "verdict": "unsupported",
+            "detail": "OS window-state mutation is Windows-only",
+        }));
+        Self::default()
+    }
+}
+
+/// Plain-JSON form of one [`osmut::PaintDrainOutcome`].
+fn drain_paint_json(outcome: &osmut::PaintDrainOutcome) -> Value {
+    json!({
+        "supported": outcome.supported,
+        "hwnd": outcome.hwnd,
+        "update_before": outcome.update_before,
+        "ops": outcome.ops.iter().map(container_mutation_json).collect::<Vec<_>>(),
+        "dispatched": outcome.dispatched,
+        "update_after": outcome.update_after,
+        "cleared": outcome.cleared,
+    })
+}
+
+/// The bounded settle after a mutated presentation stage — same
+/// contract as [`be_settle`], labelled for this case.
+fn rf_settle(stage: &str, steps: &mut Vec<Value>) {
+    std::thread::sleep(Duration::from_millis(BE_SETTLE_MS));
+    steps.push(json!({
+        "step": "rf_settle",
+        "verdict": "note",
+        "stage": stage,
+        "settle_ms": BE_SETTLE_MS,
+        "settle_kind": "std::thread::sleep",
+    }));
+}
+
+/// One `rf_drain` row — the bounded paint-drain outcome at `stage`.
+fn rf_drain_row(steps: &mut Vec<Value>, stage: &str, drain: &osmut::PaintDrainOutcome) {
+    steps.push(json!({
+        "step": "rf_drain",
+        "verdict": "note",
+        "stage": stage,
+        "drain": drain_paint_json(drain),
+    }));
+}
+
+/// One `rf_screen` capture row at `stage` — the screen-composited
+/// green fraction, returned for the fix oracle (`None` when the
+/// capture failed; the row records the error honestly either way).
+fn rf_screen_green(
+    steps: &mut Vec<Value>,
+    stage: &str,
+    index: usize,
+    hwnd: u64,
+    artifacts: Option<&Path>,
+) -> Option<f64> {
+    let result = ospix::window_screen_rect(hwnd).and_then(ospix::capture_screen_rect);
+    let fraction = result.as_ref().ok().map(|capture| {
+        let (green, total) = green_stats(&capture.rgba);
+        green_fraction(green, total)
+    });
+    record_present_capture(
+        steps,
+        "rf_screen",
+        index,
+        "editor_child",
+        hwnd,
+        "screen",
+        None,
+        &result,
+        artifacts,
+        &format!("real-dcomp-rasterfix-screen-{stage}-c{index}"),
+    );
+    fraction
+}
+
+/// One `rf_raster` window-DC capture row at `stage` — the child's
+/// own backing-surface green fraction, the raster-present
+/// diagnostic the screen capture is compared against. Returned for
+/// the oracle summary (`None` when the capture failed).
+fn rf_raster_green(
+    steps: &mut Vec<Value>,
+    stage: &str,
+    index: usize,
+    hwnd: u64,
+    artifacts: Option<&Path>,
+) -> Option<f64> {
+    let result = ospix::capture_window_dc(hwnd);
+    let fraction = result.as_ref().ok().map(|capture| {
+        let (green, total) = green_stats(&capture.rgba);
+        green_fraction(green, total)
+    });
+    record_present_capture(
+        steps,
+        "rf_raster",
+        index,
+        "editor_child",
+        hwnd,
+        "windowdc",
+        None,
+        &result,
+        artifacts,
+        &format!("real-dcomp-rasterfix-windowdc-{stage}-c{index}"),
+    );
+    fraction
+}
+
+/// The raster-fix oracle probe — runs while the editor is still
+/// attached, on `observation.children[0]` (the fixture's single
+/// editor child, owned by this caller thread). Sequence:
+///
+/// 1. `rf_baseline_state` + baseline observation — container/child/
+///    root snapshots and the baseline screen green. A baseline that
+///    already meets [`GREEN_VISIBLE_FRACTION`] means the fix under
+///    test (private container class) reached the screen unaided —
+///    the arms are skipped, `fix_arm = "baseline"`.
+/// 2. Arm `pump` (a2) — `osmut::drain_paint` (`UpdateWindow` +
+///    bounded caller-thread `WM_PAINT` dispatch) while still
+///    docked, then raster + screen evidence. Discriminates the
+///    `update_pending` hypothesis.
+/// 3. Arm `reparent` (b-variant) — `osmut::reparent_to_desktop` on
+///    the child + `HWND_TOPMOST` promotion (a reparented
+///    `WS_CHILD` window otherwise stays below every top-level
+///    sibling, making the screen oracle race unrelated z-order),
+///    then `drain_paint` + raster + screen evidence: whether a
+///    top-level window with a real raster escapes GPUI's
+///    presentation plane.
+/// 4. Arm `layered` — `osmut::apply_layered` on the now-top-level
+///    child (where the bit latches), then the same evidence: the
+///    layered-surface airspace path.
+/// 5. `rf_restore` — `osmut::restore_container` with verified
+///    parent/exstyle/rect.
+///
+/// The case `Pass` requires one arm's screen green —
+/// `fix_arm` — plus executed + restored + lifecycle. A probe that
+/// ran cleanly but never produced screen green reports `Fail`:
+/// the hypotheses are honestly rejected, never upgraded to a pass
+/// on setup success alone.
+#[expect(clippy::too_many_lines)]
+fn rasterfix_probe_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> RasterfixProbeOutcome {
+    let Some(token) = container else {
+        return RasterfixProbeOutcome::not_evaluable(
+            steps,
+            "no container token — the container cannot be resolved",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return RasterfixProbeOutcome::not_evaluable(
+                steps,
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => {
+            return RasterfixProbeOutcome::not_evaluable(
+                steps,
+                "top-level presentation query failed",
+            );
+        }
+    }
+    if observation.children.is_empty() {
+        return RasterfixProbeOutcome::not_evaluable(steps, "no observed child HWNDs to probe");
+    }
+
+    let child = &observation.children[0];
+    let container_snapshot = osmut::observe_container(token);
+    let child_baseline = osmut::observe_container(child.hwnd);
+    let root_snapshot = osmut::observe(child.hwnd);
+    steps.push(json!({
+        "step": "rf_baseline_state",
+        "verdict": "note",
+        "container": container_snapshot_json(&container_snapshot),
+        "child": container_snapshot_json(&child_baseline),
+        "root_snapshot": snapshot_json(&root_snapshot),
+        "caller_thread": observation.caller_thread,
+        "container_thread": observation.container_thread,
+    }));
+
+    let mut outcome = RasterfixProbeOutcome {
+        evaluated: true,
+        executed: true,
+        restored: true,
+        failure: None,
+        fix_arm: None,
+        greens: Map::new(),
+    };
+    observe_all_children("baseline", observation, token, artifacts, steps, RF_LABELS);
+    let baseline_green = rf_screen_green(steps, "baseline", 0, child.hwnd, artifacts);
+    outcome
+        .greens
+        .insert("baseline".to_string(), json!(baseline_green));
+
+    if baseline_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+        outcome.fix_arm = Some("baseline");
+        steps.push(json!({
+            "step": "rf_arms",
+            "verdict": "note",
+            "skipped": true,
+            "reason": "baseline screen green already meets the \
+                       threshold — the treatment arms are unnecessary",
+        }));
+        return outcome;
+    }
+
+    // Arm (a2) — drain the child's pending paint while still
+    // docked. The drain rows are note-level: a refused
+    // `UpdateWindow` or an empty queue is data, not a verdict
+    // input — the update-region state discriminates the
+    // hypothesis.
+    let drain = osmut::drain_paint(child.hwnd);
+    rf_drain_row(steps, "pump", &drain);
+    let pump_raster = rf_raster_green(steps, "pump", 0, child.hwnd, artifacts);
+    outcome
+        .greens
+        .insert("pump_raster".to_string(), json!(pump_raster));
+    rf_settle("pump", steps);
+    let pump_green = rf_screen_green(steps, "pump", 0, child.hwnd, artifacts);
+    outcome.greens.insert("pump".to_string(), json!(pump_green));
+    observe_all_children("pump", observation, token, artifacts, steps, RF_LABELS);
+
+    if pump_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+        outcome.fix_arm = Some("pump");
+        return outcome;
+    }
+
+    // Arm (b-variant) — reparent the child to the desktop and
+    // present its raster there. The restore contract needs the
+    // baseline parent/exstyle/rect; an unreadable baseline skips
+    // the arm honestly (the probe then reports no fix arm).
+    if !child_baseline.supported
+        || !child_baseline.alive
+        || child_baseline.parent.is_none()
+        || child_baseline.exstyle.is_none()
+        || child_baseline.rect.is_none()
+    {
+        steps.push(json!({
+            "step": "rf_reparent",
+            "verdict": "not_run",
+            "reason": "child baseline parent/exstyle/rect could not \
+                       be read — the reparent arm cannot restore",
+        }));
+        // Not every planned arm ran — the probe did not complete,
+        // so the outcome can never claim the reparent/layered
+        // hypotheses were tested and rejected.
+        outcome.executed = false;
+        outcome.failure = Some(
+            "child baseline parent/exstyle/rect could not be read — \
+             the reparent/layered arms were never attempted"
+                .to_string(),
+        );
+        return outcome;
+    }
+    let (baseline_exstyle, baseline_rect) =
+        match (child_baseline.exstyle.as_ref(), child_baseline.rect) {
+            (Some(exstyle), Some(rect)) => (exstyle.value, rect),
+            _ => unreachable!("baseline exstyle/rect guarded above"),
+        };
+
+    let reparent_ops = osmut::reparent_to_desktop(child.hwnd, baseline_exstyle, baseline_rect);
+    for (step_name, op) in RF_REPARENT_OPS.iter().zip(reparent_ops.iter()) {
+        record_container_apply_row(steps, step_name, op);
+        fold_container_op(&mut outcome.executed, &mut outcome.failure, step_name, op);
+    }
+    // A reparented `WS_CHILD`-styled window stays below every
+    // top-level window in the desktop's child z-list — `HWND_TOP`
+    // only raises within the child band (observed: 37 siblings
+    // still above it), so without promotion the screen oracle
+    // races unrelated z-order state. `HWND_TOPMOST` lifts the
+    // window into the topmost band deterministically: the arm
+    // then measures whether the child's raster composites, not
+    // which sibling happens to cover it. The baseline restore
+    // still re-parents, rewrites the baseline exstyle (clearing
+    // `WS_EX_TOPMOST`), and re-seats the rect.
+    let topmost = osmut::set_topmost(child.hwnd);
+    record_apply_row(steps, "rf_apply_topmost", &topmost, true);
+    if !topmost.applied {
+        outcome.executed = false;
+        outcome.failure.get_or_insert_with(|| {
+            format!(
+                "set_topmost refused (win32 error {})",
+                topmost
+                    .win32_error
+                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+            )
+        });
+    }
+    rf_settle("reparent", steps);
+    // Present the raster while top-level — the same-thread drain
+    // applies identically once the child is desktop-parented.
+    let drain = osmut::drain_paint(child.hwnd);
+    rf_drain_row(steps, "reparent", &drain);
+    let reparent_raster = rf_raster_green(steps, "reparent", 0, child.hwnd, artifacts);
+    outcome
+        .greens
+        .insert("reparent_raster".to_string(), json!(reparent_raster));
+    let reparent_green = rf_screen_green(steps, "reparent", 0, child.hwnd, artifacts);
+    outcome
+        .greens
+        .insert("reparent".to_string(), json!(reparent_green));
+    observe_all_children("reparent", observation, token, artifacts, steps, RF_LABELS);
+
+    if reparent_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+        outcome.fix_arm = Some("reparent");
+    } else {
+        // The layered-surface airspace path — the bit the
+        // child-level write refused now latches on a top-level
+        // window; `LWA_ALPHA=255` keeps the window visually
+        // identical while its composition rides a layered surface.
+        let layered_ops = osmut::apply_layered(child.hwnd);
+        for (step_name, op) in RF_LAYERED_OPS.iter().zip(layered_ops.iter()) {
+            record_container_apply_row(steps, step_name, op);
+            fold_container_op(&mut outcome.executed, &mut outcome.failure, step_name, op);
+        }
+        rf_settle("layered", steps);
+        let drain = osmut::drain_paint(child.hwnd);
+        rf_drain_row(steps, "layered", &drain);
+        let layered_raster = rf_raster_green(steps, "layered", 0, child.hwnd, artifacts);
+        outcome
+            .greens
+            .insert("layered_raster".to_string(), json!(layered_raster));
+        let layered_green = rf_screen_green(steps, "layered", 0, child.hwnd, artifacts);
+        outcome
+            .greens
+            .insert("layered".to_string(), json!(layered_green));
+        observe_all_children("layered", observation, token, artifacts, steps, RF_LABELS);
+        if layered_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+            outcome.fix_arm = Some("layered");
+        }
+    }
+
+    // Verified restore — always runs once the reparent arm
+    // mutated, whatever the green outcome was; a "fix" the
+    // restore cannot undo is never claimed.
+    let restore = osmut::restore_container(&child_baseline);
+    let restore_ops_ok = restore.ops.iter().all(|op| op.applied);
+    outcome.restored = restore.parent_restored
+        && restore.exstyle_restored
+        && restore.rect_restored
+        && restore_ops_ok;
+    steps.push(json!({
+        "step": "rf_restore",
+        "verdict": if outcome.restored { "pass" } else { "fail" },
+        "restore": container_restore_json(&restore),
+        "note": "child parent, raw GWL_EXSTYLE, and screen rect \
+                 verified deterministically; sibling z-order is \
+                 best-effort — zorder_before/after record what \
+                 could and could not be restored",
+    }));
+    if !outcome.restored {
+        outcome.executed = false;
+        outcome.failure.get_or_insert_with(|| {
+            format!(
+                "child restore verification failed (parent_restored={}, \
+                 exstyle_restored={}, rect_restored={}, ops_ok={})",
+                restore.parent_restored,
+                restore.exstyle_restored,
+                restore.rect_restored,
+                restore_ops_ok
+            )
+        });
+    }
+    observe_all_children("restore", observation, token, artifacts, steps, RF_LABELS);
+
+    outcome
+}
+
+/// Verification for `real-dcomp-rasterfix` — the lifecycle contract
+/// plus the fix-oracle probe outcome. Unlike the diagnostic cases,
+/// `fix_arm` IS a verdict input: `Pass` requires one arm to have
+/// produced the user-visible screen result.
+struct RasterfixVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence).
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated probe outcome (execution + fix oracle).
+    probe: RasterfixProbeOutcome,
+    /// `observed` extras — container/child ids, threads, events,
+    /// probe + oracle summary.
+    extras: Value,
+}
+
+/// Post-open raster-fix observation + close convergence — the
+/// `real-dcomp-rasterfix` counterpart of
+/// [`observe_editor_childinv_probe`].
+fn observe_editor_rasterfix_probe(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> RasterfixVerification {
+    let mut failure: Option<String> = None;
+
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    let probe = if observation.supported {
+        rasterfix_probe_children(&observation, container, artifacts, steps)
+    } else {
+        RasterfixProbeOutcome::unsupported(steps)
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+
+    let probe_summary = ProbeOutcome {
+        evaluated: probe.evaluated,
+        executed: probe.executed,
+        restored: probe.restored,
+        failure: probe.failure.clone(),
+    };
+    let mut extras = mutation_probe_extras(
+        container,
+        &observation,
+        &rendered,
+        &probe_summary,
+        "rasterfix_probe",
+    );
+    extras.insert(
+        "rasterfix_oracle".to_string(),
+        json!({
+            "fix_arm": probe.fix_arm,
+            "screen_green_threshold": GREEN_VISIBLE_FRACTION,
+            "screen_green": probe.greens,
+        }),
+    );
+
+    RasterfixVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(extras),
+        probe,
+    }
+}
+
+/// `real-dcomp-rasterfix`'s post-open observation bound to its
+/// artifact directory — see [`childinv_observe`].
+fn rasterfix_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    &RealOsGuiTest,
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> RasterfixVerification
++ '_ {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_rasterfix_probe(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
+/// `real-dcomp-rasterfix`: the same real attach path plus the
+/// raster-fix oracle — baseline screen green, the bounded
+/// update/pump arm, the desktop-reparent + raster-present arm, the
+/// top-level layered arm, and a verified restore. `Pass` requires
+/// one arm to produce user-visible screen green with lifecycle +
+/// restore verified; a clean probe with no green is an honest
+/// `Fail` — the hypotheses are rejected, never upgraded.
+fn editor_rasterfix_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: rasterfix_observe(artifacts),
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     window-state observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) if !verification.probe.evaluated => not_run(format!(
+                "editor lifecycle verified but the raster-fix probe \
+                 is not evaluable: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("baseline could not be taken")
+            )),
+            Some(verification) if !verification.probe.executed || !verification.probe.restored => {
+                fail(format!(
+                    "editor lifecycle verified but the raster-fix \
+                     probe did not complete: {}",
+                    verification
+                        .probe
+                        .failure
+                        .as_deref()
+                        .unwrap_or("probe execution or restore verification failed")
+                ))
+            }
+            Some(verification) => match verification.probe.fix_arm {
+                Some(arm) => {
+                    let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                    outcome.detail = Some(format!(
+                        "arm `{arm}` produced user-visible screen green \
+                         (≥ {GREEN_VISIBLE_FRACTION}) — the child's raster \
+                         reached the composed screen with lifecycle and \
+                         restore verified"
+                    ));
+                    outcome
+                        .evidence
+                        .push(format!("dcomp-rasterfix:{arm}-screen-green"));
+                    outcome
+                }
+                None => fail(
+                    "the drain/reparent/layered arms ran with a verified \
+                     restore but none produced user-visible screen green — \
+                     the ruviform-side treatment hypotheses are rejected; \
+                     the remaining suspect is GPUI's own visual-tree \
+                     presentation"
+                        .to_string(),
+                ),
+            },
+            None => fail("editor opened but no raster-fix observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-rasterfix` case: pre-flight requires
+/// `NativePluginDock` and `VisualCapture` (same capabilities as the
+/// other dcomp cases — the oracle re-uses the screen-pixel
+/// reading), then the body drives the attach chain plus the
+/// raster-fix probe — or reports the honest artifact/session/
+/// environment outcome.
+fn real_dcomp_rasterfix_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_rasterfix_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // case: real-multiwindow-focus (AC1 — 2-window focus transfer)
 // ---------------------------------------------------------------------
 
@@ -11424,11 +12158,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 27, "twenty-seven real-dock cases");
+        assert_eq!(reports.len(), 28, "twenty-eight real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -11461,7 +12195,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

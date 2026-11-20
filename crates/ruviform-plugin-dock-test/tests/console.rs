@@ -103,7 +103,7 @@ fn list_emits_headless_projection_without_verdicts() {
     }
 }
 
-/// `--list --include-real` appends the twenty-seven real-lane rows marked
+/// `--list --include-real` appends the twenty-eight real-lane rows marked
 /// `session_required`/`lane` — metadata only, `runnable`/`missing`
 /// null, no execution claim. Requires the `real-dock` feature; the
 /// refusal path is covered by `include_real_refused_without_feature`.
@@ -117,7 +117,7 @@ fn list_include_real_appends_real_lane_rows() {
         String::from_utf8_lossy(&output.stderr)
     );
     let rows = stdout_lines(&output);
-    assert_eq!(rows.len(), 36, "9 headless + 27 real rows");
+    assert_eq!(rows.len(), 37, "9 headless + 28 real rows");
     let real: Vec<&Value> = rows.iter().skip(9).collect();
     let expected = [
         "real-window-mount",
@@ -130,6 +130,7 @@ fn list_include_real_appends_real_lane_rows() {
         "real-dcomp-uncovered",
         "real-dcomp-bandescape",
         "real-dcomp-childinv",
+        "real-dcomp-rasterfix",
         "real-multiwindow-focus",
         "real-os-input",
         "real-command-receipt",
