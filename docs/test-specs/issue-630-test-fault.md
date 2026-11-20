@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #630 test_fault slice — test specification"
 created: "2026-11-15"
-updated: "2026-11-15"
+updated: "2026-11-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -81,7 +81,13 @@ relations:
   `SpawnFailed{cause: Timeout}` になる共有 deadline の構造的原因は
   解消された。残留する flake 観測の分類ルール・定量・対処方針は
   `docs/discovery/issue-841-spawn-deadline-flake.md`（ruviform#841）を
-  参照（test 側 bounded re-instantiate は ruviform#849 が追跡）。
+  参照。test 側 bounded re-instantiate は ruviform#849 で両 ABI の
+  `instantiate` helper に実装済み — `SpawnFailed{cause: Timeout}` が
+  retained diagnostics record で pre-mint phase（`PreSpawn`/`Spawn`/
+  `DrainInit`/`Handshake`）かつ `cause == Some(Timeout)` と signature
+  確認された場合のみ bounded（最大 3 retry）re-instantiate し、
+  signature 不一致・bound 超過は正直に fail する。本 spec の
+  assertion・gate・`#[ignore]` は不変。
 - **bundled_crash_fans_out**: Bundled 2 instance、片方 abort →
   両方 `Failed` + 2 `InstanceFailed`。
 - **dedicated_isolation**: Dedicated で fault/gain 分離、fault
