@@ -111,8 +111,8 @@ fn prepared_instrument_plugin() -> Box<dyn ErasedPlugin> {
 /// bridge's `single_component` arm runs: own-CID detection → the
 /// shared object's `cast::<IEditController>` → one `initialize` →
 /// `setComponentHandler` on the shared object → no `IConnectionPoint`
-/// pairing (the fixture implements none, so a bridge that tried
-/// would fail `init`).
+/// pairing (the single arm's guard skips the pairing block; even a
+/// bridge that tried would silently skip on the `None` cast).
 fn prepared_single_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(6)
 }
