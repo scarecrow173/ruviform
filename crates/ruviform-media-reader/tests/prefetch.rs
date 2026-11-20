@@ -965,3 +965,32 @@ fn rd02_end_committed_at_eof_survives_a_later_seek() {
         "the committed End still reached the consumer ahead of the boundary"
     );
 }
+
+// ---- Issue #823: free-ring seeding runs in every profile ----
+
+#[test]
+fn rd03_manual_pool_seeded_at_construction() {
+    // #823: `Prefetch::manual` must populate the free ring in every
+    // build profile — the seeding `try_push` used to sit inside a
+    // `debug_assert!`, so a `debug_assertions = false` build left the
+    // ring empty and `fill_block` could never produce a block. The
+    // assertion is on the observable outcome (a fill writes real
+    // content), not on debug-only internals.
+    let reader = open_reader(512); // two 256-frame blocks — pump reaches `Ended`
+    let (_handle, mut producer, mut consumer) = Prefetch::manual(reader, config()).unwrap();
+    let ctx = RtContext::mint();
+    for _ in 0..64 {
+        match producer.pump().unwrap() {
+            PumpOutcome::Idle | PumpOutcome::Ended => break,
+            _ => {}
+        }
+    }
+    let mut dst = [vec![0.0f32; 256], vec![0.0f32; 256]];
+    let mut slices: Vec<&mut [f32]> = dst.iter_mut().map(Vec::as_mut_slice).collect();
+    let report = consumer.fill(&mut slices, consumer.position(), &ctx);
+    assert!(
+        report.written > 0,
+        "construction seeds the free ring — pump delivers content"
+    );
+    assert_eq!(slices[0][0], expected(0), "content starts at source 0");
+}
