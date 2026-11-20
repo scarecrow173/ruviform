@@ -6,6 +6,7 @@ Directory: `docs/knowledge`
 
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
+| KNOW-0350CWtG3cUgzAB14TzdHc | システムアーキテクチャ概要 | draft | [architecture-overview.md](./architecture-overview.md) |
 | KNOW-CmfIfzajrECw9xSJUSHMmP | オーディオデバイス・MIDI のバックエンド設計 | draft | [audio-device-and-midi.md](./audio-device-and-midi.md) |
 | KNOW-GRmD7p9xDYORobz06ZaKNN | CI レーン・ゲート・検証基盤の運用 | draft | [ci-and-verification-lanes.md](./ci-and-verification-lanes.md) |
 | KNOW-QnMonN3Oz14duTQ9HZCgHg | 開発基盤・ツールチェーン・MSRV | draft | [development-environment-and-toolchain.md](./development-environment-and-toolchain.md) |
