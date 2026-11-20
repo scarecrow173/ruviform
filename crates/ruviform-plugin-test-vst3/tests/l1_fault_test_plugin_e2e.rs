@@ -15,20 +15,23 @@
 //! ## Arming law under test
 //!
 //! The fault arms **in-band**: a `ParamValue` event on the `Fault`
-//! parameter (id `0`, plain `[0.0, 4.0]`) inside a `process` block.
+//! parameter (id `0`, plain `[0.0, 8.0]`) inside a `process` block.
 //! The armed block's `process()` dispatches the mode at its end —
 //! `abort`/`exit`/`hang` kill or wedge the *child* (never this test
 //! process), `error` returns a defined process failure. Normalized
-//! encodings used below (plain = normalized × 4.0):
+//! encodings used below (plain = normalized × 8.0):
 //!
 //! | mode | plain | normalized |
 //! | ---- | ----- | ---------- |
 //! | `none` | `0.0` | `0.0` |
-//! | `abort` | `1.0` | `0.25` |
-//! | `exit(42)` | `2.42` | `0.605` |
-//! | `exit(0)` | `2.0` | `0.5` |
-//! | `hang` | `3.0` | `0.75` |
-//! | `error` | `4.0` | `1.0` |
+//! | `abort` | `1.0` | `0.125` |
+//! | `exit(42)` | `2.42` | `0.3025` |
+//! | `exit(0)` | `2.0` | `0.25` |
+//! | `hang` | `3.0` | `0.375` |
+//! | `error` | `4.0` | `0.5` |
+//! | `rt_alloc` | `5.0` | `0.625` |
+//! | `bad_time` | `6.0` | `0.75` |
+//! | `invalid` | `7.0` | `0.875` |
 
 #![cfg(feature = "l1-runner")]
 
@@ -213,8 +216,8 @@ fn host_block(
 }
 
 /// One `Fault` `ParamValue` event at frame offset 0 — `normalized`
-/// is the wire value; the fixture's plain domain is `[0.0, 4.0]`
-/// (`plain = normalized × 4.0`).
+/// is the wire value; the fixture's plain domain is `[0.0, 8.0]`
+/// (`plain = normalized × 8.0`).
 fn fault_event(normalized: f64) -> Event {
     Event::new(
         0,
@@ -309,14 +312,14 @@ fn drive_clean_blocks(host: &mut PluginHost, handle: PluginHandle, blocks: u32) 
 }
 
 /// Submits one block carrying `events` (empty slice = clean block)
-/// and returns the `ProcessResult` — asserts only that the submit
-/// was accepted (`Ok`); the status is the caller's oracle (an armed
-/// `error` block legitimately reports `ProcessStatus::Error`).
-fn submit_block_result(
+/// and returns the `ProcessResult` *plus* the delivered output
+/// channels — the oracle for the marker/state-bearing modes
+/// (`rt_alloc`'s `200.0` sample, `invalid`'s NaN block).
+fn submit_block_full(
     host: &mut PluginHost,
     handle: PluginHandle,
     events: &[Event],
-) -> ProcessResult {
+) -> (ProcessResult, [f32; FRAMES], [f32; FRAMES]) {
     let in_left = [0.5_f32; FRAMES];
     let in_right = [-0.25_f32; FRAMES];
     let input = [&in_left[..], &in_right[..]];
@@ -328,8 +331,21 @@ fn submit_block_result(
         EventList::new(events, FRAMES_U32).unwrap()
     };
     thread::sleep(Duration::from_millis(5));
-    host_block(host, handle, &input, &mut out_left, &mut out_right, list)
-        .expect("process submit must be accepted")
+    let result = host_block(host, handle, &input, &mut out_left, &mut out_right, list)
+        .expect("process submit must be accepted");
+    (result, out_left, out_right)
+}
+
+/// Submits one block carrying `events` (empty slice = clean block)
+/// and returns the `ProcessResult` — asserts only that the submit
+/// was accepted (`Ok`); the status is the caller's oracle (an armed
+/// `error` block legitimately reports `ProcessStatus::Error`).
+fn submit_block_result(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    events: &[Event],
+) -> ProcessResult {
+    submit_block_full(host, handle, events).0
 }
 
 /// Submits one clean block — every call must stay
@@ -429,8 +445,8 @@ fn real_test_fault_l1_abort_fails_instance() {
     drive_to_processing(&mut host, handle);
     assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
 
-    // normalized 0.25 → plain 1.0 → mode `abort`.
-    arm_fault(&mut host, handle, 0.25);
+    // normalized 0.125 → plain 1.0 → mode `abort`.
+    arm_fault(&mut host, handle, 0.125);
 
     wait_host_failed(&host, handle);
     let (notified, exit, _cause) = wait_host_notification(&mut host);
@@ -497,8 +513,8 @@ fn real_test_fault_l1_voluntary_exit_reports_code() {
     drive_to_processing(&mut host, handle);
     assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
 
-    // normalized 0.605 → plain 2.42 → mode `exit`, code 42.
-    arm_fault(&mut host, handle, 0.605);
+    // normalized 0.3025 → plain 2.42 → mode `exit`, code 42.
+    arm_fault(&mut host, handle, 0.3025);
 
     wait_host_failed(&host, handle);
     let (notified, exit, _cause) = wait_host_notification(&mut host);
@@ -516,7 +532,7 @@ fn real_test_fault_l1_voluntary_exit_reports_code() {
 /// `exit(0)` is still a failure: a voluntary clean exit while live
 /// converges to `Failed` exactly like a crash — the
 /// `voluntary_exit_zero_is_failure` precedent applied to a real
-/// plugin. normalized `0.5` → plain `2.0` → `exit(0)`.
+/// plugin. normalized `0.25` → plain `2.0` → `exit(0)`.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
 fn real_test_fault_l1_exit_zero_is_failure() {
@@ -530,8 +546,8 @@ fn real_test_fault_l1_exit_zero_is_failure() {
     drive_to_processing(&mut host, handle);
     assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
 
-    // normalized 0.5 → plain 2.0 → mode `exit`, code 0.
-    arm_fault(&mut host, handle, 0.5);
+    // normalized 0.25 → plain 2.0 → mode `exit`, code 0.
+    arm_fault(&mut host, handle, 0.25);
 
     wait_host_failed(&host, handle);
     let (notified, exit, _cause) = wait_host_notification(&mut host);
@@ -565,9 +581,9 @@ fn real_test_fault_l1_hang_converges_on_timeout() {
         .audio_counters(handle)
         .map_or(0, |c| c.passthrough_submits);
 
-    // normalized 0.75 → plain 3.0 → mode `hang` — the child's
+    // normalized 0.375 → plain 3.0 → mode `hang` — the child's
     // `process()` never returns.
-    arm_fault(&mut host, handle, 0.75);
+    arm_fault(&mut host, handle, 0.375);
 
     // The audio leg keeps answering `Ok(CONTINUE)` with substituted
     // (passthrough/silence) output while the child is wedged — a few
@@ -624,7 +640,7 @@ fn real_test_fault_l1_bundled_crash_fans_out() {
     assert!(drive_clean_blocks(&mut host, second, 16) >= 4);
 
     // Arm `abort` on the first instance only — the shared child dies.
-    arm_fault(&mut host, first, 0.25);
+    arm_fault(&mut host, first, 0.125);
 
     // Both handles converge to `Failed` — the crash is child-scoped.
     wait_host_failed(&host, first);
@@ -678,7 +694,7 @@ fn real_test_fault_l1_dedicated_isolation() {
     assert!(drive_clean_blocks(&mut host, gain, 16) >= 4);
 
     // Arm `abort` on the fault instance — its dedicated child dies.
-    arm_fault(&mut host, fault, 0.25);
+    arm_fault(&mut host, fault, 0.125);
     wait_host_failed(&host, fault);
     let (notified, _exit, _cause) = wait_host_notification(&mut host);
     assert_eq!(notified, fault);
@@ -735,7 +751,7 @@ fn real_test_fault_l1_dedicated_isolation() {
 }
 
 /// `error` mode is a *defined rejection*, not a crash: normalized
-/// `1.0` → plain `4.0` → the plugin returns a process error that
+/// `0.5` → plain `4.0` → the plugin returns a process error that
 /// surfaces to the caller as `Ok(ProcessResult { status: Error })`
 /// — a *defined* rejection, not a crash: the instance **stays**
 /// `Processing` (never `Failed`), and a follow-up `none` event
@@ -753,7 +769,7 @@ fn real_test_fault_l1_error_is_defined_rejection() {
     drive_to_processing(&mut host, handle);
     assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
 
-    // normalized 1.0 → plain 4.0 → mode `error` — armed persistently.
+    // normalized 0.5 → plain 4.0 → mode `error` — armed persistently.
     // Every poll block re-carries the event so a dropped submit
     // cannot lose the arm (same law as `arm_fault`), and results
     // land asynchronously behind the lookahead window — poll until
@@ -762,7 +778,7 @@ fn real_test_fault_l1_error_is_defined_rejection() {
     let deadline = Instant::now() + NOTIFY_TIMEOUT;
     let mut error_results = 0_u32;
     while Instant::now() < deadline && error_results < 2 {
-        let result = submit_block_result(&mut host, handle, &[fault_event(1.0)]);
+        let result = submit_block_result(&mut host, handle, &[fault_event(0.5)]);
         if result.status == ProcessStatus::Error {
             error_results += 1;
         }
@@ -803,6 +819,186 @@ fn real_test_fault_l1_error_is_defined_rejection() {
         host.lifecycle_state(handle),
         Some(LifecycleState::Processing)
     );
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// `rt_alloc` mode in the L1 child: normalized `0.625` → plain `5.0`
+/// → the armed block's `process()` heap-allocates and writes the
+/// `200.0` marker (`f32::from(0xC8)`, read *from* the allocated
+/// buffer) into `output[0][0]`. The allocation itself is
+/// host-unobservable — the marker is the fixture's own report that
+/// the violation ran; the sample domain carries it across the wire.
+/// The instance stays `Processing`; disarm restores pass-through.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_fault_l1_rt_alloc_marks_armed_blocks() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // Poll armed blocks (normalized 0.625 → plain 5.0) until the
+    // `200.0` marker lands in `out_left[0]` on at least two calls —
+    // sustained violation, not a fluke behind the lookahead window.
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut marked = 0_u32;
+    while Instant::now() < deadline && marked < 2 {
+        let (result, out_left, out_right) =
+            submit_block_full(&mut host, handle, &[fault_event(0.625)]);
+        if result.status == ProcessStatus::Continue
+            && sample_eq(out_left[0], 200.0)
+            && out_left[1..].iter().all(|&s| sample_eq(s, 0.5))
+            && out_right.iter().all(|&s| sample_eq(s, -0.25))
+        {
+            marked += 1;
+        }
+    }
+    assert_eq!(marked, 2, "rt_alloc's heap marker must reach the host");
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing),
+        "rt_alloc stays a defined, non-fatal fault"
+    );
+
+    // Disarm — normalized 0.0 → `none` restores pass-through.
+    arm_fault(&mut host, handle, 0.0);
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut clean = 0_u32;
+    while Instant::now() < deadline && clean < 6 {
+        let (result, out_left, out_right) = submit_block_full(&mut host, handle, &[]);
+        if result.status == ProcessStatus::Continue
+            && out_left.iter().all(|&s| sample_eq(s, 0.5))
+            && out_right.iter().all(|&s| sample_eq(s, -0.25))
+        {
+            clean += 1;
+        }
+    }
+    assert_eq!(clean, 6, "a disarmed instance must pass audio through");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// `bad_time` mode in the L1 child: normalized `0.75` → plain `6.0`
+/// → a zero-tail pass-through fixture claims `TAIL_INFINITE` —
+/// `getTailSamples` reports `0xFFFFFFFF`, which the wire carries as
+/// `tail_frames == u32::MAX` — the bad-timing lie a host oracle
+/// detects. The instance stays `Processing`; disarm restores the
+/// zero-tail truth.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_fault_l1_bad_time_claims_infinite_tail() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // Poll armed blocks (normalized 0.75 → plain 6.0) until the
+    // `TAIL_INFINITE` claim lands on at least two calls.
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut claimed = 0_u32;
+    while Instant::now() < deadline && claimed < 2 {
+        let result = submit_block_result(&mut host, handle, &[fault_event(0.75)]);
+        if result.status == ProcessStatus::Continue && result.tail_frames == u32::MAX {
+            claimed += 1;
+        }
+    }
+    assert_eq!(claimed, 2, "bad_time's tail lie must reach the host");
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing)
+    );
+
+    // Disarm — the zero-tail truth returns.
+    arm_fault(&mut host, handle, 0.0);
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut clean = 0_u32;
+    while Instant::now() < deadline && clean < 6 {
+        let result = submit_block_result(&mut host, handle, &[]);
+        if result.status == ProcessStatus::Continue && result.tail_frames == 0 {
+            clean += 1;
+        }
+    }
+    assert_eq!(clean, 6, "a disarmed instance must report a zero tail");
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// `invalid` mode in the L1 child: normalized `0.875` → plain `7.0`
+/// → the armed block delivers a full-NaN output — the invalid audio
+/// state a host must detect and isolate. The instance stays
+/// `Processing`; disarm restores clean pass-through — the
+/// isolate/recover pair a host exercises.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_fault_l1_invalid_emits_nan_block() {
+    assert_fixture_present();
+
+    let expected = expected_fault_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // Poll armed blocks (normalized 0.875 → plain 7.0) until a
+    // full-NaN block lands on at least two calls.
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut nan_blocks = 0_u32;
+    while Instant::now() < deadline && nan_blocks < 2 {
+        let (result, out_left, out_right) =
+            submit_block_full(&mut host, handle, &[fault_event(0.875)]);
+        if result.status == ProcessStatus::Continue
+            && out_left.iter().all(|s| s.is_nan())
+            && out_right.iter().all(|s| s.is_nan())
+        {
+            nan_blocks += 1;
+        }
+    }
+    assert_eq!(nan_blocks, 2, "invalid's NaN block must reach the host");
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing),
+        "invalid stays a defined, non-fatal fault"
+    );
+
+    // Disarm — pass-through returns.
+    arm_fault(&mut host, handle, 0.0);
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut clean = 0_u32;
+    while Instant::now() < deadline && clean < 6 {
+        let (result, out_left, out_right) = submit_block_full(&mut host, handle, &[]);
+        if result.status == ProcessStatus::Continue
+            && out_left.iter().all(|&s| sample_eq(s, 0.5))
+            && out_right.iter().all(|&s| sample_eq(s, -0.25))
+        {
+            clean += 1;
+        }
+    }
+    assert_eq!(clean, 6, "a disarmed instance must pass audio through");
 
     host.execute(HostCommand::StopProcessing { handle })
         .unwrap();

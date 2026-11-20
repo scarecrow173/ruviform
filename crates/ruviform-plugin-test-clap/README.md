@@ -51,13 +51,18 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
 ## `test_fault` semantics
 
 - Same port shape as `test_gain`; one stepped `Fault` parameter
-  (plain `[0.0, 4.0]`, default `0.0` = `none`).
+  (plain `[0.0, 8.0]`, default `0.0` = `none`).
 - Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
-  event arms `abort`/`exit`/`hang`/`error` dispatch inside the
-  arming block's `process()` — the L1 out-of-process
-  crash/hang/timeout/isolation oracle. `error` returns
+  event arms `abort`/`exit`/`hang`/`error`/`rt_alloc`/`bad_time`/
+  `invalid` dispatch inside the arming block's `process()` — the L1
+  out-of-process crash/hang/timeout/isolation oracle. `error` returns
   `CLAP_PROCESS_ERROR` (a defined rejection, not a crash);
-  `abort`/`exit`/`hang` are L1-only faults.
+  `rt_alloc` performs a bounded heap round-trip in `process()` and
+  reports it through a `200.0` marker in the first output sample;
+  `bad_time` claims an infinite tail via `CLAP_PROCESS_TAIL`; `invalid`
+  fills every output sample with `NaN`. `abort`/`exit`/`hang` are
+  L1-only faults; `error`/`rt_alloc`/`bad_time`/`invalid` are
+  nonfatal and disarm back to pass-through.
 
 ## `test_stateful` semantics
 
