@@ -144,9 +144,18 @@ pub struct OutOfProcessSpec {
     /// slot depth `CreateInstance` declares on the wire, and the
     /// codec caps that depth at `WIRE_MAX_ELEMENTS`.
     pub lookahead_blocks: u32,
-    /// Defined timeout for the handshake and every later `Reply`
-    /// wait (default **10 s**); a timed-out command converges the
-    /// instance to `Failed`.
+    /// Defined timeout for the pre-mint spawn/handshake waits —
+    /// the child spawn hand-off, the `Hello` version gate, and the
+    /// `Scan`/`CreateInstance` reply waits (default **10 s**); a
+    /// timed-out stage fails the spawn with
+    /// `SpawnFailed{cause: Timeout}`. Independent of
+    /// `command_timeout`: shortening the command deadline never
+    /// shortens the environment-dependent spawn deadline.
+    pub spawn_timeout: Duration,
+    /// Defined timeout for every post-mint `Reply` wait (default
+    /// **10 s**); a timed-out command converges the instance to
+    /// `Failed`. The pre-mint handshake waits use `spawn_timeout`,
+    /// not this value.
     pub command_timeout: Duration,
     /// Child-process isolation for this route (default
     /// [`OutOfProcessIsolation::Bundled`]) — see the enum for the
@@ -158,7 +167,7 @@ pub struct OutOfProcessSpec {
 
 impl OutOfProcessSpec {
     /// A spec with the design defaults (`lookahead_blocks` 2,
-    /// `command_timeout` 10 s, `isolation`
+    /// `spawn_timeout` 10 s, `command_timeout` 10 s, `isolation`
     /// [`OutOfProcessIsolation::Bundled`]); adjust the fields as
     /// needed.
     ///
@@ -170,6 +179,7 @@ impl OutOfProcessSpec {
             program,
             args: Vec::new(),
             lookahead_blocks: 2,
+            spawn_timeout: Duration::from_secs(10),
             command_timeout: Duration::from_secs(10),
             isolation: OutOfProcessIsolation::Bundled,
         }
@@ -528,6 +538,7 @@ impl PluginHost {
             program,
             args,
             lookahead_blocks,
+            spawn_timeout,
             command_timeout,
             isolation,
         } = spec;
@@ -537,6 +548,7 @@ impl PluginHost {
         let mut spawn = SpawnSpec::new(descriptor, program);
         spawn.args = args;
         spawn.lookahead_blocks = lookahead_blocks;
+        spawn.spawn_timeout = spawn_timeout;
         spawn.command_timeout = command_timeout;
         self.routes.insert(
             descriptor.id.to_owned(),
@@ -611,6 +623,7 @@ impl PluginHost {
             descriptor,
             program,
             args,
+            spawn_timeout,
             command_timeout,
             render_timeout,
         } = spec;
@@ -619,6 +632,7 @@ impl PluginHost {
         }
         let mut spawn = crate::l1::VideoSpawnSpec::new(descriptor, program);
         spawn.args = args;
+        spawn.spawn_timeout = spawn_timeout;
         spawn.command_timeout = command_timeout;
         spawn.render_timeout = render_timeout;
         self.routes.insert(
@@ -754,7 +768,8 @@ impl PluginHost {
     ///
     /// **RT contract:** non-RT only — may allocate, spawn child
     /// processes and call non-RT hooks; L1 commands wait at most the
-    /// spec's `command_timeout` per reply.
+    /// spec's `command_timeout` per post-mint reply (`Instantiate`'s
+    /// pre-mint stages wait `spawn_timeout` each).
     ///
     /// # Errors
     ///
@@ -2873,6 +2888,7 @@ mod tests {
     /// short timeouts.
     fn pool_spec() -> SpawnSpec {
         let mut spec = SpawnSpec::new(DESCRIPTOR, OsString::from("no-such-runner-binary"));
+        spec.spawn_timeout = Duration::from_millis(50);
         spec.command_timeout = Duration::from_millis(50);
         spec
     }

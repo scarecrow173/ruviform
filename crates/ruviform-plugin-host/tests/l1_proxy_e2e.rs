@@ -68,10 +68,12 @@ fn spec(args: &[&str]) -> SpawnSpec {
     spec
 }
 
-/// A spec with a short `command_timeout` for the timeout paths —
-/// the defined default is 10 s, far too long for a hang test.
+/// A spec with short `spawn_timeout`/`command_timeout` for the
+/// timeout paths — the defined defaults are 10 s, far too long for
+/// a hang test.
 fn fast_timeout_spec(args: &[&str]) -> SpawnSpec {
     let mut spec = spec(args);
+    spec.spawn_timeout = Duration::from_millis(500);
     spec.command_timeout = Duration::from_millis(500);
     spec
 }
@@ -414,7 +416,7 @@ fn handshake_version_mismatch() {
 }
 
 /// `Hello` arrives but `Scan` is never answered — the handshake
-/// `command_timeout` path → `SpawnFailed{cause: Timeout}` +
+/// `spawn_timeout` path → `SpawnFailed{cause: Timeout}` +
 /// kill/reap.
 #[test]
 fn handshake_scan_timeout() {
@@ -3871,7 +3873,7 @@ mod composite_e2e {
     /// `Hello`, the drain (started ahead of the `Hello` wait)
     /// retains it, and the mid-`CreateInstance` wedge freezes it
     /// into the registered record. A *hang*, not a crash — the
-    /// `command_timeout` window gives the detached drain a
+    /// `spawn_timeout` window gives the detached drain a
     /// deterministic slice to read the emission before
     /// `create_rollback_error` freezes. `handle` stays `None`
     /// (nothing minted) while `phase` is `Live` — the child's
@@ -3885,16 +3887,16 @@ mod composite_e2e {
             OsString::from("--stderr-bytes=128"),
             OsString::from("--hang-after-msgs=1"),
         ];
-        spawn_spec.command_timeout = Duration::from_millis(500);
+        spawn_spec.spawn_timeout = Duration::from_millis(500);
         host.register_out_of_process(spawn_spec).unwrap();
 
         let start = Instant::now();
         let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
         assert!(
             start.elapsed() < Duration::from_secs(8),
-            "a create wedge must fire command_timeout"
+            "a create wedge must fire spawn_timeout"
         );
-        // The request wait fired `command_timeout` — the cause was
+        // The request wait fired `spawn_timeout` — the cause was
         // recorded before the wedge-kill issued.
         assert_eq!(cause, FailureCause::Timeout);
         let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {

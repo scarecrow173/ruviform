@@ -38,7 +38,8 @@
 //!
 //! The caller thread never performs blocking pipe I/O except the
 //! bounded waits documented on [`L1Instance::execute`] /
-//! [`L1Instance::spawn`] (each capped by `command_timeout`).
+//! [`L1Instance::spawn`] (each capped by its declared deadline —
+//! `command_timeout` post-mint, `spawn_timeout` pre-mint).
 //!
 //! **Lock order:** `Shared.inner` and `Shared.child` critical
 //! sections are always disjoint — no thread holds one while
@@ -212,20 +213,27 @@ pub(crate) struct SpawnSpec {
     /// `lookahead_blocks` — values `>= WIRE_MAX_ELEMENTS`
     /// (`D > WIRE_MAX_ELEMENTS`) are rejected the same way.
     pub(crate) lookahead_blocks: u32,
-    /// Defined timeout for the `Hello`, `Scan` and every later
-    /// `Reply` wait (default 10 s).
+    /// Defined timeout for the pre-mint spawn/handshake waits —
+    /// the child spawn hand-off, the `Hello` version gate, and the
+    /// `Scan`/`CreateInstance` reply waits (default 10 s).
+    /// Independent of `command_timeout`.
+    pub(crate) spawn_timeout: Duration,
+    /// Defined timeout for every post-mint `Reply` wait (default
+    /// 10 s).
     pub(crate) command_timeout: Duration,
 }
 
 impl SpawnSpec {
     /// A spec with the design defaults (`lookahead_blocks` 2,
-    /// `command_timeout` 10 s); adjust the fields as needed.
+    /// `spawn_timeout` 10 s, `command_timeout` 10 s); adjust the
+    /// fields as needed.
     pub(crate) fn new(descriptor: PluginDescriptor, program: OsString) -> Self {
         Self {
             descriptor,
             program,
             args: Vec::new(),
             lookahead_blocks: 2,
+            spawn_timeout: Duration::from_secs(10),
             command_timeout: Duration::from_secs(10),
         }
     }
@@ -261,6 +269,7 @@ impl SpawnSpec {
             descriptor: &self.descriptor,
             program: &self.program,
             args: &self.args,
+            spawn_timeout: self.spawn_timeout,
             command_timeout: self.command_timeout,
         }
     }
@@ -282,8 +291,13 @@ pub(crate) struct SpawnSpecView<'a> {
     pub(crate) program: &'a OsString,
     /// The runner's own argv prefix.
     pub(crate) args: &'a [OsString],
-    /// Defined timeout for `Hello`, `Scan` and every later
-    /// non-render `Reply` wait.
+    /// Defined timeout for the pre-mint waits — the spawn
+    /// hand-off, `Hello`, `Scan` and `CreateInstance`/
+    /// `CreateVideoInstance` reply waits. Independent of
+    /// `command_timeout`.
+    pub(crate) spawn_timeout: Duration,
+    /// Defined timeout for every post-mint non-render `Reply`
+    /// wait.
     pub(crate) command_timeout: Duration,
 }
 
@@ -2061,9 +2075,10 @@ impl L1Child {
     /// drops with the failed attempt.
     ///
     /// **RT contract:** non-RT only — blocks up to
-    /// `2 × command_timeout` (spawn hand-off + `Hello` wait).
+    /// `2 × spawn_timeout` (spawn hand-off + `Hello` wait).
     pub(crate) fn spawn(
         command: ProcCommand,
+        spawn_timeout: Duration,
         command_timeout: Duration,
         diag: &diag::DiagRegistry,
     ) -> Result<Arc<Self>, HostError> {
@@ -2091,7 +2106,7 @@ impl L1Child {
                     return Err(spawn_failed(&shared, diag));
                 }
             };
-        let io = match spawn_rx.recv_timeout(command_timeout) {
+        let io = match spawn_rx.recv_timeout(spawn_timeout) {
             Ok(Ok(io)) => io,
             Ok(Err(())) => {
                 // Child spawn failed — the driver recorded `Spawn`
@@ -2145,7 +2160,7 @@ impl L1Child {
                 return Err(spawn_failed(&shared, diag));
             }
         };
-        match hello_rx.recv_timeout(command_timeout) {
+        match hello_rx.recv_timeout(spawn_timeout) {
             Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
             other => {
                 // Missing/mismatched `Hello` — the spawn is
@@ -2178,12 +2193,18 @@ impl L1Child {
 
     /// `Scan` → descriptor field-match — the child-scope handshake
     /// half the dedicated route always runs after [`L1Child::spawn`]
-    /// (a T3 pooled child is scanned once at mint instead). A
-    /// `Failed`-child `Err` surfaces as `Ipc`; the caller freezes
-    /// and registers it through [`spawn_failed`].
+    /// (a T3 pooled child is scanned once at mint instead). The
+    /// reply wait is `spec.spawn_timeout` — pre-mint, not
+    /// `command_timeout`. A `Failed`-child `Err` surfaces as `Ipc`;
+    /// the caller freezes and registers it through
+    /// [`spawn_failed`].
     pub(crate) fn scan_match(&self, spec: &SpawnSpecView<'_>) -> Result<(), HostError> {
         let matched = match self
-            .request(wire::WIRE_INSTANCE_NONE, wire::Command::Scan)
+            .request_timed(
+                wire::WIRE_INSTANCE_NONE,
+                wire::Command::Scan,
+                spec.spawn_timeout,
+            )
             .map_err(|_| HostError::Ipc)?
         {
             wire::Reply::Scanned(descriptors) => {
@@ -2220,7 +2241,7 @@ impl L1Child {
     /// precondition — check it before paying the spawn.
     ///
     /// **RT contract:** non-RT only — [`L1Child::spawn`]'s bounds
-    /// plus the `Scan` wait.
+    /// plus the `Scan` wait (every stage `spawn_timeout`-bounded).
     pub(crate) fn spawn_scanned(
         spec: &SpawnSpecView<'_>,
         diag: &diag::DiagRegistry,
@@ -2233,7 +2254,7 @@ impl L1Child {
             // Piped so the drain thread captures diagnostics —
             // stderr never implicitly echoes to the host's stderr.
             .stderr(Stdio::piped());
-        let child = Self::spawn(command, spec.command_timeout, diag)?;
+        let child = Self::spawn(command, spec.spawn_timeout, spec.command_timeout, diag)?;
         if child.scan_match(spec).is_err() {
             // Fresh-child handshake failure — freeze + register
             // BEFORE teardown so the record captures stderr at the
@@ -2344,7 +2365,7 @@ impl L1Child {
             submit: submit_rx,
             shm_key: segment.key().to_owned(),
         });
-        let create = self.request(
+        let create = self.request_timed(
             instance,
             wire::Command::CreateInstance {
                 plugin_id: spec.descriptor.id.to_owned(),
@@ -2352,6 +2373,7 @@ impl L1Child {
                 in_depth: depth,
                 out_depth: depth,
             },
+            spec.spawn_timeout,
         );
         if let Ok(wire::Reply::Ok) = create {
             let (went_live, leg_counters, source_readers) = self.flip_live(instance);
@@ -2473,7 +2495,7 @@ impl L1Child {
     /// child's fate on failure exactly like the audio path.
     ///
     /// **RT contract:** non-RT only — segment create plus one
-    /// `command_timeout` reply wait.
+    /// `spawn_timeout` reply wait.
     pub(crate) fn create_video_instance(
         &self,
         spec: &SpawnSpecView<'_>,
@@ -2518,13 +2540,14 @@ impl L1Child {
         // driver-side per-instance state (the `submits`/`views`
         // maps are audio data-plane only); the facade's segment is
         // host-side, the child attaches it by `shm_key`.
-        let create = self.request(
+        let create = self.request_timed(
             instance,
             wire::Command::CreateVideoInstance {
                 plugin_id: spec.descriptor.id.to_owned(),
                 shm_key: segment.key().to_owned(),
                 config,
             },
+            spec.spawn_timeout,
         );
         if let Ok(wire::Reply::Ok) = create {
             // Same mid-mint race as `create_instance`: the `Ok`
@@ -2569,11 +2592,14 @@ impl L1Child {
         Err(error)
     }
 
-    /// Registers the waiter, queues the frame and waits — the
-    /// command channel the handshake (`Scan`/`CreateInstance`) and
-    /// [`L1Instance::request`] share. `instance` is the stamped
-    /// envelope value: `WIRE_INSTANCE_NONE` for the child-scope
-    /// `Scan`, the minted handle otherwise.
+    /// Registers the waiter, queues the frame and waits on
+    /// `command_timeout` — the post-mint command channel
+    /// [`L1Instance::request`] uses (the pre-mint handshake verbs
+    /// `Scan`/`CreateInstance`/`CreateVideoInstance` call
+    /// [`L1Child::request_timed`] with `spawn_timeout` instead).
+    /// `instance` is the stamped envelope value:
+    /// `WIRE_INSTANCE_NONE` for the child-scope `Scan`, the minted
+    /// handle otherwise.
     ///
     /// The instance-scope gate runs **inside** the waiter insert —
     /// atomically: `Scan` needs no entry; ordinary commands require
@@ -2595,11 +2621,12 @@ impl L1Child {
     }
 
     /// [`L1Child::request`] with an explicit reply wait — the
-    /// timeout-generalized request the video `Render` window needs
-    /// (`render_timeout` is the only verb that outlasts
-    /// `command_timeout`; every other caller takes the wrapper's
-    /// `command_timeout` default). Timeout behavior is identical:
-    /// waiter removal, child-scope `converge_child`,
+    /// timeout-generalized request for verbs whose bound is not
+    /// `command_timeout`: the pre-mint handshake verbs
+    /// (`Scan`/`CreateInstance`/`CreateVideoInstance`) pass
+    /// `spawn_timeout`, the video `Render` window passes
+    /// `render_timeout`. Timeout behavior is identical: waiter
+    /// removal, child-scope `converge_child`,
     /// `Err(HostError::Ipc)`.
     ///
     /// **RT contract:** non-RT only — waits at most `timeout`.
@@ -2886,7 +2913,7 @@ impl L1Instance {
     /// spec-legality violation stays `Err(HostError::Ipc)`.
     ///
     /// **RT contract:** non-RT only — blocks up to
-    /// `4 × command_timeout` in the worst case (spawn hand-off,
+    /// `4 × spawn_timeout` in the worst case (spawn hand-off,
     /// `Hello` wait, `Scan` reply, `CreateInstance` reply).
     ///
     /// `lookahead_blocks == 0` is `Err(Ipc)` — with `D = 1` the

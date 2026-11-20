@@ -1358,7 +1358,7 @@ fn real_test_spawn_l1_stderr_is_captured() {
 }
 
 /// `hang`: the child loads the fixture then parks before `Hello` —
-/// the parent's `command_timeout` decides `SpawnFailed{Timeout}` and
+/// the parent's `spawn_timeout` decides `SpawnFailed{Timeout}` and
 /// the wedged child is killed and reaped, never left running.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
@@ -1366,7 +1366,7 @@ fn real_test_spawn_l1_hang_before_hello_times_out() {
     assert_fixture_present();
 
     let mut spec = spec_with_args(EXPECTED_FAULT, &["--ruviform-test-fault=hang"]);
-    spec.command_timeout = Duration::from_millis(500);
+    spec.spawn_timeout = Duration::from_millis(500);
     let mut host = PluginHost::new();
     host.register_out_of_process(spec).unwrap();
 
