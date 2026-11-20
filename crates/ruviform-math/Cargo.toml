@@ -40,3 +40,8 @@ assert_no_alloc = "1.1"
 [[bench]]
 name = "simd_poc"
 harness = false
+
+# Issue #807: frozen regression bench (custom main — A/B ratio gate).
+[[bench]]
+name = "dsp_frozen"
+harness = false

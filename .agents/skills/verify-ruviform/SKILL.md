@@ -255,3 +255,33 @@ Canonical lanes: `mise run test-ui-rvf-ctl` (doctor report →
 The feature map under `./features/` (`README.md` index + one file per
 user-visible surface) records what each drive sequence is meant to
 prove — drive against it, not against the op list alone.
+
+## Bench
+
+Frozen DSP SIMD benchmark + regression gate (Issue #807):
+
+```sh
+mise run bench-frozen                          # gated real run vs pinned baseline
+mise run bench-frozen --test                   # 1-rep smoke (report_only; perf-gate never blocks — output_mismatch still exits 1)
+mise run bench-frozen --selftest               # inject degraded dispatch -> gate must fail
+mise run bench-frozen --write-baseline <path>  # emit an un-promoted baseline candidate
+```
+
+- Measures the production `ruviform-math::dsp` kernels (`dot`, `fir`) via
+  an in-process A/B: `SimdToken::force_fallback()` vs `SimdToken::detect()`,
+  alternating, 7 reps, median + min/max per-call ns. The gate metric is the
+  A/B time ratio against `min_ratio` thresholds pinned in
+  `crates/ruviform-math/benches/frozen/dsp_baseline.json` — fail-closed
+  (unreadable/un-promoted baseline, below-threshold ratio, or output
+  mismatches vs the scalar reference all fail the run mode).
+- The pinned baseline is read-only during gating. Updating it is two-phase:
+  `--write-baseline` emits a candidate with `"approval": null`; a human
+  promotes it by copying it to the pin path with `approval` filled. The gate
+  refuses un-promoted candidates.
+- Evidence follows the `evidence/<issue>/` convention: JSONL `run`/`cell`/
+  `gate` records (verdict vocabulary `pass`/`fail`/`not_run`/`unsupported`),
+  `--selftest` gate-fail proof, the candidate and promoted pin, plus
+  `decision.tsv` (hillclimb schema) and `verification.md`. Contract:
+  `docs/test-specs/issue-807-frozen-dsp-bench.md`.
+- This lane is manual/opt-in only — the CI `bench` job keeps calling
+  `bench-smoke`; do not wire `bench-frozen` into CI.
