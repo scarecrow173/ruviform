@@ -102,3 +102,4 @@ Directory: `docs/discovery`
 | DISC-034ZhjBMAgFhy2Ry7D4Z5S | Issue #759 plugin-clap host.rs f64 as u32 cast — clippy lint lane 破損の診断と境界契約 | resolved | [issue-759-clippy-cast.md](./issue-759-clippy-cast.md) |
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
+| DISC-rf768staleOracle01 | Issue #768 l1_fault / l1_stateful E2E staleness oracle 監査（#763 同 class）— findings | final | [issue-768-staleness-oracle.md](./issue-768-staleness-oracle.md) |
