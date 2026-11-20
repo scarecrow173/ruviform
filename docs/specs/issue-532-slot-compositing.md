@@ -68,7 +68,7 @@ Option-A（GPUI fork）判定の根拠を確定する。
 ## 検証
 
 - canonical run（`mise run test-ui-plugin-dock-real`、既定 `none`）:
-  baseline と完全一致（20 pass / `real-dcomp-pixel` fail 既知 / 2 unsupported）。
+  baseline と完全一致（19 pass / `real-dcomp-pixel` fail 既知 / 3 unsupported）。
 - 非回帰: `test-ui-gpui`（79 単体 + 各スイート）pass、
   `native_slot_contract` 13 pass、`gui-boundary-guard --offline` pass、
   `fmt-check` pass、新規決定論テスト 2 件 pass。

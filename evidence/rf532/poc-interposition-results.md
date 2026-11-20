@@ -20,10 +20,10 @@ HWND の画素を覆い、`real-dcomp-pixel` が fail する既知問題) への
 
 | mode | 機構の実効確認 | real-dcomp-pixel | 他ケース |
 |---|---|---|---|
-| baseline (変更前) | — | fail (green 0.000) | 20 pass / 2 unsupported |
-| `region` | 適用済(後述の2証拠) | **fail** (green 0.000) | `real-os-input` が pass → not_run に回帰 |
-| `alpha` | 適用済(描画抑制を計測確認) | **fail** (green 0.000) | 20 pass / 2 unsupported (baseline 同等) |
-| canonical run (既定 `none`) | — | fail (green 0.000) | 20 pass / 2 unsupported = baseline 完全一致 |
+| baseline (変更前) | — | fail (green 0.000) | 19 pass / 3 unsupported |
+| `region` | 適用済(後述の2証拠) | **fail** (green 0.000) | 18 pass / 1 not_run / 3 unsupported — `real-os-input` が pass → not_run に回帰 |
+| `alpha` | 適用済(描画抑制を計測確認) | **fail** (green 0.000) | 19 pass / 3 unsupported (baseline 同等) |
+| canonical run (既定 `none`) | — | fail (green 0.000) | 19 pass / 3 unsupported = baseline 完全一致 |
 
 ## 方式1: root HWND `SetWindowRgn` hole (region)
 

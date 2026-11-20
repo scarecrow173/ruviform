@@ -97,4 +97,4 @@ GPUI を fork せずに `real-dcomp-pixel` を green にできるか。
 不確実性）、`plugin-dock-real-{baseline,poc-region,poc-alpha}.jsonl`、
 `{baseline,region,alpha3}-pixels/`。canonical run
 （`mise run test-ui-plugin-dock-real`、既定 `none`）は baseline と完全一致
-（20 pass / 1 既知 fail / 2 unsupported）。
+（19 pass / 1 既知 fail / 3 unsupported）。
