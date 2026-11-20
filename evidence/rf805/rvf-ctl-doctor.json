@@ -1,5 +1,6 @@
 {
-  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-doctor\\target\\debug\\dummy_app.exe",
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-slice2\\target\\debug\\dummy_app.exe",
+  "app_args": [],
   "capabilities": {
     "clock_domains": [
       "host_tick"
@@ -17,7 +18,7 @@
       "notices"
     ],
     "screenshot": false,
-    "session_id": "s-fd58c85b42043529",
+    "session_id": "s-c2841f42509a7606",
     "windows": [
       {
         "close_pending": false,
@@ -72,7 +73,7 @@
   },
   "lane": "rvf-ctl-doctor",
   "repo": {
-    "sha": "1a696064bbbc9c2310a27e35492a8dd5f9ab49d0"
+    "sha": "e11854c28335c359a46065b08683d83cd1e67866"
   },
   "transport": "stdio",
   "type": "doctor",
@@ -105,9 +106,9 @@
       "screenshot": false
     },
     "os": "windows",
-    "run_id": "run-58202521bbcdf5fa",
+    "run_id": "run-7913c79fa5d6f326",
     "ruviform_revision": "0.1.0",
-    "session_id": "s-fd58c85b42043529",
+    "session_id": "s-c2841f42509a7606",
     "v": 1,
     "windows": [
       {

@@ -250,6 +250,41 @@ mkdir -p evidence/rf805
 cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- doctor --out evidence/rf805/rvf-ctl-doctor.json
 '''
 
+# Issue #805 slice 2 rvf-ctl drive lane (manual/opt-in — NOT a
+# CI-required gate): the canonical entry for `rvf-ctl drive`, the
+# composable drive surface over the rvf.uitest.v1 closed op set. One
+# invocation = one session: spawn headless dummy_app → test.hello →
+# the ordered step list (observation + fixture/clock/fault/window
+# ops, incl. a capability-gated screenshot that must record
+# `unsupported` honestly) → graceful test.shutdown → child-exit.
+# JSON report to evidence/rf805/rvf-ctl-drive.json. Exit 0 = every
+# check and step passed (unsupported/not_run-capability answers are
+# honest outcomes); 1 = a fail or a step left not_run, or AUT-missing
+# not_run + environment_blocked; 2 = CLI misuse (writes only
+# target/ + evidence/rf805/).
+[tasks.test-ui-rvf-ctl-drive]
+description = "Issue #805 slice 2 rvf-ctl drive lane (manual/opt-in — NOT a CI-required gate): canonical `rvf-ctl drive` entry — one session runs the ordered closed-op step list against headless dummy_app (observe/fixture/clock/fault/window + capability-gated screenshot → honest `unsupported`); JSON report to evidence/rf805/rvf-ctl-drive.json; exit 0 pass / 1 fail-or-not_run / 2 misuse (writes only target/ + evidence/rf805/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --locked -p ruviform-ui-test --bin dummy_app --bin rvf-ctl
+mkdir -p evidence/rf805
+cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- drive --out evidence/rf805/rvf-ctl-drive.json \
+  'capabilities' \
+  'observe.windows' \
+  'fixture.prepare={"name":"windows","seed":7,"params":{"count":1,"close_policy":"veto"}}' \
+  'observe.windows' \
+  'clock.advance={"domain":"host_tick","ticks":2}' \
+  'observe.receipts={"since":0,"limit":64}' \
+  'fault.set={"kind":"ipc_disconnect","window":1}' \
+  'observe.windows' \
+  'fault.clear={"kind":"ipc_disconnect","window":1}' \
+  'notices' \
+  'window.request_close={"window":"last"}' \
+  'observe.windows' \
+  'observe.screenshot={"window":"last"}'
+'''
+
 [tasks.build]
 description = "Verify one Cargo package: mise run build <package> [cargo flags] (required package)"
 raw_args = true

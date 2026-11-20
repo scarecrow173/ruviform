@@ -1,0 +1,33 @@
+{
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-slice2\\target\\debug\\dummy_app.exe",
+  "app_exists": true,
+  "dry_run": true,
+  "lane": "rvf-ctl-drive",
+  "read_only": false,
+  "session": [
+    "spawn the AUT with RVF_TEST_CONTROL=<transport> (+ --app-args argv)",
+    "test.hello → Welcome",
+    "run each step in order — mutating ops change live AUT state",
+    "test.shutdown graceful → CleanupReport",
+    "await the child exit status"
+  ],
+  "steps": [
+    {
+      "op": "test.observe.windows",
+      "params": {},
+      "seq": 1
+    },
+    {
+      "op": "test.fixture.prepare",
+      "params": {
+        "name": "windows",
+        "params": {
+          "count": 1
+        }
+      },
+      "seq": 2
+    }
+  ],
+  "transport": "stdio",
+  "type": "drive-plan"
+}

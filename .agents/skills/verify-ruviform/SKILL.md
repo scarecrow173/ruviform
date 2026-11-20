@@ -90,6 +90,60 @@ misuse. Failures carry `error.stage` and `error.next_step`
 
 ## Drive
 
+`rvf-ctl drive` is the composable op surface: one invocation is one
+session — spawn → `test.hello` → the ordered step list → graceful
+`test.shutdown` → child-exit. Each positional argument is one op
+written `<op>[=<json params>]` (the `test.` prefix is optional):
+
+```sh
+# canonical lane (builds both binaries, writes evidence)
+mise run test-ui-rvf-ctl-drive
+
+# direct (auxiliary evidence — canonical = mise)
+target/debug/rvf-ctl drive \
+  'capabilities' \
+  'observe.windows' \
+  'fixture.prepare={"name":"windows","seed":7,"params":{"count":1,"close_policy":"veto"}}' \
+  'observe.windows' \
+  'clock.advance={"domain":"host_tick","ticks":2}' \
+  'observe.receipts={"since":0,"limit":64}' \
+  'fault.set={"kind":"ipc_disconnect","window":1}' \
+  'fault.clear={"kind":"ipc_disconnect","window":1}' \
+  'notices' \
+  'window.request_close={"window":"last"}' \
+  'observe.windows' \
+  'observe.screenshot={"window":"last"}' \
+  --out evidence/rf805/rvf-ctl-drive.json
+
+target/debug/rvf-ctl drive --dry-run '<step>...'   # plan only — spawns nothing
+target/debug/rvf-ctl drive --app target/debug/windowed_test_app \
+  --app-args "--windows 1" '<step>...'             # a different AUT
+```
+
+Step params are validated before anything spawns — a bad JSON
+object, unknown param key, unknown clock domain (known:
+`host_tick`), or unknown fault kind (known: `window_crash`,
+`ipc_disconnect`) is exit 2 and never reaches the wire. Window
+selectors accept a u64 id or `"last"` — the most recently observed
+or created window (welcome → fixture receipt → `observe.windows`),
+so one session can prepare a fixture and then drive the window it
+created.
+
+Per-step verdicts use the shared vocabulary: `pass` for an `ok`
+answer, `unsupported` for an `unavailable` answer (capability
+gating — e.g. `observe.screenshot` on `dummy_app`, whose declared
+`screenshot` is `false`), `fail` for any other refusal, `not_run`
+for a step that never reached the wire (unresolvable `"last"`, or a
+channel already dead). Async `Notify` events buffered while an op
+ran attach to that step's `notices`. The report shape mirrors
+`doctor`: `type:"drive"`, `lane:"rvf-ctl-drive"`, `steps[]`,
+`checks[]` for spawn/handshake/shutdown/child-exit, `welcome`,
+`cleanup`, `child_exit`, `environment`, `repo.sha`, `verdict`, and
+`error{stage,detail,next_step}` on failure. Exit `0` = every check
+and step passed (`unsupported` is an honest answer, not a failure);
+`1` = a `fail`, a step left `not_run`, or AUT-missing `not_run` +
+`environment_blocked`; `2` = CLI misuse.
+
 The `rvf.uitest.v1` closed op set (`crates/ruviform-ui-test/src/proto.rs`):
 
 | Op | Mutating? |
@@ -102,6 +156,11 @@ Transport: stdio is the default; loopback TCP is opt-in via
 `RVF_TEST_CONTROL=tcp` + `RVF_TEST_ADDR` + `RVF_TEST_SECRET` (the
 driver owns the listener and the run-bound secret — wrong secret ⇒
 unauthenticated). Frames are length-prefixed JSON.
+
+The `features/` map (`./features/README.md`) normalizes the
+user-visible surfaces these ops drive — read it before composing a
+drive sequence so the steps exercise a real user path rather than a
+convenient subset.
 
 Headless drive lane (`plugin-dock-console`):
 
@@ -176,7 +235,11 @@ test-only; not shipped with the product):
 
 ```sh
 target/debug/rvf-ctl doctor [options]
+target/debug/rvf-ctl drive [options] <step>...
+
   --app <path>        AUT binary (default: sibling dummy_app)
+  --app-args "<s>"    extra AUT argv, whitespace-split
+                      (e.g. "--windows 2", "--fail-init")
   --transport <t>     stdio (default) | tcp
   --dry-run           print the plan JSON, spawn nothing
   --out <path>        write the report to a file instead of stdout
@@ -185,6 +248,10 @@ target/debug/rvf-ctl doctor [options]
 rvf-ctl --help        # same usage; exit 0
 ```
 
-This slice ships `doctor` only; drive/evidence subcommands are later
-slices. The `features/` map referenced by the Issue is likewise a later
-slice — this skill is complete for the headless subset without it.
+Canonical lanes: `mise run test-ui-rvf-ctl` (doctor report →
+`evidence/rf805/rvf-ctl-doctor.json`), `mise run test-ui-rvf-ctl-drive`
+(drive report → `evidence/rf805/rvf-ctl-drive.json`).
+
+The feature map under `./features/` (`README.md` index + one file per
+user-visible surface) records what each drive sequence is meant to
+prove — drive against it, not against the op list alone.

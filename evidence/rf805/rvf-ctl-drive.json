@@ -1,0 +1,399 @@
+{
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-slice2\\target\\debug\\dummy_app.exe",
+  "app_args": [],
+  "checks": [
+    {
+      "id": "spawn",
+      "verdict": "pass"
+    },
+    {
+      "id": "handshake",
+      "verdict": "pass"
+    },
+    {
+      "id": "shutdown",
+      "verdict": "pass"
+    },
+    {
+      "id": "child-exit",
+      "verdict": "pass"
+    }
+  ],
+  "child_exit": {
+    "code": 0,
+    "success": true
+  },
+  "cleanup": {
+    "app": {
+      "jobs_running": false,
+      "windows_open": 2
+    },
+    "exited": true,
+    "windows_closed": 2,
+    "windows_open": 2
+  },
+  "environment": {
+    "arch": "x86_64",
+    "environment_kind": "deterministic-backend",
+    "os": "windows"
+  },
+  "lane": "rvf-ctl-drive",
+  "repo": {
+    "sha": "e11854c28335c359a46065b08683d83cd1e67866"
+  },
+  "steps": [
+    {
+      "notices": [
+        {
+          "kind": "window.created",
+          "seq": 0,
+          "window": 1
+        }
+      ],
+      "op": "test.capabilities",
+      "params": {},
+      "reply": {
+        "clock_domains": [
+          "host_tick"
+        ],
+        "dom_access": false,
+        "faults": [
+          "window_crash",
+          "ipc_disconnect"
+        ],
+        "fixture": true,
+        "input_injection": false,
+        "observation": [
+          "windows",
+          "receipts",
+          "notices"
+        ],
+        "screenshot": false,
+        "session_id": "s-bceba61c1a782487",
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 1,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          }
+        ]
+      },
+      "seq": 2,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.fixture.prepare",
+      "params": {
+        "name": "windows",
+        "params": {
+          "close_policy": "veto",
+          "count": 1
+        },
+        "seed": 7
+      },
+      "reply": {
+        "applied": {
+          "seed": 7,
+          "windows": [
+            2
+          ]
+        },
+        "name": "windows"
+      },
+      "seq": 3,
+      "verdict": "pass"
+    },
+    {
+      "notices": [
+        {
+          "kind": "window.created",
+          "seq": 1,
+          "window": 2
+        }
+      ],
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          },
+          {
+            "close_pending": false,
+            "height": 600,
+            "id": 2,
+            "ipc_down": false,
+            "ready": true,
+            "title": "dummy",
+            "width": 800
+          }
+        ]
+      },
+      "seq": 4,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.clock.advance",
+      "params": {
+        "domain": "host_tick",
+        "ticks": 2
+      },
+      "reply": {
+        "advanced": 2,
+        "domain": "host_tick"
+      },
+      "seq": 5,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.receipts",
+      "params": {
+        "limit": 64,
+        "since": 0
+      },
+      "reply": {
+        "entries": [
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "created",
+            "seq": 1,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "ready",
+            "seq": 2,
+            "window": 1
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "created",
+            "seq": 3,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "ready",
+            "seq": 4,
+            "window": 2
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 5
+          },
+          {
+            "bytes": 0,
+            "direction": "in",
+            "kind": "tick",
+            "seq": 6
+          }
+        ],
+        "next_since": 6,
+        "truncated": false
+      },
+      "seq": 6,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.fault.set",
+      "params": {
+        "kind": "ipc_disconnect",
+        "window": 1
+      },
+      "reply": {
+        "applied": true,
+        "kind": "ipc_disconnect"
+      },
+      "seq": 7,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": true,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          },
+          {
+            "close_pending": false,
+            "height": 600,
+            "id": 2,
+            "ipc_down": false,
+            "ready": true,
+            "title": "dummy",
+            "width": 800
+          }
+        ]
+      },
+      "seq": 8,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.fault.clear",
+      "params": {
+        "kind": "ipc_disconnect",
+        "window": 1
+      },
+      "reply": {
+        "applied": false,
+        "kind": "ipc_disconnect"
+      },
+      "seq": 9,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.notices",
+      "params": {},
+      "reply": {
+        "notices": []
+      },
+      "seq": 10,
+      "verdict": "pass"
+    },
+    {
+      "op": "test.window.request_close",
+      "params": {
+        "window": "last"
+      },
+      "reply": {
+        "requested": true,
+        "window": 2
+      },
+      "seq": 11,
+      "verdict": "pass"
+    },
+    {
+      "notices": [
+        {
+          "kind": "window.close_requested",
+          "seq": 2,
+          "window": 2
+        }
+      ],
+      "op": "test.observe.windows",
+      "params": {},
+      "reply": {
+        "windows": [
+          {
+            "close_pending": false,
+            "height": 800,
+            "id": 1,
+            "ipc_down": false,
+            "ready": true,
+            "title": "ruviform",
+            "width": 1280
+          },
+          {
+            "close_pending": false,
+            "height": 600,
+            "id": 2,
+            "ipc_down": false,
+            "ready": true,
+            "title": "dummy",
+            "width": 800
+          }
+        ]
+      },
+      "seq": 12,
+      "verdict": "pass"
+    },
+    {
+      "error": "unavailable: capability \"screenshot\" is not declared by this host",
+      "op": "test.observe.screenshot",
+      "params": {
+        "window": "last"
+      },
+      "seq": 13,
+      "verdict": "unsupported"
+    }
+  ],
+  "transport": "stdio",
+  "type": "drive",
+  "verdict": "pass",
+  "welcome": {
+    "app": {
+      "name": "dummy_app",
+      "version": "0.1.0"
+    },
+    "arch": "x86_64",
+    "backend": {
+      "name": "headless-fake"
+    },
+    "capabilities": {
+      "clock_domains": [
+        "host_tick"
+      ],
+      "dom_access": false,
+      "faults": [
+        "window_crash",
+        "ipc_disconnect"
+      ],
+      "fixture": true,
+      "input_injection": false,
+      "observation": [
+        "windows",
+        "receipts",
+        "notices"
+      ],
+      "screenshot": false
+    },
+    "os": "windows",
+    "run_id": "run-4a5690078d8d34c3",
+    "ruviform_revision": "0.1.0",
+    "session_id": "s-bceba61c1a782487",
+    "v": 1,
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  }
+}
