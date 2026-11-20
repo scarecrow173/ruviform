@@ -1,0 +1,6 @@
+# Run artifacts stay local — committed files are the verification
+# record (evidence/rf763・rf768・rf841・rf846 先例).
+# `*.log` (per-run / induced logs) は repo ルート .gitignore が除外済み。
+bin/
+logs/
+logs-*/

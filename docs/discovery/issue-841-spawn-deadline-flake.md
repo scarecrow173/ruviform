@@ -208,20 +208,33 @@ pre-mint phase 限定の bounded re-instantiate、両 ABI 対称）を推奨
 
 ## Residual
 
-- **C の実装（test-file-only・要両 ABI 対称）**: 本 slice dispatch
-  時点で clap 側 `l1_fault_test_plugin_e2e.rs` は rf#842 の lease
-  占有中・vst3 側も本 slice の lease 外のため実装しない（rf#842 は
-  PR #844 として main merge 済み — lease 依存は解消済み）。実装
-  内容: hang test の instantiate を `instantiate_spawn_failed` 系
-  helper + `diagnostics_query` で `cause==Timeout`（および可能なら
-  `phase` が pre-mint）を識別して bounded（例 3 回）re-instantiate。
-  assertion・gate は不変。
+- **C の実装（test-file-only・両 ABI 対称）**: ruviform#849 で実装
+  済み。両 ABI `l1_fault_test_plugin_e2e.rs` の共有 `instantiate`
+  helper が `Err(HostError::SpawnFailed)` を捕捉し、
+  `host.diagnostics_query(diagnostics_id)` → `DiagnosticQuery::Found`
+  record で `cause == Timeout` かつ `record.phase` ∈ {`PreSpawn`,
+  `Spawn`, `DrainInit`, `Handshake`} かつ `record.cause ==
+  Some(Timeout)` の signature を満たす場合のみ bounded（最大 3
+  retry = 4 attempt）re-instantiate する。signature 不一致（`Live`
+  phase・非 `Timeout` cause・`Evicted`/`NotFound`）は retry せず即
+  fail、bound 超過も正直に fail — assertion・gate・`#[ignore]` は
+  不変。`instantiate_spawn_failed`（失敗期待 helper）は厳格のまま
+  維持。**coverage boundary（実装時に判明）**: `Scan`・
+  `CreateInstance` の wait は `L1Child::spawn` が `Hello` 成功直後に
+  `set_phase(Live)` してから走る（`l1/mod.rs:2184`）ため、それらの
+  timeout は `phase == Live` の record を残し本 signature では
+  retry されない — retry が効く pre-mint wait は spawn hand-off
+  （`Spawn`）と `Hello`（`Handshake`）系に限定される。signature は
+  本 doc 判定表どおりの保守境界であり、post-mint staleness 誤
+  リトライは構造的に不可のまま。
 - **E は `ruviform#846` として起票済み**: spawn/handshake deadline と
   `command_timeout` の分離（`OutOfProcessSpec`/`SpawnSpec` への別
   field、または `l1/mod.rs:2094/2148` wait の固定化）。`request_timed`
   （`l1/mod.rs:2606`）に `render_timeout` 先例（video `Render` のみ
   別 timeout を取る）があるため設計の置き場所は既存。
-- **phase 帰属 print**: panic log に deadline phase が出ない制約は
-  C の実装時に `record.phase` print で解消可能（分類精度向上のため
-  併せて推奨）。
+- **phase 帰属 print**: ruviform#849 で実装済み — `SpawnFailed`
+  attempt ごとに attempt index・`diagnostics_id`・`record.phase`・
+  `record.cause` を stderr へ直接 print（libtest の per-test capture
+  を bypass し、retry が recover しても lane log に証跡が残る）。
+  panic message にも `record.phase` を含む。
 - docs index（`docs/**/README.md`）は Coordinator が統合時に整備。
