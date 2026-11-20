@@ -322,3 +322,4 @@ Directory: `docs/designs`
 | ID | Title | Status | File |
 | --- | --- | --- | --- |
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
+| DES-034ZbbClipPart00000001 | Issue #839 GPUI fork clip-partition fix — 設計 | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
