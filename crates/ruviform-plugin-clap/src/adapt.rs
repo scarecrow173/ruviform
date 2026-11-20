@@ -38,10 +38,10 @@
 use core::mem::size_of;
 use core::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
-use clack_common::events::UnknownEvent;
 use clack_common::events::event_types::{TransportEvent, TransportFlags};
 use clack_common::events::io::InputEvents;
 use clack_common::events::spaces::CoreEventSpace;
+use clack_common::events::{Match, Pckn, UnknownEvent};
 use clack_plugin::plugin::PluginError;
 use clack_plugin::process::audio::{BufferError, ChannelPair, PortPair, SampleType};
 use clack_plugin::process::{PluginAudioConfiguration, ProcessStatus as ClapProcessStatus};
@@ -800,6 +800,102 @@ pub(crate) fn translate_events<'a>(
     })
 }
 
+/// Translates a plugin-written CLAP output event into a canonical
+/// report [`Event`] — the plugin→host direction the host bridge's
+/// `drain_output_reports` path consumes (Issue #842).
+///
+/// Faithful where the canonical type can carry the data — including
+/// frame stamps outside the block: `Event::frame_offset` is a `u32`,
+/// so even a malformed `u32::MAX` stamp is representable verbatim and
+/// reaches the report as observable evidence rather than a silent
+/// drop. The report contract (Issue #253) does not let the host
+/// reinterpret offsets, so no bound check exists here — the
+/// deliberate mirror of the input path's out-of-block drop.
+///
+/// Defined skips (`None`): a `ParamValue` for an unknown id, a
+/// `CLAP_INVALID_ID`, or a non-finite value; a note event with wild
+/// channel/key targeting or a non-finite velocity; every other core
+/// event type (note-end/choke/expression, param-mod/gesture,
+/// transport, sysex) and non-core event spaces — none carries an
+/// honest canonical payload.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+pub(crate) fn translate_output_event(
+    unknown: &UnknownEvent,
+    params: &[ParamInfo],
+) -> Option<Event> {
+    match unknown.as_core_event() {
+        Some(CoreEventSpace::ParamValue(event)) => {
+            let param_id = event.param_id()?;
+            let param = params.iter().find(|info| info.id.0 == param_id.get())?;
+            translate_param_event(unknown, param)
+        }
+        Some(CoreEventSpace::NoteOn(event)) => {
+            translate_note_event(unknown, event.pckn(), event.velocity(), true)
+        }
+        Some(CoreEventSpace::NoteOff(event)) => {
+            translate_note_event(unknown, event.pckn(), event.velocity(), false)
+        }
+        Some(CoreEventSpace::Midi(_) | CoreEventSpace::Midi2(_)) => translate_midi_event(unknown),
+        _ => None,
+    }
+}
+
+/// Shared `NoteOn`/`NoteOff` → [`MidiKind`] mapping for
+/// [`translate_output_event`]. Channel and key must be concrete —
+/// wild targeting has no canonical note payload — and `port_index`
+/// narrows to the MIDI group with [`Match::All`] read as
+/// [`MidiGroup::ZERO`] (the default port, same as the input path's
+/// "pckn applied as if global" convention). `note_id` has no
+/// canonical field and is a defined narrowing. Velocity is a `f64`
+/// unit value: non-finite is a defined skip, finite values clamp
+/// into `[0, 1]` and scale to canonical `u32` — the inverse of the
+/// input path's `unit_f64`, same round-then-saturate law as the
+/// VST3 bridge's `norm_f32_to_u32`.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free.
+fn translate_note_event(
+    unknown: &UnknownEvent,
+    pckn: Pckn,
+    velocity: f64,
+    on: bool,
+) -> Option<Event> {
+    let channel = match pckn.channel {
+        Match::Specific(channel) => u8::try_from(channel)
+            .ok()
+            .and_then(|c| MidiChannel::new(c).ok())?,
+        Match::All => return None,
+    };
+    let key = match pckn.key {
+        Match::Specific(key) => u8::try_from(key).ok().and_then(|k| NoteKey::new(k).ok())?,
+        Match::All => return None,
+    };
+    let group = match pckn.port_index {
+        Match::Specific(port) => u8::try_from(port)
+            .ok()
+            .and_then(|p| MidiGroup::new(p).ok())?,
+        Match::All => MidiGroup::ZERO,
+    };
+    if !velocity.is_finite() {
+        return None;
+    }
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let velocity = (velocity.clamp(0.0, 1.0) * f64::from(u32::MAX)).round() as u32;
+    let kind = if on {
+        MidiKind::NoteOn { key, velocity }
+    } else {
+        MidiKind::NoteOff { key, velocity }
+    };
+    Some(Event::new(
+        unknown.header().time(),
+        EventKind::Midi(MidiEvent {
+            group,
+            channel,
+            kind,
+        }),
+    ))
+}
+
 // ---------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------
@@ -1027,7 +1123,11 @@ pub(crate) mod test_support {
 mod tests {
     use super::test_support::StereoFixture;
     use super::*;
-    use clack_common::events::event_types::{MidiEvent, ParamValueEvent};
+    use clack_common::events::Event as _;
+    use clack_common::events::event_types::{
+        MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent, ParamGestureBeginEvent,
+        ParamModEvent, ParamValueEvent,
+    };
     use clack_common::events::io::EventBuffer;
     use clack_common::events::{EventFlags, EventHeader, Pckn};
     use clack_common::utils::{BeatTime, ClapId, SecondsTime};
@@ -1721,6 +1821,148 @@ mod tests {
         assert_eq!(translated_sequence(&buffer, 0).unwrap().len(), 1);
         buffer.push(&gain_event(1, 0.5));
         assert_eq!(translated_sequence(&buffer, 0).unwrap().len(), 1);
+    }
+
+    // -- Output reports (plugin → host, Issue #842) ------------------------
+
+    /// First event in `buffer` run through [`translate_output_event`]
+    /// against a `[GAIN_PARAM]` table.
+    fn output_event(buffer: &EventBuffer) -> Option<Event> {
+        let unknown = buffer.iter().next().expect("one event staged");
+        translate_output_event(unknown, &[GAIN_PARAM])
+    }
+
+    #[test]
+    fn translate_output_event_translates_param_value() {
+        let mut buffer = EventBuffer::new();
+        buffer.push(&gain_event(3, 1.0));
+        let event = output_event(&buffer).unwrap();
+        assert_eq!(event.frame_offset(), 3);
+        let EventKind::ParamValue(param) = event.kind() else {
+            panic!("ParamValue must land as a ParamValue report");
+        };
+        assert_eq!(param.param_id, GAIN_PARAM.id);
+        // plain 1.0 of [0,2] → normalized 0.5.
+        assert_eq!(param.value.get(), 0.5);
+    }
+
+    /// The faithful-stamp law: an out-of-block `u32::MAX` offset is
+    /// representable in `frame_offset` and reaches the report
+    /// verbatim — the malformed-stamp evidence the fault legs exist
+    /// to surface — while payloads the canonical type cannot carry
+    /// are defined skips.
+    #[test]
+    fn translate_output_event_carries_malformed_stamp_and_skips_payload() {
+        let mut buffer = EventBuffer::new();
+        buffer.push(&gain_event(u32::MAX, 0.0));
+        let event = output_event(&buffer).unwrap();
+        assert_eq!(event.frame_offset(), u32::MAX);
+
+        // A `ParamValue` for an unknown id is a defined skip.
+        buffer.clear();
+        buffer.push(&ParamValueEvent::new(
+            0,
+            ClapId::new(42),
+            Pckn::match_all(),
+            1.0,
+        ));
+        assert!(output_event(&buffer).is_none());
+
+        // A non-finite value is a defined skip — `ParamInfo::
+        // normalize` rejects NaN rather than fabricating one.
+        buffer.clear();
+        buffer.push(&gain_event(0, f64::NAN));
+        assert!(output_event(&buffer).is_none());
+    }
+
+    #[test]
+    fn translate_output_event_translates_note_events() {
+        let pckn = || {
+            Pckn::new(
+                Match::All,
+                Match::Specific(3),
+                Match::Specific(60),
+                Match::All,
+            )
+        };
+        let mut buffer = EventBuffer::new();
+        buffer.push(&NoteOnEvent::new(4, pckn(), 0.5));
+        let event = output_event(&buffer).unwrap();
+        assert_eq!(event.frame_offset(), 4);
+        let EventKind::Midi(midi) = event.kind() else {
+            panic!("NoteOn must land as a Midi report");
+        };
+        assert_eq!(midi.channel, MidiChannel::new(3).unwrap());
+        assert_eq!(midi.group, MidiGroup::ZERO);
+        assert!(matches!(midi.kind, MidiKind::NoteOn { key, velocity }
+                if key == NoteKey::new(60).unwrap() && MidiValue::as_u7(velocity) == 64));
+
+        // NoteOff mirrors NoteOn's mapping.
+        buffer.clear();
+        buffer.push(&NoteOffEvent::new(9, pckn(), 0.25));
+        let EventKind::Midi(midi) = output_event(&buffer).unwrap().kind() else {
+            panic!("NoteOff must land as a Midi report");
+        };
+        assert!(matches!(
+            midi.kind,
+            MidiKind::NoteOff { key, .. } if key == NoteKey::new(60).unwrap()
+        ));
+
+        // A concrete port index narrows to the MIDI group.
+        buffer.clear();
+        buffer.push(&NoteOnEvent::new(
+            0,
+            Pckn::new(
+                Match::Specific(2),
+                Match::Specific(3),
+                Match::Specific(60),
+                Match::All,
+            ),
+            0.5,
+        ));
+        let EventKind::Midi(midi) = output_event(&buffer).unwrap().kind() else {
+            panic!("a concrete port must narrow to the MIDI group");
+        };
+        assert_eq!(midi.group, MidiGroup::new(2).unwrap());
+
+        // Wild channel/key targeting has no canonical note payload —
+        // defined skips.
+        buffer.clear();
+        buffer.push(&NoteOnEvent::new(0, Pckn::match_all(), 0.5));
+        assert!(output_event(&buffer).is_none());
+        buffer.clear();
+        buffer.push(&NoteOnEvent::new(0, pckn(), f64::NAN));
+        assert!(
+            output_event(&buffer).is_none(),
+            "non-finite velocity is a defined skip"
+        );
+    }
+
+    #[test]
+    fn translate_output_event_translates_midi_and_skips_rest() {
+        let mut buffer = EventBuffer::new();
+        // A channel-voice `Midi` event lands through the input path's
+        // own `translate_midi_event` law.
+        buffer.push(&MidiEvent::new(5, 0, [0x90, 60, 100]));
+        let event = output_event(&buffer).unwrap();
+        assert_eq!(event.frame_offset(), 5);
+        assert!(matches!(event.kind(), EventKind::Midi(_)));
+
+        // Choke, gestures and param-mod carry no canonical report
+        // payload — defined skips.
+        let choke = NoteChokeEvent::new(0, Pckn::match_all());
+        let gesture = ParamGestureBeginEvent::new(0, gain_clap_id());
+        let modulation = ParamModEvent::new(0, gain_clap_id(), Pckn::match_all(), 0.5);
+        for event in [
+            choke.as_unknown(),
+            gesture.as_unknown(),
+            modulation.as_unknown(),
+        ] {
+            assert!(
+                translate_output_event(event, &[GAIN_PARAM]).is_none(),
+                "unsupported core kinds are defined skips"
+            );
+        }
     }
 
     // -- Transport -----------------------------------------------------------

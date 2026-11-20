@@ -424,6 +424,80 @@ fn fault_invalid_mode_fills_nan_outputs() {
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }
 
+/// `test_fault` `bad_time` output event through the production host's
+/// `drain_output_reports` (Issue #842): the armed block pushes a
+/// `ParamValue` stamped `u32::MAX` onto `events.output`, and the
+/// production bridge — no longer a `void` sink — translates it
+/// faithfully into a canonical report: the malformed stamp survives
+/// as `frame_offset == u32::MAX`, plain `0.0` normalizes to `0.0`.
+/// An `OutputEvents::void()` sink could never produce this evidence.
+#[test]
+fn fault_bad_time_output_event_is_host_observable() {
+    let mut plugin = prepared_fault_plugin();
+
+    let (result, _out) = drive_block(&mut *plugin, &[fault_arm(0.75)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+
+    let mut reports = Vec::new();
+    plugin.drain_output_reports(&mut reports);
+    assert_eq!(
+        reports.len(),
+        1,
+        "the armed block must emit exactly the malformed output event"
+    );
+    assert_eq!(
+        reports[0].frame_offset(),
+        u32::MAX,
+        "the out-of-block stamp translates faithfully as observable evidence"
+    );
+    let EventKind::ParamValue(param) = reports[0].kind() else {
+        panic!("the output event must land as a ParamValue report");
+    };
+    assert_eq!(param.param_id, ParamId(0));
+    assert_eq!(param.value.get(), 0.0);
+
+    // The drain empties the pending buffer — a second drain returns
+    // nothing fabricated.
+    reports.clear();
+    plugin.drain_output_reports(&mut reports);
+    assert!(reports.is_empty(), "drained reports must not repeat");
+}
+
+/// `test_fault` `invalid` output event through the same drain: the
+/// armed block pushes a `ParamValue` carrying `NaN`, which the
+/// canonical `ParamValue` type cannot honestly carry — a defined
+/// skip, not a fabricated `0.0`. The `bad_time` block first proves
+/// the drain path is live (an empty drain after `invalid` is only
+/// meaningful against a drain that demonstrably moves events).
+#[test]
+fn fault_invalid_output_event_is_defined_skip() {
+    let mut plugin = prepared_fault_plugin();
+
+    drive_block(&mut *plugin, &[fault_arm(0.75)]);
+    let mut reports = Vec::new();
+    plugin.drain_output_reports(&mut reports);
+    assert_eq!(
+        reports.len(),
+        1,
+        "the live drain must deliver bad_time's event first"
+    );
+    reports.clear();
+
+    let (result, _out) = drive_block(&mut *plugin, &[fault_arm(0.875)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    plugin.drain_output_reports(&mut reports);
+    assert!(
+        reports.is_empty(),
+        "the NaN payload is a defined skip — nothing reaches the drain"
+    );
+}
+
 /// `test_stateful`'s parameter surface through the production path:
 /// the `params` extension reports the same gain contract as
 /// `test_gain` — plain range `[0.0, 2.0]`, default `1.0`.

@@ -47,7 +47,7 @@ use ruviform_plugin_core::{
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessIsolation,
-    OutOfProcessSpec, PluginHandle, PluginHost,
+    OutOfProcessSpec, PluginHandle, PluginHost, ReportDrain,
 };
 
 /// The `test_fault` descriptor the child synthesizes from a real
@@ -929,11 +929,10 @@ fn real_test_fault_l1_rt_alloc_marks_armed_blocks() {
 /// → a zero-tail pass-through fixture reports `CLAP_PROCESS_TAIL`,
 /// which the wire carries as `tail_frames == u32::MAX` — the
 /// bad-timing lie a host oracle detects. (The CLAP-only leg — a
-/// `u32::MAX`-stamped output event — is emitted on the child's
-/// `events.output`; the ruviform v1 host maps plugin output to
-/// `OutputEvents::void()` and cannot observe it — recorded as
-/// unsupported on this host.) The instance stays `Processing`;
-/// disarm restores the zero-tail truth.
+/// `u32::MAX`-stamped output event on the child's `events.output` —
+/// is observable through `drain_output_reports`; see
+/// `real_test_fault_l1_output_events_drain`.) The instance stays
+/// `Processing`; disarm restores the zero-tail truth.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
 fn real_test_fault_l1_bad_time_claims_infinite_tail() {
@@ -1048,6 +1047,140 @@ fn real_test_fault_l1_invalid_emits_nan_block() {
     }
     assert_eq!(clean, 6, "a disarmed instance must pass audio through");
 
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// The CLAP-only output-event legs through the wire-v4
+/// `DrainOutputReports` verb (Issue #842): an armed `bad_time` block
+/// pushes a `ParamValue` stamped `u32::MAX` onto the child's
+/// `events.output`, and the production bridge now translates it
+/// faithfully into a canonical report — the malformed stamp reaches
+/// the parent's `drain_output_reports` as `frame_offset == u32::MAX`,
+/// positive evidence a `void` sink could never produce. The `invalid`
+/// leg's NaN payload is a defined skip — after draining `bad_time`'s
+/// evidence, an `invalid`-armed run appends nothing. The instance
+/// stays `Processing`; disarm + teardown stay clean.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_fault_l1_output_events_drain() {
+    assert_fixture_present();
+
+    let expected = EXPECTED_FAULT;
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // Poll armed blocks (normalized 0.75 → plain 6.0) until the
+    // `TAIL_INFINITE` claim lands on at least two matched calls —
+    // the same armed block that emits exactly one `u32::MAX`-stamped
+    // `ParamValue` on the child's output list. The armed event fires
+    // inside the child's `process()` asynchronously, so matched-but-
+    // unarmed blocks must not be counted as emitted evidence.
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut landed = 0_u32;
+    while Instant::now() < deadline && landed < 2 {
+        let (result, deltas) = submit_block_result(&mut host, handle, &[fault_event(0.75)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && result.tail_frames == u32::MAX
+        {
+            landed += 1;
+        }
+    }
+    assert_eq!(landed, 2, "two armed bad_time blocks must land");
+
+    let mut reports = Vec::new();
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained),
+        "the L1 audio slot must drain reports"
+    );
+    // Every armed block emits exactly one output event; a submit the
+    // leg substituted may still have rendered child-side, so the
+    // backlog holds at least the two claimed blocks' events.
+    assert!(
+        reports.len() >= 2,
+        "every armed bad_time block emits one output event"
+    );
+    for report in &reports {
+        assert_eq!(
+            report.frame_offset(),
+            u32::MAX,
+            "the out-of-block stamp translates faithfully as observable evidence"
+        );
+        let EventKind::ParamValue(param) = report.kind() else {
+            panic!("the output event must land as a ParamValue report");
+        };
+        assert_eq!(param.param_id, ParamId(0));
+        assert_eq!(param.value.get(), 0.0);
+    }
+
+    // `invalid` — the NaN payload is a defined skip: the live drain
+    // (proven above) appends nothing for the armed blocks. Poll full
+    // blocks (normalized 0.875 → plain 7.0) until two matched
+    // all-NaN renders land — each armed block pushes the NaN event
+    // the translation layer then skips.
+    reports.clear();
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut nan_blocks = 0_u32;
+    while Instant::now() < deadline && nan_blocks < 2 {
+        let (result, out_left, out_right, deltas) =
+            submit_block_full(&mut host, handle, &[fault_event(0.875)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && out_left.iter().all(|s| s.is_nan())
+            && out_right.iter().all(|s| s.is_nan())
+        {
+            nan_blocks += 1;
+        }
+    }
+    assert_eq!(nan_blocks, 2, "two armed invalid blocks must land");
+    // Transition-window blocks may still have been `bad_time`-armed
+    // when processed — their reports are stragglers, not `invalid`
+    // evidence. Flush them so the next drain proves emptiness on
+    // armed `invalid` blocks alone.
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained)
+    );
+    reports.clear();
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut skipped = 0_u32;
+    while Instant::now() < deadline && skipped < 2 {
+        let (result, out_left, out_right, deltas) =
+            submit_block_full(&mut host, handle, &[fault_event(0.875)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && out_left.iter().all(|s| s.is_nan())
+            && out_right.iter().all(|s| s.is_nan())
+        {
+            skipped += 1;
+        }
+    }
+    assert_eq!(skipped, 2, "two more armed invalid blocks must land");
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained)
+    );
+    assert!(
+        reports.is_empty(),
+        "the NaN payload is a defined skip — nothing reaches the drain"
+    );
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing),
+        "the output legs stay defined, non-fatal observations"
+    );
+
+    // Disarm — clean teardown.
+    arm_fault(&mut host, handle, 0.0);
     host.execute(HostCommand::StopProcessing { handle })
         .unwrap();
     host.execute(HostCommand::Deactivate { handle }).unwrap();

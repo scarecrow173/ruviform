@@ -63,9 +63,22 @@
 //!   `EventKind::Midi` maps to structured `NoteOn`/`NoteOff` events
 //!   or raw `clap_event_midi` bytes for the remaining channel-voice
 //!   kinds (canonical `u32` ↔ CLAP unit/`u7` via [`MidiValue`]).
-//!   The plugin's output events go to [`OutputEvents::void`] —
-//!   discarded, not mapped (v1), in a sink the plugin cannot force to
-//!   allocate on the RT path.
+//! - **Output reports** (plugin → host, Issue #842) — the plugin's
+//!   `events.output` is a persistent [`EventBuffer`] behind a
+//!   [`BoundedOutputBuffer`]: pushes past the count/byte bounds are
+//!   refused at `try_push` (the plugin-visible back-pressure), so the
+//!   backing `Vec` never reallocates on the RT path. After the call
+//!   the buffered events translate through
+//!   [`translate_output_event`] (`ParamValue` → `EventKind::
+//!   ParamValue`, `NoteOn`/`NoteOff`/`Midi`/`Midi2` → `EventKind::
+//!   Midi`) into `pending_reports`, which accumulates across blocks
+//!   until [`PluginProcessor::drain_output_reports`] moves it into
+//!   the caller's `Vec` — a non-RT verb per the neutral contract
+//!   (Issue #253 report wire). Untranslatable payloads (non-finite
+//!   value, unknown param, unsupported kind/space) and buffer
+//!   overflows are defined skips counted in `report_stats`; frame
+//!   stamps translate faithfully — a `u32::MAX` stamp stays
+//!   observable evidence rather than a silent drop.
 //! - **`steady_time`/`transport`** — `steady_time` stays `None` (no
 //!   monotonic counter is tracked); a caller-supplied
 //!   [`TransportInfo`] maps to `clap_event_transport` — playing
@@ -132,8 +145,8 @@ use clack_common::events::event_types::{
     MidiEvent as ClapMidiEvent, NoteOffEvent, NoteOnEvent, ParamValueEvent, TransportEvent,
     TransportFlags,
 };
-use clack_common::events::io::{EventBuffer, OutputEvents};
-use clack_common::events::{EventFlags, EventHeader, Match, Pckn};
+use clack_common::events::io::{EventBuffer, OutputEventBuffer, OutputEvents, TryPushError};
+use clack_common::events::{EventFlags, EventHeader, Match, Pckn, UnknownEvent};
 use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::{ClapId, FixedPoint};
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
@@ -155,11 +168,13 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, EventKind, EventList, GuiHandle, GuiSize, HostError,
-    ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory,
-    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
-    TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiSize,
+    HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    ProcessStatus, TransportInfo, erase,
 };
+
+use crate::adapt::translate_output_event;
 
 /// Upper bound of param events forwarded per block — the same scale as
 /// the plugin-side adapter's `MAX_EVENTS_PER_BLOCK`. Excess events are
@@ -635,11 +650,22 @@ struct ClapPlugin {
     input_ports: AudioPorts,
     output_ports: AudioPorts,
     /// Persistent input event buffer — capacity-bounded at `prepare`,
-    /// cleared per block. Plugin output events go to
-    /// [`OutputEvents::void`] instead of a buffer: never read in v1,
-    /// and a plugin cannot force a host `Vec` past capacity on the RT
-    /// path.
+    /// cleared per block.
     input_events: EventBuffer,
+    /// Persistent plugin→host output store — a [`BoundedOutputBuffer`]
+    /// wrapping an [`EventBuffer`] reserved at `prepare`, cleared per
+    /// block. The plugin's `try_push` is refused past the count/byte
+    /// bounds, so the backing `Vec` never grows on the RT path.
+    output_events: BoundedOutputBuffer,
+    /// Canonical output reports collected after each `process` —
+    /// accumulated across blocks until [`PluginProcessor::
+    /// drain_output_reports`] moves them into the caller's `Vec`.
+    /// Reserved at `prepare`; a full buffer is a defined drop counted
+    /// in `report_stats.skipped` (the VST3 bridge's back-pressure
+    /// bound).
+    pending_reports: Vec<Event>,
+    /// Report-path skip/refusal counters — see [`ReportStats`].
+    report_stats: ReportStats,
     /// The plugin's `clap.ext.gui` extension handle — `Some` only
     /// while a GUI created by `open_gui` is alive. GUI teardown
     /// (`hide` best-effort + `destroy`) runs in `close_gui` and at
@@ -675,6 +701,9 @@ impl ClapPlugin {
             input_ports: AudioPorts::with_capacity(0, 0),
             output_ports: AudioPorts::with_capacity(0, 0),
             input_events: EventBuffer::new(),
+            output_events: BoundedOutputBuffer::with_capacity(0),
+            pending_reports: Vec::new(),
+            report_stats: ReportStats::new(),
             gui: None,
             gui_seq: 0,
         }
@@ -695,6 +724,36 @@ impl ClapPlugin {
         let handle = instance.plugin_handle();
         let _ = gui.hide(&handle);
         gui.destroy(&handle);
+    }
+
+    /// Translates the plugin's buffered output events into canonical
+    /// [`Event`] reports appended to `pending_reports` — the
+    /// [`translate_output_event`] dispatch:
+    /// `ParamValue` → `EventKind::ParamValue`, note/`Midi`/`Midi2`
+    /// → `EventKind::Midi`. Runs inside `process` (still the RT
+    /// path): bounded iteration over preallocated storage, pushes
+    /// inside reserved capacity — an untranslatable entry or a full
+    /// `pending_reports` is a defined skip counted in `report_stats`,
+    /// never an allocation. Reports accumulate across blocks until
+    /// drained — the bounded `pending_reports` capacity is the
+    /// back-pressure bound the neutral contract declares (the VST3
+    /// bridge's `collect_output_reports` shape).
+    ///
+    /// **RT contract:** RT-suitable — bounded scan, no allocation.
+    fn collect_output_reports(&mut self) {
+        self.report_stats.refused += self.output_events.take_refused();
+        for unknown in self.output_events.iter() {
+            match translate_output_event(unknown, self.params) {
+                Some(event) => {
+                    push_report(&mut self.pending_reports, &mut self.report_stats, event);
+                }
+                None => self.report_stats.skipped += 1,
+            }
+        }
+        // Canonical consumers expect frame-ordered reports; the sort
+        // is unstable (no allocation) over the reserved buffer.
+        self.pending_reports
+            .sort_unstable_by_key(|event| event.frame_offset());
     }
 }
 
@@ -1011,6 +1070,115 @@ fn transport_event(info: &TransportInfo) -> TransportEvent {
     event
 }
 
+// ---------------------------------------------------------------------------
+// Output reports (plugin → host event drain, Issue #842)
+// ---------------------------------------------------------------------------
+
+/// Report-path counters — the observable side of the defined
+/// skip/refusal law, cumulative across blocks (the VST3 bridge's
+/// `MidiBridgeStats` shape). Counters are diagnostic state, never
+/// reset by the bridge itself.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ReportStats {
+    /// Output events translated into canonical reports and queued.
+    translated: u64,
+    /// Output events defined-skipped — untranslatable payload
+    /// (non-finite value, unknown parameter, unsupported kind or
+    /// event space) or `pending_reports` overflow.
+    skipped: u64,
+    /// Plugin `try_push` calls the bounded output buffer refused —
+    /// the structural back-pressure bound seen plugin-side.
+    refused: u64,
+}
+
+impl ReportStats {
+    /// Zeroed counters.
+    const fn new() -> Self {
+        Self {
+            translated: 0,
+            skipped: 0,
+            refused: 0,
+        }
+    }
+}
+
+/// Pushes a canonical report into `pending_reports` inside its
+/// reserved capacity — a full buffer is a defined drop counted in
+/// `stats.skipped`, never a reallocation (the VST3 bridge's
+/// `push_report` law).
+fn push_report(reports: &mut Vec<Event>, stats: &mut ReportStats, event: Event) {
+    if reports.len() < reports.capacity() {
+        reports.push(event);
+        stats.translated += 1;
+    } else {
+        stats.skipped += 1;
+    }
+}
+
+/// A bounded [`OutputEventBuffer`] over the persistent
+/// [`EventBuffer`] backing the plugin's `events.output`.
+///
+/// clack's stock `EventBuffer` accepts every push — its `Vec`
+/// reallocates past capacity, which would let plugin code force a
+/// host allocation on the RT path. This wrapper refuses `try_push`
+/// with `Err(TryPushError)` — the back-pressure the CLAP contract
+/// gives a bounded host — once either bound is hit:
+///
+/// - **count** ≥ [`MAX_EVENTS_PER_BLOCK`], or
+/// - **byte size** of the single event > `size_of::<TransportEvent>`
+///   (the "largest standard event" quantum
+///   [`EventBuffer::with_capacity`] reserves per index slot — bigger
+///   payloads like oversized `SysEx` dumps are refused, a defined
+///   bound, not an unbounded store).
+///
+/// `with_capacity(N)` reserves `N` index slots and `N ×
+/// size_of::<TransportEvent>` aligned header elements, so every
+/// accepted push stays inside reserved capacity — the RT path never
+/// reallocates. Refusals are counted per block and folded into
+/// [`ReportStats::refused`] at collect time.
+struct BoundedOutputBuffer {
+    buffer: EventBuffer,
+    refused: u64,
+}
+
+impl BoundedOutputBuffer {
+    /// Empty buffer with the `prepare`-time reservation.
+    fn with_capacity(events: usize) -> Self {
+        Self {
+            buffer: EventBuffer::with_capacity(events),
+            refused: 0,
+        }
+    }
+
+    /// Empties the buffer for the next block — capacity preserved.
+    fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    /// Iterates the buffered events as `&UnknownEvent`.
+    fn iter(&self) -> impl Iterator<Item = &UnknownEvent> + '_ {
+        self.buffer.iter()
+    }
+
+    /// Takes the per-block refusal count (counters reset to 0).
+    fn take_refused(&mut self) -> u64 {
+        core::mem::take(&mut self.refused)
+    }
+}
+
+impl OutputEventBuffer for BoundedOutputBuffer {
+    fn try_push(&mut self, event: &UnknownEvent) -> Result<(), TryPushError> {
+        if usize::try_from(self.buffer.len()).unwrap_or(usize::MAX) >= MAX_EVENTS_PER_BLOCK
+            || event.as_bytes().len() > size_of::<TransportEvent>()
+        {
+            self.refused += 1;
+            return Err(TryPushError::new());
+        }
+        self.buffer.push(event);
+        Ok(())
+    }
+}
+
 impl PluginProcessor for ClapPlugin {
     /// `prepare` → `activate`: stores the `StoppedPluginAudioProcessor`
     /// `activate` returns and pre-sizes every buffer the RT call needs
@@ -1095,6 +1263,13 @@ impl PluginProcessor for ClapPlugin {
         self.input_ports = AudioPorts::with_capacity(total_in, in_channels.len());
         self.output_ports = AudioPorts::with_capacity(total_out, out_channels.len());
         self.input_events = EventBuffer::with_capacity(MAX_EVENTS_PER_BLOCK);
+        self.output_events = BoundedOutputBuffer::with_capacity(MAX_EVENTS_PER_BLOCK);
+        // Report collection buffers — reserved once; `process` pushes
+        // inside capacity (defined drop past it). `report_stats`
+        // stays cumulative across activations (the VST3 bridge's
+        // `MidiBridgeStats` law).
+        self.pending_reports.clear();
+        self.pending_reports.reserve(MAX_EVENTS_PER_BLOCK);
         Ok(())
     }
 
@@ -1169,10 +1344,13 @@ impl PluginProcessor for ClapPlugin {
 
         push_events(&mut self.input_events, self.params, events, frames);
         let input_events = self.input_events.as_input();
-        // Plugin output events are unmapped in v1 — `void` discards
-        // every `try_push` with no backing store a plugin could grow
-        // on the RT path.
-        let mut output_events = OutputEvents::void();
+        // Plugin output events land in the persistent bounded buffer —
+        // pushes past the count/byte bounds are refused (the plugin
+        // sees `try_push` `Err`), so the backing store never grows on
+        // the RT path. Translated into `pending_reports` after the
+        // call.
+        self.output_events.clear();
+        let mut output_events = OutputEvents::from_buffer(&mut self.output_events);
         // `steady_time` stays `None` (no monotonic counter is tracked
         // — see the module docs); `transport` maps the neutral
         // snapshot to a CLAP `clap_event_transport` when the caller
@@ -1190,6 +1368,7 @@ impl PluginProcessor for ClapPlugin {
 
         // Bounce processed scratch back to the host-visible output.
         bounce_output(&self.output_scratch, outputs, frames);
+        self.collect_output_reports();
 
         match status {
             Ok(ClapProcessStatus::Continue | ClapProcessStatus::ContinueIfNotQuiet) => {
@@ -1201,6 +1380,13 @@ impl PluginProcessor for ClapPlugin {
             Ok(ClapProcessStatus::Sleep) => ProcessResult::SLEEP,
             Err(_) => ProcessResult::new(ProcessStatus::Error, ProcessResult::TAIL_NONE),
         }
+    }
+
+    /// Moves the accumulated canonical reports into `out` — a non-RT
+    /// verb per the neutral contract (caller-owned `Vec` append, the
+    /// same shape the VST3 bridge drains).
+    fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.pending_reports);
     }
 }
 
@@ -1858,7 +2044,8 @@ mod tests {
 
     /// Issue #22 RT-verification lane — the bridge `process` path
     /// (input/output bounce into pre-sized scratch, `with_*_buffers`
-    /// within reserved capacity, `push_events`, `OutputEvents::void`)
+    /// within reserved capacity, `push_events`, the bounded output
+    /// buffer plus `collect_output_reports`)
     /// performs no allocation after `prepare`; `assert_no_alloc`
     /// aborts the test binary on any (de)allocation inside the
     /// window. The `#[global_allocator]` `AllocDisabler` armed in
@@ -1978,5 +2165,33 @@ mod tests {
         assert_eq!(gui_size_component(f64::NEG_INFINITY), 0);
         assert_eq!(gui_size_component(f64::from(u32::MAX) + 0.4), u32::MAX);
         assert_eq!(gui_size_component(1e30), u32::MAX);
+    }
+
+    /// `BoundedOutputBuffer` is the structural bound the stock
+    /// `EventBuffer` lacks (Issue #842): `try_push` accepts up to
+    /// `MAX_EVENTS_PER_BLOCK` events then refuses with
+    /// `Err(TryPushError)` — never reallocating on the RT path — and
+    /// the refusal count is handed to `ReportStats` per block.
+    #[test]
+    fn bounded_output_buffer_refuses_past_count_bound() {
+        let mut buffer = BoundedOutputBuffer::with_capacity(MAX_EVENTS_PER_BLOCK);
+        let event = ParamValueEvent::new(0, ClapId::new(0), Pckn::match_all(), 0.5);
+        for _ in 0..MAX_EVENTS_PER_BLOCK {
+            assert!(buffer.try_push(event.as_ref()).is_ok());
+        }
+        assert_eq!(buffer.iter().count(), MAX_EVENTS_PER_BLOCK);
+
+        // Every push past the bound is refused — never reallocated —
+        // and each refusal is counted once.
+        assert!(buffer.try_push(event.as_ref()).is_err());
+        assert!(buffer.try_push(event.as_ref()).is_err());
+        assert_eq!(buffer.take_refused(), 2);
+        assert_eq!(buffer.take_refused(), 0, "refusal count is per-block");
+
+        // `clear` empties for the next block without releasing the
+        // reserved capacity — the accept bound resets with it.
+        buffer.clear();
+        assert!(buffer.try_push(event.as_ref()).is_ok());
+        assert_eq!(buffer.iter().count(), 1);
     }
 }
