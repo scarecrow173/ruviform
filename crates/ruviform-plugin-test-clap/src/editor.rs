@@ -29,8 +29,9 @@
 //! - declares `PluginGui` via `declare_extensions` and implements
 //!   [`PluginGuiImpl`] on the main-thread object;
 //! - answers `is_api_supported`/`get_preferred_api` true only for
-//!   `win32` + embedded on Windows builds — floating windows,
-//!   other APIs, and non-Windows builds are honest `false`/`None`;
+//!   `win32` on Windows builds — embedded *and* floating (the
+//!   plugin-owned popup surface); other APIs and non-Windows builds
+//!   are honest `false`/`None`;
 //! - `set_parent` validates the supplied [`Window`] is a Win32
 //!   window, requires `create` first, rejects a second embed, then
 //!   creates a real `WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS` child
@@ -45,10 +46,15 @@
 //!   HWND — the VST3 `test_editor` `canResize`/`onSize` counterpart;
 //!   `adjust_size`/`get_resize_hints` keep the trait defaults (no
 //!   constraints to declare), `set_size` before `create` is a
-//!   defined rejection, `set_transient` rejects (floating
-//!   unsupported), `set_scale` acknowledges a finite positive
+//!   defined rejection, `set_scale` acknowledges a finite positive
 //!   factor (CLAP permits ignoring it — the Win32 child uses
-//!   physical pixels), `suggest_title` is a documented no-op.
+//!   physical pixels);
+//! - floating mode is the fixture's popup surface: `set_transient`
+//!   records the host window the popup stays above (embedded mode
+//!   is the honest refusal), `suggest_title` names the popup HWND,
+//!   and `show` creates a real `WS_POPUP` window owned by the
+//!   transient parent on first call — `set_parent` on a floating
+//!   GUI is the defined rejection in the opposite direction.
 //!
 //! ## Windows child window
 //!
@@ -134,10 +140,20 @@ const EMBEDDED_WIN32: GuiConfiguration<'static> = GuiConfiguration {
 struct GuiState {
     /// `create` ran and `destroy` has not — state verbs gate on this.
     created: bool,
-    /// The embedded child HWND as a `usize` (`None` until
-    /// `set_parent`). Only ever `Some` on Windows — the non-Windows
-    /// `win32` shim never produces one.
+    /// The negotiated mode from `create`: `true` = the CLAP floating
+    /// surface (plugin-owned popup window), `false` = embedded.
+    floating: bool,
+    /// The embedded child HWND — or, in floating mode, the
+    /// plugin-owned popup HWND (`None` until `set_parent`/`show`).
+    /// Only ever `Some` on Windows — the non-Windows `win32` shim
+    /// never produces one.
     hwnd: Option<usize>,
+    /// Floating mode only: the transient parent `set_transient`
+    /// handed the plugin — the window the popup stays above.
+    transient: Option<usize>,
+    /// Floating mode only: the title `suggest_title` recorded —
+    /// applied to the popup HWND's window text when it is created.
+    title: Option<String>,
     /// The current editor size — `get_size` reports it, `set_size`
     /// replaces it (and resizes the child HWND when attached).
     size: GuiSize,
@@ -147,7 +163,10 @@ impl Default for GuiState {
     fn default() -> Self {
         Self {
             created: false,
+            floating: false,
             hwnd: None,
+            transient: None,
+            title: None,
             size: DEFAULT_GUI_SIZE,
         }
     }
@@ -374,12 +393,14 @@ impl PluginAudioPortsImpl for TestEditorMainThread<'_> {
 // ---------------------------------------------------------------------------
 
 impl PluginGuiImpl for TestEditorMainThread<'_> {
-    /// Only `win32` + embedded on Windows builds — floating windows,
-    /// other windowing APIs, and non-Windows builds are honest
-    /// `false`. The host bridge's `open_gui` requires exactly this
-    /// gate before it calls `create`.
+    /// `win32` on Windows builds — embedded *and* floating (the
+    /// plugin-owned popup surface): other windowing APIs and
+    /// non-Windows builds are honest `false`. The host bridge's
+    /// `open_gui` requires exactly this gate before it calls
+    /// `create` (embedded); `create` is the negotiation point that
+    /// records which mode the session runs.
     fn is_api_supported(&self, configuration: GuiConfiguration) -> bool {
-        configuration.api_type == GuiApiType::WIN32 && !configuration.is_floating && cfg!(windows)
+        configuration.api_type == GuiApiType::WIN32 && cfg!(windows)
     }
 
     /// The preferred configuration mirrors `is_api_supported` —
@@ -407,6 +428,7 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
             return Err(PluginError::Message("gui already created"));
         }
         state.created = true;
+        state.floating = configuration.is_floating;
         Ok(())
     }
 
@@ -424,6 +446,9 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
             win32::destroy(hwnd);
         }
         state.created = false;
+        state.floating = false;
+        state.transient = None;
+        state.title = None;
         state.size = DEFAULT_GUI_SIZE;
     }
 
@@ -495,6 +520,11 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         if !state.created {
             return Err(PluginError::Message("set_parent before create"));
         }
+        if state.floating {
+            // A floating surface has no parent to embed into —
+            // honest refusal, not a faked embed.
+            return Err(PluginError::Message("set_parent on floating gui"));
+        }
         if state.hwnd.is_some() {
             return Err(PluginError::Message("gui already embedded"));
         }
@@ -505,23 +535,68 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         Ok(())
     }
 
-    /// Floating windows are out of scope — always a defined
-    /// rejection, on every platform.
-    fn set_transient(&self, _window: Window) -> Result<(), PluginError> {
-        Err(PluginError::Message("floating gui unsupported"))
+    /// Floating mode: records the window the plugin-owned popup
+    /// should stay above — the CLAP popup surface's host half. The
+    /// supplied [`Window`] must be a Win32 window whose handle is a
+    /// live window (same `IsWindow` gate `set_parent` applies).
+    /// Embedded mode is the honest refusal the popup verb gets on a
+    /// surface that cannot be transient.
+    fn set_transient(&self, window: Window) -> Result<(), PluginError> {
+        let parent = window
+            .as_win32_hwnd()
+            .ok_or(PluginError::Message("set_transient: not a win32 window"))?;
+        let mut state = self
+            .gui
+            .try_borrow_mut()
+            .map_err(|_| PluginError::Message("gui state re-entered"))?;
+        if !state.created {
+            return Err(PluginError::Message("set_transient before create"));
+        }
+        if !state.floating {
+            return Err(PluginError::Message("set_transient on embedded gui"));
+        }
+        if !win32::is_window(parent as usize) {
+            return Err(PluginError::Message("set_transient: not a live window"));
+        }
+        state.transient = Some(parent as usize);
+        Ok(())
     }
 
-    // `suggest_title` keeps the trait's no-op default — it only
-    // applies to floating windows, which this fixture rejects.
+    /// Floating mode: records the host-suggested title — applied to
+    /// the popup HWND's window text when `show` creates it, and to a
+    /// live popup directly. Embedded mode acknowledges and ignores
+    /// (CLAP permits ignoring a suggestion that names no surface).
+    fn suggest_title(&self, title: &str) {
+        let Ok(mut state) = self.gui.try_borrow_mut() else {
+            return;
+        };
+        state.title = Some(title.to_string());
+        if let Some(hwnd) = state.hwnd {
+            win32::set_title(hwnd, title);
+        }
+    }
 
-    /// Shows the embedded child (`SW_SHOW`). Requires an attached
-    /// parent — `show` before `set_parent` (or before `create`) is a
-    /// host protocol violation and a defined rejection.
+    /// Shows the surface: embedded mode flips the child `SW_SHOW`;
+    /// floating mode creates the plugin-owned popup HWND on first
+    /// `show` (a `WS_POPUP` owned by the recorded transient parent,
+    /// titled `rvf-test-editor-popup` or the host-suggested title)
+    /// and shows it. `show` before `create` — or on embedded before
+    /// `set_parent` — is a host protocol violation and a defined
+    /// rejection.
     fn show(&self) -> Result<(), PluginError> {
-        let state = self
+        let mut state = self
             .gui
-            .try_borrow()
+            .try_borrow_mut()
             .map_err(|_| PluginError::Message("gui state re-entered"))?;
+        if state.floating && state.hwnd.is_none() {
+            let title = state
+                .title
+                .clone()
+                .unwrap_or_else(|| "rvf-test-editor-popup".to_string());
+            let hwnd = win32::popup(state.transient, &title, state.size)
+                .ok_or(PluginError::Message("popup window creation failed"))?;
+            state.hwnd = Some(hwnd);
+        }
         let Some(hwnd) = state.hwnd else {
             return Err(PluginError::Message("show before set_parent"));
         };
@@ -563,6 +638,8 @@ mod win32 {
     use std::sync::Once;
     use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 
+    use super::GuiSize;
+
     use windows_sys::Win32::Foundation::{HINSTANCE, HWND, RECT};
     use windows_sys::Win32::Graphics::Gdi::CreateSolidBrush;
     use windows_sys::Win32::System::LibraryLoader::{
@@ -572,7 +649,8 @@ mod win32 {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
         GetClientRect, IsWindow, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOMOVE, SWP_NOZORDER,
-        SetWindowPos, ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+        SetWindowPos, SetWindowTextW, ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_POPUP,
+        WS_VISIBLE,
     };
 
     /// Solid-fill color — blue, distinct from the VST3 fixture's
@@ -762,14 +840,75 @@ mod win32 {
             DestroyWindow(hwnd as HWND);
         }
     }
+
+    /// Creates the plugin-owned popup window — a `WS_POPUP` HWND
+    /// owned by `owner` (the `set_transient` parent, so the popup
+    /// stays above it and dies with it; `None` → unowned), sized
+    /// `width`×`height`, titled `title` — the observable tag an
+    /// observer reads through `GetWindowTextW`. Returns `None` on any
+    /// defined failure — the caller maps it to a `PluginError`.
+    pub(super) fn popup(owner: Option<usize>, title: &str, size: GuiSize) -> Option<usize> {
+        if !ensure_registered() {
+            return None;
+        }
+        let class = class_name();
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: the class and title outlive the synchronous call;
+        // `owner` is a live window or null (unowned popup). The
+        // returned HWND is owned by this gui state until `destroy`.
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title_w.as_ptr(),
+                WS_POPUP | WS_CLIPSIBLINGS,
+                0,
+                0,
+                i32::try_from(size.width).unwrap_or(200),
+                i32::try_from(size.height).unwrap_or(100),
+                owner.map_or(ptr::null_mut(), |hwnd| hwnd as HWND),
+                ptr::null_mut(),
+                MODULE_H.load(Ordering::Relaxed) as HINSTANCE,
+                ptr::null(),
+            )
+        };
+        if window.is_null() {
+            None
+        } else {
+            Some(window as usize)
+        }
+    }
+
+    /// Whether `hwnd` currently names a live window — the
+    /// `set_transient` validation gate and the test-side existence
+    /// check.
+    pub(super) fn is_window(hwnd: usize) -> bool {
+        // SAFETY: `IsWindow` is a pure handle-validity query — safe
+        // on any value.
+        unsafe { IsWindow(hwnd as HWND) != 0 }
+    }
+
+    /// Stamps the popup HWND's window text — the observable effect
+    /// of `suggest_title`. Best-effort: a dead handle is a harmless
+    /// `SetWindowTextW` error.
+    pub(super) fn set_title(hwnd: usize, title: &str) {
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `hwnd` is a window this module created; on a dead
+        // handle the call is a defined no-op error.
+        unsafe {
+            SetWindowTextW(hwnd as HWND, title_w.as_ptr());
+        }
+    }
 }
 
 /// Non-Windows shim — no HWND surface exists off Windows, so
-/// `attach` always answers `None` (the caller's defined rejection)
-/// and `destroy`/`set_visible`/`resize` are unreachable but defined.
+/// `attach`/`popup` always answer `None` (the caller's defined
+/// rejection) and the rest are unreachable but defined.
 #[cfg(not(target_os = "windows"))]
 mod win32 {
     use std::ffi::c_void;
+
+    use super::GuiSize;
 
     pub(super) fn attach(_parent: *mut c_void) -> Option<usize> {
         None
@@ -780,6 +919,16 @@ mod win32 {
     pub(super) fn resize(_hwnd: usize, _width: i32, _height: i32) {}
 
     pub(super) fn destroy(_hwnd: usize) {}
+
+    pub(super) fn popup(_owner: Option<usize>, _title: &str, _size: GuiSize) -> Option<usize> {
+        None
+    }
+
+    pub(super) fn is_window(_hwnd: usize) -> bool {
+        false
+    }
+
+    pub(super) fn set_title(_hwnd: usize, _title: &str) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -922,22 +1071,26 @@ mod tests {
         }
     }
 
-    /// `is_api_supported` answers `true` only for `win32` + embedded
-    /// on Windows builds — floating windows, every other API type,
-    /// and non-Windows builds are honest `false`.
+    /// `is_api_supported` answers `true` only for `win32` on Windows
+    /// builds — embedded *and* floating (the popup surface); every
+    /// other API type and non-Windows builds are honest `false`.
     #[test]
     fn api_support_is_win32_embedded_on_windows_only() {
         let main = main_thread();
         assert_eq!(
             main.is_api_supported(EMBEDDED_WIN32),
             cfg!(windows),
-            "win32+embedded is the only supported configuration"
+            "win32+embedded is supported"
         );
         let floating = GuiConfiguration {
             api_type: GuiApiType::WIN32,
             is_floating: true,
         };
-        assert!(!main.is_api_supported(floating), "floating is unsupported");
+        assert_eq!(
+            main.is_api_supported(floating),
+            cfg!(windows),
+            "win32+floating is the popup surface"
+        );
         let cocoa = GuiConfiguration {
             api_type: GuiApiType::COCOA,
             is_floating: false,
@@ -982,6 +1135,8 @@ mod tests {
         assert!(main.set_scale(-1.0).is_err());
         assert!(main.set_scale(f64::NAN).is_err());
         assert!(main.set_scale(f64::INFINITY).is_err());
+        // `set_transient` before `create` is a protocol violation —
+        // the floating-mode verb still declines honestly here.
         let transient = Window::from_generic_ptr(GuiApiType::WIN32, ptr::null_mut());
         assert!(main.set_transient(transient).is_err());
         // On Windows, `create` → `set_size` records the size
@@ -1006,12 +1161,12 @@ mod tests {
     #[test]
     fn create_and_destroy_are_idempotent_edges() {
         let main = main_thread();
-        // Unsupported configuration — defined rejection.
-        let floating = GuiConfiguration {
-            api_type: GuiApiType::WIN32,
-            is_floating: true,
+        // A non-win32 configuration is a defined rejection.
+        let cocoa = GuiConfiguration {
+            api_type: GuiApiType::COCOA,
+            is_floating: false,
         };
-        assert!(main.create(floating).is_err());
+        assert!(main.create(cocoa).is_err());
         // `create` with the supported config succeeds only where the
         // build can actually create a window.
         if cfg!(windows) {
@@ -1024,6 +1179,55 @@ mod tests {
             main.destroy();
         } else {
             assert!(main.create(EMBEDDED_WIN32).is_err());
+        }
+    }
+
+    /// Floating mode is the fixture's popup surface: `set_parent`
+    /// rejects (a floating surface has no embed), `set_transient`
+    /// accepts only a live Win32 window, `suggest_title` names the
+    /// popup, and `show` creates a real plugin-owned `WS_POPUP`
+    /// HWND that `hide`/`destroy` converge. Off Windows every verb
+    /// stays a defined rejection.
+    #[test]
+    fn floating_popup_surface_is_honest() {
+        let main = main_thread();
+        let floating = GuiConfiguration {
+            api_type: GuiApiType::WIN32,
+            is_floating: true,
+        };
+        if !cfg!(windows) {
+            assert!(main.create(floating).is_err());
+            return;
+        }
+        assert!(main.create(floating).is_ok());
+        // A floating surface cannot be embedded under a parent.
+        let parent = Window::from_generic_ptr(GuiApiType::WIN32, ptr::null_mut());
+        assert!(main.set_parent(parent).is_err());
+        // `set_transient` gates on a *live* win32 window — null and
+        // dead payloads are the defined rejection.
+        let dead = Window::from_generic_ptr(GuiApiType::WIN32, ptr::null_mut());
+        assert!(main.set_transient(dead).is_err());
+        #[cfg(target_os = "windows")]
+        {
+            // The host's window the popup stays above — a real HWND
+            // created with the same helper the popup itself uses.
+            let anchor = win32::popup(None, "transient-anchor", DEFAULT_GUI_SIZE)
+                .expect("transient anchor window");
+            let transient =
+                Window::from_generic_ptr(GuiApiType::WIN32, anchor as *mut core::ffi::c_void);
+            assert!(main.set_transient(transient).is_ok());
+            main.suggest_title("rvf-popup-suggested");
+            // First `show` materializes the plugin-owned popup.
+            assert!(main.show().is_ok());
+            assert!(
+                win32::is_window(main.gui.borrow().hwnd.expect("popup hwnd")),
+                "floating show leaves a live popup HWND"
+            );
+            assert!(main.hide().is_ok());
+            assert!(main.show().is_ok(), "re-showing a live popup");
+            main.destroy();
+            assert!(main.gui.borrow().hwnd.is_none(), "destroy frees the popup");
+            win32::destroy(anchor);
         }
     }
 

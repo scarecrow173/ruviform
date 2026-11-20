@@ -5,9 +5,9 @@
 //! ## Fault parameter law
 //!
 //! `Fault` is parameter id `0` with a plain (host-visible) range of
-//! `[0.0, 4.0]`, default `0.0`, stepped (`stepCount = 4` → five
+//! `[0.0, 8.0]`, default `0.0`, stepped (`stepCount = 7` → eight
 //! discrete modes). The normalized domain is the [`ParamInfo`] linear
-//! law (`plain = normalized * 4.0`), so the armed modes are reached
+//! law (`plain = normalized * 8.0`), so the armed modes are reached
 //! through ordinary `ParamValue` events — no argv, no env vars, no
 //! out-of-band channel:
 //!
@@ -17,7 +17,10 @@
 //! | `[1.0, 2.0)` | `abort` | `std::process::abort()` |
 //! | `[2.0, 3.0)` | `exit` | `std::process::exit(code)` — `code = round((plain - 2.0) * 100)` clamped to `[0, 100]` |
 //! | `[3.0, 4.0)` | `hang` | never returns (bounded spin) |
-//! | `4.0` | `error` | returns `ProcessStatus::Error` — a defined rejection, not a crash |
+//! | `[4.0, 5.0)` | `error` | returns `ProcessStatus::Error` — a defined rejection, not a crash |
+//! | `[5.0, 6.0)` | `rt_alloc` | heap-allocates inside `process()` (a bounded 4 KiB `Vec`) and writes the buffer's byte into `output[0][0]` — the `200.0` marker |
+//! | `[6.0, 7.0)` | `bad_time` | returns `Continue` with `TAIL_INFINITE` — a zero-tail fixture claiming an unbounded tail |
+//! | `[7.0, 8.0]` | `invalid` | fills every output sample with NaN — an invalid audio state |
 //!
 //! The mode is the *floor* of the plain value — any value inside a
 //! mode's unit band selects that mode, so automation jitter inside a
@@ -38,7 +41,25 @@
 //!
 //! `abort`/`exit`/`hang` intentionally kill or wedge the *host
 //! process* — they must only ever run inside the L1 out-of-process
-//! child. Unit tests exercise only `none`/`error` in-process.
+//! child. `error`/`rt_alloc`/`bad_time`/`invalid` stay defined and
+//! non-fatal — safe to exercise in-process.
+//!
+//! ## Detection contract
+//!
+//! `rt_alloc` is the RT-allocation fault: it allocates inside
+//! `process()` and writes `f32::from(0xC8)` = `200.0` — read *from*
+//! the heap buffer — into `output[0][0]`. A host-side allocator
+//! cannot observe the fixture's heap (and nothing crosses the L1
+//! process boundary), so the marker is the fixture's own report that
+//! the violation ran — the sample domain makes it unmissable to a
+//! scanning oracle.
+//!
+//! `bad_time`/`invalid` are the bad-timestamp / invalid-state faults:
+//! a zero-tail pass-through fixture reporting `TAIL_INFINITE`
+//! (`getTailSamples` = `0xFFFFFFFF`, VST3's `kInfiniteTail`) and a
+//! full-NaN output block. Both surface on ordinary neutral results —
+//! `ProcessResult::tail_frames` and the delivered samples — no side
+//! channel required.
 //!
 //! [`TestFaultProcessor`] implements the shared neutral
 //! [`PluginProcessor`] contract; the fault law is this fixture's own.
@@ -56,22 +77,33 @@ use crate::component::TestComponent;
 /// VST3 parameter id of the fault parameter.
 pub(crate) const FAULT_PARAM_ID: u32 = 0;
 
-/// The `Fault` parameter descriptor — plain range `[0.0, 4.0]`,
-/// default `0.0` (`none`), automatable and stepped (five modes).
+/// The `Fault` parameter descriptor — plain range `[0.0, 8.0]`,
+/// default `0.0` (`none`), automatable and stepped (eight modes).
 pub(crate) const FAULT_PARAM: ParamInfo = ParamInfo {
     id: ParamId(FAULT_PARAM_ID),
     name: "Fault",
     unit: "",
     min_value: 0.0,
-    max_value: 4.0,
+    max_value: 8.0,
     default_value: 0.0,
     flags: ParamFlags::AUTOMATABLE.union(ParamFlags::STEPPED),
 };
 
-/// VST3 `ParameterInfo::stepCount` for the fault parameter — four
-/// steps means five discrete modes (`none`/`abort`/`exit`/`hang`/
-/// `error`).
-pub(crate) const FAULT_STEP_COUNT: i32 = 4;
+/// VST3 `ParameterInfo::stepCount` for the fault parameter — seven
+/// steps means eight discrete modes (`none`/`abort`/`exit`/`hang`/
+/// `error`/`rt_alloc`/`bad_time`/`invalid`).
+pub(crate) const FAULT_STEP_COUNT: i32 = 7;
+
+/// The `rt_alloc` mode's heap allocation size — a bounded 4 KiB
+/// `Vec` created inside `process()`. The size is fixed so every
+/// armed block's churn is identical and bounded.
+const RT_ALLOC_CAPACITY: usize = 4096;
+
+/// The byte `rt_alloc` fills its heap buffer with — `f32::from` of it
+/// is `200.0`, far outside the legal sample domain. `process()` then
+/// writes `f32::from(buf[0])` *read from the buffer* into
+/// `output[0][0]`, so the marker proves the heap round-trip ran.
+const RT_ALLOC_FILL: u8 = 0xC8;
 
 /// `test_fault`'s controller class ID — a fresh `uid` for the test
 /// suite, distinct from both `test_gain`'s controller and the adapter
@@ -90,13 +122,22 @@ pub(crate) enum FaultMode {
     Exit,
     /// `[3.0, 4.0)` — never returns.
     Hang,
-    /// `4.0` — defined `ProcessStatus::Error` rejection.
+    /// `[4.0, 5.0)` — defined `ProcessStatus::Error` rejection.
     Error,
+    /// `[5.0, 6.0)` — heap-allocates inside `process()` and marks
+    /// `output[0][0]` — the RT-allocation fault.
+    RtAlloc,
+    /// `[6.0, 7.0)` — claims `TAIL_INFINITE` — the bad-timestamp
+    /// fault.
+    BadTime,
+    /// `[7.0, 8.0]` — fills outputs with NaN — the invalid-state
+    /// fault.
+    Invalid,
 }
 
 /// Decodes a plain `Fault` value into `(mode, exit_code)`.
 ///
-/// The mode is `floor(plain)` clamped to `[0, 4]`; `exit_code` is
+/// The mode is `floor(plain)` clamped to `[0, 8]`; `exit_code` is
 /// `round((plain - 2.0) * 100)` clamped to `[0, 100]` and meaningful
 /// only for [`FaultMode::Exit`]. Pure and total — safe to unit test
 /// for every input including values outside the declared domain.
@@ -105,15 +146,18 @@ pub(crate) fn decode_fault(plain: f64) -> (FaultMode, u32) {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "clamped to [0.0, 4.0] before the cast — values are small non-negative integers"
+        reason = "clamped to [0.0, 8.0] before the cast — values are small non-negative integers"
     )]
-    let index = plain.floor().clamp(0.0, 4.0) as u32;
+    let index = plain.floor().clamp(0.0, 8.0) as u32;
     let mode = match index {
         0 => FaultMode::None,
         1 => FaultMode::Abort,
         2 => FaultMode::Exit,
         3 => FaultMode::Hang,
-        _ => FaultMode::Error,
+        4 => FaultMode::Error,
+        5 => FaultMode::RtAlloc,
+        6 => FaultMode::BadTime,
+        _ => FaultMode::Invalid,
     };
     #[expect(
         clippy::cast_possible_truncation,
@@ -155,7 +199,7 @@ pub(crate) fn pass_through<I: BufferView, O: BufferViewMut>(
 /// dispatch. The armed plain value persists across blocks (the last
 /// `Fault` event wins); the mode decodes at the end of every block.
 pub(crate) struct TestFaultProcessor {
-    /// The armed plain `Fault` value (`[0.0, 4.0]`), held as `f64`.
+    /// The armed plain `Fault` value (`[0.0, 8.0]`), held as `f64`.
     /// `0.0` (`none`) is the unarmed default.
     armed: f64,
 }
@@ -237,6 +281,36 @@ impl PluginProcessor for TestFaultProcessor {
         match mode {
             FaultMode::None => result,
             FaultMode::Error => ProcessResult::new(ProcessStatus::Error, ProcessResult::TAIL_NONE),
+            FaultMode::RtAlloc => {
+                // The RT violation under test: a bounded heap
+                // allocation inside `process()`. `black_box` keeps the
+                // compiler from eliding the round-trip, and the marker
+                // is read *from* the buffer so the sample proves the
+                // allocation ran.
+                let buf = vec![RT_ALLOC_FILL; RT_ALLOC_CAPACITY];
+                std::hint::black_box(&buf);
+                if let Some(first) = outputs
+                    .first_mut()
+                    .and_then(|o| o.channel_mut(0))
+                    .and_then(|c| c.first_mut())
+                {
+                    *first = f32::from(buf[0]);
+                }
+                result
+            }
+            FaultMode::BadTime => {
+                ProcessResult::new(ProcessStatus::Continue, ProcessResult::TAIL_INFINITE)
+            }
+            FaultMode::Invalid => {
+                for output in outputs.iter_mut() {
+                    for channel in 0..output.channels() {
+                        if let Some(data) = output.channel_mut(channel) {
+                            data.fill(f32::NAN);
+                        }
+                    }
+                }
+                result
+            }
             FaultMode::Abort => std::process::abort(),
             FaultMode::Exit => {
                 std::process::exit(i32::try_from(exit_code).unwrap_or(i32::MAX));
@@ -317,9 +391,17 @@ mod tests {
         assert_eq!(decode_fault(3.0), (FaultMode::Hang, 0));
         assert_eq!(decode_fault(3.99), (FaultMode::Hang, 0));
         assert_eq!(decode_fault(4.0), (FaultMode::Error, 0));
+        assert_eq!(decode_fault(4.99), (FaultMode::Error, 0));
+        assert_eq!(decode_fault(5.0), (FaultMode::RtAlloc, 0));
+        assert_eq!(decode_fault(5.99), (FaultMode::RtAlloc, 0));
+        assert_eq!(decode_fault(6.0), (FaultMode::BadTime, 0));
+        assert_eq!(decode_fault(6.99), (FaultMode::BadTime, 0));
+        assert_eq!(decode_fault(7.0), (FaultMode::Invalid, 0));
+        assert_eq!(decode_fault(7.99), (FaultMode::Invalid, 0));
+        assert_eq!(decode_fault(8.0), (FaultMode::Invalid, 0));
         // Out-of-domain plain values clamp deterministically.
         assert_eq!(decode_fault(-1.0).0, FaultMode::None);
-        assert_eq!(decode_fault(9.0).0, FaultMode::Error);
+        assert_eq!(decode_fault(9.0).0, FaultMode::Invalid);
     }
 
     /// The unarmed default is pure pass-through — `out == in`
@@ -355,9 +437,92 @@ mod tests {
         let mut processor = TestFaultProcessor::new();
         let input = [vec![0.25_f32; 8]];
         let mut output = [vec![0.0_f32; 8]];
-        // plain 4.0 → normalized 1.0 → `error`.
-        let result = run_block(&mut processor, &input, &mut output, &[fault_event(1.0)]);
+        // plain 4.0 → normalized 0.5 → `error`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.5)]);
         assert_eq!(result.status, ProcessStatus::Error);
+    }
+
+    /// `rt_alloc` allocates inside `process()` and writes the heap
+    /// byte (`200.0` = `f32::from(0xC8)` — `RT_ALLOC_FILL`) into
+    /// `output[0][0]` — the sample proves the allocation round-trip
+    /// ran. The rest of the block stays pass-through.
+    #[test]
+    fn alloc_fault_marks_armed_block() {
+        let mut processor = TestFaultProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        // plain 5.0 → normalized 0.625 → `rt_alloc`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.625)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(output[0][0], f32::from(RT_ALLOC_FILL));
+        assert_eq!(output[0][1..], input[0][1..]);
+        assert_eq!(output[1], input[1]);
+    }
+
+    /// `bad_time` returns `Continue` with `TAIL_INFINITE` — the
+    /// zero-tail fixture's timing lie surfaces on the neutral
+    /// `tail_frames` a host reads back.
+    #[test]
+    fn bad_time_mode_claims_infinite_tail() {
+        let mut processor = TestFaultProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        // plain 6.0 → normalized 0.75 → `bad_time`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.75)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(result.tail_frames, ProcessResult::TAIL_INFINITE);
+    }
+
+    /// `invalid` fills every output sample with NaN — the invalid
+    /// audio state the host oracle detects on the delivered samples.
+    #[test]
+    fn invalid_mode_fills_nan_outputs() {
+        let mut processor = TestFaultProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        // plain 7.0 → normalized 0.875 → `invalid`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.875)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert!(output[0].iter().all(|s| s.is_nan()));
+        assert!(output[1].iter().all(|s| s.is_nan()));
+    }
+
+    /// The armed modes persist until disarmed: after `invalid`, a
+    /// `none` event restores pure pass-through — the fault mode's
+    /// recovery half.
+    #[test]
+    fn disarm_restores_pass_through() {
+        let mut processor = TestFaultProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        // plain 7.0 → normalized 0.875 → `invalid`.
+        run_block(&mut processor, &input, &mut output, &[fault_event(0.875)]);
+        // plain 0.0 → normalized 0.0 → `none`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.0)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(output[0], input[0]);
+    }
+
+    /// RT proof: the unarmed/`none` path never allocates — the armed
+    /// `rt_alloc` path is the deliberate violation; the inert law is
+    /// untouched. Views and the event list are built outside the
+    /// `assert_no_alloc` window so only `process()` itself is
+    /// measured (the `rt_` name selects this for `mise run test-rt`).
+    #[test]
+    fn rt_unarmed_block_is_alloc_free() {
+        let mut processor = TestFaultProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        let in_views: Vec<_> = input.iter().map(|c| &c[..]).collect();
+        let inputs = [PlanarBufferView::new(&in_views).unwrap()];
+        let mut out_views: Vec<_> = output.iter_mut().map(|c| &mut c[..]).collect();
+        let mut outputs = [PlanarBufferViewMut::new(&mut out_views).unwrap()];
+        let events = [fault_event(0.0)];
+        let list = EventList::new(&events, 8).unwrap();
+        let mut context = ProcessContext::new();
+        assert_no_alloc::assert_no_alloc(|| {
+            processor.process(&inputs, &mut outputs, list, None, &mut context)
+        });
     }
 
     /// Foreign parameter ids never arm the fault — the armed value

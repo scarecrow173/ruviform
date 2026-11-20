@@ -195,7 +195,7 @@ fn reports_gain_param_in_plain_domain() {
 
 /// The fault parameter surface through the production path: the
 /// `params` extension reports the stepped `Fault` parameter — plain
-/// range `[0.0, 4.0]`, default `0.0` (`none`).
+/// range `[0.0, 8.0]`, default `0.0` (`none`).
 #[test]
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
@@ -208,7 +208,7 @@ fn reports_fault_param_in_plain_domain() {
     assert_eq!(fault.id.0, 0);
     assert_eq!(fault.name, "Fault");
     assert_eq!(fault.min_value, 0.0);
-    assert_eq!(fault.max_value, 4.0);
+    assert_eq!(fault.max_value, 8.0);
     assert_eq!(fault.default_value, 0.0);
 }
 
@@ -293,7 +293,7 @@ fn fault_unarmed_and_none_mode_are_pass_through() {
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }
 
-/// `test_fault` `error` mode through the real ABI: normalized `1.0`
+/// `test_fault` `error` mode through the real ABI: normalized `0.5`
 /// → plain `4.0` → the plugin returns `CLAP_PROCESS_ERROR`, which
 /// the production bridge reports as `ProcessStatus::Error` — a
 /// defined rejection, not a crash. The instance stays alive: a
@@ -306,7 +306,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
         0,
         EventKind::ParamValue(ParamEvent {
             param_id: ParamId(0),
-            value: ParamValue::new(1.0).unwrap(),
+            value: ParamValue::new(0.5).unwrap(),
         }),
     )];
     let (result, _out) = drive_block(&mut *plugin, &error_events);
@@ -325,6 +325,97 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
         }),
     )];
     let (result, [left, right]) = drive_block(&mut *plugin, &none_events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// One `Fault` arming event at normalized `normalized` — the shared
+/// builder for the safe in-process fault modes below.
+fn fault_arm(normalized: f64) -> Event {
+    Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(normalized).unwrap(),
+        }),
+    )
+}
+
+/// `test_fault` `rt_alloc` mode through the real ABI: normalized
+/// `0.625` → plain `5.0` → the armed block's `process()` runs a
+/// bounded heap allocation and writes `f32::from(0xC8)` = `200.0` —
+/// read *from* the allocated buffer — into `output[0][0]`. The
+/// marker is the fixture's own report that the RT violation ran (a
+/// host-side allocator cannot observe the plugin's heap); the rest
+/// of the block stays pass-through. Disarm restores clean audio.
+#[test]
+fn fault_rt_alloc_mode_marks_armed_block() {
+    let mut plugin = prepared_fault_plugin();
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[fault_arm(0.625)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left[0], 200.0, "the heap marker proves the alloc ran");
+    assert_eq!(left[1..], vec![0.5_f32; FRAMES - 1]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[fault_arm(0.0)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_fault` `bad_time` mode through the real ABI: normalized
+/// `0.75` → plain `6.0` → a zero-tail pass-through fixture claims
+/// `TAIL_INFINITE` — the plugin reports `CLAP_PROCESS_TAIL`, which
+/// the production bridge surfaces as `tail_frames == u32::MAX` —
+/// the bad-timing lie the host oracle detects. Disarm restores the
+/// zero-tail truth.
+#[test]
+fn fault_bad_time_mode_claims_infinite_tail() {
+    let mut plugin = prepared_fault_plugin();
+
+    let (result, _out) = drive_block(&mut *plugin, &[fault_arm(0.75)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(
+        result.tail_frames,
+        u32::MAX,
+        "bad_time must claim TAIL_INFINITE via CLAP_PROCESS_TAIL"
+    );
+
+    let (result, _out) = drive_block(&mut *plugin, &[fault_arm(0.0)]);
+    assert_eq!(result.tail_frames, 0, "disarm restores a zero tail");
+}
+
+/// `test_fault` `invalid` mode through the real ABI: normalized
+/// `0.875` → plain `7.0` → the armed block delivers a full-NaN
+/// output — the invalid audio state a host must detect and isolate.
+/// Disarm restores clean pass-through.
+#[test]
+fn fault_invalid_mode_fills_nan_outputs() {
+    let mut plugin = prepared_fault_plugin();
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[fault_arm(0.875)]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert!(left.iter().all(|s| s.is_nan()));
+    assert!(right.iter().all(|s| s.is_nan()));
+
+    let (result, [left, right]) = drive_block(&mut *plugin, &[fault_arm(0.0)]);
     assert!(matches!(
         result.status,
         ruviform_plugin_core::ProcessStatus::Continue
@@ -356,13 +447,13 @@ fn reports_stateful_param_in_plain_domain() {
     assert_eq!(gain.default_value, 1.0);
 }
 
-/// Extracts the plain gain from the fixture's 16-byte state blob —
-/// `[u32 LE "RFST"][u32 LE version=1][f64 LE]`; the f64 sits at
-/// offset 8.
+/// Extracts the plain gain from the fixture's 20-byte v2 state blob —
+/// `[u32 LE "RFST"][u32 LE version=2][f64 LE][u32 LE checksum]`; the
+/// f64 sits at offset 8.
 fn blob_gain(blob: &[u8]) -> f64 {
-    assert_eq!(blob.len(), 16, "the CLAP state stream is one 16-byte blob");
+    assert_eq!(blob.len(), 20, "the CLAP state stream is one 20-byte blob");
     assert_eq!(&blob[0..4], b"RFST");
-    assert_eq!(&blob[4..8], &1_u32.to_le_bytes());
+    assert_eq!(&blob[4..8], &2_u32.to_le_bytes());
     f64::from_le_bytes(blob[8..16].try_into().unwrap())
 }
 
@@ -448,18 +539,23 @@ fn stateful_restore_rejects_malformed_blob() {
         plugin.restore_state(&valid[..8]),
         Err(HostError::PluginFailed)
     );
-    // Trailing bytes → `PluginFailed`.
-    let mut trailing = valid.clone();
-    trailing.push(0);
-    assert_eq!(
-        plugin.restore_state(&trailing),
-        Err(HostError::PluginFailed)
-    );
     // Corrupted magic → `PluginFailed`.
     let mut corrupt = valid.clone();
     corrupt[0] ^= 0xFF;
     assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
-    // Non-finite payload → `PluginFailed`.
+    // Checksum mismatch → `PluginFailed`.
+    let mut corrupt_sum = valid.clone();
+    corrupt_sum[16] ^= 0xFF;
+    assert_eq!(
+        plugin.restore_state(&corrupt_sum),
+        Err(HostError::PluginFailed)
+    );
+    // A version this build does not know → `PluginFailed`.
+    let mut future = valid.clone();
+    future[4..8].copy_from_slice(&3_u32.to_le_bytes());
+    assert_eq!(plugin.restore_state(&future), Err(HostError::PluginFailed));
+    // Non-finite payload (stale checksum → fails integrity) →
+    // `PluginFailed`.
     let mut nan = valid.clone();
     nan[8..16].copy_from_slice(&f64::NAN.to_bits().to_le_bytes());
     assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
@@ -468,6 +564,36 @@ fn stateful_restore_rejects_malformed_blob() {
     // surface intact — `save_state` still returns the valid blob.
     let still = plugin.save_state().expect("save_state");
     assert_eq!(still, valid, "rejected restores must not corrupt state");
+}
+
+/// Restore accepts the legacy 16-byte v1 layout and a v2 core plus
+/// an unknown extension tail — the next `save_state` re-serializes
+/// canonical v2 in both cases: migration and forward-compat degrade
+/// through the production `clap.ext.state` bridge.
+#[test]
+fn stateful_restore_migrates_v1_and_degrades_extension() {
+    let mut plugin = prepared_stateful_plugin();
+    let canonical = plugin.save_state().expect("save_state");
+    assert_eq!(blob_gain(&canonical), 1.0);
+
+    // v1 in → v2 out: the migration path through `clap.ext.state`.
+    let mut v1 = canonical[..16].to_vec();
+    v1[4..8].copy_from_slice(&1_u32.to_le_bytes());
+    plugin.restore_state(&v1).expect("v1 restores");
+    let migrated = plugin.save_state().expect("save_state");
+    assert_eq!(migrated, canonical, "v1 in → canonical v2 out");
+
+    // v2 core + extension tail → degraded accept, tail dropped.
+    let mut degraded = canonical.clone();
+    degraded.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+    plugin.restore_state(&degraded).expect("degraded restores");
+    let resaved = plugin.save_state().expect("save_state");
+    assert_eq!(resaved, canonical, "degraded in → canonical v2 out");
+
+    // The restored gain still drives the DSP.
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }
 
 /// The stateless fixtures keep their honest capability decline: no

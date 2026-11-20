@@ -29,9 +29,12 @@
 //!
 //! ## State blob law
 //!
-//! Both the component and controller payloads are the same 16-byte
-//! plugin-defined format — `[u32 "RFST" LE][u32 version = 1 LE]
-//! [f64 LE]` — differing only in the `f64` domain:
+//! Both the component and controller payloads are the same
+//! plugin-defined format — the current **v2** layout is
+//! `[u32 "RFST" LE][u32 version = 2 LE][f64 LE][u32 checksum LE]`
+//! (20 bytes), where `checksum` is FNV-1a-32 over the 16-byte core.
+//! The **v1** layout is the same without the checksum field (16
+//! bytes). Payloads differ only in the `f64` domain:
 //!
 //! | payload | `f64` domain | written by | read by |
 //! | ------- | ------------ | ---------- | ------- |
@@ -44,12 +47,22 @@
 //! gain and folds it into the controller's normalized value — the
 //! standard distributed-plugin state hand-off.
 //!
-//! Decode is a defined rejection, never a silent accept: wrong
-//! length, magic or version mismatch, or a non-finite `f64` →
-//! `kResultFalse` (component/controller) → the host adapter's
-//! `PluginFailed`. A finite out-of-range plain value clamps into the
-//! parameter domain per the `ParamInfo` law — the same clamp the
-//! CLAP twin's `set_gain_plain` applies.
+//! Restore is a defined, typed outcome — never a silent accept:
+//!
+//! | input | outcome |
+//! | ----- | ------- |
+//! | v2, valid checksum, `len == 20` | **Canonical** accept |
+//! | v1, `len == 16` | **Migrated** accept — the next save writes v2 |
+//! | v2, valid checksum, `len > 20` | **Degraded** accept — the unknown extension tail is dropped and the next save re-serializes canonical |
+//! | v2, invalid checksum | `ChecksumMismatch` rejection |
+//! | any other version | `UnsupportedVersion` rejection |
+//! | bad magic, bad length, non-finite `f64` | `Malformed` rejection |
+//!
+//! Every rejection maps to `kResultFalse` (component/controller) →
+//! the host adapter's `PluginFailed`; the instance survives and its
+//! stored state is untouched. A finite out-of-range plain value
+//! clamps into the parameter domain per the `ParamInfo` law — the
+//! same clamp the CLAP twin's `set_gain_plain` applies.
 //!
 //! Serialization is deterministic: fixed-width little-endian fields,
 //! no timestamps, no padding — `save → restore → save` is an exact
@@ -146,7 +159,7 @@ impl ComponentStateSurface for SharedGain {
 }
 
 // ---------------------------------------------------------------------------
-// State blob law — `[u32 "RFST" LE][u32 version = 1 LE][f64 LE]`
+// State blob law — `[u32 "RFST" LE][u32 version LE][f64 LE][u32 checksum LE]`
 // ---------------------------------------------------------------------------
 
 /// Blob magic — the ASCII tag `"RFST"` (Ruviform Stateful Test) as a
@@ -154,40 +167,183 @@ impl ComponentStateSurface for SharedGain {
 /// before any field is interpreted.
 const STATE_MAGIC: u32 = u32::from_le_bytes(*b"RFST");
 
-/// Blob format version — bumped only on an incompatible layout
-/// change; `1` is the initial `[magic][version][f64]` layout.
-const STATE_VERSION: u32 = 1;
+/// The current blob format version — `2` appends a `u32` checksum
+/// over the core fields to the v1 layout.
+const STATE_VERSION: u32 = 2;
 
-/// Exact blob length — two `u32` headers plus one `f64`.
-pub(crate) const STATE_BLOB_LEN: usize = 16;
+/// The legacy format version — the original 16-byte
+/// `[magic][version][f64]` layout with no checksum field.
+const STATE_VERSION_V1: u32 = 1;
 
-/// Serializes `value` into the deterministic 16-byte blob.
+/// The shared core: magic + version + one `f64` — the field span the
+/// v2 checksum covers and the exact length of a legacy v1 blob.
+const STATE_CORE_LEN: usize = 16;
+
+/// Exact current blob length — the 16-byte core plus the `u32`
+/// checksum.
+pub(crate) const STATE_BLOB_LEN: usize = 20;
+
+/// FNV-1a-32 over the blob's core fields — a deterministic integrity
+/// tag that lets restore distinguish a corrupt payload (rejection)
+/// from an older-format one (migration).
+fn state_checksum(core: &[u8]) -> u32 {
+    const FNV_OFFSET: u32 = 0x811C_9DC5;
+    const FNV_PRIME: u32 = 0x0100_0193;
+    let mut hash = FNV_OFFSET;
+    for &byte in core {
+        hash = (hash ^ u32::from(byte)).wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
+/// Serializes `value` into the deterministic 20-byte v2 blob.
 #[must_use]
 pub(crate) fn encode_state_blob(value: f64) -> [u8; STATE_BLOB_LEN] {
     let mut blob = [0_u8; STATE_BLOB_LEN];
     blob[0..4].copy_from_slice(&STATE_MAGIC.to_le_bytes());
     blob[4..8].copy_from_slice(&STATE_VERSION.to_le_bytes());
     blob[8..16].copy_from_slice(&value.to_le_bytes());
+    let checksum = state_checksum(&blob[0..16]);
+    blob[16..20].copy_from_slice(&checksum.to_le_bytes());
     blob
 }
 
-/// Decodes a blob produced by [`encode_state_blob`] — `None` on any
-/// malformed shape: wrong length, magic or version mismatch, or a
-/// non-finite `f64`. The caller maps `None` to its ABI's defined
-/// rejection (`kResultFalse` / `PluginError`).
+/// Serializes `value` into the legacy 16-byte v1 blob — the payload a
+/// pre-checksum fixture saved. Exists so tests can hand `setState` /
+/// `setComponentState` a real older-format payload and observe the
+/// migration path.
+#[cfg(test)]
+fn encode_state_blob_v1(value: f64) -> [u8; STATE_CORE_LEN] {
+    let mut blob = [0_u8; STATE_CORE_LEN];
+    blob[0..4].copy_from_slice(&STATE_MAGIC.to_le_bytes());
+    blob[4..8].copy_from_slice(&STATE_VERSION_V1.to_le_bytes());
+    blob[8..16].copy_from_slice(&value.to_le_bytes());
+    blob
+}
+
+/// How an accepted blob related to the current format — the restore
+/// path's provenance report. Every provenance still stores the
+/// decoded value; the distinctions exist so tests (and future
+/// debuggability) can observe migration and forward-compat degrade
+/// rather than have them pass silently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StateProvenance {
+    /// A current-version blob with a valid checksum.
+    Canonical,
+    /// A legacy v1 blob — accepted; the next save re-serializes the
+    /// migrated value in the v2 layout.
+    Migrated,
+    /// A v2 core with a valid checksum followed by unknown extension
+    /// bytes — accepted with the tail dropped (forward-compat
+    /// degrade); the next save re-serializes the canonical layout.
+    Degraded,
+}
+
+/// Why a blob was rejected — one defined outcome per violation, all
+/// of which the ABI verbs map to their defined rejection
+/// (`kResultFalse` / `PluginError`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StateRejection {
+    /// Bad magic, a length no known layout admits, or a non-finite
+    /// `f64` payload.
+    Malformed,
+    /// A version this build does not know — including newer formats
+    /// the fixture cannot interpret.
+    UnsupportedVersion,
+    /// A v2 blob whose stored checksum does not cover its core —
+    /// corruption, not an unknown format.
+    ChecksumMismatch,
+}
+
+/// A decoded blob: the plain-domain value plus its provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct DecodedState {
+    /// The decoded `f64` payload.
+    pub(crate) value: f64,
+    /// How the blob related to the current format.
+    pub(crate) provenance: StateProvenance,
+}
+
+/// Decodes a blob with full provenance — the detailed restore
+/// contract the module docs tabulate. Unknown-version blobs report
+/// [`StateRejection::UnsupportedVersion`] before any field beyond the
+/// version is trusted.
+pub(crate) fn inspect_state_blob(bytes: &[u8]) -> Result<DecodedState, StateRejection> {
+    if bytes.len() < 8 {
+        return Err(StateRejection::Malformed);
+    }
+    if u32::from_le_bytes(
+        bytes[0..4]
+            .try_into()
+            .map_err(|_| StateRejection::Malformed)?,
+    ) != STATE_MAGIC
+    {
+        return Err(StateRejection::Malformed);
+    }
+    let version = u32::from_le_bytes(
+        bytes[4..8]
+            .try_into()
+            .map_err(|_| StateRejection::Malformed)?,
+    );
+    match version {
+        STATE_VERSION_V1 => {
+            if bytes.len() != STATE_CORE_LEN {
+                return Err(StateRejection::Malformed);
+            }
+            let value = f64::from_le_bytes(
+                bytes[8..16]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if !value.is_finite() {
+                return Err(StateRejection::Malformed);
+            }
+            Ok(DecodedState {
+                value,
+                provenance: StateProvenance::Migrated,
+            })
+        }
+        STATE_VERSION => {
+            if bytes.len() < STATE_BLOB_LEN {
+                return Err(StateRejection::Malformed);
+            }
+            let stored = u32::from_le_bytes(
+                bytes[16..20]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if stored != state_checksum(&bytes[0..16]) {
+                return Err(StateRejection::ChecksumMismatch);
+            }
+            let value = f64::from_le_bytes(
+                bytes[8..16]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if !value.is_finite() {
+                return Err(StateRejection::Malformed);
+            }
+            Ok(DecodedState {
+                value,
+                provenance: if bytes.len() == STATE_BLOB_LEN {
+                    StateProvenance::Canonical
+                } else {
+                    StateProvenance::Degraded
+                },
+            })
+        }
+        _ => Err(StateRejection::UnsupportedVersion),
+    }
+}
+
+/// Decodes a blob produced by [`encode_state_blob`] — or any blob
+/// [`inspect_state_blob`] accepts (canonical, migrated, or
+/// degraded) — returning only the value. `None` on any rejection.
+/// The caller maps `None` to its ABI's defined rejection
+/// (`kResultFalse` / `PluginError`).
 #[must_use]
 pub(crate) fn decode_state_blob(bytes: &[u8]) -> Option<f64> {
-    if bytes.len() != STATE_BLOB_LEN {
-        return None;
-    }
-    if u32::from_le_bytes(bytes[0..4].try_into().ok()?) != STATE_MAGIC {
-        return None;
-    }
-    if u32::from_le_bytes(bytes[4..8].try_into().ok()?) != STATE_VERSION {
-        return None;
-    }
-    let value = f64::from_le_bytes(bytes[8..16].try_into().ok()?);
-    value.is_finite().then_some(value)
+    inspect_state_blob(bytes).ok().map(|decoded| decoded.value)
 }
 
 // ---------------------------------------------------------------------------
@@ -567,11 +723,14 @@ mod tests {
         let mut bad_magic = good;
         bad_magic[0] ^= 0xFF;
         assert_eq!(decode_state_blob(&bad_magic), None);
-        // Version mismatch.
+        // Version mismatch — a bogus high byte makes the version
+        // field unreadable to this build.
         let mut bad_version = good;
-        bad_version[7] = 2;
+        bad_version[7] = 0x02;
         assert_eq!(decode_state_blob(&bad_version), None);
-        // Non-finite payloads — NaN and ±inf bit patterns.
+        // Non-finite payloads — NaN and ±inf bit patterns. Note the
+        // checksum must be recomputed for the mutated core or the
+        // blob fails integrity first — either way it is a rejection.
         for bits in [
             f64::NAN.to_bits(),
             f64::INFINITY.to_bits(),
@@ -581,6 +740,80 @@ mod tests {
             bad_value[8..16].copy_from_slice(&bits.to_le_bytes());
             assert_eq!(decode_state_blob(&bad_value), None);
         }
+    }
+
+    /// `inspect_state_blob` reports the full restore contract:
+    /// canonical acceptance, v1 migration, forward-compat degrade,
+    /// and one typed rejection per violation class.
+    #[test]
+    fn inspect_reports_provenance_and_typed_rejections() {
+        let blob = encode_state_blob(0.75);
+        assert_eq!(
+            inspect_state_blob(&blob),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Canonical,
+            })
+        );
+
+        // A legacy v1 payload — no checksum field — migrates: it is
+        // accepted and the next save re-serializes v2.
+        let v1 = encode_state_blob_v1(0.75);
+        assert_eq!(v1.len(), STATE_CORE_LEN);
+        assert_eq!(
+            inspect_state_blob(&v1),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Migrated,
+            })
+        );
+        assert_eq!(decode_state_blob(&v1), Some(0.75));
+
+        // A v2 core with a valid checksum plus unknown extension
+        // bytes degrades — accepted, tail dropped.
+        let mut extended = blob.to_vec();
+        extended.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(
+            inspect_state_blob(&extended),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Degraded,
+            })
+        );
+        assert_eq!(decode_state_blob(&extended), Some(0.75));
+
+        // Truncated v2 (no checksum field) — malformed, not a
+        // downgrade attack on the integrity field.
+        assert_eq!(
+            inspect_state_blob(&blob[..STATE_CORE_LEN]),
+            Err(StateRejection::Malformed)
+        );
+        // Corrupt core or corrupt checksum — integrity failure.
+        let mut corrupt_core = blob;
+        corrupt_core[9] ^= 0xFF;
+        assert_eq!(
+            inspect_state_blob(&corrupt_core),
+            Err(StateRejection::ChecksumMismatch)
+        );
+        let mut corrupt_sum = blob;
+        corrupt_sum[16] ^= 0xFF;
+        assert_eq!(
+            inspect_state_blob(&corrupt_sum),
+            Err(StateRejection::ChecksumMismatch)
+        );
+        // A version this build does not know — unsupported, and the
+        // answer does not depend on checksum bytes.
+        let mut future = blob;
+        future[4..8].copy_from_slice(&3_u32.to_le_bytes());
+        assert_eq!(
+            inspect_state_blob(&future),
+            Err(StateRejection::UnsupportedVersion)
+        );
+        // A v1-versioned blob at the v2 length is not a v1 blob —
+        // malformed, not migrated.
+        let mut fake_v1 = encode_state_blob_v1(0.75).to_vec();
+        fake_v1.extend_from_slice(&[0; 4]);
+        assert_eq!(inspect_state_blob(&fake_v1), Err(StateRejection::Malformed));
     }
 
     /// The cell clamps into the parameter domain on store — the
@@ -694,6 +927,56 @@ mod tests {
         let out = ComWrapper::new(TestStream::new());
         unsafe { component.getState(ib_stream(&out).as_ptr()) };
         assert_eq!(out.take_bytes(), blob.to_vec());
+    }
+
+    /// A legacy v1 blob restores through the real `IBStream` verb
+    /// and the next `getState` re-serializes in the current v2
+    /// layout — the migration path observable end-to-end through the
+    /// COM surface.
+    #[expect(unsafe_code)]
+    #[test]
+    fn v1_component_blob_migrates_on_next_save() {
+        let component = TestStatefulComponent::new();
+
+        // setState with a legacy 16-byte payload → accepted (Migrated).
+        let v1 = encode_state_blob_v1(1.25);
+        let input = ComWrapper::new(TestStream::from_bytes(v1.to_vec()));
+        let result = unsafe { component.setState(ib_stream(&input).as_ptr()) };
+        assert_eq!(result, kResultOk);
+
+        // getState writes the migrated value as canonical v2 — the
+        // payload grew the checksum field.
+        let out = ComWrapper::new(TestStream::new());
+        unsafe { component.getState(ib_stream(&out).as_ptr()) };
+        assert_eq!(out.take_bytes(), encode_state_blob(1.25).to_vec());
+
+        // A degraded blob — v2 core + extension tail — is also
+        // accepted and re-serializes canonical (the tail is dropped).
+        let mut extended = encode_state_blob(0.5).to_vec();
+        extended.extend_from_slice(&[0xAB, 0xCD]);
+        let input = ComWrapper::new(TestStream::from_bytes(extended));
+        let result = unsafe { component.setState(ib_stream(&input).as_ptr()) };
+        assert_eq!(result, kResultOk);
+        let out = ComWrapper::new(TestStream::new());
+        unsafe { component.getState(ib_stream(&out).as_ptr()) };
+        assert_eq!(out.take_bytes(), encode_state_blob(0.5).to_vec());
+
+        // A checksum-corrupt v2 blob and an unknown-version blob are
+        // the same defined `kResultFalse` the malformed cases get.
+        let mut corrupt = encode_state_blob(0.5);
+        corrupt[16] ^= 0xFF;
+        let input = ComWrapper::new(TestStream::from_bytes(corrupt.to_vec()));
+        assert_eq!(
+            unsafe { component.setState(ib_stream(&input).as_ptr()) },
+            kResultFalse
+        );
+        let mut future = encode_state_blob(0.5);
+        future[4..8].copy_from_slice(&9_u32.to_le_bytes());
+        let input = ComWrapper::new(TestStream::from_bytes(future.to_vec()));
+        assert_eq!(
+            unsafe { component.setState(ib_stream(&input).as_ptr()) },
+            kResultFalse
+        );
     }
 
     /// The controller's state verbs speak the *normalized* domain:

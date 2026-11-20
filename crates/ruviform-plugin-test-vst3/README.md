@@ -51,13 +51,18 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 ## `test_fault` semantics
 
 - Same bus shape as `test_gain`; one stepped `Fault` parameter
-  (plain `[0.0, 4.0]`, default `0.0` = `none`).
+  (plain `[0.0, 8.0]`, default `0.0` = `none`).
 - Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
-  event arms `abort`/`exit`/`hang`/`error` dispatch inside the
-  arming block's `process()` — the L1 out-of-process
-  crash/hang/timeout/isolation oracle. `error` returns `kResultFalse`
-  (a defined rejection, not a crash); `abort`/`exit`/`hang` are
-  L1-only faults.
+  event arms `abort`/`exit`/`hang`/`error`/`rt_alloc`/`bad_time`/
+  `invalid` dispatch inside the arming block's `process()` — the L1
+  out-of-process crash/hang/timeout/isolation oracle. `error` returns
+  `kResultFalse` (a defined rejection, not a crash);
+  `rt_alloc` performs a bounded heap round-trip in `process()` and
+  reports it through a `200.0` marker in the first output sample;
+  `bad_time` claims an infinite tail via `getTailSamples()`; `invalid`
+  fills every output sample with `NaN`. `abort`/`exit`/`hang` are
+  L1-only faults; `error`/`rt_alloc`/`bad_time`/`invalid` are
+  nonfatal and disarm back to pass-through.
 
 ## `test_editor` semantics
 
@@ -75,18 +80,32 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
   inputs are honest `kResultFalse` rejections; off Windows every
   attach is a defined rejection. `removed()` destroys the child and
   always reports `kResultOk`.
+- Popup surface: `onKeyDown` with `key_code == VK_P` (`0x50`)
+  toggles a plugin-owned `WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS`
+  HWND titled `rvf-test-editor-popup-{seq}`, owned by the editor
+  child's root ancestor so it dies with the editor. Open/close
+  record `po:{seq}`/`pc:{seq}` tokens in the same event log the
+  `kd:` tokens write to the window title; `removed()` folds any
+  open popup before destroying the child. Off Windows no HWND is
+  created but the logical `po:`/`pc:` tokens are still recorded.
 
 ## `test_stateful` semantics
 
 - Same bus shape, gain parameter (plain `[0.0, 2.0]`, default
   `1.0`) and DSP law as `test_gain` — the class exists to carry real
   state, not new DSP.
-- Component and controller each persist a 16-byte payload
-  `[u32 LE "RFST"][u32 LE version=1][f64 LE]` through `IBStream`:
-  the component stores the **plain** gain, the controller stores the
+- Component and controller each persist a 20-byte v2 payload
+  `[u32 LE "RFST"][u32 LE version=2][f64 LE][u32 LE FNV-1a-32
+  checksum of the first 16 bytes]` through `IBStream`: the component
+  stores the **plain** gain, the controller stores the
   **normalized** gain, and `setComponentState` converts between the
-  two domains. Wrong length, magic, version or a non-finite value is
-  a defined rejection; finite out-of-range values clamp to the
+  two domains. Restore accepts three provenances — canonical v2,
+  16-byte v1 blobs (`version=1`, migrated: the next save emits
+  canonical v2), and v2 blobs with a valid checksum plus an unknown
+  extension tail (degraded/forward-compatible: the tail is dropped
+  on the next save). Wrong magic, length, version, checksum or a
+  non-finite value is a defined rejection that leaves the stored
+  gain unchanged; finite out-of-range values clamp to the
   parameter range.
 - Unlike `test_gain`, activation does **not** reset the gain — a
   restored state survives `setActive`, which is what makes the
@@ -104,7 +123,8 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
   `initialize`/`terminate`, no `IConnectionPoint` pairing, an empty
   controller payload in framed state). Every other class in the
   suite is a distributed pair and can never reach that arm.
-- Same gain parameter, DSP law, 16-byte RFST state blob and
+- Same gain parameter, DSP law, 20-byte RFST v2 state blob (with
+  the same v1-migration and degraded-tail acceptance) and
   activation-does-not-reset law as `test_stateful` — the class
   exists to vary the *topology*, not the DSP or the codec. The gain
   lives in one shared cell bound to both the component state verbs
