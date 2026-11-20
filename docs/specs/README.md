@@ -225,6 +225,7 @@ Directory: `docs/specs`
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | SPEC-Nb71vRwYkP8sHd4mQt2xLc | Issue #631 real-command-receipt case | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | SPEC-m4Qz8wVn2Xk7pLc9dRt3Yb | Issue #631 AC4 evidence-fields 完成 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
+| SPEC-r7Tn2mQv9Kw4xLb8cJd5Hs | Issue #631 AC4 'OS and GPU' display-adapter field | approved | [issue-631-gpu-field.md](./issue-631-gpu-field.md) |
 | SPEC-Qa82xTzLmV5nWp7rYh3dGf | Issue #631 headless-command-receipt case | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | SPEC-034XEa3KZlRiONK0C4tHgr | Issue #631 Plugin-dock scenario skeleton（test-only crate ruviform-plugin-dock-test・正直な verdict・plugin artifact evidence） | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | SPEC-034Y3nW74RKYWUkLfv81MG | Issue #631 real-editor-attach（test_editor 実 IPlugView による real-editor-attach Pass 化 — 実 child HWND の OS 観測・detach 収束・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |

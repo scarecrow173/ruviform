@@ -257,6 +257,7 @@ Directory: `docs/designs`
 | DESIGN-034Y4dCo7zV1IwCz9gEIi0 | Issue #630 test_stateful slice — 設計 | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
 | DESIGN-Hc82nSyZlQ9tIe5oRu3yMd | Issue #631 real-command-receipt case 設計 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | DSGN-n3Ws6xBr4Ym8kTf2hQv9Jc | Issue #631 AC4 evidence-fields 完成 — 設計 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
+| DSGN-b4Xc8vLn2Kp9wQm6rTs3Jh | Issue #631 AC4 'OS and GPU' display-adapter field — 設計 | approved | [issue-631-gpu-field.md](./issue-631-gpu-field.md) |
 | DESIGN-Rt91uVbKxW4mJq8sZc6fDh | Issue #631 headless-command-receipt case 設計 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | DESIGN-034XEb9x9Tty07692Bu8cc | Issue #631 Plugin-dock scenario skeleton 設計 | approved | [issue-631-plugin-dock-scenario.md](./issue-631-plugin-dock-scenario.md) |
 | DESIGN-034Y3o3I0foDX68pAnpDEx | Issue #631 real-editor-attach 設計（test_editor descriptor 選択・child HWND OS 観測・thread-affinity 記録） | approved | [issue-631-real-editor-attach.md](./issue-631-real-editor-attach.md) |
