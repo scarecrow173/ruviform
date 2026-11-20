@@ -1,6 +1,6 @@
 //! `ruviform-plugin-test-vst3` — the Ruviform **test-only** VST3 test
 //! plugin suite (Issue #630: `test_gain`, `test_fault`, `test_editor`,
-//! `test_stateful`, `test_instrument`).
+//! `test_stateful`, `test_instrument`, `test_stateful_single`).
 //!
 //! ## Test-only declaration
 //!
@@ -53,6 +53,14 @@
 //!   impulses at `ppqn` boundaries while playing with musical time)
 //!   fed by `ProcessContext`. The suite's only `MidiTransport` input
 //!   surface.
+//! - `test_stateful_single` — the suite's **single-component** class:
+//!   one COM object implementing `IComponent` + `IAudioProcessor` +
+//!   `IEditController` whose `getControllerClassId` reports its own
+//!   CID. It carries `test_stateful`'s gain/DSP/RFST-blob law so a
+//!   host's `single_component` arm (shared-object controller cast,
+//!   single init/terminate, no `IConnectionPoint` pairing,
+//!   `ctrl_len = 0` state framing) gets real-binary coverage — the
+//!   arm every distributed-pair class can never reach.
 //!
 //! All `vst3`-crate binding types stay private — the crate exports
 //! no public Rust API; hosts reach the plugin purely through the ABI
@@ -90,6 +98,7 @@ mod fault;
 mod gain;
 mod instrument;
 mod preset;
+mod single;
 mod stateful;
 mod strings;
 

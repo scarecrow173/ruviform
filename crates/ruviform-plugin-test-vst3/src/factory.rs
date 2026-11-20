@@ -1,8 +1,9 @@
 //! The VST3 plugin factory: `IPluginFactory` + `IPluginFactory2` +
-//! `IPluginFactory3` describing and instantiating the eleven classes
+//! `IPluginFactory3` describing and instantiating the twelve classes
 //! the module ships (`test_gain`/`test_fault`/`test_editor`/
-//! `test_stateful`/`test_instrument` component + controller pairs, plus
-//! the listed-but-uncreatable `test_spawn_fail` class).
+//! `test_stateful`/`test_instrument` component + controller pairs, the
+//! listed-but-uncreatable `test_spawn_fail` class, and the
+//! single-component `test_stateful_single` class).
 
 use std::ffi::c_void;
 
@@ -24,6 +25,7 @@ use crate::gain::GAIN_PARAM;
 use crate::instrument::TestInstrumentComponent;
 use crate::preset::{TestStatefulComponent, TestStatefulController};
 use crate::sdk_enum_i32;
+use crate::single::TestStatefulSingle;
 use crate::stateful::STATEFUL_CONTROLLER_CID;
 use crate::strings::{copy_cstring, copy_wstring};
 
@@ -69,11 +71,13 @@ const SPAWN_FAIL_CID: TUID = vst3::uid(0x5E2A_9F14, 0x7C3D_8B61, 0xA4E9_1F27, 0x
 
 /// Classes 0/1 = `test_gain`, 2/3 = `test_fault`, 4/5 =
 /// `test_editor`, 6/7 = `test_stateful`, 8/9 = `test_instrument` —
-/// component + controller pairs in suite order — plus class 10 =
+/// component + controller pairs in suite order — class 10 =
 /// `test_spawn_fail`, a listed-but-uncreatable class whose
 /// `createInstance` always declines (the spawn-phase
-/// `CreateInstance`-rejection oracle).
-const CLASS_ROWS: [ClassRow; 11] = [
+/// `CreateInstance`-rejection oracle), and class 11 =
+/// `test_stateful_single`, the suite's single-component class (one
+/// object carrying component + controller — no controller row).
+const CLASS_ROWS: [ClassRow; 12] = [
     ClassRow {
         cid: TestGainComponent::CID,
         category: "Audio Module Class",
@@ -140,6 +144,12 @@ const CLASS_ROWS: [ClassRow; 11] = [
         name: "test_spawn_fail",
         sub_categories: "Fx",
     },
+    ClassRow {
+        cid: TestStatefulSingle::CID,
+        category: "Audio Module Class",
+        name: "test_stateful_single",
+        sub_categories: "Fx",
+    },
 ];
 
 impl IPluginFactoryTrait for TestGainFactory {
@@ -159,7 +169,7 @@ impl IPluginFactoryTrait for TestGainFactory {
 
     #[expect(unsafe_code)]
     unsafe fn countClasses(&self) -> i32 {
-        11
+        12
     }
 
     #[expect(unsafe_code)]
@@ -220,6 +230,9 @@ impl IPluginFactoryTrait for TestGainFactory {
             }
             TestInstrumentComponent::CID => {
                 ComWrapper::new(TestInstrumentComponent::new()).to_com_ptr::<FUnknown>()
+            }
+            TestStatefulSingle::CID => {
+                ComWrapper::new(TestStatefulSingle::new()).to_com_ptr::<FUnknown>()
             }
             _ => None,
         };

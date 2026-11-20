@@ -59,11 +59,12 @@ fn load_library() -> Vst3Library {
 /// drives (`prepared_plugin()` precedent in the adapter's host tests).
 /// `index` selects the suite plugin (`0` = `test_gain`,
 /// `1` = `test_fault`, `2` = `test_editor`, `3` = `test_stateful`,
-/// `4` = `test_instrument`).
+/// `4` = `test_instrument`, `5` = `test_spawn_fail`,
+/// `6` = `test_stateful_single`).
 fn prepared_plugin_at(index: usize) -> Box<dyn ErasedPlugin> {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 6, "the module ships six plugins");
+    assert_eq!(factories.len(), 7, "the module ships seven plugins");
     let mut plugin = factories[index].create();
     plugin.init().expect("init");
     let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
@@ -105,6 +106,17 @@ fn prepared_instrument_plugin() -> Box<dyn ErasedPlugin> {
     prepared_plugin_at(4)
 }
 
+/// `test_stateful_single`'s prepared instance — the
+/// single-component oracle's entry point. `init` is where the
+/// bridge's `single_component` arm runs: own-CID detection → the
+/// shared object's `cast::<IEditController>` → one `initialize` →
+/// `setComponentHandler` on the shared object → no `IConnectionPoint`
+/// pairing (the single arm's guard skips the pairing block; even a
+/// bridge that tried would silently skip on the `None` cast).
+fn prepared_single_plugin() -> Box<dyn ErasedPlugin> {
+    prepared_plugin_at(6)
+}
+
 /// Drives one 64-frame stereo block of golden PCM through the
 /// production path — deterministic input `0.5 / -0.25` — and returns
 /// the neutral `ProcessResult` plus the output channels.
@@ -134,8 +146,9 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
 
 /// Discovery through the production path: `Vst3Library::load` scans
 /// the real binary's factory, finds the `test_gain`, `test_fault`,
-/// `test_editor`, `test_stateful`, and `test_instrument` component
-/// classes (the distributed controller classes are filtered out, as
+/// `test_editor`, `test_stateful`, `test_instrument`,
+/// `test_spawn_fail`, and `test_stateful_single` component classes
+/// (the distributed controller classes are filtered out, as
 /// with every VST3 module), and reports each fixture's
 /// vendor/name/features.
 #[test]
@@ -144,7 +157,7 @@ fn discovers_suite_plugins_through_production_host() {
     let descriptors = library.descriptors();
     assert_eq!(
         descriptors.len(),
-        6,
+        7,
         "only the audio component classes are plugin descriptors"
     );
     let gain = descriptors[0];
@@ -173,6 +186,16 @@ fn discovers_suite_plugins_through_production_host() {
     assert_eq!(instrument.version, "0.0.0");
     assert!(instrument.features.contains(&"Instrument"));
     assert!(instrument.features.contains(&"Fx"));
+    let spawn_fail = descriptors[5];
+    assert_eq!(spawn_fail.name, "test_spawn_fail");
+    assert_eq!(spawn_fail.vendor, "Ruviform Test");
+    assert_eq!(spawn_fail.version, "0.0.0");
+    assert!(spawn_fail.features.contains(&"Fx"));
+    let single = descriptors[6];
+    assert_eq!(single.name, "test_stateful_single");
+    assert_eq!(single.vendor, "Ruviform Test");
+    assert_eq!(single.version, "0.0.0");
+    assert!(single.features.contains(&"Fx"));
 }
 
 /// Parameter surface through the production path: the host instantiates
@@ -184,7 +207,7 @@ fn discovers_suite_plugins_through_production_host() {
 fn reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 6);
+    assert_eq!(factories.len(), 7);
     let plugin = factories[0].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_gain exposes exactly one parameter");
@@ -203,7 +226,7 @@ fn reports_gain_param_in_plain_domain() {
 fn reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 6);
+    assert_eq!(factories.len(), 7);
     let plugin = factories[1].create();
     let params = plugin.params();
     assert_eq!(params.len(), 1, "test_fault exposes exactly one parameter");
@@ -342,7 +365,7 @@ fn fault_error_mode_is_defined_rejection_not_crash() {
 fn editor_reports_no_params() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 6);
+    assert_eq!(factories.len(), 7);
     let plugin = factories[2].create();
     assert!(
         plugin.params().is_empty(),
@@ -417,7 +440,7 @@ fn gain_and_fault_have_no_editor_view() {
 fn stateful_reports_gain_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
-    assert_eq!(factories.len(), 6);
+    assert_eq!(factories.len(), 7);
     let plugin = factories[3].create();
     let params = plugin.params();
     assert_eq!(
@@ -575,8 +598,152 @@ fn stateful_restore_rejects_malformed_blob() {
     plugin.save_state().expect("save_state still works");
 }
 
+/// `test_stateful_single`'s parameter surface through the production
+/// path: the class reports its *own* CID from `getControllerClassId`,
+/// so the bridge's `single_component` arm resolves `IEditController`
+/// by casting the component — and the parameter scan proves the
+/// shared object answers the controller surface (`Gain`, plain
+/// `[0.0, 2.0]`, default `1.0`).
+#[test]
+fn single_component_reports_gain_param_in_plain_domain() {
+    let library = load_library();
+    let factories = library.factories();
+    assert_eq!(factories.len(), 7);
+    let plugin = factories[6].create();
+    let params = plugin.params();
+    assert_eq!(
+        params.len(),
+        1,
+        "test_stateful_single exposes exactly one parameter"
+    );
+    let gain = params[0];
+    assert_eq!(gain.id.0, 0);
+    assert_eq!(gain.name, "Gain");
+    assert_eq!(gain.min_value, 0.0);
+    assert_eq!(gain.max_value, 2.0);
+    assert_eq!(gain.default_value, 1.0);
+}
+
+/// The single-component state oracle through the production VST3
+/// bridge — the arm this class exists to reach. `single_component
+/// == true` → `save_state` runs `component.getState` only and frames
+/// `[u32 comp_len][comp][u32 0]` — 24 bytes total, `ctrl_len = 0`:
+/// the empty-controller-payload shape only a real single-component
+/// binary produces (the distributed classes always frame two
+/// payloads). The save → mutate → restore → save round-trip is
+/// byte-exact and the restored gain drives the DSP — all on the one
+/// shared object, one `initialize`/`terminate` pair (the fixture's
+/// strict contracts would fail `init`/teardown on a double call).
+#[test]
+fn single_component_save_mutate_restore_save_round_trips() {
+    let mut plugin = prepared_single_plugin();
+
+    // Initial save — default plain gain 1.0. Single-component
+    // framing: [u32 comp_len][comp payload][u32 ctrl_len = 0] —
+    // 4 + 16 + 4 = 24 bytes, the `ctrl_len = 0` arm.
+    let initial = plugin.save_state().expect("save_state");
+    assert_eq!(
+        initial.len(),
+        24,
+        "one 16-byte component payload + two u32 lengths (ctrl_len = 0)"
+    );
+    assert_eq!(&initial[0..4], &16_u32.to_le_bytes());
+    assert_eq!(&initial[4..8], b"RFST");
+    assert_eq!(
+        f64::from_le_bytes(initial[12..20].try_into().unwrap()),
+        1.0,
+        "component payload: plain gain"
+    );
+    assert_eq!(
+        &initial[20..24],
+        &0_u32.to_le_bytes(),
+        "single-component save frames an empty controller payload"
+    );
+
+    // Deterministic: an immediate second save is byte-identical.
+    let again = plugin.save_state().expect("save_state");
+    assert_eq!(again, initial);
+
+    // Mutate through the real ABI: normalized 0.375 → plain 0.75 at
+    // offset 0 — the whole block runs at ×0.75 and the shared cell
+    // adopts it.
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    let (_result, [left, _right]) = drive_block(&mut *plugin, &events);
+    assert_eq!(left, vec![0.375_f32; FRAMES]);
+
+    // The mutated save differs — same 24-byte single-component
+    // frame, new plain gain in the component payload.
+    let mutated = plugin.save_state().expect("save_state");
+    assert_eq!(mutated.len(), 24);
+    assert_eq!(
+        f64::from_le_bytes(mutated[12..20].try_into().unwrap()),
+        0.75
+    );
+    assert_eq!(&mutated[20..24], &0_u32.to_le_bytes());
+
+    // Restore the initial blob — the single-component restore arm
+    // (`component.setState` → `component.getState`, no controller
+    // state verbs) runs and the re-saved blob is byte-identical to
+    // the initial save.
+    plugin.restore_state(&initial).expect("restore_state");
+    let restored = plugin.save_state().expect("save_state");
+    assert_eq!(restored, initial, "save → restore → save is exact");
+
+    // Audio proves the restored gain drives the DSP again: ×1.0 —
+    // `out == in` through the real ABI on the shared object.
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// A malformed state blob on the single-component class is a
+/// defined `PluginFailed`, never a silent accept — same contract as
+/// the distributed class, same fault isolation: the instance
+/// survives and `save_state` still works afterwards.
+#[test]
+fn single_component_restore_rejects_malformed_blob() {
+    let mut plugin = prepared_single_plugin();
+    plugin.save_state().expect("save_state");
+
+    // Too short to be the framed format → foreign passthrough → the
+    // component payload fails the codec → `PluginFailed`.
+    assert_eq!(
+        plugin.restore_state(&[0xAA, 0xBB]),
+        Err(HostError::PluginFailed)
+    );
+    // A well-framed blob with a corrupted component magic →
+    // `PluginFailed` at `component.setState`.
+    let mut corrupt = plugin.save_state().expect("save_state");
+    corrupt[4] ^= 0xFF;
+    assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
+    // A well-framed blob with one trailing byte → `unframe_state`
+    // requires `ctrl_end == blob.len()` → `PluginFailed` before any
+    // plugin verb runs.
+    let mut trailing = plugin.save_state().expect("save_state");
+    trailing.push(0x00);
+    assert_eq!(
+        plugin.restore_state(&trailing),
+        Err(HostError::PluginFailed)
+    );
+    // A well-framed blob whose component payload carries a NaN
+    // gain → the codec's non-finite check → `kResultFalse` →
+    // `PluginFailed` at `component.setState`.
+    let mut nan = plugin.save_state().expect("save_state");
+    nan[12..20].copy_from_slice(&f64::NAN.to_le_bytes());
+    assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
+    // The instance is still alive and its state surface intact.
+    plugin.save_state().expect("save_state still works");
+}
+
 /// The stateless classes keep the honest `Unsupported` on both state
-/// verbs — `test_stateful` is the suite's only state surface.
+/// verbs — `test_stateful`/`test_stateful_single` are the suite's
+/// only state surfaces.
 #[test]
 fn stateless_classes_decline_state_verbs() {
     for mut plugin in [

@@ -11,7 +11,7 @@ consumers (Issue #630).
 A single VST3 module binary exporting `GetPluginFactory` plus the
 platform module hooks (`InitDll`/`ExitDll` on Windows,
 `ModuleEntry`/`ModuleExit` on Linux, `bundleEntry`/`bundleExit` on
-macOS) that hosts four plugins (eight classes):
+macOS) that hosts seven plugins (twelve classes):
 
 | Class | CID role | Surface |
 | --- | --- | --- |
@@ -23,6 +23,10 @@ macOS) that hosts four plugins (eight classes):
 | `test_editor Controller` ("Component Controller Class") | controller | `IEditController` + `createView("editor")` → `IPlugView` |
 | `test_stateful` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` + `IComponent::setState`/`getState` |
 | `test_stateful Controller` ("Component Controller Class") | controller | `IEditController` + `setComponentState`/`setState`/`getState` |
+| `test_instrument` ("Audio Module Class") | component | `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` (musical-time fields) |
+| `test_instrument Controller` ("Component Controller Class") | controller | `IEditController` |
+| `test_spawn_fail` ("Audio Module Class") | component | enumerable; `createInstance` always declines (spawn-rejection oracle) |
+| `test_stateful_single` ("Audio Module Class") | component **and** controller | one COM object: `IComponent` + `IAudioProcessor` + `IProcessContextRequirements` + `IEditController`; `getControllerClassId` reports its own CID |
 
 Vendor is `"Ruviform Test"` and the class IDs are fresh `uid`s,
 distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
@@ -90,6 +94,30 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 - The stateless classes keep `kNotImplemented` on the state verbs;
   `test_stateful` is the suite's real-ABI state oracle.
 
+## `test_stateful_single` semantics
+
+- The suite's **single-component** class: one COM object implements
+  `IComponent`, `IAudioProcessor` and `IEditController`, and
+  `getControllerClassId` reports the class's *own* CID — the VST3
+  discriminator that drives a conforming host's `single_component`
+  arm (controller = a cast on the component object, one
+  `initialize`/`terminate`, no `IConnectionPoint` pairing, an empty
+  controller payload in framed state). Every other class in the
+  suite is a distributed pair and can never reach that arm.
+- Same gain parameter, DSP law, 16-byte RFST state blob and
+  activation-does-not-reset law as `test_stateful` — the class
+  exists to vary the *topology*, not the DSP or the codec. The gain
+  lives in one shared cell bound to both the component state verbs
+  and the controller value/state verbs: a single component has one
+  source of truth, not a mirror that can drift.
+- Deliberate strictness for verification: `terminate` is legal only
+  while initialized (a host double-`terminate` on the shared object
+  is a defined rejection, not a silent accept), and
+  `setComponentHandler` enforces the VST3 once-contract (a second
+  call is a defined rejection). The controller state verbs stay
+  honest — a conforming host never calls them on a single
+  component, but they are real surface with specified semantics.
+
 ## Independence boundary
 
 The plugin-side implementation (DSP law, lifecycle mapping, bus and
@@ -120,10 +148,11 @@ validated or bounded at the boundary. Verified by the `rt_`
 
 ## Scope
 
-This slice ships `test_gain`, `test_fault`, `test_editor`, and
-`test_stateful`. The stateless classes report `kNotImplemented` on
-the state verbs honestly. CLAP `test_editor`, the `test_instrument`
-class, out-of-process editor attach, and the `ruviform-audio-test`
+The module ships `test_gain`, `test_fault`, `test_editor`,
+`test_stateful`, `test_instrument`, `test_spawn_fail`, and
+`test_stateful_single`. The stateless classes report
+`kNotImplemented` on the state verbs honestly. CLAP `test_editor`,
+out-of-process editor attach, and the `ruviform-audio-test`
 runtime integration are subsequent slices of the same suite. A real-HWND
 `open_gui` attach's Pass evidence belongs to the Issue `scarecrow173/ruviform#631`
 real-dock lane; this crate's default test suite pins only the
