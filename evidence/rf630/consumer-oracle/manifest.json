@@ -1,0 +1,388 @@
+{
+  "schema": "rf630-fixture-contract/1",
+  "title": "Issue #630 AC7 consumer-oracle — fixture contract manifest",
+  "issue": "scarecrow173/ruviform#630",
+  "acceptanceCriterion": "AC7: Synvelis #101/#127/#128/#176 および AL #127 の独立 Consumer Oracle を照合し、Ruviform Test Plugin 自体が AudioLens への新依存を強制しない",
+  "created": "2026-11-21",
+  "repo": {
+    "name": "scarecrow173/ruviform",
+    "shaAtFreeze": "812555d80c2867e69214648a1166cc22599c4b51",
+    "branch": "docs/630-consumer-oracle"
+  },
+  "policyVocabulary": {
+    "source": "POLICIES.md §3 — 要求状態と検証結果は別軸",
+    "requirementStates": ["Required", "Deferred", "NotApplicable"],
+    "runResults": ["Pass", "Fail", "NotRun", "Unsupported"],
+    "dispositions": {
+      "headless-contract-match": "manifest pin と consumer oracle anchor の contract-shape が一致 — ruviform 側で headless に照合可能",
+      "external-owner": "consumer Issue・gate・後続 slice が所有する実走 leg — 本 manifest では Pass/Fail を付けない",
+      "gate": "外部修正 Issue の着地を待つ受入 gate — 本 manifest では判定しない"
+    }
+  },
+  "authoritativeContract": {
+    "principle": "fixture contract の値の正本は各 crate の README（test-only 宣言済み）。本 manifest は README の版と節への pin だけを保持し、contract 値（param domain・DSP law・blob layout・fault 帯域・token 形式）を複写しない。複写は二重正本化として禁止。identity key（class 名・plugin id）は consumer が fixture を引く join key としてのみ記す。",
+    "pinFormat": "<readme path>#<section heading を kebab-case にした anchor>",
+    "driftPolicy": "README の sha256 が本 manifest と乖離したら drift として pin を再照合する。乖離は pin の自動失効ではなく再検証トリガ。",
+    "sources": [
+      {
+        "crate": "ruviform-plugin-test-vst3",
+        "abi": "vst3",
+        "readme": "crates/ruviform-plugin-test-vst3/README.md",
+        "readmeSha256": "ded84ae15239d63f622f5490a09134ce6852341171d60119cc25c1552dcd0829",
+        "readmeLines": 260
+      },
+      {
+        "crate": "ruviform-plugin-test-clap",
+        "abi": "clap",
+        "readme": "crates/ruviform-plugin-test-clap/README.md",
+        "readmeSha256": "6a252f63fe0e321c1c238200786d0bde8380efc1b9e6254054ba2d299ddebdc0",
+        "readmeLines": 248
+      }
+    ]
+  },
+  "fixtureClasses": [
+    {
+      "name": "test_gain",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_gain", "test_gain Controller"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-gain",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "paramSurface": {
+          "pin": "#test_gain-semantics",
+          "declares": "automatable param の id/name/plain domain/default/dimensionless・normalized↔plain 非恒等 mapping"
+        },
+        "dspLaw": {
+          "pin": "#test_gain-semantics",
+          "declares": "deterministic gain law・sample-accurate frame offset 適用・same-offset last-wins・zero-frame flush"
+        },
+        "rtContract": {
+          "pin": "#realtime-contract",
+          "declares": "process 内 alloc/blocking/wait/IO なし — rt_ assert_no_alloc lane"
+        }
+      }
+    },
+    {
+      "name": "test_fault",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_fault", "test_fault Controller"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-fault",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "paramSurface": {
+          "pin": "#test_fault-semantics",
+          "declares": "stepped Fault param の plain domain/default・8 帯域 decode law・normalized arm 値"
+        },
+        "faultModes": {
+          "pin": "#test_fault-semantics",
+          "declares": "none/abort/exit/hang/error/rt_alloc/bad_time/invalid の 8 mode 表・L1-only vs nonfatal の区別・disarm 回復・CLAP events.output leg の honest 境界"
+        },
+        "dspLaw": {
+          "pin": "#test_fault-semantics",
+          "declares": "unarmed = pure pass-through・in-band ParamValue arming・armed block dispatch"
+        }
+      }
+    },
+    {
+      "name": "test_editor",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_editor", "test_editor Controller"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-editor",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "editorSurface": {
+          "pin": "#test_editor-semantics",
+          "declares": "view 生成・固定 size・resize 拒否/受理・attach/detach 契約・実 child HWND 生成（Windows）・非 Windows defined rejection"
+        },
+        "popup": {
+          "pin": "#test_editor-semantics",
+          "declares": "VST3: 指定 key の plugin 所有 WS_POPUP HWND toggle・owner 契約・removed() 畳み込み。CLAP: is_floating floating window 契約（set_transient/suggest_title/show）・embedded/floating 混在 rejection"
+        },
+        "eventTokens": {
+          "pin": "#test_editor-semantics",
+          "declares": "VST3 のみ — child HWND window text 上の event log（attach 世代 title + f:/kd:/ku:/po:/pc: token 表）。CLAP 側に対応 token 面は存在しない"
+        }
+      }
+    },
+    {
+      "name": "test_stateful",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_stateful", "test_stateful Controller"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-stateful",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "paramSurface": {
+          "pin": "#test_stateful-semantics",
+          "declares": "test_gain と同じ Gain param 面・activation で reset しない law"
+        },
+        "stateBlob": {
+          "pin": "#test_stateful-semantics",
+          "declares": "RFST v2 20B blob layout（magic/version/f64/FNV-1a-32 checksum）・canonical/migrated/degraded provenance・typed rejection・deterministic serialization・domain 変換（VST3 component=plain / controller=normalized）"
+        },
+        "presetSurface": {
+          "pin": "#test_stateful-semantics",
+          "declares": "VST3: IUnitInfo+IUnitHandler(+2)（controller）/ IProgramListData+IUnitData（component）・Factory program list・同一 RFST codec・setUnitProgramData=kNotImplemented。CLAP: clap.ext.preset-load + clap.factory.preset-discovery（provider org.ruviform-test.clap-presets）・同一 catalog"
+        }
+      }
+    },
+    {
+      "name": "test_stateful_single",
+      "abis": ["vst3"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_stateful_single"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "topology": {
+          "pin": "#test_stateful_single-semantics",
+          "declares": "single-component 構成（1 COM object が IComponent+IAudioProcessor+IEditController・getControllerClassId が自身の CID）・single-component discriminator・terminate/handler の厳格契約"
+        },
+        "stateBlob": {
+          "pin": "#test_stateful_single-semantics",
+          "declares": "test_stateful と同じ RFST v2 codec・v1 migration・degraded 受理・共有 gain cell"
+        }
+      }
+    },
+    {
+      "name": "test_instrument",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_instrument", "test_instrument Controller"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-instrument",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "paramSurface": {
+          "pin": "#test_instrument-semantics",
+          "declares": "test_gain と同じ Gain param 面"
+        },
+        "midiTransport": {
+          "pin": "#test_instrument-semantics",
+          "declares": "VST3: IEventList MIDI drain（inputEvents・event bus 宣言なし）+ IProcessContextRequirements musical-time → TransportInfo（ppqn 960）。CLAP: note port（dialects CLAP|MIDI・preferred MIDI）+ Process::transport snapshot → TransportInfo（ppqn 960 固定）"
+        },
+        "voiceLaw": {
+          "pin": "#test_instrument-semantics",
+          "declares": "8 voice polyphonic triangle・voice steal/release・CC7 volume・CC1 tremolo・mix law"
+        },
+        "transportClick": {
+          "pin": "#test_instrument-semantics",
+          "declares": "Playing + musical timing で ppqn 境界の single-frame click・exact i128 変換・block 跨ぎ状態なし・Stopped/Paused/欠損/zero tempo は silence"
+        }
+      }
+    },
+    {
+      "name": "test_spawn_fail",
+      "abis": ["vst3", "clap"],
+      "identity": {
+        "vst3": {
+          "classNames": ["test_spawn_fail"],
+          "pin": "crates/ruviform-plugin-test-vst3/README.md#what-it-provides"
+        },
+        "clap": {
+          "pluginId": "org.ruviform-test.clap-test-spawn-fail",
+          "pin": "crates/ruviform-plugin-test-clap/README.md#what-it-provides"
+        }
+      },
+      "contractFaces": {
+        "spawnRejection": {
+          "pin": "#test_spawn_fail-semantics",
+          "declares": "enumerable だが create 常時拒否（VST3 createInstance→kInvalidArgument / CLAP create_plugin→None）— spawn-phase CreateInstance-rejection oracle・scan は壊れない"
+        }
+      }
+    }
+  ],
+  "consumerOracleMap": [
+    {
+      "issue": "scarecrow173/synvelis#101",
+      "requirementState": "Required",
+      "oracleAnchors": [
+        {
+          "path": "crates/synvelis-player/src/binding.rs",
+          "symbols": ["PluginBindingSession", "check_frame_base"],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        }
+      ],
+      "issueNamedFixtures": ["test_gain", "test_stateful", "test_fault"],
+      "primaryFixtures": ["test_gain"],
+      "contractFacesUsed": ["paramSurface", "dspLaw"],
+      "contractShape": {
+        "disposition": "headless-contract-match",
+        "matched": "param binding oracle が要求する param id/domain/normalized mapping・sample-accurate frame offset・last-wins は test_gain の paramSurface/dspLaw pin で宣言済み"
+      },
+      "consumerRun": {
+        "disposition": "external-owner",
+        "owner": "scarecrow173/synvelis#101",
+        "note": "synvelis 本番 Host での実走 leg（Verified FrameBase/ParamId/Capability Generation・Automation Frame Offset・RT noalloc）は同 Issue の AC/lane 責務"
+      }
+    },
+    {
+      "issue": "scarecrow173/synvelis#127",
+      "requirementState": "Required",
+      "oracleAnchors": [
+        {
+          "path": "crates/synvelis-player/src/process_boundary.rs",
+          "symbols": ["ProcessBoundarySession", "PrecisionProvenance"],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        }
+      ],
+      "issueNamedFixtures": ["test_gain", "test_instrument", "test_stateful", "test_fault"],
+      "primaryFixtures": ["test_gain", "test_instrument", "test_fault"],
+      "contractFacesUsed": ["paramSurface", "dspLaw", "midiTransport", "voiceLaw", "transportClick", "faultModes"],
+      "contractShape": {
+        "disposition": "headless-contract-match",
+        "matched": "process boundary oracle が要求する param/PCM 面・MIDI/transport 面（test_instrument の midiTransport/voiceLaw/transportClick）・crash/hang/timeout/isolation 面（test_fault の faultModes・L1-only/nonfatal 区別）は pin 済み。fixture 側の crash isolation oracle は #630 の L1 e2e で done 判定済み（evidence/rf630/fault-modes-verification.md）"
+      },
+      "consumerRun": {
+        "disposition": "external-owner",
+        "owner": "scarecrow173/synvelis#127",
+        "note": "synvelis 本番 Host からの Discover/Load/Process と Loop/Tempo/Automation/Process 境界・RT・crash 隔離の製品 oracle 実走は同 Issue の AC/lane 責務"
+      }
+    },
+    {
+      "issue": "scarecrow173/synvelis#128",
+      "requirementState": "Required",
+      "oracleAnchors": [
+        {
+          "path": "crates/synvelis-player/src/plugin_state.rs",
+          "symbols": ["PluginStatePort", "PluginStateHost"],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        },
+        {
+          "path": "crates/synvelis-project/src/plugin_state.rs",
+          "symbols": ["StateCaptureQuality"],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        }
+      ],
+      "issueNamedFixtures": ["test_stateful", "test_fault"],
+      "primaryFixtures": ["test_stateful", "test_stateful_single", "test_fault"],
+      "contractFacesUsed": ["stateBlob", "presetSurface", "topology", "spawnRejection"],
+      "contractShape": {
+        "disposition": "headless-contract-match",
+        "matched": "state quality oracle が要求する blob layout・provenance（Canonical/Migrated/Degraded）・typed rejection・deterministic serialization は test_stateful(+_single) の stateBlob pin で宣言済み。test_fault（state 拡張なし）と test_spawn_fail（create 拒否）は state capability の対照 fixture — Coordinated/Quiescent/BestEffort/Unsupported の capability 差を写す"
+      },
+      "consumerRun": {
+        "disposition": "external-owner",
+        "owner": "scarecrow173/synvelis#128",
+        "note": "本番 Host 経由の Save/Reload/Offline・Blob 破損・Timeout・Crash・State hash + 独立 PCM 比較の実走は同 Issue の AC/lane 責務"
+      }
+    },
+    {
+      "issue": "scarecrow173/synvelis#176",
+      "requirementState": "Required",
+      "oracleAnchors": [
+        {
+          "path": "evidence/sv176/pd-01-07-case-definitions.md",
+          "symbols": ["PD-01..07", "PluginArtifactEvidence"],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        },
+        {
+          "path": "evidence/sv176/acceptance-ledger.md",
+          "symbols": [],
+          "repoShaVerified": "d68f0e54c09763b93eb556353098c7a92532dfcf"
+        }
+      ],
+      "issueNamedFixtures": ["test_editor"],
+      "primaryFixtures": ["test_editor"],
+      "contractFacesUsed": ["editorSurface", "popup", "eventTokens"],
+      "contractShape": {
+        "disposition": "headless-contract-match",
+        "matched": "PD-01..07 schema dims（plugin artifact identity・host/repo SHA・Expected/Observed/Result・lane 分離）に対し fixture 側は実 child HWND 生成・VK_P popup toggle・event token 表・CLAP floating window 契約を pin 済み。editor-attach upstream Unsupported は #630 側 slice で解消済み（VST3 createView(\"editor\")・CLAP gui ext）"
+      },
+      "consumerRun": {
+        "disposition": "external-owner",
+        "owner": "scarecrow173/synvelis#176 + scarecrow173/ruviform#631",
+        "note": "実 GPUI Window Runner・Native Dock 画素/Focus/Resize/Tab/2Window/ReDock/Crash/RT の PD-01..07 実走は sv#176（製品受入）と #631（real-dock lane）の責務 — freeze 済み ledger も Real OS/Real Plugin 行を NotRun のまま保持"
+      }
+    },
+    {
+      "issue": "scarecrow173/audio-lens#127",
+      "requirementState": "NotApplicable",
+      "oracleAnchors": [],
+      "issueNamedFixtures": [],
+      "primaryFixtures": [],
+      "contractFacesUsed": [],
+      "contractShape": {
+        "disposition": "external-owner",
+        "matched": "照合対象なし — AudioLens は plugin host 機能を製品提供しない"
+      },
+      "consumerRun": {
+        "disposition": "external-owner",
+        "owner": "scarecrow173/audio-lens#127",
+        "note": "al#127 本文: 「#629 OS Audio/MIDI仮想Endpointと#630実Plugin Test SuiteはAudioLensが現在その機能を製品提供しない限りNotApplicableであり、導入した場合だけOwner/Caseを追加する」— NotApplicable を記録するのみで実走 leg は存在しない"
+      }
+    }
+  ],
+  "dependencyNonContamination": {
+    "claim": "Ruviform Test Plugin 自体は AudioLens（および Synvelis）への新依存を強制しない",
+    "structuralHalf": {
+      "fact": "両 test crate は test-only 宣言済みで、production crate は test fixture crate に非依存（README の Independence boundary / dev-dependency のみ）",
+      "measurement": "grep -n \"ruviform-plugin-test\\|ruviform-plugin-dock-test\" ../synvelis/Cargo.lock ../audio-lens/Cargo.lock → 両 consumer Cargo.lock に非含有（exit 1 = 期待値）。実行記録は evidence/rf630/consumer-oracle-verification.md",
+      "consumerPinsAtMeasurement": {
+        "synvelis": "d68f0e54c09763b93eb556353098c7a92532dfcf（ruviform resolved rev cd4213a1d665600f6adfefa0c3a90f2be9b4e4ce）",
+        "audio-lens": "fef857f684997449725e9f1bf38eca354a748d2c（ruviform resolved rev e4c9f6f0715da3ac479f8c437d21a021327e51da）"
+      }
+    }
+  },
+  "residuals": [
+    {
+      "id": "clap-output-event-drain",
+      "disposition": "external-owner",
+      "summary": "CLAP events.output の host 側観測経路（crates/ruviform-plugin-clap/src/host.rs の OutputEvents::void → drain 配線）。fixture の発行面は faultModes pin 済み。scarecrow173/ruviform#253 の VST3 report wire 再利用見込みの後続 slice",
+      "owner": "scarecrow173/ruviform（後続 slice）"
+    },
+    {
+      "id": "popup-real-hwnd-harness",
+      "disposition": "external-owner",
+      "summary": "editor popup の real-HWND host harness / L1 editor 面（production open_gui 経由の popup 観測）。plugin-impl test が現行 oracle",
+      "owner": "scarecrow173/ruviform#631（real-dock lane）"
+    },
+    {
+      "id": "ac4-real-window-dcomp",
+      "disposition": "gate",
+      "summary": "AC4 の実 Window/DComp 既知 Fail 再現・解消判定 — 修正 Issue 着地待ちの外部 gate（既知 soft）",
+      "owner": "scarecrow173/ruviform#532"
+    },
+    {
+      "id": "consumer-run-legs",
+      "disposition": "external-owner",
+      "summary": "各 consumer Issue の本番 Host での fixture 実走 leg — ruviform 側は manifest+対応表+verdict 記録まで",
+      "owner": "scarecrow173/synvelis#101/#127/#128/#176・scarecrow173/audio-lens#127（NotApplicable）"
+    }
+  ],
+  "interpretation": "AC7 の『照合』が『consumer 実走まで要求』と解釈される場合、実走 legs は synvelis/audio-lens 側の別 slice（各 consumer Issue が Own する AC/lane）に分割する。ruviform 側は fixture contract manifest + consumer oracle 対応表 + verdict 記録 + dep 非汚染 evidence を本 slice で完結させる（探索記録 rf630-ac7-consumer-oracle.explore.json の採用解釈）。"
+}
