@@ -1,0 +1,5 @@
+# Run artifacts stay local — committed files are the loop script and the
+# reproduction/verification records (evidence/rf763・rf768 先例).
+# `*.log` (per-iter / canonical logs) は repo ルート .gitignore が除外済み。
+bin/
+logs-*/
