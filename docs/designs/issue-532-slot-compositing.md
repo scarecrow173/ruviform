@@ -90,7 +90,14 @@ mechanism=adapter）。
    "https://github.com/scarecrow173/gpui", tag = "v0.2.2-rf1",
    version = "=0.2.2", optional = true }` — crate 名・`=0.2.2` version
    制約を維持し、`Cargo.lock` を git ソース（commit `f77e44e6`）へ更新。
-4. **回帰面**: non-topmost 化で GPUI コンテンツが子に隠れるケース
+4. **pin の解除条件**: registry 公開の gpui release が本変更と同等の挙動を
+   提供した時点で、git pin を crates.io registry dep へ戻す。同等性の判定は
+   挙動のみで行う — ウィンドウに layered されたネイティブ子 HWND が
+   DirectComposition コンテンツより上に合成される構成（non-topmost
+   composition target 相当）が release 側で成立すること。判定の実証は
+   `real-dcomp-pixel`（必要なら同 lane の `real-dcomp-*` 系ケース）の
+   緑化で行い、解禁したら `version` 制約をその release へ更新する。
+5. **回帰面**: non-topmost 化で GPUI コンテンツが子に隠れるケース
    （オーバーレイ UI、IME 候補窓、メニュー等）は real lane の
    `real-window-ime` 等で要検証 → 実走では `real-window-ime` は
    unsupported のまま、`real-dcomp-present` 等 presentation 系ケースは
