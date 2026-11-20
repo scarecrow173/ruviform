@@ -59,3 +59,32 @@ canonical lane + 監査の構造論証で示す。
   が必要という lane 契約）。
 - loop script・binary 退避・log 収集は `evidence/rf763` の形状に
   揃えた。
+
+## 第 2 slice（`l1_real_adapter` / `l1_real_test_plugin` 非 instrument 面）— logs2-bin-pre/
+
+`loop2.sh`（本ディレクトリ）で `l1_real_adapter_e2e`・
+`l1_real_test_plugin_e2e` の両 ABI 計 4 binary を `BIN_DIR=bin-pre
+N=15` で並走。
+
+| lane | 結果 |
+| ---- | ---- |
+| clap-adapter | 15/15 pass |
+| vst3-adapter | 15/15 pass |
+| clap-testplugin | 15/15 pass |
+| vst3-testplugin | 15/15 pass |
+
+60/60 pass・fail 0 件。**これは finding 未存在ではなく性質上の
+観測限界** — 本 slice の provenance gap（substituted
+`last_output` replay の delivered 水増し計数）は fail を生じさせない
+silent な soundness hole であり、pre-fix binary では分類計数自体が
+存在しないため loop では発現しない（fault 側 finding と同じ
+「fail しない soundness gap」の性質 — 前段 §fault 参照）。
+監査 finding の根拠は構造論証（`docs/discovery/
+issue-768-staleness-oracle.md` Findings — 追補）と counter
+semantics の production 読み取りに基づく。
+
+pre-fix binary は本 worktree で test file を patch 退避→revert→
+`cargo test --no-run` したもの（`bin-pre/`・fixture DLL/runner は
+canonical lane の成果物を共有）。post-fix binary（`bin-post/`）に
+`matched calls` メッセージ文字列が存在し pre-fix には存在しない
+ことを binary grep で確認済み — pre/post の識別は確実。

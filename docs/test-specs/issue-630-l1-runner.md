@@ -87,7 +87,15 @@ through the production L1 runner path.
   `ParamValue(0.25)` event; delivered blocks equal `0.5 ×` an earlier
   input (non-identity `[0.0, 2.0]` gain law); first `lookahead_blocks`
   calls and underruns are defined silence; every call `Ok(CONTINUE)`;
-  ≥8 of 30 eligible calls must deliver.
+  ≥8 matched calls of the 30 eligible calls must deliver. The
+  delivered count keeps to *matched* calls only — per-call
+  `audio_counters` deltas classify `passthrough_submits > 0`
+  (substituted `last_output` replay, whose samples satisfy the
+  membership check without fresh child work) out of delivery
+  evidence (`ruviform#766`/`ruviform#836` pattern; `ruviform#768`
+  oracle audit). The identical `ParamValue` rides every call, so a
+  dropped submit re-lands it structurally — no bounded-resend
+  window (the gain overwrite is idempotent).
 - Rule: Defined rejections — `SaveState`/`RestoreState` return
   `Err(HostError::Unsupported)` wire replies (bridges keep the
   `Plugin` defaults); `OpenGui`/`CloseGui` short-circuit host-side as
@@ -110,8 +118,9 @@ through the production L1 runner path.
 
 - Example: full series — spawn runner → handshake descriptor
   field-match → 32 blocks at 48 kHz/512 frames stereo → gain `0.5`
-  delivered-block membership → `Err(Unsupported)` state/GUI verbs →
-  clean teardown exit 0.
+  delivered-block membership on matched calls (substituted replays
+  classified out by the `passthrough_submits` delta) →
+  `Err(Unsupported)` state/GUI verbs → clean teardown exit 0.
 - Example: kill — `kill_child` mid-`Processing` → `Failed` + one
   `InstanceFailed{exit.code|signal}` notification → `Initialize`/
   `SaveState` → `Err(Failed)` → silence `process` → `Destroy` ok.

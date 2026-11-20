@@ -120,8 +120,10 @@ fixtures. Each test crate (`ruviform-plugin-test-vst3`,
   (`#![cfg(feature = "l1-runner")]` + `#[ignore]`-gated) mirroring the
   adapter `tests/l1_real_adapter_e2e.rs` oracle: spawn + handshake
   descriptor field-match, lifecycle to `Processing`, shm `process`
-  blocks with a `ParamValue` event (delivered-block membership,
-  underrun = defined silence), defined `Err(Unsupported)` for
+  blocks with a `ParamValue` event (delivered-block membership —
+  matched calls only, substituted `last_output` replays classified
+  out via the `passthrough_submits` delta; underrun = defined
+  silence), defined `Err(Unsupported)` for
   `SaveState`/`RestoreState`/`OpenGui`/`CloseGui`, clean teardown,
   `kill_child` → `Failed` + exactly-once notification, and missing
   runner → `SpawnFailed`;
@@ -200,7 +202,9 @@ binary under test.
 - The e2e oracle must field-match the child's scanned descriptor
   against a parent-side pin computed independently (literal CID hex
   derivation for VST3; literal descriptor for CLAP), reuse the
-  adapter e2e's delivered-block membership / underrun-silence /
+  adapter e2e's matched-only delivered-block membership (substituted
+  replays classified out via `passthrough_submits` deltas;
+  `ruviform#768` oracle audit) / underrun-silence /
   exactly-once-notification semantics, and assert-fail (never
   silent-skip) on missing artifacts.
 - Dependency direction must stay acyclic: test crates may depend on
@@ -215,9 +219,10 @@ binary under test.
 - [ ] `mise run test-l1-real-plugin` builds both test-crate cdylibs +
   runner bins and passes the `#[ignore]`d e2e suites on Windows:
   spawn+handshake descriptor field-match, lifecycle, param-event shm
-  process with delivered-block membership and underrun silence,
-  defined `Err(Unsupported)` state/editor verbs, clean teardown,
-  kill→`Failed`+notification exactly once, missing runner→`SpawnFailed`.
+  process with matched-only delivered-block membership and underrun
+  silence, defined `Err(Unsupported)` state/editor verbs, clean
+  teardown, kill→`Failed`+notification exactly once, missing
+  runner→`SpawnFailed`.
 - [ ] `mise run check`/`lint`/`test`/`fmt-check`/`test-rt` pass for
   both test crates (default features) and the `l1-runner` feature
   targets via the extended lane tasks; `prek run --all-files` clean.

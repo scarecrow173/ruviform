@@ -63,3 +63,35 @@ round-trip）は全 run で pass — substituted call を計数対象から
 - `hang` spawn-deadline flake は本 slice 対象外の residual として
   記録（test-file 変更では解消できない runner spawn 経路の問題 —
   `ruviform#767` 系の別 class）。
+
+## 第 2 slice（`l1_real_adapter` / `l1_real_test_plugin` 非 instrument 面）
+
+### Canonical verification（mise）
+
+| lane | command | result |
+| ---- | ------- | ------ |
+| canonical E2E | `mise run test-l1-real-plugin` | Pass（exit 0）— `l1_real_adapter_e2e` 3/3×2・`l1_real_test_plugin_e2e` 10/10×2・`l1_fault` 19/19×2・`l1_stateful` 3/3+5/5（両 ABI・`-- --ignored` 実走）。対象 `*_l1_full_series` は matched-only 計数化後に pass |
+| typecheck | `mise run check-l1-real-plugin` | Pass（exit 0）— `LegDeltas` 返却化の初回 run で `dropped` 未読 warning を検出 → failure line に `{dropped_calls} dropped` を含めて解消（warning 抑制ではなく診断情報として使用） |
+| lint | `mise run lint-l1-real-plugin` | Pass（exit 0・`-D warnings`） |
+| fmt | `mise run fmt-check` | Pass（exit 0） |
+
+### 補助証拠（canonical ≠ mise）— `loop2.sh` concurrent loop
+
+| phase | lane | result |
+| ----- | ---- | ------ |
+| pre-fix（`BIN_DIR=bin-pre N=15`） | clap/vst3-adapter・clap/vst3-testplugin | 60/60 pass（fail 0 — provenance gap は fail しない soundness hole のため、pre-fix pass は gap 未存在を意味しない。`reproduction.md` 第 2 slice 節参照） |
+| post-fix（`BIN_DIR=bin-post N=15 LOAD=1`） | 同 4 lane + sibling main checkout の cargo build 負荷 | 60/60 pass — matched-only 計数化で最低到達数 gate が負荷下・実 drop 条件下でも充足。substituted/dropped 計数が gate を阻害する事象は観測されず |
+
+### 判定（第 2 slice）
+
+- `*_l1_full_series` の delivered provenance gap を matched-only
+  分類で解消 — `passthrough == 0` が matched の必要十分条件は
+  現行 counter semantics 下で確定（`ruviform#767` が semantics を
+  変えた場合は分類前提の再確認が必要 — PR 本文で相互リンク）。
+- 修正の正しさは canonical lane PASS（matched-only で全 test
+  green）+ 構造論証 + 副次強化（matched all-zero は underrun
+  免責でなく membership fail へ — oracle は弱体化でなく強化）。
+- `ParamValue` event は全 call 構造再送 + plain overwrite 冪等 —
+  bounded resend 不要の監査結論どおり・観測上も fail なし。
+- ローカル検証＝変更範囲の検証。統合受入は merge 後の対象 SHA の
+  必須 CI 結果（Coordinator が確認）。
