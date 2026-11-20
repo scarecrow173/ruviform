@@ -47,7 +47,14 @@
 //! presentation attributes, `PrintWindow` flag variants, and
 //! screen-vs-suspect pixel fingerprints that discriminate the
 //! remaining hit-test-transparent / child-presentation /
-//! capture-blind-spot candidates. The catalog also
+//! capture-blind-spot candidates; `real-dcomp-uncovered`
+//! (Issue #532 uncovered-baseline slice) applies the foreground
+//! probe's staged mutations to establish a no-foreign-cover state,
+//! verifies it through hit-test roles, then re-observes hits and
+//! screen pixels across a bounded settle curve plus post-settle
+//! capture variants to decide whether the residual no-green is a
+//! pre-paint frame or compositor-internal occlusion. The catalog
+//! also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
 //! injection, command-receipt settlement, live geometry/

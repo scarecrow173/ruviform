@@ -1595,3 +1595,111 @@ gesture を駆動し、minted `command_id` 相関の applied
   'twenty-one catalog rows'）は lease 外の既知残件として保持。
 - docs index（`docs/**/README.md`）は未同期 — Coordinator が
   統合時に整備する。
+
+# Slice 追記: Issue #532 uncovered-baseline bisect — `real-dcomp-uncovered` + `ospres::own_windows`
+
+- Date: 2026-11-20
+- OS: Windows (x86_64) — interactive desktop 実走
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA（evidence header）: `2bb902b2e7374300ba54a151ae80b61ed2e2f9c0`
+  （`origin/main` と同一 — 本 slice の commit 前ベース。
+  working tree の未 commit 差分を含む実走）
+- Doc chain: `docs/{specs,designs,test-specs,discovery}/issue-532-uncovered-baseline.md`
+- Bisect 記録: `evidence/rf532/uncovered-baseline-bisect.md`
+  （残余 no-green の原因は compositor-internal /
+  presentation-layer occlusion と確定 — Issue #532 は open のまま）
+
+## 実装概要（本 slice の追加）
+
+- real catalog 23 case 目として `real-dcomp-uncovered` を追加
+  （`real-dcomp-present` の後・`real-multiwindow-focus` の前）。
+- `ospres::Inventory.own_windows`: 自 process の top-level window
+  を `INVENTORY_CAP` 非依存で全件収録し、full-enumeration の真の
+  `z_index` を保持（前 slice で自分自身が cap 切れして z_index
+  を読めなかった制約の解消 — 残課題 c）。
+- `real-dcomp-uncovered` probe: own-process inventory → baseline
+  snapshot → env-prep mutation（raise→foreground→topmost）→
+  `uc_uncovered` role 集計 → 累積 200/500/1200ms の settle curve
+  （`std::thread::sleep` — case body は caller thread、GPUI pump
+  は継続）→ post-settle `PrintWindow` flag 変種 + window-DC →
+  verified restore。green/uncovered/update_pending は全て note
+  級 data で verdict 入力にしない。
+- foreground/presentation 両 probe が使う shared helper を
+  label-parametrized に refactor（`ProbeLabels`・`uc_*`/`fg_*`/
+  `pres_*` step prefix）。観測・mutation・restore の意味論は
+  不変。
+- manifest/依存/feature 変更なし。
+
+## Lane results（全て実走）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `cargo check --locked --all-targets -p ruviform-plugin-dock-test` | pass |
+| `cargo check --locked --all-targets -p ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run test ruviform-plugin-dock-test` | pass（unit 14 + console 14 + plugin_dock 4） |
+| `cargo test --locked -p ruviform-plugin-dock-test --features real-dock` | pass（unit 17 + console 14 + plugin_dock 5） |
+| `mise run test-ui-plugin-dock` | pass — `plugin-dock-scenario.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-console` | pass — `plugin-dock-console.jsonl` 再生成（`--list --include-real` = 32 row: 9 headless + 23 real） |
+| `mise run test-ui-plugin-dock-real` 相当（cargo 直実行、`--pixel-artifacts` 付き） | **exit 1（設計どおり）** — `real-dcomp-pixel` の既知 `Fail` が唯一の Fail。`plugin-dock-real-scenario.jsonl` 再生成 |
+| `GPUI_DISABLE_DIRECT_COMPOSITION=1` + cargo 直実行 | **exit 1（設計どおり、同上）** — `plugin-dock-real-scenario-dcomp-disabled.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-real-headless` | pass（exit 0 — 23 row 全て `not_run`+`environment_blocked`。`plugin-dock-real-headless.jsonl` 再生成） |
+| `mise run test-ui-scenario-contract` | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise exec -- prek run --all-files` | pass |
+
+## `test-ui-plugin-dock-real` 実走 verdict（23 case、interactive Windows desktop）
+
+| case | verdict（両 run 共通） |
+| --- | --- |
+| `real-window-mount` | pass |
+| `real-native-slot` | pass |
+| `real-editor-attach` | pass |
+| `real-capture` | pass |
+| `real-dcomp-pixel` | **fail**（既知 `ruviform#532` — screen green=0.0、変化なし） |
+| `real-dcomp-foreground` | pass |
+| `real-dcomp-present` | pass |
+| `real-dcomp-uncovered` | **pass**（probe 完走 + restore 検証、47 steps） |
+| `real-multiwindow-focus` | pass |
+| `real-os-input` | pass |
+| `real-command-receipt` | pass |
+| `real-window-dpi` | pass |
+| `real-window-ime` | unsupported |
+| `real-window-close` | pass |
+| `real-editor-resize` | pass |
+| `real-editor-redock` | pass |
+| `real-session-terminate` | pass |
+| `real-session-degraded` | pass |
+| `real-session-recovery` | pass |
+| `real-session-timeout` | pass |
+| `real-editor-visibility` | pass |
+| `real-session-crash` | unsupported |
+| `real-session-hang` | unsupported |
+
+## `real-dcomp-uncovered` 実測観測値（DComp on / off 共通）
+
+- `uc_uncovered`: `uncovered=true` — topmost 後の
+  `WindowFromPoint` 5 点全て `editor_child` role。
+- settle 0/200/500/1200ms の screen green は全て 0.0・同一
+  sha256 — unsettled frame 仮説を棄却。
+- `update_pending=true` が settle 全域で持続 — child の classic
+  update region は validate されず。
+- DComp off: child windowdc=1.0・root windowdc=0.996 に green
+  存在、screen=0.0 — 最終合成は window bitmap 以外の surface
+  を源泉（compositor-internal occlusion の支持）。
+- `uc_inventory.own_windows`: 7 件（visible z=22–25・invisible
+  z=287–289）、cap 256 truncation の影響を受けず。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-dcomp-pixel` の `Fail`（`ruviform#532`）は据え置き —
+  pixel Pass は別 gate。verdict ロジック不変。
+- Issue #532 は open のまま — 本 slice は診断確定のみで
+  compositor 修正・方式選定は別 slice。
+- 遮蔽 surface の内部機構（DComp visual tree の何が flat dark
+  を提示しているか）は HWND 層 probe の射程外で未解決 —
+  evidence に正直な留保として記録。
+- docs index（`docs/**/README.md`）は未同期 — Coordinator が
+  統合時に整備する。

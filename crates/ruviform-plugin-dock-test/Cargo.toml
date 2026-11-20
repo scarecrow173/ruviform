@@ -120,7 +120,11 @@ sha2 = "0.10"
 #   observation (`EnumWindows`/`GetWindow`/`GetWindowLongPtrW`/
 #   `GetWindowRgn`/`GetRgnBox`/`GetUpdateRect`/
 #   `GetLayeredWindowAttributes`, plus `DwmGetWindowAttribute` via
-#   local extern) — no mutation, no new features. Windows-targeted
+#   local extern) — no mutation, no new features. The Issue #532
+#   uncovered-baseline slice adds no new Win32 surface: it reuses
+#   the `osmut` staged mutations plus the query-only probes, with
+#   `std::thread::sleep` for the settle curve — no feature or
+#   dependency change. Windows-targeted
 #   so the dep never
 #   enters non-Windows builds; optional so the default headless
 #   lane's dependency tree is unchanged. Same `windows-sys` 0.61
