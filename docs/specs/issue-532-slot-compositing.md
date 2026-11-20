@@ -15,6 +15,8 @@ relations:
     added:
       - type: "file"
         path: "evidence/rf532/poc-interposition-results.md"
+      - type: "file"
+        path: "evidence/rf532/option-a-results.md"
       - type: "doc"
         path: "docs/discovery/issue-532-slot-compositing.md"
       - type: "doc"
@@ -24,6 +26,10 @@ relations:
         path: "crates/ruviform-ui-gpui/src/gpui_driver/surface.rs"
       - type: "file"
         path: "crates/ruviform-ui-gpui/src/render.rs"
+      - type: "file"
+        path: "crates/ruviform-ui-gpui/Cargo.toml"
+      - type: "file"
+        path: "Cargo.lock"
     deleted: []
     renamed: []
     moved: []
@@ -65,6 +71,17 @@ Option-A（GPUI fork）判定の根拠を確定する。
 `evidence/rf532/poc-interposition-results.md`、設計:
 `docs/designs/issue-532-slot-compositing.md`）。
 
+## Option-A 実施結果（後続スライスで実施済み）
+
+`gpui` を `CreateTargetForHwnd(hwnd, false)` へ修正した git fork
+（tag `v0.2.2-rf1`、`crates/ruviform-ui-gpui/Cargo.toml` で version
+`=0.2.2` 制約を維持した git dep）へ切り替え、`RVF_SLOT_HOLE` 機構を撤去し
+canonical run を再実走。**`real-dcomp-pixel` は引き続き fail**（green
+0.000）で、verdict 構成・topmost ステージ画面 capture SHA256 が
+baseline と完全一致 — 注入ビジュアルの z-order は遮蔽機構ではなかった。
+遮蔽主体は presentation plane 自体と見るのが全証拠と整合（次候補は
+`evidence/rf532/option-a-results.md` 参照）。
+
 ## 検証
 
 - canonical run（`mise run test-ui-plugin-dock-real`、既定 `none`）:
@@ -74,8 +91,13 @@ Option-A（GPUI fork）判定の根拠を確定する。
   `fmt-check` pass、新規決定論テスト 2 件 pass。
 - 実験 run: `RVF_SLOT_HOLE=region` / `alpha` の JSONL・画素証跡は
   `evidence/rf532/` に記録。
+- Option-A run（fork 適用後の canonical run）: 19 pass /
+  `real-dcomp-pixel` fail / 3 unsupported — verdict 構成は baseline
+  と同一、presentation 系回帰なし（一覧は
+  `evidence/rf532/option-a-results.md`）。
 
 ## Issue 状態
 
-`real-dcomp-pixel` は引き続き fail。Issue #532 は **open** のまま、
-Option-A（fork 実施）スライスを後続として起票・着手する。
+`real-dcomp-pixel` は Option-A 実施後も引き続き fail。Issue #532 は
+**open** のまま — 遮蔽機構の再特定（presentation plane / swapchain flip
+経路、または airspace 回避方式）を次スライスへ引き継ぐ。
