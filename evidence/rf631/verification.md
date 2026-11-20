@@ -1703,3 +1703,118 @@ gesture を駆動し、minted `command_id` 相関の applied
   evidence に正直な留保として記録。
 - docs index（`docs/**/README.md`）は未同期 — Coordinator が
   統合時に整備する。
+
+# Slice 追記: Issue #631 editor input/focus verbs（`real-editor-input`/`real-editor-focus`）
+
+- Date: 2026-11-20
+- Lane JSONL repo_sha: `e0240590`（実走時 HEAD — 直上の
+  `a637c2bd` は test コメントのみの style fix で lane 入力不変）
+- 対象: `GuiKeyEvent`/`GuiKeyDirection`/`GuiModifiers` 境界語彙、
+  `Plugin`/`ErasedPlugin` の `set_gui_focus`/`send_gui_key` hook
+  （既定 `Unsupported`）、L0-only
+  `HostCommand::SetGuiFocus`/`SendGuiKey`（wire 非対象・version
+  不変）、`EditorSessionOps::set_focus`/`send_key` +
+  `InProcessEditorOps` 実装（`L1EditorOps` は全 verb
+  `Unsupported` のまま）、VST3 `IPlugView::onFocus`/`onKeyDown`/
+  `onKeyUp` forward、fixture の child HWND title event log、
+  `real-editor-input`/`real-editor-focus` 2 case（24→26 rows）
+
+## Static lanes（全 pass）
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `mise run check/lint/test ruviform-plugin-core` | pass（2 tests） |
+| `mise run check/lint/test ruviform-plugin-host` | pass（226 + 57 + 18 + 112 + 23 + 187 等、全 suite 0 failed — 下記 flake 注記） |
+| `mise run check/lint/test ruviform-plugin-vst3` | pass（44 tests） |
+| `mise run check/lint/test ruviform-plugin-test-vst3` | pass（99 + 19、Windows-only HWND test は ignore のまま） |
+| `mise run check/lint/test ruviform-plugin-dock-test` | pass（unit 2 + console 14 + plugin_dock 4） |
+| `cargo check/clippy/test -p ruviform-plugin-dock-test --features real-dock` | pass（unit 17 + console 14 + plugin_dock 5、`-D warnings`） |
+| `mise run test-ui-scenario-contract`（fake/gpui 両 lane） | pass |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+
+### plugin-host L1 e2e flake 注記
+
+`mise run test ruviform-plugin-host` を全 test binary 並列実行した際、
+`runner_lane_*`（5 件、`ruviform-plugin-l1-video-runner` 未 build 時）と
+`l1_proxy_e2e` の timeout-convergence 系（run ごとに 2〜3 件、
+`command_timeout_converges_failed_with_timeout_cause`/
+`hang_converges_on_command_timeout`/
+`spawn_failed_attempt_record_captures_stderr`/
+`wedged_child_write_converges_and_teardown_is_bounded`）が断続失敗した。
+runner bin を `cargo build --bin ruviform-plugin-l1-video-runner` で
+事前生成すると `runner_lane_*` は 5/5 pass、`l1_proxy_e2e` 単独実行は
+187/187 pass — 並列実行時の spawned runner process 由来の環境 flake で、
+本 slice の L0-only 変更（L1 proxy 経路に非接触）とは無関係。
+
+## `test-ui-plugin-dock-real` 実走（26 case、interactive Windows desktop）
+
+`mise run test-ui-plugin-dock-real` — exit 1（`real-dcomp-pixel`
+既知 `ruviform#532` Fail + `real-dcomp-bandescape` の既存
+environmental Fail による設計どおり）。
+
+| case | verdict |
+| --- | --- |
+| `real-window-mount` | pass |
+| `real-native-slot` | pass |
+| `real-editor-attach` | pass |
+| `real-capture` | pass |
+| `real-dcomp-pixel` | **fail**（既知 `ruviform#532` — screen green=0.0、据え置き） |
+| `real-dcomp-foreground` | pass |
+| `real-dcomp-present` | pass |
+| `real-dcomp-uncovered` | pass |
+| `real-dcomp-bandescape` | **fail**（前 slice 記録と同一の `be_apply_layered_exstyle refused (win32 error unknown)` — 本 slice 非関連の既存 environmental fail） |
+| `real-multiwindow-focus` | pass |
+| `real-os-input` | pass |
+| `real-command-receipt` | pass |
+| `real-window-dpi` | pass |
+| `real-window-ime` | unsupported |
+| `real-window-close` | pass |
+| `real-editor-resize` | pass |
+| `real-editor-redock` | pass |
+| `real-session-terminate` | pass |
+| `real-session-degraded` | pass |
+| `real-session-recovery` | pass |
+| `real-session-timeout` | pass |
+| `real-editor-visibility` | pass |
+| `real-editor-input` | **pass**（本 slice 新規 — child HWND title に `\|kd:0061:0041:0000,ku:0061:0041:0000` suffix を OS 観測） |
+| `real-editor-focus` | **pass**（本 slice 新規 — title suffix `\|f:1,f:0` を OS 観測） |
+| `real-session-crash` | unsupported |
+| `real-session-hang` | unsupported |
+
+分布: 21 pass / 2 fail / 3 unsupported（26 rows）。
+`plugin-dock-real-scenario.jsonl` 再生成（1 header + 26 rows）。
+
+### 新規 2 case の oracle 実測
+
+- `real-editor-input`: `session.send_key` down+up `'a'` が production
+  `InProcessEditorOps` 経由で accept され、再 enumerate した child
+  HWND の `GetWindowTextW` title が
+  `rvf-test-editor-attach-{n}|kd:0061:0041:0000,ku:0061:0041:0000`
+  で終了（`editor_input` + `editor_input_effect` step 共に pass）。
+  session は `Attached` のまま、events は `[Attached{Docked},
+  Closed]`、close 後 `IsWindow(child)==0`。
+- `real-editor-focus`: `session.set_focus(true)`→`(false)` が accept
+  され、title suffix `|f:1,f:0` を OS 観測（`editor_focus` +
+  `editor_focus_effect` 共に pass）。session/events/close 収束は
+  同上。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+`mise run test-ui-plugin-dock-real-headless` — pass（exit 0）。
+`plugin-dock-real-headless.jsonl` 再生成: 26 case 全て `not_run` +
+`observed.environment_blocked`、`environment_kind=real-window`
+claim なし（self-check 通過、26/26 row）。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `SendGuiKey`/`SetGuiFocus` の wire encoding・`L1EditorOps` 対応 —
+  L0-only 設計のまま据え置き（out-of-process editor verb は別
+  slice）。
+- CLAP adapter の input/focus — hook は既定 `Unsupported`。
+- `real-window-ime` — `Ime` capability 未 claim（Issue #389 scope）。
+- `real-session-crash`/`real-session-hang` — architectural boundary
+  `Unsupported` 据え置き。
+- `real-dcomp-pixel`/`real-dcomp-bandescape` の `Fail` — 既知・
+  既存のまま据え置き（Issue #532 系、本 slice 非関連）。
+- macOS/Linux GUI — `Unsupported`/`Deferred` 据え置き。
