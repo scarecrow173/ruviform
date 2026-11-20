@@ -5,7 +5,7 @@
 //! presentation-probe/uncovered-baseline/band-escape slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-four
+//! windows* through [`RealOsGuiTest`] and records the twenty-six
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -85,6 +85,12 @@
 //! | `real-editor-visibility`| `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_visibility` |
 //! |                         |             | の hide→destroy / show→recreate cycle を child HWND     |
 //! |                         |             | 生死 + `Hidden`/`Shown` event で検証                    |
+//! | `real-editor-input`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `send_key`     |
+//! |                         |             | down/up を実 lease 経由で実行し、child HWND title の   |
+//! |                         |             | fixture event log（`kd:`/`ku:` token）を検証           |
+//! | `real-editor-focus`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_focus`    |
+//! |                         |             | true→false を実 lease 経由で実行し、child HWND title   |
+//! |                         |             | の fixture event log（`f:` token）を検証               |
 //! | `real-session-crash`    | `RealOs`    | `Unsupported` — in-process lane は fixture の         |
 //! |                         |             | process-killing fault を生存不能（out-of-process      |
 //! |                         |             | host 未実装）                                         |
@@ -109,10 +115,10 @@
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionState, EditorSize, HostCommand, HostError, HostReply, InProcessEditorOps,
-    InProcessHost, MonotonicSessionClock, OpenOutcome, ParentLease, ParentSlotLease,
-    PluginEditorSession, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
-    SessionDeadlinePolicy, SessionFailCause,
+    EditorSessionState, EditorSize, GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand,
+    HostError, HostReply, InProcessEditorOps, InProcessHost, MonotonicSessionClock, OpenOutcome,
+    ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId, PluginEditorSessions,
+    PluginHandle, SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
@@ -170,7 +176,8 @@ use crate::scenario::{
 /// `real-editor-resize`, `real-editor-redock`,
 /// `real-session-terminate`, `real-session-degraded`,
 /// `real-session-recovery`, `real-session-timeout`,
-/// `real-editor-visibility`) consume it.
+/// `real-editor-visibility`, `real-editor-input`,
+/// `real-editor-focus`) consume it.
 type PluginPair = (Vst3Library, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
@@ -568,7 +575,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 24] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 26] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -738,6 +745,20 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 24] {
             required: &[ScenarioCapability::NativePluginDock],
             spec_extras: editor_attach_extras,
             run: real_editor_visibility_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-input",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_input_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-focus",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_focus_case,
         },
         ScenarioEntry {
             case: "real-session-crash",
@@ -1260,7 +1281,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1314,7 +1335,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -8543,6 +8564,275 @@ fn observe_editor_redock_lifecycle(
     }
 }
 
+// ---------------------------------------------------------------------
+// AC3 non-pixel editor op cases (input / focus)
+// ---------------------------------------------------------------------
+
+/// The per-case constants of the input/focus verb observation —
+/// step name plus the window-text suffix the fixture's event log
+/// must carry once the verbs land.
+#[derive(Clone, Copy)]
+struct EditorVerbCase {
+    /// Observation step name (`editor_input`/`editor_focus`).
+    step: &'static str,
+    /// The `GetWindowTextW` suffix proving delivery —
+    /// `|{event},{event},…` appended to the attach-generation tag.
+    expected_suffix: &'static str,
+    /// Pass-step detail for the accepted arm.
+    accepted_detail: &'static str,
+}
+
+/// `real-editor-input`/`real-editor-focus` post-open observation:
+/// child-HWND attach contract → the case's verb sequence through the
+/// production `InProcessEditorOps` → the child HWND's
+/// `GetWindowTextW` must carry the fixture's recorded event log in
+/// the title (`rvf-test-editor-attach-{n}|{tokens}` — the fixture
+/// stamps every `onFocus`/`onKeyDown`/`onKeyUp` it receives) → the
+/// session stays `Attached` (a refused verb is non-fatal by
+/// contract) → close convergence with the unchanged
+/// `[Attached{Docked}, Closed]` event sequence. No pixel capture —
+/// the oracle is the fixture's OS-readable event log, never pixels.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
+fn observe_editor_verb_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    verb: EditorVerbCase,
+    run: impl FnOnce(
+        &mut PluginEditorSession,
+        &mut InProcessEditorOps<'_>,
+    ) -> Result<(), EditorSessionError>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+
+    let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    // An accepted verb whose event-log oracle observed a mismatch is
+    // a contract failure — tracked separately so `verified` (and
+    // thus the `Fail` verdict) sees it.
+    let mut effect_ok = true;
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        run(session, &mut ops)
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": verb.step,
+                "verdict": "unsupported",
+                "detail": "the editor verb ran through InProcessEditorOps \
+                           and the plugin declined it — the defined \
+                           EditorOpError::Unsupported",
+            }));
+            landing = OpLanding::Refused;
+        }
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": verb.step,
+                "verdict": "pass",
+                "detail": verb.accepted_detail,
+                "expected_suffix": verb.expected_suffix,
+            }));
+            landing = OpLanding::Accepted;
+            // Effect oracle — re-enumerate while attached: the child
+            // contract must still hold AND every child's title must
+            // end with the fixture's expected event-log suffix. An
+            // accepted verb whose log did not appear is a contract
+            // failure, never a `NotRun`.
+            if observation.supported {
+                let effect_step = format!("{}_effect", verb.step);
+                let (after, after_ok) = observe_attached_children(container, steps, &mut failure);
+                attach_ok = attach_ok && after_ok;
+                let mismatches: Vec<String> = after
+                    .children
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, child)| !child.title.ends_with(verb.expected_suffix))
+                    .map(|(index, child)| {
+                        format!(
+                            "child[{index}] hwnd={:#x} title={child:?}",
+                            child.hwnd,
+                            child = child.title,
+                        )
+                    })
+                    .collect();
+                if after.children.is_empty() {
+                    // `child_enumerated`/`child_contract` already
+                    // recorded the failure.
+                    effect_ok = false;
+                } else if mismatches.is_empty() {
+                    effect_confirmed = true;
+                    steps.push(json!({
+                        "step": effect_step,
+                        "verdict": "pass",
+                        "children": after
+                            .children
+                            .iter()
+                            .map(|child| json!({
+                                "hwnd": child.hwnd,
+                                "title": child.title,
+                            }))
+                            .collect::<Vec<_>>(),
+                    }));
+                } else {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        &effect_step,
+                        format!(
+                            "accepted verb but no child HWND title carries \
+                             the event log {:?}: {}",
+                            verb.expected_suffix,
+                            mismatches.join("; "),
+                        ),
+                    );
+                    effect_ok = false;
+                }
+                observation = after;
+            }
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, verb.step, error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                verb.step,
+                "editor session vanished before the verb",
+            );
+        }
+    }
+
+    // Non-fatal contract: an accepted or refused verb leaves the
+    // session `Attached` — any other landing is a violation.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let attached = sessions
+            .session(session_id)
+            .is_some_and(|session| matches!(session.state(), EditorSessionState::Attached { .. }));
+        if attached {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": "Attached",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                format!("session did not stay Attached after {}", verb.step),
+            );
+            state_ok = false;
+        }
+    }
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-editor-input` `observe_open` — `send_key` down+up of a
+/// plain `'a'` key: the title log must become
+/// `|kd:0061:0041:0000,ku:0061:0041:0000` (UTF-16 `'a'` = `0x0061`,
+/// virtual key `0x41`, no modifiers).
+#[expect(clippy::too_many_arguments)]
+fn observe_editor_input_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let key = |direction| GuiKeyEvent {
+        direction,
+        key: 'a',
+        key_code: 0x41,
+        modifiers: GuiModifiers::NONE,
+    };
+    observe_editor_verb_lifecycle(
+        gui,
+        container,
+        lease_raw,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        EditorVerbCase {
+            step: "editor_input",
+            expected_suffix: "|kd:0061:0041:0000,ku:0061:0041:0000",
+            accepted_detail: "send_key down+up accepted — verifying the \
+                              child HWND title carries kd/ku:0061:0041",
+        },
+        |session, ops| {
+            session.send_key(ops, key(GuiKeyDirection::Down))?;
+            session.send_key(ops, key(GuiKeyDirection::Up))
+        },
+    )
+}
+
+/// `real-editor-focus` `observe_open` — `set_focus(true)` then
+/// `set_focus(false)`: the title log must become `|f:1,f:0`.
+#[expect(clippy::too_many_arguments)]
+fn observe_editor_focus_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    observe_editor_verb_lifecycle(
+        gui,
+        container,
+        lease_raw,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        EditorVerbCase {
+            step: "editor_focus",
+            expected_suffix: "|f:1,f:0",
+            accepted_detail: "set_focus true→false accepted — verifying \
+                              the child HWND title carries f:1,f:0",
+        },
+        |session, ops| {
+            session.set_focus(ops, true)?;
+            session.set_focus(ops, false)
+        },
+    )
+}
+
 /// Shared body for the non-pixel editor-op cases — identical
 /// prerequisite/attempt mapping to `editor_attach_body`; the
 /// case-supplied `observe_open` drives the op attempt and decides
@@ -8750,6 +9040,87 @@ fn real_editor_redock_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
                 evidence: "editor-redock:real-attach-generation-cycle",
             },
             observe_editor_redock_lifecycle,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-editor-input` case: pre-flight requires `NativePluginDock`,
+/// then the body drives the real attach chain plus `send_key`
+/// down+up of `'a'` — judged by the fixture's `GetWindowTextW`
+/// event-log oracle (`|kd:0061:0041:0000,ku:0061:0041:0000` on the
+/// child HWND title), session state/events, and close convergence,
+/// never pixels.
+fn real_editor_input_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "session.send_key(down+up 'a') accepted through \
+                              the REAL container lease; the child HWND title \
+                              carried the fixture's event log \
+                              (kd:0061:0041:0000,ku:0061:0041:0000 via \
+                              GetWindowTextW), the session stayed Attached, \
+                              events [Attached{Docked}, Closed], and close \
+                              convergence verified — no pixels",
+                evidence: "editor-input:real-title-event-log-effect",
+            },
+            observe_editor_input_lifecycle,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-editor-focus` case: pre-flight requires `NativePluginDock`,
+/// then the body drives the real attach chain plus
+/// `set_focus(true)`/`set_focus(false)` — judged by the fixture's
+/// `GetWindowTextW` event-log oracle (`|f:1,f:0` on the child HWND
+/// title), session state/events, and close convergence, never
+/// pixels.
+fn real_editor_focus_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "session.set_focus(true→false) accepted through \
+                              the REAL container lease; the child HWND title \
+                              carried the fixture's event log (f:1,f:0 via \
+                              GetWindowTextW), the session stayed Attached, \
+                              events [Attached{Docked}, Closed], and close \
+                              convergence verified — no pixels",
+                evidence: "editor-focus:real-title-event-log-effect",
+            },
+            observe_editor_focus_lifecycle,
         ))
     });
     finalize_case(
@@ -10102,11 +10473,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 24, "twenty-four real-dock cases");
+        assert_eq!(reports.len(), 26, "twenty-six real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -10139,7 +10510,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

@@ -164,7 +164,8 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # (2-window focus transfer, real OS input injection, and honest
 # `Unsupported` judgments for DPI/IME/window-close where no adapter
 # API exists) and the AC3 non-pixel editor op rows
-# (`real-editor-resize`/`real-editor-redock` — session event/HWND
+# (`real-editor-resize`/`real-editor-redock`/`real-editor-visibility`/
+# `real-editor-input`/`real-editor-focus` — session event/HWND
 # oracles only, never pixels). Requires an interactive desktop
 # session; on a headless host every case records NotRun +
 # observed="environment_blocked" (fail-closed — never a fake pass,
@@ -174,7 +175,7 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # evidence (editor-pixel dock acceptance stays deferred). Real OS
 # windows — run unattended (writes only target/ + evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]
-description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock/visibility/input/focus); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
