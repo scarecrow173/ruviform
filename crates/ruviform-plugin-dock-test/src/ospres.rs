@@ -92,6 +92,14 @@ pub(crate) struct Inventory {
     pub own_pid: u32,
     /// The enumerated top-level windows, z-order (topmost first).
     pub windows: Vec<TopLevelWindow>,
+    /// The lane process's own top-level windows — every
+    /// `EnumWindows` entry whose `pid == own_pid`, regardless of the
+    /// [`INVENTORY_CAP`]. `z_index` is the position in the full
+    /// enumeration, so the own windows' true z-order is observable
+    /// even when the capped `windows` prefix truncated them away
+    /// (Issue #532 uncovered-baseline bisect — presentation-probe
+    /// 残課題 c).
+    pub own_windows: Vec<TopLevelWindow>,
     /// Total top-level windows `EnumWindows` returned before the
     /// cap — always `>= windows.len()`.
     pub total: usize,
@@ -233,21 +241,37 @@ mod platform {
         // SAFETY: read-only enumeration; `found` outlives the call.
         let enumerated = unsafe { EnumWindows(Some(collect), &raw mut found as LPARAM) != 0 };
         let total = found.len();
-        let windows: Vec<TopLevelWindow> = found
-            .into_iter()
-            .take(super::INVENTORY_CAP)
-            .enumerate()
-            .map(|(index, hwnd)| {
-                top_level_window(hwnd, u32::try_from(index).expect("index fits u32"))
-            })
-            .collect();
         // SAFETY: query-only process-id read.
         let own_pid = unsafe { GetCurrentProcessId() };
+        let mut windows: Vec<TopLevelWindow> = Vec::new();
+        let mut own_windows: Vec<TopLevelWindow> = Vec::new();
+        for (index, hwnd) in found.into_iter().enumerate() {
+            let z_index = u32::try_from(index).expect("index fits u32");
+            // A single pid query decides whether the full row is
+            // needed at all — own-process windows bypass the cap so
+            // their true z_index stays observable.
+            let mut pid: u32 = 0;
+            // SAFETY: read-only pid query; `pid` outlives the call.
+            let is_own = unsafe {
+                GetWindowThreadProcessId(hwnd as HWND, &raw mut pid) != 0 && pid == own_pid
+            };
+            if !is_own && windows.len() >= super::INVENTORY_CAP {
+                continue;
+            }
+            let row = top_level_window(hwnd, z_index);
+            if is_own {
+                own_windows.push(row.clone());
+            }
+            if windows.len() < super::INVENTORY_CAP {
+                windows.push(row);
+            }
+        }
         let truncated = total > windows.len();
         Inventory {
             supported: enumerated,
             own_pid,
             windows,
+            own_windows,
             total,
             truncated,
         }
@@ -495,6 +519,7 @@ mod platform {
             supported: false,
             own_pid: 0,
             windows: Vec::new(),
+            own_windows: Vec::new(),
             total: 0,
             truncated: false,
         }

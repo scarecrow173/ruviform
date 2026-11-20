@@ -308,7 +308,7 @@ fn fixture_run_reports_honest_verdicts() {
 #[test]
 fn blocked_probe_rows_carry_no_session_scoped_fields() {
     let reports = ruviform_plugin_dock_test::real_dock::blocked_probe(&LaneEnvironment::default());
-    assert_eq!(reports.len(), 22, "twenty-two real-dock rows");
+    assert_eq!(reports.len(), 23, "twenty-three real-dock rows");
     for report in &reports {
         assert_eq!(report.verdict, ScenarioVerdict::NotRun);
         let environment = report.environment.as_ref().expect("environment recorded");
