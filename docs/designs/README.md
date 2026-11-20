@@ -311,6 +311,7 @@ Directory: `docs/designs`
 | DESIGN-ZwNUJSnzzVrmRrqQ7S6lJ9 | Issue #465 WebView 移行台帳現行化 — 4 分類スキームと証拠設計 | approved | [wv-removal-inventory-design.md](./wv-removal-inventory-design.md) |
 | DSN-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` design | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 | DSN-630faultModes01 | Issue #630 fault-modes slice — 設計 | approved | [issue-630-fault-modes.md](./issue-630-fault-modes.md) |
+| DSN-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — 設計 | approved | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
 | DES-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe — 設計（container mutation family・verified-write・2 経路の試行順序） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | DES-034ZaaChildInventory001 | Issue #532 child-inventory probe — 設計 | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 

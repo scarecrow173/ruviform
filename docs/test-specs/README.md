@@ -314,6 +314,7 @@ Directory: `docs/test-specs`
 | TSPEC-Wm6ujGxaqkur53e1zm0Xak | Issue #465 WebView 移行台帳現行化 — 分類検証契約 | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 | TSPEC-630singleComponent01 | Issue #630 single-component slice — test specification | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 | TSPEC-630faultModes01 | Issue #630 fault-modes slice — test specification | approved | [issue-630-fault-modes.md](./issue-630-fault-modes.md) |
+| TSPEC-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — test specification | approved | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
 | TSPEC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe test spec | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | TSPEC-034ZaaChildInventory01 | Issue #532 child-inventory probe — test spec | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 
