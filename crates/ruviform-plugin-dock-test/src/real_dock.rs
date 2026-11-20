@@ -1,11 +1,12 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
 //! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`/
-//! `real-dcomp-present`/`real-dcomp-uncovered`/`real-dcomp-bandescape`
-//! added by the Issue #532 dcomp-pixel/foreground-probe/
-//! presentation-probe/uncovered-baseline/band-escape slices).
+//! `real-dcomp-present`/`real-dcomp-uncovered`/`real-dcomp-bandescape`/
+//! `real-dcomp-childinv` added by the Issue #532 dcomp-pixel/
+//! foreground-probe/presentation-probe/uncovered-baseline/band-escape/
+//! child-inventory slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-six
+//! windows* through [`RealOsGuiTest`] and records the twenty-seven
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -47,6 +48,15 @@
 //! |                         |             | 各 stage で hit-test+screen green を再観測して     |
 //! |                         |             | 脱出経路を二分。verdict は probe 実行+復元+        |
 //! |                         |             | lifecycle のみ（観測値は方式採否データ）           |
+//! | `real-dcomp-childinv`   | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — child-level |
+//! |                         |             | inventory + capture-plane 診断: child HWND の     |
+//! |                         |             | `GWL_STYLE`/`GWL_EXSTYLE`/class/`GCL_STYLE`/所有    |
+//! |                         |             | thread+process/parent を query-only で採取、       |
+//! |                         |             | `0x4088`(`CS_PARENTDC`) class-style 診断、         |
+//! |                         |             | `PrintWindow`/window DC/screen 3 面 capture、      |
+//! |                         |             | `GPUI_DISABLE_DIRECT_COMPOSITION` の正直な        |
+//! |                         |             | env-arm 記録、child-level layered/reparent retry。 |
+//! |                         |             | verdict は probe 実行+復元+lifecycle のみ          |
 //! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
@@ -575,7 +585,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 26] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 27] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -654,6 +664,16 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 26] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_bandescape_case,
+        },
+        ScenarioEntry {
+            case: "real-dcomp-childinv",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_childinv_case,
         },
         ScenarioEntry {
             case: "real-multiwindow-focus",
@@ -1281,7 +1301,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1335,7 +1355,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -1628,19 +1648,58 @@ struct ChildWindowObservation {
     supported: bool,
 }
 
+/// Query-only style/class/ownership inventory for one HWND — the
+/// facts the `EnumChildWindows` contract facts do not carry:
+/// `GWL_STYLE`/`GWL_EXSTYLE` raw bits, the window class name and
+/// `GCL_STYLE` bits, the owning thread/process, and the parent
+/// HWND. `real-dcomp-childinv` records this per docked child,
+/// container, and GPUI root to diagnose why the child's raster
+/// never reaches the composed screen (Issue #532).
+#[derive(Debug)]
+struct WindowInventory {
+    /// The queried HWND echoed back.
+    hwnd: u64,
+    /// `false` off-Windows — no HWND inventory exists there.
+    supported: bool,
+    /// `IsWindow(hwnd)` — a dead handle reports `None`/`Err`
+    /// fields, never fabricated values.
+    alive: bool,
+    /// `GetWindowLongPtrW(hwnd, GWL_STYLE)` — raw bits, or the read
+    /// error (a `0` style with a real last-error is a failure, not
+    /// a style-less window).
+    style: Result<u64, String>,
+    /// `GetWindowLongPtrW(hwnd, GWL_EXSTYLE)` — raw bits or error.
+    exstyle: Result<u64, String>,
+    /// `GetClassNameW` — the window class identity, or error.
+    class_name: Result<String, String>,
+    /// `GetClassLongPtrW(hwnd, GCL_STYLE)` — class-style bits;
+    /// `CS_PARENTDC`/`CS_OWNDC`/`CS_CLASSDC` decide the window's DC
+    /// ownership. `None` when dead; read errors surface as `Err`.
+    class_style: Result<u64, String>,
+    /// `GetWindowThreadProcessId` — the thread that owns the HWND's
+    /// message queue (cross-thread mutation diagnosis).
+    thread_id: Option<u32>,
+    /// Owning process id from the same call.
+    process_id: Option<u32>,
+    /// `GetParent(hwnd)` — the immediate parent, `None` when `0`
+    /// (top-level or unparented).
+    parent: Option<u64>,
+}
+
 /// Windows implementation — query-only Win32 (`poc.rs` precedent):
 /// enumeration and property reads only; this module never creates,
 /// destroys, moves, or messages a window.
 #[cfg(windows)]
 mod oschild {
-    use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT};
+    use windows_sys::Win32::Foundation::{GetLastError, HWND, LPARAM, RECT, SetLastError};
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, GetParent, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
+        EnumChildWindows, GCL_STYLE, GWL_EXSTYLE, GWL_STYLE, GetClassLongPtrW, GetClassNameW,
+        GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
         GetWindowThreadProcessId, IsWindow, IsWindowVisible,
     };
 
-    use super::{ChildAttachFacts, ChildWindowFacts, ChildWindowObservation};
+    use super::{ChildAttachFacts, ChildWindowFacts, ChildWindowObservation, WindowInventory};
 
     /// Collects `container`'s descendant child HWNDs (the
     /// `EnumChildWindows` walk recurses) and their contract
@@ -1734,6 +1793,124 @@ mod oschild {
         unsafe { IsWindow(hwnd as HWND) != 0 }
     }
 
+    /// One `GetWindowLongPtrW` read with the `SetLastError(0)`
+    /// disambiguation — a `0` return is a valid value only when
+    /// `GetLastError` stays `0` (the `osmut` exstyle reader's
+    /// convention).
+    #[expect(unsafe_code)]
+    fn window_long(hwnd: u64, index: i32, name: &str) -> Result<u64, String> {
+        // SAFETY: query-only window-long read.
+        unsafe {
+            SetLastError(0);
+            let raw = GetWindowLongPtrW(hwnd as HWND, index);
+            if raw == 0 {
+                let error = GetLastError();
+                if error != 0 {
+                    return Err(format!("{name} failed (win32 error {error})"));
+                }
+            }
+            u64::try_from(raw).map_err(|_| format!("{name} value does not fit u64"))
+        }
+    }
+
+    /// `GetClassNameW` into a `String` — 256 UTF-16 code units is
+    /// the documented class-name limit. `0` returned means failure.
+    #[expect(unsafe_code)]
+    fn class_name(hwnd: u64) -> Result<String, String> {
+        // SAFETY: query-only; `buf` outlives the call and the
+        // returned length is bounded by the buffer size.
+        unsafe {
+            let mut buf = [0u16; 256];
+            let len = GetClassNameW(
+                hwnd as HWND,
+                buf.as_mut_ptr(),
+                i32::try_from(buf.len()).unwrap_or(0),
+            );
+            if len <= 0 {
+                return Err(format!(
+                    "GetClassNameW failed (win32 error {})",
+                    GetLastError()
+                ));
+            }
+            Ok(String::from_utf16_lossy(
+                &buf[..usize::try_from(len).unwrap_or(0)],
+            ))
+        }
+    }
+
+    /// `GetClassLongPtrW(hwnd, GCL_STYLE)` — class-style bits with
+    /// the same last-error disambiguation as [`window_long`].
+    #[expect(unsafe_code)]
+    fn class_style(hwnd: u64) -> Result<u64, String> {
+        // SAFETY: query-only class-long read.
+        unsafe {
+            SetLastError(0);
+            let raw = GetClassLongPtrW(hwnd as HWND, GCL_STYLE);
+            if raw == 0 {
+                let error = GetLastError();
+                if error != 0 {
+                    return Err(format!(
+                        "GetClassLongPtrW(GCL_STYLE) failed (win32 error {error})"
+                    ));
+                }
+            }
+            u64::try_from(raw).map_err(|_| "GCL_STYLE value does not fit u64".to_string())
+        }
+    }
+
+    /// The query-only style/class/ownership inventory for one HWND
+    /// — `real-dcomp-childinv`'s child-level record. Dead handles
+    /// report `alive: false` with `Err`/`None` fields, never
+    /// fabricated values.
+    #[expect(unsafe_code)]
+    pub(super) fn inventory(hwnd: u64) -> WindowInventory {
+        // SAFETY: every read below is a query-only Win32 getter —
+        // nothing creates, destroys, moves, re-styles, or messages
+        // the window.
+        unsafe {
+            let alive = IsWindow(hwnd as HWND) != 0;
+            let (thread_id, process_id) = if alive {
+                let mut pid = 0u32;
+                let tid = GetWindowThreadProcessId(hwnd as HWND, &raw mut pid);
+                (Some(tid), Some(pid))
+            } else {
+                (None, None)
+            };
+            let parent = alive.then(|| {
+                let parent = GetParent(hwnd as HWND);
+                (!parent.is_null()).then_some(parent as usize as u64)
+            });
+            WindowInventory {
+                hwnd,
+                supported: true,
+                alive,
+                style: if alive {
+                    window_long(hwnd, GWL_STYLE, "GetWindowLongPtrW(GWL_STYLE)")
+                } else {
+                    Err("dead HWND".to_string())
+                },
+                exstyle: if alive {
+                    window_long(hwnd, GWL_EXSTYLE, "GetWindowLongPtrW(GWL_EXSTYLE)")
+                } else {
+                    Err("dead HWND".to_string())
+                },
+                class_name: if alive {
+                    class_name(hwnd)
+                } else {
+                    Err("dead HWND".to_string())
+                },
+                class_style: if alive {
+                    class_style(hwnd)
+                } else {
+                    Err("dead HWND".to_string())
+                },
+                thread_id,
+                process_id,
+                parent: parent.flatten(),
+            }
+        }
+    }
+
     /// An observation for the no-container-token path — the platform
     /// supports observation but there is nothing to enumerate, so
     /// the child checks fail honestly downstream.
@@ -1792,6 +1969,23 @@ mod oschild {
     /// No HWND concept off-Windows — never alive.
     pub(super) fn is_alive(_hwnd: u64) -> bool {
         false
+    }
+
+    /// No HWND concept off-Windows — always the unsupported,
+    /// dead-handle inventory.
+    pub(super) fn inventory(hwnd: u64) -> super::WindowInventory {
+        super::WindowInventory {
+            hwnd,
+            supported: false,
+            alive: false,
+            style: Err("unsupported".to_string()),
+            exstyle: Err("unsupported".to_string()),
+            class_name: Err("unsupported".to_string()),
+            class_style: Err("unsupported".to_string()),
+            thread_id: None,
+            process_id: None,
+            parent: None,
+        }
     }
 
     /// No-op off-Windows — there are never children to mark.
@@ -6800,6 +6994,763 @@ fn real_dcomp_bandescape_case(
 }
 
 // ---------------------------------------------------------------------
+// case: real-dcomp-childinv (Issue #532 child-level inventory +
+// capture-plane diagnosis)
+// ---------------------------------------------------------------------
+
+/// The child-inventory case's labels — `ci_*` step names and the
+/// PNG artifact prefix.
+const CI_LABELS: ProbeLabels = ProbeLabels {
+    step: "ci",
+    artifact: "real-dcomp-childinv",
+};
+
+/// Step-row names for the child-level `osmut::apply_layered` ops,
+/// in issue order.
+const CI_LAYERED_OPS: [&str; 3] = [
+    "ci_apply_layered_exstyle",
+    "ci_apply_layered_frame",
+    "ci_apply_layered_lwa",
+];
+
+/// Step-row names for the child reparent stage's four
+/// `osmut::reparent_to_desktop` ops, in issue order.
+const CI_REPARENT_OPS: [&str; 4] = [
+    "ci_apply_reparent_exstyle",
+    "ci_apply_reparent_frame",
+    "ci_apply_reparent_parent",
+    "ci_apply_reparent_rect",
+];
+
+/// Step-row names for the post-reparent layered retry's ops.
+const CI_LAYERED_RETRY_OPS: [&str; 3] = [
+    "ci_apply_retry_exstyle",
+    "ci_apply_retry_frame",
+    "ci_apply_retry_lwa",
+];
+
+/// Verification for `real-dcomp-childinv` — same lifecycle contract
+/// as [`BandescapeVerification`]. The case verdict reads
+/// `lifecycle_ok` + `probe.{evaluated,executed,restored}` only;
+/// every inventoried fact and captured raster is diagnosis *data*,
+/// never a verdict input.
+struct ChildinvVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence).
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated probe outcome.
+    probe: ProbeOutcome,
+    /// `observed` extras — container/child ids, threads, events,
+    /// probe summary.
+    extras: Value,
+}
+
+/// Plain-JSON form of a `Result<u64, String>`/string read — the
+/// raw value on success, `{error}` on failure.
+fn read_json(read: &Result<u64, String>) -> Value {
+    match read {
+        Ok(value) => json!({ "value": value }),
+        Err(error) => json!({ "error": error }),
+    }
+}
+
+/// Decoded `GWL_STYLE`/`GWL_EXSTYLE`/`GCL_STYLE` bits for the
+/// inventory JSON — raw value plus the compositor-relevant flags.
+fn style_bits_json(value: u64) -> Value {
+    json!({
+        "value": value,
+        "popup": value & 0x8000_0000 != 0,
+        "child": value & 0x4000_0000 != 0,
+        "visible": value & 0x1000_0000 != 0,
+        "disabled": value & 0x0800_0000 != 0,
+        "clipsiblings": value & 0x0400_0000 != 0,
+        "clipchildren": value & 0x0200_0000 != 0,
+    })
+}
+
+/// Decoded `GWL_EXSTYLE` bits.
+fn exstyle_bits_json(value: u64) -> Value {
+    json!({
+        "value": value,
+        "noredirectionbitmap": value & 0x0020_0000 != 0,
+        "layered": value & 0x0008_0000 != 0,
+        "transparent": value & 0x0000_0020 != 0,
+        "noactivate": value & 0x0800_0000 != 0,
+        "composited": value & 0x0200_0000 != 0,
+        "topmost": value & 0x0000_0008 != 0,
+        "appwindow": value & 0x0004_0000 != 0,
+        "toolwindow": value & 0x0000_0080 != 0,
+    })
+}
+
+/// Decoded `GCL_STYLE` bits — the class-DC ownership flags drive
+/// the `CS_PARENTDC` diagnosis.
+fn class_bits_json(value: u64) -> Value {
+    json!({
+        "value": value,
+        "vredraw": value & 0x0001 != 0,
+        "hredraw": value & 0x0002 != 0,
+        "dblclks": value & 0x0008 != 0,
+        "owndc": value & 0x0020 != 0,
+        "classdc": value & 0x0040 != 0,
+        "parentdc": value & 0x0080 != 0,
+        "noclose": value & 0x0200 != 0,
+        "savebits": value & 0x0800 != 0,
+        "bytealignclient": value & 0x1000 != 0,
+        "bytealignwindow": value & 0x2000 != 0,
+        "globalclass": value & 0x4000 != 0,
+        "ime": value & 0x1_0000 != 0,
+        "dropshadow": value & 0x2_0000 != 0,
+    })
+}
+
+/// Plain-JSON form of one [`WindowInventory`].
+fn window_inventory_json(inv: &WindowInventory) -> Value {
+    json!({
+        "hwnd": inv.hwnd,
+        "supported": inv.supported,
+        "alive": inv.alive,
+        "style": inv.style.as_ref().map_or_else(
+            |e| read_json(&Err::<u64, _>(e.clone())),
+            |v| style_bits_json(*v),
+        ),
+        "exstyle": inv.exstyle.as_ref().map_or_else(
+            |e| read_json(&Err::<u64, _>(e.clone())),
+            |v| exstyle_bits_json(*v),
+        ),
+        "class_name": inv.class_name.as_ref().map_or_else(
+            |e| json!({ "error": e }),
+            |name| json!(name),
+        ),
+        "class_style": inv.class_style.as_ref().map_or_else(
+            |e| read_json(&Err::<u64, _>(e.clone())),
+            |v| class_bits_json(*v),
+        ),
+        "thread_id": inv.thread_id,
+        "process_id": inv.process_id,
+        "parent": inv.parent,
+    })
+}
+
+/// The bounded settle after a mutated child-presentation stage —
+/// one `std::thread::sleep` on the caller thread, recorded as a
+/// `ci_settle` row (the `be_settle` counterpart for this case).
+fn ci_settle(stage: &str, steps: &mut Vec<Value>) {
+    std::thread::sleep(Duration::from_millis(BE_SETTLE_MS));
+    steps.push(json!({
+        "step": "ci_settle",
+        "verdict": "note",
+        "stage": stage,
+        "settle_ms": BE_SETTLE_MS,
+        "settle_kind": "std::thread::sleep",
+    }));
+}
+
+/// One `ci_inventory` row — the style/class/ownership facts plus
+/// the update-region and DWM-attribute proxies `ospres` reads.
+fn record_inventory_row(
+    steps: &mut Vec<Value>,
+    role: &str,
+    hwnd: u64,
+    child_index: Option<usize>,
+) -> WindowInventory {
+    let inv = oschild::inventory(hwnd);
+    let attrs = ospres::attributes(hwnd);
+    steps.push(json!({
+        "step": "ci_inventory",
+        "verdict": "note",
+        "target_role": role,
+        "child_index": child_index,
+        "inventory": window_inventory_json(&inv),
+        "presentation": {
+            "cloaked": attrs.cloaked,
+            "update": attrs.update.as_ref().map(|u| json!({
+                "has_update": u.has_update,
+                "error": u.error,
+            })),
+        },
+    }));
+    inv
+}
+
+/// The child-level/capture-plane diagnosis probe — runs while the
+/// editor is still attached. Sequence:
+///
+/// 1. `ci_inventory` — `GWL_STYLE`/`GWL_EXSTYLE`/class name/
+///    `GCL_STYLE`/owning thread+process/parent for every docked
+///    child, the container, and the GPUI root, plus update-region
+///    and `DWMWA_CLOAKED` proxies (query-only).
+/// 2. `ci_class_diag` — the class-style comparison the band-escape
+///    evidence asked for: editor-host class `0x4088` decodes to
+///    `CS_GLOBALCLASS|CS_PARENTDC|CS_DBLCLKS`; the fixture class
+///    carries `CS_HREDRAW|CS_VREDRAW`. Whether the container's
+///    `CS_PARENTDC` DC-inheritance semantics intersect the `DComp`
+///    visual's child clipping is recorded as data.
+/// 3. `ci_capture` — `PrintWindow` flag variants + window DC +
+///    screen capture per child (the same raster-vs-screen split
+///    `real-dcomp-present` records).
+/// 4. `ci_dcomp_env` — the honest env-arm record:
+///    `GPUI_DISABLE_DIRECT_COMPOSITION` presence vs the root's
+///    `WS_EX_NOREDIRECTIONBITMAP` — the fork applies that exstyle
+///    only when the env var did NOT reach platform init, so a set
+///    var with the bit present proves the arm never engaged.
+/// 5. `ci_layered` — the residual band-escape experiment at child
+///    level: `WS_EX_LAYERED` on the *child* HWND (owned by this
+///    caller thread, so a same-thread write must latch) → read-back;
+///    when the bit did not latch, `SetParent(GetDesktopWindow())`
+///    converts the child to top-level and the layered write is
+///    retried — separating a cross-thread child-window mutation
+///    failure from the composition issue. Verified restore.
+///
+/// Verdict inputs are mutation application + restore + lifecycle;
+/// every inventoried fact, latched bit, and green fraction is
+/// diagnosis data.
+#[expect(clippy::too_many_lines)]
+fn childinv_probe_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ProbeOutcome {
+    let Some(token) = container else {
+        return ProbeOutcome::not_evaluable(
+            steps,
+            "ci_probe",
+            "no container token — the container cannot be resolved",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return ProbeOutcome::not_evaluable(
+                steps,
+                "ci_probe",
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => {
+            return ProbeOutcome::not_evaluable(
+                steps,
+                "ci_probe",
+                "top-level presentation query failed",
+            );
+        }
+    }
+    if observation.children.is_empty() {
+        return ProbeOutcome::not_evaluable(steps, "ci_probe", "no observed child HWNDs to probe");
+    }
+
+    // Baseline context — the container's own snapshot and the GPUI
+    // root resolution; the inventory itself is query-only.
+    let container_snapshot = osmut::observe_container(token);
+    let first = &observation.children[0];
+    let root_snapshot = osmut::observe(first.hwnd);
+    steps.push(json!({
+        "step": "ci_baseline_state",
+        "verdict": "note",
+        "container": container_snapshot_json(&container_snapshot),
+        "root_snapshot": snapshot_json(&root_snapshot),
+        "caller_thread": observation.caller_thread,
+        "container_thread": observation.container_thread,
+    }));
+
+    // Stage 1 — inventory: every docked child, then the container
+    // and the root it hangs under.
+    let mut targets: Vec<(String, Value)> = Vec::new();
+    for (index, child) in observation.children.iter().enumerate() {
+        let inv = record_inventory_row(steps, "editor_child", child.hwnd, Some(index));
+        targets.push(("editor_child".to_string(), window_inventory_json(&inv)));
+    }
+    let inv = record_inventory_row(steps, "container", token, None);
+    targets.push(("container".to_string(), window_inventory_json(&inv)));
+    if let Some(root) = root_snapshot.root {
+        let inv = record_inventory_row(steps, "root", root, None);
+        targets.push(("root".to_string(), window_inventory_json(&inv)));
+    }
+
+    // Stage 2 — class-style diagnosis. Facts: which classes carry
+    // `CS_PARENTDC`/`CS_OWNDC`/`CS_CLASSDC`; the hypothesis field is
+    // labelled interpretation, never measured fact.
+    let class_rows: Vec<Value> = targets
+        .iter()
+        .map(|(role, inv)| {
+            json!({
+                "role": role,
+                "class_name": inv["class_name"],
+                "class_style": inv["class_style"],
+            })
+        })
+        .collect();
+    let container_parentdc = container_snapshot
+        .class_style
+        .is_some_and(|c| c & 0x0080 != 0);
+    steps.push(json!({
+        "step": "ci_class_diag",
+        "verdict": "note",
+        "targets": class_rows,
+        "container_class_parentdc": container_parentdc,
+        "hypothesis": "editor-host class 0x4088 = CS_GLOBALCLASS | \
+                       CS_PARENTDC | CS_DBLCLKS — CS_PARENTDC gives \
+                       the container its parent's DC semantics; \
+                       whether that intersects the DComp visual's \
+                       child clipping is a hypothesis under test, \
+                       not a measured fact. The fixture class \
+                       (CS_HREDRAW | CS_VREDRAW) carries no DC \
+                       ownership flag",
+    }));
+
+    // Stage 3 — capture proxies: `PrintWindow` flag variants +
+    // window DC + screen-composited child rect, same split as
+    // `real-dcomp-present`'s `pres_*` rows.
+    for (index, child) in observation.children.iter().enumerate() {
+        for (role, target) in [("editor_child", child.hwnd), ("container", token)]
+            .into_iter()
+            .chain(root_snapshot.root.map(|root| ("root", root)))
+        {
+            for flags in PRESENT_FLAGS {
+                let result = ospix::capture_print_window_flags(target, flags);
+                record_present_capture(
+                    steps,
+                    "ci_capture",
+                    index,
+                    role,
+                    target,
+                    "printwindow",
+                    Some(flags),
+                    &result,
+                    artifacts,
+                    &format!("real-dcomp-childinv-{role}-f{flags}-c{index}"),
+                );
+            }
+            let result = ospix::capture_window_dc(target);
+            record_present_capture(
+                steps,
+                "ci_capture",
+                index,
+                role,
+                target,
+                "windowdc",
+                None,
+                &result,
+                artifacts,
+                &format!("real-dcomp-childinv-{role}-windowdc-c{index}"),
+            );
+        }
+        let screen = ospix::window_screen_rect(child.hwnd).and_then(ospix::capture_screen_rect);
+        record_present_capture(
+            steps,
+            "ci_capture",
+            index,
+            "editor_child",
+            child.hwnd,
+            "screen",
+            None,
+            &screen,
+            artifacts,
+            &format!("real-dcomp-childinv-screen-c{index}"),
+        );
+    }
+
+    // Stage 4 — the honest env arm. The fork applies
+    // `WS_EX_NOREDIRECTIONBITMAP` to the top-level window only when
+    // `GPUI_DISABLE_DIRECT_COMPOSITION` did NOT reach platform init
+    // (gpui window.rs:409), and skips the DirectComposition visual
+    // only when it did (directx_renderer.rs:147). Both branches
+    // still present a swap chain — DComp-off changes *how* GPUI's
+    // scene reaches DWM, never *whether* child pixels composite.
+    let env_value = std::env::var_os("GPUI_DISABLE_DIRECT_COMPOSITION")
+        .map(|v| v.to_string_lossy().into_owned());
+    let noredir = root_snapshot
+        .exstyle
+        .as_ref()
+        .map(osoccl::ExstyleFacts::noredirectionbitmap);
+    let inferred = match (env_value.is_some(), noredir) {
+        (false, Some(true)) => "dcomp_active",
+        (true, Some(false)) => "dcomp_disabled_by_env",
+        (true, Some(true)) => "env_set_but_dcomp_style_applied",
+        (false, Some(false)) => "dcomp_style_absent_without_env",
+        (_, None) => "unreadable",
+    };
+    steps.push(json!({
+        "step": "ci_dcomp_env",
+        "verdict": "note",
+        "env_var": "GPUI_DISABLE_DIRECT_COMPOSITION",
+        "env_set": env_value.is_some(),
+        "env_value": env_value,
+        "root_exstyle_noredirectionbitmap": noredir,
+        "inferred_dcomp_path": inferred,
+        "note": "the fork's env arm only gates the DirectComposition \
+                 visual and the noredirectionbitmap exstyle; the \
+                 swap-chain present runs on both branches, so \
+                 child-content compositing is unchanged either way",
+    }));
+
+    // Stage 5 — the residual layered experiment at child level.
+    // The child HWND is owned by this caller thread (the fixture's
+    // CreateWindowExW ran inside `session.open`), so a same-thread
+    // `GWL_EXSTYLE` write must latch; a silent drop then mirrors
+    // the container-level read-back failure and a reparent retry
+    // separates a top-level-only latch rule from mutation failure.
+    let mut executed = true;
+    let mut restored = true;
+    let mut failure: Option<String> = None;
+    let child = &observation.children[0];
+    let child_baseline = osmut::observe_container(child.hwnd);
+    steps.push(json!({
+        "step": "ci_child_baseline",
+        "verdict": "note",
+        "child": container_snapshot_json(&child_baseline),
+    }));
+    if !child_baseline.supported
+        || !child_baseline.alive
+        || child_baseline.parent.is_none()
+        || child_baseline.exstyle.is_none()
+        || child_baseline.rect.is_none()
+    {
+        steps.push(json!({
+            "step": "ci_layered",
+            "verdict": "not_run",
+            "reason": "child baseline parent/exstyle/rect could not \
+                       be read — the layered arm cannot restore",
+        }));
+    } else {
+        observe_all_children("baseline", observation, token, artifacts, steps, CI_LABELS);
+
+        let layered_ops = osmut::apply_layered(child.hwnd);
+        for (step_name, op) in CI_LAYERED_OPS.iter().zip(layered_ops.iter()) {
+            record_container_apply_row(steps, step_name, op);
+            fold_container_op(&mut executed, &mut failure, step_name, op);
+        }
+        let latched_child = layered_ops
+            .last()
+            .and_then(|op| op.after.exstyle.as_ref().map(osoccl::ExstyleFacts::layered));
+        steps.push(json!({
+            "step": "ci_layered_as_child",
+            "verdict": "note",
+            "latched": latched_child,
+            "note": "same-thread GWL_EXSTYLE write — a latched=false \
+                     after applied ops is a silently dropped bit, \
+                     mirroring the container-level read-back failure",
+        }));
+        ci_settle("layered", steps);
+        observe_all_children("layered", observation, token, artifacts, steps, CI_LABELS);
+
+        if latched_child == Some(true) {
+            steps.push(json!({
+                "step": "ci_reparent",
+                "verdict": "note",
+                "skipped": true,
+                "reason": "WS_EX_LAYERED latched on the child — the \
+                           top-level retry arm is unnecessary",
+            }));
+        } else {
+            let (baseline_exstyle, baseline_rect) =
+                match (child_baseline.exstyle.as_ref(), child_baseline.rect) {
+                    (Some(exstyle), Some(rect)) => (exstyle.value, rect),
+                    _ => unreachable!("baseline exstyle/rect guarded above"),
+                };
+            let reparent_ops =
+                osmut::reparent_to_desktop(child.hwnd, baseline_exstyle, baseline_rect);
+            for (step_name, op) in CI_REPARENT_OPS.iter().zip(reparent_ops.iter()) {
+                record_container_apply_row(steps, step_name, op);
+                fold_container_op(&mut executed, &mut failure, step_name, op);
+            }
+            ci_settle("reparent", steps);
+            observe_all_children("reparent", observation, token, artifacts, steps, CI_LABELS);
+
+            let retry_ops = osmut::apply_layered(child.hwnd);
+            for (step_name, op) in CI_LAYERED_RETRY_OPS.iter().zip(retry_ops.iter()) {
+                record_container_apply_row(steps, step_name, op);
+                fold_container_op(&mut executed, &mut failure, step_name, op);
+            }
+            let latched_toplevel = retry_ops
+                .last()
+                .and_then(|op| op.after.exstyle.as_ref().map(osoccl::ExstyleFacts::layered));
+            steps.push(json!({
+                "step": "ci_layered_as_toplevel",
+                "verdict": "note",
+                "latched": latched_toplevel,
+                "note": "latched=true only after top-level conversion \
+                         means the child-window latch path was the \
+                         constraint; latched=false means the drop is \
+                         not a child-style restriction",
+            }));
+            observe_all_children("toplevel", observation, token, artifacts, steps, CI_LABELS);
+        }
+
+        // Verified restore — the child's baseline parent (the
+        // container), exstyle, and rect are deterministic checks;
+        // sibling z-order is best-effort.
+        let restore = osmut::restore_container(&child_baseline);
+        let restore_ops_ok = restore.ops.iter().all(|op| op.applied);
+        restored = restore.parent_restored
+            && restore.exstyle_restored
+            && restore.rect_restored
+            && restore_ops_ok;
+        steps.push(json!({
+            "step": "ci_restore",
+            "verdict": if restored { "pass" } else { "fail" },
+            "restore": container_restore_json(&restore),
+            "note": "child parent, raw GWL_EXSTYLE, and screen rect \
+                     verified deterministically; sibling z-order is \
+                     best-effort — zorder_before/after record what \
+                     could and could not be restored",
+        }));
+        if !restored {
+            executed = false;
+            failure.get_or_insert_with(|| {
+                format!(
+                    "child restore verification failed (parent_restored={}, \
+                     exstyle_restored={}, rect_restored={}, ops_ok={})",
+                    restore.parent_restored,
+                    restore.exstyle_restored,
+                    restore.rect_restored,
+                    restore_ops_ok
+                )
+            });
+        }
+        observe_all_children("restore", observation, token, artifacts, steps, CI_LABELS);
+    }
+
+    ProbeOutcome {
+        evaluated: true,
+        executed,
+        restored,
+        failure,
+    }
+}
+
+/// Post-open child-inventory observation + close convergence — the
+/// `real-dcomp-childinv` counterpart of
+/// [`observe_editor_bandescape_probe`].
+fn observe_editor_childinv_probe(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ChildinvVerification {
+    let mut failure: Option<String> = None;
+
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    let probe = if observation.supported {
+        childinv_probe_children(&observation, container, artifacts, steps)
+    } else {
+        ProbeOutcome::unsupported(steps, "ci_probe")
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+
+    ChildinvVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(mutation_probe_extras(
+            container,
+            &observation,
+            &rendered,
+            &probe,
+            "childinv_probe",
+        )),
+        probe,
+    }
+}
+
+/// `real-dcomp-childinv`'s post-open observation bound to its
+/// artifact directory — see [`pixel_observe`].
+fn childinv_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    &RealOsGuiTest,
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> ChildinvVerification
++ '_ {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_childinv_probe(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
+/// `real-dcomp-childinv`: the same real attach path plus the
+/// child-level/capture-plane diagnosis probe — the query-only
+/// style/class/ownership inventory, class-style diagnosis,
+/// raster-vs-screen capture split, honest env-arm record, and the
+/// bounded child-level layered/reparent retry. The case verdict is
+/// the *probe's own* honest oracle (executed + restored +
+/// lifecycle); every inventoried fact is diagnosis data, never a
+/// verdict input.
+fn editor_childinv_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: childinv_observe(artifacts),
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     window-state observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) if !verification.probe.evaluated => not_run(format!(
+                "editor lifecycle verified but the child-inventory probe \
+                 is not evaluable: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("baseline could not be taken")
+            )),
+            Some(verification) if !verification.probe.executed || !verification.probe.restored => {
+                fail(format!(
+                    "editor lifecycle verified but the child-inventory \
+                     probe did not complete: {}",
+                    verification
+                        .probe
+                        .failure
+                        .as_deref()
+                        .unwrap_or("probe execution or restore verification failed")
+                ))
+            }
+            Some(_) => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(
+                    "child-level inventory + capture-plane diagnosis executed \
+                     (style/class/ownership inventory, class-style diagnosis, \
+                     raster-vs-screen captures, env-arm record, bounded \
+                     child-level layered/reparent retry with verified restore). \
+                     Observed facts are diagnosis data recorded in steps"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("dcomp-childinv:probe-executed-restored".to_string());
+                outcome
+            }
+            None => {
+                fail("editor opened but no child-inventory observation was recorded".to_string())
+            }
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-childinv` case: pre-flight requires
+/// `NativePluginDock` and `VisualCapture` (same capabilities as the
+/// other dcomp cases — the probe re-uses the screen-pixel oracle),
+/// then the body drives the attach chain plus the child-inventory
+/// probe — or reports the honest artifact/session/environment
+/// outcome.
+fn real_dcomp_childinv_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_childinv_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // case: real-multiwindow-focus (AC1 — 2-window focus transfer)
 // ---------------------------------------------------------------------
 
@@ -10473,11 +11424,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 26, "twenty-six real-dock cases");
+        assert_eq!(reports.len(), 27, "twenty-seven real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -10510,7 +11461,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 26] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 27] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

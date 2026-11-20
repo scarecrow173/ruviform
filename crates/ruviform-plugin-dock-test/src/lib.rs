@@ -62,7 +62,17 @@
 //! each stage to bisect which escape route (minimal layered
 //! container vs reparented owned popup) can free the docked
 //! child's pixels from the presentation band, then restores and
-//! verifies parent/exstyle/rect. The catalog
+//! verifies parent/exstyle/rect; `real-dcomp-childinv` (Issue #532
+//! child-level inventory slice) records the query-only
+//! `GWL_STYLE`/`GWL_EXSTYLE`/class-name/`GCL_STYLE`/thread+process/
+//! parent inventory of every docked child, the container, and the
+//! GPUI root, decodes the editor-host `0x4088` class style's
+//! `CS_PARENTDC` semantics, splits child raster (`PrintWindow` flag
+//! variants + window DC) from screen-composited pixels, records
+//! whether `GPUI_DISABLE_DIRECT_COMPOSITION` actually reached the
+//! fork (env-set vs root `WS_EX_NOREDIRECTIONBITMAP`), and runs a
+//! bounded child-level `WS_EX_LAYERED`/desktop-reparent retry with
+//! verified restore. The catalog
 //! also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
