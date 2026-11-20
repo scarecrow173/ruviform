@@ -286,6 +286,40 @@ mise run bench-frozen --write-baseline <path>  # emit an un-promoted baseline ca
 - This lane is manual/opt-in only — the CI `bench` job keeps calling
   `bench-smoke`; do not wire `bench-frozen` into CI.
 
+Frozen E2E pipeline benchmark + regression gate (Issue #807, slice 2):
+
+```sh
+mise run bench-frozen-e2e                          # gated real run vs pinned baseline
+mise run bench-frozen-e2e --test                   # 1-rep smoke (report_only; perf-gate never blocks — correctness failures still exit 1)
+mise run bench-frozen-e2e --selftest               # inject wall-floor + Xrun degradations -> gate must fail
+mise run bench-frozen-e2e --write-baseline <path>  # emit an un-promoted baseline candidate
+```
+
+- Measures the deterministic production audio-pipeline legs of
+  `ruviform-audio-test` end to end (no mocks in the measured path):
+  `output/session` (scripted output → `Session::open` → `pump_output_next`
+  fires `plan.drive` → captured PCM) and `input/typed-rt` (scripted input →
+  `InputCapture` → `RtRuntime` `input_writer`/`process`/`output_reader`),
+  warmup + 7 reps of 64×256-frame callbacks each.
+- Two gate layers, both fail-closed against
+  `crates/ruviform-audio-test/benches/frozen/pipeline_baseline.json`:
+  (a) normalized wall `norm = median(rep ns) / median(ref ns)` (an
+  in-process mix64 yardstick, so the metric is machine-speed independent)
+  vs per-cell `max_norm_ratio`; (b) correctness — oracle PCM mismatches,
+  device errors, capture-pool loss, pipeline errors, rep-over-rep digest
+  divergence, and the pinned `expected_digest` fingerprint of observed
+  output. Any correctness count > 0 fails the cell before the threshold.
+- Deterministic scripted backend = OS-L1 evidence only — not
+  WASAPI/WinMM, real threads, GUI, or plugin-ABI evidence. The callback
+  firing is manual; driver orchestration is non-RT (the RT alloc-free
+  contract inside the callback is proven by `rt_pipeline_*` tests).
+- Baseline is read-only during gating; `--write-baseline` emits an
+  `"approval": null` candidate, promotion is manual (same two-phase rule
+  as `bench-frozen`). Evidence under `evidence/<issue>/`; contract:
+  `docs/test-specs/issue-807-e2e-pipeline-bench.md`.
+- Manual/opt-in only — the CI `bench` job keeps calling `bench-smoke`;
+  `ruviform-audio-test` benches are not part of `bench-smoke` either.
+
 ## Formal
 
 D-layer property + bounded-model-check lanes for the wire codecs
