@@ -45,6 +45,13 @@
 //!   parent, baseline `GWL_EXSTYLE` + `SWP_FRAMECHANGED`, the
 //!   baseline rect in parent-client coordinates at `HWND_TOP`,
 //!   and a best-effort sibling z-order reposition.
+//! - `drain_paint` — `UpdateWindow(hwnd)` plus a bounded
+//!   caller-thread `PeekMessage`/`DispatchMessage` `WM_PAINT`
+//!   pass: the (a2) update/pump experiment for the docked child
+//!   HWND, which is owned by this thread, so its queued paint
+//!   messages sit in this thread's queue and a bounded pass
+//!   drains them deterministically — never an open-ended
+//!   message loop.
 //!
 //! Restoration contract: only the `WS_EX_TOPMOST` flag is
 //! *verified* on the root (`topmost_restored`); z-order and
@@ -81,6 +88,12 @@ const WS_EX_LAYERED: u64 = 0x0008_0000;
 /// far fewer top-level windows; hitting it records `truncated`
 /// rather than looping on a corrupted chain.
 const ZWALK_CAP: u32 = 512;
+
+/// Safety cap on the caller-thread paint pump — one `WM_PAINT`
+/// dispatch is normally enough; the cap bounds the pass so a
+/// wndproc that re-invalidates itself cannot turn the drain into
+/// an unbounded message loop.
+const PAINT_PUMP_CAP: u32 = 8;
 
 /// The GPUI root HWND's mutable window state — everything the
 /// probe needs to know before mutating and to compare after.
@@ -260,6 +273,49 @@ pub(crate) struct ContainerRestoreOutcome {
     pub zorder_after: (Option<u32>, Option<u64>),
 }
 
+/// The result of [`drain_paint`] — the bounded paint-drain ops
+/// plus the update-region state read before and after.
+#[derive(Debug)]
+pub(crate) struct PaintDrainOutcome {
+    /// `false` only on the non-Windows stub — callers gate on the
+    /// attach observation's `supported` before probing, so this is
+    /// a defensive flag, not a second oracle.
+    pub supported: bool,
+    /// The drained HWND echoed back.
+    pub hwnd: u64,
+    /// `GetUpdateRect` non-empty before the drain — the `ospres`
+    /// `has_update` proxy re-read here so the probe records one
+    /// source of truth. `None` when the read was unavailable.
+    pub update_before: Option<bool>,
+    /// The drain ops in issue order (`UpdateWindow`, then the
+    /// bounded `PeekMessage`/`DispatchMessage` pump row).
+    pub ops: Vec<ContainerMutationOutcome>,
+    /// `WM_PAINT` messages the pump dispatched to the wndproc.
+    pub dispatched: u32,
+    /// `has_update` re-read after the drain.
+    pub update_after: Option<bool>,
+    /// `update_after == Some(false)` — the pending update region
+    /// really cleared, the discriminating fact of the (a2)
+    /// hypothesis.
+    pub cleared: bool,
+}
+
+/// `UpdateWindow(hwnd)` plus a bounded caller-thread
+/// `PeekMessage(WM_PAINT)`/`DispatchMessage` pass — the Issue #532
+/// (a2) experiment: if the docked child HWND's pending update
+/// region exists only because its owning thread (this caller
+/// thread) never pumps `WM_PAINT`, draining it here must clear the
+/// region and produce a real backing raster. `UpdateWindow` sends
+/// `WM_PAINT` synchronously when the region is non-empty; the pump
+/// then dispatches any `WM_PAINT` still queued for `hwnd` —
+/// possible precisely because the child is owned by this thread —
+/// bounded by [`PAINT_PUMP_CAP`]. Nothing here is a restorable
+/// state mutation; the outcome records what ran and what the
+/// update region reported.
+pub(crate) fn drain_paint(hwnd: u64) -> PaintDrainOutcome {
+    platform::drain_paint(hwnd)
+}
+
 /// Snapshot the mutable state of the leased container HWND —
 /// parent, exstyle, screen rect, and sibling z-order position.
 /// Query only; never mutates.
@@ -356,20 +412,20 @@ pub(crate) fn restore(baseline: &RootSnapshot) -> RestoreOutcome {
 mod platform {
     use windows_sys::Win32::Foundation::{GetLastError, HWND, POINT, SetLastError};
     use windows_sys::Win32::Graphics::Gdi::{
-        RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow, ScreenToClient,
+        RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow, ScreenToClient, UpdateWindow,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GA_ROOT, GCL_STYLE, GW_HWNDNEXT, GW_HWNDPREV, GWL_EXSTYLE, GetClassLongPtrW,
-        GetDesktopWindow, GetParent, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, IsWindow, LWA_ALPHA,
-        SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_NOZORDER, SetForegroundWindow, SetLayeredWindowAttributes, SetParent,
-        SetWindowLongPtrW, SetWindowPos,
+        DispatchMessageW, GA_ROOT, GCL_STYLE, GW_HWNDNEXT, GW_HWNDPREV, GWL_EXSTYLE,
+        GetClassLongPtrW, GetDesktopWindow, GetParent, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST,
+        IsWindow, LWA_ALPHA, MSG, PM_REMOVE, PeekMessageW, SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
+        SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW, SetWindowPos, WM_PAINT,
     };
 
     use super::{
         ContainerMutationOutcome, ContainerRestoreOutcome, ContainerSnapshot, ExstyleFacts,
-        MutationOutcome, RestoreOutcome, RootSnapshot, ScreenRect, WS_EX_LAYERED, WS_EX_TOPMOST,
-        ZWALK_CAP,
+        MutationOutcome, PAINT_PUMP_CAP, PaintDrainOutcome, RestoreOutcome, RootSnapshot,
+        ScreenRect, WS_EX_LAYERED, WS_EX_TOPMOST, ZWALK_CAP,
     };
 
     /// Flags shared by every z-order/band mutation — move, size,
@@ -745,6 +801,83 @@ mod platform {
         }
     }
 
+    /// `GetUpdateRect` non-empty on `hwnd` — re-read through
+    /// `ospres` so the probe records one source of truth for the
+    /// pending-update fact.
+    fn update_pending(hwnd: u64) -> Option<bool> {
+        crate::ospres::attributes(hwnd)
+            .update
+            .as_ref()
+            .map(|u| u.has_update)
+    }
+
+    /// `UpdateWindow(hwnd)` + bounded `PeekMessage(WM_PAINT)`/
+    /// `DispatchMessage` pass — see [`super::drain_paint`]. The
+    /// pump targets `hwnd` on this thread's own queue; the child
+    /// HWND is owned by this thread, so each dispatch invokes its
+    /// wndproc synchronously (`BeginPaint`/`EndPaint` clear the
+    /// update region and produce the raster).
+    pub(super) fn drain_paint(hwnd: u64) -> PaintDrainOutcome {
+        let update_before = update_pending(hwnd);
+        let mut ops = Vec::with_capacity(2);
+        // SAFETY: `UpdateWindow` is the intentional synchronous-paint
+        // call this arm exists for; `GetLastError` disambiguates a
+        // failed call.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = UpdateWindow(hwnd as HWND) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ops.push(ContainerMutationOutcome {
+            api: "UpdateWindow()",
+            applied,
+            win32_error: error,
+            after: observe_container(hwnd),
+        });
+        // Bounded caller-thread pump — `PeekMessage` with the
+        // hwnd + `WM_PAINT` filter synthesizes the pending paint
+        // message for this thread's queue; `DispatchMessage`
+        // invokes the wndproc on this thread. The pass stops at the
+        // first empty read or `PAINT_PUMP_CAP` — a wndproc that
+        // re-invalidates itself cannot keep it alive.
+        let mut dispatched = 0u32;
+        for _ in 0..PAINT_PUMP_CAP {
+            // SAFETY: `msg` is a valid out/in pointer across both
+            // calls; the message came from this thread's own queue,
+            // so dispatch is synchronous on this thread.
+            let found = unsafe {
+                let mut msg = MSG::default();
+                if PeekMessageW(&raw mut msg, hwnd as HWND, WM_PAINT, WM_PAINT, PM_REMOVE) == 0 {
+                    false
+                } else {
+                    DispatchMessageW(&raw const msg);
+                    true
+                }
+            };
+            if !found {
+                break;
+            }
+            dispatched += 1;
+        }
+        ops.push(ContainerMutationOutcome {
+            api: "PeekMessageW(hwnd,WM_PAINT,PM_REMOVE)+DispatchMessageW[cap=8]",
+            applied: true,
+            win32_error: None,
+            after: observe_container(hwnd),
+        });
+        let update_after = update_pending(hwnd);
+        PaintDrainOutcome {
+            supported: true,
+            hwnd,
+            update_before,
+            ops,
+            dispatched,
+            update_after,
+            cleared: update_after == Some(false),
+        }
+    }
+
     /// `RedrawWindow(container, NULL, NULL,
     /// RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)` — synchronous whole-
     /// window repaint; `RDW_UPDATENOW` drains the update region
@@ -857,9 +990,10 @@ mod platform {
         ops
     }
 
-    /// Restore toward `baseline` — `SetParent` back, baseline
-    /// exstyle + frame apply, baseline rect in parent-client
-    /// coordinates, then a best-effort insert-after reposition.
+    /// Restore toward `baseline` — baseline exstyle + frame apply
+    /// while still under the current parent, `SetParent` back,
+    /// baseline rect in parent-client coordinates, then a
+    /// best-effort insert-after reposition.
     /// Parent/exstyle/rect are verified deterministically; the
     /// sibling z-order is recorded, never claimed.
     pub(super) fn restore_container(baseline: &ContainerSnapshot) -> ContainerRestoreOutcome {
@@ -868,7 +1002,40 @@ mod platform {
         };
         let mut ops = Vec::new();
 
-        // 1) Return the container beneath its baseline parent.
+        // 1) Z-band restore toward the baseline, while the window
+        //    is still under its current (possibly desktop) parent.
+        //    `WS_EX_TOPMOST` is band state — a `GWL_EXSTYLE` write
+        //    of the baseline value cannot clear it (observed: the
+        //    `0x8 → 0` write returns without error yet the bit
+        //    stays set), only `SetWindowPos(HWND_NOTOPMOST)` moves
+        //    the window out of the topmost band. The op is issued
+        //    before re-docking because band state is meaningless —
+        //    and the write unreliable — under a foreign-thread
+        //    parent (see the exstyle note below).
+        if let Some(op) = band_restore_op(container, baseline) {
+            ops.push(op);
+        }
+
+        // 2) Baseline exstyle + frame apply, still under the
+        //    current parent. Evidence from the rf532 probe:
+        //    `GWL_EXSTYLE` writes on the editor child are refused
+        //    with win32 error 6 whenever its parent is owned by
+        //    another thread — the container is GPUI-thread-owned —
+        //    but succeed while the window is desktop-parented.
+        //    Restoring the style bits (e.g. clearing
+        //    `WS_EX_LAYERED` left by a treatment arm) is only
+        //    reliable before the window is re-docked beneath the
+        //    foreign-thread parent.
+        if let Some(facts) = &baseline.exstyle {
+            ops.push(exstyle_write(
+                container,
+                facts.value,
+                "SetWindowLongPtrW(GWL_EXSTYLE,<baseline>)",
+            ));
+            ops.push(frame_apply(container));
+        }
+
+        // 3) Return the container beneath its baseline parent.
         if let Some(parent) = baseline.parent {
             // SAFETY: `SetParent` back to the observed baseline
             // parent is the intentional restore mutation;
@@ -893,17 +1060,7 @@ mod platform {
             });
         }
 
-        // 2) Baseline exstyle + frame apply.
-        if let Some(facts) = &baseline.exstyle {
-            ops.push(exstyle_write(
-                container,
-                facts.value,
-                "SetWindowLongPtrW(GWL_EXSTYLE,<baseline>)",
-            ));
-            ops.push(frame_apply(container));
-        }
-
-        // 3) Baseline rect re-seat — `SetWindowPos` on a child
+        // 4) Baseline rect re-seat — `SetWindowPos` on a child
         //    window takes parent-client coordinates, so convert the
         //    baseline screen rect's origin through `ScreenToClient`
         //    on the baseline parent. A failed conversion marks the
@@ -938,7 +1095,7 @@ mod platform {
             });
         }
 
-        // 4) Approximate sibling z-order restore — insert directly
+        // 5) Approximate sibling z-order restore — insert directly
         //    below the baseline above-neighbor when that neighbor
         //    is still alive.
         if let Some(above) = baseline.above_hwnd {
@@ -972,6 +1129,37 @@ mod platform {
         }
     }
 
+    /// The baseline z-band op for [`restore_container`] — `None`
+    /// when the baseline exstyle is unknown or the window already
+    /// sits in the baseline band. `WS_EX_TOPMOST` is band state —
+    /// a `GWL_EXSTYLE` write of the baseline value cannot clear it
+    /// (observed: the `0x8 → 0` write returns without error yet the
+    /// bit stays set), only `SetWindowPos(HWND_NOTOPMOST)` moves
+    /// the window out of the topmost band. Issued before re-docking
+    /// because band state is meaningless — and the write
+    /// unreliable — under a foreign-thread parent (see the exstyle
+    /// note inside `restore_container`).
+    fn band_restore_op(
+        container: u64,
+        baseline: &ContainerSnapshot,
+    ) -> Option<ContainerMutationOutcome> {
+        let facts = baseline.exstyle.as_ref()?;
+        let current = observe_container(container);
+        let current_topmost = current.exstyle.as_ref().is_some_and(ExstyleFacts::topmost);
+        if current_topmost == facts.topmost() {
+            return None;
+        }
+        let (insert_after, api) = if facts.topmost() {
+            (HWND_TOPMOST, "SetWindowPos(HWND_TOPMOST,<baseline-band>)")
+        } else {
+            (
+                HWND_NOTOPMOST,
+                "SetWindowPos(HWND_NOTOPMOST,<baseline-band>)",
+            )
+        };
+        Some(zorder_seat(container, insert_after, api))
+    }
+
     /// `SetWindowLongPtrW(GWL_EXSTYLE, value)` on the container —
     /// `SetLastError(0)` first so a legitimate `0` previous style
     /// value does not masquerade as a failure.
@@ -990,20 +1178,24 @@ mod platform {
         // SAFETY: `SetWindowLongPtrW(GWL_EXSTYLE)` is the
         // intentional, bounded style mutation this module exists
         // for; `GetLastError` disambiguates a failed call.
-        let (applied, error) = unsafe {
+        let error = unsafe {
             SetLastError(0);
             SetWindowLongPtrW(container as HWND, GWL_EXSTYLE, new);
             let err = GetLastError();
-            (err == 0, (err != 0).then_some(err))
+            (err != 0).then_some(err)
         };
         let after = observe_container(container);
-        // The API's success convention is last-error only, but a
-        // write on a window owned by another thread — or a style
-        // the window's class forbids — can be dropped silently.
-        // `applied` claims the style actually changed, so verify
-        // the read-back against the requested value; the snapshot
-        // records the state the write actually produced.
-        let applied = applied && after.exstyle.as_ref().is_some_and(|e| e.value == value);
+        // `applied` claims the requested style state holds, not the
+        // API's return convention — a write on a window owned by
+        // another thread or whose class forbids the bit can be
+        // dropped silently, and a refused call whose target state
+        // already holds (baseline exstyle written over itself — the
+        // `SetParent`-adjacent windows in the rf532 probe refuse the
+        // write with error 6 yet change nothing) is still a state
+        // that satisfies the mutation's contract. The refusal stays
+        // recorded in `win32_error` either way; only the observed
+        // read-back decides `applied`.
+        let applied = after.exstyle.as_ref().is_some_and(|e| e.value == value);
         ContainerMutationOutcome {
             api,
             applied,
@@ -1215,6 +1407,20 @@ mod platform {
             "RedrawWindow(RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)",
             container,
         )
+    }
+
+    /// No HWND/message queue exists off-Windows — report the drain
+    /// unsupported with no ops rather than fabricating paint facts.
+    pub(super) fn drain_paint(hwnd: u64) -> PaintDrainOutcome {
+        PaintDrainOutcome {
+            supported: false,
+            hwnd,
+            update_before: None,
+            ops: Vec::new(),
+            dispatched: 0,
+            update_after: None,
+            cleared: false,
+        }
     }
 
     pub(super) fn apply_layered(container: u64) -> Vec<ContainerMutationOutcome> {

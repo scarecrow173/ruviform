@@ -72,7 +72,15 @@
 //! whether `GPUI_DISABLE_DIRECT_COMPOSITION` actually reached the
 //! fork (env-set vs root `WS_EX_NOREDIRECTIONBITMAP`), and runs a
 //! bounded child-level `WS_EX_LAYERED`/desktop-reparent retry with
-//! verified restore. The catalog
+//! verified restore; `real-dcomp-rasterfix` (Issue #532
+//! capture-plane fix-oracle slice) is the *verdict-level* fix
+//! oracle — it records baseline state, runs the bounded
+//! update/pump arm (`UpdateWindow` + caller-thread `WM_PAINT`
+//! dispatch) and the desktop-reparent + raster-present +
+//! top-level-layered arms with verified restore, and reports
+//! `Pass` only when an arm produces user-visible screen green —
+//! a clean probe without green is an honest `Fail`, never a
+//! pass on mutation success alone. The catalog
 //! also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
