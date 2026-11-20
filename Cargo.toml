@@ -142,6 +142,10 @@ publish = false           # 未決定クレートは公開しない（licensing 
 [workspace.lints.rust]
 unsafe_code = "warn"      # lint ゲートの -D warnings で実質 deny。例外は局所許可＋SAFETY コメント（後述）
 unused_qualifications = "warn"
+# tests/ 配下の `#[cfg(kani)]` proof harness（Issue #806 formal
+# verification）を check-cfg で許容する。`cargo kani` 実行時にのみ
+# 有効化され、通常ビルドでは cfg 除外される。
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

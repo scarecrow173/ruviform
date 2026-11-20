@@ -285,6 +285,93 @@ cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- drive --out evidence/rf8
   'observe.screenshot={"window":"last"}'
 '''
 
+# test-formal is the Issue #806 D-layer property-test lane
+# (manual/opt-in — NOT a CI-required gate): it runs the proptest
+# suites for the wire codec targets — rvf.ipc.v1
+# parse_intent/valid_op/Event::to_json
+# (crates/ruviform-ui/tests/formal_ipc.rs) and rvf.uitest.v1
+# read_frame/write_frame framing
+# (crates/ruviform-ui-test/tests/formal_transport.rs). It is a plain
+# `cargo test` lane and runs natively on every host — the 1-command
+# re-run entry for AC#1.
+[tasks.test-formal]
+description = "Issue #806 D-layer formal lane (manual/opt-in — NOT a CI-required gate): run the wire-codec proptest suites — `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` (rvf.ipc.v1 parse_intent/valid_op/Event::to_json + rvf.uitest.v1 read_frame/write_frame contracts; runs natively; writes only target/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo test --locked -p ruviform-ui --test formal_ipc
+cargo test --locked -p ruviform-ui-test --test formal_transport
+'''
+
+# test-formal-kani is the Issue #806 D-layer bounded-proof lane
+# (manual/opt-in — NOT a CI-required gate): it runs the
+# `#[cfg(kani)]` proof harnesses co-located with the proptest
+# suites. Kani needs a Linux CBMC toolchain, so the lane
+# env-detects: a native `cargo kani` first, then a WSL2 distro
+# (Kani cannot run on native Windows). In WSL the repository is
+# reached via /mnt/<drive> but the target dir is forced onto the
+# WSL native filesystem (/mnt builds are too slow; the Windows-side
+# cargo output dir is untouched). No usable environment reports
+# verdict `not_run` + reason + provision guidance and exits 0 — a
+# missing environment is not a lane failure. Exit 1 is reserved for
+# a real verification failure (fail-closed). Provision runbook:
+# docs/specs/formal-verification.md.
+[tasks.test-formal-kani]
+description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs (WSL target dir on the native FS, never /mnt); honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+verdict() {
+  printf '{"lane":"test-formal-kani","verdict":"%s","reason":"%s"}\n' "$1" "$2"
+}
+
+# 1) native cargo kani (Linux/macOS hosts, or a Windows host that
+#    already runs kani natively)
+if cargo kani --version >/dev/null 2>&1; then
+  if cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test; then
+    verdict pass "native cargo kani verification succeeded"
+    exit 0
+  else
+    verdict fail "native cargo kani verification failed"
+    exit 1
+  fi
+fi
+
+# 2) WSL2: find a distro that has cargo + cargo kani
+if command -v wsl.exe >/dev/null 2>&1; then
+  DISTRO=""
+  DISTROS="$(WSL_UTF8=1 wsl.exe -l -q 2>/dev/null | tr -d '\0\r')"
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    if wsl.exe -d "$d" -- bash -lc 'command -v cargo >/dev/null 2>&1 && cargo kani --version >/dev/null 2>&1'; then
+      DISTRO="$d"
+      break
+    fi
+  done <<< "$DISTROS"
+  if [ -n "$DISTRO" ]; then
+    WIN_PWD="$(pwd -W 2>/dev/null || pwd)"
+    REPO_WSL="$(wsl.exe -d "$DISTRO" -- wslpath -a "$WIN_PWD" | tr -d '\r')"
+    if [ -z "$REPO_WSL" ]; then
+      verdict not_run "environment_blocked: WSL distro $DISTRO cannot map repo path $WIN_PWD (run the lane from a /mnt/<drive>-visible path)"
+      exit 0
+    fi
+    if wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test"; then
+      verdict pass "WSL2 ($DISTRO) cargo kani verification succeeded"
+      exit 0
+    else
+      verdict fail "WSL2 ($DISTRO) cargo kani verification failed"
+      exit 1
+    fi
+  fi
+  verdict not_run "environment_blocked: wsl.exe present but no WSL2 distro has cargo kani — provision per docs/specs/formal-verification.md (rustup + cargo install --locked kani-verifier + cargo kani setup)"
+  exit 0
+fi
+
+verdict not_run "environment_blocked: no native cargo kani and no wsl.exe — provision Kani per docs/specs/formal-verification.md"
+exit 0
+'''
+
 [tasks.build]
 description = "Verify one Cargo package: mise run build <package> [cargo flags] (required package)"
 raw_args = true

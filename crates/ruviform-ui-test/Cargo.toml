@@ -53,6 +53,12 @@ base64 = "0.22"
 #   prove the semantic machine is theme-independent (T3 2-theme
 #   equivalence). Test-only; the production graph is untouched.
 ruviform-ui-theme = { path = "../ruviform-ui-theme" }
+# - proptest: Issue #806 D層 formal verification slice 1 — transport
+#   framing（rvf.uitest.v1 `read_frame`/`write_frame`）の property
+#   suite（tests/formal_transport.rs）に使用する生成入力検査器。
+#   dev-dep のみで本番依存グラフへ波及しない。MIT OR Apache-2.0・
+#   pure Rust。MSRV 1.89 適合。
+proptest = "1"
 
 # Issue #390 driver boundary guard CLI（自動検出名
 # `gui_boundary_guard` を canonical 名 `gui-boundary-guard` へ rename）。
