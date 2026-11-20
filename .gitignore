@@ -24,7 +24,11 @@ tmp/
 # APM dependencies and generated deployment assets
 apm_modules/
 **/apm_modules/
-.agents/
+# Exception: .agents/skills/verify-ruviform/ is repo-owned (Issue #805)
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/verify-ruviform/
 .claude/agents/
 .claude/commands/
 .claude/hooks/
