@@ -1484,3 +1484,114 @@ gesture を駆動し、minted `command_id` 相関の applied
   opt-in artifacts + canonical digest を維持。
 - docs index（`docs/**/README.md`）は未同期 — Coordinator が
   統合時に `doc-maintenance` で再生成する。
+
+# Slice 追記: Issue #631 AC4 'OS and GPU' — `display_adapters`（EnumDisplayDevicesW display-adapter 記録・stale コメント修復）
+
+- Date: 2026-11-20
+- OS: Windows (x86_64) — interactive desktop 実走（`query session`:
+  `console` session Active・本 terminal は session 2 内）
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1
+- Repo SHA（evidence header）: `cd145c4f1f7d8d9e6343d5353ae43fdbfaa90961`
+  （`origin/main` と同一 — 本 slice の commit 前ベース。
+  working tree の未 commit 差分を含む実走）
+- Doc chain: `docs/{discovery,specs,designs,adr}/issue-631-gpu-field.md`
+
+## 実装概要（本 slice の evidence field）
+
+- `environment.display_adapters`: session 開始時に
+  `osgpu::display_adapters()` で一度だけ display-adapter census
+  を採取し、`finalize_case` の merged extras で全 22 real case
+  の `environment` に刻印（`session_scale_factor`・
+  `window_identities` と同じ経路）。
+- `src/osgpu.rs`（新規）: `EnumDisplayDevicesW` の `idevnum`
+  列挙で `DeviceName`/`DeviceString`/`DeviceID`/`DeviceKey`/
+  `StateFlags` を取得し、`EDD_GET_DEVICE_INTERFACE_NAME`
+  第2段で monitor 対応付けを記録。StateFlags から
+  `attached_to_desktop`（bit 0）・`primary`（bit 2）を decode。
+  初回列挙失敗は `error` に記録、safety cap 64 到達は
+  `truncated: true`。非 Windows stub は `supported: false`・
+  空 `adapters` を正直に返す。
+- `source: "EnumDisplayDevicesW"` を field に刻み provenance を
+  明示。GDI の display-adapter view であり GPUI/compositor の
+  renderer adapter 証明ではない旨を README・ADR に明記。
+- `src/lib.rs` stale コメント修復（前 slice 残件 — 本 slice で
+  lease 内）: DPI/window-close は実 verdict 化済みで
+  `Unsupported` は `real-window-ime` のみ、command-receipt
+  settlement 実装済みに追従。
+- manifest/依存/feature 変更なし（windows-sys 0.61.2 の既存
+  有効 feature のみ使用）。
+
+## Lane results（全て実走）
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass |
+| `mise run check ruviform-plugin-dock-test` | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run test ruviform-plugin-dock-test` | pass（unit 15 + console 14 + plugin_dock 4 — feature-gated test は base では非対象で正しい） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass（unit 17 + console 14 + plugin_dock 5 — `display_adapters_json_shape`/`display_adapters_live_enumeration_is_honest`/`blocked_probe_rows_carry_no_session_scoped_fields` 含む） |
+| `mise run test-ui-plugin-dock` | pass — `plugin-dock-scenario.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-console` | pass — `plugin-dock-console.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-real` | **exit 1（設計どおり）** — `real-dcomp-pixel` の既知 `Fail`（`ruviform#532` DComp topmost occlusion）が唯一の Fail。`plugin-dock-real-scenario.jsonl` を `display_adapters` 込みで再生成 |
+| `mise run test-ui-plugin-dock-real-headless` | pass（exit 0 — 22 row 全て `not_run`+`environment_blocked`、`display_adapters` 非記録を維持。`plugin-dock-real-headless.jsonl` 再生成） |
+| `mise run test-ui-scenario-contract` | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+
+## `test-ui-plugin-dock-real` 実走 verdict（22 case、interactive Windows desktop）
+
+| case | verdict |
+| --- | --- |
+| `real-window-mount` | pass |
+| `real-native-slot` | pass |
+| `real-editor-attach` | pass |
+| `real-capture` | pass |
+| `real-dcomp-pixel` | **fail**（既知 `ruviform#532` — screen-composited green 0.0、正直な regression signal） |
+| `real-dcomp-foreground` | pass |
+| `real-dcomp-present` | pass |
+| `real-multiwindow-focus` | pass |
+| `real-os-input` | pass |
+| `real-command-receipt` | pass |
+| `real-window-dpi` | pass |
+| `real-window-ime` | unsupported |
+| `real-window-close` | pass |
+| `real-editor-resize` | pass |
+| `real-editor-redock` | pass |
+| `real-session-terminate` | pass |
+| `real-session-degraded` | pass |
+| `real-session-recovery` | pass |
+| `real-session-timeout` | pass |
+| `real-editor-visibility` | pass |
+| `real-session-crash` | unsupported |
+| `real-session-hang` | unsupported |
+
+## `display_adapters` 実測記録（`plugin-dock-real-scenario.jsonl`）
+
+- 全 22 real case 行に `environment.display_adapters` が同一
+  session census として記録（`supported: true`・`error: null`・
+  `truncated: false`）。
+- 実測環境: NVIDIA GeForce RTX 4070 SUPER 1 GPU・`\.\DISPLAY1`–
+  `\.\DISPLAY4` の 4 display device。`\.\DISPLAY1` が
+  `primary: true`・`state_flags: 5`（ATTACHED_TO_DESKTOP|
+  PRIMARY_DEVICE）。DISPLAY1/2 に `Generic PnP Monitor` の
+  monitor entry が `EDD_GET_DEVICE_INTERFACE_NAME` の device
+  interface 名（`\?\DISPLAY#GSM5B55#...#{e6f07b5f-...}`）付き
+  で記録。DISPLAY3/4 は `state_flags: 0`（desktop 未接続）で
+  `monitors: []`。
+- `plugin-dock-real-headless.jsonl`（blocked-probe）22 row は
+  `not_run`+`environment_blocked` のまま `display_adapters`・
+  `window_identities` 非記録（fail-closed 維持）。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- `real-dcomp-pixel` の `Fail`（`ruviform#532`）は据え置き —
+  pixel Pass は別 gate。
+- renderer adapter 特定（DXGI / GPUI renderer-info）は本 slice
+  対象外（Coordinator 決定 — ADR に記録）。`display_adapters`
+  は環境 census であり renderer 証明ではない。
+- `bin/plugin-dock-console.rs:9` の stale コメント（
+  'twenty-one catalog rows'）は lease 外の既知残件として保持。
+- docs index（`docs/**/README.md`）は未同期 — Coordinator が
+  統合時に整備する。

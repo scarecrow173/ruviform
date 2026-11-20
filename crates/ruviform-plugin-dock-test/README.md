@@ -119,6 +119,18 @@ value (`null` when unset) so each run self-describes which
 compositor path GPUI took; the env var is read once by GPUI at
 process start, so set it on the lane invocation itself
 (`GPUI_DISABLE_DIRECT_COMPOSITION=1 mise run test-ui-plugin-dock-real`).
+The session-scoped AC4 evidence fields land on the same object:
+`scale_factor` (the primary window's measured scale factor),
+`window_identities` (per-window identity digests — id/title/
+geometry/SHA-256), and `display_adapters` (the AC4 'OS and GPU'
+GPU portion — the `EnumDisplayDevicesW` display-adapter census:
+each adapter's `device_name`/`device_string`/`device_id`/
+`device_key`, raw `state_flags`, decoded `primary`/
+`attached_to_desktop` bits, and its `EDD_GET_DEVICE_INTERFACE_NAME`
+monitor census; the GDI adapter view never claims which device the
+renderer composited on). None of these is stamped on
+`--blocked-probe`/headless rows — no session exists there to
+measure them (fail-closed).
 GPUI types never cross this crate's API or evidence schema.
 
 ```sh

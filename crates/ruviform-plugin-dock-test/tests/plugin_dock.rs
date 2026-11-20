@@ -297,3 +297,32 @@ fn fixture_run_reports_honest_verdicts() {
         }
     }
 }
+
+/// Session-scoped evidence fields are stamped only inside a live
+/// real session — `scale_factor`/`window_identities` (AC4) and the
+/// `display_adapters` GPU inventory. The fail-closed
+/// `blocked_probe` rows must carry none of them: no session exists
+/// to measure them, and stamping them would fabricate session
+/// evidence (AC4/AC5 fail-closed).
+#[cfg(feature = "real-dock")]
+#[test]
+fn blocked_probe_rows_carry_no_session_scoped_fields() {
+    let reports = ruviform_plugin_dock_test::real_dock::blocked_probe(&LaneEnvironment::default());
+    assert_eq!(reports.len(), 22, "twenty-two real-dock rows");
+    for report in &reports {
+        assert_eq!(report.verdict, ScenarioVerdict::NotRun);
+        let environment = report.environment.as_ref().expect("environment recorded");
+        for field in ["window_identities", "display_adapters"] {
+            assert!(
+                environment.get(field).is_none(),
+                "blocked-probe row `{}` must not carry session-scoped `{field}`: {environment}",
+                report.case.as_ref().map_or("?", |id| id.as_str()),
+            );
+        }
+        assert_eq!(
+            environment["scale_factor"],
+            serde_json::Value::Null,
+            "no session measured a scale factor"
+        );
+    }
+}
