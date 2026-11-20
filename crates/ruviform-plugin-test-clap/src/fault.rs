@@ -48,10 +48,11 @@
 //! `CLAP_PROCESS_TAIL`; a full-NaN block); the CLAP-only leg emits
 //! real ABI output events — a `ParamValue` stamped `u32::MAX` and a
 //! `ParamValue` carrying NaN — which a spec-conforming host's event
-//! list observes. The ruviform host's v1 adapter maps plugin output
-//! to `OutputEvents::void()` and discards them: the emission is the
-//! fixture's honest surface, the host-side observation is recorded
-//! as unsupported on this host.
+//! list observes. The ruviform host drains plugin output into
+//! canonical reports (Issue #842): the representable `u32::MAX`
+//! stamp arrives faithfully, while the NaN payload is
+//! unrepresentable in the canonical `ParamValue` and lands as a
+//! counted defined skip.
 
 use core::fmt::Write as _;
 use std::ffi::CStr;
@@ -699,9 +700,9 @@ impl<'a> PluginAudioProcessor<'a, TestFaultShared, TestFaultMainThread<'a>>
         // The CLAP-only fault legs: `bad_time` emits a `ParamValue`
         // stamped beyond any legal block bound, `invalid` one
         // carrying NaN — real ABI-level malformed events a spec host
-        // observes on its output list. The ruviform v1 host maps
-        // plugin output to `OutputEvents::void()` and discards them;
-        // the push is therefore best-effort and its failure ignored.
+        // observes on its output list. The ruviform host drains them
+        // into canonical reports (Issue #842); the push stays
+        // best-effort and its failure is ignored.
         match decode_fault(self.processor.armed_plain()).0 {
             FaultMode::BadTime => {
                 let _ = events.output.try_push(bad_time_output_event());

@@ -36,6 +36,7 @@
 #![cfg(feature = "l1-runner")]
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -47,7 +48,7 @@ use ruviform_plugin_core::{
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessIsolation,
-    OutOfProcessSpec, PluginHandle, PluginHost,
+    OutOfProcessSpec, PluginHandle, PluginHost, ReportDrain, SpawnPhase,
 };
 
 /// The `test_fault` descriptor the child synthesizes from a real
@@ -140,16 +141,89 @@ fn sample_eq(actual: f32, expected: f32) -> bool {
     actual.to_bits() == expected.to_bits()
 }
 
+/// Bound on `Instantiate` retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 C1 signature. The failure is
+/// an environment deadline event (a stalled spawn-path wait), not a
+/// contract verdict: `SpawnFailed` is pre-mint only, so a fresh
+/// attempt is the defined recovery — the same "pre-contract
+/// environment retry" shape as `ARM_RESEND_CALLS` (rf#766). The
+/// bound keeps a persistent stall an honest failure instead of an
+/// absorbed flake (`docs/discovery/issue-841-spawn-deadline-flake.md`
+/// Decision C — assertion/gate unchanged).
+const SPAWN_TIMEOUT_RETRIES: u32 = 3;
+
+/// `Instantiate` with a bounded retry on the rf#841 C1 signature —
+/// `SpawnFailed{cause: Timeout}` proven pre-mint by its retained
+/// diagnostics record. The signature check is explicit per Decision
+/// C: the error's `cause` is `Timeout` AND the record is `Found`
+/// with `phase` in {`PreSpawn`, `Spawn`, `DrainInit`, `Handshake`}
+/// and `cause == Some(Timeout)`. A record frozen at `Live` (a
+/// `Scan`/`CreateInstance`-wait timeout — the phase advances to
+/// `Live` before those waits run), a non-`Timeout` cause, or an
+/// `Evicted`/`NotFound` query result is signature-missed and fails
+/// at once — never retried. Every `SpawnFailed` attempt is traced
+/// to the real stderr — bypassing the harness's per-test capture so
+/// the trace lands in lane logs even when a later attempt recovers
+/// the test — carrying the attempt index plus the record's
+/// `diagnostics_id`/`phase`/`cause` (the deadline-phase attribution
+/// the `SpawnFailed` payload alone cannot show — rf#841 Residual).
+/// Bound exhaustion is an honest failure — the flake is never
+/// absorbed silently.
 fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
-    match host
-        .execute(HostCommand::Instantiate {
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        match host.execute(HostCommand::Instantiate {
             plugin_id: plugin_id.to_owned(),
-        })
-        .unwrap()
-    {
-        HostReply::Instantiated { handle } => handle,
-        other => panic!("unexpected reply: {other:?}"),
+        }) {
+            Ok(HostReply::Instantiated { handle }) => return handle,
+            Ok(other) => panic!("unexpected reply: {other:?}"),
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => {
+                let query = host.diagnostics_query(diagnostics_id);
+                let (phase, record_cause) = match &query {
+                    DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+                    _ => (None, None),
+                };
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "instantiate SpawnFailed trace: plugin={plugin_id} \
+                     attempt={attempt} cause={cause:?} \
+                     diagnostics_id={diagnostics_id} phase={phase:?} \
+                     record_cause={record_cause:?}"
+                );
+                let signature = cause == FailureCause::Timeout
+                    && matches!(
+                        &query,
+                        DiagnosticQuery::Found(record)
+                            if matches!(
+                                record.phase,
+                                SpawnPhase::PreSpawn
+                                    | SpawnPhase::Spawn
+                                    | SpawnPhase::DrainInit
+                                    | SpawnPhase::Handshake
+                            ) && record.cause == Some(FailureCause::Timeout)
+                    );
+                assert!(
+                    signature,
+                    "instantiate failed: SpawnFailed{{cause:{cause:?}, \
+                     diagnostics_id:{diagnostics_id}}} is outside the \
+                     pre-mint timeout signature (phase={phase:?} \
+                     record_cause={record_cause:?}) — not retried"
+                );
+                assert!(
+                    attempt < SPAWN_TIMEOUT_RETRIES,
+                    "instantiate failed: the pre-mint \
+                     SpawnFailed{{cause:Timeout}} signature persisted \
+                     through the {SPAWN_TIMEOUT_RETRIES}-retry bound \
+                     (phase={phase:?}) — an honest environment \
+                     failure, not an absorbed flake"
+                );
+            }
+            Err(error) => panic!("instantiate failed: {error:?}"),
+        }
     }
+    unreachable!("the loop exits only through `return` or `panic!`")
 }
 
 /// Per-call counter deltas recorded around one `process` — the
@@ -929,11 +1003,10 @@ fn real_test_fault_l1_rt_alloc_marks_armed_blocks() {
 /// → a zero-tail pass-through fixture reports `CLAP_PROCESS_TAIL`,
 /// which the wire carries as `tail_frames == u32::MAX` — the
 /// bad-timing lie a host oracle detects. (The CLAP-only leg — a
-/// `u32::MAX`-stamped output event — is emitted on the child's
-/// `events.output`; the ruviform v1 host maps plugin output to
-/// `OutputEvents::void()` and cannot observe it — recorded as
-/// unsupported on this host.) The instance stays `Processing`;
-/// disarm restores the zero-tail truth.
+/// `u32::MAX`-stamped output event on the child's `events.output` —
+/// is observable through `drain_output_reports`; see
+/// `real_test_fault_l1_output_events_drain`.) The instance stays
+/// `Processing`; disarm restores the zero-tail truth.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
 fn real_test_fault_l1_bad_time_claims_infinite_tail() {
@@ -1048,6 +1121,140 @@ fn real_test_fault_l1_invalid_emits_nan_block() {
     }
     assert_eq!(clean, 6, "a disarmed instance must pass audio through");
 
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// The CLAP-only output-event legs through the wire-v4
+/// `DrainOutputReports` verb (Issue #842): an armed `bad_time` block
+/// pushes a `ParamValue` stamped `u32::MAX` onto the child's
+/// `events.output`, and the production bridge now translates it
+/// faithfully into a canonical report — the malformed stamp reaches
+/// the parent's `drain_output_reports` as `frame_offset == u32::MAX`,
+/// positive evidence a `void` sink could never produce. The `invalid`
+/// leg's NaN payload is a defined skip — after draining `bad_time`'s
+/// evidence, an `invalid`-armed run appends nothing. The instance
+/// stays `Processing`; disarm + teardown stay clean.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_fault_l1_output_events_drain() {
+    assert_fixture_present();
+
+    let expected = EXPECTED_FAULT;
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // Poll armed blocks (normalized 0.75 → plain 6.0) until the
+    // `TAIL_INFINITE` claim lands on at least two matched calls —
+    // the same armed block that emits exactly one `u32::MAX`-stamped
+    // `ParamValue` on the child's output list. The armed event fires
+    // inside the child's `process()` asynchronously, so matched-but-
+    // unarmed blocks must not be counted as emitted evidence.
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut landed = 0_u32;
+    while Instant::now() < deadline && landed < 2 {
+        let (result, deltas) = submit_block_result(&mut host, handle, &[fault_event(0.75)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && result.tail_frames == u32::MAX
+        {
+            landed += 1;
+        }
+    }
+    assert_eq!(landed, 2, "two armed bad_time blocks must land");
+
+    let mut reports = Vec::new();
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained),
+        "the L1 audio slot must drain reports"
+    );
+    // Every armed block emits exactly one output event; a submit the
+    // leg substituted may still have rendered child-side, so the
+    // backlog holds at least the two claimed blocks' events.
+    assert!(
+        reports.len() >= 2,
+        "every armed bad_time block emits one output event"
+    );
+    for report in &reports {
+        assert_eq!(
+            report.frame_offset(),
+            u32::MAX,
+            "the out-of-block stamp translates faithfully as observable evidence"
+        );
+        let EventKind::ParamValue(param) = report.kind() else {
+            panic!("the output event must land as a ParamValue report");
+        };
+        assert_eq!(param.param_id, ParamId(0));
+        assert_eq!(param.value.get(), 0.0);
+    }
+
+    // `invalid` — the NaN payload is a defined skip: the live drain
+    // (proven above) appends nothing for the armed blocks. Poll full
+    // blocks (normalized 0.875 → plain 7.0) until two matched
+    // all-NaN renders land — each armed block pushes the NaN event
+    // the translation layer then skips.
+    reports.clear();
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut nan_blocks = 0_u32;
+    while Instant::now() < deadline && nan_blocks < 2 {
+        let (result, out_left, out_right, deltas) =
+            submit_block_full(&mut host, handle, &[fault_event(0.875)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && out_left.iter().all(|s| s.is_nan())
+            && out_right.iter().all(|s| s.is_nan())
+        {
+            nan_blocks += 1;
+        }
+    }
+    assert_eq!(nan_blocks, 2, "two armed invalid blocks must land");
+    // Transition-window blocks may still have been `bad_time`-armed
+    // when processed — their reports are stragglers, not `invalid`
+    // evidence. Flush them so the next drain proves emptiness on
+    // armed `invalid` blocks alone.
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained)
+    );
+    reports.clear();
+    let deadline = Instant::now() + NOTIFY_TIMEOUT;
+    let mut skipped = 0_u32;
+    while Instant::now() < deadline && skipped < 2 {
+        let (result, out_left, out_right, deltas) =
+            submit_block_full(&mut host, handle, &[fault_event(0.875)]);
+        if deltas.passthrough == 0
+            && result.status == ProcessStatus::Continue
+            && out_left.iter().all(|s| s.is_nan())
+            && out_right.iter().all(|s| s.is_nan())
+        {
+            skipped += 1;
+        }
+    }
+    assert_eq!(skipped, 2, "two more armed invalid blocks must land");
+    assert_eq!(
+        host.drain_output_reports(handle, &mut reports),
+        Ok(ReportDrain::Drained)
+    );
+    assert!(
+        reports.is_empty(),
+        "the NaN payload is a defined skip — nothing reaches the drain"
+    );
+    assert_eq!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing),
+        "the output legs stay defined, non-fatal observations"
+    );
+
+    // Disarm — clean teardown.
+    arm_fault(&mut host, handle, 0.0);
     host.execute(HostCommand::StopProcessing { handle })
         .unwrap();
     host.execute(HostCommand::Deactivate { handle }).unwrap();
@@ -1225,7 +1432,7 @@ fn real_test_spawn_l1_stderr_is_captured() {
 }
 
 /// `hang`: the child loads the fixture then parks before `Hello` —
-/// the parent's `command_timeout` decides `SpawnFailed{Timeout}` and
+/// the parent's `spawn_timeout` decides `SpawnFailed{Timeout}` and
 /// the wedged child is killed and reaped, never left running.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
@@ -1233,7 +1440,7 @@ fn real_test_spawn_l1_hang_before_hello_times_out() {
     assert_fixture_present();
 
     let mut spec = spec_with_args(EXPECTED_FAULT, &["--ruviform-test-fault=hang"]);
-    spec.command_timeout = Duration::from_millis(500);
+    spec.spawn_timeout = Duration::from_millis(500);
     let mut host = PluginHost::new();
     host.register_out_of_process(spec).unwrap();
 

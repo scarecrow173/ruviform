@@ -51,8 +51,13 @@ pub(crate) struct VideoSpawnSpec {
     /// Extra arguments prepended to the runner's argv — the runner's
     /// own flags only.
     pub(crate) args: Vec<OsString>,
-    /// Defined timeout for `Hello`, `Scan` and every later
-    /// non-render `Reply` wait (default 10 s).
+    /// Defined timeout for the pre-mint spawn/handshake waits —
+    /// the child spawn hand-off, `Hello`, `Scan` and
+    /// `CreateVideoInstance` reply waits (default 10 s).
+    /// Independent of `command_timeout`.
+    pub(crate) spawn_timeout: Duration,
+    /// Defined timeout for every post-mint non-render `Reply` wait
+    /// (default 10 s).
     pub(crate) command_timeout: Duration,
     /// Defined timeout for one `VideoRender` request→reply window
     /// (default 60 s) — a render legitimately outlasts
@@ -61,13 +66,15 @@ pub(crate) struct VideoSpawnSpec {
 }
 
 impl VideoSpawnSpec {
-    /// A spec with the design defaults (`command_timeout` 10 s,
-    /// `render_timeout` 60 s); adjust the fields as needed.
+    /// A spec with the design defaults (`spawn_timeout` 10 s,
+    /// `command_timeout` 10 s, `render_timeout` 60 s); adjust the
+    /// fields as needed.
     pub(crate) fn new(descriptor: PluginDescriptor, program: OsString) -> Self {
         Self {
             descriptor,
             program,
             args: Vec::new(),
+            spawn_timeout: Duration::from_secs(10),
             command_timeout: Duration::from_secs(10),
             render_timeout: Duration::from_secs(60),
         }
@@ -81,6 +88,7 @@ impl VideoSpawnSpec {
             descriptor: &self.descriptor,
             program: &self.program,
             args: &self.args,
+            spawn_timeout: self.spawn_timeout,
             command_timeout: self.command_timeout,
         }
     }
@@ -145,7 +153,7 @@ impl VideoL1Instance {
     /// unflattened with no record.
     ///
     /// **RT contract:** non-RT only — blocks up to
-    /// `4 × command_timeout` in the worst case.
+    /// `4 × spawn_timeout` in the worst case.
     ///
     /// `config` is the `VideoHostCommand::Instantiate` payload — a
     /// per-instance value, deliberately not part of the spec (the

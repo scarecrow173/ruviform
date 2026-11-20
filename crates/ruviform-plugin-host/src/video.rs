@@ -203,8 +203,14 @@ pub struct VideoOutOfProcessSpec {
     pub program: OsString,
     /// Extra argv prefix for the runner.
     pub args: Vec<OsString>,
-    /// Defined timeout for `Hello`, `Scan` and every non-render
-    /// command's reply wait — default 10 s.
+    /// Defined timeout for the pre-mint spawn/handshake waits —
+    /// the child spawn hand-off, `Hello`, `Scan` and
+    /// `CreateVideoInstance` reply waits — default 10 s.
+    /// Independent of `command_timeout`.
+    pub spawn_timeout: Duration,
+    /// Defined timeout for every post-mint non-render command's
+    /// reply wait — default 10 s (the pre-mint handshake waits use
+    /// `spawn_timeout`, `Render` uses `render_timeout`).
     pub command_timeout: Duration,
     /// Defined timeout for one `Render`'s request→reply window —
     /// default 60 s (a render legitimately outlasts
@@ -213,8 +219,9 @@ pub struct VideoOutOfProcessSpec {
 }
 
 impl VideoOutOfProcessSpec {
-    /// A spec with the design defaults (`command_timeout` 10 s,
-    /// `render_timeout` 60 s); adjust the fields as needed.
+    /// A spec with the design defaults (`spawn_timeout` 10 s,
+    /// `command_timeout` 10 s, `render_timeout` 60 s); adjust the
+    /// fields as needed.
     ///
     /// **RT contract:** non-RT only — allocation-free value move.
     #[must_use]
@@ -223,6 +230,7 @@ impl VideoOutOfProcessSpec {
             descriptor,
             program,
             args: Vec::new(),
+            spawn_timeout: Duration::from_secs(10),
             command_timeout: Duration::from_secs(10),
             render_timeout: Duration::from_secs(60),
         }

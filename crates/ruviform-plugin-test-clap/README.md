@@ -82,12 +82,18 @@ descriptor, so both modules coexist in one host scan.
   L1-only faults; `error`/`rt_alloc`/`bad_time`/`invalid` are
   nonfatal and disarm back to pass-through.
 - CLAP-only leg: `bad_time` also pushes a `ParamValue` event
-  stamped beyond the block boundary and `invalid` a `ParamValue`
-  with a `NaN` value into `events.output`. The Ruviform v1 host
-  bridge discards plugin output events (`OutputEvents::void`), so
-  only the fixture's ABI emission face is observable — the push is
-  best-effort and its failure is ignored (an honest record, not a
-  hidden oracle).
+  stamped beyond the block boundary (`u32::MAX`) and `invalid` a
+  `ParamValue` with a `NaN` value into `events.output`. The host
+  bridge drains plugin output events into canonical reports
+  (`drain_output_reports`, Issue #842): the `bad_time` event's
+  representable malformed stamp arrives faithfully (host-observable
+  evidence — `host_path.rs`'s L0 test and the L1
+  `real_test_fault_l1_output_events_drain` pin it), while the
+  `invalid` event's NaN payload is unrepresentable in the canonical
+  `ParamValue` and lands as a counted defined skip — the drain
+  proves live by the `bad_time` reports around it. The push itself
+  stays best-effort and its failure is ignored (an honest record,
+  not a hidden oracle).
 
 ## `test_stateful` semantics
 

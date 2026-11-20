@@ -47,6 +47,7 @@ Directory: `docs/discovery`
 | DSC-732clapLifecycleAudit01 | Issue #732 production CLAP adapter lifecycle 監査 — VST3同型欠陥の診断 | final | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | DSC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` 調査記録 | final | [issue-630-single-component.md](./issue-630-single-component.md) |
 | DSC-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — 調査記録 | final | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
+| DSC-630clapOutputDrain01 | Issue #842 CLAP output-drain slice — 調査記録 | final | [issue-630-clap-output-drain.md](./issue-630-clap-output-drain.md) |
 | DISC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe — 調査記録 | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
@@ -104,3 +105,4 @@ Directory: `docs/discovery`
 | DISC-034L2cDWe52zQHUbLyygTw | OFX ホストアダプタ境界とバインディング方針の探索（Issue #98） | resolved | [ofx-host-adapter-boundary-and-bindings.md](./ofx-host-adapter-boundary-and-bindings.md) |
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | DISC-rf768staleOracle01 | Issue #768 l1_fault / l1_stateful E2E staleness oracle 監査（#763 同 class）— findings | final | [issue-768-staleness-oracle.md](./issue-768-staleness-oracle.md) |
+| DISC-rf841spawnDeadline | Issue #841 L1 spawn/handshake deadline flake（SpawnFailed{Timeout}）— 定量・分類ルール・対処方針 | resolved | [issue-841-spawn-deadline-flake.md](./issue-841-spawn-deadline-flake.md) |
