@@ -58,7 +58,7 @@ Issue #807 の pstack 検証環境 E 層（benchmark / hillclimb）として、`
 - **work count は処理要素数の総量**: `len * (inner_a + inner_b) * reps` を `work_count` として記録し、計測した仕事量を示す。
 - **baseline 不変・2 相更新**: gate は pinned baseline を読むだけで絶対に書き換えない。`--write-baseline <path>` は `"approval": null` の candidate JSON を出力するのみで、promote は「candidate をコピーし `approval` を人手で埋めて pin パスに置く」手順。`approval` が null の candidate を gate 入力（`--baseline` / pin パス）に使うと unreadable として fail する。
 - **gate は fail-closed**: run モードで baseline が読めない・未 promote・セルが `min_ratio` 未達・エラー数 > 0 のいずれかなら gate verdict `fail`（exit 1）。verdict 語彙は `pass` / `fail` / `not_run` / `unsupported` で、verify-ruviform skill の規約と整合させる（全 cell が unsupported のときのみ gate verdict `unsupported`）。
-- **`--test` は smoke で hard-fail させない**: `cargo bench ... -- --test` は全 `[[bench]]` ターゲットに渡るため、`--test` = 1 反復・`gate_mode: report_only` とし、閾値 gate で exit 1 にしない。CI `bench` ジョブ（`bench-smoke` のみ）の契約を変えない。
+- **`--test` は smoke で perf gate を hard-fail させない**: `cargo bench ... -- --test` は全 `[[bench]]` ターゲットに渡るため、`--test` = 1 反復・`gate_mode: report_only` とし、perf 系 cell 失敗（`ratio_below_threshold`・`detect_returned_fallback`）は per-cell 診断として残し gate verdict は `not_run`（exit 0）。`output_mismatch` だけは機器差ではなく正しさの欠陥なので smoke でも exit 1 とする。CI `bench` ジョブ（`bench-smoke` のみ）の契約を変えない。
 - **`--selftest` は注入で gate fail を実証**: B 側を `detect()` ではなく `force_fallback()` に注入し、ratio ~1.0 < `min_ratio` で全 cell `fail`・gate `fail`・非零 exit を再現する（実機回帰を待たず証拠を作る注入経路。run レコードの `injected` フィールドに内容を記す）。
 - **閾値の初期値は余裕側**: `min_ratio = floor(1 + (measured_ratio - 1) * 0.5, 0.1)`——pin 時実測の SIMD 優位が半減したら fail（dispatch が scalar に退化 → ratio ~1.0 で確実に検出）しつつ、機器ノイズには十分な余裕を持たせる。根拠は `evidence/<issue>/decision.tsv` に記録する。
 - **limiter を cell ごとに記録**: 律速（compute-bound / memory-bandwidth 等）を各 cell の `limiter` フィールドに記し、特定手順（内側ループ構造・入力サイズ・キャッシュ常駐性・scalar-routing floor の有無から推定）と記録先（JSONL + baseline candidate の `limiter` 節）をこの契約とする。
@@ -73,6 +73,7 @@ Issue #807 の pstack 検証環境 E 層（benchmark / hillclimb）として、`
 - Given: `approval` が null の candidate を `--baseline` に指定。When: run モードで実行。Then: baseline unreadable として全 cell `not_run`、gate verdict `fail`。
 - Given: pin パスの baseline ファイルが存在しない。When: run モードで実行。Then: 同上（baseline 不存在は pass 材料にならない）。
 - Given: CI bench ジョブ相当。When: `mise run bench-smoke`。Then: `dsp_frozen` に `--test` が渡り、1 反復・report_only で完走し exit 0。
+- Given: 閾値が届かない pin（機器差・閾値引き上げ直後等）。When: `mise run bench-frozen --test --baseline <pin>`。Then: cells は `fail` 診断（`ratio_below_threshold`）を保持するが gate verdict は `not_run` で exit 0 — smoke が perf gate でブロックしない。
 - Given: dispatch 退行を証明したい。When: `mise run bench-frozen --selftest`。Then: B 側が fallback 注入で ratio ~1.0、全 cell `fail`、gate verdict `fail`、非零 exit。
 - Given: baseline を更新したい。When: `mise run bench-frozen --write-baseline evidence/rf807/dsp_baseline.candidate.json`。Then: candidate JSON（`"approval": null`）が出力され、gate は実行されない。promote は別途人手で行う。
 
@@ -81,7 +82,7 @@ Issue #807 の pstack 検証環境 E 層（benchmark / hillclimb）として、`
 - `mise run bench-frozen` 1 コマンドで metric（median/range）・error count・work count・limiter が構造化出力される。
 - regression gate が閾値超過で fail することが `--selftest` で headless に証明できる。
 - baseline が gate 実行の副作用で変化しない（読み取り専用・更新は candidate → 人手 promote のみ）。
-- `--test` smoke が CI bench 契約を破壊しない（report_only・hard-fail なし）。
+- `--test` smoke が perf gate で CI bench をブロックしない（report_only・gate verdict `not_run`・exit 0）。正しさ欠陥（`output_mismatch`）のみ smoke でも fail する。
 - 計測・判定・記録の手順が本契約として文書化され、`decision.tsv` に試行の記録先が固定される。
 
 ## Non-goals

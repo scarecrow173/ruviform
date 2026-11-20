@@ -262,7 +262,7 @@ Frozen DSP SIMD benchmark + regression gate (Issue #807):
 
 ```sh
 mise run bench-frozen                          # gated real run vs pinned baseline
-mise run bench-frozen --test                   # 1-rep smoke (report_only, never hard-fails)
+mise run bench-frozen --test                   # 1-rep smoke (report_only; perf-gate never blocks — output_mismatch still exits 1)
 mise run bench-frozen --selftest               # inject degraded dispatch -> gate must fail
 mise run bench-frozen --write-baseline <path>  # emit an un-promoted baseline candidate
 ```

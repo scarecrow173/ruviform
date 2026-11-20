@@ -28,9 +28,13 @@
 //!   Exit `0` on gate pass, `1` on gate fail / harness error.
 //! - `--test` — `bench-smoke` compatibility path: `1` rep per side,
 //!   same output shape, gate evaluated report-only (`gate_mode:
-//!   "report_only"`), exit `0` unless the harness itself errors or argv
-//!   is malformed. `cargo bench -- --test` reaches every `[[bench]]`
-//!   target, so this path is what CI's `bench` job runs.
+//!   "report_only"`): perf-class cell failures
+//!   (`ratio_below_threshold`, `detect_returned_fallback`) stay per-cell
+//!   diagnostics and the gate reports `not_run` — the perf gate never
+//!   reaches the exit code on this path. An `output_mismatch` vs the
+//!   scalar reference is a correctness defect, not machine variance,
+//!   and still exits `1`. `cargo bench -- --test` reaches every
+//!   `[[bench]]` target, so this path is what CI's `bench` job runs.
 //! - `--selftest` — injects a real regression: side B is timed with
 //!   `SimdToken::force_fallback()` instead of `detect()`, simulating a
 //!   dispatch layer that silently degrades to scalar. The gate must
@@ -51,7 +55,7 @@
 //! yields `gate: "not_run"`, exit `0`.
 //!
 //! Exit codes: `0` gate pass / smoke / no cells selected, `1` gate
-//! fail or harness error, `2` CLI misuse.
+//! fail / output mismatch / harness error, `2` CLI misuse.
 
 #[allow(dead_code)]
 #[path = "../tests/simd_poc/equiv.rs"]
@@ -1204,14 +1208,23 @@ fn run(args: &Args) -> u8 {
     }
 
     // Gate line: `fail` wins over `pass`; a baseline that cannot be read
-    // or was never promoted fails the gate closed (except in smoke,
-    // where nothing hard-fails).
+    // or was never promoted fails the gate closed. In smoke
+    // (`report_only`) the perf gate never reaches the exit code —
+    // threshold and dispatch-level cell failures stay per-cell
+    // diagnostics — but an output mismatch vs the scalar reference is a
+    // correctness defect, not machine variance, and still fails hard.
+    let hard_failures = results
+        .iter()
+        .filter(|r| r.verdict == "fail" && r.reason.as_deref() == Some("output_mismatch"))
+        .count();
     let gate_mode = if report_only {
         "report_only"
     } else {
         "fail_closed"
     };
-    let verdict = if !gating || cells == 0 || (baseline.is_err() && report_only) {
+    let verdict = if hard_failures > 0 {
+        "fail"
+    } else if !gating || cells == 0 || report_only {
         "not_run"
     } else if failed > 0 || baseline.is_err() {
         // A cell failed, or the pinned baseline itself cannot be read —

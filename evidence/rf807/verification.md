@@ -18,7 +18,8 @@ lane（`bench-frozen` / `bench-smoke`）。補助証拠（bench バイナリ直�
 | --- | --- | --- |
 | 1 | `mise run bench-frozen`（実走・gate） | 6/6 cells `pass`（dot/256–4096 ratio 1.75–2.13 vs min_ratio 1.3–1.5、fir 1.46–1.75 vs 1.2–1.3）、`errors 0`、gate verdict `pass`・exit 0。記録: `run.jsonl` / `rf807-run.log` |
 | 2 | `mise run bench-frozen --selftest`（B 側を fallback 注入） | 全 6 cells ratio ~1.0 < `min_ratio` で `fail`（reason `ratio_below_threshold`）、gate verdict `fail`・exit 1（task failed）。記録: `selftest.jsonl` / `rf807-selftest.log` |
-| 3 | `mise run bench-frozen --test`（CI smoke 経路） | 1 rep・`gate_mode:"report_only"`・6/6 cells pass・exit 0。hard-fail しない。記録: `test-smoke.jsonl` / `rf807-test.log` |
+| 3 | `mise run bench-frozen --test`（CI smoke 経路） | 1 rep・`gate_mode:"report_only"`・6/6 cells pass・gate verdict `not_run`（perf gate は smoke で強制しない）・exit 0。記録: `test-smoke.jsonl` / `rf807-test.log` |
+| 3b | `mise run bench-frozen --test --baseline ../../evidence/rf807/dsp_baseline_high_threshold.demo.json`（smoke-fail 実演 — min_ratio=99.0 の合成 pin） | 6/6 cells が `fail` 診断（`ratio_below_threshold`）を保持しつつ、gate verdict `not_run`・exit 0 — perf gate が smoke でプロセスを落とさないことの実演。記録: `test-smoke-fail.jsonl`・合成 pin: `dsp_baseline_high_threshold.demo.json` |
 | 4 | `mise run bench-smoke`（非回帰 — 既存 CI bench 契約） | 新規 `dsp_frozen` を含む全 5 crate の `--test` が完走・exit 0（出力内 `mode:"test"` 行を確認）。CI `bench` ジョブ契約不変 |
 | 5 | `mise run bench-frozen --write-baseline ../../evidence/rf807/dsp_baseline.candidate.json` | `"approval":null` の candidate を原子的に出力（tmp+rename）・exit 0、gate は未評価（`verdict:"not_run"` / reason `write_baseline_mode`）。記録: `dsp_baseline.candidate.json` |
 | 6 | candidate を pin へ promote（copy + `approval` 人手記入 → `benches/frozen/dsp_baseline.json`） | 以後 run/selftest の gate が pin を `baseline_status:"ok"` で読む（action 1–3 の状態） |
@@ -31,7 +32,8 @@ lane（`bench-frozen` / `bench-smoke`）。補助証拠（bench バイナリ直�
 | --- | --- | --- | --- | --- |
 | `mise run bench-frozen` | Windows x64 | 0 | pass | gate pass・6/6 cells・errors 0 |
 | `mise run bench-frozen --selftest` | Windows x64 | 1（task failed — 期待どおりの fail 実証） | fail | 注入 ratio ~1.0 < threshold で全 cell fail |
-| `mise run bench-frozen --test` | Windows x64 | 0 | pass | smoke は report_only で hard-fail しない |
+| `mise run bench-frozen --test` | Windows x64 | 0 | pass | smoke は report_only・gate verdict `not_run`（perf gate 非強制） |
+| `mise run bench-frozen --test --baseline <99.0 pin>` | Windows x64 | 0 | pass | smoke-fail 実演 — cells fail 診断を残し gate `not_run`・exit 0（`output_mismatch` のみ smoke でも hard-fail） |
 | `mise run bench-frozen --write-baseline …` | Windows x64 | 0 | written | candidate 出力のみ・gate なし |
 | `mise run bench-smoke` | Windows x64 | 0 | pass | `dsp_frozen --test` 含め完走・CI 契約不変 |
 | `mise run fmt-check` | Windows x64 | 0 | pass | `cargo fmt --all -- --check` |
@@ -80,4 +82,11 @@ lane（`bench-frozen` / `bench-smoke`）。補助証拠（bench バイナリ直�
   各 run の `b_level` で環境差を観測する。3 OS 動作は `detect()` 任せ
   （本 slice の必須検証は Windows x64 のみ — 他 OS は未検証=NotRun）。
 - baseline 未読時の gate は run モードでのみ fail-closed。`--test`
-  smoke では report_only（CI bench 契約を変えないため）。
+  smoke では report_only（CI bench 契約を変えないため）—— perf 系
+  cell 失敗は診断として残るが gate verdict は `not_run` で exit 0。
+  例外は `output_mismatch` のみ（正しさの欠陥は機器差ではないため
+  smoke でも exit 1 — この判定は本 slice 内の設計判断）。
+- 当初実装では `--test` で ratio 未達 cell が gate `fail` → exit 1
+  になり得る欠陥があった（report_only が baseline.is_err のみを
+  免除していた）。Completion Gate 指摘により修正 — 修正後の挙動は
+  action 3b の smoke-fail 実演で検証済み。
