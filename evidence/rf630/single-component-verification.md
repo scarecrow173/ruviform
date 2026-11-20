@@ -44,23 +44,33 @@
 
 ## deterministic evidence
 
+正規 lane（`mise.toml` のタスク）と補助証拠（`mise exec -- cargo` の
+直接呼出 — 正規検証とは別記録）を区別する。
+
 | コマンド | 結果 |
 | --- | --- |
 | `mise run fmt-check` | Passed |
-| `mise exec -- cargo check -p ruviform-plugin-test-vst3 --all-targets` | Passed |
-| `mise exec -- cargo test -p ruviform-plugin-test-vst3 --lib` | Passed（`single::` 7 tests 含む） |
-| `mise run check-plugin-vst3-clap` | Passed |
-| `mise run lint-plugin-vst3-clap` | Passed（`-D warnings`） |
-| `mise run test-plugin-vst3` | Passed（host_path 19 tests 含む） |
-| `mise exec -- cargo test --workspace rt_` | Passed |
+| `mise run check ruviform-plugin-test-vst3` | Passed |
+| `mise run lint ruviform-plugin-test-vst3` | Passed（clippy `-D warnings`） |
+| `mise run test ruviform-plugin-test-vst3` | Passed（host_path 19 tests 含む） |
+| `mise run check-l1-real-plugin` | Passed（adapter `host` + fixture `l1-runner` feature の全 target 型検査） |
+| `mise run lint-l1-real-plugin` | Passed（同上 feature 面で `-D warnings`） |
+| `mise run test-rt` | Passed（`cargo test --workspace rt_` 相当） |
 | `mise exec -- prek run --all-files` | Passed |
+| 補助証拠: `mise exec -- cargo check -p ruviform-plugin-test-vst3 --all-targets` | Passed |
+| 補助証拠: `mise exec -- cargo test -p ruviform-plugin-test-vst3 --lib` | Passed（`single::` 7 tests 含む） |
+
+禁止パス確認（spec 要件・zero-diff）: `git diff --name-only
+origin/main...HEAD -- crates/ruviform-plugin-vst3/` → 空（0 件 —
+変更は `crates/ruviform-plugin-test-vst3` + docs + evidence に限定、
+commit 済 head `f2d607b5` で確認）。
 
 ## real-run evidence
 
 | コマンド | 結果 |
 | --- | --- |
-| `mise run test-l1-real-plugin` | Passed — `real_stateful_single_test_plugin_l1_save_mutate_restore_save` + `..._rejects_malformed_state` 含む全 suite 緑 |
-| `node ci/plugin-abi-validator/run.mjs`（explicit validator paths） | Passed — VST3 SDK validator 282 passed / 0 failed、`TestSuite : test_stateful_single` 実走 |
+| `mise run test-l1-real-plugin` | Passed — `real_stateful_single_test_plugin_l1_save_mutate_restore_save` + `real_stateful_single_test_plugin_l1_rejects_malformed_state` 含む全 suite 緑 |
+| 補助証拠: `node ci/plugin-abi-validator/run.mjs`（`test-plugin-abi-validator` lane の内部コマンドを explicit validator paths で直接起動 — conventional layout 未検出のため） | Passed — VST3 SDK validator 282 passed / 0 failed、`TestSuite : test_stateful_single` 実走 |
 
 注: L1 lane の初回実行では `real_test_fault_l1_hang_converges_on_timeout` が
 spawn timeout で flake（単独再実行で pass）。本 slice 起因ではなく
@@ -72,8 +82,12 @@ spawn timeout で flake（単独再実行で pass）。本 slice 起因ではな
   経由では構造的に観測不能（`BridgeComponentHandler` は
   acknowledge-only no-op）。once-contract（2 回目 reject → `init`
   失敗）で「せいぜい 1 回」のみ pin した。
-- `IConnectionPoint` 非実装は「pairing が試みられれば `init` 失敗」
-  の pin — 成功経路が pairing 非依存であることの間接証拠。
+- `IConnectionPoint` 非実装は観測 pin ではない: bridge は
+  `!single_component` guard（host.rs:2903 付近）で pairing
+  block を試行すらせず、仮に試行されても `if let (Some, Some)`
+  の `None` cast 許容で silent skip になる — 非実装による
+  pairing 退行の検出はできない。「pairing なし」が観測できる
+  のはコード guard の存在＋single arm が正常終了した事実のみ。
 - `controller.setState`/`getState`/`setComponentState` は production
   single 経路では呼ばれない — honest 実装 + unit test カバーのみ。
   `kNotImplemented` ではないことを Pass と書かない。

@@ -55,9 +55,9 @@ honest に残る境界として記録する。
 | test | 検証内容 |
 | --- | --- |
 | discovery pin 更新 | 7 descriptors（6 → 7）、`test_stateful_single` が名前順 index 6 |
-| `single_component_exposes_gain_param` | `params()` が scan 経由で Gain 面（id 0, `[0.0,2.0]`, default 1.0）を返す — `controller_cid == component_cid` 判定 + cast が production 経路で成功 |
-| `single_component_state_roundtrip` | load → init → prepare → process → save → mutate(`setParamNormalized`) → restore → save byte-exact → teardown。保存 blob 長 24 + `[u32 16][RFST][u32 0]` framing pin |
-| `single_component_rejects_malformed_state` | 壊した blob の `restore_component_state` → `PluginFailed` |
+| `single_component_reports_gain_param_in_plain_domain` | `params()` が scan 経由で Gain 面（id 0, `[0.0,2.0]`, default 1.0）を返す — `controller_cid == component_cid` 判定 + cast が production 経路で成功 |
+| `single_component_save_mutate_restore_save_round_trips` | load → init → prepare → process → save → mutate(`setParamNormalized`) → restore → save byte-exact → teardown。保存 blob 長 24 + `[u32 16][RFST][u32 0]` framing pin |
+| `single_component_restore_rejects_malformed_blob` | 壊した blob の `restore_component_state` → `PluginFailed` |
 
 ## L1 real-plugin（out-of-process runner — real-run）
 
@@ -77,8 +77,11 @@ honest に残る境界として記録する。
 - `setComponentHandler` が「呼ばれた」こと自体は bridge 経由では
   観測不能（`BridgeComponentHandler` は no-op）。once-contract で
   「せいぜい 1 回」のみ pin する。
-- `IConnectionPoint` pairing は fixture 非実装により「試みられたら
-  `init` 失敗」として観測 — 成功経路自体は pairing が無いことの
-  間接証拠。
+- `IConnectionPoint` pairing は観測 pin にならない: bridge は
+  `!single_component` guard で pairing block を試行せず、仮に
+  試行されても `if let (Some, Some)` の `None` cast 許容で
+  silent skip になる（fixture 非実装は `init` 失敗を引き起こさ
+  ない）。「pairing なし」の根拠はコード guard と single arm の
+  正常終了のみ。
 - RT invariance は `process` が `TestComponent<TestStatefulProcessor>`
   委譲のため既存 `rt_` suite でカバー（新規コードパスなし）。

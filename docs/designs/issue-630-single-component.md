@@ -79,8 +79,12 @@ query は tuple 順を問わず解決するため、shared object への
   ある旨を evidence に記録する。
 - **pure-domain verb**: `domain` へ委譲 — 値を持たない verb は
   instance state に依存しないため mirror 問題が存在しない。
-- **`IConnectionPoint`**: 実装しない — bridge が single で
-  pairing を試みれば QI 失敗が `init` 失敗として可視。
+- **`IConnectionPoint`**: 実装しない — bridge は single arm で
+  `!single_component` guard により pairing block を構造的に
+  skip する（試行されない）。仮に試行されても `if let
+  (Some, Some)` の `None` cast 許容で silent skip — 非実装は
+  観測 pin ではなく、pairing 非依存を壊さない honest な表形
+  である。
 
 ## factory 登録
 
@@ -99,7 +103,7 @@ arm を追加。descriptor scan は category フィルタで 7 件
 | 二重 init なし | `initialize` が `Created` 以外で reject — bridge が犯せば host `init` 失敗 |
 | 二重 terminate なし | strict `terminate` — bridge が犯せば teardown/`Destroy` 失敗 |
 | handler が shared object に 1 回 | once-contract（2 回目で reject → `init` 失敗） |
-| `IConnectionPoint` pairing なし | 非実装 — pairing 試行は QI 失敗 |
+| `IConnectionPoint` pairing なし | `!single_component` guard が pairing block を構造的に skip — fixture 非実装は観測 pin ではない（`None` cast は silent skip で許容される）|
 | `ctrl_len = 0` framing | save blob が 24 bytes `[u32 16][RFST][u32 0]` — L0/L1 の両方で byte レベル pin |
 | state round-trip | save → mutate → restore → save byte-exact + audio oracle |
 

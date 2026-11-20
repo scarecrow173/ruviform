@@ -97,8 +97,13 @@ observable 契約を確定した:
   観測可能。「少なくとも 1 回」は bridge 経由では構造的に
   観測不能 — evidence に残る観測境界として記録。
 - `IConnectionPoint` 非実装: fixture は `IConnectionPoint` を
-  実装しない — bridge が single で pairing を試みると QI 失敗が
-  `init` 失敗として可視。
+  実装しない — 実挙動としては、bridge は `!single_component`
+  guard で single arm の pairing block を構造的に skip する
+  （host.rs:2903 付近 — pairing は試行すらされない）。仮に
+  guard が退行して試行されても、bridge は `if let (Some, Some)`
+  で `None` cast を許容するため QI 失敗は `init` 失敗ではなく
+  silent skip になる — 非実装は pairing 退行を観測しない。
+  この pin は発火しない条件である。
 
 ## upstream 参照禁止への適合
 

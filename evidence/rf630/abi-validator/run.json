@@ -4,7 +4,8 @@
   "finishedAt": "2026-11-20T12:06:14.674Z",
   "repo": {
     "root": "G:\\orca\\workspaces\\ruviform\\rf630-single-component",
-    "head": "3a67825486f823cfe6a80e8663f7f3a02b5cf583",
+    "baseHead": "3a67825486f823cfe6a80e8663f7f3a02b5cf583",
+    "baseHeadNote": "`git rev-parse HEAD` at run time — the branch base (merge-base with origin/main). The tested binaries were built from the dirty worktree on top of this base; those changes are now committed as 00a949c0..f2d607b5 on feature/630-single-component.",
     "platform": "win32/x64",
     "osRelease": "MINGW64_NT-10.0-26300 3.6.7-fb42d713.x86_64",
     "node": "v26.12.1"
