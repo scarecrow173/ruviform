@@ -133,6 +133,7 @@ use sha2::{Digest, Sha256};
 
 use crate::LaneEnvironment;
 use crate::artifact;
+use crate::osgpu;
 use crate::osmut;
 use crate::osoccl;
 use crate::ospix;
@@ -211,6 +212,17 @@ struct RealDockContext<'a> {
     /// identity is never fabricated. `blocked_reports` never sees
     /// this field: no session exists there.
     window_identities: Value,
+    /// Session-scoped display-adapter inventory (AC4 'OS and GPU'
+    /// — the GPU portion): `osgpu::display_adapters()` recorded
+    /// once at session start — `EnumDisplayDevicesW`'s GDI view of
+    /// the session's display adapters (`DeviceString`/`DeviceID`/
+    /// `DeviceKey` GPU identity plus each adapter's monitor
+    /// census) — stamped into every real case's
+    /// `environment.display_adapters` by `finalize_case`. The GDI
+    /// adapter view never claims which device the renderer
+    /// composited on. `blocked_reports` never sees this field:
+    /// no session exists there.
+    display_adapters: Value,
     /// The mounted view instance id.
     view: ViewInstanceId,
     /// The fourth window's view instance id — the fader-dock
@@ -401,6 +413,12 @@ pub fn run_all_with_pixel_artifacts(
                 .map(|(w, title)| window_identity_entry(w, title, gui.window_geometry(w).ok()))
                 .collect(),
             );
+            // Session-scoped display-adapter inventory (AC4 'OS
+            // and GPU' — the GPU portion): the
+            // `EnumDisplayDevicesW` census recorded once at
+            // session start; `finalize_case` stamps it into every
+            // real case's `environment.display_adapters`.
+            let display_adapters = display_adapters_json(&osgpu::display_adapters());
             // The session-scoped catalog — `real_entries` rows run
             // through `run_entries` against the live context.
             let entries = real_entries();
@@ -412,6 +430,7 @@ pub fn run_all_with_pixel_artifacts(
                 window_d,
                 session_scale_factor,
                 window_identities,
+                display_adapters,
                 view,
                 view_d,
                 env,
@@ -521,6 +540,7 @@ fn finalize_case(
         "window_identities".to_string(),
         ctx.window_identities.clone(),
     );
+    merged.insert("display_adapters".to_string(), ctx.display_adapters.clone());
     finalize_real(report, ctx.env, kind, artifact, merged)
 }
 
@@ -1144,6 +1164,42 @@ fn window_identity_entry(
         obj.insert("sha256".to_string(), json!(digest));
     }
     entry
+}
+
+/// The session-scoped display-adapter inventory projected to
+/// evidence JSON (AC4 'OS and GPU' — the GPU portion):
+/// `source`/`supported`/`truncated`/`error` provenance fields plus
+/// each adapter's GDI identity (`device_name`/`device_string`/
+/// `device_id`/`device_key`, raw `state_flags`, and the decoded
+/// `primary`/`attached_to_desktop` bits) and its monitor census.
+/// Observation only — never a verdict input, and the GDI
+/// display-adapter view never claims which device the renderer
+/// composited on.
+fn display_adapters_json(inventory: &osgpu::DisplayAdapters) -> Value {
+    json!({
+        "source": "EnumDisplayDevicesW",
+        "supported": inventory.supported,
+        "truncated": inventory.truncated,
+        "error": inventory.error,
+        "adapters": inventory.adapters.iter().map(|adapter| json!({
+            "index": adapter.index,
+            "device_name": adapter.device_name,
+            "device_string": adapter.device_string,
+            "device_id": adapter.device_id,
+            "device_key": adapter.device_key,
+            "state_flags": adapter.state_flags,
+            "attached_to_desktop": adapter.attached_to_desktop,
+            "primary": adapter.primary,
+            "monitors": adapter.monitors.iter().map(|monitor| json!({
+                "index": monitor.index,
+                "device_name": monitor.device_name,
+                "device_string": monitor.device_string,
+                "device_id": monitor.device_id,
+                "device_key": monitor.device_key,
+                "state_flags": monitor.state_flags,
+            })).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    })
 }
 
 /// SHA-256 hex of raw RGBA8 pixel bytes — the canonical
@@ -8969,6 +9025,118 @@ mod tests {
         assert_eq!(tree.len(), 2, "panel + slot only: {tree:?}");
         assert!(tree.contains_key("plugin.dock"));
         assert!(tree.contains_key(PLUGIN_DOCK_SLOT_KEY));
+    }
+
+    /// AC4 'OS and GPU' — the display-adapter evidence projection
+    /// carries provenance (`source`/`supported`/`truncated`/
+    /// `error`), every enumerated adapter field, and the monitor
+    /// census; a failed first enumeration call records `error`
+    /// with an honest empty list rather than fabricated devices.
+    #[test]
+    fn display_adapters_json_shape() {
+        let inventory = osgpu::DisplayAdapters {
+            supported: true,
+            adapters: vec![osgpu::DisplayAdapter {
+                index: 0,
+                device_name: "\\\\.\\DISPLAY1".to_string(),
+                device_string: "Test GPU".to_string(),
+                device_id: "PCI\\VEN_0000&DEV_0000".to_string(),
+                device_key: "\\\\Registry\\\\Machine\\\\GPU".to_string(),
+                state_flags: 5,
+                attached_to_desktop: true,
+                primary: true,
+                monitors: vec![osgpu::DisplayMonitor {
+                    index: 0,
+                    device_name: "\\\\?\\DISPLAY#MON#1#{guid}".to_string(),
+                    device_string: "Generic PnP Monitor".to_string(),
+                    device_id: "MONITOR\\TEST\\{guid}".to_string(),
+                    device_key: "\\\\Registry\\\\Machine\\\\MON".to_string(),
+                    state_flags: 3,
+                }],
+            }],
+            truncated: false,
+            error: None,
+        };
+        let json = display_adapters_json(&inventory);
+        assert_eq!(json["source"], "EnumDisplayDevicesW");
+        assert_eq!(json["supported"], true);
+        assert_eq!(json["truncated"], false);
+        assert_eq!(json["error"], Value::Null);
+        let adapter = &json["adapters"][0];
+        assert_eq!(adapter["index"], 0);
+        assert_eq!(adapter["device_name"], "\\\\.\\DISPLAY1");
+        assert_eq!(adapter["device_string"], "Test GPU");
+        assert_eq!(adapter["device_id"], "PCI\\VEN_0000&DEV_0000");
+        assert_eq!(adapter["device_key"], "\\\\Registry\\\\Machine\\\\GPU");
+        assert_eq!(adapter["state_flags"], 5);
+        assert_eq!(adapter["attached_to_desktop"], true);
+        assert_eq!(adapter["primary"], true);
+        let monitor = &adapter["monitors"][0];
+        assert_eq!(monitor["index"], 0);
+        assert_eq!(monitor["device_name"], "\\\\?\\DISPLAY#MON#1#{guid}");
+        assert_eq!(monitor["device_string"], "Generic PnP Monitor");
+
+        // A failed first enumeration call records `error` — the
+        // field stays stamped (the session ran) but the adapter
+        // list is honestly empty.
+        let failed = osgpu::DisplayAdapters {
+            supported: true,
+            adapters: Vec::new(),
+            truncated: false,
+            error: Some("EnumDisplayDevicesW failed (win32 error 5)".to_string()),
+        };
+        let json = display_adapters_json(&failed);
+        assert_eq!(json["error"], "EnumDisplayDevicesW failed (win32 error 5)");
+        assert_eq!(
+            json["adapters"].as_array().expect("adapters array").len(),
+            0
+        );
+    }
+
+    /// On Windows the live `osgpu::display_adapters` enumeration
+    /// must be honest: `supported`, and either at least one
+    /// adapter carrying its GDI identity fields or a recorded
+    /// `error` — never a silently empty, unexplained list.
+    #[cfg(windows)]
+    #[test]
+    fn display_adapters_live_enumeration_is_honest() {
+        let inventory = osgpu::display_adapters();
+        assert!(inventory.supported);
+        if inventory.adapters.is_empty() {
+            assert!(
+                inventory.error.is_some(),
+                "zero adapters with no recorded error is a fabricated record"
+            );
+            return;
+        }
+        for (position, adapter) in inventory.adapters.iter().enumerate() {
+            assert_eq!(
+                adapter.index as usize, position,
+                "adapters record idevnum order"
+            );
+            assert!(
+                !adapter.device_name.is_empty(),
+                "adapter {} carries no device_name",
+                adapter.index
+            );
+            assert!(
+                !adapter.device_string.is_empty()
+                    || !adapter.device_id.is_empty()
+                    || !adapter.device_key.is_empty(),
+                "adapter {} carries no GPU identity field",
+                adapter.index
+            );
+            assert_eq!(
+                adapter.attached_to_desktop,
+                adapter.state_flags & 1 != 0,
+                "attached_to_desktop must decode StateFlags bit 0"
+            );
+            assert_eq!(
+                adapter.primary,
+                adapter.state_flags & 4 != 0,
+                "primary must decode StateFlags bit 2"
+            );
+        }
     }
 
     fn rect(left: i32, top: i32, width: u32, height: u32) -> ospix::ScreenRect {

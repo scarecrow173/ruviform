@@ -50,8 +50,10 @@
 //! capture-blind-spot candidates. The catalog also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard
-//! injection, and honest `Unsupported` judgments where the adapter
-//! exposes no API (DPI/IME/window-close) — plus the AC3 non-pixel
+//! injection, command-receipt settlement, live geometry/
+//! scale-factor DPI observation, the armed window-close
+//! lifecycle, and one honest `Unsupported` (`real-window-ime` —
+//! `Ime` capability unclaimed, Issue #389) — plus the AC3 non-pixel
 //! editor op rows (`real-editor-resize`/`real-editor-redock`, judged
 //! by session events/HWND contract only, never pixels) and the
 //! Issue #389 session lifecycle rows
@@ -78,6 +80,8 @@
 
 pub mod artifact;
 pub mod jsonl;
+#[cfg(feature = "real-dock")]
+mod osgpu;
 #[cfg(feature = "real-dock")]
 mod osmut;
 #[cfg(feature = "real-dock")]
