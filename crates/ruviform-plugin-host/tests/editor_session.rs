@@ -653,7 +653,7 @@ enum GuiVerb {
     Key(GuiKeyEvent),
 }
 
-/// A plain `'a'-key event — the fixture event the L0 key/focus tests
+/// A plain `a`-key event — the fixture event the L0 key/focus tests
 /// send and assert on.
 fn key_a(direction: GuiKeyDirection) -> GuiKeyEvent {
     GuiKeyEvent {
