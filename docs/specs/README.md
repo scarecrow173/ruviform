@@ -278,6 +278,7 @@ Directory: `docs/specs`
 | SPEC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` spec | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 | SPEC-630faultModes01 | Issue #630 fault-modes slice — test_fault 非致命 fault mode 拡張 + test_stateful codec v2 + editor popup spec | approved | [issue-630-fault-modes.md](./issue-630-fault-modes.md) |
 | SPEC-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — fixture contract manifest + consumer oracle 対応表 + dep 非汚染 evidence spec | approved | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
+| SPEC-630clapOutputDrain01 | Issue #842 CLAP output-drain slice — plugin→host 出力イベント drain（Issue #630 残りスコープ） | approved | [issue-630-clap-output-drain.md](./issue-630-clap-output-drain.md) |
 | SPEC-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe slice（container の layered/reparent presentation 変異で child pixel 脱出可否を判別） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | SPEC-034ZaaChildInventory001 | Issue #532 child-inventory slice（child HWND inventory + capture-plane 分離 + env arm 検証 + child-level layered retry） | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 | SPEC-034ZaaRasterfix000001 | Issue #532 raster-fix slice（private container class + paint drain + reparent/layered treatment arms + pixel-based fix oracle） | approved | [issue-532-rasterfix.md](./issue-532-rasterfix.md) |
