@@ -39,7 +39,7 @@ use ruviform_ui::{
 use ruviform_ui_theme::ResolvedTheme;
 
 use crate::IntentSink;
-use crate::gpui_driver::surface::{SharedSurface, hole_mode};
+use crate::gpui_driver::surface::SharedSurface;
 
 /// `op` carried on the [`Intent`] envelope for every projected
 /// [`ruviform_ui::behavior::CommandIntent`] — the Action-channel
@@ -1338,16 +1338,8 @@ impl RvfView {
                     .size_full()
                     .flex()
                     .flex_col()
+                    .bg(self.palette.surface_bg)
                     .text_color(self.palette.text_primary);
-                // Issue #532 alpha-hole PoC — an ancestor's opaque
-                // `.bg` quad over a bound slot's rect keeps the
-                // swapchain alpha=1 there, so covering elements must
-                // not paint it. The PoC drops the whole panel bg
-                // (transparent window under `RVF_SLOT_HOLE=alpha`);
-                // a production carve would split the quad instead.
-                if !(hole_mode().alpha() && self.subtree_has_bound_slot(spec)) {
-                    el = el.bg(self.palette.surface_bg);
-                }
                 for child in &p.children {
                     el = el.child(self.element_for(child, cx));
                 }
@@ -1449,19 +1441,11 @@ impl RvfView {
             .slots
             .as_ref()
             .and_then(|p| p.borrow().mount.bindings.borrow().get(&spec.key).copied());
-        // Issue #532 alpha-hole PoC — a bound slot under
-        // `RVF_SLOT_HOLE=alpha` keeps its rect unpainted (swapchain
-        // alpha=0) so the premultiplied DComp visual is transparent
-        // where the native child draws; unbound slots keep the
-        // existing placeholder look.
-        let alpha_hole = bound.is_some() && hole_mode().alpha();
         let mut el = div()
             .flex_grow()
             .border_1()
-            .border_color(self.palette.border);
-        if !alpha_hole {
-            el = el.bg(self.palette.surface_raised);
-        }
+            .border_color(self.palette.border)
+            .bg(self.palette.surface_raised);
         if let Some([w, h]) = spec.min_size {
             el = el.min_w(px(w as f32)).min_h(px(h as f32));
         }
@@ -1484,36 +1468,11 @@ impl RvfView {
             move |bounds, (), window, _cx| {
                 // Placeholder under the native surface — visible only
                 // where the native child does not cover the region.
-                // The alpha-hole path leaves the rect unpainted.
-                if !alpha_hole {
-                    window.paint_quad(fill(bounds, fill_color));
-                }
+                window.paint_quad(fill(bounds, fill_color));
             },
         )
         .size_full();
         el.child(projection).into_any_element()
-    }
-
-    /// `true` when `spec`'s subtree contains a `NativeSlot` whose key
-    /// is bound this frame — the Issue #532 alpha-hole ancestor
-    /// audit: any `.bg` quad such an element paints covers the slot
-    /// rect, keeping the swapchain alpha=1 where the child needs
-    /// transparency.
-    fn subtree_has_bound_slot(&self, spec: &ComponentSpec) -> bool {
-        fn walk(spec: &ComponentSpec, bound: &BTreeMap<ComponentKey, SurfaceSlotId>) -> bool {
-            match spec {
-                ComponentSpec::NativeSlot(n) => bound.contains_key(&n.key),
-                ComponentSpec::Panel(p) => p.children.iter().any(|c| walk(c, bound)),
-                ComponentSpec::Tabs(t) => t.tabs.iter().any(|tab| walk(&tab.child, bound)),
-                _ => false,
-            }
-        }
-        let Some(proj) = &self.slots else {
-            return false;
-        };
-        let proj = proj.borrow();
-        let bound = proj.mount.bindings.borrow();
-        walk(spec, &bound)
     }
 
     /// Suppresses bound slots that were not painted this frame —
@@ -1572,15 +1531,6 @@ impl RvfView {
             if forgotten {
                 proj.applied.remove(&slot);
             }
-        }
-        // Issue #532 region-hole PoC — reconcile each owner window's
-        // `SetWindowRgn` hole set with post-suppression slot state so
-        // a freshly suppressed/detached slot's hole disappears this
-        // frame rather than leaving a stale transparent gap. The
-        // `RVF_SLOT_HOLE` policy lives here so the adapter's
-        // reconcile stays deterministic.
-        if hole_mode().region() {
-            proj.mount.adapter.sync_surface_regions();
         }
     }
 }
