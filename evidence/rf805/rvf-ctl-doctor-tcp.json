@@ -1,0 +1,124 @@
+{
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-doctor\\target\\debug\\dummy_app.exe",
+  "capabilities": {
+    "clock_domains": [
+      "host_tick"
+    ],
+    "dom_access": false,
+    "faults": [
+      "window_crash",
+      "ipc_disconnect"
+    ],
+    "fixture": true,
+    "input_injection": false,
+    "observation": [
+      "windows",
+      "receipts",
+      "notices"
+    ],
+    "screenshot": false,
+    "session_id": "s-e95bff373a67b256",
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "spawn",
+      "verdict": "pass"
+    },
+    {
+      "id": "handshake",
+      "verdict": "pass"
+    },
+    {
+      "id": "capabilities",
+      "verdict": "pass"
+    },
+    {
+      "id": "shutdown",
+      "verdict": "pass"
+    },
+    {
+      "id": "child-exit",
+      "verdict": "pass"
+    }
+  ],
+  "child_exit": {
+    "code": 0,
+    "success": true
+  },
+  "cleanup": {
+    "app": {
+      "jobs_running": false,
+      "windows_open": 1
+    },
+    "exited": true,
+    "windows_closed": 1,
+    "windows_open": 1
+  },
+  "environment": {
+    "arch": "x86_64",
+    "environment_kind": "deterministic-backend",
+    "os": "windows"
+  },
+  "lane": "rvf-ctl-doctor",
+  "repo": {
+    "sha": "1a696064bbbc9c2310a27e35492a8dd5f9ab49d0"
+  },
+  "transport": "tcp",
+  "type": "doctor",
+  "verdict": "pass",
+  "welcome": {
+    "app": {
+      "name": "dummy_app",
+      "version": "0.1.0"
+    },
+    "arch": "x86_64",
+    "backend": {
+      "name": "headless-fake"
+    },
+    "capabilities": {
+      "clock_domains": [
+        "host_tick"
+      ],
+      "dom_access": false,
+      "faults": [
+        "window_crash",
+        "ipc_disconnect"
+      ],
+      "fixture": true,
+      "input_injection": false,
+      "observation": [
+        "windows",
+        "receipts",
+        "notices"
+      ],
+      "screenshot": false
+    },
+    "os": "windows",
+    "run_id": "run-d40ec617cfc6ebc2",
+    "ruviform_revision": "0.1.0",
+    "session_id": "s-e95bff373a67b256",
+    "v": 1,
+    "windows": [
+      {
+        "close_pending": false,
+        "height": 800,
+        "id": 1,
+        "ipc_down": false,
+        "ready": true,
+        "title": "ruviform",
+        "width": 1280
+      }
+    ]
+  }
+}
