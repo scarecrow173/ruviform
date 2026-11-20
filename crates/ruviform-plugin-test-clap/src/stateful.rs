@@ -87,40 +87,184 @@ use crate::preset::preset_by_load_key;
 /// fixture's state format to `load`'s validator.
 const STATE_MAGIC: u32 = u32::from_le_bytes(*b"RFST");
 
-/// The state blob's format version — `load` rejects anything else.
-const STATE_VERSION: u32 = 1;
+/// The blob's current format version — `2` appends a `u32` checksum
+/// over the core fields to the v1 layout.
+const STATE_VERSION: u32 = 2;
 
-/// The state blob's exact length: magic + version + one `f64`.
-pub(crate) const STATE_BLOB_LEN: usize = 16;
+/// The legacy format version — the original 16-byte
+/// `[magic][version][f64]` layout with no checksum field.
+const STATE_VERSION_V1: u32 = 1;
 
-/// Serializes the plain gain into the fixture's 16-byte state blob —
-/// deterministic and byte-exact for a given value.
+/// The shared core: magic + version + one `f64` — the field span the
+/// v2 checksum covers and the exact length of a legacy v1 blob.
+const STATE_CORE_LEN: usize = 16;
+
+/// The state blob's current exact length: the 16-byte core plus the
+/// `u32` checksum.
+pub(crate) const STATE_BLOB_LEN: usize = 20;
+
+/// FNV-1a-32 over the blob's core fields — the deterministic
+/// integrity tag that lets `load` tell a corrupt payload (rejection)
+/// from an older-format one (migration). Same algorithm the VST3
+/// twin's `state_checksum` runs so saved blobs are interchangeable.
+fn state_checksum(core: &[u8]) -> u32 {
+    const FNV_OFFSET: u32 = 0x811C_9DC5;
+    const FNV_PRIME: u32 = 0x0100_0193;
+    let mut hash = FNV_OFFSET;
+    for &byte in core {
+        hash = (hash ^ u32::from(byte)).wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
+/// Serializes the plain gain into the fixture's 20-byte v2 state
+/// blob — deterministic and byte-exact for a given value.
 pub(crate) fn encode_state_blob(plain: f64) -> [u8; STATE_BLOB_LEN] {
     let mut blob = [0u8; STATE_BLOB_LEN];
     blob[0..4].copy_from_slice(&STATE_MAGIC.to_le_bytes());
     blob[4..8].copy_from_slice(&STATE_VERSION.to_le_bytes());
     blob[8..16].copy_from_slice(&plain.to_le_bytes());
+    let checksum = state_checksum(&blob[0..16]);
+    blob[16..20].copy_from_slice(&checksum.to_le_bytes());
     blob
 }
 
-/// Decodes and validates a state blob — `None` on any contract
-/// violation (wrong length, magic, version, non-finite value).
-/// Finite out-of-range values clamp to the parameter's plain range,
-/// the same law `text_to_value` applies.
+/// Serializes `plain` into the legacy 16-byte v1 blob — the payload a
+/// pre-checksum fixture saved. Exists so tests can hand `load` a real
+/// older-format payload and observe the migration path.
+#[cfg(test)]
+fn encode_state_blob_v1(plain: f64) -> [u8; STATE_CORE_LEN] {
+    let mut blob = [0u8; STATE_CORE_LEN];
+    blob[0..4].copy_from_slice(&STATE_MAGIC.to_le_bytes());
+    blob[4..8].copy_from_slice(&STATE_VERSION_V1.to_le_bytes());
+    blob[8..16].copy_from_slice(&plain.to_le_bytes());
+    blob
+}
+
+/// How an accepted blob related to the current format — the restore
+/// path's provenance report, mirroring the VST3 twin's
+/// `StateProvenance`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StateProvenance {
+    /// A current-version blob with a valid checksum.
+    Canonical,
+    /// A legacy v1 blob — accepted; the next save re-serializes the
+    /// migrated value in the v2 layout.
+    Migrated,
+    /// A v2 core with a valid checksum followed by unknown extension
+    /// bytes — accepted with the tail dropped (forward-compat
+    /// degrade); the next save re-serializes the canonical layout.
+    Degraded,
+}
+
+/// Why a blob was rejected — one defined outcome per violation, all
+/// of which `load` maps to `PluginError`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StateRejection {
+    /// Bad magic, a length no known layout admits, or a non-finite
+    /// `f64` payload.
+    Malformed,
+    /// A version this build does not know — including newer formats
+    /// the fixture cannot interpret.
+    UnsupportedVersion,
+    /// A v2 blob whose stored checksum does not cover its core —
+    /// corruption, not an unknown format.
+    ChecksumMismatch,
+}
+
+/// A decoded blob: the plain-domain value plus its provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DecodedState {
+    /// The decoded `f64` payload, before domain clamping.
+    value: f64,
+    /// How the blob related to the current format.
+    provenance: StateProvenance,
+}
+
+/// Decodes a blob with full provenance — the restore contract shared
+/// with the VST3 twin: canonical acceptance, v1 migration,
+/// forward-compat degrade, and typed rejections.
+fn inspect_state_blob(blob: &[u8]) -> Result<DecodedState, StateRejection> {
+    if blob.len() < 8 {
+        return Err(StateRejection::Malformed);
+    }
+    if u32::from_le_bytes(
+        blob[0..4]
+            .try_into()
+            .map_err(|_| StateRejection::Malformed)?,
+    ) != STATE_MAGIC
+    {
+        return Err(StateRejection::Malformed);
+    }
+    let version = u32::from_le_bytes(
+        blob[4..8]
+            .try_into()
+            .map_err(|_| StateRejection::Malformed)?,
+    );
+    match version {
+        STATE_VERSION_V1 => {
+            if blob.len() != STATE_CORE_LEN {
+                return Err(StateRejection::Malformed);
+            }
+            let value = f64::from_le_bytes(
+                blob[8..16]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if !value.is_finite() {
+                return Err(StateRejection::Malformed);
+            }
+            Ok(DecodedState {
+                value,
+                provenance: StateProvenance::Migrated,
+            })
+        }
+        STATE_VERSION => {
+            if blob.len() < STATE_BLOB_LEN {
+                return Err(StateRejection::Malformed);
+            }
+            let stored = u32::from_le_bytes(
+                blob[16..20]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if stored != state_checksum(&blob[0..16]) {
+                return Err(StateRejection::ChecksumMismatch);
+            }
+            let value = f64::from_le_bytes(
+                blob[8..16]
+                    .try_into()
+                    .map_err(|_| StateRejection::Malformed)?,
+            );
+            if !value.is_finite() {
+                return Err(StateRejection::Malformed);
+            }
+            Ok(DecodedState {
+                value,
+                provenance: if blob.len() == STATE_BLOB_LEN {
+                    StateProvenance::Canonical
+                } else {
+                    StateProvenance::Degraded
+                },
+            })
+        }
+        _ => Err(StateRejection::UnsupportedVersion),
+    }
+}
+
+/// Decodes and validates a state blob — `None` on any rejection
+/// [`inspect_state_blob`] reports (malformed, unsupported version, or
+/// checksum mismatch). Canonical, migrated, and degraded inputs all
+/// decode. Finite out-of-range values clamp to the parameter's plain
+/// range, the same law `text_to_value` applies. Test-side codec
+/// surface — `load` calls `inspect_state_blob` directly.
+#[cfg(test)]
 fn decode_state_blob(blob: &[u8]) -> Option<f64> {
-    if blob.len() != STATE_BLOB_LEN {
-        return None;
-    }
-    if u32::from_le_bytes(blob[0..4].try_into().ok()?) != STATE_MAGIC {
-        return None;
-    }
-    if u32::from_le_bytes(blob[4..8].try_into().ok()?) != STATE_VERSION {
-        return None;
-    }
-    let plain = f64::from_le_bytes(blob[8..16].try_into().ok()?);
-    plain
-        .is_finite()
-        .then(|| plain.clamp(GAIN_PARAM.min_value, GAIN_PARAM.max_value))
+    inspect_state_blob(blob).ok().map(|decoded| {
+        decoded
+            .value
+            .clamp(GAIN_PARAM.min_value, GAIN_PARAM.max_value)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -405,34 +549,31 @@ impl PluginStateImpl for TestStatefulMainThread<'_> {
             .map_err(|_| PluginError::Message("state save stream failed"))
     }
 
-    /// `clap.ext.state` `load` — reads exactly one 16-byte blob,
-    /// validates it through [`decode_state_blob`], and stores the
-    /// decoded plain gain into the mirror. A rejected blob leaves
-    /// the mirror untouched.
+    /// `clap.ext.state` `load` — drains the stream (the format may
+    /// legitimately carry bytes beyond the canonical length: legacy
+    /// v1 payloads are shorter, extension tails are longer and
+    /// degrade), validates the blob through [`inspect_state_blob`],
+    /// and stores the decoded plain gain into the mirror. A rejected
+    /// blob leaves the mirror untouched.
     ///
     /// **RT contract:** non-RT only — runs on the main thread; the
     /// host-provided stream may allocate.
     ///
     /// # Errors
     ///
-    /// `PluginError::Message` — truncated stream, trailing bytes,
-    /// stream failure, or a blob failing codec validation.
+    /// `PluginError::Message` — stream failure or a blob failing
+    /// codec validation (malformed shape, unsupported version, or
+    /// checksum mismatch).
     fn load(&self, input: &mut InputStream) -> Result<(), PluginError> {
-        let mut blob = [0u8; STATE_BLOB_LEN];
+        let mut blob = Vec::new();
         input
-            .read_exact(&mut blob)
-            .map_err(|_| PluginError::Message("state blob truncated"))?;
-        // The fixture's stream carries exactly one blob — trailing
-        // bytes are a defined rejection, not ignored input.
-        let mut extra = [0u8; 1];
-        if input
-            .read(&mut extra)
-            .map_err(|_| PluginError::Message("state stream failed"))?
-            != 0
-        {
-            return Err(PluginError::Message("state blob has trailing data"));
-        }
-        let gain = decode_state_blob(&blob).ok_or(PluginError::Message("malformed state blob"))?;
+            .read_to_end(&mut blob)
+            .map_err(|_| PluginError::Message("state stream failed"))?;
+        let decoded =
+            inspect_state_blob(&blob).map_err(|_| PluginError::Message("malformed state blob"))?;
+        let gain = decoded
+            .value
+            .clamp(GAIN_PARAM.min_value, GAIN_PARAM.max_value);
         self.apply_restored_gain(gain);
         Ok(())
     }
@@ -821,12 +962,10 @@ mod tests {
     #[test]
     fn state_blob_rejects_malformed_input() {
         let valid = encode_state_blob(1.0);
-        // Wrong length — short and long.
+        // Wrong length — a truncated core is malformed. (A *longer*
+        // payload is no longer malformed: valid-core extension tails
+        // degrade — `inspect_reports_provenance_and_typed_rejections`.)
         assert_eq!(decode_state_blob(&valid[..8]), None);
-        assert_eq!(
-            decode_state_blob(&[valid.as_slice(), &[0u8]].concat()),
-            None
-        );
         // Corrupted magic / version.
         let mut bad_magic = valid;
         bad_magic[0] ^= 0xFF;
@@ -834,12 +973,77 @@ mod tests {
         let mut bad_version = valid;
         bad_version[7] = 2;
         assert_eq!(decode_state_blob(&bad_version), None);
-        // Non-finite payload.
+        // Non-finite payload — the stale checksum makes these fail
+        // integrity before the value check; either way a rejection.
         for bits in [f64::NAN.to_bits(), f64::INFINITY.to_bits()] {
             let mut bad = valid;
             bad[8..16].copy_from_slice(&bits.to_le_bytes());
             assert_eq!(decode_state_blob(&bad), None);
         }
+    }
+
+    /// `inspect_state_blob` reports the full restore contract shared
+    /// with the VST3 twin: canonical acceptance, v1 migration,
+    /// forward-compat degrade, and one typed rejection per violation
+    /// class.
+    #[test]
+    fn inspect_reports_provenance_and_typed_rejections() {
+        let blob = encode_state_blob(0.75);
+        assert_eq!(
+            inspect_state_blob(&blob),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Canonical,
+            })
+        );
+
+        // A legacy v1 payload — no checksum field — migrates.
+        let v1 = encode_state_blob_v1(0.75);
+        assert_eq!(v1.len(), STATE_CORE_LEN);
+        assert_eq!(
+            inspect_state_blob(&v1),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Migrated,
+            })
+        );
+
+        // A v2 core + unknown extension tail degrades — accepted.
+        let mut extended = blob.to_vec();
+        extended.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(
+            inspect_state_blob(&extended),
+            Ok(DecodedState {
+                value: 0.75,
+                provenance: StateProvenance::Degraded,
+            })
+        );
+
+        // Truncated v2 (no checksum field) — malformed.
+        assert_eq!(
+            inspect_state_blob(&blob[..STATE_CORE_LEN]),
+            Err(StateRejection::Malformed)
+        );
+        // Corrupt core or corrupt checksum — integrity failure.
+        let mut corrupt_core = blob;
+        corrupt_core[9] ^= 0xFF;
+        assert_eq!(
+            inspect_state_blob(&corrupt_core),
+            Err(StateRejection::ChecksumMismatch)
+        );
+        let mut corrupt_sum = blob;
+        corrupt_sum[16] ^= 0xFF;
+        assert_eq!(
+            inspect_state_blob(&corrupt_sum),
+            Err(StateRejection::ChecksumMismatch)
+        );
+        // Unknown version — unsupported.
+        let mut future = blob;
+        future[4..8].copy_from_slice(&3_u32.to_le_bytes());
+        assert_eq!(
+            inspect_state_blob(&future),
+            Err(StateRejection::UnsupportedVersion)
+        );
     }
 
     #[test]
@@ -882,7 +1086,9 @@ mod tests {
     }
 
     /// `load` rejections are defined errors and leave the mirror
-    /// untouched: truncated, trailing bytes, bad magic, non-finite.
+    /// untouched: truncated, bad magic, checksum mismatch, unknown
+    /// version, non-finite. (A valid-core extension tail is *not* a
+    /// rejection — it degrades; see `v1_and_degraded_blobs_load`.)
     #[test]
     fn state_extension_load_rejects_malformed_blobs() {
         let shared = TestStatefulShared::initialize().unwrap();
@@ -899,23 +1105,65 @@ mod tests {
         };
 
         let valid = encode_state_blob(0.5);
-        // Truncated.
+        // Truncated — below the version field, and truncated v2.
         assert!(try_load(&valid[..8]).is_err());
-        // Trailing bytes.
-        let mut trailing = valid.to_vec();
-        trailing.push(0);
-        assert!(try_load(&trailing).is_err());
+        assert!(try_load(&valid[..STATE_CORE_LEN]).is_err());
         // Bad magic.
         let mut bad_magic = valid;
         bad_magic[0] ^= 0xFF;
         assert!(try_load(&bad_magic).is_err());
-        // Non-finite.
+        // Checksum mismatch.
+        let mut corrupt = valid;
+        corrupt[16] ^= 0xFF;
+        assert!(try_load(&corrupt).is_err());
+        // Unknown version.
+        let mut future = valid;
+        future[4..8].copy_from_slice(&7_u32.to_le_bytes());
+        assert!(try_load(&future).is_err());
+        // Non-finite (stale checksum — fails integrity regardless).
         let mut nan = valid;
         nan[8..16].copy_from_slice(&f64::NAN.to_bits().to_le_bytes());
         assert!(try_load(&nan).is_err());
 
         // Every rejection left the mirror at its prior value.
         assert_eq!(shared.gain_mirror.load(), 1.0);
+    }
+
+    /// Migration and degrade through the real `load` verb: a legacy
+    /// v1 payload restores and the next `save` re-serializes v2; a
+    /// v2 core plus an unknown extension tail restores with the tail
+    /// dropped and also re-saves canonical.
+    #[test]
+    fn v1_and_degraded_blobs_load_and_resave_canonical() {
+        let shared = TestStatefulShared::initialize().unwrap();
+        let main = TestStatefulMainThread {
+            shared: &shared,
+            host: None,
+        };
+        let load = |bytes: &[u8]| {
+            let mut reader = std::io::Cursor::new(bytes);
+            let mut stream = InputStream::from_reader(&mut reader);
+            main.load(&mut stream)
+        };
+        let saved = |main: &TestStatefulMainThread<'_>| {
+            let mut bytes = Vec::new();
+            let mut stream = OutputStream::from_writer(&mut bytes);
+            main.save(&mut stream).unwrap();
+            bytes
+        };
+
+        // v1 in → v2 out: the migration path end-to-end.
+        shared.gain_mirror.store(1.0);
+        load(&encode_state_blob_v1(1.25)).unwrap();
+        assert_eq!(shared.gain_mirror.load(), 1.25);
+        assert_eq!(saved(&main), encode_state_blob(1.25).to_vec());
+
+        // v2 core + extension tail → accepted, tail dropped.
+        let mut extended = encode_state_blob(0.5).to_vec();
+        extended.extend_from_slice(&[0xAB, 0xCD]);
+        load(&extended).unwrap();
+        assert_eq!(shared.gain_mirror.load(), 0.5);
+        assert_eq!(saved(&main), encode_state_blob(0.5).to_vec());
     }
 
     // -- Params rescan contract (state load) ---------------------------------

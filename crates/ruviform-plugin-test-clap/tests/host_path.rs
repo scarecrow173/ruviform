@@ -447,13 +447,13 @@ fn reports_stateful_param_in_plain_domain() {
     assert_eq!(gain.default_value, 1.0);
 }
 
-/// Extracts the plain gain from the fixture's 16-byte state blob —
-/// `[u32 LE "RFST"][u32 LE version=1][f64 LE]`; the f64 sits at
-/// offset 8.
+/// Extracts the plain gain from the fixture's 20-byte v2 state blob —
+/// `[u32 LE "RFST"][u32 LE version=2][f64 LE][u32 LE checksum]`; the
+/// f64 sits at offset 8.
 fn blob_gain(blob: &[u8]) -> f64 {
-    assert_eq!(blob.len(), 16, "the CLAP state stream is one 16-byte blob");
+    assert_eq!(blob.len(), 20, "the CLAP state stream is one 20-byte blob");
     assert_eq!(&blob[0..4], b"RFST");
-    assert_eq!(&blob[4..8], &1_u32.to_le_bytes());
+    assert_eq!(&blob[4..8], &2_u32.to_le_bytes());
     f64::from_le_bytes(blob[8..16].try_into().unwrap())
 }
 
@@ -539,18 +539,23 @@ fn stateful_restore_rejects_malformed_blob() {
         plugin.restore_state(&valid[..8]),
         Err(HostError::PluginFailed)
     );
-    // Trailing bytes → `PluginFailed`.
-    let mut trailing = valid.clone();
-    trailing.push(0);
-    assert_eq!(
-        plugin.restore_state(&trailing),
-        Err(HostError::PluginFailed)
-    );
     // Corrupted magic → `PluginFailed`.
     let mut corrupt = valid.clone();
     corrupt[0] ^= 0xFF;
     assert_eq!(plugin.restore_state(&corrupt), Err(HostError::PluginFailed));
-    // Non-finite payload → `PluginFailed`.
+    // Checksum mismatch → `PluginFailed`.
+    let mut corrupt_sum = valid.clone();
+    corrupt_sum[16] ^= 0xFF;
+    assert_eq!(
+        plugin.restore_state(&corrupt_sum),
+        Err(HostError::PluginFailed)
+    );
+    // A version this build does not know → `PluginFailed`.
+    let mut future = valid.clone();
+    future[4..8].copy_from_slice(&3_u32.to_le_bytes());
+    assert_eq!(plugin.restore_state(&future), Err(HostError::PluginFailed));
+    // Non-finite payload (stale checksum → fails integrity) →
+    // `PluginFailed`.
     let mut nan = valid.clone();
     nan[8..16].copy_from_slice(&f64::NAN.to_bits().to_le_bytes());
     assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
@@ -559,6 +564,36 @@ fn stateful_restore_rejects_malformed_blob() {
     // surface intact — `save_state` still returns the valid blob.
     let still = plugin.save_state().expect("save_state");
     assert_eq!(still, valid, "rejected restores must not corrupt state");
+}
+
+/// Restore accepts the legacy 16-byte v1 layout and a v2 core plus
+/// an unknown extension tail — the next `save_state` re-serializes
+/// canonical v2 in both cases: migration and forward-compat degrade
+/// through the production `clap.ext.state` bridge.
+#[test]
+fn stateful_restore_migrates_v1_and_degrades_extension() {
+    let mut plugin = prepared_stateful_plugin();
+    let canonical = plugin.save_state().expect("save_state");
+    assert_eq!(blob_gain(&canonical), 1.0);
+
+    // v1 in → v2 out: the migration path through `clap.ext.state`.
+    let mut v1 = canonical[..16].to_vec();
+    v1[4..8].copy_from_slice(&1_u32.to_le_bytes());
+    plugin.restore_state(&v1).expect("v1 restores");
+    let migrated = plugin.save_state().expect("save_state");
+    assert_eq!(migrated, canonical, "v1 in → canonical v2 out");
+
+    // v2 core + extension tail → degraded accept, tail dropped.
+    let mut degraded = canonical.clone();
+    degraded.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+    plugin.restore_state(&degraded).expect("degraded restores");
+    let resaved = plugin.save_state().expect("save_state");
+    assert_eq!(resaved, canonical, "degraded in → canonical v2 out");
+
+    // The restored gain still drives the DSP.
+    let (_result, [left, right]) = drive_block(&mut *plugin, &[]);
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }
 
 /// The stateless fixtures keep their honest capability decline: no

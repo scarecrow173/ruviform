@@ -29,7 +29,9 @@
 //!
 //! CLAP `clap.ext.state` is one plugin-defined byte stream with no
 //! adapter framing: the fixture writes exactly
-//! `[u32 LE "RFST"][u32 LE version=1][f64 LE plain gain]` — 16 bytes.
+//! `[u32 LE "RFST"][u32 LE version=2][f64 LE plain gain][u32 LE
+//! checksum]` — 20 bytes (the legacy 16-byte v1 layout still
+//! restores — migration).
 
 #![cfg(feature = "l1-runner")]
 
@@ -217,7 +219,7 @@ fn drive_to_processing(host: &mut PluginHost, handle: PluginHandle) {
 }
 
 /// `SaveState` → the state blob (`HostReply::State`) — the raw
-/// 16-byte `clap.ext.state` stream, no adapter framing.
+/// 20-byte `clap.ext.state` stream, no adapter framing.
 fn save_state(host: &mut PluginHost, handle: PluginHandle) -> Vec<u8> {
     match host.execute(HostCommand::SaveState { handle }).unwrap() {
         HostReply::State { bytes } => bytes,
@@ -251,12 +253,13 @@ fn wait_for_gain_output(
     false
 }
 
-/// Extracts the plain gain from the state blob —
-/// `[u32 LE "RFST"][u32 LE ver=1][f64 LE]`; the f64 sits at offset 8.
+/// Extracts the plain gain from the state blob — the v2 layout
+/// `[u32 LE "RFST"][u32 LE ver=2][f64 LE][u32 LE checksum]`; the f64
+/// sits at offset 8.
 fn blob_gain(blob: &[u8]) -> f64 {
-    assert_eq!(blob.len(), 16, "the CLAP state stream is one 16-byte blob");
+    assert_eq!(blob.len(), 20, "the CLAP state stream is one 20-byte blob");
     assert_eq!(&blob[0..4], b"RFST");
-    assert_eq!(&blob[4..8], &1_u32.to_le_bytes());
+    assert_eq!(&blob[4..8], &2_u32.to_le_bytes());
     f64::from_le_bytes(blob[8..16].try_into().unwrap())
 }
 
@@ -379,23 +382,11 @@ fn real_stateful_test_plugin_l1_rejects_malformed_state() {
     let valid = save_state(&mut host, handle);
     assert_eq!(blob_gain(&valid), 1.0);
 
-    // Truncated blob → `load`'s `read_exact` fails → `PluginFailed`.
+    // Truncated blob → the codec's malformed check → `PluginFailed`.
     assert_eq!(
         host.execute(HostCommand::RestoreState {
             handle,
             bytes: valid[..8].to_vec(),
-        }),
-        Err(HostError::PluginFailed)
-    );
-
-    // Trailing bytes → `PluginFailed` — the fixture's stream carries
-    // exactly one blob.
-    let mut trailing = valid.clone();
-    trailing.push(0);
-    assert_eq!(
-        host.execute(HostCommand::RestoreState {
-            handle,
-            bytes: trailing,
         }),
         Err(HostError::PluginFailed)
     );
@@ -412,10 +403,90 @@ fn real_stateful_test_plugin_l1_rejects_malformed_state() {
         Err(HostError::PluginFailed)
     );
 
+    // Checksum mismatch → `PluginFailed` — the codec's integrity
+    // check.
+    let mut corrupt_sum = valid.clone();
+    corrupt_sum[16] ^= 0xFF;
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: corrupt_sum,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // A version this build does not know → `PluginFailed` — the
+    // codec's unsupported-version check.
+    let mut future = valid.clone();
+    future[4..8].copy_from_slice(&3_u32.to_le_bytes());
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: future,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
     // The rejected writes left the instance alive and its state
     // surface intact — `SaveState` still returns the valid blob.
     let still = save_state(&mut host, handle);
     assert_eq!(still, valid, "rejected restores must not corrupt state");
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// Migration and forward-compat degrade through the L1 wire: the
+/// legacy 16-byte v1 blob restores (`Migrated`) and the next
+/// `SaveState` re-serializes the 20-byte v2 layout; a v2 blob with
+/// an unknown extension tail restores (`Degraded`) and re-saves
+/// canonical. The restored gain drives the DSP afterwards — the same
+/// state contract the in-process host-path test asserts,
+/// out-of-process.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_migrates_and_degrades_state() {
+    assert_fixture_present();
+
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(EXPECTED, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+
+    let canonical = save_state(&mut host, handle);
+    assert_eq!(blob_gain(&canonical), 1.0);
+
+    // Craft the v1 payload: the v2 core (magic+version+f64) with the
+    // version rewritten to 1 — 16 bytes, no checksum field.
+    let mut v1 = canonical[..16].to_vec();
+    v1[4..8].copy_from_slice(&1_u32.to_le_bytes());
+    host.execute(HostCommand::RestoreState { handle, bytes: v1 })
+        .unwrap();
+    let migrated = save_state(&mut host, handle);
+    assert_eq!(migrated, canonical, "v1 in → canonical v2 out");
+
+    // v2 core + unknown extension tail → degraded accept, tail
+    // dropped on re-save.
+    let mut degraded = canonical.clone();
+    degraded.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: degraded,
+    })
+    .unwrap();
+    let resaved = save_state(&mut host, handle);
+    assert_eq!(resaved, canonical, "degraded in → canonical v2 out");
+
+    // Audio proves the restored ×1.0 gain still drives the DSP.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.5, -0.25),
+        "delivered audio never showed the restored ×1.0 gain"
+    );
 
     // Clean teardown.
     host.execute(HostCommand::StopProcessing { handle })

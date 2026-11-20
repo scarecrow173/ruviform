@@ -266,33 +266,33 @@ fn wait_for_gain_output(
 
 /// Extracts the component payload's plain gain from the framed blob —
 /// `[u32 comp_len][comp][u32 ctrl_len][ctrl]` where `comp` is the
-/// fixture's `["RFST"][ver=1][f64 LE]` payload (f64 at comp offset 8,
-/// i.e. blob offset 12).
+/// fixture's 20-byte v2 `["RFST"][ver=2][f64 LE][cksum]` payload
+/// (f64 at comp offset 8, i.e. blob offset 12).
 fn component_gain(blob: &[u8]) -> f64 {
-    assert_eq!(blob.len(), 40, "two 16-byte payloads + two u32 lengths");
-    assert_eq!(&blob[0..4], &16_u32.to_le_bytes());
+    assert_eq!(blob.len(), 48, "two 20-byte payloads + two u32 lengths");
+    assert_eq!(&blob[0..4], &20_u32.to_le_bytes());
     assert_eq!(&blob[4..8], b"RFST");
-    assert_eq!(&blob[20..24], &16_u32.to_le_bytes());
-    assert_eq!(&blob[24..28], b"RFST");
+    assert_eq!(&blob[24..28], &20_u32.to_le_bytes());
+    assert_eq!(&blob[28..32], b"RFST");
     f64::from_le_bytes(blob[12..20].try_into().unwrap())
 }
 
 /// Extracts the component payload's plain gain from a
 /// **single-component** framed blob — `[u32 comp_len][comp][u32 0]`
-/// where `comp` is the same 16-byte `["RFST"][ver=1][f64 LE]` payload
-/// and the controller payload is *empty* (`ctrl_len = 0`: the
+/// where `comp` is the same 20-byte v2 `["RFST"][ver=2][f64 LE][cksum]`
+/// payload and the controller payload is *empty* (`ctrl_len = 0`: the
 /// `single_component` save arm only a real single-component binary
-/// produces — 24 bytes total).
+/// produces — 28 bytes total).
 fn single_component_gain(blob: &[u8]) -> f64 {
     assert_eq!(
         blob.len(),
-        24,
-        "one 16-byte component payload + two u32 lengths (ctrl_len = 0)"
+        28,
+        "one 20-byte component payload + two u32 lengths (ctrl_len = 0)"
     );
-    assert_eq!(&blob[0..4], &16_u32.to_le_bytes());
+    assert_eq!(&blob[0..4], &20_u32.to_le_bytes());
     assert_eq!(&blob[4..8], b"RFST");
     assert_eq!(
-        &blob[20..24],
+        &blob[24..28],
         &0_u32.to_le_bytes(),
         "single-component save frames an empty controller payload"
     );
@@ -442,10 +442,108 @@ fn real_stateful_test_plugin_l1_rejects_malformed_state() {
         Err(HostError::PluginFailed)
     );
 
+    // A checksum-corrupt component payload → `PluginFailed` — the
+    // codec's integrity check.
+    let mut corrupt_sum = valid.clone();
+    corrupt_sum[20] ^= 0xFF;
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: corrupt_sum,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
+    // A version this build does not know → `PluginFailed` — the
+    // codec's unsupported-version check.
+    let mut future = valid.clone();
+    future[8..12].copy_from_slice(&3_u32.to_le_bytes());
+    assert_eq!(
+        host.execute(HostCommand::RestoreState {
+            handle,
+            bytes: future,
+        }),
+        Err(HostError::PluginFailed)
+    );
+
     // The rejected writes left the instance alive and its state
     // surface intact — `SaveState` still returns the valid blob.
     let still = save_state(&mut host, handle);
     assert_eq!(still, valid, "rejected restores must not corrupt state");
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// Migration and forward-compat degrade through the L1 wire: a
+/// framed blob whose payloads are the legacy 16-byte v1 layout
+/// restores (`Migrated`) and the next `SaveState` re-serializes the
+/// 48-byte v2 frame; a v2 component payload with an unknown
+/// extension tail restores (`Degraded`) and re-saves canonical. The
+/// restored gain drives the DSP afterwards — the same state contract
+/// the in-process host-path test asserts, out-of-process.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_migrates_and_degrades_state() {
+    assert_fixture_present();
+
+    let expected = expected_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+
+    let canonical = save_state(&mut host, handle);
+    assert_eq!(component_gain(&canonical), 1.0);
+
+    // Craft a v1 frame: [u32 16][v1 comp][u32 16][v1 ctrl] — each
+    // payload is the v2 core (magic+version+f64) with the version
+    // rewritten to 1.
+    let mut comp_v1 = canonical[4..20].to_vec();
+    comp_v1[4..8].copy_from_slice(&1_u32.to_le_bytes());
+    let mut ctrl_v1 = canonical[28..44].to_vec();
+    ctrl_v1[4..8].copy_from_slice(&1_u32.to_le_bytes());
+    let mut v1_frame = Vec::new();
+    v1_frame.extend_from_slice(&16_u32.to_le_bytes());
+    v1_frame.extend_from_slice(&comp_v1);
+    v1_frame.extend_from_slice(&16_u32.to_le_bytes());
+    v1_frame.extend_from_slice(&ctrl_v1);
+
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: v1_frame,
+    })
+    .unwrap();
+    // The re-save re-serializes canonical v2 — migration grew the
+    // checksum field back.
+    let migrated = save_state(&mut host, handle);
+    assert_eq!(migrated, canonical, "v1 in → canonical v2 out");
+
+    // A v2 component payload + 4 unknown extension bytes (comp_len
+    // 24, valid checksum over the core) → degraded accept.
+    let mut degraded = Vec::new();
+    degraded.extend_from_slice(&24_u32.to_le_bytes());
+    degraded.extend_from_slice(&canonical[4..24]);
+    degraded.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+    degraded.extend_from_slice(&canonical[24..]);
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: degraded,
+    })
+    .unwrap();
+    let resaved = save_state(&mut host, handle);
+    assert_eq!(resaved, canonical, "degraded in → canonical v2 out");
+
+    // Audio proves the restored ×1.0 gain still drives the DSP.
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.5, -0.25),
+        "delivered audio never showed the restored ×1.0 gain"
+    );
 
     // Clean teardown.
     host.execute(HostCommand::StopProcessing { handle })

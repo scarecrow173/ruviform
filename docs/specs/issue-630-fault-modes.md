@@ -2,7 +2,7 @@
 id: "SPEC-630faultModes01"
 type: "spec"
 status: "approved"
-title: "Issue #630 fault-modes slice — test_fault 非致命 fault mode 拡張 spec"
+title: "Issue #630 fault-modes slice — test_fault 非致命 fault mode 拡張 + test_stateful codec v2 + editor popup spec"
 created: "2026-11-21"
 updated: "2026-11-21"
 owners: ["scarecrow173"]
@@ -25,6 +25,18 @@ relations:
         path: "crates/ruviform-plugin-test-vst3/tests/l1_fault_test_plugin_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-clap/tests/l1_fault_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/tests/l1_stateful_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-clap/tests/l1_stateful_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/src/stateful.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-clap/src/stateful.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/src/editor_view.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-clap/src/editor.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-vst3/README.md"
       - type: "file"
@@ -64,14 +76,26 @@ fixture 側で再現不能のままだった。本 slice は `Fault` param を
 plain `[0.0, 8.0]` の 8 mode に拡張し、`rt_alloc` / `bad_time` /
 `invalid` を実 ABI 越しに観測可能にする。
 
+coordinator 承認の scope 拡張により、同じ lease に以下を畳み込む:
+
+- `test_stateful` fixture の state blob codec を v2 化し、
+  checksum・v1 migration・degraded (前方互換 tail) 受理・
+  typed rejection (`Malformed`/`UnsupportedVersion`/
+  `ChecksumMismatch`) を両 ABI で実現する。
+- `test_editor` fixture に popup 面を追加する。VST3 は指定
+  key (`VK_P`) で plugin 所有 `WS_POPUP` HWND を toggle し、
+  CLAP は `is_floating` floating window 契約 (`set_transient` /
+  `suggest_title` / `show`) を実装する。
+
 ## スコープ
 
-`crates/ruviform-plugin-test-{vst3,clap}` の `src/fault.rs` と
-その test 面のみ。production crate (`ruviform-plugin-{vst3,clap,
-host,export,core}`) は zero-diff。arming channel は既存どおり
-in-band `ParamValue` event のみ — 新規 param・env・argv 経路は
-追加しない (`ParamController` が single-param のため第 2 param
-追加は本 slice の境界外)。
+`crates/ruviform-plugin-test-{vst3,clap}` の `src/fault.rs`・
+`src/stateful.rs`・editor 面 (`src/editor_view.rs` /
+`src/editor.rs`) とその test 面のみ。production crate
+(`ruviform-plugin-{vst3,clap,host,export,core}`) は zero-diff。
+arming channel は既存どおり in-band `ParamValue` event のみ —
+新規 param・env・argv 経路は追加しない (`ParamController` が
+single-param のため第 2 param 追加は本 slice の境界外)。
 
 ## Fault law 変更（両 format 共通）
 
@@ -94,6 +118,52 @@ default `0.0`、stepped。mode decode は `floor(plain)` を
 `plain = normalized × 8.0` なので normalized arm 値は
 `abort=0.125` / `exit(42)=0.3025` / `exit(0)=0.25` / `hang=0.375` /
 `error=0.5` / `rt_alloc=0.625` / `bad_time=0.75` / `invalid=0.875`。
+
+## State codec v2 law（両 format 共通）
+
+`test_stateful` の state blob を v2 に引き上げる:
+
+- v2 (canonical): 20 bytes — `[u32 "RFST" LE][u32 version=2 LE]
+  [f64 gain LE][u32 FNV-1a-32(先頭16B) LE]`。
+- v1 (legacy): 16 bytes — version=1、checksum なし。受理時は
+  migration として扱い、次回 save は canonical v2 を吐く。
+- degraded: 20B 以上の v2 blob で checksum 正当・末尾に未知の
+  extension bytes を持つもの。受理時に tail を捨て、次回 save は
+  canonical 20B に収束する（前方互換 — 新しい writer が古い
+  reader を壊さない方向の契約）。
+- rejection: bad magic・不正長・非 finite f64・未知 version・
+  checksum 不一致は受理せず、stored gain は不変のまま defined
+  rejection (VST3 `kResultFalse` / CLAP `PluginError` + `false`
+  戻り) に写像される。
+- finite だが範囲外の gain は従来どおり `[0.0, 2.0]` に clamp。
+- serialization は deterministic: `save→save`・`save→restore→save`
+  は byte 同一、migrated/degraded 入力は canonical に再 serialize。
+- codec は `inspect_state_blob` が provenance (`Canonical`/
+  `Migrated`/`Degraded`) と typed rejection を報告する単一実装;
+  `decode_state_blob` は従来の `Option<f64>` 互換面を維持し、
+  共有 caller (`component.rs`/`controller.rs`/`preset.rs`/
+  `single.rs`) は zero-diff のまま。
+- CLAP `load` は stream を `read_to_end` で全消費し、canonical
+  長ぴったりを要求しない（v1/degraded 受理の前提）。
+
+## Editor popup law（format 別）
+
+- VST3 `test_editor`: `IPlugView` に popup verb が存在しないため
+  指定 key `VK_P` (`key_code == 0x50`) の `onKeyDown` が
+  plugin 所有 `WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS` HWND
+  (`rvf-test-editor-popup-{seq}`、editor child の root ancestor
+  を owner) を toggle する。open は `po:{seq}`・close は
+  `pc:{seq}` を既存 `kd:` と同じ event log (= window title) に
+  記録し、`removed()`/detach は開いた popup を必ず畳む。
+  非 Windows shim は HWND を返さないが論理 event は記録する。
+- CLAP `test_editor`: popup = floating window 契約。
+  `is_api_supported(WIN32, is_floating=*)` を Windows で受理し、
+  floating `create` → `set_transient(live HWND)` →
+  `suggest_title` → `show` で `WS_POPUP` HWND (`rvf-test-editor-
+  popup` または提案 title、transient owner 所有) を生成する。
+  embedded/floating の混在 (`set_parent` on floating /
+  `set_transient` on embedded)・dead handle・非 Win32 window は
+  全て honest `PluginError` rejection。
 
 ## 受入条件（slice 確定版）
 
@@ -119,6 +189,20 @@ default `0.0`、stepped。mode decode は `floor(plain)` を
    in-process では絶対に踏まない既存 RT 境界を維持。
 6. 既存 lane は緑のまま — normalized arm 値の rescale は全
    test/doc に波及し、既存 fault case は回帰しない。
+7. `test_stateful` は v2 canonical blob を save し、v1 blob を
+   migrate・degraded v2 を受理して canonical に再 serialize、
+   malformed/unsupported-version/checksum 不一致を stored gain
+   不変のまま reject する — VST3 component/controller 両 verb・
+   single-component 面・CLAP `clap.ext.state` で同契約。
+8. `test_editor` は VST3 `VK_P` で popup HWND が実在・toggle
+   し `removed()` で畳まれること、CLAP floating `show` が実
+   `WS_POPUP` HWND を生成し transient/title が観測できることを
+   unit/plugin-impl レベルで検証する（real HWND host harness が
+   無いため popup の L1 面は設けない）。
+9. 両 ABI の L1 stateful e2e (`#[ignore]` + `l1-runner`) が v2
+   20B frame・migration・degraded・checksum・unsupported
+   version を out-of-process で観測し、reject 後も instance が
+   生存して canonical save に回復することを示す。
 
 ## 振る舞い契約
 
@@ -152,12 +236,19 @@ default `0.0`、stepped。mode decode は `floor(plain)` を
   で arm → 観測（`out_left[0] == 200.0` / `tail_frames ==
   u32::MAX` / 全 sample NaN）→ `Processing` 維持 → disarm 回復 →
   clean teardown。armed submit は既存先例どおり繰り返す。
+- `tests/l1_stateful_test_plugin_e2e.rs`: v2 20B payload offset、
+  v1 migration・degraded tail・checksum corruption・unknown
+  version を out-of-process で踏み、reject 後の生存性と
+  canonical re-save・restored gain の audio 反映を観測する。
+- `editor_view.rs` / `editor.rs` unit test: popup toggle event
+  token・HWND 実在性・seq 増分・`removed()` 畳み込み
+  (VST3)、floating transient/title/show/hide/destroy と
+  embedded↔floating 混在 rejection (CLAP)。
 - deterministic evidence と real-run evidence を分離して記録。
 - 既存 `test-l1-real-plugin` / `test-rt` / lint / fmt / prek lane。
 
 ## 非目標
 
-- stateful migration/checksum/degraded 挙動、editor popup 挙動。
 - real dock/DComp gate、consumer oracle 照合。
 - `assert_no_alloc` による fixture dylib 内確保の直接検出
   （allocator 境界を越えて観測不能 — marker が受入 oracle）。

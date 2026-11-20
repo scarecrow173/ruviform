@@ -85,6 +85,47 @@ relations:
 - **CLAP `submit_block_full`**: 出力 channel の内容まで検査
   できる block submit helper（marker/NaN 観測用に新規追加）。
 
+## Feature: state codec v2（in-crate unit tests, `src/stateful.rs`）
+
+- **Rule**: `inspect_state_blob` は provenance `Canonical`/
+  `Migrated`/`Degraded` と typed rejection `Malformed`/
+  `UnsupportedVersion`/`ChecksumMismatch` を返す。
+  **Example**: canonical v2 round-trip、v1 16B は `Migrated`、
+  v2 + tail は `Degraded`、checksum 反転・version=3・bad
+  magic・不正長・非 finite は各 typed rejection。
+- **Rule**: rejected blob は stored gain を変えない。
+- **Rule**: `save→save` / `save→restore→save` は byte 同一、
+  migrated/degraded 入力は次回 save で canonical 20B に収束。
+- **Rule**: finite 範囲外 gain は `[0.0, 2.0]` に clamp
+  （従来契約維持）。
+- **Rule**: COM/stream 経路 — VST3 `IBStream` component/
+  controller verb・single-component 面・CLAP `clap.ext.state`
+  save/load で同契約（CLAP `load` は stream 全消費）。
+
+## Feature: state host_path + L1 stateful E2E
+
+- **host_path**: frame/payload offset が v2 20B 前提に更新、
+  `stateful_restore_migrates_v1_and_degrades_extension` と
+  `stateful_restore_rejects_malformed_blob` が migration・
+  degraded・checksum・unsupported version を網羅。
+- **l1_stateful_test_plugin_e2e** (ignored + l1-runner): v2 20B
+  payload offset、migration・degraded・checksum corruption・
+  unknown version を out-of-process で観測、reject 後の
+  instance 生存 + canonical re-save + restored gain の audio
+  反映を確認（VST3 5 case / CLAP 3 case）。
+
+## Feature: editor popup（in-crate unit tests）
+
+- **VST3 `popup_key_toggles_plugin_owned_window`**: 通常 key は
+  `kd:` のみ、`VK_P` で `po:{seq}`/`pc:{seq}` toggle、
+  Windows では popup HWND が実在、reopen で seq 増分、
+  `removed()` が popup を畳む。
+- **CLAP `floating_popup_surface_is_honest`**: floating `create`
+  → `set_parent` 拒否・`set_transient` の live-HWND gate・
+  `suggest_title` → `show` で popup HWND 実在・`hide`/再
+  `show`/`destroy` 収束。embedded↔floating 混在は honest
+  rejection。非 Windows は全 defined rejection。
+
 ## Lane
 
 - `mise run test ruviform-plugin-test-{vst3,clap}`: unit +

@@ -68,11 +68,17 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
 
 - Same port shape, gain parameter and DSP law as `test_gain` — the
   class exists to carry real state, not new DSP.
-- `clap.ext.state` `save` writes one plugin-defined 16-byte stream
-  `[u32 LE "RFST"][u32 LE version=1][f64 LE plain gain]`; `load`
-  accepts exactly that length — wrong length, magic, version or a
-  non-finite value is a defined rejection, and finite out-of-range
-  values clamp to the parameter range.
+- `clap.ext.state` `save` writes one plugin-defined 20-byte v2
+  stream `[u32 LE "RFST"][u32 LE version=2][f64 LE plain gain]
+  [u32 LE FNV-1a-32 checksum of the first 16 bytes]`; `load`
+  drains the whole input stream and accepts canonical v2, 16-byte
+  v1 blobs (`version=1`, migrated — the next save emits v2), and
+  v2 blobs carrying a valid checksum plus an unknown extension
+  tail (degraded/forward-compatible — the tail is dropped on the
+  next save). Wrong magic, length, version, checksum or a
+  non-finite value is a defined rejection that leaves the stored
+  gain unchanged; finite out-of-range values clamp to the
+  parameter range.
 - Unlike `test_gain`, activation does **not** reset the gain — a
   restored state survives `activate`, which is what makes the
   save → mutate → restore → save round-trip meaningful.
@@ -86,9 +92,9 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
   parameters declared at all) plus the plugin side of
   `clap.ext.gui` — the CLAP counterpart of the VST3 `test_editor`
   fixture.
-- `is_api_supported`/`get_preferred_api` answer `win32` + embedded
-  only, and only on Windows builds; floating windows, other API
-  types, and non-Windows builds are honest `false`/`None`.
+- `is_api_supported`/`get_preferred_api` answer `win32` only, and
+  only on Windows builds — embedded *and* floating; other API
+  types and non-Windows builds are honest `false`/`None`.
 - `create` → `set_parent` → `show`/`hide` → `destroy` follow the
   production host bridge's `open_gui`/`close_gui` contract. On
   Windows `set_parent` validates the supplied `Window` is a Win32
@@ -102,8 +108,15 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
   the requested size and resizes the attached child HWND —
   `adjust_size`/`get_resize_hints` decline (no constraints declared),
   `set_size` before `create` rejects, `set_scale` accepts only
-  finite positive factors, `set_transient` rejects (floating
-  unsupported).
+  finite positive factors.
+- Floating mode is the fixture's popup surface: `create` with
+  `is_floating` records the mode, `set_transient` accepts only a
+  live Win32 host window (embedded mode is the honest refusal),
+  `suggest_title` names the popup, and `show` creates a real
+  `WS_POPUP` HWND owned by the transient parent (titled
+  `rvf-test-editor-popup` or the suggested title) on first call —
+  `hide`/`destroy` converge it. `set_parent` on a floating GUI is
+  the defined rejection in the opposite direction.
 - Win32 calls are confined to `src/editor.rs`'s
   `#[cfg(target_os = "windows")]` `win32` module behind
   `#[expect(unsafe_code)]` + SAFETY comments — the crate's only

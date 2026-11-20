@@ -129,3 +129,78 @@ alloc/lock/wait-free を維持 — `rt_unarmed_block_is_alloc_free`
 `rt_alloc` の確保は **armed block 内だけ**の意図的 fault で
 あり、`assert_no_alloc` の対象にはしない（armed fault は
 RT 契約の対象外 — `abort`/`exit`/`hang` と同じ扱い）。
+
+## State codec v2（拡張 scope）
+
+### codec を単一実装に集約する
+
+`inspect_state_blob` を唯一の decode 入口とし、provenance
+(`Canonical`/`Migrated`/`Degraded`) と typed rejection
+(`Malformed`/`UnsupportedVersion`/`ChecksumMismatch`) を返す。
+`decode_state_blob` は `Option<f64>` を返す薄い wrapper として
+残す — `component.rs`/`controller.rs`/`preset.rs`/`single.rs`
+が共有する既存 signature は lease 外 caller を巻き込むため
+変更しない（AGENTS「正しい境界で修正」: codec の domain rule を
+`stateful.rs` 一箇所に置き、caller 側に補正を増やさない）。
+
+- v2 canonical = magic `RFST` + version=2 + f64 gain + 先頭 16B
+  の FNV-1a-32 checksum (20B)。
+- v1 (16B) は checksum を持たないため受理時 `Migrated` と
+  判別し、次回 `encode_state_blob` は常に canonical v2 を吐く
+  — migrate は read 側の解釈であって write 面は単一形式に
+  収束させる（DRY）。
+- v2 + 正当 checksum + 余剰 tail は `Degraded` 受理 — tail を
+  捨てて reserialize すると canonical に収束する。version が
+  未知のものは tail の有無に関わらず `UnsupportedVersion` で
+  拒否し、先頭 8B 以外を信頼しない（untrusted input は codec
+  境界で検証、呼び出し側に防御を散らさない）。
+- checksum 検証は version 確定後・gain 解釈前 — checksum を
+  pass した blob のみ f64 を読み、非 finite は `Malformed`。
+
+### VST3 側
+
+`stateful.rs` の `STATE_BLOB_LEN` を 16→20 にし、component/
+controller/single の state verb は全て同じ codec を通るため
+frame 長だけが変わる — caller は blob bytes を透過するだけで
+migration/degraded 判定を持たない。`setState` 系の rejection
+写像は既存どおり `kResultFalse`。
+
+### CLAP 側
+
+`clap.ext.state::load` は `InputStream` (= `io::Read`) を
+`read_to_end` で全消費する — 旧実装の「canonical 長ぴったり
+要求」は degraded tail と両立しない。検証と適用は分離し、
+inspect 成功時のみ gain mirror を更新 + params values rescan
+通知を発行する（rejected load は状態不変が観測契約）。
+
+## Editor popup（拡張 scope）
+
+### VST3 — plugin 所有 popup HWND + key 契約
+
+`IPlugView` は popup の verb を持たないため、fixture は key
+input を契約とする: `onKeyDown` は既存どおり `kd:{key}:
+{key_code}:{modifiers}` を記録した上で `key_code == 0x50`
+(`VK_P`) のみ `popup_toggle` を呼ぶ。open は `po:{seq}`・
+close は `pc:{seq}` を同じ event log (window title) に記録し、
+`win32::popup` が `WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS`
+HWND を editor child の root ancestor (`GetAncestor(GA_ROOT)`)
+を owner に生成する — editor HWND が死んでも popup が残らない
+owner 契約。`removed()` は child 破棄前に popup を必ず畳む。
+非 Windows shim は `None` を返すが `po:`/`pc:` token は記録
+される — 「verb が走った」論理面と HWND 実在面を分離するのは
+既存 `attached` token の先例と同じ。
+
+### CLAP — `is_floating` floating window 契約
+
+CLAP gui 拡張には既に popup 相当の verb がある: floating GUI +
+`set_transient` + `suggest_title` + `show`。`GuiState` に
+`floating`/`transient`/`title` を追加し、`is_api_supported`
+を `is_floating` 両方で受理（Windows のみ — 非 Windows と
+非 Win32 API は従来どおり honest `false`）。`create` が mode
+を記録し、混在 verb は相互に defined rejection (`set_parent`
+on floating / `set_transient` on embedded)。`set_transient`
+は `as_win32_hwnd` + `IsWindow` gate を `set_parent` と同じ
+境界で行い、`show` が初回に `win32::popup` で実 HWND を生成
+する（transient owner + 提案 title または default）。host
+harness が無いため popup の L1 面は設けず、plugin-impl 単体
+test を受入 oracle とする（AC8）。

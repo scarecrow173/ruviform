@@ -593,20 +593,21 @@ fn stateful_save_mutate_restore_save_round_trips() {
 
     // Initial save — default plain gain 1.0 / normalized 0.5.
     // Framed blob: [u32 comp_len][comp][u32 ctrl_len][ctrl], each
-    // payload the fixture's 16-byte `["RFST"][ver=1][f64]` blob.
+    // payload the fixture's 20-byte v2 `["RFST"][ver=2][f64][cksum]`
+    // blob.
     let initial = plugin.save_state().expect("save_state");
-    assert_eq!(initial.len(), 40, "two 16-byte payloads + two u32 lengths");
-    assert_eq!(&initial[0..4], &16_u32.to_le_bytes());
+    assert_eq!(initial.len(), 48, "two 20-byte payloads + two u32 lengths");
+    assert_eq!(&initial[0..4], &20_u32.to_le_bytes());
     assert_eq!(&initial[4..8], b"RFST");
     assert_eq!(
         f64::from_le_bytes(initial[12..20].try_into().unwrap()),
         1.0,
         "component payload: plain gain"
     );
-    assert_eq!(&initial[20..24], &16_u32.to_le_bytes());
-    assert_eq!(&initial[24..28], b"RFST");
+    assert_eq!(&initial[24..28], &20_u32.to_le_bytes());
+    assert_eq!(&initial[28..32], b"RFST");
     assert_eq!(
-        f64::from_le_bytes(initial[32..40].try_into().unwrap()),
+        f64::from_le_bytes(initial[36..44].try_into().unwrap()),
         0.5,
         "controller payload: normalized value"
     );
@@ -680,13 +681,71 @@ fn stateful_restore_rejects_malformed_blob() {
         Err(HostError::PluginFailed)
     );
     // A well-framed blob whose component payload carries a NaN
-    // gain → the codec's non-finite check → `kResultFalse` →
-    // `PluginFailed` at `component.setState`.
+    // gain → the stale checksum fails integrity before the value
+    // check → `kResultFalse` → `PluginFailed` at `component.setState`.
     let mut nan = plugin.save_state().expect("save_state");
     nan[12..20].copy_from_slice(&f64::NAN.to_le_bytes());
     assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));
+    // A checksum-corrupt component payload → `PluginFailed`.
+    let mut corrupt_sum = plugin.save_state().expect("save_state");
+    corrupt_sum[20] ^= 0xFF;
+    assert_eq!(
+        plugin.restore_state(&corrupt_sum),
+        Err(HostError::PluginFailed)
+    );
+    // A version this build does not know → `PluginFailed`.
+    let mut future = plugin.save_state().expect("save_state");
+    future[8..12].copy_from_slice(&3_u32.to_le_bytes());
+    assert_eq!(plugin.restore_state(&future), Err(HostError::PluginFailed));
     // The instance is still alive and its state surface intact.
     plugin.save_state().expect("save_state still works");
+}
+
+/// Restore accepts a framed blob whose payloads are the legacy
+/// 16-byte v1 layout and the next `save_state` re-serializes the
+/// current v2 layout — migration observable through the production
+/// bridge (the frame shrinks in, grows out). A valid-core extension
+/// tail on the component payload degrades the same way.
+#[test]
+fn stateful_restore_migrates_v1_and_degrades_extension() {
+    let mut plugin = prepared_stateful_plugin();
+    let canonical = plugin.save_state().expect("save_state");
+
+    // Craft a v1 frame: [u32 16][v1 comp][u32 16][v1 ctrl] — each
+    // payload is the v2 core with the version field rewritten to 1.
+    let comp_v1: Vec<u8> = canonical[4..20]
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| if i == 4 { 1 } else { b })
+        .collect();
+    let ctrl_v1: Vec<u8> = canonical[28..44]
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| if i == 4 { 1 } else { b })
+        .collect();
+    let mut v1_frame = Vec::new();
+    v1_frame.extend_from_slice(&16_u32.to_le_bytes());
+    v1_frame.extend_from_slice(&comp_v1);
+    v1_frame.extend_from_slice(&16_u32.to_le_bytes());
+    v1_frame.extend_from_slice(&ctrl_v1);
+
+    plugin.restore_state(&v1_frame).expect("v1 restores");
+    // The re-save re-serializes canonical v2 — migrated state grew
+    // the checksum field back.
+    let migrated = plugin.save_state().expect("save_state");
+    assert_eq!(migrated, canonical, "v1 in → canonical v2 out");
+
+    // A v2 component payload + unknown extension tail: comp_len 24,
+    // valid checksum over the 16-byte core → degraded accept; the
+    // re-save drops the tail.
+    let mut degraded = Vec::new();
+    degraded.extend_from_slice(&24_u32.to_le_bytes());
+    degraded.extend_from_slice(&canonical[4..24]);
+    degraded.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+    degraded.extend_from_slice(&canonical[24..]);
+    plugin.restore_state(&degraded).expect("degraded restores");
+    let resaved = plugin.save_state().expect("save_state");
+    assert_eq!(resaved, canonical, "degraded in → canonical v2 out");
 }
 
 /// `test_stateful_single`'s parameter surface through the production
@@ -731,14 +790,14 @@ fn single_component_save_mutate_restore_save_round_trips() {
 
     // Initial save — default plain gain 1.0. Single-component
     // framing: [u32 comp_len][comp payload][u32 ctrl_len = 0] —
-    // 4 + 16 + 4 = 24 bytes, the `ctrl_len = 0` arm.
+    // 4 + 20 + 4 = 28 bytes, the `ctrl_len = 0` arm.
     let initial = plugin.save_state().expect("save_state");
     assert_eq!(
         initial.len(),
-        24,
-        "one 16-byte component payload + two u32 lengths (ctrl_len = 0)"
+        28,
+        "one 20-byte component payload + two u32 lengths (ctrl_len = 0)"
     );
-    assert_eq!(&initial[0..4], &16_u32.to_le_bytes());
+    assert_eq!(&initial[0..4], &20_u32.to_le_bytes());
     assert_eq!(&initial[4..8], b"RFST");
     assert_eq!(
         f64::from_le_bytes(initial[12..20].try_into().unwrap()),
@@ -746,7 +805,7 @@ fn single_component_save_mutate_restore_save_round_trips() {
         "component payload: plain gain"
     );
     assert_eq!(
-        &initial[20..24],
+        &initial[24..28],
         &0_u32.to_le_bytes(),
         "single-component save frames an empty controller payload"
     );
@@ -768,15 +827,15 @@ fn single_component_save_mutate_restore_save_round_trips() {
     let (_result, [left, _right]) = drive_block(&mut *plugin, &events);
     assert_eq!(left, vec![0.375_f32; FRAMES]);
 
-    // The mutated save differs — same 24-byte single-component
+    // The mutated save differs — same 28-byte single-component
     // frame, new plain gain in the component payload.
     let mutated = plugin.save_state().expect("save_state");
-    assert_eq!(mutated.len(), 24);
+    assert_eq!(mutated.len(), 28);
     assert_eq!(
         f64::from_le_bytes(mutated[12..20].try_into().unwrap()),
         0.75
     );
-    assert_eq!(&mutated[20..24], &0_u32.to_le_bytes());
+    assert_eq!(&mutated[24..28], &0_u32.to_le_bytes());
 
     // Restore the initial blob — the single-component restore arm
     // (`component.setState` → `component.getState`, no controller
@@ -823,8 +882,8 @@ fn single_component_restore_rejects_malformed_blob() {
         Err(HostError::PluginFailed)
     );
     // A well-framed blob whose component payload carries a NaN
-    // gain → the codec's non-finite check → `kResultFalse` →
-    // `PluginFailed` at `component.setState`.
+    // gain → the stale checksum fails integrity before the value
+    // check → `kResultFalse` → `PluginFailed` at `component.setState`.
     let mut nan = plugin.save_state().expect("save_state");
     nan[12..20].copy_from_slice(&f64::NAN.to_le_bytes());
     assert_eq!(plugin.restore_state(&nan), Err(HostError::PluginFailed));

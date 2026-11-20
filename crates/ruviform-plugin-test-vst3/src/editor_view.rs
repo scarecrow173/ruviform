@@ -91,7 +91,23 @@ struct ViewState {
     /// same `GetWindowTextW` channel the attach generation uses
     /// (the fixture has no other observable output).
     events: Vec<String>,
+    /// The plugin-owned popup window as a `usize` (`None` = closed).
+    /// `test_editor` ships no host-visible popup verb — `IPlugView`
+    /// has none — so the fixture opens its own transient window the
+    /// way a real plugin opens a context menu: on user input. The
+    /// designated key is `key_code == 0x50` (`VK_P`) in `onKeyDown`.
+    popup: Option<usize>,
+    /// Popup generation — stamped into the popup HWND's window text
+    /// (`rvf-test-editor-popup-{n}`) so an observer can prove a
+    /// close/open cycle really recreated the surface.
+    popup_seq: u32,
 }
+
+/// The `key_code` that toggles the plugin-owned popup — `VK_P`
+/// (`0x50`). A real plugin opens its popup/menu on user input; the
+/// fixture's only input verb is `onKeyDown`, so the designated key
+/// stands in for the menu gesture.
+const POPUP_VK: i16 = 0x50;
 
 /// `test_editor`'s plug view — one instance per
 /// `createView("editor")` call; the host owns the returned COM
@@ -119,6 +135,8 @@ impl TestEditorView {
                 },
                 attach_seq: 0,
                 events: Vec::new(),
+                popup: None,
+                popup_seq: 0,
             }),
         }
     }
@@ -133,6 +151,34 @@ impl TestEditorView {
             return kResultFalse;
         };
         state.events.push(token);
+        if let Some(hwnd) = state.hwnd {
+            win32::set_title(hwnd, &state.window_title());
+        }
+        kResultOk
+    }
+
+    /// Toggles the plugin-owned popup: open creates a real
+    /// `WS_POPUP` HWND titled `rvf-test-editor-popup-{seq}` owned by
+    /// the editor's root ancestor when one exists; close destroys
+    /// it. The `po:{seq}`/`pc:{seq}` tokens land in the same event
+    /// log the `kd:` tokens use — the verb dispatch is recorded
+    /// whether or not this build can create HWNDs (off Windows the
+    /// `win32` shim answers `None` and the log still shows the verb
+    /// ran, the same split `attached` uses).
+    fn popup_toggle(&self) -> tresult {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        if let Some(popup) = state.popup.take() {
+            win32::destroy(popup);
+            let seq = state.popup_seq;
+            state.events.push(format!("pc:{seq}"));
+        } else {
+            state.popup_seq = state.popup_seq.wrapping_add(1);
+            let seq = state.popup_seq;
+            state.popup = win32::popup(state.hwnd, &format!("rvf-test-editor-popup-{seq}"));
+            state.events.push(format!("po:{seq}"));
+        }
         if let Some(hwnd) = state.hwnd {
             win32::set_title(hwnd, &state.window_title());
         }
@@ -201,14 +247,18 @@ impl IPlugViewTrait for TestEditorView {
         }
     }
 
-    /// Detaches the view: destroys the child HWND (if any) and always
-    /// reports `kResultOk` — the host debug-asserts this result, so
-    /// declining would turn a benign double-`removed` into a failure.
+    /// Detaches the view: destroys the child HWND and any open popup
+    /// and always reports `kResultOk` — the host debug-asserts this
+    /// result, so declining would turn a benign double-`removed`
+    /// into a failure.
     #[expect(unsafe_code)]
     unsafe fn removed(&self) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
             return kResultFalse;
         };
+        if let Some(popup) = state.popup.take() {
+            win32::destroy(popup);
+        }
         if let Some(hwnd) = state.hwnd.take() {
             win32::destroy(hwnd);
         }
@@ -224,10 +274,17 @@ impl IPlugViewTrait for TestEditorView {
 
     /// Records the key-down — the token lands in the event log the
     /// child HWND's window text carries (`kd:{key}:{key_code}:{mods}`
-    /// as four-digit hex), making the delivery OS-observable.
+    /// as four-digit hex), making the delivery OS-observable. The
+    /// designated popup key (`VK_P`) additionally toggles the
+    /// plugin-owned popup window and logs `po:{seq}`/`pc:{seq}`.
     #[expect(unsafe_code)]
     unsafe fn onKeyDown(&self, key: u16, key_code: i16, modifiers: i16) -> tresult {
-        self.record(format!("kd:{key:04x}:{key_code:04x}:{modifiers:04x}"))
+        let result = self.record(format!("kd:{key:04x}:{key_code:04x}:{modifiers:04x}"));
+        if result == kResultOk && key_code == POPUP_VK {
+            self.popup_toggle()
+        } else {
+            result
+        }
     }
 
     /// Records the key-up — same log shape as `onKeyDown`.
@@ -351,9 +408,10 @@ mod win32 {
         GetModuleHandleExW,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
-        GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
-        SetWindowTextW, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_VISIBLE,
+        CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GA_ROOT,
+        GetAncestor, GetClassInfoW, GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE,
+        SWP_NOZORDER, SetWindowPos, SetWindowTextW, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_POPUP,
+        WS_VISIBLE,
     };
 
     /// Solid-fill color — green, distinct from the `PoC` probe's red so
@@ -544,6 +602,59 @@ mod win32 {
             DestroyWindow(hwnd as HWND);
         }
     }
+
+    /// Creates the plugin-owned popup window — a `WS_POPUP` HWND
+    /// titled `rvf-test-editor-popup-{seq}`. `anchor` is the editor's
+    /// child HWND when attached: the popup is owned by that window's
+    /// root ancestor so it stays above the host's top-level window
+    /// and dies with it; an unattached view creates an unowned popup
+    /// (still a real HWND the observer can find). Returns `None` on
+    /// any defined failure — the caller still logs the verb.
+    pub(super) fn popup(anchor: Option<usize>, title: &str) -> Option<usize> {
+        if !ensure_registered() {
+            return None;
+        }
+        // SAFETY: `IsWindow`/`GetAncestor` are pure handle queries —
+        // safe on any value including a dead or bogus anchor.
+        let owner = anchor
+            .filter(|hwnd| unsafe { IsWindow(*hwnd as HWND) } != 0)
+            .map(|hwnd| unsafe { GetAncestor(hwnd as HWND, GA_ROOT) });
+        let class = class_name();
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: the class and title outlive the synchronous call;
+        // `owner` is a live window or null (unowned popup). The
+        // returned HWND is owned by this view until `destroy`.
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title_w.as_ptr(),
+                WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS,
+                0,
+                0,
+                200,
+                100,
+                owner.unwrap_or(ptr::null_mut()),
+                ptr::null_mut(),
+                MODULE_H.load(Ordering::Relaxed) as HINSTANCE,
+                ptr::null(),
+            )
+        };
+        if window.is_null() {
+            None
+        } else {
+            Some(window as usize)
+        }
+    }
+
+    /// Whether `hwnd` currently names a live window — the test-side
+    /// existence check for popup/editor surfaces.
+    #[cfg(test)]
+    pub(super) fn is_window(hwnd: usize) -> bool {
+        // SAFETY: `IsWindow` is a pure handle-validity query — safe
+        // on any value.
+        unsafe { IsWindow(hwnd as HWND) != 0 }
+    }
 }
 
 /// Non-Windows shim — no HWND surface exists off Windows, so
@@ -562,6 +673,15 @@ mod win32 {
     pub(super) fn set_title(_hwnd: usize, _title: &str) {}
 
     pub(super) fn destroy(_hwnd: usize) {}
+
+    pub(super) fn popup(_anchor: Option<usize>, _title: &str) -> Option<usize> {
+        None
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_window(_hwnd: usize) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -643,6 +763,47 @@ mod tests {
 
             assert_eq!(view.getSize(ptr::null_mut()), kInvalidArgument);
             assert_eq!(view.onSize(ptr::null_mut()), kInvalidArgument);
+        }
+    }
+
+    /// The designated popup key (`VK_P` on `key_code`) toggles the
+    /// plugin-owned popup: `po:{seq}`/`pc:{seq}` tokens land in the
+    /// event log and, on Windows, a real `WS_POPUP` HWND exists
+    /// between them. Every other key only records `kd:`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn popup_key_toggles_plugin_owned_window() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view instance; the args
+        // are plain scalar values.
+        unsafe {
+            // A non-popup key — records `kd:` only.
+            view.onKeyDown(0x41, 0x41, 0);
+            assert_eq!(view.state.borrow().events, ["kd:0041:0041:0000"]);
+
+            // Popup open — token plus, on Windows, a live HWND.
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            {
+                let state = view.state.borrow();
+                assert!(state.events.contains(&"po:1".to_string()));
+                assert_eq!(state.popup.is_some(), cfg!(windows));
+                if let Some(popup) = state.popup {
+                    assert!(win32::is_window(popup));
+                }
+            }
+            // Popup close — token, HWND destroyed.
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            {
+                let state = view.state.borrow();
+                assert!(state.events.contains(&"pc:1".to_string()));
+                assert!(state.popup.is_none());
+            }
+            // Re-open advances the generation.
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            assert!(view.state.borrow().events.contains(&"po:2".to_string()));
+            // `removed` tears the open popup down.
+            view.removed();
+            assert!(view.state.borrow().popup.is_none());
         }
     }
 
