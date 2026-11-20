@@ -312,6 +312,7 @@ Directory: `docs/test-specs`
 | TSPEC-Wm6ujGxaqkur53e1zm0Xak | Issue #465 WebView 移行台帳現行化 — 分類検証契約 | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 | TSPEC-630singleComponent01 | Issue #630 single-component slice — test specification | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 | TSPEC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe test spec | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
+| TSPEC-01M7WJTWYS1655HDBKFJ31SN92 | Issue #631 editor input/focus verbs テスト仕様 — boundary 語彙・L0-only guard・fixture event log・title-suffix oracle の判定 | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
