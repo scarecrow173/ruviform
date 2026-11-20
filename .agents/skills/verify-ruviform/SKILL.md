@@ -285,3 +285,41 @@ mise run bench-frozen --write-baseline <path>  # emit an un-promoted baseline ca
   `docs/test-specs/issue-807-frozen-dsp-bench.md`.
 - This lane is manual/opt-in only — the CI `bench` job keeps calling
   `bench-smoke`; do not wire `bench-frozen` into CI.
+
+## Formal
+
+D-layer property + bounded-model-check lanes for the wire codecs
+(Issue #806, slice 1 — `rvf.ipc.v1` / `rvf.uitest.v1`):
+
+```sh
+mise run test-formal        # proptest: formal_ipc + formal_transport
+mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
+```
+
+- Test files live next to the crates: `crates/ruviform-ui/tests/
+  formal_ipc.rs` (`parse_intent`, `valid_op`, `Event::to_json`) and
+  `crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
+  `write_frame`). Kani proofs sit in a `#[cfg(kani)] mod proofs` at the
+  bottom of the same file — never in product sources.
+- `test-formal` is the always-runnable first layer (pure Rust, MSRV,
+  same entry as CI). `test-formal-kani` resolves an environment in
+  order: native `cargo kani` → a WSL2 distro with `cargo` +
+  `cargo kani` (Windows path mapped to `/mnt/<drive>/`, builds in a
+  WSL-native target dir, never through `/mnt`) → `not_run` +
+  `environment_blocked` + exit 0. A real CBMC counterexample is `fail`
+  + exit 1; environment absence is never reported as `pass`.
+- Bounds and assumptions (what is proven vs unproven, float 1-ulp
+  semantics, cap-path complementarity between proptest and Kani) are
+  the contract of record: `docs/specs/formal-verification.md`. Keep it
+  in sync when harness bounds change.
+- Proptest regression files (`*.proptest-regressions` next to a test)
+  are committed — they pin historically failing seeds so every run
+  replays them first.
+- Mutation-fail proof is required evidence: temporarily break one codec
+  invariant, run the property suite, record the shrunk failure, revert
+  completely, and re-run green. The mutant / observed failure / revert
+  triple goes into `evidence/<issue>/` — a suite that cannot fail is
+  not a gate.
+- Verdict vocabulary and the local-vs-integration distinction follow
+  the `## Evidence` rules above; `verification.md` records the Kani
+  toolchain (verifier + CBMC versions) alongside OS/arch/repo SHA.

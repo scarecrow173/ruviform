@@ -25,5 +25,13 @@ serde_json = "1"
 ruviform-exec = { path = "../ruviform-exec" }
 ruviform-rt = { path = "../ruviform-rt" }
 
+[dev-dependencies]
+# - proptest: Issue #806 D層 formal verification slice 1 — wire codec
+#   （rvf.ipc.v1 `parse_intent`/`valid_op`/`Event::to_json`）の
+#   property suite（tests/formal_ipc.rs）に使用する生成入力検査器。
+#   dev-dep のみで本番依存グラフへ波及しない。MIT OR Apache-2.0・
+#   pure Rust。MSRV 1.89 適合。
+proptest = "1"
+
 [lints]
 workspace = true

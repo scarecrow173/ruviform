@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 91217a47615874bbbd25560d573e5d23d4ff9b8708da30bd6e777583dd8b1120 # shrinks to intent = Intent { v: 1, kind: "intent", id: "", op: "a._", params: Array [Number(956106.0719011067)] }
+cc ebf9da39d7f925fc42f660fd8e73614641032a0e12bf1b99ff97f92d1eb96e54 # shrinks to ev = Notify { seq: 0, data: Object {"": Number(905096.8987248447)} }
