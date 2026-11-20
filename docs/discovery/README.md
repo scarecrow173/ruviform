@@ -91,6 +91,7 @@ Directory: `docs/discovery`
 | DISC-034WZDbDyQpBcWspeahHje | Issue #532 GPUI DComp topmost 合成制約 — 現行 L1 証拠照合・再開条件・方式 A/B/C 調査手順監査 | resolved | [issue-532-dcomp-native-dock.md](./issue-532-dcomp-native-dock.md) |
 | DISC-034XAXQbwZKvh8lVqSB9dy | Issue #532 GPUI 0.2.2 DComp public-surface 監査 — 方式A/B/C 技術入力 | resolved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | DISC-034ZaaChildInvDiagnosis01 | Issue #532 child-level inventory + capture-plane 診断 — 調査記録 | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
+| DISC-034ZaaRasterfix0000001 | Issue #532 raster-fix oracle — 実測調査記録 | approved | [issue-532-rasterfix.md](./issue-532-rasterfix.md) |
 | DISC-034YaXLgv895taUPDbx0B6 | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 — 調査記録 | resolved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | DISC-01M7WJTWYSRTVAMEGHYE8WA4F4 | Issue #631 editor input/focus verb 面 — EditorSessionOps 拡張と fixture の OS-observable 効果チャンネル | resolved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
 | DISC-qxX0PvQy0Qu34AwzZ69G5e | Issue #692 s2 Luau analyzer backend — 調査記録 | resolved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |

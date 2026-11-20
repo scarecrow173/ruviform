@@ -317,6 +317,7 @@ Directory: `docs/test-specs`
 | TSPEC-630consumerOracle01 | Issue #630 AC7 consumer-oracle slice — test specification | approved | [issue-630-consumer-oracle.md](./issue-630-consumer-oracle.md) |
 | TSPEC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe test spec | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | TSPEC-034ZaaChildInventory01 | Issue #532 child-inventory probe — test spec | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
+| TSPEC-034ZaaRasterfix00001 | Issue #532 raster-fix oracle — test spec | approved | [issue-532-rasterfix.md](./issue-532-rasterfix.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
