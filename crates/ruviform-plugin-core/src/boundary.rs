@@ -159,6 +159,100 @@ pub struct GuiSize {
     pub height: f64,
 }
 
+/// Which direction a [`GuiKeyEvent`] travels — press or release.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GuiKeyDirection {
+    /// Key press (`onKeyDown`-direction).
+    Down,
+    /// Key release (`onKeyUp`-direction).
+    Up,
+}
+
+/// Modifier state held while a [`GuiKeyEvent`] fires.
+///
+/// A bitmask over the [`GuiModifiers::SHIFT`]/[`GuiModifiers::ALTERNATE`]/
+/// [`GuiModifiers::COMMAND`]/[`GuiModifiers::CONTROL`] constants — the
+/// same shape every plugin format's key verb carries (VST3's
+/// `KeyModifier` `int16`, CLAP's modifier mask). `COMMAND` is the
+/// platform's primary shortcut modifier (Ctrl on Windows, Cmd on
+/// macOS) and `CONTROL` the secondary control modifier — the same
+/// split VST3's `kCommandKey`/`kControlKey` encodes.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct GuiModifiers {
+    /// The held-modifier bitmask — `0` for none.
+    pub bits: u16,
+}
+
+impl GuiModifiers {
+    /// No modifiers held.
+    pub const NONE: Self = Self { bits: 0 };
+    /// Shift.
+    pub const SHIFT: Self = Self { bits: 1 << 0 };
+    /// Alt/Option.
+    pub const ALTERNATE: Self = Self { bits: 1 << 1 };
+    /// Primary shortcut modifier (Ctrl on Windows, Cmd on macOS).
+    pub const COMMAND: Self = Self { bits: 1 << 2 };
+    /// Secondary control modifier.
+    pub const CONTROL: Self = Self { bits: 1 << 3 };
+
+    /// `true` when every `flag` bit is held.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn contains(self, flag: Self) -> bool {
+        self.bits & flag.bits == flag.bits
+    }
+
+    /// The union of two masks.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self {
+            bits: self.bits | other.bits,
+        }
+    }
+}
+
+/// One key event delivered to an open plugin GUI — press or release.
+///
+/// The driver-neutral triple every plugin format's key verb carries:
+/// `key` is the character the key produces (`'\0'` when the key has
+/// no text representation — arrows, function keys), `key_code` is
+/// the virtual key code **in the adapter's key-code space** (opaque
+/// to this vocabulary, like [`ParentLease::payload`]: the VST3
+/// adapter carries the OS virtual-key code its `onKeyDown`/`onKeyUp`
+/// verbs define; a format without a virtual-key concept declines the
+/// verb), and `modifiers` is the held-modifier state.
+///
+/// `key` is limited to the basic multilingual plane: format verbs
+/// carry the character as one UTF-16 code unit, so an adapter
+/// rejects a supplementary-plane `key` with
+/// [`HostError::InvalidValue`] rather than truncating it.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GuiKeyEvent {
+    /// Press or release.
+    pub direction: GuiKeyDirection,
+    /// The character the key produces, or `'\0'` when it has no
+    /// text representation.
+    pub key: char,
+    /// The virtual key code in the adapter's key-code space.
+    pub key_code: i16,
+    /// Held modifiers.
+    pub modifiers: GuiModifiers,
+}
+
 /// Opaque reference to one open plugin editor session.
 ///
 /// The `{slot, generation}` pair mirrors [`PluginHandle`]'s stale

@@ -80,7 +80,10 @@
 //! `recover(Docked)` `Recovered{Docked}`; `real-session-timeout` —
 //! ZERO deadline policy + `tick_all` → `Failed{Timeout}`;
 //! `real-editor-visibility` — the defined `set_visibility`
-//! `Unsupported` refusal with `Attached` preserved; and the honest
+//! `Unsupported` refusal with `Attached` preserved;
+//! `real-editor-input`/`real-editor-focus` — the `send_key`/
+//! `set_focus` verbs judged by the fixture's OS-observable
+//! `GetWindowTextW` event log; and the honest
 //! `Unsupported` boundaries `real-session-crash`/`real-session-hang`
 //! — process-killing/wedging fault modes the in-process lane cannot
 //! survive).

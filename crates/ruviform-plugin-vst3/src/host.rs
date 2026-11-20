@@ -187,12 +187,14 @@ use libloading::Library;
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiSize,
-    HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
-    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle,
+    GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError, ParamEvent, ParamFlags,
+    ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor,
+    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    erase,
 };
 use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
+use vst3::Steinberg::KeyModifier_::{kAlternateKey, kCommandKey, kControlKey, kShiftKey};
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
     Event as VstEvent, FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait,
@@ -208,8 +210,8 @@ use vst3::Steinberg::{
     FUnknown, FUnknown_iid, IBStream, IBStreamTrait, IPlugFrame, IPlugFrameTrait, IPlugView,
     IPlugViewTrait, IPluginBaseTrait, IPluginFactory, IPluginFactory2, IPluginFactory2Trait,
     IPluginFactory3, IPluginFactory3Trait, IPluginFactoryTrait, PClassInfo, PClassInfo2,
-    PClassInfoW, TUID, ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse, kResultOk,
-    kResultTrue, tresult,
+    PClassInfoW, TBool, TUID, ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse,
+    kResultOk, kResultTrue, tresult,
 };
 use vst3::{Class, ComPtr, ComWrapper, Interface};
 
@@ -3255,6 +3257,88 @@ impl Plugin for Vst3Plugin {
         self.gui_attached = true;
         Ok(())
     }
+
+    /// `set_gui_focus` → `IPlugView::onFocus` — forwards the host's
+    /// focus flag as the VST3 `TBool` state.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open;
+    /// [`HostError::PluginFailed`] when the view declines.
+    #[expect(unsafe_code)]
+    fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: live `IPlugView` on the caller's UI thread — the
+        // same contract `open_gui` runs under.
+        if unsafe { view.onFocus(TBool::from(focused)) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        Ok(())
+    }
+
+    /// `send_gui_key` → `IPlugView::onKeyDown`/`onKeyUp` — the
+    /// boundary `GuiKeyEvent` maps onto the VST3 triple: `key` is the
+    /// UTF-16 `char16`, `key_code` the VST3 virtual key code, and
+    /// `modifiers` the `KeyModifier` bitmask.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open;
+    /// [`HostError::InvalidValue`] when `key` does not fit one UTF-16
+    /// code unit; [`HostError::PluginFailed`] when the view declines.
+    #[expect(unsafe_code)]
+    fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        // `char16` is one UTF-16 code unit — a supplementary-plane
+        // `key` cannot be truncated into a surrogate pair the verb
+        // does not carry.
+        let key = u16::try_from(u32::from(event.key)).map_err(|_| HostError::InvalidValue)?;
+        let modifiers = key_modifiers(event.modifiers);
+        // SAFETY: live `IPlugView` on the caller's UI thread — the
+        // same contract `open_gui` runs under.
+        let result = unsafe {
+            match event.direction {
+                GuiKeyDirection::Down => view.onKeyDown(key, event.key_code, modifiers),
+                GuiKeyDirection::Up => view.onKeyUp(key, event.key_code, modifiers),
+                // `GuiKeyDirection` is `#[non_exhaustive]` — an
+                // unknown direction has no defined VST3 verb.
+                _ => return Err(HostError::InvalidValue),
+            }
+        };
+        if result != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        Ok(())
+    }
+}
+
+/// Maps the boundary [`GuiModifiers`] bitmask onto the VST3
+/// `KeyModifier` bitmask (`int16`) — the two layouts do not share
+/// bit positions, so the translation is per-flag, not a passthrough.
+// `kShiftKey`..`kControlKey` are the binding's wider enum type
+// (`KeyModifier = DefaultEnumType`) but the defined VST3 modifier
+// bits are 1/2/4/8 — every value fits `int16`, which is exactly
+// what `onKeyDown`/`onKeyUp` take.
+#[expect(clippy::cast_possible_truncation)]
+fn key_modifiers(modifiers: GuiModifiers) -> i16 {
+    let mut bits: i16 = 0;
+    if modifiers.contains(GuiModifiers::SHIFT) {
+        bits |= kShiftKey as i16;
+    }
+    if modifiers.contains(GuiModifiers::ALTERNATE) {
+        bits |= kAlternateKey as i16;
+    }
+    if modifiers.contains(GuiModifiers::COMMAND) {
+        bits |= kCommandKey as i16;
+    }
+    if modifiers.contains(GuiModifiers::CONTROL) {
+        bits |= kControlKey as i16;
+    }
+    bits
 }
 
 // ---------------------------------------------------------------------------

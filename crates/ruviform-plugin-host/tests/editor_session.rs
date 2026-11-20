@@ -16,9 +16,9 @@ use std::time::Duration;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, GuiSize, HostInput, HostOutput,
-    LifecycleState, ParamInfo, ParentLease, PluginDescriptor, PrepareError, ProcessConfig,
-    ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    BufferView, BufferViewMut, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers,
+    GuiSize, HostInput, HostOutput, LifecycleState, ParamInfo, ParentLease, PluginDescriptor,
+    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
@@ -53,6 +53,8 @@ struct FakeOps {
     size_result: Result<(), EditorOpError>,
     visibility_result: Result<(), EditorOpError>,
     reattach_result: Result<(), EditorOpError>,
+    focus_result: Result<(), EditorOpError>,
+    key_result: Result<(), EditorOpError>,
     caps: EditorCapabilities,
     open_calls: usize,
 }
@@ -65,6 +67,8 @@ impl FakeOps {
             size_result: Ok(()),
             visibility_result: Ok(()),
             reattach_result: Ok(()),
+            focus_result: Ok(()),
+            key_result: Ok(()),
             caps: EditorCapabilities {
                 dock: Support::Supported,
                 close: Support::Supported,
@@ -125,6 +129,22 @@ impl EditorSessionOps for FakeOps {
         _lease: &ParentSlotLease,
     ) -> Result<(), EditorOpError> {
         self.reattach_result
+    }
+
+    fn set_focus(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _focused: bool,
+    ) -> Result<(), EditorOpError> {
+        self.focus_result
+    }
+
+    fn send_key(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _event: GuiKeyEvent,
+    ) -> Result<(), EditorOpError> {
+        self.key_result
     }
 }
 
@@ -627,6 +647,21 @@ enum GuiVerb {
     Visibility(bool),
     /// `set_gui_parent` — the redeemed parent payload the plugin saw.
     Parent(u64),
+    /// `set_gui_focus` — the focus flag.
+    Focus(bool),
+    /// `send_gui_key` — the key event the plugin received.
+    Key(GuiKeyEvent),
+}
+
+/// A plain `a`-key event — the fixture event the L0 key/focus tests
+/// send and assert on.
+fn key_a(direction: GuiKeyDirection) -> GuiKeyEvent {
+    GuiKeyEvent {
+        direction,
+        key: 'a',
+        key_code: 0x41,
+        modifiers: GuiModifiers::default(),
+    }
 }
 
 /// Minimal `PluginProcessor` + `Plugin` whose `open_gui` is switchable
@@ -713,6 +748,26 @@ impl Plugin for GuiPlugin {
         }
         if let Some(verbs) = &self.verbs {
             verbs.borrow_mut().push(GuiVerb::Parent(parent.payload()));
+        }
+        Ok(())
+    }
+
+    fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Focus(focused));
+        }
+        Ok(())
+    }
+
+    fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Key(event));
         }
         Ok(())
     }
@@ -1104,6 +1159,96 @@ fn l0_reattach_redeems_lease_and_reaches_set_gui_parent() {
 }
 
 #[test]
+fn l0_set_focus_reaches_plugin_through_setguifocus() {
+    // The L0 verb chain: session.set_focus → InProcessEditorOps →
+    // HostCommand::SetGuiFocus → plugin.set_gui_focus — the plugin
+    // sees the focus flag the session requested.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session.set_focus(&mut ops, true).expect("focus");
+        session.set_focus(&mut ops, false).expect("unfocus");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(
+        verbs.borrow().as_slice(),
+        &[GuiVerb::Focus(true), GuiVerb::Focus(false)]
+    );
+}
+
+#[test]
+fn l0_send_key_reaches_plugin_through_sendguikey() {
+    // The L0 verb chain: session.send_key → InProcessEditorOps →
+    // HostCommand::SendGuiKey → plugin.send_gui_key — the plugin sees
+    // the same key event the session sent.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session
+            .send_key(&mut ops, key_a(GuiKeyDirection::Down))
+            .expect("key down");
+        session
+            .send_key(&mut ops, key_a(GuiKeyDirection::Up))
+            .expect("key up");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(
+        verbs.borrow().as_slice(),
+        &[
+            GuiVerb::Key(key_a(GuiKeyDirection::Down)),
+            GuiVerb::Key(key_a(GuiKeyDirection::Up)),
+        ]
+    );
+}
+
+#[test]
+fn l0_focus_and_key_verbs_require_an_attached_editor() {
+    // Neither verb may reach the plugin before an attach — the
+    // session rejects them as InvalidState and the verb log stays
+    // empty.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        assert_eq!(
+            session.set_focus(&mut ops, true),
+            Err(EditorSessionError::InvalidState)
+        );
+        assert_eq!(
+            session.send_key(&mut ops, key_a(GuiKeyDirection::Down)),
+            Err(EditorSessionError::InvalidState)
+        );
+    }
+    assert!(verbs.borrow().is_empty());
+}
+
+#[test]
 fn l0_redeemer_refusal_blocks_reattach_before_setguiparent() {
     // A redeemer that accepts the open lease then rejects the
     // reattach lease must stop the verb before `SetGuiParent` can
@@ -1174,6 +1319,22 @@ fn l0_plugin_verb_refusal_maps_to_unsupported_non_fatally() {
             session.state(),
             EditorSessionState::Attached { .. }
         ));
+        assert_eq!(
+            session.set_focus(&mut ops, true),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+        assert_eq!(
+            session.send_key(&mut ops, key_a(GuiKeyDirection::Down)),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
     }
 }
 
@@ -1200,6 +1361,14 @@ fn l1_editor_ops_refuses_every_op_and_never_degrades() {
     );
     assert_eq!(
         ops.reattach(session_id, &lease()),
+        Err(EditorOpError::Unsupported)
+    );
+    assert_eq!(
+        ops.set_focus(session_id, true),
+        Err(EditorOpError::Unsupported)
+    );
+    assert_eq!(
+        ops.send_key(session_id, key_a(GuiKeyDirection::Down)),
         Err(EditorOpError::Unsupported)
     );
 }
@@ -1606,6 +1775,22 @@ impl EditorSessionOps for ModeOps {
         &mut self,
         _session: PluginEditorSessionId,
         _lease: &ParentSlotLease,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    fn set_focus(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _focused: bool,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    fn send_key(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _event: GuiKeyEvent,
     ) -> Result<(), EditorOpError> {
         Ok(())
     }

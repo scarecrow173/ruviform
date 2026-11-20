@@ -29,7 +29,8 @@ use std::fmt;
 use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::{
-    GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    GuiKeyEvent, GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
+    PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
@@ -122,6 +123,10 @@ pub struct EditorCapabilities {
     pub popup: Support,
     /// Can close/destroy the editor.
     pub close: Support,
+    /// Can deliver key events (press/release) to the editor.
+    pub input: Support,
+    /// Can give/remove keyboard focus on the editor.
+    pub focus: Support,
 }
 
 /// Why a session fell into [`EditorSessionState::Failed`] or emitted a
@@ -560,6 +565,30 @@ pub trait EditorSessionOps {
         &mut self,
         session: PluginEditorSessionId,
         lease: &ParentSlotLease,
+    ) -> Result<(), EditorOpError>;
+
+    /// Gives (`focused = true`) or removes keyboard focus on the
+    /// editor.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] — `Unsupported` when the adapter or
+    /// plugin has no focus surface (a defined rejection, not a crash).
+    fn set_focus(
+        &mut self,
+        session: PluginEditorSessionId,
+        focused: bool,
+    ) -> Result<(), EditorOpError>;
+
+    /// Delivers one key event (press or release) to the editor.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] — `Unsupported` when the adapter or
+    /// plugin takes no key input, `InvalidValue` when the event cannot
+    /// be represented in the adapter's key vocabulary.
+    fn send_key(
+        &mut self,
+        session: PluginEditorSessionId,
+        event: GuiKeyEvent,
     ) -> Result<(), EditorOpError>;
 }
 
@@ -1202,6 +1231,53 @@ impl PluginEditorSession {
         Ok(())
     }
 
+    /// Gives (`focused = true`) or removes keyboard focus on the
+    /// editor. Focus is not session state — a plugin rejection is
+    /// non-fatal and the session is left unchanged, like `set_size`.
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless attached/hidden;
+    /// [`EditorSessionError::Ops`] on a refusal.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn set_focus<O: EditorSessionOps>(
+        &mut self,
+        ops: &mut O,
+        focused: bool,
+    ) -> Result<(), EditorSessionError> {
+        if !matches!(
+            self.state,
+            EditorSessionState::Attached { .. } | EditorSessionState::Hidden { .. }
+        ) {
+            return Err(EditorSessionError::InvalidState);
+        }
+        ops.set_focus(self.id, focused)
+            .map_err(EditorSessionError::Ops)
+    }
+
+    /// Delivers one key event (press or release) to the editor —
+    /// non-fatal like `set_focus`, no state transition.
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless attached/hidden;
+    /// [`EditorSessionError::Ops`] on a refusal.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn send_key<O: EditorSessionOps>(
+        &mut self,
+        ops: &mut O,
+        event: GuiKeyEvent,
+    ) -> Result<(), EditorSessionError> {
+        if !matches!(
+            self.state,
+            EditorSessionState::Attached { .. } | EditorSessionState::Hidden { .. }
+        ) {
+            return Err(EditorSessionError::InvalidState);
+        }
+        ops.send_key(self.id, event)
+            .map_err(EditorSessionError::Ops)
+    }
+
     /// Re-parents the editor under a new `lease` (dock move / float /
     /// re-dock).
     ///
@@ -1720,6 +1796,42 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             _ => Err(EditorOpError::Plugin),
         }
     }
+
+    fn set_focus(
+        &mut self,
+        _session: PluginEditorSessionId,
+        focused: bool,
+    ) -> Result<(), EditorOpError> {
+        match self
+            .host
+            .execute(HostCommand::SetGuiFocus {
+                handle: self.instance,
+                focused,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
+
+    fn send_key(
+        &mut self,
+        _session: PluginEditorSessionId,
+        event: GuiKeyEvent,
+    ) -> Result<(), EditorOpError> {
+        match self
+            .host
+            .execute(HostCommand::SendGuiKey {
+                handle: self.instance,
+                event,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
 }
 
 /// L1 editor-session ops: the defined `Unsupported` refusal on every op.
@@ -1785,6 +1897,22 @@ impl EditorSessionOps for L1EditorOps {
         &mut self,
         _session: PluginEditorSessionId,
         _lease: &ParentSlotLease,
+    ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
+
+    fn set_focus(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _focused: bool,
+    ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
+
+    fn send_key(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _event: GuiKeyEvent,
     ) -> Result<(), EditorOpError> {
         Err(EditorOpError::Unsupported)
     }

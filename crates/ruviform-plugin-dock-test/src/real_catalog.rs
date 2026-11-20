@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The twenty-four real-window dock cases in run order — metadata
+/// The twenty-six real-window dock cases in run order — metadata
 /// only. The AC1 remainder rows (`real-multiwindow-focus`,
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
@@ -71,11 +71,14 @@ pub struct RealCatalogRow {
 /// settle the binding phases while the decoded `CommandReceipt`s
 /// land in the report's `receipts`. The AC3 rows
 /// (`real-editor-resize`, `real-editor-redock`,
-/// `real-editor-visibility`) judge editor ops through non-pixel
+/// `real-editor-visibility`, `real-editor-input`,
+/// `real-editor-focus`) judge editor ops through non-pixel
 /// oracles — session events, child-HWND contract/state, plus the
 /// verbs' own OS-level effect oracles (child `GetWindowRect`
 /// geometry for resize, hide→destroy/show→recreate for visibility,
-/// attach-generation title advance for redock) — never pixels.
+/// attach-generation title advance for redock, and the fixture's
+/// `GetWindowTextW` event-log title tokens for input/focus) —
+/// never pixels.
 /// The AC1/AC6 remainder rows
 /// (`real-session-terminate` and the Issue #389 lifecycle
 /// remainder: `real-session-degraded`, `real-session-recovery`,
@@ -208,6 +211,16 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     },
     RealCatalogRow {
         case: "real-editor-visibility",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-editor-input",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-editor-focus",
         scenario: SCENARIO,
         required: &[ScenarioCapability::NativePluginDock],
     },

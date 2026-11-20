@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::time::Duration;
 
-use ruviform_plugin_core::{ParentSlotLease, PluginEditorSessionId, PluginHandle};
+use ruviform_plugin_core::{GuiKeyEvent, ParentSlotLease, PluginEditorSessionId, PluginHandle};
 use ruviform_plugin_host::{
     AttachMode, DEFAULT_REQUEST_TIMEOUT, EditorCapabilities, EditorOpError, EditorSessionError,
     EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, PluginEditorSession,
@@ -73,6 +73,8 @@ enum OpCall {
     SetSize,
     SetVisibility { visible: bool },
     Reattach,
+    SetFocus { focused: bool },
+    SendKey,
 }
 
 /// Scripted `EditorSessionOps`: canned per-op results, per-mode open
@@ -87,6 +89,8 @@ struct ScriptedOps {
     reattach_result: Result<(), EditorOpError>,
     size_result: Result<(), EditorOpError>,
     visibility_result: Result<(), EditorOpError>,
+    focus_result: Result<(), EditorOpError>,
+    key_result: Result<(), EditorOpError>,
     caps: EditorCapabilities,
     hung: HashSet<OpKind>,
     calls: RefCell<Vec<OpCall>>,
@@ -101,6 +105,8 @@ impl ScriptedOps {
             reattach_result: Ok(()),
             size_result: Ok(()),
             visibility_result: Ok(()),
+            focus_result: Ok(()),
+            key_result: Ok(()),
             caps: EditorCapabilities {
                 dock: Support::Supported,
                 float: Support::Supported,
@@ -127,6 +133,8 @@ impl ScriptedOps {
             reattach_result: Err(EditorOpError::Unsupported),
             size_result: Err(EditorOpError::Unsupported),
             visibility_result: Err(EditorOpError::Unsupported),
+            focus_result: Err(EditorOpError::Unsupported),
+            key_result: Err(EditorOpError::Unsupported),
             caps: EditorCapabilities::default(),
             ..Self::ok()
         }
@@ -229,6 +237,24 @@ impl EditorSessionOps for ScriptedOps {
     ) -> Result<(), EditorOpError> {
         self.calls.borrow_mut().push(OpCall::Reattach);
         self.reattach_result
+    }
+
+    fn set_focus(
+        &mut self,
+        _session: PluginEditorSessionId,
+        focused: bool,
+    ) -> Result<(), EditorOpError> {
+        self.calls.borrow_mut().push(OpCall::SetFocus { focused });
+        self.focus_result
+    }
+
+    fn send_key(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _event: GuiKeyEvent,
+    ) -> Result<(), EditorOpError> {
+        self.calls.borrow_mut().push(OpCall::SendKey);
+        self.key_result
     }
 }
 
