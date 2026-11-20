@@ -26,6 +26,7 @@ Directory: `docs/discovery`
 | DISC-034YnFUCO4ivyDKz4EYxVt | Issue #532 dcomp-occlusion discovery — 遮蔽層診断の探索結果 | approved | [issue-532-dcomp-occlusion.md](./issue-532-dcomp-occlusion.md) |
 | DISC-034YxCYwvosUuX47paEbNO | Issue #532 foreground-probe discovery — 変異 probe の探索結果 | approved | [issue-532-foreground-probe.md](./issue-532-foreground-probe.md) |
 | DISC-fZWC8q6tfUQG3VuH1L9Eoz | Issue #532 presentation-probe discovery — 残余 3 候補の判別設計探索 | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
+| DISC-034ZaaUncoveredBaseline01 | Issue #532 uncovered-baseline bisect — 調査記録 | approved | [issue-532-uncovered-baseline.md](./issue-532-uncovered-baseline.md) |
 | DISC-034XC9utDSmNZnzNq2DOds | Issue #629 Windows virtual audio/MIDI endpoint survey and capability probe | draft | [issue-629-virtual-endpoint-survey.md](./issue-629-virtual-endpoint-survey.md) |
 | DSC-630abiValidatorRerun01 | Issue #630 外部 ABI validator 再実走 slice — post-#735 surface の調査と declared-expectation 設計判断 | final | [issue-630-abi-validator-rerun.md](./issue-630-abi-validator-rerun.md) |
 | DSC-630abiValidator01 | Issue #630 外部 ABI validator slice — provisioning 調査と validator 指摘の診断 | final | [issue-630-abi-validator.md](./issue-630-abi-validator.md) |
