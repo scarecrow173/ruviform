@@ -106,3 +106,4 @@ Directory: `docs/discovery`
 | DISC-034LNekQmplu83WT5PUMzs | プラグイン L1 アウトプロセス分離（plugin-host L1 プロキシ + plugin-export 薄ランナー）の探索（Issue #76） | resolved | [plugin-l1-out-of-process.md](./plugin-l1-out-of-process.md) |
 | DISC-rf768staleOracle01 | Issue #768 l1_fault / l1_stateful E2E staleness oracle 監査（#763 同 class）— findings | final | [issue-768-staleness-oracle.md](./issue-768-staleness-oracle.md) |
 | DISC-rf841spawnDeadline | Issue #841 L1 spawn/handshake deadline flake（SpawnFailed{Timeout}）— 定量・分類ルール・対処方針 | resolved | [issue-841-spawn-deadline-flake.md](./issue-841-spawn-deadline-flake.md) |
+| DISC-034ZbbClipPart000000001 | Issue #839 GPUI fork clip-partition fix — 実測調査記録 | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
