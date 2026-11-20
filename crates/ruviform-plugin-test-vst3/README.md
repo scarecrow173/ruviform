@@ -52,15 +52,28 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 
 - Same bus shape as `test_gain`; one stepped `Fault` parameter
   (plain `[0.0, 8.0]`, default `0.0` = `none`).
+- The parameter decodes `floor(plain)` clamped to `[0, 8]` — eight
+  fault bands dispatched inside the arming block's `process()`:
+
+  | plain band | mode | behavior |
+  | --- | --- | --- |
+  | `[0.0, 1.0)` | `none` | pass-through (default, fully inert) |
+  | `[1.0, 2.0)` | `abort` | `std::process::abort()` |
+  | `[2.0, 3.0)` | `exit` | `std::process::exit(round((plain - 2) * 100))` |
+  | `[3.0, 4.0)` | `hang` | unresponsive wait (never returns) |
+  | `[4.0, 5.0)` | `error` | `kResultFalse` — a defined rejection, not a crash |
+  | `[5.0, 6.0)` | `rt_alloc` | bounded heap round-trip; `200.0` marker in the first output sample |
+  | `[6.0, 7.0)` | `bad_time` | claims an infinite tail via `getTailSamples()` |
+  | `[7.0, 8.0]` | `invalid` | fills every output channel/sample with `NaN` |
+
+  `plain = normalized * 8.0`, so the normalized arm values are
+  `abort` `0.125`, `exit(0)` `0.25`, `exit(42)` `0.3025`, `hang`
+  `0.375`, `error` `0.5`, `rt_alloc` `0.625`, `bad_time` `0.75`,
+  `invalid` `0.875`.
+
 - Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
-  event arms `abort`/`exit`/`hang`/`error`/`rt_alloc`/`bad_time`/
-  `invalid` dispatch inside the arming block's `process()` — the L1
-  out-of-process crash/hang/timeout/isolation oracle. `error` returns
-  `kResultFalse` (a defined rejection, not a crash);
-  `rt_alloc` performs a bounded heap round-trip in `process()` and
-  reports it through a `200.0` marker in the first output sample;
-  `bad_time` claims an infinite tail via `getTailSamples()`; `invalid`
-  fills every output sample with `NaN`. `abort`/`exit`/`hang` are
+  event arms the dispatch — the L1 out-of-process
+  crash/hang/timeout/isolation oracle. `abort`/`exit`/`hang` are
   L1-only faults; `error`/`rt_alloc`/`bad_time`/`invalid` are
   nonfatal and disarm back to pass-through.
 
@@ -88,6 +101,17 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
   `kd:` tokens write to the window title; `removed()` folds any
   open popup before destroying the child. Off Windows no HWND is
   created but the logical `po:`/`pc:` tokens are still recorded.
+- Event log: the fixture's only observable channel is the child
+  HWND's window text — `rvf-test-editor-attach-{seq}` followed by
+  `|` and the comma-joined event tokens, so a host observer reads
+  the whole record through `GetWindowTextW`:
+
+  | token | verb |
+  | --- | --- |
+  | `f:{state}` | `onFocus` (`1` focused, `0` unfocused) |
+  | `kd:{key:04x}:{key_code:04x}:{modifiers:04x}` | `onKeyDown` |
+  | `ku:{key:04x}:{key_code:04x}:{modifiers:04x}` | `onKeyUp` |
+  | `po:{seq}` / `pc:{seq}` | popup open / close (see above) |
 
 ## `test_stateful` semantics
 
@@ -110,8 +134,66 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 - Unlike `test_gain`, activation does **not** reset the gain — a
   restored state survives `setActive`, which is what makes the
   save → mutate → restore → save round-trip meaningful.
+- Preset surface: the controller carries `IUnitInfo` +
+  `IUnitHandler`/`IUnitHandler2` — one root unit (`kRootUnitId`)
+  and one `"Factory"` program list (id `0`) holding the named
+  programs `Default` `1.0`, `Half` `0.5`, `Boost` `1.5`, `Mute`
+  `0.0` — and the component carries `IProgramListData`/`IUnitData`.
+  Program and unit data payloads reuse the same `RFST` codec as
+  the state verbs — a preset is a serialized gain — and
+  `IUnitData` on the root unit carries the live gain.
+  `IUnitInfo::setUnitProgramData` is honestly `kNotImplemented`;
+  the supported write path is the component's data verbs.
 - The stateless classes keep `kNotImplemented` on the state verbs;
   `test_stateful` is the suite's real-ABI state oracle.
+
+## `test_instrument` semantics
+
+- Same stereo `kMain` bus pair and the same `Gain` parameter as
+  `test_gain` (`id` `0`, plain `[0.0, 2.0]`, default `1.0`,
+  `plain = normalized * 2`). Unlike every other class it also
+  declares `IProcessContextRequirements` musical-time fields and
+  drains `IEventList` MIDI from `ProcessData.inputEvents` into
+  neutral note/CC events — the suite's MIDI + transport oracle.
+  MIDI arrives through the process call's event list; the class
+  declares no event bus. Reported subCategories are
+  `"Instrument|Fx"` (every other audio class reports `"Fx"`).
+- Voice law: up to 8 polyphonic triangle voices at
+  `440 * 2^((key - 69) / 12)` (equal temperament, `f64`
+  coefficient table — every platform computes the identical
+  IEEE-754 result), a `u64` Q32.32 phase accumulator and no
+  transcendental calls on the audio path. `NoteOn` retriggers the
+  voice holding the same key, else takes the first inactive
+  voice, else steals the oldest; `velocity == 0` follows the
+  running-status convention and behaves as note-off. `NoteOff`
+  starts a fixed 2400-frame linear release. `ControlChange` 7
+  sets master volume (default `u32::MAX` = unity) and CC 1 the
+  tremolo depth (default `0` = off); every other controller,
+  pitch-bend, pressure and program event is a defined no-op.
+- Mix law: `out[c][n] = voice_sum * gain * volume * tremolo +
+  click[n]` where `tremolo = 1 - depth * (0.5 + 0.5 * lfo)` with a
+  4 Hz triangle LFO (`lfo ∈ [-1, 1]`), so depth `0` is
+  transparent and depth `1` pulses between `0` and `1`; the mono
+  voice sum is written identically to every output channel.
+- Transport click oracle: while transport is `Playing` with full
+  musical timing (position ticks, tempo and ppqn all valid), a
+  single-frame impulse of amplitude `0.5 * volume` fires at every
+  ppqn-tick boundary strictly inside the block — `Stopped`/
+  `Paused`, missing musical info or a zero tempo produce silence.
+  Tick→frame conversion is exact `i128` ceiling division and no
+  click state crosses block boundaries, so loop/seek is exercised
+  purely through the per-block transport snapshot.
+
+## `test_spawn_fail` semantics
+
+- The listed-but-uncreatable class: `countClasses`/`getClassInfo*`
+  enumerate it (`"Audio Module Class"`, subCategories `"Fx"`,
+  `kManyInstances`) but `createInstance` deliberately declines
+  with `kInvalidArgument` — the suite's spawn-phase
+  `CreateInstance`-rejection oracle. Scan-level enumeration still
+  sees the class, so a host's create-failure path is exercised
+  without breaking discovery (through the Ruviform host bridge the
+  deferred ABI create surfaces as `Initialize` → `PluginFailed`).
 
 ## `test_stateful_single` semantics
 
@@ -171,9 +253,8 @@ validated or bounded at the boundary. Verified by the `rt_`
 The module ships `test_gain`, `test_fault`, `test_editor`,
 `test_stateful`, `test_instrument`, `test_spawn_fail`, and
 `test_stateful_single`. The stateless classes report
-`kNotImplemented` on the state verbs honestly. CLAP `test_editor`,
-out-of-process editor attach, and the `ruviform-audio-test`
-runtime integration are subsequent slices of the same suite. A real-HWND
-`open_gui` attach's Pass evidence belongs to the Issue `scarecrow173/ruviform#631`
+`kNotImplemented` on the state verbs honestly. Out-of-process
+editor attach and a real-HWND `open_gui` attach's Pass evidence
+belong to the Issue `scarecrow173/ruviform#631`
 real-dock lane; this crate's default test suite pins only the
 defined-rejection paths headlessly.

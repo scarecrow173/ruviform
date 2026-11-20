@@ -9,21 +9,26 @@ ships to consumers (Issue #630, CLAP slice).
 ## What it provides
 
 A single CLAP plugin binary exporting `clap_entry` — a custom
-`Entry` + `PluginFactoryImpl` exposing five plugins through one
-factory (`plugin_count() == 5`):
+`Entry` + `PluginFactoryImpl` exposing six plugin descriptors
+through one factory (`plugin_count() == 6`), plus a second
+entry-level factory (`clap.factory.preset-discovery`) that
+advertises the `test_stateful` preset catalog:
 
 | Plugin | CLAP id | Surface |
 | --- | --- | --- |
 | `test_gain` | `org.ruviform-test.clap-test-gain` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
 | `test_fault` | `org.ruviform-test.clap-test-fault` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` |
-| `test_stateful` | `org.ruviform-test.clap-test-stateful` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` + `clap.ext.state` |
+| `test_stateful` | `org.ruviform-test.clap-test-stateful` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.params` + `clap.ext.state` + `clap.ext.preset-load` |
 | `test_instrument` | `org.ruviform-test.clap-test-instrument` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.note-ports` + `clap.ext.params` |
 | `test_editor` | `org.ruviform-test.clap-test-editor` | `clap_plugin` + `clap.ext.audio-ports` + `clap.ext.gui` |
+| `test_spawn_fail` | `org.ruviform-test.clap-test-spawn-fail` | descriptor only — `create_plugin` always returns `None` (spawn-rejection oracle) |
 
-Vendor is `"Ruviform Test"`, version `0.0.0`, features
-`audio-effect` + `stereo` — distinct from the
-`ruviform-plugin-clap` adapter fixture's `org.ruviform.clap-gain-poc`
-/ `"Ruviform"` descriptor, so both modules coexist in one host scan.
+Vendor is `"Ruviform Test"`, version `0.0.0`; features are
+`audio-effect` + `stereo` for every class except
+`test_instrument`, which reports `instrument` + `synthesizer` +
+`stereo`. The ids are distinct from the `ruviform-plugin-clap`
+adapter fixture's `org.ruviform.clap-gain-poc` / `"Ruviform"`
+descriptor, so both modules coexist in one host scan.
 
 ## `test_gain` semantics
 
@@ -52,17 +57,37 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
 
 - Same port shape as `test_gain`; one stepped `Fault` parameter
   (plain `[0.0, 8.0]`, default `0.0` = `none`).
+- The parameter decodes `floor(plain)` clamped to `[0, 8]` — eight
+  fault bands dispatched inside the arming block's `process()`:
+
+  | plain band | mode | behavior |
+  | --- | --- | --- |
+  | `[0.0, 1.0)` | `none` | pass-through (default, fully inert) |
+  | `[1.0, 2.0)` | `abort` | `std::process::abort()` |
+  | `[2.0, 3.0)` | `exit` | `std::process::exit(round((plain - 2) * 100))` |
+  | `[3.0, 4.0)` | `hang` | unresponsive wait (never returns) |
+  | `[4.0, 5.0)` | `error` | `CLAP_PROCESS_ERROR` — a defined rejection, not a crash |
+  | `[5.0, 6.0)` | `rt_alloc` | bounded heap round-trip; `200.0` marker in the first output sample |
+  | `[6.0, 7.0)` | `bad_time` | claims an infinite tail via `CLAP_PROCESS_TAIL` |
+  | `[7.0, 8.0]` | `invalid` | fills every output channel/sample with `NaN` |
+
+  `plain = normalized * 8.0`, so the normalized arm values are
+  `abort` `0.125`, `exit(0)` `0.25`, `exit(42)` `0.3025`, `hang`
+  `0.375`, `error` `0.5`, `rt_alloc` `0.625`, `bad_time` `0.75`,
+  `invalid` `0.875`.
+
 - Unarmed (`none`) it is pure pass-through; an in-band `ParamValue`
-  event arms `abort`/`exit`/`hang`/`error`/`rt_alloc`/`bad_time`/
-  `invalid` dispatch inside the arming block's `process()` — the L1
-  out-of-process crash/hang/timeout/isolation oracle. `error` returns
-  `CLAP_PROCESS_ERROR` (a defined rejection, not a crash);
-  `rt_alloc` performs a bounded heap round-trip in `process()` and
-  reports it through a `200.0` marker in the first output sample;
-  `bad_time` claims an infinite tail via `CLAP_PROCESS_TAIL`; `invalid`
-  fills every output sample with `NaN`. `abort`/`exit`/`hang` are
+  event arms the dispatch — the L1 out-of-process
+  crash/hang/timeout/isolation oracle. `abort`/`exit`/`hang` are
   L1-only faults; `error`/`rt_alloc`/`bad_time`/`invalid` are
   nonfatal and disarm back to pass-through.
+- CLAP-only leg: `bad_time` also pushes a `ParamValue` event
+  stamped beyond the block boundary and `invalid` a `ParamValue`
+  with a `NaN` value into `events.output`. The Ruviform v1 host
+  bridge discards plugin output events (`OutputEvents::void`), so
+  only the fixture's ABI emission face is observable — the push is
+  best-effort and its failure is ignored (an honest record, not a
+  hidden oracle).
 
 ## `test_stateful` semantics
 
@@ -82,6 +107,14 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
 - Unlike `test_gain`, activation does **not** reset the gain — a
   restored state survives `activate`, which is what makes the
   save → mutate → restore → save round-trip meaningful.
+- Preset surface: `clap.ext.preset-load` restores a catalog preset
+  by `load_key` through the same `clap.ext.state` `load` tail, and
+  the entry's `clap.factory.preset-discovery` factory advertises
+  the built-in catalog — provider `org.ruviform-test.clap-presets`
+  ("Ruviform Test Presets") with four presets (`Default` `1.0`,
+  `Half` `0.5`, `Boost` `1.5`, `Mute` `0.0`) tagged to the
+  `clap-test-stateful` plugin id, the same names and gains the
+  VST3 `"Factory"` program list carries.
 - The stateless classes ship no `clap.ext.state` extension, so the
   host bridge reports `HostError::Unsupported` honestly;
   `test_stateful` is the suite's real-ABI state oracle.
@@ -133,6 +166,45 @@ Vendor is `"Ruviform Test"`, version `0.0.0`, features
   `set_parent_creates_real_child_hwnd` unit test is the manual
   opt-in check.
 
+## `test_instrument` semantics
+
+- Same stereo main audio port pair and `Gain` parameter as
+  `test_gain` (`id` `0`, plain `[0.0, 2.0]`, default `1.0`), plus
+  one input note port (`"Notes"`, id `0`, supported dialects
+  `CLAP` | `MIDI`, preferred `MIDI`) — the suite's MIDI +
+  transport oracle. Structured note events and raw MIDI 1.0 events
+  translate into the same neutral kinds the VST3 fixture drains
+  from `IEventList`, and the `Process::transport` snapshot maps to
+  `TransportInfo` (CLAP carries no ppqn — the fixture fixes
+  `960`).
+- Voice and mix law are the VST3 fixture's: up to 8 polyphonic
+  triangle voices at `440 * 2^((key - 69) / 12)` with a `u64`
+  Q32.32 phase accumulator; `NoteOn` retriggers/first-inactive/
+  steal-oldest, `velocity == 0` behaves as note-off, `NoteOff`
+  starts the fixed 2400-frame linear release; CC7 master volume
+  and CC1 tremolo depth are the only live controllers. Mix is
+  `out[c][n] = voice_sum * gain * volume * tremolo + click[n]`
+  with the 4 Hz triangle LFO, written identically to both output
+  channels.
+- Transport click oracle: while the transport snapshot reports
+  `Playing` with full musical timing, a single-frame impulse of
+  amplitude `0.5 * volume` fires at every ppqn-tick boundary
+  strictly inside the block (exact `i128` ceiling division);
+  `Stopped`/`Paused`, missing musical info or a zero tempo produce
+  silence. No click state crosses block boundaries, so loop/seek
+  is exercised purely through the per-block snapshot.
+
+## `test_spawn_fail` semantics
+
+- The listed-but-uncreatable plugin: `plugin_descriptor` enumerates
+  it (`audio-effect` + `stereo`, vendor `"Ruviform Test"`) but
+  `create_plugin` deliberately returns `None` — the suite's
+  spawn-phase create-rejection oracle. Scan-level enumeration
+  still sees the descriptor, so a host's create-failure path is
+  exercised without breaking discovery (through the Ruviform host
+  bridge the deferred ABI create surfaces as `Initialize` →
+  `PluginFailed`).
+
 ## Independence boundary
 
 The plugin-side implementation (DSP law, lifecycle mapping, port and
@@ -167,8 +239,10 @@ boundary. Verified by the `rt_` `assert_no_alloc` tests
 
 ## Scope
 
-This slice ships `test_gain`, `test_fault`, `test_stateful`,
-`test_instrument` and `test_editor`. Out-of-process editor attach
+The module ships `test_gain`, `test_fault`, `test_stateful`,
+`test_instrument`, `test_editor` and `test_spawn_fail` through one
+plugin factory, plus the `test_stateful` preset catalog through
+`clap.factory.preset-discovery`. Out-of-process editor attach
 (L1 `OpenGui`/`CloseGui` is `HostError::Unsupported` by design), the
 CLAP real-attach lane leg, external SDK validators, and consumer
 oracle checks are subsequent slices of the same suite.
