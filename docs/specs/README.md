@@ -276,6 +276,7 @@ Directory: `docs/specs`
 | SPEC-BXaMmK5e7X2mLZAG4xFeZv | ViewLink authoritative generation 採用 — backend attach応答epochのSDK seam | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | SPEC-WXP3Ux78gYSf2Aj16emS6p | Issue #465 WebView 移行台帳の現行化 — 現行 main 基準の分類検証（P2 物理撤去は対象外） | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 | SPEC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` spec | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
+| SPEC-630faultModes01 | Issue #630 fault-modes slice — test_fault 非致命 fault mode 拡張 + test_stateful codec v2 + editor popup spec | approved | [issue-630-fault-modes.md](./issue-630-fault-modes.md) |
 | SPEC-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe slice（container の layered/reparent presentation 変異で child pixel 脱出可否を判別） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | SPEC-034ZaaChildInventory001 | Issue #532 child-inventory slice（child HWND inventory + capture-plane 分離 + env arm 検証 + child-level layered retry） | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 
