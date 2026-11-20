@@ -219,7 +219,6 @@ Directory: `docs/designs`
 | DESIGN-RLPMudBgwjqSh9kxCAvNCq | Issue #532 presentation-probe 設計（cover inventory・capture path variant・fingerprint・verdict 意味論） | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | DESIGN-rf532sltcmp0stn1t3rp | Issue #532 スロット合成 — fork-free PoC 機構と Option-A GPUI fork 設計 | proposed | [issue-532-slot-compositing.md](./issue-532-slot-compositing.md) |
 | DES-034ZaaUncoveredBaseline001 | Issue #532 uncovered-baseline bisect — 設計（settle 方式・新 case・own-process inventory） | approved | [issue-532-uncovered-baseline.md](./issue-532-uncovered-baseline.md) |
-| DES-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe — 設計（container mutation family・verified-write・2 経路の試行順序） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | DESIGN-034VedvLujxpzyWOjxyoD4 | Issue #552 — SendInput preflight 設計（注入→実効 read-back・EnvironmentBlocked verdict） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | DESIGN-sh006tWu0ht5WmSqG0V85w | Consumer-neutral Workflow/CLI orchestration契約設計（Issue #553 RF-AUTX-01） | approved | [issue-553-workflow-orchestration-design.md](./issue-553-workflow-orchestration-design.md) |
 | DESIGN-034XeaFjxZePL0m6LYuEeS | Multi-backend Script/Analyzer言語非依存契約設計（Issue #558 RF-SCRIPT-00） | approved | [issue-558-script-contract-design.md](./issue-558-script-contract-design.md) |
@@ -309,6 +308,7 @@ Directory: `docs/designs`
 | DESIGN-034JZVID00000000000030 | 動画エンジン設計（パイプライン・スケジューラ・セッション） | approved | [video-engine.md](./video-engine.md) |
 | DESIGN-aYGxhiXLZHim70lzzr4olp | ViewLink.attach authoritative generation 採用設計 | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | DESIGN-ZwNUJSnzzVrmRrqQ7S6lJ9 | Issue #465 WebView 移行台帳現行化 — 4 分類スキームと証拠設計 | approved | [wv-removal-inventory-design.md](./wv-removal-inventory-design.md) |
+| DSN-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` design | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

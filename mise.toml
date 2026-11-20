@@ -170,8 +170,7 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # observed="environment_blocked" (fail-closed — never a fake pass,
 # exit code stays 0). Honest verdicts only: `real-capture` stays
 # window/slot-region pixels; the Issue #532 `real-dcomp-*` cases
-# observe the docked editor child's pixels and exercise bounded,
-# restored window-state mutations as occlusion-bisect/band-escape
+# observe the docked editor child's pixels as occlusion-bisect
 # evidence (editor-pixel dock acceptance stays deferred). Real OS
 # windows — run unattended (writes only target/ + evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]

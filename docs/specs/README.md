@@ -188,7 +188,6 @@ Directory: `docs/specs`
 | SPEC-kIDA2z7xvjXFGeni2wVkwU | Issue #532 presentation-mechanism 判別 probe slice（cover inventory・capture path variant・presentation attributes） | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | SPEC-rf532sltcmp0stn1t3rp | Issue #532 スロット合成 PoC — fork-free 介入の評価と Option-A 判定 | proposed | [issue-532-slot-compositing.md](./issue-532-slot-compositing.md) |
 | SPEC-034ZaaUncoveredBaseline001 | Issue #532 uncovered-baseline bisect slice（settle 付き topmost 再観測と遮蔽なし baseline で compositor-internal occlusion を確定） | approved | [issue-532-uncovered-baseline.md](./issue-532-uncovered-baseline.md) |
-| SPEC-034ZaaBandEscapeProbe001 | Issue #532 band-escape probe slice（container の layered/reparent presentation 変異で child pixel 脱出可否を判別） | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | SPEC-034VeaErc3izqznL8Ycsk6 | Issue #552 — real-OS input lane SendInput preflight（注入→実効 read-back で EnvironmentBlocked と GUI Fail を区別） | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | SPEC-thW5o4Z4OMp1n1quFRk4uh | Consumer-neutral Workflow/CLI orchestration契約・両Consumer適用性レビュー（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | SPEC-034Xe8fKEL6vpFX9pkgPU0 | Multi-backend Script/Analyzer言語非依存契約（Issue #558） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
@@ -275,6 +274,7 @@ Directory: `docs/specs`
 | SPEC-034JZVID00000000000010 | 動画エンジン（フレームパイプライン・A/V 同期・シーク） | approved | [video-engine.md](./video-engine.md) |
 | SPEC-BXaMmK5e7X2mLZAG4xFeZv | ViewLink authoritative generation 採用 — backend attach応答epochのSDK seam | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | SPEC-WXP3Ux78gYSf2Aj16emS6p | Issue #465 WebView 移行台帳の現行化 — 現行 main 基準の分類検証（P2 物理撤去は対象外） | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
+| SPEC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` spec | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
