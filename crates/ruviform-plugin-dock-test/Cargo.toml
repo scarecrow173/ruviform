@@ -124,7 +124,15 @@ sha2 = "0.10"
 #   uncovered-baseline slice adds no new Win32 surface: it reuses
 #   the `osmut` staged mutations plus the query-only probes, with
 #   `std::thread::sleep` for the settle curve — no feature or
-#   dependency change. Windows-targeted
+#   dependency change. The Issue #532 band-escape slice adds the
+#   container-presentation mutation family inside `osmut` —
+#   `RedrawWindow`/`ScreenToClient` (`Win32_Graphics_Gdi`, already
+#   enabled) plus `SetWindowLongPtrW`/`SetLayeredWindowAttributes`/
+#   `SetParent`/`GetDesktopWindow`/`GetParent`/`GetClassLongPtrW`/
+#   `SetWindowPos(SWP_FRAMECHANGED)` (`Win32_UI_WindowsAndMessaging`,
+#   already enabled): bounded, restored mutations of the container's
+#   layered/parented presentation relationship — no new features.
+#   Windows-targeted
 #   so the dep never
 #   enters non-Windows builds; optional so the default headless
 #   lane's dependency tree is unchanged. Same `windows-sys` 0.61

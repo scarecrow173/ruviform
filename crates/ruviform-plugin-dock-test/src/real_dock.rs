@@ -1,11 +1,11 @@
 //! Real-window plugin-dock lane (Issue #631 real-window slice —
 //! feature `real-dock`; `real-dcomp-pixel`/`real-dcomp-foreground`/
-//! `real-dcomp-present`/`real-dcomp-uncovered` added by the
-//! Issue #532 dcomp-pixel/foreground-probe/presentation-probe/
-//! uncovered-baseline slices).
+//! `real-dcomp-present`/`real-dcomp-uncovered`/`real-dcomp-bandescape`
+//! added by the Issue #532 dcomp-pixel/foreground-probe/
+//! presentation-probe/uncovered-baseline/band-escape slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-three
+//! windows* through [`RealOsGuiTest`] and records the twenty-four
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -40,6 +40,13 @@
 //! |                         |             | 付き hit-test+screen 再観測と post-settle capture |
 //! |                         |             | variants で compositor-internal occlusion の有無を |
 //! |                         |             | 確定。verdict は probe 実行+復元+lifecycle のみ     |
+//! | `real-dcomp-bandescape` | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — band-escape |
+//! |                         |             | probe: container の presentation 関係を変異        |
+//! |                         |             | （強制 repaint → `WS_EX_LAYERED`+`LWA_ALPHA` →     |
+//! |                         |             | `SetParent(GetDesktopWindow())`+baseline rect) し、 |
+//! |                         |             | 各 stage で hit-test+screen green を再観測して     |
+//! |                         |             | 脱出経路を二分。verdict は probe 実行+復元+        |
+//! |                         |             | lifecycle のみ（観測値は方式採否データ）           |
 //! | `real-multiwindow-focus`| `RealOs`    | `Pass`/`Fail`/`NotRun` — 2 window の `request_focus` |
 //! |                         |             | → `window_focused` 観測による focus 移譲            |
 //! | `real-os-input`         | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — preflight     |
@@ -159,6 +166,7 @@ use crate::scenario::{
 /// The resolved plugin binary + its evidence identity — only the
 /// editor/session cases (`real-editor-attach`, `real-dcomp-pixel`,
 /// `real-dcomp-foreground`, `real-dcomp-present`,
+/// `real-dcomp-uncovered`, `real-dcomp-bandescape`,
 /// `real-editor-resize`, `real-editor-redock`,
 /// `real-session-terminate`, `real-session-degraded`,
 /// `real-session-recovery`, `real-session-timeout`,
@@ -560,7 +568,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 23] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 24] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -629,6 +637,16 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 23] {
             ],
             spec_extras: editor_attach_extras,
             run: real_dcomp_uncovered_case,
+        },
+        ScenarioEntry {
+            case: "real-dcomp-bandescape",
+            scenario: SCENARIO,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::VisualCapture,
+            ],
+            spec_extras: editor_attach_extras,
+            run: real_dcomp_bandescape_case,
         },
         ScenarioEntry {
             case: "real-multiwindow-focus",
@@ -1242,7 +1260,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 23] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1296,7 +1314,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 23] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -6154,6 +6172,613 @@ fn real_dcomp_uncovered_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec)
 }
 
 // ---------------------------------------------------------------------
+// case: real-dcomp-bandescape (Issue #532 band-escape probe)
+// ---------------------------------------------------------------------
+
+/// Settle between a mutated presentation stage and its re-observation
+/// — one bounded `std::thread::sleep` per mutated stage. The repaint
+/// stage observes immediately instead: `RDW_UPDATENOW` pumps
+/// `WM_PAINT` inline, so no settle is needed there.
+const BE_SETTLE_MS: u64 = 500;
+
+/// The band-escape case's labels — `be_*` step names and the PNG
+/// artifact prefix.
+const BE_LABELS: ProbeLabels = ProbeLabels {
+    step: "be",
+    artifact: "real-dcomp-bandescape",
+};
+
+/// Step-row names for the layered stage's three
+/// `osmut::apply_layered` ops, in issue order.
+const BE_LAYERED_OPS: [&str; 3] = [
+    "be_apply_layered_exstyle",
+    "be_apply_layered_frame",
+    "be_apply_layered_lwa",
+];
+
+/// Step-row names for the reparent stage's four
+/// `osmut::reparent_to_desktop` ops, in issue order.
+const BE_REPARENT_OPS: [&str; 4] = [
+    "be_apply_reparent_exstyle",
+    "be_apply_reparent_frame",
+    "be_apply_reparent_parent",
+    "be_apply_reparent_rect",
+];
+
+/// Verification for `real-dcomp-bandescape` — same lifecycle
+/// contract as [`ForegroundVerification`] plus the probe outcome.
+/// The case verdict reads `lifecycle_ok` + `probe.{evaluated,
+/// executed,restored}` only; per-stage green and hit-test answers
+/// are escape-strategy *data*, never verdict inputs.
+struct BandescapeVerification {
+    /// `false` off-Windows — the observation half then reports
+    /// `Unsupported`, never a fabricated pass.
+    supported: bool,
+    /// Every lifecycle contract check agreed (attach contract,
+    /// close, detach, session convergence).
+    lifecycle_ok: bool,
+    /// First violated lifecycle check (`name: detail`).
+    lifecycle_failure: Option<String>,
+    /// The aggregated probe outcome.
+    probe: ProbeOutcome,
+    /// `observed` extras — container/child ids, threads, events,
+    /// probe summary.
+    extras: Value,
+}
+
+/// Plain-JSON form of one [`osmut::ContainerSnapshot`] — parent,
+/// exstyle (flattened to its compositor-relevant bits), screen
+/// rect, and sibling z-order position.
+fn container_snapshot_json(snapshot: &osmut::ContainerSnapshot) -> Value {
+    json!({
+        "supported": snapshot.supported,
+        "container": snapshot.container,
+        "alive": snapshot.alive,
+        "parent": snapshot.parent,
+        "exstyle": snapshot.exstyle.as_ref().map(|e| json!({
+            "value": e.value,
+            "noredirectionbitmap": e.noredirectionbitmap(),
+            "topmost": e.topmost(),
+            "layered": e.layered(),
+            "transparent": e.transparent(),
+            "noactivate": e.noactivate(),
+            "toolwindow": e.toolwindow(),
+            "appwindow": e.appwindow(),
+        })),
+        // Class-style bits relevant to `WS_EX_LAYERED` — a class
+        // carrying either bit refuses layered windows by contract.
+        "class_style": snapshot.class_style.map(|c| json!({
+            "value": c,
+            "own_dc": c & 0x0020 != 0,
+            "class_dc": c & 0x0040 != 0,
+        })),
+        "rect": snapshot.rect.map(|r| json!({
+            "left": r.left,
+            "top": r.top,
+            "width": r.width,
+            "height": r.height,
+        })),
+        "above_count": snapshot.above_count,
+        "above_hwnd": snapshot.above_hwnd,
+        "below_hwnd": snapshot.below_hwnd,
+        "truncated": snapshot.truncated,
+    })
+}
+
+/// Plain-JSON form of one [`osmut::ContainerMutationOutcome`].
+fn container_mutation_json(outcome: &osmut::ContainerMutationOutcome) -> Value {
+    json!({
+        "api": outcome.api,
+        "applied": outcome.applied,
+        "win32_error": outcome.win32_error,
+        "after": container_snapshot_json(&outcome.after),
+    })
+}
+
+/// Plain-JSON form of one [`osmut::ContainerRestoreOutcome`] —
+/// every restore op plus the verification fields (parent/exstyle/
+/// rect are deterministic checks; sibling z-order is a recorded
+/// observed value, never claimed restored).
+fn container_restore_json(outcome: &osmut::ContainerRestoreOutcome) -> Value {
+    json!({
+        "ops": outcome.ops.iter().map(container_mutation_json).collect::<Vec<_>>(),
+        "parent_restored": outcome.parent_restored,
+        "exstyle_restored": outcome.exstyle_restored,
+        "rect_restored": outcome.rect_restored,
+        "zorder_before": {
+            "above_count": outcome.zorder_before.0,
+            "above_hwnd": outcome.zorder_before.1,
+        },
+        "zorder_after": {
+            "above_count": outcome.zorder_after.0,
+            "above_hwnd": outcome.zorder_after.1,
+        },
+        "final_state": container_snapshot_json(&outcome.final_state),
+    })
+}
+
+/// One container-mutation apply step row — `pass` when the API
+/// applied, `fail` when refused. Every band-escape op is strict:
+/// `RedrawWindow`/`SetWindowLongPtrW`/`SetLayeredWindowAttributes`/
+/// `SetParent`/`SetWindowPos` on our own live HWND have no
+/// legitimate-refusal path, so a refusal is an anomaly, not data.
+fn record_container_apply_row(
+    steps: &mut Vec<Value>,
+    step: &str,
+    outcome: &osmut::ContainerMutationOutcome,
+) {
+    steps.push(json!({
+        "step": step,
+        "verdict": if outcome.applied { "pass" } else { "fail" },
+        "mutation": container_mutation_json(outcome),
+    }));
+}
+
+/// Fold one container op's `applied` into the probe's
+/// `executed`/`first_failure` accumulators — the container
+/// counterpart of the `run_probe_stages` strict checks.
+fn fold_container_op(
+    executed: &mut bool,
+    failure: &mut Option<String>,
+    step: &str,
+    outcome: &osmut::ContainerMutationOutcome,
+) {
+    if !outcome.applied {
+        *executed = false;
+        failure.get_or_insert_with(|| {
+            format!(
+                "{step} refused (win32 error {})",
+                outcome
+                    .win32_error
+                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+            )
+        });
+    }
+}
+
+/// The bounded settle after a mutated presentation stage — one
+/// `std::thread::sleep` on the caller thread (GPUI's app thread
+/// keeps pumping, same as the uncovered case's settle), recorded
+/// honestly as `be_settle` rows.
+fn be_settle(stage: &str, steps: &mut Vec<Value>) {
+    std::thread::sleep(Duration::from_millis(BE_SETTLE_MS));
+    steps.push(json!({
+        "step": "be_settle",
+        "verdict": "note",
+        "stage": stage,
+        "settle_ms": BE_SETTLE_MS,
+        "settle_kind": "std::thread::sleep",
+    }));
+}
+
+/// The band-escape probe — runs while the editor is still attached.
+/// Sequence: container baseline snapshot (parent/exstyle/rect/
+/// z-order — the restore inputs) → covered baseline observation →
+/// forced repaint (`RDW_UPDATENOW`, the `update_pending` confound
+/// drain) → layered-surface stage (`WS_EX_LAYERED` + `LWA_ALPHA` +
+/// repaint → settle → observe) → desktop-reparent stage (baseline
+/// exstyle → `SetParent(GetDesktopWindow())` + baseline rect at
+/// `HWND_TOP` → settle → observe) → verified container restore.
+/// Every observation is `note`-level data; the verdict inputs are
+/// mutation application + restore + lifecycle.
+#[expect(clippy::too_many_lines)]
+fn bandescape_probe_children(
+    observation: &ChildWindowObservation,
+    container: Option<u64>,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> ProbeOutcome {
+    let Some(token) = container else {
+        return ProbeOutcome::not_evaluable(
+            steps,
+            "be_probe",
+            "no container token — the container cannot be resolved",
+        );
+    };
+    match ospix::presented(token) {
+        Some(true) => {}
+        Some(false) => {
+            return ProbeOutcome::not_evaluable(
+                steps,
+                "be_probe",
+                "top-level window is minimized or hidden — no screen pixels",
+            );
+        }
+        None => {
+            return ProbeOutcome::not_evaluable(
+                steps,
+                "be_probe",
+                "top-level presentation query failed",
+            );
+        }
+    }
+    if observation.children.is_empty() {
+        return ProbeOutcome::not_evaluable(steps, "be_probe", "no observed child HWNDs to probe");
+    }
+
+    // Baseline — the container's parent/exstyle/rect/sibling z-order
+    // are the restore inputs; the root snapshot is context only (the
+    // probe mutates the container, not the root).
+    let container_baseline = osmut::observe_container(token);
+    let first = &observation.children[0];
+    let root_snapshot = osmut::observe(first.hwnd);
+    steps.push(json!({
+        "step": "be_baseline_state",
+        "verdict": "note",
+        "container": container_snapshot_json(&container_baseline),
+        "root": root_snapshot.root,
+        "root_snapshot": snapshot_json(&root_snapshot),
+    }));
+    if !container_baseline.supported || !container_baseline.alive {
+        return ProbeOutcome::not_evaluable(steps, "be_probe", "container HWND is not alive");
+    }
+    if container_baseline.parent.is_none()
+        || container_baseline.exstyle.is_none()
+        || container_baseline.rect.is_none()
+    {
+        return ProbeOutcome::not_evaluable(
+            steps,
+            "be_probe",
+            "container baseline parent/exstyle/rect could not be read",
+        );
+    }
+
+    observe_all_children("baseline", observation, token, artifacts, steps, BE_LABELS);
+
+    let mut executed = true;
+    let mut failure: Option<String> = None;
+
+    // Stage 1 — forced repaint. `RDW_UPDATENOW` drains the update
+    // region inline, so the post-repaint `update_pending` read must
+    // show the confound cleared before any escape is attempted.
+    let repaint = osmut::repaint_container(token);
+    record_container_apply_row(steps, "be_apply_repaint", &repaint);
+    fold_container_op(&mut executed, &mut failure, "be_apply_repaint", &repaint);
+    let pending = |hwnd: u64| {
+        let update = ospres::attributes(hwnd).update;
+        json!({
+            "hwnd": hwnd,
+            "update_pending": update.as_ref().map(|u| u.has_update),
+            "update_error": update.as_ref().and_then(|u| u.error.clone()),
+        })
+    };
+    steps.push(json!({
+        "step": "be_update_pending",
+        "verdict": "note",
+        "container": pending(token),
+        "children": observation
+            .children
+            .iter()
+            .map(|child| pending(child.hwnd))
+            .collect::<Vec<_>>(),
+        "note": "RDW_UPDATENOW should have drained each window's \
+                 update region — a persisted true means paint is \
+                 still queued and any observed no-green may be a \
+                 pre-paint frame",
+    }));
+    observe_all_children("repaint", observation, token, artifacts, steps, BE_LABELS);
+
+    // Stage 2 — layered surface: `WS_EX_LAYERED` + `SWP_FRAMECHANGED`
+    // + `LWA_ALPHA(255)` re-routes the container through a layered
+    // presentation surface; the follow-up repaint + bounded settle
+    // give the new path a frame before the hit-test/green
+    // re-observation.
+    let layered_ops = osmut::apply_layered(token);
+    for (step_name, op) in BE_LAYERED_OPS.iter().zip(layered_ops.iter()) {
+        record_container_apply_row(steps, step_name, op);
+        fold_container_op(&mut executed, &mut failure, step_name, op);
+    }
+    let repaint = osmut::repaint_container(token);
+    record_container_apply_row(steps, "be_apply_layered_repaint", &repaint);
+    fold_container_op(
+        &mut executed,
+        &mut failure,
+        "be_apply_layered_repaint",
+        &repaint,
+    );
+    be_settle("layered", steps);
+    observe_all_children("layered", observation, token, artifacts, steps, BE_LABELS);
+
+    // Stage 3 — desktop reparent: baseline exstyle first so the
+    // escape runs on the pristine style, then
+    // `SetParent(GetDesktopWindow())` + the baseline screen rect at
+    // `HWND_TOP` makes the container a top-level window whose
+    // composition no longer rides the GPUI root's presentation
+    // plane. The child keeps its position inside the container, so
+    // the same screen rect stays a valid hit-test/capture target.
+    let baseline_exstyle = container_baseline
+        .exstyle
+        .as_ref()
+        .expect("baseline exstyle guarded by the not_evaluable check above")
+        .value;
+    let baseline_rect = container_baseline
+        .rect
+        .expect("baseline rect guarded by the not_evaluable check above");
+    let reparent_ops = osmut::reparent_to_desktop(token, baseline_exstyle, baseline_rect);
+    for (step_name, op) in BE_REPARENT_OPS.iter().zip(reparent_ops.iter()) {
+        record_container_apply_row(steps, step_name, op);
+        fold_container_op(&mut executed, &mut failure, step_name, op);
+    }
+    be_settle("reparent", steps);
+    observe_all_children("reparent", observation, token, artifacts, steps, BE_LABELS);
+
+    // Stage 4 — verified restore: baseline parent + exstyle + rect
+    // are checked deterministically; the sibling z-order reposition
+    // is recorded best-effort only.
+    let restore = osmut::restore_container(&container_baseline);
+    let restore_ops_ok = restore.ops.iter().all(|op| op.applied);
+    let restored = restore.parent_restored
+        && restore.exstyle_restored
+        && restore.rect_restored
+        && restore_ops_ok;
+    steps.push(json!({
+        "step": "be_restore",
+        "verdict": if restored { "pass" } else { "fail" },
+        "restore": container_restore_json(&restore),
+        "note": "parent, raw GWL_EXSTYLE, and screen rect are \
+                 verified deterministically; the sibling z-order is \
+                 best-effort — zorder_before/after record what could \
+                 and could not be restored",
+    }));
+    if !restored {
+        executed = false;
+        failure.get_or_insert_with(|| {
+            format!(
+                "container restore verification failed \
+                 (parent_restored={}, exstyle_restored={}, \
+                 rect_restored={}, ops_ok={})",
+                restore.parent_restored,
+                restore.exstyle_restored,
+                restore.rect_restored,
+                restore_ops_ok
+            )
+        });
+    }
+    observe_all_children("restore", observation, token, artifacts, steps, BE_LABELS);
+
+    ProbeOutcome {
+        evaluated: true,
+        executed,
+        restored,
+        failure,
+    }
+}
+
+/// Post-open band-escape observation + close convergence — the
+/// `real-dcomp-bandescape` counterpart of
+/// [`observe_editor_uncovered_probe`]. Same attach contract checks,
+/// then — while still attached — the container-presentation escape
+/// probe ([`bandescape_probe_children`]), then the shared close →
+/// detach → convergence tail ([`conclude_editor_session`]).
+fn observe_editor_bandescape_probe(
+    container: Option<u64>,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    artifacts: Option<&Path>,
+    steps: &mut Vec<Value>,
+) -> BandescapeVerification {
+    let mut failure: Option<String> = None;
+
+    // Phase 1 — enumerate the container's children while the editor
+    // is still attached (same observation as `real-editor-attach`).
+    let mut observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+
+    let attach_ok = if observation.supported {
+        check_attached_children(&observation, container, steps, &mut failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+
+    // Phase 1b — the container-presentation escape probe while still
+    // attached. Off-Windows there is no window-state mutation either
+    // — recorded as unsupported.
+    let probe = if observation.supported {
+        bandescape_probe_children(&observation, container, artifacts, steps)
+    } else {
+        ProbeOutcome::unsupported(steps, "be_probe")
+    };
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+
+    BandescapeVerification {
+        supported: observation.supported,
+        lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
+        lifecycle_failure: failure,
+        extras: Value::Object(mutation_probe_extras(
+            container,
+            &observation,
+            &rendered,
+            &probe,
+            "bandescape_probe",
+        )),
+        probe,
+    }
+}
+
+/// `real-dcomp-bandescape`'s post-open observation bound to its
+/// artifact directory — see [`pixel_observe`].
+fn bandescape_observe(
+    artifacts: Option<&Path>,
+) -> impl FnOnce(
+    &RealOsGuiTest,
+    Option<u64>,
+    u64,
+    &mut PluginEditorSessions,
+    PluginEditorSessionId,
+    &mut InProcessHost,
+    PluginHandle,
+    &mut Vec<Value>,
+) -> BandescapeVerification
++ '_ {
+    move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
+        observe_editor_bandescape_probe(
+            container, sessions, session_id, host, handle, artifacts, steps,
+        )
+    }
+}
+
+/// `real-dcomp-bandescape`: the same real attach path plus the
+/// band-escape probe — does changing the *container's* presentation
+/// relationship (layered surface, then a desktop-reparented
+/// top-level window) let the docked child's pixels escape the
+/// GPUI presentation band? The case verdict is the *probe's own*
+/// honest oracle (executed + restored + lifecycle); whether green
+/// appeared is escape-strategy data recorded in the step rows,
+/// never a verdict input.
+fn editor_bandescape_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    artifacts: Option<&Path>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    let (attempt, cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        AttachDrive {
+            drive_open: drive_open_docked,
+            observe_open: bandescape_observe(artifacts),
+        },
+    );
+
+    let mut outcome = match attach_attempt_failure(&attempt) {
+        Some(outcome) => outcome,
+        None => match verification.as_ref() {
+            Some(verification) if !verification.supported => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+                outcome.detail = Some(
+                    "editor opened through the REAL container lease but OS \
+                     window-state observation is unsupported on this platform"
+                        .to_string(),
+                );
+                outcome
+            }
+            Some(verification) if !verification.lifecycle_ok => fail(format!(
+                "editor opened through the REAL container lease but the \
+                 lifecycle observation failed: {}",
+                verification
+                    .lifecycle_failure
+                    .as_deref()
+                    .unwrap_or("unknown mismatch")
+            )),
+            Some(verification) if !verification.probe.evaluated => not_run(format!(
+                "editor lifecycle verified but the band-escape probe \
+                 is not evaluable: {}",
+                verification
+                    .probe
+                    .failure
+                    .as_deref()
+                    .unwrap_or("baseline could not be taken")
+            )),
+            Some(verification) if !verification.probe.executed || !verification.probe.restored => {
+                fail(format!(
+                    "editor lifecycle verified but the band-escape \
+                     probe did not complete: {}",
+                    verification
+                        .probe
+                        .failure
+                        .as_deref()
+                        .unwrap_or("probe execution or restore verification failed")
+                ))
+            }
+            Some(_) => {
+                let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+                outcome.detail = Some(
+                    "band-escape probe executed the repaint/layered/reparent \
+                     mutation stages; container parent, exstyle, and rect \
+                     verified restored (sibling z-order best-effort — see \
+                     steps). Escape-strategy data (hit-test answers, screen \
+                     green per stage) is recorded in steps"
+                        .to_string(),
+                );
+                outcome
+                    .evidence
+                    .push("dcomp-bandescape:probe-executed-restored".to_string());
+                outcome
+            }
+            None => fail("editor opened but no band-escape observation was recorded".to_string()),
+        },
+    };
+    let mut observed = Map::from_iter([
+        ("steps".to_string(), json!(steps)),
+        ("cleanup".to_string(), json!(cleanup)),
+    ]);
+    if let Some(verification) = &verification
+        && let Value::Object(fields) = &verification.extras
+    {
+        observed.extend(fields.clone());
+    }
+    outcome.observed = Some(Value::Object(observed));
+    outcome
+}
+
+/// `real-dcomp-bandescape` case: pre-flight requires
+/// `NativePluginDock` and `VisualCapture` (same capabilities as the
+/// other dcomp cases — the probe re-uses the screen-pixel oracle per
+/// stage), then the body drives the attach chain plus the
+/// band-escape probe — or reports the honest
+/// artifact/session/environment outcome.
+fn real_dcomp_bandescape_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let pixel_artifacts = ctx.pixel_artifacts;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_bandescape_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            pixel_artifacts,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // case: real-multiwindow-focus (AC1 — 2-window focus transfer)
 // ---------------------------------------------------------------------
 
@@ -9477,11 +10102,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 23, "twenty-three real-dock cases");
+        assert_eq!(reports.len(), 24, "twenty-four real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 23] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -9514,7 +10139,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 23] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 24] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

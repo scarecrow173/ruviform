@@ -10,7 +10,8 @@
 //!
 //! `--pixel-artifacts <dir>` is opt-in: the `real-capture`,
 //! `real-dcomp-pixel`, `real-dcomp-foreground`,
-//! `real-dcomp-present`, and `real-dcomp-uncovered` cases then write
+//! `real-dcomp-present`, `real-dcomp-uncovered`, and
+//! `real-dcomp-bandescape` cases then write
 //! each captured frame as a
 //! PNG under `<dir>` (created on demand), recording
 //! `artifact: {path, sha256}` alongside the canonical

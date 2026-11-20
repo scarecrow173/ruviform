@@ -53,7 +53,16 @@
 //! verifies it through hit-test roles, then re-observes hits and
 //! screen pixels across a bounded settle curve plus post-settle
 //! capture variants to decide whether the residual no-green is a
-//! pre-paint frame or compositor-internal occlusion. The catalog
+//! pre-paint frame or compositor-internal occlusion;
+//! `real-dcomp-bandescape` (Issue #532 band-escape slice) mutates
+//! the *container's* presentation relationship — a forced repaint,
+//! then `WS_EX_LAYERED`+`LWA_ALPHA`, then a
+//! `SetParent(GetDesktopWindow())` reparent onto the baseline
+//! screen rect — and re-observes hit-tests and screen green at
+//! each stage to bisect which escape route (minimal layered
+//! container vs reparented owned popup) can free the docked
+//! child's pixels from the presentation band, then restores and
+//! verifies parent/exstyle/rect. The catalog
 //! also
 //! carries the AC1 remainder
 //! rows — two-window focus transfer, real OS pointer/keyboard

@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The twenty-three real-window dock cases in run order — metadata
+/// The twenty-four real-window dock cases in run order — metadata
 /// only. The AC1 remainder rows (`real-multiwindow-focus`,
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
@@ -132,6 +132,14 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     },
     RealCatalogRow {
         case: "real-dcomp-uncovered",
+        scenario: SCENARIO,
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::VisualCapture,
+        ],
+    },
+    RealCatalogRow {
+        case: "real-dcomp-bandescape",
         scenario: SCENARIO,
         required: &[
             ScenarioCapability::NativePluginDock,
