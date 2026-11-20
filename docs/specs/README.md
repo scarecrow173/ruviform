@@ -274,6 +274,7 @@ Directory: `docs/specs`
 | SPEC-034JZVID00000000000010 | 動画エンジン（フレームパイプライン・A/V 同期・シーク） | approved | [video-engine.md](./video-engine.md) |
 | SPEC-BXaMmK5e7X2mLZAG4xFeZv | ViewLink authoritative generation 採用 — backend attach応答epochのSDK seam | approved | [viewlink-authoritative-generation.md](./viewlink-authoritative-generation.md) |
 | SPEC-WXP3Ux78gYSf2Aj16emS6p | Issue #465 WebView 移行台帳の現行化 — 現行 main 基準の分類検証（P2 物理撤去は対象外） | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
+| SPEC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` spec | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

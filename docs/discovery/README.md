@@ -45,6 +45,7 @@ Directory: `docs/discovery`
 | DSC-722vst3LifecycleAudit01 | Issue #722 production VST3 adapter lifecycle 監査 — test fixture 同型欠陥の診断 | final | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | DSC-726clapValidatorPanic01 | Issue #726 clap-validator 0.4.1 param-fuzz panic — 根因所在と upstream 報告要否の調査 | final | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |
 | DSC-732clapLifecycleAudit01 | Issue #732 production CLAP adapter lifecycle 監査 — VST3同型欠陥の診断 | final | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
+| DSC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` 調査記録 | final | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

@@ -310,6 +310,7 @@ Directory: `docs/test-specs`
 | TSPEC-034L6w5zHELr4fPxPNpBsk | Video Plugin Plain Contract Tests | proposed | [video-plugin-plain-contract-tests.md](./video-plugin-plain-contract-tests.md) |
 | TSPEC-42XLbuUif4jmek9sQGVA3S | ViewLink authoritative generation テスト仕様 | approved | [viewlink-authoritative-generation-tests.md](./viewlink-authoritative-generation-tests.md) |
 | TSPEC-Wm6ujGxaqkur53e1zm0Xak | Issue #465 WebView 移行台帳現行化 — 分類検証契約 | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
+| TSPEC-630singleComponent01 | Issue #630 single-component slice — test specification | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
