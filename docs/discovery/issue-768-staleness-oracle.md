@@ -163,12 +163,99 @@ fixture `src/fault.rs`・`src/stateful.rs`（両 crate）は law 上の不足
 なし — read-only 監査どおり zero-diff。production host crate も
 zero-diff（test-file-only slice）。
 
+## Findings — 追補: `l1_real_adapter` / `l1_real_test_plugin` 非 instrument 面（第 2 slice）
+
+Residual で残件化した `l1_real_adapter_e2e.rs`（両 ABI・adapter
+crate）と `l1_real_test_plugin_e2e.rs`（両 ABI・test crate の非
+instrument 面）の全 assertion site を同一基準で監査した。
+**production defect は見つからず**、findings は全て test oracle 側の
+同 class 分類欠如。
+
+### 確定 site（両 ABI 同型 — `*_l1_full_series` の delivered provenance gap）
+
+- 各 file の `*_l1_full_series` は非 silent output を
+  `assert_defined_channels`（全 sample が `EXPECTED_GAIN` × 過去
+  input の membership check）で検査して `delivered` に計数し、
+  `delivered >= 8`（30 eligible call 中）を gate としていた。
+  membership は **stale `last_output` replay も通る**（hold-last は
+  `EXPECTED_GAIN` × 過去 input で構成される）ため、substituted
+  call が fresh な delivered 証拠として水増し計数され得た —
+  `ruviform#836` が fault 側で分類対象としたのと同型の
+  provenance gap。`host_block` は counter 非対応で
+  `LegDeltas` を返さなかった（test-plugin 両 file には
+  instrument 専用の `host_block_transport`/`LegDeltas` が既存 —
+  非 instrument の `host_block` のみが未対応だった）。
+- 修正（test-file-only・`ruviform#766`/`ruviform#836` 同 pattern）:
+  `host_block` を per-call `audio_counters` 前後差分の
+  `LegDeltas` を result と併せて返す形に揃え、`delivered` は
+  matched（`passthrough == 0`）call のみで計数。substituted
+  call は content assert を skip して `substituted` 変数で分類
+  記録し、`delivered >= 8` の failure message に
+  `{substituted}` を含めて切り分け情報とする（先例どおり）。
+  gate 閾値・`assert_defined_channels` の assertion 内容は不変。
+- 副次の oracle 強化: 旧 else-if arm の「全 zero なら underrun
+  silence として免責」を counter 分類に置き換えた結果、
+  matched call の全 zero output は `assert_defined_channels`
+  の membership で**正直に fail** する（underrun silence は
+  `passthrough > 0` arm で尽くされるため matched silence = 子
+  側 defect）。本 fixture の gain law（常に非零）下で免責して
+  よい matched silence は存在しない — 弱体化ではなく強化。
+
+### ParamValue event の再送構造 — bounded resend 不要と判定
+
+- `full_series` 系は loop 外で一度構築した同一 `event_list` を
+  **全 call** に積む。dropped submit で event が喪失しても次 call
+  で同一 event が構造上再送されるため、`arm_fault`/stateful
+  mutation のような単発 event 喪失の flaky 経路は成立しない。
+- fixture gain law 確認（`crates/ruviform-plugin-test-clap/src/
+  gain.rs`・`crates/ruviform-plugin-clap/src/gain.rs` 両系同型）:
+  plain gain state への overwrite — 同一 `ParamValue` の再送は
+  冪等で、sample-accurate に次 block へ反映される。
+- 判定: `ParamValue` event は構造再送されるため bounded resend
+  導入の必要なし。コメントで構造を明記済み。
+
+### 対象外と確定した site（監査記録として分類を残す）
+
+- `call < 2` の underflow silence assert（`seq - lookahead`
+  underflow — `l1_proxy_e2e`/`plugin_graph_e2e` precedent pin —
+  warmup 期の defined silence で counter 分類の導入を変えない）。
+- `*_kill_reports_failed_once`（kill/dead-leg 面 — dead leg 上の
+  `host_block` は counter 非計数のまま result のみ assert で
+  維持。`audio_counters` が dead handle で `None` を返し得る
+  ため `map_or((0,0), ...)` で許容 — 先例どおり）。
+- `*_missing_runner_is_spawn_failed`（missing-runner 面 —
+  process call 非依存）。
+- Scan/descriptor field-match・lifecycle・`latency_frames`・
+  `Err(Unsupported)` 系 assert（content gate 非依存 — L1
+  verb/lifecycle oracle で本 class 外）。
+- instrument 系 test（test-plugin 両 file の
+  `real_test_plugin_l1_instrument_*` 4 test + `attach_*` module —
+  `ruviform#766` で `LegDeltas`/`host_block_transport` 分類済み、
+  維持確認のみ）。
+
+## Decision — 追補（第 2 slice）
+
+- adapter 両 file・test-plugin 両 file の `host_block` を
+  `LegDeltas` 返却に揃え（test-plugin 側は既存の
+  `host_block_transport` と同一構造 — `LegDeltas` は file 内で
+  instrument/non-instrument 共有に拡張、doc 更新）、`*_l1_full_
+  series` の `delivered` を matched-only 計数に修正。
+- assertion 内容・`delivered >= 8` 最低到達数 gate は不変 —
+  substituted skip で到達数が足りなければ正直に fail。
+- production/fixture src は zero-diff（test-file-only slice —
+  `ruviform#767` の counter semantics 調査 boundary を侵さない）。
+
 ## Residual
 
 - `dropped_submits` の周期的発生そのものは production 側調査
   `ruviform#767` の scope — counter semantics が同 Issue で変わる
   場合は `LegDeltas` 分類の前提再確認が必要（PR 本文で相互リンク）。
 - `hang` test の spawn-deadline flake（`SpawnFailed{Timeout}` —
-  `evidence/rf763` 記録済み環境 flake）は本 class 外・未対応。
-- lease 外の `l1_real_adapter_e2e.rs` に同 class site があれば残件化。
+  `evidence/rf763` 記録済み環境 flake）は本 class 外・`ruviform#841`
+  で追跡中。
+- `l1_real_adapter_e2e.rs` / `l1_real_test_plugin_e2e.rs` 非
+  instrument 面の同 class 監査は第 2 slice（本 PR）で消化済み。
+  lease 外 test file（`l1_proxy_e2e`・`plugin_graph_e2e` 等）は
+  探索時点で対象外確定のまま — 新たな同 class site が見つかった
+  場合は残件化して Issue 側で追跡。
 - docs index（`docs/**/README.md`）は Coordinator が統合時に整備。

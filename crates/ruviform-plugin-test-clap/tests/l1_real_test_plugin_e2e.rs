@@ -179,6 +179,9 @@ fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
 /// `HostOutput` carry two channels. The output channel list is
 /// reborrowed locally (the `l1_proxy_e2e` `out_list` precedent —
 /// `PlanarBufferViewMut` needs a fresh `&'a mut [&'a mut [f32]]`).
+/// Returns the `ProcessResult` plus the leg's per-call counter
+/// deltas so callers can classify the delivered block as matched
+/// (`passthrough == 0`) or substituted (`passthrough > 0`).
 fn host_block(
     host: &mut PluginHost,
     handle: PluginHandle,
@@ -186,13 +189,26 @@ fn host_block(
     out_left: &mut [f32],
     out_right: &mut [f32],
     events: EventList<'_>,
-) -> Result<ProcessResult, HostError> {
+) -> (Result<ProcessResult, HostError>, LegDeltas) {
+    let counters = |h: &PluginHost| {
+        h.audio_counters(handle)
+            .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+    };
+    let before = counters(host);
     let input_view = PlanarBufferView::new(&input[..]).unwrap();
     let inputs = [HostInput(&input_view)];
     let mut out_list = [&mut *out_left, &mut *out_right];
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
-    host.process(handle, &inputs, &mut outputs, events, None)
+    let result = host.process(handle, &inputs, &mut outputs, events, None);
+    let after = counters(host);
+    (
+        result,
+        LegDeltas {
+            passthrough: after.0 - before.0,
+            dropped: after.1 - before.1,
+        },
+    )
 }
 
 /// One stereo block through `PluginHost::process` carrying a
@@ -231,8 +247,9 @@ fn host_block_transport(
 }
 
 /// Per-call L1 leg counter deltas observed around one `process` —
-/// the instrument oracle's provenance record for the delivered
-/// block. `passthrough_submits` increments when the leg substitutes
+/// the delivered-block oracle's provenance record (shared by the
+/// instrument and non-instrument `host_block*` helpers).
+/// `passthrough_submits` increments when the leg substitutes
 /// hold-last/silence output instead of a matched child block;
 /// `dropped_submits` increments when this call's input block (audio
 /// plus queued events) never reached the child at all — later
@@ -369,7 +386,10 @@ fn drive_to_processing(host: &mut PluginHost, handle: PluginHandle) {
 /// `EXPECTED_GAIN` × an earlier input (channel sign applied). A
 /// stale-slot replay is a defined underrun output, so exact
 /// `call − lookahead_blocks` attribution is deliberately not
-/// required — only defined values may ever appear.
+/// required — only defined values may ever appear. Callers apply
+/// this to matched blocks only (`passthrough == 0`): a substituted
+/// replay satisfies membership without fresh child work, which is
+/// why it must be classified out before this check runs.
 fn assert_defined_channels(call: u32, inputs: &[f32], out_left: &[f32], out_right: &[f32]) {
     for (channel, sign) in [(out_left, 1.0_f32), (out_right, -1.0_f32)] {
         assert!(
@@ -457,7 +477,11 @@ fn real_test_plugin_l1_full_series() {
     // `[0.0, 2.0]` plain domain). Delivered blocks are exactly
     // `0.5 ×` an earlier input (the lookahead pipeline); underruns
     // are defined pass-through (silence/last received) and every
-    // call is `Ok(CONTINUE)`.
+    // call is `Ok(CONTINUE)`. The same `event_list` rides every
+    // call, so a dropped submit re-lands the identical `ParamValue`
+    // on the next call — resending is structural, no bounded-resend
+    // window is needed (the fixture's gain law is a plain
+    // overwrite, so resending one event is idempotent).
     let events = [Event::new(
         0,
         EventKind::ParamValue(ParamEvent {
@@ -468,6 +492,8 @@ fn real_test_plugin_l1_full_series() {
     let event_list = EventList::new(&events, FRAMES_U32).unwrap();
     let mut inputs: Vec<f32> = Vec::new();
     let mut delivered = 0_u32;
+    let mut substituted = 0_u32;
+    let mut dropped_calls = 0_u32;
     for call in 0..32_u32 {
         let value = 0.2 + 0.01 * f32::from(u8::try_from(call % 16).unwrap() + 1);
         let left = vec![value; FRAMES];
@@ -476,17 +502,15 @@ fn real_test_plugin_l1_full_series() {
         let mut out_left = vec![0.0_f32; FRAMES];
         let mut out_right = vec![0.0_f32; FRAMES];
         thread::sleep(Duration::from_millis(5));
-        assert_eq!(
-            host_block(
-                &mut host,
-                handle,
-                &input,
-                &mut out_left,
-                &mut out_right,
-                event_list,
-            ),
-            Ok(ProcessResult::CONTINUE)
+        let (result, deltas) = host_block(
+            &mut host,
+            handle,
+            &input,
+            &mut out_left,
+            &mut out_right,
+            event_list,
         );
+        assert_eq!(result, Ok(ProcessResult::CONTINUE));
         if call < 2 {
             // `seq - lookahead` underflow — the first
             // `lookahead_blocks` (2) calls are defined silence, no
@@ -494,12 +518,21 @@ fn real_test_plugin_l1_full_series() {
             // `plugin_graph_e2e` precedent pin).
             assert!(out_left.iter().all(|&s| sample_eq(s, 0.0)));
             assert!(out_right.iter().all(|&s| sample_eq(s, 0.0)));
-        } else if out_left.iter().all(|&s| sample_eq(s, 0.0))
-            && out_right.iter().all(|&s| sample_eq(s, 0.0))
-        {
-            // Defined underrun silence — the child's result has not
-            // landed inside the lookahead window.
+        } else if deltas.passthrough > 0 {
+            // Substituted output — a dropped submit (`dropped > 0`)
+            // or a result not yet landed replays `last_output`/
+            // silence. Defined, but a stale replay satisfies
+            // `assert_defined_channels`'s membership check without
+            // fresh child work, so it is not delivery evidence.
+            substituted += 1;
+            if deltas.dropped > 0 {
+                dropped_calls += 1;
+            }
         } else {
+            // Matched — the child's render of an earlier source call
+            // reached this call. Underrun silence is already
+            // classified as substituted, so an all-zero block here
+            // is a child-side defect the membership check reports.
             assert_defined_channels(call, &inputs, &out_left, &out_right);
             delivered += 1;
         }
@@ -507,15 +540,16 @@ fn real_test_plugin_l1_full_series() {
     }
     // The pipeline must actually deliver: the `l1_proxy_e2e` /
     // `plugin_graph_e2e` precedents pin `matched >= 16` of 30
-    // eligible calls on exact `call−2` attribution. This test's
-    // membership semantic is looser (a stale-slot replay is a
-    // defined underrun output, so it also counts as delivered), and
-    // a real spawned fixture may pace slower than the in-repo stub
-    // worker — 8 of 30 still proves sustained delivery, not a
-    // one-off block.
+    // eligible calls on exact `call−2` attribution. Only *matched*
+    // calls count here (`passthrough == 0`) — a substituted replay
+    // of `last_output` satisfies the membership check without fresh
+    // child work, and counting it was the staleness gap Issue #768
+    // audits. A real spawned fixture may pace slower than the
+    // in-repo stub worker — 8 of 30 still proves sustained
+    // delivery, not a one-off block.
     assert!(
         delivered >= 8,
-        "the L1 pipeline barely delivered — {delivered} non-silent calls"
+        "the L1 pipeline barely delivered — {delivered} matched calls, {substituted} substituted ({dropped_calls} dropped)"
     );
 
     // `SaveState`/`RestoreState` ride the wire and come back as
@@ -613,17 +647,15 @@ fn real_test_plugin_l1_kill_reports_failed_once() {
     let input = [&in_left[..], &in_right[..]];
     let mut out_left = [7.0_f32; FRAMES];
     let mut out_right = [7.0_f32; FRAMES];
-    assert_eq!(
-        host_block(
-            &mut host,
-            handle,
-            &input,
-            &mut out_left,
-            &mut out_right,
-            EventList::empty(FRAMES_U32),
-        ),
-        Ok(ProcessResult::CONTINUE)
+    let (result, _deltas) = host_block(
+        &mut host,
+        handle,
+        &input,
+        &mut out_left,
+        &mut out_right,
+        EventList::empty(FRAMES_U32),
     );
+    assert_eq!(result, Ok(ProcessResult::CONTINUE));
     assert!(out_left.iter().all(|&s| sample_eq(s, 0.0)));
     assert!(out_right.iter().all(|&s| sample_eq(s, 0.0)));
 
