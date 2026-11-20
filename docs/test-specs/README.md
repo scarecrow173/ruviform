@@ -274,6 +274,7 @@ Directory: `docs/test-specs`
 | TSPEC-732clapLifecycleAudit06 | Issue #732 production CLAP adapter lifecycle 監査 — test specification | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | TSPEC-034Z78HXuZljkt8u95PZgA | Issue #744 JobExecutor 実装 テスト仕様 | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | TSPEC-034kf807dspFrozenBenchG4te | Issue #807 frozen DSP SIMD ベンチと ratio regression gate の契約 | approved | [issue-807-frozen-dsp-bench.md](./issue-807-frozen-dsp-bench.md) |
+| TSPEC-034kf807e2ePipelineBenchG4te | Issue #807 frozen E2E pipeline ベンチと normalized-wall / digest regression gate の契約 | approved | [issue-807-e2e-pipeline-bench.md](./issue-807-e2e-pipeline-bench.md) |
 | TSPEC-034MLRCbJ8DILg5vtGVsQB | 実プラグイン L1 opt-in lane（mise task・`#[ignore]` ゲート・fixture 欠落 fail・CI `l1-real-verify` job）テスト仕様 | approved | [l1-real-plugin-lane-tests.md](./l1-real-plugin-lane-tests.md) |
 | TSPEC-034X9FNp2hKXlrw3sQ5AOt | Linux 配布設計（CI 照合確定版）の検証 | proposed | [linux-distribution.md](./linux-distribution.md) |
 | TSPEC-034IdHmKPCUPXNnJh1Y7f7 | lockfile による再現セットアップ | proposed | [lockfile-reproducible-setup.md](./lockfile-reproducible-setup.md) |
@@ -313,7 +314,6 @@ Directory: `docs/test-specs`
 | TSPEC-Wm6ujGxaqkur53e1zm0Xak | Issue #465 WebView 移行台帳現行化 — 分類検証契約 | approved | [wv-removal-inventory.md](./wv-removal-inventory.md) |
 | TSPEC-630singleComponent01 | Issue #630 single-component slice — test specification | approved | [issue-630-single-component.md](./issue-630-single-component.md) |
 | TSPEC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe test spec | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
-| TSPEC-034ZaaChildInventory01 | Issue #532 child-inventory probe test spec | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 

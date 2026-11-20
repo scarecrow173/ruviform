@@ -47,7 +47,6 @@ Directory: `docs/discovery`
 | DSC-732clapLifecycleAudit01 | Issue #732 production CLAP adapter lifecycle 監査 — VST3同型欠陥の診断 | final | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | DSC-630singleComponent01 | Issue #630 single-component slice — VST3 `test_stateful_single` 調査記録 | final | [issue-630-single-component.md](./issue-630-single-component.md) |
 | DISC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe — 調査記録 | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
-| DISC-034ZaaChildInvDiagnosis01 | Issue #532 child-level inventory + capture-plane 診断 — 調査記録 | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 
 ## Settled <!-- doc-suite:settled-index -->
 
