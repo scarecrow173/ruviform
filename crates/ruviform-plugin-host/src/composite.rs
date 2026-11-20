@@ -1765,7 +1765,9 @@ fn command_handle(command: &HostCommand) -> PluginHandle {
         | HostCommand::CloseGui { handle }
         | HostCommand::SetGuiSize { handle, .. }
         | HostCommand::SetGuiVisibility { handle, .. }
-        | HostCommand::SetGuiParent { handle, .. } => handle,
+        | HostCommand::SetGuiParent { handle, .. }
+        | HostCommand::SetGuiFocus { handle, .. }
+        | HostCommand::SendGuiKey { handle, .. } => handle,
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate never reach dispatch")
         }
@@ -1792,6 +1794,8 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
             HostCommand::SetGuiVisibility { handle, visible }
         }
         HostCommand::SetGuiParent { parent, .. } => HostCommand::SetGuiParent { handle, parent },
+        HostCommand::SetGuiFocus { focused, .. } => HostCommand::SetGuiFocus { handle, focused },
+        HostCommand::SendGuiKey { event, .. } => HostCommand::SendGuiKey { handle, event },
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate carry no handle")
         }
@@ -1800,15 +1804,18 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
 
 /// `true` for the editor-GUI verbs that exist only on the L0
 /// in-process surface — `SetGuiSize`/`SetGuiVisibility`/
-/// `SetGuiParent` have no `wire::Command` encoding yet, so an
-/// `OutOfProcess` slot answers the defined `Unsupported` instead of
-/// reaching `to_wire` (which would panic on them).
+/// `SetGuiParent`/`SetGuiFocus`/`SendGuiKey` have no
+/// `wire::Command` encoding yet, so an `OutOfProcess` slot answers
+/// the defined `Unsupported` instead of reaching `to_wire` (which
+/// would panic on them).
 fn l0_only_gui_verb(command: &HostCommand) -> bool {
     matches!(
         command,
         HostCommand::SetGuiSize { .. }
             | HostCommand::SetGuiVisibility { .. }
             | HostCommand::SetGuiParent { .. }
+            | HostCommand::SetGuiFocus { .. }
+            | HostCommand::SendGuiKey { .. }
     )
 }
 
@@ -1833,7 +1840,9 @@ fn to_wire(command: HostCommand) -> wire::Command {
         | HostCommand::Destroy { .. }
         | HostCommand::SetGuiSize { .. }
         | HostCommand::SetGuiVisibility { .. }
-        | HostCommand::SetGuiParent { .. } => {
+        | HostCommand::SetGuiParent { .. }
+        | HostCommand::SetGuiFocus { .. }
+        | HostCommand::SendGuiKey { .. } => {
             unreachable!(
                 "Scan/Instantiate/Destroy and the L0-only GUI verbs are not wire verbs here"
             )

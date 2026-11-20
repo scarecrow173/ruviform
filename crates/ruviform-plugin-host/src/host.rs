@@ -16,8 +16,9 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, Event, EventList, GuiSize, Lifecycle, LifecycleError, LifecycleEvent,
-    LifecycleState, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    BusDescriptor, Event, EventList, GuiKeyEvent, GuiSize, Lifecycle, LifecycleError,
+    LifecycleEvent, LifecycleState, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -278,6 +279,8 @@ impl InProcessHost {
                 self.set_gui_visibility(handle, visible)
             }
             HostCommand::SetGuiParent { handle, parent } => self.set_gui_parent(handle, parent),
+            HostCommand::SetGuiFocus { handle, focused } => self.set_gui_focus(handle, focused),
+            HostCommand::SendGuiKey { handle, event } => self.send_gui_key(handle, event),
         }
     }
 
@@ -1156,6 +1159,44 @@ impl InProcessHost {
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.set_gui_parent(parent).map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_focus(
+        &mut self,
+        handle: PluginHandle,
+        focused: bool,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_focus(focused)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.set_gui_focus(focused).map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn send_gui_key(
+        &mut self,
+        handle: PluginHandle,
+        event: GuiKeyEvent,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.send_gui_key(event)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.send_gui_key(event).map(|()| HostReply::Ok)
                 })
             }
         }

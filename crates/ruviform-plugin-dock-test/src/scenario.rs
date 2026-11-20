@@ -39,9 +39,10 @@ use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_core::{PluginFactory, ProcessConfig};
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError, HostReply,
-    InProcessEditorOps, InProcessHost, ParentLease, ParentSlotLease, PluginEditorSession,
-    PluginEditorSessionId, PluginEditorSessions, PluginHandle, SessionFailCause,
+    EditorSessionOps, EditorSessionState, EditorSize, GuiKeyEvent, HostCommand, HostError,
+    HostReply, InProcessEditorOps, InProcessHost, ParentLease, ParentSlotLease,
+    PluginEditorSession, PluginEditorSessionId, PluginEditorSessions, PluginHandle,
+    SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::WindowId;
@@ -501,6 +502,22 @@ impl EditorSessionOps for CountingEditorOps<'_> {
         lease: &ParentSlotLease,
     ) -> Result<(), EditorOpError> {
         self.inner.reattach(session, lease)
+    }
+
+    fn set_focus(
+        &mut self,
+        session: PluginEditorSessionId,
+        focused: bool,
+    ) -> Result<(), EditorOpError> {
+        self.inner.set_focus(session, focused)
+    }
+
+    fn send_key(
+        &mut self,
+        session: PluginEditorSessionId,
+        event: GuiKeyEvent,
+    ) -> Result<(), EditorOpError> {
+        self.inner.send_key(session, event)
     }
 }
 

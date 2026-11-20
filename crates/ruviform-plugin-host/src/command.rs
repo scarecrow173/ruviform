@@ -20,8 +20,8 @@
 use ruviform_plugin_core::{PluginDescriptor, ProcessConfig};
 
 pub use ruviform_plugin_core::{
-    FailureCause, GuiHandle, GuiSize, HostError, ParentLease, ParentSlotLease,
-    PluginEditorSessionId, PluginHandle,
+    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError,
+    ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 
 /// A non-RT host operation expressed as serializable plain data.
@@ -131,6 +131,27 @@ pub enum HostCommand {
         handle: PluginHandle,
         /// Redeemed parent lease for the new parent surface.
         parent: ParentLease,
+    },
+    /// Give (`focused = true`) or remove keyboard focus from the
+    /// plugin GUI.
+    ///
+    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`]
+    /// (Issue #631's editor input/focus verbs ride the in-process
+    /// lane; the out-of-process GUI verb scope stays Issue #115's).
+    SetGuiFocus {
+        /// Target instance.
+        handle: PluginHandle,
+        /// `true` gives the GUI keyboard focus, `false` removes it.
+        focused: bool,
+    },
+    /// Deliver one key event (press or release) to the plugin GUI.
+    ///
+    /// L0-only — same wire boundary as [`HostCommand::SetGuiFocus`].
+    SendGuiKey {
+        /// Target instance.
+        handle: PluginHandle,
+        /// The key event to deliver.
+        event: GuiKeyEvent,
     },
 }
 
