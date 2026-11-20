@@ -235,7 +235,12 @@ default `0.0`、stepped。mode decode は `floor(plain)` を
 - `tests/l1_fault_test_plugin_e2e.rs`: 新 3 mode を out-of-process
   で arm → 観測（`out_left[0] == 200.0` / `tail_frames ==
   u32::MAX` / 全 sample NaN）→ `Processing` 維持 → disarm 回復 →
-  clean teardown。armed submit は既存先例どおり繰り返す。
+  clean teardown。armed/disarm submit は `dropped_submits`
+  delta == 0 の着地確認まで bounded resend。armed・disarm・
+  clean の各計数 loop は per-call `audio_counters` delta で
+  matched call のみ計数し、substituted call（hold-last
+  `last_output` 再生）は分類して skip — assertion・最低到達数
+  gate は緩めない（`ruviform#768` oracle 監査で確定した基準）。
 - `tests/l1_stateful_test_plugin_e2e.rs`: v2 20B payload offset、
   v1 migration・degraded tail・checksum corruption・unknown
   version を out-of-process で踏み、reject 後の生存性と

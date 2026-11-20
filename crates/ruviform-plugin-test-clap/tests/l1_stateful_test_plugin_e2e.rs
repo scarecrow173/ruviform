@@ -89,6 +89,12 @@ const FRAMES_U32: u32 = 512;
 /// CI host (the existing suite's delivery bounds are looser still).
 const MAX_FOLLOW_UPS: u32 = 24;
 
+/// Cap on mutation-event resends — each resend is one call carrying
+/// the `ParamValue` event; if none lands within the window the
+/// ordering gate fails honestly instead of looping (the same bound
+/// the fault suite's `ARM_RESEND_CALLS` uses).
+const MUTATION_RESEND_CALLS: u32 = 8;
+
 /// The runner executable — `CARGO_BIN_EXE_*` names it directly
 /// (defined only under `--features l1-runner`, which this file's
 /// `#![cfg]` guarantees). A missing binary is an `assert!` failure,
@@ -169,8 +175,31 @@ fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
     }
 }
 
+/// Per-call counter deltas recorded around one `process` — the
+/// oracle's provenance record for the delivered block.
+/// `passthrough_submits` increments when the leg substitutes
+/// hold-last/silence output instead of a matched child block;
+/// `dropped_submits` increments when this call's input block —
+/// audio plus its queued events — never reached the child at all.
+/// A dropped submit also substitutes output, so `passthrough > 0`
+/// marks every non-matched block and `dropped` distinguishes event
+/// loss. The delivered-audio gate must classify per call: a
+/// substituted block replays `last_output`, which can satisfy the
+/// expected-gain equality without the child having rendered
+/// anything new.
+#[derive(Clone, Copy, Default)]
+struct LegDeltas {
+    /// `passthrough_submits` delta: `> 0` ⇒ substituted output.
+    passthrough: u64,
+    /// `dropped_submits` delta: `> 0` ⇒ this call's submit dropped.
+    dropped: u64,
+}
+
 /// One stereo block through `PluginHost::process` — the fixture
-/// declares a single stereo bus pair.
+/// declares a single stereo bus pair. Returns the `ProcessResult`
+/// plus the leg's per-call counter deltas so callers can classify
+/// the delivered block as matched (`passthrough == 0`) or
+/// substituted (`passthrough > 0`).
 fn host_block(
     host: &mut PluginHost,
     handle: PluginHandle,
@@ -178,32 +207,70 @@ fn host_block(
     out_left: &mut [f32],
     out_right: &mut [f32],
     events: EventList<'_>,
-) -> Result<ProcessResult, HostError> {
+) -> (Result<ProcessResult, HostError>, LegDeltas) {
+    let counters = |h: &PluginHost| {
+        h.audio_counters(handle)
+            .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+    };
+    let before = counters(host);
     let input_view = PlanarBufferView::new(&input[..]).unwrap();
     let inputs = [HostInput(&input_view)];
     let mut out_list = [&mut *out_left, &mut *out_right];
     let mut output_view = PlanarBufferViewMut::new(&mut out_list).unwrap();
     let mut outputs = [HostOutput(&mut output_view)];
-    host.process(handle, &inputs, &mut outputs, events, None)
+    let result = host.process(handle, &inputs, &mut outputs, events, None);
+    let after = counters(host);
+    (
+        result,
+        LegDeltas {
+            passthrough: after.0 - before.0,
+            dropped: after.1 - before.1,
+        },
+    )
 }
 
-/// Submits one constant-input block (`0.5 / -0.25`) carrying `events`.
+/// Submits one constant-input block (`0.5 / -0.25`) carrying
+/// `events`, returning the delivered output channels plus the
+/// leg's counter deltas.
 fn submit_block(
     host: &mut PluginHost,
     handle: PluginHandle,
     events: EventList<'_>,
-) -> ([f32; FRAMES], [f32; FRAMES]) {
+) -> ([f32; FRAMES], [f32; FRAMES], LegDeltas) {
     let left = [0.5_f32; FRAMES];
     let right = [-0.25_f32; FRAMES];
     let input = [&left[..], &right[..]];
     let mut out_left = [0.0_f32; FRAMES];
     let mut out_right = [0.0_f32; FRAMES];
     thread::sleep(Duration::from_millis(5));
-    assert_eq!(
-        host_block(host, handle, &input, &mut out_left, &mut out_right, events),
-        Ok(ProcessResult::CONTINUE)
-    );
-    (out_left, out_right)
+    let (result, deltas) = host_block(host, handle, &input, &mut out_left, &mut out_right, events);
+    assert_eq!(result, Ok(ProcessResult::CONTINUE));
+    (out_left, out_right, deltas)
+}
+
+/// Submits blocks carrying `events` until one lands — a `dropped`
+/// delta of 0 means this call's block *and* its queued events
+/// reached the child-side queue. A single-shot mutation submit is
+/// not a reliable mutation: a busy slot or full channel drops the
+/// submit wholesale and the gain never changes, which the
+/// delivered-audio gate then cannot observe — a flaky failure with
+/// no oracle defect elsewhere. Re-sends are idempotent: the
+/// fixture's gain setter is a plain overwrite of the last
+/// `ParamValue` (`stateful.rs`), so a later copy carries the same
+/// intent. Returns whether a submit landed within
+/// `MUTATION_RESEND_CALLS`.
+fn submit_mutation_until_landed(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    events: EventList<'_>,
+) -> bool {
+    for _ in 0..MUTATION_RESEND_CALLS {
+        let (_out_left, _out_right, deltas) = submit_block(host, handle, events);
+        if deltas.dropped == 0 {
+            return true;
+        }
+    }
+    false
 }
 
 /// Drive one instance through `Processing`.
@@ -227,29 +294,43 @@ fn save_state(host: &mut PluginHost, handle: PluginHandle) -> Vec<u8> {
     }
 }
 
-/// Submits event-free constant-input blocks until a delivered result
-/// shows `expected_left`/`expected_right` — the gain-scaled golden
-/// values for the constant `0.5 / -0.25` input — or `MAX_FOLLOW_UPS`
-/// elapse. Returns whether the expected output was observed.
+/// Submits event-free constant-input blocks until a *matched*
+/// delivered result shows `expected_left`/`expected_right` — the
+/// gain-scaled golden values for the constant `0.5 / -0.25` input —
+/// or `MAX_FOLLOW_UPS` elapse. Returns whether the expected output
+/// was observed.
 ///
 /// This is the ordering gate described in the module docs: a matching
 /// output can only come from a *new* result the child produced after
 /// the gain reached `expected`, which proves every earlier block —
-/// including the mutation event block — was processed first.
+/// including the mutation event block — was processed first. Only
+/// matched calls count: a substituted block replays an older
+/// `last_output` — defined, but not this call's child rendering — so
+/// it can satisfy the equality while proving nothing.
 fn wait_for_gain_output(
     host: &mut PluginHost,
     handle: PluginHandle,
     expected_left: f32,
     expected_right: f32,
 ) -> bool {
+    let mut substituted = 0_u32;
     for _ in 0..MAX_FOLLOW_UPS {
-        let (out_left, out_right) = submit_block(host, handle, EventList::empty(FRAMES_U32));
+        let (out_left, out_right, deltas) =
+            submit_block(host, handle, EventList::empty(FRAMES_U32));
+        if deltas.passthrough > 0 {
+            substituted += 1;
+            continue;
+        }
         if out_left.iter().all(|&s| sample_eq(s, expected_left))
             && out_right.iter().all(|&s| sample_eq(s, expected_right))
         {
             return true;
         }
     }
+    eprintln!(
+        "wait_for_gain_output({expected_left}, {expected_right}): \
+         {substituted}/{MAX_FOLLOW_UPS} calls substituted, none matched the expected gain"
+    );
     false
 }
 
@@ -301,10 +382,15 @@ fn real_stateful_test_plugin_l1_save_mutate_restore_save() {
             value: ParamValue::new(0.375).unwrap(),
         }),
     )];
-    submit_block(
-        &mut host,
-        handle,
-        EventList::new(&events, FRAMES_U32).unwrap(),
+    // Resend until a submit lands — a dropped block would lose the
+    // event wholesale; re-sends overwrite the same gain, idempotent.
+    assert!(
+        submit_mutation_until_landed(
+            &mut host,
+            handle,
+            EventList::new(&events, FRAMES_U32).unwrap(),
+        ),
+        "the ×0.75 mutation event never landed"
     );
     // Gate: delivered ×0.75 audio proves the child processed the
     // event block before the next state verb.
@@ -324,10 +410,13 @@ fn real_stateful_test_plugin_l1_save_mutate_restore_save() {
             value: ParamValue::new(0.875).unwrap(),
         }),
     )];
-    submit_block(
-        &mut host,
-        handle,
-        EventList::new(&events, FRAMES_U32).unwrap(),
+    assert!(
+        submit_mutation_until_landed(
+            &mut host,
+            handle,
+            EventList::new(&events, FRAMES_U32).unwrap(),
+        ),
+        "the ×1.75 mutation event never landed"
     );
     assert!(
         wait_for_gain_output(&mut host, handle, 0.875, -0.4375),

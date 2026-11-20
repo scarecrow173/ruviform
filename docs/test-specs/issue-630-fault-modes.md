@@ -65,8 +65,13 @@ relations:
 ## Feature: L1 fault E2E（`tests/l1_fault_test_plugin_e2e.rs`, ignored）
 
 全 case は実 cdylib + `l1-runner` runner を spawn。fixture/runner
-欠落は assert failure（silent skip なし）。armed submit は
-繰り返し送出（lookahead/drop 先例どおり）。
+欠落は assert failure（silent skip なし）。armed/mutation submit は
+`dropped_submits` delta == 0 の着地確認まで bounded resend
+（`ruviform#763` 先例どおり — drop は event を含む block 全体を
+喪失する）。content/status assert は per-call `audio_counters`
+delta で matched call（`passthrough_submits` delta == 0）のみを
+計数し、substituted call（hold-last `last_output` 再生）は
+分類して skip する — assertion 内容・最低到達数 gate は緩めない。
 
 - **rt_alloc_marks_armed_blocks**: normalized `0.625` arm →
   `out_left[0] == 200.0` + `out_left[1..]`/`out_right` は
