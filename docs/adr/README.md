@@ -54,6 +54,7 @@ Directory: `docs/adr`
 | ADR-7Qk2mXvLp9RwTd4YsN8bF | issue-630-test-spawn-fault-runner-argv | accepted | [issue-630-test-spawn-fault-runner-argv.md](./issue-630-test-spawn-fault-runner-argv.md) |
 | ADR-Km83rTzcPE9wLj6uVx7yHq | issue-631-command-receipt fixture mount 形態 | accepted | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | ADR-w8Mn4vXc2Qp6rTs9yHb5Js | issue-631-evidence-fields opt-in artifacts・semantic tree helper 配置 | accepted | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
+| ADR-q6Mv3tYn8Lb5xKp2cJd9Rw | issue-631-gpu-field EnumDisplayDevicesW 採用・DXGI 不採用の根拠 | accepted | [issue-631-gpu-field.md](./issue-631-gpu-field.md) |
 | ADR-Ns84uYadQF1xOk7tWx9jMe | issue-631-headless-command-receipt fixture・body 配置 | accepted | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | ADR-sEmeB5hwtcID0a4rBWSHTx | Issue #692 s2 Luau analyzer 依存選定 — native Luau.Analysis bridge（AC4） | accepted | [issue-692-luau-dependency-selection.md](./issue-692-luau-dependency-selection.md) |
 | ADR-GUIvRTewPsVAJEv3wqlUBg | Issue #716 runtime 依存選定 — mlua Rust API（#692 AC4 再評価） | accepted | [issue-716-runtime-backend.md](./issue-716-runtime-backend.md) |
