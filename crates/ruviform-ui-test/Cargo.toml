@@ -60,5 +60,11 @@ ruviform-ui-theme = { path = "../ruviform-ui-theme" }
 name = "gui-boundary-guard"
 path = "src/bin/gui_boundary_guard.rs"
 
+# Issue #805 verification control CLI（自動検出名 `rvf_ctl` を
+# canonical 名 `rvf-ctl` へ rename）。test-only で製品配布に含めない。
+[[bin]]
+name = "rvf-ctl"
+path = "src/bin/rvf_ctl.rs"
+
 [lints]
 workspace = true

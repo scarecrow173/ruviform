@@ -1,0 +1,9 @@
+{"case":"view-mount","driver":"fake","missing":null,"required":["semantic-action"],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"command-receipt","driver":"fake","missing":null,"required":["semantic-action"],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"artifact","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"host-lifecycle","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"editor-attach","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"session-lifecycle","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"host-terminate","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"open-or-degrade","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}
+{"case":"dock-pixels","driver":"plugin-host-probe","missing":null,"required":[],"runnable":true,"scenario":"rf631.plugin-dock","type":"catalog"}

@@ -1,0 +1,21 @@
+{
+  "app": "G:\\orca\\workspaces\\ruviform\\rf805-verify-skill-doctor\\target\\debug\\dummy_app.exe",
+  "app_exists": true,
+  "dry_run": true,
+  "lane": "rvf-ctl-doctor",
+  "ops": [
+    "test.hello",
+    "test.capabilities",
+    "test.shutdown"
+  ],
+  "read_only": true,
+  "steps": [
+    "spawn the AUT with RVF_TEST_CONTROL=<transport> (piped stdio, or loopback TCP with a run-bound secret)",
+    "test.hello → Welcome (v, session_id, run_id, app, ruviform_revision, backend, capabilities, windows, os, arch)",
+    "test.capabilities → declared capability set + session_id",
+    "test.shutdown graceful → CleanupReport",
+    "await the child exit status"
+  ],
+  "transport": "stdio",
+  "type": "doctor-plan"
+}

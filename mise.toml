@@ -227,6 +227,29 @@ mkdir -p evidence/rf631
 cargo run --locked -p ruviform-plugin-dock-test --features lab-gui --bin plugin-dock-lab -- --out evidence/rf631/plugin-dock-lab.jsonl
 '''
 
+# Issue #805 verify-ruviform control CLI lane (manual/opt-in — NOT a
+# CI-required gate): the canonical entry for `rvf-ctl`, the unified
+# agent-facing control CLI over rvf.uitest.v1. This slice runs
+# `doctor` — builds the headless `dummy_app` AUT + `rvf-ctl`, spawns
+# the AUT over the stdio transport, runs the
+# test.hello/test.capabilities handshake + graceful test.shutdown +
+# child-exit check, and writes the structured JSON report to
+# evidence/rf805/rvf-ctl-doctor.json. Exit 0 = every check passed;
+# 1 = spawn/handshake/capabilities/shutdown/exit failure (report
+# records `verdict` + failing stage + `error.next_step`) or
+# AUT-missing `not_run` + environment_blocked; 2 = CLI misuse.
+# `--dry-run`/`--help` are exercised directly (writes only target/ +
+# evidence/rf805/).
+[tasks.test-ui-rvf-ctl]
+description = "Issue #805 verify-ruviform control CLI lane (manual/opt-in — NOT a CI-required gate): canonical rvf-ctl entry — `doctor` spawns headless dummy_app over rvf.uitest.v1 stdio, runs test.hello + test.capabilities + graceful test.shutdown + child-exit check, JSON report to evidence/rf805/rvf-ctl-doctor.json; exit 0 pass / 1 fail-or-not_run / 2 misuse (writes only target/ + evidence/rf805/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --locked -p ruviform-ui-test --bin dummy_app --bin rvf-ctl
+mkdir -p evidence/rf805
+cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- doctor --out evidence/rf805/rvf-ctl-doctor.json
+'''
+
 [tasks.build]
 description = "Verify one Cargo package: mise run build <package> [cargo flags] (required package)"
 raw_args = true
