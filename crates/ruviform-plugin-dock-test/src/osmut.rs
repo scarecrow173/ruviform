@@ -4,7 +4,8 @@
 //! This is the *only* module in the crate that mutates window
 //! state. The sibling query modules (`osoccl`/`ospix`) keep their
 //! read-only contract; everything here is confined to the GPUI
-//! root HWND's z-order band and foreground ownership, applied and
+//! root HWND's z-order band and foreground ownership plus the
+//! leased container HWND's presentation relationship, applied and
 //! restored inside one bounded probe case.
 //!
 //! Mutation families:
@@ -25,27 +26,56 @@
 //!   flag), repositions it below its baseline above-neighbor when
 //!   one existed, and attempts to hand foreground back to the
 //!   baseline owner when that owner was not the root itself.
+//! - `repaint_container` — `RedrawWindow(container, NULL, NULL,
+//!   RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)`: a synchronous forced
+//!   repaint that clears any persisted update region before
+//!   observation (Issue #532 band-escape probe).
+//! - `apply_layered` — `GWL_EXSTYLE |= WS_EX_LAYERED` on the
+//!   container + `SWP_FRAMECHANGED` style apply +
+//!   `SetLayeredWindowAttributes(container, 0, 255, LWA_ALPHA)`:
+//!   re-routes the container through a layered presentation
+//!   surface instead of its inherited compositing path.
+//! - `reparent_to_desktop` — restores the container's baseline
+//!   exstyle, then `SetParent(container, GetDesktopWindow())` +
+//!   `SetWindowPos` back onto its baseline screen rect at
+//!   `HWND_TOP`: makes the container a top-level window so its
+//!   composition no longer rides the GPUI root's presentation
+//!   plane.
+//! - `restore_container` — `SetParent` back to the baseline
+//!   parent, baseline `GWL_EXSTYLE` + `SWP_FRAMECHANGED`, the
+//!   baseline rect in parent-client coordinates at `HWND_TOP`,
+//!   and a best-effort sibling z-order reposition.
 //!
 //! Restoration contract: only the `WS_EX_TOPMOST` flag is
-//! *verified* (`topmost_restored`); z-order and foreground are
-//! best-effort — `zorder_before/after` and
+//! *verified* on the root (`topmost_restored`); z-order and
+//! foreground are best-effort — `zorder_before/after` and
 //! `foreground_before/attempted/final` are recorded as observed
 //! values so a reader sees exactly what could and could not be
-//! restored. Windows does not guarantee exact z-order or
-//! foreground restoration.
+//! restored. The container restore verifies `parent`, the raw
+//! `GWL_EXSTYLE` value, and the screen rect deterministically
+//! (`parent_restored`/`exstyle_restored`/`rect_restored`); its
+//! sibling z-order is likewise best-effort only. Windows does
+//! not guarantee exact z-order or foreground restoration.
 //!
 //! All values crossing the module boundary are plain integers,
-//! booleans, strings, and [`osoccl::ExstyleFacts`] — no Win32 type
-//! reaches the caller (the same `u64`-narrowed-handle convention
-//! as `oschild`/`ospix`/`osoccl`).
+//! booleans, strings, [`osoccl::ExstyleFacts`], and
+//! [`ospix::ScreenRect`] — no Win32 type reaches the caller (the
+//! same `u64`-narrowed-handle convention as
+//! `oschild`/`ospix`/`osoccl`).
 //!
 //! **RT contract:** non-RT only. **Test-only:** nothing here ships.
 
 use crate::osoccl::ExstyleFacts;
+use crate::ospix::ScreenRect;
 
 /// `WS_EX_TOPMOST` extended-style bit — same stable Win32 ABI value
 /// `osoccl` declares platform-neutrally.
 const WS_EX_TOPMOST: u64 = 0x0000_0008;
+
+/// `WS_EX_LAYERED` extended-style bit — the layered-surface flag the
+/// band-escape probe ORs into the container's `GWL_EXSTYLE`. Same
+/// stable Win32 ABI value `osoccl` decodes.
+const WS_EX_LAYERED: u64 = 0x0008_0000;
 
 /// Safety cap on the top-level z-order walk — a real desktop has
 /// far fewer top-level windows; hitting it records `truncated`
@@ -137,6 +167,151 @@ pub(crate) struct RestoreOutcome {
     pub foreground_final: Option<u64>,
 }
 
+/// The leased plugin-dock container HWND's mutable window state —
+/// the snapshot the band-escape probe takes before mutating the
+/// container's presentation relationship and compares after
+/// restoring.
+#[derive(Debug, Clone)]
+pub(crate) struct ContainerSnapshot {
+    /// `false` only on the non-Windows stub — callers gate on the
+    /// attach observation's `supported` before probing, so this is
+    /// a defensive flag, not a second oracle.
+    pub supported: bool,
+    /// The queried container HWND echoed back (the input handle —
+    /// `None` only on the non-Windows stub, which takes no HWND).
+    pub container: Option<u64>,
+    /// `IsWindow(container)` — a dead container cannot be repainted,
+    /// layered, reparented, or restored; every downstream op then
+    /// fails honestly rather than mutating a recycled handle.
+    pub alive: bool,
+    /// `GetParent(container)` — the window the restore must return
+    /// the container beneath. `None` when dead or unparented.
+    pub parent: Option<u64>,
+    /// The container's raw `GWL_EXSTYLE` facts — `None` when the
+    /// query fails. The restore writes this value back verbatim.
+    pub exstyle: Option<ExstyleFacts>,
+    /// `GetClassLongPtrW(container, GCL_STYLE)` — the container's
+    /// class-style bits. `CS_OWNDC`/`CS_CLASSDC` forbid
+    /// `WS_EX_LAYERED`, so the band-escape evidence needs them to
+    /// distinguish a refused layered write from a silently dropped
+    /// one. `None` when dead or the read fails.
+    pub class_style: Option<u64>,
+    /// `GetWindowRect` in virtual-screen coordinates — the rect the
+    /// reparent stage re-applies and the restore returns to (in
+    /// parent-client coordinates). `None` when the query fails.
+    pub rect: Option<ScreenRect>,
+    /// Sibling windows above the container in its parent's z-order
+    /// (`GW_HWNDPREV` walk) — `None` when the container is dead.
+    pub above_count: Option<u32>,
+    /// The sibling directly above the container — the
+    /// `SetWindowPos` insert-after target for approximate z-order
+    /// restore.
+    pub above_hwnd: Option<u64>,
+    /// The sibling directly below the container.
+    pub below_hwnd: Option<u64>,
+    /// `true` when the `GW_HWNDPREV` walk hit [`ZWALK_CAP`] before
+    /// reaching the top — `above_count` is then a lower bound.
+    pub truncated: bool,
+}
+
+/// The result of one container-mutation API call — what was
+/// invoked, whether it applied, and the post-call container
+/// snapshot.
+#[derive(Debug, Clone)]
+pub(crate) struct ContainerMutationOutcome {
+    /// Recording name of the API call, e.g.
+    /// `"SetParent(GetDesktopWindow())"`.
+    pub api: &'static str,
+    /// The API's success result — `true` applied, `false` refused
+    /// or failed. Recorded verbatim; never upgraded.
+    pub applied: bool,
+    /// `GetLastError` when `applied` is `false` — `None` when the
+    /// call succeeded or the error read itself was unavailable.
+    pub win32_error: Option<u32>,
+    /// Post-call [`ContainerSnapshot`] — parent/exstyle/rect/
+    /// z-order re-read so the caller sees the state the mutation
+    /// actually produced.
+    pub after: ContainerSnapshot,
+}
+
+/// The result of [`restore_container`] — every restore op issued
+/// plus the final observed state and the verification fields.
+#[derive(Debug, Clone)]
+pub(crate) struct ContainerRestoreOutcome {
+    /// The restore ops in issue order (`SetParent` back → baseline
+    /// `GWL_EXSTYLE` write → `SWP_FRAMECHANGED` apply → baseline
+    /// rect re-seat → optional sibling insert-after reposition).
+    pub ops: Vec<ContainerMutationOutcome>,
+    /// The container snapshot after all restore ops.
+    pub final_state: ContainerSnapshot,
+    /// `final_state.parent == baseline.parent` — verified
+    /// deterministically; `false` when either side is unknown.
+    pub parent_restored: bool,
+    /// `final_state.exstyle.value == baseline.exstyle.value` —
+    /// verified deterministically; `false` when either read failed.
+    pub exstyle_restored: bool,
+    /// `final_state.rect == baseline.rect` — verified
+    /// deterministically; `false` when either read failed.
+    pub rect_restored: bool,
+    /// `(above_count, above_hwnd)` before restore — recorded for
+    /// the reader; exact equality is not guaranteed.
+    pub zorder_before: (Option<u32>, Option<u64>),
+    /// `(above_count, above_hwnd)` after restore — same caveat.
+    pub zorder_after: (Option<u32>, Option<u64>),
+}
+
+/// Snapshot the mutable state of the leased container HWND —
+/// parent, exstyle, screen rect, and sibling z-order position.
+/// Query only; never mutates.
+pub(crate) fn observe_container(container: u64) -> ContainerSnapshot {
+    platform::observe_container(container)
+}
+
+/// `RedrawWindow(container, NULL, NULL,
+/// RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)` — a synchronous forced
+/// repaint of the whole container so a persisted update region is
+/// drained before observation (`RDW_UPDATENOW` pumps `WM_PAINT`
+/// inline; no settle needed).
+pub(crate) fn repaint_container(container: u64) -> ContainerMutationOutcome {
+    platform::repaint_container(container)
+}
+
+/// Layered-surface stage: `GWL_EXSTYLE |= WS_EX_LAYERED` on the
+/// container, `SWP_FRAMECHANGED` so the new style takes effect, then
+/// `SetLayeredWindowAttributes(container, 0, 255, LWA_ALPHA)` —
+/// opaque alpha, so the window should look identical while its
+/// presentation now rides a layered surface. The three ops return in
+/// issue order; the caller records each and follows with
+/// [`repaint_container`].
+pub(crate) fn apply_layered(container: u64) -> Vec<ContainerMutationOutcome> {
+    platform::apply_layered(container)
+}
+
+/// Desktop-reparent stage: write `baseline_exstyle` back first so
+/// the escape runs on the pristine style, apply it with
+/// `SWP_FRAMECHANGED`, then `SetParent(container,
+/// GetDesktopWindow())` and `SetWindowPos` the window back onto
+/// `rect` (screen coordinates — a top-level window's frame rect) at
+/// `HWND_TOP`. The four ops return in issue order.
+pub(crate) fn reparent_to_desktop(
+    container: u64,
+    baseline_exstyle: u64,
+    rect: ScreenRect,
+) -> Vec<ContainerMutationOutcome> {
+    platform::reparent_to_desktop(container, baseline_exstyle, rect)
+}
+
+/// Restore the container toward `baseline`: `SetParent` back to the
+/// baseline parent, write the baseline `GWL_EXSTYLE` back and apply
+/// it with `SWP_FRAMECHANGED`, re-seat the baseline rect (converted
+/// to parent-client coordinates) at `HWND_TOP`, then place the
+/// container directly below its baseline above-neighbor when one
+/// existed. Every op's result is recorded; the verification fields
+/// report what could and could not be confirmed.
+pub(crate) fn restore_container(baseline: &ContainerSnapshot) -> ContainerRestoreOutcome {
+    platform::restore_container(baseline)
+}
+
 /// Snapshot the mutable state of the GPUI root that `child`
 /// belongs to — resolves `GA_ROOT`, then reads exstyle, the
 /// top-level z-order position, and the foreground owner. Query
@@ -179,15 +354,22 @@ pub(crate) fn restore(baseline: &RootSnapshot) -> RestoreOutcome {
 #[cfg(windows)]
 #[expect(unsafe_code)]
 mod platform {
-    use windows_sys::Win32::Foundation::{GetLastError, HWND, SetLastError};
+    use windows_sys::Win32::Foundation::{GetLastError, HWND, POINT, SetLastError};
+    use windows_sys::Win32::Graphics::Gdi::{
+        RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow, ScreenToClient,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GA_ROOT, GW_HWNDNEXT, GW_HWNDPREV, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST,
-        IsWindow, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SetForegroundWindow, SetWindowPos,
+        GA_ROOT, GCL_STYLE, GW_HWNDNEXT, GW_HWNDPREV, GWL_EXSTYLE, GetClassLongPtrW,
+        GetDesktopWindow, GetParent, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, IsWindow, LWA_ALPHA,
+        SET_WINDOW_POS_FLAGS, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_NOZORDER, SetForegroundWindow, SetLayeredWindowAttributes, SetParent,
+        SetWindowLongPtrW, SetWindowPos,
     };
 
     use super::{
-        ExstyleFacts, MutationOutcome, RestoreOutcome, RootSnapshot, WS_EX_TOPMOST, ZWALK_CAP,
+        ContainerMutationOutcome, ContainerRestoreOutcome, ContainerSnapshot, ExstyleFacts,
+        MutationOutcome, RestoreOutcome, RootSnapshot, ScreenRect, WS_EX_LAYERED, WS_EX_TOPMOST,
+        ZWALK_CAP,
     };
 
     /// Flags shared by every z-order/band mutation — move, size,
@@ -472,6 +654,28 @@ mod platform {
         }
     }
 
+    /// `GCL_STYLE` of `hwnd`'s window class — raw bits as `u64`.
+    /// `CS_OWNDC`/`CS_CLASSDC` forbid `WS_EX_LAYERED`, so the
+    /// band-escape evidence needs the class style to distinguish a
+    /// silently dropped `GWL_EXSTYLE` write from a refused one.
+    /// `SetLastError(0)` disambiguates a legitimate `0` class style
+    /// from a failed call.
+    fn class_style_bits(hwnd: HWND) -> Result<u64, String> {
+        // SAFETY: read-only class-style query on an observed-live
+        // handle; `GetLastError` disambiguates a failed call.
+        unsafe {
+            SetLastError(0);
+            let raw = GetClassLongPtrW(hwnd, GCL_STYLE);
+            let error = GetLastError();
+            if raw == 0 && error != 0 {
+                return Err(format!(
+                    "GetClassLongPtrW(GCL_STYLE) failed (win32 error {error})"
+                ));
+            }
+            Ok(raw as u64)
+        }
+    }
+
     /// `GetForegroundWindow` as `u64` — `None` on NULL or an
     /// unsupported read.
     fn foreground_owner() -> Option<u64> {
@@ -495,6 +699,419 @@ mod platform {
             foreground_final: baseline.foreground,
         }
     }
+
+    /// Full container mutable-state snapshot — liveness gates every
+    /// read so a dead handle reports `alive:false` with every field
+    /// `None` rather than probing a recycled HWND.
+    pub(super) fn observe_container(container: u64) -> ContainerSnapshot {
+        // SAFETY: `IsWindow`/`GetParent`/`GetWindow` are read-only
+        // queries on an opaque handle; `window_screen_rect` and
+        // `exstyle` scope their own read-only calls. No window is
+        // created, moved, styled, re-parented, or messaged.
+        let (alive, parent, facts, class_style, rect, zorder) = unsafe {
+            let hwnd = container as HWND;
+            let alive = IsWindow(hwnd) != 0;
+            let parent = if alive {
+                let parent = GetParent(hwnd);
+                (!parent.is_null()).then_some(parent as usize as u64)
+            } else {
+                None
+            };
+            let facts = alive.then(|| exstyle(hwnd).ok()).flatten();
+            let class_style = alive.then(|| class_style_bits(hwnd).ok()).flatten();
+            let rect = alive
+                .then(|| crate::ospix::window_screen_rect(container).ok())
+                .flatten();
+            let zorder = if alive {
+                z_position_u64(container)
+            } else {
+                (None, None, None, false)
+            };
+            (alive, parent, facts, class_style, rect, zorder)
+        };
+        let (above_count, above_hwnd, below_hwnd, truncated) = zorder;
+        ContainerSnapshot {
+            supported: true,
+            container: Some(container),
+            alive,
+            parent,
+            exstyle: facts,
+            class_style,
+            rect,
+            above_count,
+            above_hwnd,
+            below_hwnd,
+            truncated,
+        }
+    }
+
+    /// `RedrawWindow(container, NULL, NULL,
+    /// RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)` — synchronous whole-
+    /// window repaint; `RDW_UPDATENOW` drains the update region
+    /// inline so the post-call observation sees a painted frame.
+    pub(super) fn repaint_container(container: u64) -> ContainerMutationOutcome {
+        // SAFETY: `RedrawWindow` is the intentional, bounded repaint
+        // mutation this probe stage exists for; `GetLastError`
+        // disambiguates a failed call.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = RedrawWindow(
+                container as HWND,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW,
+            ) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ContainerMutationOutcome {
+            api: "RedrawWindow(RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)",
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        }
+    }
+
+    /// The three layered-surface ops in issue order — exstyle OR,
+    /// frame apply, `LWA_ALPHA` attributes.
+    pub(super) fn apply_layered(container: u64) -> Vec<ContainerMutationOutcome> {
+        let mut ops = Vec::with_capacity(3);
+        let current = observe_container(container).exstyle.map(|e| e.value);
+        ops.push(match current {
+            Some(value) => exstyle_write(
+                container,
+                value | WS_EX_LAYERED,
+                "SetWindowLongPtrW(GWL_EXSTYLE,<current>|WS_EX_LAYERED)",
+            ),
+            None => ContainerMutationOutcome {
+                api: "SetWindowLongPtrW(GWL_EXSTYLE,<current>|WS_EX_LAYERED)",
+                applied: false,
+                win32_error: None,
+                after: observe_container(container),
+            },
+        });
+        ops.push(frame_apply(container));
+        // SAFETY: `SetLayeredWindowAttributes` is the intentional,
+        // bounded attribute mutation this probe stage exists for —
+        // alpha 255 (fully opaque), no color key. `GetLastError`
+        // disambiguates a failed call.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = SetLayeredWindowAttributes(container as HWND, 0, 255, LWA_ALPHA) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ops.push(ContainerMutationOutcome {
+            api: "SetLayeredWindowAttributes(0,255,LWA_ALPHA)",
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        });
+        ops
+    }
+
+    /// The four desktop-reparent ops in issue order — baseline
+    /// exstyle restore, frame apply, `SetParent` to the desktop,
+    /// rect re-seat at `HWND_TOP`.
+    pub(super) fn reparent_to_desktop(
+        container: u64,
+        baseline_exstyle: u64,
+        rect: ScreenRect,
+    ) -> Vec<ContainerMutationOutcome> {
+        let mut ops = Vec::with_capacity(4);
+        ops.push(exstyle_write(
+            container,
+            baseline_exstyle,
+            "SetWindowLongPtrW(GWL_EXSTYLE,<baseline>)",
+        ));
+        ops.push(frame_apply(container));
+        // SAFETY: `SetParent` to `GetDesktopWindow` is the
+        // intentional, bounded reparent this probe stage exists
+        // for. A NULL return is a failed reparent; `GetLastError`
+        // disambiguates.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let previous = SetParent(container as HWND, GetDesktopWindow());
+            let ok = !previous.is_null();
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ops.push(ContainerMutationOutcome {
+            api: "SetParent(GetDesktopWindow())",
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        });
+        // The container is top-level now — its frame rect lives in
+        // screen coordinates, so the baseline screen rect applies
+        // verbatim.
+        ops.push(rect_seat(
+            container,
+            HWND_TOP,
+            rect.left,
+            rect.top,
+            rect.width,
+            rect.height,
+            "SetWindowPos(HWND_TOP,<baseline-screen-rect>,SWP_NOACTIVATE)",
+        ));
+        ops
+    }
+
+    /// Restore toward `baseline` — `SetParent` back, baseline
+    /// exstyle + frame apply, baseline rect in parent-client
+    /// coordinates, then a best-effort insert-after reposition.
+    /// Parent/exstyle/rect are verified deterministically; the
+    /// sibling z-order is recorded, never claimed.
+    pub(super) fn restore_container(baseline: &ContainerSnapshot) -> ContainerRestoreOutcome {
+        let Some(container) = baseline.container else {
+            return empty_container_restore(baseline);
+        };
+        let mut ops = Vec::new();
+
+        // 1) Return the container beneath its baseline parent.
+        if let Some(parent) = baseline.parent {
+            // SAFETY: `SetParent` back to the observed baseline
+            // parent is the intentional restore mutation;
+            // `IsWindow` guards a plainly dead parent first (it
+            // cannot detect handle reuse, but skips a dead one).
+            let (applied, error) = unsafe {
+                if IsWindow(parent as HWND) == 0 {
+                    (false, None)
+                } else {
+                    SetLastError(0);
+                    let previous = SetParent(container as HWND, parent as HWND);
+                    let ok = !previous.is_null();
+                    let error = if ok { None } else { Some(GetLastError()) };
+                    (ok, error)
+                }
+            };
+            ops.push(ContainerMutationOutcome {
+                api: "SetParent(<baseline-parent>)",
+                applied,
+                win32_error: error,
+                after: observe_container(container),
+            });
+        }
+
+        // 2) Baseline exstyle + frame apply.
+        if let Some(facts) = &baseline.exstyle {
+            ops.push(exstyle_write(
+                container,
+                facts.value,
+                "SetWindowLongPtrW(GWL_EXSTYLE,<baseline>)",
+            ));
+            ops.push(frame_apply(container));
+        }
+
+        // 3) Baseline rect re-seat — `SetWindowPos` on a child
+        //    window takes parent-client coordinates, so convert the
+        //    baseline screen rect's origin through `ScreenToClient`
+        //    on the baseline parent. A failed conversion marks the
+        //    op unapplied (the unconverted screen origin would land
+        //    the window at the wrong offset).
+        if let (Some(parent), Some(rect)) = (baseline.parent, baseline.rect) {
+            let (applied, error) = unsafe {
+                let mut point = POINT {
+                    x: rect.left,
+                    y: rect.top,
+                };
+                SetLastError(0);
+                let converted = ScreenToClient(parent as HWND, &raw mut point) != 0;
+                let moved = SetWindowPos(
+                    container as HWND,
+                    HWND_TOP,
+                    point.x,
+                    point.y,
+                    i32::try_from(rect.width).unwrap_or(i32::MAX),
+                    i32::try_from(rect.height).unwrap_or(i32::MAX),
+                    SWP_NOACTIVATE,
+                ) != 0;
+                let ok = converted && moved;
+                let error = if ok { None } else { Some(GetLastError()) };
+                (ok, error)
+            };
+            ops.push(ContainerMutationOutcome {
+                api: "SetWindowPos(HWND_TOP,<baseline-rect-parent-client>,SWP_NOACTIVATE)",
+                applied,
+                win32_error: error,
+                after: observe_container(container),
+            });
+        }
+
+        // 4) Approximate sibling z-order restore — insert directly
+        //    below the baseline above-neighbor when that neighbor
+        //    is still alive.
+        if let Some(above) = baseline.above_hwnd {
+            // SAFETY: `IsWindow` is a read-only liveness query on an
+            // observed handle before it is reused as insert-after.
+            let alive = unsafe { IsWindow(above as HWND) } != 0;
+            if alive {
+                ops.push(zorder_seat(
+                    container,
+                    above as HWND,
+                    "SetWindowPos(<baseline-above-neighbor>,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)",
+                ));
+            }
+        }
+
+        let final_state = observe_container(container);
+        ContainerRestoreOutcome {
+            parent_restored: baseline.parent.is_some() && final_state.parent == baseline.parent,
+            exstyle_restored: match (&baseline.exstyle, &final_state.exstyle) {
+                (Some(baseline), Some(after)) => after.value == baseline.value,
+                _ => false,
+            },
+            rect_restored: match (baseline.rect, final_state.rect) {
+                (Some(baseline), Some(after)) => after == baseline,
+                _ => false,
+            },
+            zorder_before: (baseline.above_count, baseline.above_hwnd),
+            zorder_after: (final_state.above_count, final_state.above_hwnd),
+            ops,
+            final_state,
+        }
+    }
+
+    /// `SetWindowLongPtrW(GWL_EXSTYLE, value)` on the container —
+    /// `SetLastError(0)` first so a legitimate `0` previous style
+    /// value does not masquerade as a failure.
+    fn exstyle_write(container: u64, value: u64, api: &'static str) -> ContainerMutationOutcome {
+        // `GWL_EXSTYLE` values are u32-range by ABI — a value that
+        // does not fit `isize` records an honest unapplied op
+        // rather than a truncated write.
+        let Ok(new) = isize::try_from(value) else {
+            return ContainerMutationOutcome {
+                api,
+                applied: false,
+                win32_error: None,
+                after: observe_container(container),
+            };
+        };
+        // SAFETY: `SetWindowLongPtrW(GWL_EXSTYLE)` is the
+        // intentional, bounded style mutation this module exists
+        // for; `GetLastError` disambiguates a failed call.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            SetWindowLongPtrW(container as HWND, GWL_EXSTYLE, new);
+            let err = GetLastError();
+            (err == 0, (err != 0).then_some(err))
+        };
+        let after = observe_container(container);
+        // The API's success convention is last-error only, but a
+        // write on a window owned by another thread — or a style
+        // the window's class forbids — can be dropped silently.
+        // `applied` claims the style actually changed, so verify
+        // the read-back against the requested value; the snapshot
+        // records the state the write actually produced.
+        let applied = applied && after.exstyle.as_ref().is_some_and(|e| e.value == value);
+        ContainerMutationOutcome {
+            api,
+            applied,
+            win32_error: error,
+            after,
+        }
+    }
+
+    /// `SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|
+    /// SWP_NOZORDER|SWP_NOACTIVATE)` — commits a cached exstyle
+    /// change without moving, sizing, re-ordering, or activating.
+    fn frame_apply(container: u64) -> ContainerMutationOutcome {
+        // SAFETY: bounded `SetWindowPos` style-commit mutation.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = SetWindowPos(
+                container as HWND,
+                HWND_TOP,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            ) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ContainerMutationOutcome {
+            api: "SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)",
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        }
+    }
+
+    /// `SetWindowPos` onto a rect at `insert_after` with `flags` —
+    /// the shared seat used by the reparent stage's screen-rect
+    /// application.
+    fn rect_seat(
+        container: u64,
+        insert_after: HWND,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        api: &'static str,
+    ) -> ContainerMutationOutcome {
+        // SAFETY: bounded `SetWindowPos` move/size mutation.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = SetWindowPos(
+                container as HWND,
+                insert_after,
+                x,
+                y,
+                i32::try_from(width).unwrap_or(i32::MAX),
+                i32::try_from(height).unwrap_or(i32::MAX),
+                SWP_NOACTIVATE,
+            ) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ContainerMutationOutcome {
+            api,
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        }
+    }
+
+    /// `SetWindowPos(insert_after, ZORDER_FLAGS)` on the container —
+    /// the sibling z-order reposition (container counterpart of the
+    /// root's `mutation` helper).
+    fn zorder_seat(
+        container: u64,
+        insert_after: HWND,
+        api: &'static str,
+    ) -> ContainerMutationOutcome {
+        // SAFETY: bounded `SetWindowPos` z-order mutation —
+        // `ZORDER_FLAGS` suppresses move/size/activation.
+        let (applied, error) = unsafe {
+            SetLastError(0);
+            let ok = SetWindowPos(container as HWND, insert_after, 0, 0, 0, 0, ZORDER_FLAGS) != 0;
+            let error = if ok { None } else { Some(GetLastError()) };
+            (ok, error)
+        };
+        ContainerMutationOutcome {
+            api,
+            applied,
+            win32_error: error,
+            after: observe_container(container),
+        }
+    }
+
+    /// Restore outcome for a baseline with no container handle —
+    /// nothing was mutated, so there is nothing to restore; the
+    /// fields still report the baseline honestly.
+    fn empty_container_restore(baseline: &ContainerSnapshot) -> ContainerRestoreOutcome {
+        ContainerRestoreOutcome {
+            ops: Vec::new(),
+            final_state: baseline.clone(),
+            parent_restored: baseline.parent.is_none(),
+            exstyle_restored: baseline.exstyle.is_none(),
+            rect_restored: baseline.rect.is_none(),
+            zorder_before: (baseline.above_count, baseline.above_hwnd),
+            zorder_after: (baseline.above_count, baseline.above_hwnd),
+        }
+    }
 }
 
 /// Non-Windows stub — `NativePluginDock` (and thus the case that
@@ -504,7 +1121,10 @@ mod platform {
 /// mutations or observations.
 #[cfg(not(windows))]
 mod platform {
-    use super::{MutationOutcome, RestoreOutcome, RootSnapshot};
+    use super::{
+        ContainerMutationOutcome, ContainerRestoreOutcome, ContainerSnapshot, MutationOutcome,
+        RestoreOutcome, RootSnapshot, ScreenRect,
+    };
 
     fn unsupported_snapshot() -> RootSnapshot {
         RootSnapshot {
@@ -526,6 +1146,34 @@ mod platform {
             applied: false,
             win32_error: None,
             after: unsupported_snapshot(),
+        }
+    }
+
+    fn unsupported_container_snapshot(container: u64) -> ContainerSnapshot {
+        ContainerSnapshot {
+            supported: false,
+            container: Some(container),
+            alive: false,
+            parent: None,
+            exstyle: None,
+            class_style: None,
+            rect: None,
+            above_count: None,
+            above_hwnd: None,
+            below_hwnd: None,
+            truncated: false,
+        }
+    }
+
+    fn unsupported_container_outcome(
+        api: &'static str,
+        container: u64,
+    ) -> ContainerMutationOutcome {
+        ContainerMutationOutcome {
+            api,
+            applied: false,
+            win32_error: None,
+            after: unsupported_container_snapshot(container),
         }
     }
 
@@ -555,6 +1203,62 @@ mod platform {
             foreground_before: baseline.foreground,
             foreground_attempted: false,
             foreground_final: baseline.foreground,
+        }
+    }
+
+    pub(super) fn observe_container(container: u64) -> ContainerSnapshot {
+        unsupported_container_snapshot(container)
+    }
+
+    pub(super) fn repaint_container(container: u64) -> ContainerMutationOutcome {
+        unsupported_container_outcome(
+            "RedrawWindow(RDW_INVALIDATE|RDW_ERASE|RDW_UPDATENOW)",
+            container,
+        )
+    }
+
+    pub(super) fn apply_layered(container: u64) -> Vec<ContainerMutationOutcome> {
+        vec![
+            unsupported_container_outcome(
+                "SetWindowLongPtrW(GWL_EXSTYLE,<current>|WS_EX_LAYERED)",
+                container,
+            ),
+            unsupported_container_outcome(
+                "SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)",
+                container,
+            ),
+            unsupported_container_outcome("SetLayeredWindowAttributes(0,255,LWA_ALPHA)", container),
+        ]
+    }
+
+    pub(super) fn reparent_to_desktop(
+        container: u64,
+        _baseline_exstyle: u64,
+        _rect: ScreenRect,
+    ) -> Vec<ContainerMutationOutcome> {
+        vec![
+            unsupported_container_outcome("SetWindowLongPtrW(GWL_EXSTYLE,<baseline>)", container),
+            unsupported_container_outcome(
+                "SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)",
+                container,
+            ),
+            unsupported_container_outcome("SetParent(GetDesktopWindow())", container),
+            unsupported_container_outcome(
+                "SetWindowPos(HWND_TOP,<baseline-screen-rect>,SWP_NOACTIVATE)",
+                container,
+            ),
+        ]
+    }
+
+    pub(super) fn restore_container(baseline: &ContainerSnapshot) -> ContainerRestoreOutcome {
+        ContainerRestoreOutcome {
+            ops: Vec::new(),
+            final_state: baseline.clone(),
+            parent_restored: baseline.parent.is_none(),
+            exstyle_restored: baseline.exstyle.is_none(),
+            rect_restored: baseline.rect.is_none(),
+            zorder_before: (baseline.above_count, baseline.above_hwnd),
+            zorder_after: (baseline.above_count, baseline.above_hwnd),
         }
     }
 }

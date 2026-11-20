@@ -208,6 +208,7 @@ Directory: `docs/test-specs`
 | TSPEC-034XB25A57vEBAhqcyKdIM | Issue #532 GPUI DComp public-surface 監査 検証仕様 | approved | [issue-532-gpui-dcomp-surface.md](./issue-532-gpui-dcomp-surface.md) |
 | TSPEC-5QuUji5Eu9kpUAQbq5rtDI | Issue #532 presentation-probe test spec | approved | [issue-532-presentation-probe.md](./issue-532-presentation-probe.md) |
 | TSPEC-034ZaaUncoveredBaseline01 | Issue #532 uncovered-baseline bisect test spec | approved | [issue-532-uncovered-baseline.md](./issue-532-uncovered-baseline.md) |
+| TSPEC-034ZaaBandEscapeProbe01 | Issue #532 band-escape probe test spec | approved | [issue-532-band-escape.md](./issue-532-band-escape.md) |
 | TSPEC-034VedyL5Ej4Yc3P62YgUl | Issue #552 — SendInput preflight 検証契約 | approved | [issue-552-sendinput-preflight.md](./issue-552-sendinput-preflight.md) |
 | TSPEC-cFTjIZpnYGLaA5BcC74ahh | Consumer-neutral Workflow/CLI orchestration契約検証（Issue #553 RF-AUTX-01） | proposed | [issue-553-workflow-orchestration.md](./issue-553-workflow-orchestration.md) |
 | TSPEC-034XecRP3Wpuq0BscTS283 | Multi-backend Script/Analyzer契約検証（Issue #558 RF-SCRIPT-00） | proposed | [issue-558-script-contract.md](./issue-558-script-contract.md) |
