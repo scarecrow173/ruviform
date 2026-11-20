@@ -1366,6 +1366,12 @@ impl Prefetch {
     ///
     /// [`ErrorKind::InvalidValue`] — `config` disagrees with the
     /// reader's canonical format, or a zero dimension was supplied.
+    ///
+    /// # Panics
+    ///
+    /// Panics if seeding the free ring rejects a block — the ring's
+    /// capacity equals the pool size, so a rejection reports an
+    /// internal invariant violation, not input or runtime state.
     #[allow(clippy::type_complexity)]
     pub fn manual(
         reader: SourceReader<'static>,
@@ -1377,7 +1383,14 @@ impl Prefetch {
         let mut free_tx = free_tx;
         for _ in 0..config.block_count {
             let block = PcmBlock::new(config.channels, config.block_frames);
-            debug_assert!(free_tx.try_push(block).is_ok());
+            // Seeding is real work, not a check — it must run in
+            // every profile. The ring's capacity equals the pool
+            // size ("Single owner" above), so the push cannot fail;
+            // `Full` would be an internal invariant violation, not
+            // a `Result` error.
+            free_tx
+                .try_push(block)
+                .expect("free ring capacity equals pool size");
         }
         let telemetry = PrefetchTelemetry::default();
         let (cmd_tx, cmd_rx) = mpsc::channel();
@@ -1426,6 +1439,10 @@ impl Prefetch {
     ///
     /// Same as [`manual`](Self::manual), plus
     /// [`ErrorKind::Io`] when the thread cannot be spawned.
+    ///
+    /// # Panics
+    ///
+    /// Same as [`manual`](Self::manual).
     pub fn spawn(reader: SourceReader<'static>, config: PrefetchConfig) -> Result<Prefetch> {
         let (mut handle, producer, consumer) = Self::manual(reader, config)?;
         let worker = std::thread::Builder::new()
