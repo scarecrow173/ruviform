@@ -132,7 +132,7 @@ const NO_NOTIFY_GRACE: Duration = Duration::from_millis(500);
 
 /// Short timeout injected into the spec for the wedge paths — long
 /// enough that spawn+handshake stays deterministic on a loaded
-/// host (every handshake stage gets its own `command_timeout`
+/// host (every pre-mint stage gets its own `spawn_timeout`
 /// window), short enough that a mistargeted wait is observable:
 /// the 2 s wedge still fires well inside the 10 s default.
 const SHORT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -1763,16 +1763,16 @@ fn hello_version_mismatch_fails_instantiate() {
     assert_no_notification(&mut host);
 }
 
-/// A handshake wedge is also `command_timeout`:
+/// A handshake wedge is `spawn_timeout`:
 /// `--hang-after-msgs=0` stops the child answering even the
 /// handshake `Scan`, so `Instantiate` fails
 /// `SpawnFailed{cause: Timeout}` inside the injected timeout — no
 /// handle, no notification.
 #[test]
-fn handshake_wedge_uses_command_timeout() {
+fn handshake_wedge_uses_spawn_timeout() {
     let mut host = PluginHost::new();
     let mut spec = video_spec(&["--hang-after-msgs=0"]);
-    spec.command_timeout = SHORT_TIMEOUT;
+    spec.spawn_timeout = SHORT_TIMEOUT;
     host.video().register_out_of_process(spec).unwrap();
 
     let start = Instant::now();
@@ -1791,7 +1791,7 @@ fn handshake_wedge_uses_command_timeout() {
     };
     assert!(
         start.elapsed() < Duration::from_secs(8),
-        "handshake wedge must fire command_timeout"
+        "handshake wedge must fire spawn_timeout"
     );
     assert_eq!(cause, FailureCause::Timeout);
     assert!(matches!(
@@ -1812,7 +1812,7 @@ fn handshake_wedge_uses_command_timeout() {
 /// the `Hello` wait, the same machinery the audio route uses —
 /// retains them, and the mid-`CreateVideoInstance` wedge freezes
 /// them into the registered record. The wedge is a *hang*, not a
-/// crash, deliberately: the `command_timeout` window gives the
+/// crash, deliberately: the `spawn_timeout` window gives the
 /// detached drain a deterministic slice to read the pre-`Hello`
 /// emission before `create_rollback_error` freezes (a mid-create
 /// *crash* would race the drain — the freeze can precede the
@@ -1825,7 +1825,7 @@ fn spawn_failed_attempt_record_captures_stderr() {
     const STDERR_BYTES: usize = 128;
     let mut host = PluginHost::new();
     let mut spec = video_spec(&["--stderr-bytes=128", "--hang-after-msgs=1"]);
-    spec.command_timeout = SHORT_TIMEOUT;
+    spec.spawn_timeout = SHORT_TIMEOUT;
     host.video().register_out_of_process(spec).unwrap();
 
     let start = Instant::now();
@@ -1844,9 +1844,9 @@ fn spawn_failed_attempt_record_captures_stderr() {
     };
     assert!(
         start.elapsed() < Duration::from_secs(8),
-        "a create wedge must fire command_timeout"
+        "a create wedge must fire spawn_timeout"
     );
-    // The request wait fired `command_timeout` — the cause was
+    // The request wait fired `spawn_timeout` — the cause was
     // recorded before the wedge-kill issued.
     assert_eq!(cause, FailureCause::Timeout);
     let DiagnosticQuery::Found(record) = host.diagnostics_query(diagnostics_id) else {
