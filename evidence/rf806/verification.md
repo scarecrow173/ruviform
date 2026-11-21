@@ -1,8 +1,11 @@
-# rf806 — formal verification D 層 slice 1（wire codec proptest + Kani）verification record
+# rf806 — formal verification D 層（proptest + Kani）verification record
 
-Issue `scarecrow173/ruviform#806` slice 1 の検証記録。canonical = `mise`
+Issue `scarecrow173/ruviform#806` の検証記録。canonical = `mise`
 lane（`test-formal` / `test-formal-kani`）。cargo 直接実行は補助証拠
-（mutation 注入確認・ロック前の下見）として明記済み。
+（mutation 注入確認・ロック前の下見）として明記済み。slice 1（wire
+codec）と slice 2（archive reader）をそれぞれ記録する。
+
+## slice 1 — wire codec（rvf.ipc.v1 / rvf.uitest.v1）
 
 - Date: 2026-11-20
 - OS: Windows (x86_64) — proptest/通常 lane。Kani lane は WSL2 Ubuntu
@@ -106,3 +109,90 @@ wire 上の意味的同一性を検証する。
   未指摘（stable では warn 化前）。
 - 変更ファイルに生産 `src/` 差分なし。`Cargo.lock` は proptest
   依存解決分のみ（dev-dep・本番グラフ非波及）。
+
+## slice 2 — archive reader（ruviform-io-archive TAR/ZIP）
+
+- Date: 2026-11-21
+- OS: Windows (x86_64) — proptest/通常 lane。Kani lane は WSL2 Ubuntu
+  （`cargo kani` 検出 → `/mnt/g` パス写像 → WSL ネイティブ target dir）
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1（Windows）;
+  rustc 1.99.0 / Kani Rust Verifier 0.68.0 / CBMC 6.11.0（WSL2）
+- Repo SHA: `b27fb6a1f63970479f5c82872f9ba0391f741ed5`（`origin/main`
+  起点。各 JSONL の `repo_sha` は実行時 HEAD を記録）
+- ローカル検証 = 変更範囲の検証。統合検証は merge 後の対象 SHA に
+  対する必須 CI 結果が証拠（本記録はそれを代替しない）。
+
+### 検証対象
+
+- `crates/ruviform-io-archive` の TAR streaming reader（`src/tar/`）・
+  ZIP reader（`src/zip/`）・`ArchiveReadLimits`（`src/limits.rs`）・
+  completion/receipt（`src/entry.rs` / `src/receipt.rs`）—
+  `tests/formal_archive.rs`（18 properties + `#[cfg(kani)] mod proofs`
+  3 harness）。
+- 生産コードの意味論は変更なし（mutation 注入・完全 revert 済み、
+  `git diff` の src/ 差分ゼロで確認）。
+
+### Actions → resulting state
+
+| # | Action (command) | Resulting state |
+| --- | --- | --- |
+| 1 | `mise run test-formal` | `formal_ipc` 7/7 + `formal_transport` 4/4 + `formal_archive` 18/18 pass・exit 0 |
+| 2 | `mise run test-formal-kani` | 環境解決: native `cargo kani` 不在 → WSL2 Ubuntu 採用。`cargo kani --tests` の全 crate 一括実行は compile 直後に WSL 側が不安定化（`E_UNEXPECTED`・CBMC 孤児 process 残存）し verdict 未発行 — 反例ではなくリソース/環境起因と判断。代替として harness 単独実行を `/tmp` log で収集（結果は下部 table） |
+| 3 | mutation 注入 attempt 1: `tar/read.rs` declared-size gate `>` → `>=`（境界のみ違反） | **未検出** — `tar_declared_size_gate` の sampling が `(declared == limit)` 境界をほぼ生成しない（`limit = limit_raw % (declared+9)` のため確率 ~1/(declared+9)）。18/18 pass・EXIT=0。boundary density gap を正直に残す。記録: `slice2/mutation-attempt1-notdetected.log`（local） |
+| 4 | mutation 注入 attempt 2: `tar/read.rs` `entries_total >= max_entries` → `>`（over-cap を 1 件余計に受理） | `tar_max_entries_gate` が shrink つき反例 `k = 2, max = 0` で FAILED（17 passed / 1 failed・EXIT=101）。suite が契約違反を検出できることの実証。記録: `slice2/mutation-fail.log`（local） |
+| 5 | 変異の完全 revert → `cargo test --locked -p ruviform-io-archive --test formal_archive` 再実行 | 18/18 green・EXIT=0・`git diff` src/ ゼロ（変異持ち越しなし）。記録: `slice2/mutation-revert-green.log`（local） |
+| 6 | `mise run fmt-check` / `check` / `lint` / `test`（ruviform-io-archive） | 全 pass（lint は `matches!`・method-ref・semicolon・useless-conversion 指摘を修正済みの最終形で clippy `-D warnings` clean） |
+| 7 | `mise exec -- prek run --all-files` | 全 hook pass（whitespace/EOF/yaml/toml/line-ending/BOM/key/actionlint） |
+
+### Lane / verification results
+
+| Command | OS | Exit | Verdict | 備考 |
+| --- | --- | --- | --- | --- |
+| `mise run test-formal` | Windows x64 | 0 | pass | proptest 11（wire codec）+ 18（archive）properties 全 pass |
+| `mise run test-formal-kani`（全 crate 一括） | WSL2 Ubuntu x64 | n/a | not_run | compile 完了直後に CBMC 群が WSL を不安定化し cargo-kani が無出力のまま exit 1・verdict 未発行。反例ではなく環境/リソース起因（`E_UNEXPECTED` 続発）— `fail` とも `pass` とも記録しない |
+| `cargo kani --harness proofs::tar_typeflag_classification`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — CBMC が unwinding 段階で継続中（`parse_numeric` inline loop が bound 600 縁まで到達）。verdict 未発行・反例なし |
+| `cargo kani --harness proofs::tar_declared_size_gate`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — 同上。verdict 未発行・反例なし |
+| `cargo kani --harness proofs::zip_index_gates`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — 同上。verdict 未発行・反例なし。long-window（1800s）再試行を別途実施 |
+| `cargo test … formal_archive`（mutant 注入時） | Windows x64 | 101 | fail（期待どおり） | `tar_max_entries_gate` が `k=2, max=0` を縮小提示 |
+| `cargo test … formal_archive`（revert 後） | Windows x64 | 0 | pass | 変異なしで緑に復帰 |
+| `mise run fmt-check` | Windows x64 | 0 | pass | |
+| `mise run check ruviform-io-archive` | Windows x64 | 0 | pass | `--all-targets`（新規 test ターゲット含む） |
+| `mise run lint ruviform-io-archive` | Windows x64 | 0 | pass | clippy `-D warnings` clean |
+| `mise run test ruviform-io-archive` | Windows x64 | 0 | pass | パッケージ全テスト pass |
+| `mise exec -- prek run --all-files` | Windows x64 | 0 | pass | repo hooks 全量 |
+
+### Bounds and assumptions（Kani・slice 2）
+
+`docs/specs/formal-verification.md` の「slice 2 archive harness」表が
+正本。要約:
+
+- `tar_typeflag_classification`: 512 byte 固定 TAR header block の
+  byte 156（typeflag）のみ symbolic・全 256 値を尽きる。name・数値
+  field・extension payload 中身は concrete — 複数 header や GNU/PAX
+  長名は proptest `tar_pax_gnu_extensions` 等に委譲。
+- `tar_declared_size_gate`: 同上 skeleton で `max_entry_uncompressed_
+  bytes` を symbolic u64 にして declared=42 との比較 gate を尽きる
+  — boundary も sampling 非依存で exhaustive。
+- `zip_index_gates`: concrete ZIP skeleton（1 entry）で EOCD の
+  `max_entries`/`max_metadata_bytes` budget を symbolic 化し
+  index gate を尽きる。複数 entry・ZIP64・deflate 本体は proptest
+  に委譲。
+- 任意 malformed stream の exhaustive proof は scope 外 — concrete
+  proptest `tar_arbitrary_stream_error_set` / `zip_arbitrary_
+  stream_error_set` が shrink つき coverage を担う（slice 1 と同じ
+  責務分割）。
+
+### Honest notes（slice 2）
+
+- archive harness の初版は harness 側 `tar_block` の 512 回 checksum
+  loop が支配的 unwind コストで CBMC が実用時間を超過したため、
+  固定 field の byte-sum を closed-form 定数（`TAR_HEADER_BASE` +
+  octal digit sum）に置き換えた。定数が layout と不整合なら
+  checksum mismatch で harness 自体が fail する自己検証構造。
+- mutation attempt 1（declared-size 境界 `>=`）が proptest に検出
+  されなかった事実は boundary density の正直なギャップとして残す。
+  同 gate は Kani harness が symbolic u64 で exhaustive に検証する
+  対象であり、boundary 検出は sampling に依存しない。
+- 変更ファイルに生産 `src/` 差分なし（mutation は完全 revert）。
+  `Cargo.lock` は proptest dev-dep 解決分のみ。`tests/common/mod.rs`
+  は `Debug` derive 追加のみ（proptest 診断表示用・意味論不変）。

@@ -45,6 +45,7 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 }
 
 /// One crafted entry: every stored field is independently controllable.
+#[derive(Debug)]
 pub struct EntrySpec {
     /// Raw name bytes written into the central directory record.
     pub name: Vec<u8>,
@@ -113,7 +114,7 @@ impl EntrySpec {
 }
 
 /// EOCD field overrides; `EocdSpec::default()` produces a correct record.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct EocdSpec {
     pub disk_no: u16,
     pub cd_disk: u16,
