@@ -31,6 +31,8 @@ relations:
     - "docs/designs/issue-839-gpui-dcomp.md"
     - "docs/discovery/issue-839-gpui-dcomp.md"
     - "evidence/rf532/clipfix-results.md"
+    - "evidence/rf532/pinned-dep-results.md"
+    - "evidence/rf532/plugin-dock-real-pinned.jsonl"
   refines: []
   refined-by: []
   derives-from:
@@ -56,9 +58,12 @@ arm 不使用）、child style/parentage 不変、timer 駆動 sync、
 reentrancy panic なし、device-lost 再構築、既存 verdict
 集合の維持。
 
-検証時点の gpui: fork `rf839-dcomp-child-raster` branch
-`b3144f2` を uncommitted `[patch]` override で参照
-（Cargo.lock pin 更新は次 slice へ defer）。
+検証時点の gpui: 初回検証は fork `rf839-dcomp-child-raster`
+branch `b3144f2` を uncommitted `[patch]` override で参照。
+後続 slice で tag `v0.2.2-rf2`（同 rev `b3144f2`）を manifest
+tag pin + `Cargo.lock` に反映し、`[patch]`/path override 無しの
+pinned dep で再検証（下表の pinned-dep 行、詳細は
+`evidence/rf532/pinned-dep-results.md`）。
 
 ## 検証 lane と実施結果
 
@@ -78,6 +83,8 @@ reentrancy panic なし、device-lost 再構築、既存 verdict
 | `mise run test-ui-plugin-dock-console` | 実施 | `--list` + `--run` exit 0 |
 | `mise run check-ui-driver-boundary` | 実施 | pass（dep-graph / signature / allowlist） |
 | `mise run test-ui-plugin-dock-real-headless` | 実施 | 全行 `NotRun` + `environment_blocked` の fail-closed mapping、exit 0 |
+| `mise run test-ui-plugin-dock-real`（pinned dep `v0.2.2-rf2`、ruviform `57c4619b`） | 実施 | **`real-dcomp-rasterfix` = Pass、`fix_arm = "baseline"`、baseline screen green `0.999994`**（patched 実測と同一値を pinned dep で再現）。`real-dcomp-pixel`/`bandescape`/`childinv` は既知 Fail で lane exit 1（設計どおり）、verdict 集合は patched run と同一。`evidence/rf532/plugin-dock-real-pinned.jsonl` |
+| `mise run check-ui-gpui` 等の非回帰 lane（pinned dep） | 実施 | `fmt-check`/`check-ui-gpui`/`test-ui-gpui`/`test-ui-plugin-dock`/`test-ui-plugin-dock-console`/`test-ui-plugin-dock-real-headless`/`check-ui-driver-boundary` 全 pass。`lint-ui-gpui` は main 既存 `cast_sign_loss` で fail（上表と同一の既知問題・対象外） |
 
 ## verdict の誠実性チェック
 

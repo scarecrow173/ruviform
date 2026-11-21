@@ -56,7 +56,7 @@ ruviform-ui = { path = "../ruviform-ui" }
 #   non-topmost so a native child HWND composites above the GPUI
 #   content). `version` asserts the fork stays on the 0.2.2 base; the
 #   tag pins the source.
-gpui = { git = "https://github.com/scarecrow173/gpui", tag = "v0.2.2-rf1", version = "=0.2.2", optional = true }
+gpui = { git = "https://github.com/scarecrow173/gpui", tag = "v0.2.2-rf2", version = "=0.2.2", optional = true }
 # - ruviform-ui-theme: Issue #387 renderer maps `ResolvedTheme` one-way
 #   into GPUI colors/lengths (second theme source of truth is never
 #   created). Optional: only needed by the gpui-gated render module.

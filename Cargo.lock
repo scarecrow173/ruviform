@@ -3151,7 +3151,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/scarecrow173/gpui?tag=v0.2.2-rf1#f77e44e64b66c1bcc4757e68ee5dfc903fb96139"
+source = "git+https://github.com/scarecrow173/gpui?tag=v0.2.2-rf2#b3144f286b942fbb5f478da73db13a826cef054a"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
