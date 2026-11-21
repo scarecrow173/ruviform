@@ -113,3 +113,4 @@ Directory: `docs/discovery`
 | DISC-01M7Y96P5AVRW761HK2XP77XF2 | Issue #631 real-editor-popup real-HWND harness — 調査記録 | resolved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
 | DISC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — canonical real-dock lane 証拠 inventory・case→AC 対応根拠・RT 非干渉 rationale | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
 | DISC-01KBZWINDOWIME0DISCOVERY00A1 | Issue #389 real-window-ime — ホスト IME 実測、IMM32 駆動経路、oracle channel と capability claim の確定 | resolved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
+| DISC-0351ujnK1guLRroTqT6pcS | Issue #872 L1 OOS editor host — docked 越境 vs child 所有 toplevel・動詞/bit 設計・fault 経路・isolation 選択の比較と却下理由 | resolved | [issue-872-l1-oos-plugin-editor-host.md](./issue-872-l1-oos-plugin-editor-host.md) |
