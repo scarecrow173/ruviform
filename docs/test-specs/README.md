@@ -332,3 +332,4 @@ Directory: `docs/test-specs`
 | TSPEC-034ZccDcompChildInv01 | Issue #532 dcomp-child-inventory — residual class 確定記録（WS_EX_LAYERED 適用不能の確定診断） | approved | [issue-532-dcomp-child-inventory.md](./issue-532-dcomp-child-inventory.md) |
 | TSPEC-rf857PixelOcclusion | Issue #857 pixel-occlusion — real-dcomp-pixel lane 自身 top-level window 遮蔽（class B）検証仕様 | draft | [issue-857-pixel-occlusion.md](./issue-857-pixel-occlusion.md) |
 | TSPEC-01M7Y96P5AREWKR3Y63G1N66DX | Issue #631 real-editor-popup real-HWND harness — 検証仕様 | approved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
+| TSPEC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — canonical real-dock verdict 集合と AC 各行の突合 | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
