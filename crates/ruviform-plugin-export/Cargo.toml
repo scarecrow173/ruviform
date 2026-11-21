@@ -22,6 +22,22 @@ ruviform-video-core = { path = "../ruviform-video-core" }
 # API or feature names.
 shared_memory = "0.12"
 
+# The `#[cfg(windows)]` lazy UI thread + container toplevel of the
+# wire-v6 GUI mechanism (Issue #883, internal `gui` module): Win32
+# window/message APIs. Same workspace-pinned `windows-sys` 0.61 edge
+# `ruviform-plugin-test-vst3` already uses — the crate keeps
+# `unsafe_code = "warn"` containment (`#[expect]` on the module) and
+# `windows-sys` never appears on a public API surface or feature
+# name.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 # The E2E minimal host needs ProcessConfig/TransportInfo value types.
 ruviform-audio-core = { path = "../ruviform-audio-core" }

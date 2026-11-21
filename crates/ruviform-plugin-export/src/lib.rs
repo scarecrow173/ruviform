@@ -97,7 +97,10 @@
 //! The crate contains no `unsafe` outside the scoped
 //! `shared_memory` slice accessors in the internal `shm`/`vshm`
 //! modules (two each) — see their deviation notes (the design assumed
-//! safe accessors; `shared_memory` 0.12.4's are `unsafe fn`).
+//! safe accessors; `shared_memory` 0.12.4's are `unsafe fn`) — and,
+//! on Windows, the internal `gui` module's Win32 calls plus its one
+//! scoped `unsafe impl Send` marshal handoff, each carrying a SAFETY
+//! comment at the call site.
 //!
 //! **RT contract:** every item here is **non-RT only** — the runner is
 //! the non-RT end of the L1 link; the host's RT leg lives in
@@ -106,7 +109,9 @@
 //! Contract source: `docs/designs/plugin-l1-out-of-process.md` (Issue
 //! #76 design), `docs/specs/plugin-l1-out-of-process.md`,
 //! `docs/designs/issue-117-bundle-child-process.md` (wire v2),
-//! `docs/designs/issue-118-video-l1.md` (wire v3 video).
+//! `docs/designs/issue-118-video-l1.md` (wire v3 video),
+//! `docs/designs/issue-872-l1-oos-plugin-editor-host.md` (wire v6
+//! GUI floating — slice 2, Issue #883).
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -115,6 +120,8 @@ use std::process::ExitCode;
 use std::sync::atomic::{Ordering, fence};
 
 use ruviform_media_core::MediaTime;
+#[cfg(windows)]
+use ruviform_plugin_core::GuiHandle;
 use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as WireReply};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, ErasedPlugin, ErasedVideoPlugin, Event, EventList, HostError,
@@ -124,11 +131,26 @@ use ruviform_plugin_core::{
 };
 use ruviform_video_core::VideoFrame;
 
+#[cfg(windows)]
+#[expect(unsafe_code)]
+mod gui;
 mod shm;
 mod vshm;
 
 const USAGE: &str = "usage: <runner>";
 const EXIT_USAGE: u8 = 2;
+
+/// The `Hello.capabilities` the audio runner advertises —
+/// [`wire::WIRE_CAPABILITY_GUI_FLOATING`] only where the child-owned
+/// UI-thread mechanism exists (Windows, this slice), `0` elsewhere:
+/// the honest non-support answer (design D-os — no bit is claimed
+/// for a mechanism the build does not carry). The video runner
+/// always passes `0`: its dispatch owns no GUI leg at all.
+#[cfg(windows)]
+const AUDIO_HELLO_CAPABILITIES: u32 = wire::WIRE_CAPABILITY_GUI_FLOATING;
+/// The non-Windows counterpart — see the Windows arm above.
+#[cfg(not(windows))]
+const AUDIO_HELLO_CAPABILITIES: u32 = 0;
 
 /// The child-process entry point — a plugin binary calls this from
 /// `main` and returns the result as the process exit code.
@@ -155,7 +177,7 @@ const EXIT_USAGE: u8 = 2;
 pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> ExitCode {
     let stdout = io::stdout();
     let mut output = stdout.lock();
-    let mut encode_buf = match boot(&mut output) {
+    let mut encode_buf = match boot(&mut output, AUDIO_HELLO_CAPABILITIES) {
         Ok(scratch) => scratch,
         Err(code) => return code,
     };
@@ -163,6 +185,8 @@ pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> ExitCode {
     let mut runner = Runner {
         factories,
         instances: HashMap::new(),
+        #[cfg(windows)]
+        gui: None,
         events_scratch: Vec::new(),
     };
 
@@ -197,7 +221,7 @@ pub fn run(factories: Vec<Box<dyn PluginFactory>>) -> ExitCode {
 pub fn run_video(factories: Vec<Box<dyn VideoPluginFactory>>) -> ExitCode {
     let stdout = io::stdout();
     let mut output = stdout.lock();
-    let mut encode_buf = match boot(&mut output) {
+    let mut encode_buf = match boot(&mut output, 0) {
         Ok(scratch) => scratch,
         Err(code) => return code,
     };
@@ -218,10 +242,13 @@ pub fn run_video(factories: Vec<Box<dyn VideoPluginFactory>>) -> ExitCode {
 /// no user args either; any argv entry is the defined usage
 /// rejection), then the `Hello` write — the first frame a child
 /// emits, before any create lands, so a peer sees a live handshake
-/// even while the registry is still empty. On success this returns
-/// the shared encode scratch [`serve`] reuses; on failure the early
-/// process exit code.
-fn boot(output: &mut impl Write) -> Result<Vec<u8>, ExitCode> {
+/// even while the registry is still empty. `capabilities` is the
+/// `Hello` bitfield the caller advertises — wire v6's
+/// `WIRE_CAPABILITY_GUI_FLOATING` where the GUI mechanism exists
+/// (`run` on Windows), `0` elsewhere and always for `run_video`. On
+/// success this returns the shared encode scratch [`serve`] reuses;
+/// on failure the early process exit code.
+fn boot(output: &mut impl Write, capabilities: u32) -> Result<Vec<u8>, ExitCode> {
     if std::env::args_os().nth(1).is_some() {
         eprintln!("ruviform-plugin-export: unexpected arguments\n{USAGE}");
         return Err(ExitCode::from(EXIT_USAGE));
@@ -231,7 +258,7 @@ fn boot(output: &mut impl Write) -> Result<Vec<u8>, ExitCode> {
         output,
         &Message::Hello {
             version: wire::WIRE_VERSION,
-            capabilities: 0,
+            capabilities,
         },
         &mut encode_buf,
     )
@@ -372,6 +399,13 @@ struct Runner {
     /// codec-enforced (a `Command` cannot decode with an out-of-range
     /// instance), so the map never sees an illegal key.
     instances: HashMap<u32, InstanceEntry>,
+    /// The lazily spawned GUI UI thread (wire v6, `#[cfg(windows)]`
+    /// — the `gui` module exists only where the mechanism does).
+    /// `None` until the first marshalable GUI verb arrives, so an
+    /// audio-only child owns no thread, window or message pump —
+    /// identical to before. `Some` ⟹ a live pump; teardown joins it.
+    #[cfg(windows)]
+    gui: Option<gui::Ui>,
     /// Shared `Event` decode scratch — `process_block` serves one
     /// block at a time, so a single buffer covers every instance.
     events_scratch: Vec<Event>,
@@ -394,6 +428,13 @@ struct InstanceEntry {
     /// reply — the plugin appends since-last-drain events here and
     /// each reply answers at most `WIRE_MAX_EVENTS`, oldest first.
     report_backlog: Vec<Event>,
+    /// Surface bookkeeping (wire v6) — `Some` while an `Opened` reply
+    /// minted a live GUI surface for this instance, `None` before and
+    /// after the surface's fold. `#[cfg(windows)]`: off Windows the
+    /// whole GUI verb family is a defined `Unsupported` and the field
+    /// would never be read.
+    #[cfg(windows)]
+    gui_handle: Option<GuiHandle>,
 }
 
 impl Runner {
@@ -411,10 +452,83 @@ impl Runner {
                 out_depth,
             } => self.create_instance(instance, &plugin_id, &shm_key, in_depth, out_depth),
             WireCommand::DestroyInstance => self.destroy_instance(instance),
+            // The wire-v6 GUI verb family is runner-level: the entry's
+            // dispatch never sees them because the UI thread handle
+            // and the marshal seam live here (an entry cannot reach
+            // runner state). The handle check stays first.
+            gui_command @ (WireCommand::OpenGui { .. }
+            | WireCommand::CloseGui
+            | WireCommand::SetGuiSize { .. }
+            | WireCommand::SetGuiVisibility { .. }
+            | WireCommand::SetGuiFocus { .. }
+            | WireCommand::SendGuiKey { .. }) => self.dispatch_gui(instance, gui_command),
             instance_command => match self.instances.get_mut(&instance) {
                 Some(entry) => entry.dispatch(instance_command),
                 None => Err(HostError::InvalidHandle),
             },
+        }
+    }
+
+    /// The GUI leg of [`Runner::dispatch`] (wire v6, Windows): handle
+    /// resolve precedes everything (the shared dispatch order), then
+    /// the defined rejections that need no UI mechanism — `Docked`
+    /// mode (the cross-process `WS_CHILD`/`SetParent` topology Issue
+    /// #115 banned) and every verb but `OpenGui` against a
+    /// surface-less instance (`CloseGui`'s settled no-surface
+    /// vocabulary, `InvalidValue`, generalized to the family) — then
+    /// the marshal boundary: spawn the UI thread lazily and hand the
+    /// verb over. The `gui_handle` bookkeeping is command-thread
+    /// state: set on an `Opened` reply, cleared on a successful
+    /// `CloseGui`, so `gui_handle.is_some()` ⟹ `self.gui.is_some()`.
+    #[cfg(windows)]
+    fn dispatch_gui(
+        &mut self,
+        instance: u32,
+        command: WireCommand,
+    ) -> Result<WireReply, HostError> {
+        let Some(entry) = self.instances.get_mut(&instance) else {
+            return Err(HostError::InvalidHandle);
+        };
+        if matches!(
+            command,
+            WireCommand::OpenGui {
+                mode: wire::OpenGuiMode::Docked,
+                ..
+            }
+        ) {
+            return Err(HostError::Unsupported);
+        }
+        if entry.gui_handle.is_none() && !matches!(command, WireCommand::OpenGui { .. }) {
+            return Err(HostError::InvalidValue);
+        }
+        let ui = match self.gui.as_mut() {
+            Some(ui) => ui,
+            None => self.gui.insert(gui::Ui::spawn()?),
+        };
+        let closing = matches!(command, WireCommand::CloseGui);
+        let reply = ui.verb(instance, &mut *entry.instance, command)?;
+        match &reply {
+            WireReply::Opened { gui, .. } => entry.gui_handle = Some(*gui),
+            WireReply::Ok if closing => entry.gui_handle = None,
+            _ => {}
+        }
+        Ok(reply)
+    }
+
+    /// The non-Windows counterpart: once the handle resolves, every
+    /// GUI verb is the defined `Err(Unsupported)` — the honest
+    /// non-support vocabulary matching the unadvertised bit (a verb
+    /// sent anyway still gets a defined answer).
+    #[cfg(not(windows))]
+    fn dispatch_gui(
+        &mut self,
+        instance: u32,
+        _command: WireCommand,
+    ) -> Result<WireReply, HostError> {
+        if self.instances.contains_key(&instance) {
+            Err(HostError::Unsupported)
+        } else {
+            Err(HostError::InvalidHandle)
         }
     }
 
@@ -479,18 +593,32 @@ impl Runner {
                 staging_in: Vec::new(),
                 staging_out: Vec::new(),
                 report_backlog: Vec::new(),
+                #[cfg(windows)]
+                gui_handle: None,
             },
         );
         Ok(WireReply::Ok)
     }
 
-    /// `DestroyInstance`: normalize the entry's lifecycle, detach its
-    /// segment (drop) and remove the handle → `Reply::Ok`. An
-    /// unregistered handle is `Err(InvalidHandle)`.
+    /// `DestroyInstance`: fold a live GUI surface first (best-effort
+    /// close on the UI thread), then normalize the entry's lifecycle,
+    /// detach its segment (drop) and remove the handle → `Reply::Ok`.
+    /// An unregistered handle is `Err(InvalidHandle)`.
     fn destroy_instance(&mut self, instance: u32) -> Result<WireReply, HostError> {
         let Some(mut entry) = self.instances.remove(&instance) else {
             return Err(HostError::InvalidHandle);
         };
+        #[cfg(windows)]
+        if entry.gui_handle.is_some()
+            && let Some(ui) = self.gui.as_mut()
+        {
+            // The GUI surface folds with its instance — best-effort:
+            // the plugin's `close_gui` and the container destroy both
+            // run regardless of the hook's verdict (teardown never
+            // fails).
+            ui.close_surface(instance, &mut *entry.instance);
+            entry.gui_handle = None;
+        }
         entry.normalize();
         Ok(WireReply::Ok)
     }
@@ -511,6 +639,26 @@ impl Runner {
     /// never fails, so sibling instances are normalized even when one
     /// plugin's hooks panic.
     fn normalize_all(&mut self) {
+        // GUI teardown precedes the lifecycle walk: every live
+        // surface folds on the UI thread (plugin `close_gui` +
+        // container destroy), then the UI thread itself drains and
+        // joins — a wedged one never returns from this, which the
+        // wedge contract accepts: the child stays put and the
+        // parent's `command_timeout` → kill converges it.
+        #[cfg(windows)]
+        {
+            if let Some(ui) = self.gui.as_mut() {
+                for (instance, entry) in &mut self.instances {
+                    if entry.gui_handle.is_some() {
+                        ui.close_surface(*instance, &mut *entry.instance);
+                        entry.gui_handle = None;
+                    }
+                }
+            }
+            if let Some(ui) = self.gui.take() {
+                ui.shutdown();
+            }
+        }
         for entry in self.instances.values_mut() {
             entry.normalize();
         }
@@ -590,27 +738,12 @@ impl InstanceEntry {
                     .and_then(|inner| inner)
                     .map(|()| WireReply::Ok)
             }
-            // `mode`/`size` stay unread — wire v6 dispatch (the UI
-            // thread and `Hello.capabilities` advertisement) is a
-            // later slice; `Docked` and an unimplemented hook both
-            // land on `HostError::Unsupported` as before.
-            WireCommand::OpenGui { parent, .. } => {
-                guarded(&mut *self.instance, |plugin| plugin.open_gui(parent))
-                    .and_then(|inner| inner)
-                    // `capabilities: 0` is the placeholder until the
-                    // dispatch slice reports real GUI capabilities.
-                    .map(|gui| WireReply::Opened {
-                        gui,
-                        capabilities: 0,
-                    })
-            }
-            WireCommand::CloseGui => guarded(&mut *self.instance, ErasedPlugin::close_gui)
-                .and_then(|inner| inner)
-                .map(|()| WireReply::Ok),
             WireCommand::DrainOutputReports => self.drain_output_reports(),
             // `#[non_exhaustive]` — the wire-v3 video verbs are the
             // cross-kind defined rejection on an audio entry, as is
-            // any verb a later WIRE_VERSION adds.
+            // any verb a later WIRE_VERSION adds. The wire-v6 GUI
+            // family never reaches here — `Runner::dispatch`
+            // intercepts it for the marshal leg first.
             _ => Err(HostError::Unsupported),
         }
     }
@@ -1557,5 +1690,18 @@ mod tests {
             Some(MediaDuration::new(3_000, TimeBase::COMMON_90K))
         );
         assert_eq!(desc.color, color);
+    }
+
+    /// The `Hello.capabilities` seam (wire v6): the audio runner
+    /// advertises the GUI-floating mechanism bit exactly where the
+    /// mechanism exists — Windows — and nothing elsewhere (D-os's
+    /// honest non-support answer). `run_video` always passes `0`;
+    /// its dispatch owns no GUI leg.
+    #[test]
+    fn audio_hello_capabilities_is_gui_floating_only_on_windows() {
+        #[cfg(windows)]
+        assert_eq!(AUDIO_HELLO_CAPABILITIES, wire::WIRE_CAPABILITY_GUI_FLOATING);
+        #[cfg(not(windows))]
+        assert_eq!(AUDIO_HELLO_CAPABILITIES, 0);
     }
 }

@@ -28,6 +28,15 @@
 //!   channel 0 afterwards; the fixture proving the runner re-zeroes
 //!   `staging_out` each block (a legal under-write must not leak the
 //!   previous block's samples into the out-slot).
+//! - `GuiPlugin` (`dev.ruviform.mock.gui`) — window-independent GUI
+//!   fixture (wire v6): `open_gui` returns a minted `GuiHandle` token
+//!   (no HWND involved — the marshal/reply round-trip is what the
+//!   E2E pins), the `close_gui`/`set_gui_*`/`send_gui_key` hooks
+//!   answer `Ok` while a surface is logically open — the same
+//!   `view.is_some()` vocabulary the VST3 adapter carries — and
+//!   `RUVIFORM_GUI_WEDGE` parks `open_gui` forever, the wedged-hook
+//!   convergence fixture (the marshal reply never arrives, so the
+//!   child's command loop stalls the way a wedged plugin GUI does).
 //!
 //! Wire v2 takes no spawn arguments — the binary is spawned bare and
 //! the host picks a plugin id per `CreateInstance`.
@@ -36,9 +45,10 @@ use std::process::ExitCode;
 
 use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, Event, EventKind, EventList, HostError, ParamFlags, ParamId,
-    ParamInfo, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
-    ProcessConfig, ProcessContext, ProcessResult, TransportInfo, erase,
+    BufferView, BufferViewMut, Event, EventKind, EventList, GuiHandle, GuiKeyEvent, GuiSize,
+    HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    TransportInfo, erase,
 };
 
 fn main() -> ExitCode {
@@ -46,6 +56,7 @@ fn main() -> ExitCode {
         Box::new(GainFactory),
         Box::new(PanicFactory),
         Box::new(UnderwriteFactory),
+        Box::new(GuiFactory),
     ])
 }
 
@@ -380,5 +391,140 @@ impl PluginFactory for UnderwriteFactory {
 
     fn create(&self) -> Box<dyn ruviform_plugin_core::ErasedPlugin> {
         erase(UnderwritePlugin { processed: 0 })
+    }
+}
+
+const GUI_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+    id: "dev.ruviform.mock.gui",
+    name: "Gui",
+    vendor: "Ruviform",
+    version: "1.0.0",
+    features: &["test-fixture"],
+};
+
+/// The wedge switch: `RUVIFORM_GUI_WEDGE` in the child env parks
+/// `open_gui` forever — the wedged-hook fixture.
+const GUI_WEDGE_ENV: &str = "RUVIFORM_GUI_WEDGE";
+
+/// Window-independent GUI fixture (wire v6): the hooks mirror the
+/// VST3 adapter's vocabulary — `open_gui` mints a `GuiHandle` token
+/// and remembers it as the logical surface (`view`), the other GUI
+/// hooks require it (`view.is_none()` → `Err(Unsupported)`), and a
+/// second `open_gui` is the defined decline `Err(PluginFailed)` —
+/// the "one live surface per instance" rule lives in the hook
+/// contract, never in a runner gate. No window is ever created:
+/// what the E2E pins is the marshal/reply round-trip and the reply
+/// vocabulary, not the HWND — that stays with the Windows lane.
+struct GuiPlugin {
+    /// The logical surface token — `Some` while a surface is open.
+    view: Option<GuiHandle>,
+    /// `GuiHandle` mint sequence — 1, 2, … per accepted open.
+    gui_seq: u32,
+}
+
+impl PluginProcessor for GuiPlugin {
+    fn prepare(
+        &mut self,
+        _config: &ProcessConfig,
+        _context: &mut ProcessContext,
+    ) -> Result<(), PrepareError> {
+        Ok(())
+    }
+
+    fn process<I, O>(
+        &mut self,
+        _inputs: &[I],
+        _outputs: &mut [O],
+        _events: EventList<'_>,
+        _transport: Option<TransportInfo>,
+        _context: &mut ProcessContext,
+    ) -> ProcessResult
+    where
+        I: BufferView,
+        O: BufferViewMut,
+    {
+        ProcessResult::CONTINUE
+    }
+}
+
+impl Plugin for GuiPlugin {
+    fn descriptor(&self) -> PluginDescriptor {
+        GUI_DESCRIPTOR
+    }
+
+    fn params(&self) -> &[ParamInfo] {
+        &[]
+    }
+
+    fn open_gui(&mut self, _parent: ParentLease) -> Result<GuiHandle, HostError> {
+        if std::env::var_os(GUI_WEDGE_ENV).is_some() {
+            // Wedged hook — parks forever inside `open_gui`; the
+            // marshal reply never arrives, so the child's command
+            // loop stalls and the parent's `command_timeout` → kill
+            // is what converges it (the E2E kills the child itself).
+            loop {
+                std::thread::park();
+            }
+        }
+        if self.view.is_some() {
+            // One live surface per instance — the adapter contract's
+            // decline (the VST3 `view.is_some()` → `PluginFailed`
+            // precedent).
+            return Err(HostError::PluginFailed);
+        }
+        self.gui_seq = self.gui_seq.wrapping_add(1);
+        let gui = GuiHandle::new(self.gui_seq);
+        self.view = Some(gui);
+        Ok(gui)
+    }
+
+    fn close_gui(&mut self) -> Result<(), HostError> {
+        if self.view.take().is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn set_gui_size(&mut self, _size: GuiSize) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn set_gui_visibility(&mut self, _visible: bool) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn set_gui_focus(&mut self, _focused: bool) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn send_gui_key(&mut self, _event: GuiKeyEvent) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+}
+
+struct GuiFactory;
+
+impl PluginFactory for GuiFactory {
+    fn descriptor(&self) -> PluginDescriptor {
+        GUI_DESCRIPTOR
+    }
+
+    fn create(&self) -> Box<dyn ruviform_plugin_core::ErasedPlugin> {
+        erase(GuiPlugin {
+            view: None,
+            gui_seq: 0,
+        })
     }
 }

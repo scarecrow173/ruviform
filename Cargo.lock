@@ -6977,6 +6977,7 @@ dependencies = [
  "ruviform-plugin-core",
  "ruviform-video-core",
  "shared_memory",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

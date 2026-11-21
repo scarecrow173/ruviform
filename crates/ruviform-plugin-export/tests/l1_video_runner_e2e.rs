@@ -197,15 +197,25 @@ impl MiniHost {
         }
     }
 
-    /// `Hello` must be the first frame, at `WIRE_VERSION`.
+    /// `Hello` must be the first frame, at `WIRE_VERSION` — the
+    /// video runner always advertises `capabilities == 0` (its
+    /// dispatch owns no GUI leg).
     fn expect_hello(&self) {
+        self.expect_hello_caps(0);
+    }
+
+    /// `Hello` must be the first frame, at `WIRE_VERSION` with
+    /// `capabilities == expected` — the cross-kind test spawns the
+    /// *audio* runner too, whose Windows bit is wire v6's
+    /// `WIRE_CAPABILITY_GUI_FLOATING`.
+    fn expect_hello_caps(&self, expected: u32) {
         match self.recv() {
             Message::Hello {
                 version,
                 capabilities,
             } => {
                 assert_eq!(version, wire::WIRE_VERSION, "Hello wire version");
-                assert_eq!(capabilities, 0);
+                assert_eq!(capabilities, expected);
             }
             other => panic!("expected Hello, got {other:?}"),
         }
@@ -759,7 +769,13 @@ fn cross_kind_create_is_a_defined_rejection() {
     // runner → `Err(InvalidHandle)` — the same registry-dispatch
     // shape needs no new arms there either.
     let mut audio = MiniHost::spawn(AUDIO_RUNNER, &[]);
-    audio.expect_hello();
+    // The audio runner's Hello carries its own platform-dependent
+    // bit — wire v6 GUI floating on Windows, `0` elsewhere.
+    audio.expect_hello_caps(if cfg!(windows) {
+        wire::WIRE_CAPABILITY_GUI_FLOATING
+    } else {
+        0
+    });
     assert_eq!(
         audio.command(
             40,
