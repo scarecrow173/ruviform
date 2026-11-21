@@ -152,7 +152,7 @@ wire 上の意味的同一性を検証する。
 | `mise run test-formal-kani`（全 crate 一括） | WSL2 Ubuntu x64 | n/a | not_run | compile 完了直後に CBMC 群が WSL を不安定化し cargo-kani が無出力のまま exit 1・verdict 未発行。反例ではなく環境/リソース起因（`E_UNEXPECTED` 続発）— `fail` とも `pass` とも記録しない |
 | `cargo kani --harness proofs::tar_typeflag_classification`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — CBMC が unwinding 段階で継続中（`parse_numeric` inline loop が bound 600 縁まで到達）。verdict 未発行・反例なし |
 | `cargo kani --harness proofs::tar_declared_size_gate`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — 同上。verdict 未発行・反例なし |
-| `cargo kani --harness proofs::zip_index_gates`（単独・timeout 900s） | WSL2 Ubuntu x64 | 124 | not_run | timeout で中断 — 同上。verdict 未発行・反例なし。long-window（1800s）再試行を別途実施 |
+| `cargo kani --harness proofs::zip_index_gates`（単独・timeout 900s → 1800s 再試行） | WSL2 Ubuntu x64 | 124 | not_run | 900s/1800s いずれも timeout で中断 — unwinding/symex 段階で継続中、BMC の `Runtime` 行未到達。verdict 未発行・反例なし |
 | `cargo test … formal_archive`（mutant 注入時） | Windows x64 | 101 | fail（期待どおり） | `tar_max_entries_gate` が `k=2, max=0` を縮小提示 |
 | `cargo test … formal_archive`（revert 後） | Windows x64 | 0 | pass | 変異なしで緑に復帰 |
 | `mise run fmt-check` | Windows x64 | 0 | pass | |
