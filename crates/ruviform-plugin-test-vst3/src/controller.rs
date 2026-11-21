@@ -374,105 +374,132 @@ impl IEditControllerTrait for ParamController {
 }
 
 /// `test_editor`'s edit controller — the suite's editor fixture
-/// (Issue #630 AC-4 plugin side). Unlike [`ParamController`] it
-/// declares **no parameters** (`getParameterCount` → `0`, every
-/// parameter verb an honest rejection) and its `createView` returns
-/// the owned [`IPlugView`] for `"editor"` only — the real
-/// child-HWND surface the production host's `open_gui` attaches.
-///
-/// State (de)serialization reports `kNotImplemented`, matching the
-/// other fixtures' no-preset-surface policy.
-pub(crate) struct TestEditorController;
+/// (Issue #630 AC-4 plugin side) carrying the shared `Fault`
+/// parameter surface (Issue #885). Every parameter/state verb
+/// delegates to the same [`ParamController`] law `test_fault` binds
+/// (`getParameterCount` → `1`, the stepped `Fault` descriptor, the
+/// `ParamInfo` domain mapping, honest `kNotImplemented` state
+/// streams); `createView` stays this class's own: it returns the
+/// owned [`IPlugView`] for `"editor"` only — the real child-HWND
+/// surface the production host's `open_gui` attaches.
+pub(crate) struct TestEditorController {
+    /// The declared-parameter surface — a [`ParamController`] bound
+    /// to [`crate::fault::FAULT_PARAM`].
+    params: ParamController,
+}
 
 impl Class for TestEditorController {
     type Interfaces = (IEditController,);
 }
 
+impl TestEditorController {
+    /// A controller exposing the shared `Fault` parameter — the same
+    /// surface `test_fault`'s controller reports.
+    pub(crate) fn new() -> Self {
+        Self {
+            params: ParamController::new(
+                &crate::fault::FAULT_PARAM,
+                crate::fault::FAULT_STEP_COUNT,
+            ),
+        }
+    }
+}
+
 impl IPluginBaseTrait for TestEditorController {
     #[expect(unsafe_code)]
-    unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
-        kResultOk
+    unsafe fn initialize(&self, context: *mut FUnknown) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.initialize(context) }
     }
 
     #[expect(unsafe_code)]
     unsafe fn terminate(&self) -> tresult {
-        kResultOk
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.terminate() }
     }
 }
 
 impl IEditControllerTrait for TestEditorController {
-    /// No preset surface — reported honestly as `kNotImplemented`.
     #[expect(unsafe_code)]
-    unsafe fn setComponentState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn setComponentState(&self, state: *mut IBStream) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.setComponentState(state) }
     }
 
     #[expect(unsafe_code)]
-    unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn setState(&self, state: *mut IBStream) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.setState(state) }
     }
 
     #[expect(unsafe_code)]
-    unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
-        kNotImplemented
+    unsafe fn getState(&self, state: *mut IBStream) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.getState(state) }
     }
 
-    /// `test_editor` declares no parameters.
     #[expect(unsafe_code)]
     unsafe fn getParameterCount(&self) -> i32 {
-        0
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.getParameterCount() }
     }
 
-    /// No parameters exist — every index is out of range.
     #[expect(unsafe_code)]
-    unsafe fn getParameterInfo(&self, _param_index: i32, _info: *mut ParameterInfo) -> tresult {
-        kInvalidArgument
+    unsafe fn getParameterInfo(&self, param_index: i32, info: *mut ParameterInfo) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.getParameterInfo(param_index, info) }
     }
 
-    /// No parameters exist — no value can be formatted.
     #[expect(unsafe_code)]
     unsafe fn getParamStringByValue(
         &self,
-        _id: u32,
-        _value_normalized: f64,
-        _string: *mut String128,
+        id: u32,
+        value_normalized: f64,
+        string: *mut String128,
     ) -> tresult {
-        kInvalidArgument
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe {
+            self.params
+                .getParamStringByValue(id, value_normalized, string)
+        }
     }
 
-    /// No parameters exist — no string can be parsed.
     #[expect(unsafe_code)]
     unsafe fn getParamValueByString(
         &self,
-        _id: u32,
-        _string: *mut TChar,
-        _value_normalized: *mut f64,
+        id: u32,
+        string: *mut TChar,
+        value_normalized: *mut f64,
     ) -> tresult {
-        kInvalidArgument
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe {
+            self.params
+                .getParamValueByString(id, string, value_normalized)
+        }
     }
 
-    /// No parameters exist — the defined fallback `0.0`.
     #[expect(unsafe_code)]
-    unsafe fn normalizedParamToPlain(&self, _id: u32, _value_normalized: f64) -> f64 {
-        0.0
+    unsafe fn normalizedParamToPlain(&self, id: u32, value_normalized: f64) -> f64 {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.normalizedParamToPlain(id, value_normalized) }
     }
 
-    /// No parameters exist — the defined fallback `0.0`.
     #[expect(unsafe_code)]
-    unsafe fn plainParamToNormalized(&self, _id: u32, _plain_value: f64) -> f64 {
-        0.0
+    unsafe fn plainParamToNormalized(&self, id: u32, plain_value: f64) -> f64 {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.plainParamToNormalized(id, plain_value) }
     }
 
-    /// No parameters exist — the defined fallback `0.0`.
     #[expect(unsafe_code)]
-    unsafe fn getParamNormalized(&self, _id: u32) -> f64 {
-        0.0
+    unsafe fn getParamNormalized(&self, id: u32) -> f64 {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.getParamNormalized(id) }
     }
 
-    /// No parameters exist — every set is a defined rejection.
     #[expect(unsafe_code)]
-    unsafe fn setParamNormalized(&self, _id: u32, _value: f64) -> tresult {
-        kInvalidArgument
+    unsafe fn setParamNormalized(&self, id: u32, value: f64) -> tresult {
+        // SAFETY: forwarded to the delegate under the same contract.
+        unsafe { self.params.setParamNormalized(id, value) }
     }
 
     /// The fixture does not retain the component handler — recorded.
@@ -668,19 +695,52 @@ mod tests {
         }
     }
 
-    /// `test_editor`'s controller declares zero parameters — the
-    /// surface the component's sentinel `param_id` mirrors.
+    /// `test_editor`'s controller declares the shared `Fault`
+    /// parameter — the same surface `test_fault`'s `ParamController`
+    /// reports: `getParameterCount == 1`, the stepped descriptor
+    /// (id `0`, `stepCount == 7`, `kCanAutomate`, default normalized
+    /// `0.0`), the `ParamInfo` domain mapping (`[0.0, 8.0]` plain —
+    /// normalized `0.5` ↔ plain `4.0`), and `setParamNormalized`
+    /// enforcing the normalized domain.
     #[expect(unsafe_code)]
     #[test]
-    fn editor_controller_reports_zero_params() {
-        let controller = TestEditorController;
-        // SAFETY: no pointers involved / `info` unused on rejection.
+    fn editor_controller_reports_fault_param() {
+        let controller = TestEditorController::new();
+        let mut info: ParameterInfo = unsafe { core::mem::zeroed() };
+        // SAFETY: `info` is a valid out-param; the plain calls take
+        // no pointers.
         unsafe {
-            assert_eq!(controller.getParameterCount(), 0);
-            assert_eq!(controller.getParamNormalized(0), 0.0);
-            assert_eq!(controller.setParamNormalized(0, 0.5), kInvalidArgument);
-            assert_eq!(controller.normalizedParamToPlain(0, 0.5), 0.0);
-            assert_eq!(controller.plainParamToNormalized(0, 1.0), 0.0);
+            assert_eq!(controller.getParameterCount(), 1);
+            assert_eq!(controller.getParameterInfo(0, &raw mut info), kResultOk);
+            assert_eq!(
+                controller.getParameterInfo(1, &raw mut info),
+                kInvalidArgument
+            );
+            assert_eq!(info.id, 0);
+            assert_eq!(info.defaultNormalizedValue, 0.0);
+            assert_eq!(info.stepCount, 7);
+            assert_eq!(info.flags, ParameterFlags_::kCanAutomate);
+
+            // The `Fault` plain domain is `[0.0, 8.0]` — the same
+            // non-identity `ParamInfo` law `test_fault` binds.
+            assert_eq!(controller.normalizedParamToPlain(0, 0.5), 4.0);
+            assert_eq!(controller.normalizedParamToPlain(0, 0.0), 0.0);
+            assert_eq!(controller.normalizedParamToPlain(0, 1.0), 8.0);
+            assert_eq!(controller.plainParamToNormalized(0, 4.0), 0.5);
+            assert_eq!(controller.plainParamToNormalized(0, 8.0), 1.0);
+            // Foreign ids map to the defined fallback.
+            assert_eq!(controller.normalizedParamToPlain(9, 0.5), 0.0);
+            assert_eq!(controller.plainParamToNormalized(9, 1.0), 0.0);
+
+            // The normalized domain contract: accepted values are
+            // stored; non-finite/out-of-range are defined rejections.
+            assert_eq!(controller.setParamNormalized(0, 0.5), kResultOk);
+            assert_eq!(controller.getParamNormalized(0), 0.5);
+            for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1.5, -0.1] {
+                assert_eq!(controller.setParamNormalized(0, bad), kInvalidArgument);
+            }
+            assert_eq!(controller.setParamNormalized(9, 0.5), kInvalidArgument);
+            assert_eq!(controller.getParamNormalized(0), 0.5);
         }
     }
 
@@ -696,7 +756,7 @@ mod tests {
         use vst3::ComPtr;
         use vst3::Steinberg::Vst::ViewType;
 
-        let controller = TestEditorController;
+        let controller = TestEditorController::new();
         let editor = CString::new("editor").unwrap();
         let other = CString::new("other").unwrap();
         // SAFETY: `editor`/`other` are live NUL-terminated strings;

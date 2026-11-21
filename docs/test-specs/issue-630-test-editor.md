@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #630 test_editor slice — test specification"
 created: "2026-11-15"
-updated: "2026-11-15"
+updated: "2026-11-22"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -59,8 +59,13 @@ real-dock slice が別途検証する。
   **Example**: `Vst3Library::load` → `descriptors().len() == 3`、
   3 件目の name が `"test_editor"`・vendor `"Ruviform Test"`・
   version `"0.0.0"`・features `"Fx"`。`countClasses == 6`。
-- **Rule**: `test_editor` は param を持たない
-  （`getParameterCount == 0` → `params()` が空）。
+- **Rule**: `test_editor` は shared `Fault` param を 1 件だけ持つ
+  （Issue #885 で拡張 — `getParameterCount == 1` →
+  `params().len() == 1`、id `0`・name `"Fault"`・plain
+  `[0.0, 8.0]`・default `0.0`・`stepCount == 7`）。本 slice 当時の
+  「param を持たない（`getParameterCount == 0`）」は #630 の
+  歴史的正本。#885 以後は `Fault` event が component の `wanted`
+  filter を通り、武装 mode が `process()` 内で発火する。
 - **Rule**: component は pass-through — 非武装の `test_fault`
   と同じ bitwise copy を stereo block で返す。
 

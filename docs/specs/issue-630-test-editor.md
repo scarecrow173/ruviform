@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #630 test_editor slice — VST3 plugin-side IPlugView (AC-4 real child HWND fixture)"
 created: "2026-11-15"
-updated: "2026-11-15"
+updated: "2026-11-22"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -100,6 +100,12 @@ requires — the plugin-fixture precondition of Issue #630 AC-4:
   `IEditController` whose `createView("editor")` returns an owned
   `IPlugView`. VST3 factory grows 4→6 classes (index 4/5 =
   `test_editor` component + `test_editor Controller`).
+  (Amended by Issue #885: the parameterless design below is the
+  #630-slice historical record — `test_editor` now declares the
+  shared stepped `Fault` parameter, `ParamId` `0` plain
+  `[0.0, 8.0]` default `0.0`, and runs `test_fault`'s in-band
+  armed-fault dispatch inside `process()`. The class stays a
+  pass-through component; only its parameter surface changed.)
 - **`IPlugView` implementation** — `isPlatformTypeSupported` →
   `kResultTrue` only for `"HWND"`; `attached` validates the parent
   HWND and creates a real `WS_CHILD` window under it on Windows
@@ -181,8 +187,12 @@ commercial plugin whose behavior cannot be pinned.
   `kInvalidArgument`. `canResize` → `kResultFalse`.
 - `setFrame` accepts null and non-null `IPlugFrame` with correct
   COM retain/release.
-- The component stays a trivial pass-through plugin with no
-  parameters; lifecycle/protocol violations remain defined rejects.
+- The component stays a trivial pass-through plugin (Issue #885
+  amended the parameterless rule: it now carries the shared stepped
+  `Fault` parameter — `getParameterCount == 1`, plain `[0.0, 8.0]`,
+  default `0.0`, `stepCount == 7` — whose armed modes dispatch
+  inside `process()`; unarmed `none` remains pure pass-through).
+  Lifecycle/protocol violations remain defined rejects.
 - Editor state is interior-mutable; no own message pump/thread;
   `unsafe` confined to the Windows window-management block with
   `#[expect(unsafe_code)]` + SAFETY comments.
