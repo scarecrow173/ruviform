@@ -91,12 +91,24 @@ struct ViewState {
     /// same `GetWindowTextW` channel the attach generation uses
     /// (the fixture has no other observable output).
     events: Vec<String>,
-    /// The plugin-owned popup window as a `usize` (`None` = closed).
+    /// The plugin-owned popup window as a `usize` (`None` = no live
+    /// surface). This field is HWND-handle only — `Some` only when
+    /// this build actually produced a window, so it is never `Some`
+    /// off Windows and stays `None` after a `CreateWindowExW`
+    /// failure. The open/closed oracle for `popup_toggle` is
+    /// `popup_open`, not this field.
     /// `test_editor` ships no host-visible popup verb — `IPlugView`
     /// has none — so the fixture opens its own transient window the
     /// way a real plugin opens a context menu: on user input. The
     /// designated key is `key_code == 0x50` (`VK_P`) in `onKeyDown`.
     popup: Option<usize>,
+    /// The logical popup open state — `popup_toggle`'s open/close
+    /// oracle. `true` after an open verb and `false` after a close
+    /// verb or `removed`, whether or not `popup` holds a real HWND.
+    /// On Windows it always matches `popup.is_some()`; off Windows
+    /// it still toggles so the `po:`/`pc:` verbs are recorded on
+    /// every OS.
+    popup_open: bool,
     /// Popup generation — stamped into the popup HWND's window text
     /// (`rvf-test-editor-popup-{n}`) so an observer can prove a
     /// close/open cycle really recreated the surface.
@@ -136,6 +148,7 @@ impl TestEditorView {
                 attach_seq: 0,
                 events: Vec::new(),
                 popup: None,
+                popup_open: false,
                 popup_seq: 0,
             }),
         }
@@ -157,26 +170,35 @@ impl TestEditorView {
         kResultOk
     }
 
-    /// Toggles the plugin-owned popup: open creates a real
+    /// Toggles the plugin-owned popup: open tries to create a real
     /// `WS_POPUP` HWND titled `rvf-test-editor-popup-{seq}` owned by
-    /// the editor's root ancestor when one exists; close destroys
-    /// it. The `po:{seq}`/`pc:{seq}` tokens land in the same event
-    /// log the `kd:` tokens use — the verb dispatch is recorded
-    /// whether or not this build can create HWNDs (off Windows the
-    /// `win32` shim answers `None` and the log still shows the verb
-    /// ran, the same split `attached` uses).
+    /// the editor's root ancestor when one exists; close destroys it
+    /// when one exists. The `po:{seq}`/`pc:{seq}` tokens land in the
+    /// same event log the `kd:` tokens use — the verb dispatch is
+    /// recorded whether or not this build can create HWNDs (off
+    /// Windows the `win32` shim answers `None` and the log still
+    /// shows the verb ran, the same split `attached` uses). The
+    /// open/close oracle is the logical `popup_open` flag, never the
+    /// HWND slot: `state.popup` only carries a live handle, so an
+    /// HWND-based oracle would leave the close branch — and `pc:` —
+    /// unreachable wherever `win32::popup` answers `None` (Issue
+    /// #855).
     fn popup_toggle(&self) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
             return kResultFalse;
         };
-        if let Some(popup) = state.popup.take() {
-            win32::destroy(popup);
+        if state.popup_open {
+            state.popup_open = false;
+            if let Some(popup) = state.popup.take() {
+                win32::destroy(popup);
+            }
             let seq = state.popup_seq;
             state.events.push(format!("pc:{seq}"));
         } else {
             state.popup_seq = state.popup_seq.wrapping_add(1);
             let seq = state.popup_seq;
             state.popup = win32::popup(state.hwnd, &format!("rvf-test-editor-popup-{seq}"));
+            state.popup_open = true;
             state.events.push(format!("po:{seq}"));
         }
         if let Some(hwnd) = state.hwnd {
@@ -247,10 +269,11 @@ impl IPlugViewTrait for TestEditorView {
         }
     }
 
-    /// Detaches the view: destroys the child HWND and any open popup
-    /// and always reports `kResultOk` — the host debug-asserts this
-    /// result, so declining would turn a benign double-`removed`
-    /// into a failure.
+    /// Detaches the view: destroys the child HWND and any open popup,
+    /// resets the logical popup open state (a re-attach must not
+    /// inherit a stale `pc:` cycle), and always reports `kResultOk` —
+    /// the host debug-asserts this result, so declining would turn a
+    /// benign double-`removed` into a failure.
     #[expect(unsafe_code)]
     unsafe fn removed(&self) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
@@ -259,6 +282,7 @@ impl IPlugViewTrait for TestEditorView {
         if let Some(popup) = state.popup.take() {
             win32::destroy(popup);
         }
+        state.popup_open = false;
         if let Some(hwnd) = state.hwnd.take() {
             win32::destroy(hwnd);
         }
@@ -658,8 +682,10 @@ mod win32 {
 }
 
 /// Non-Windows shim — no HWND surface exists off Windows, so
-/// `attach` always answers `None` (the caller's defined rejection)
-/// and `destroy` is unreachable but defined.
+/// `attach`/`popup` always answer `None` (`attach` becomes the
+/// caller's defined rejection; `popup` still logs `po:`/`pc:` via
+/// the logical `popup_open` oracle) and `destroy` is unreachable
+/// but defined.
 #[cfg(not(target_os = "windows"))]
 mod win32 {
     use std::ffi::c_void;
@@ -804,6 +830,69 @@ mod tests {
             // `removed` tears the open popup down.
             view.removed();
             assert!(view.state.borrow().popup.is_none());
+        }
+    }
+
+    /// The `po:`/`pc:` verb tokens are recorded even when the popup
+    /// HWND never materialized — the toggle's open/close oracle is
+    /// the logical open state, not `state.popup` (Issue #855: an
+    /// HWND-based oracle left `pc:` unreachable wherever
+    /// `win32::popup` answers `None` — every non-Windows build, and
+    /// any `CreateWindowExW` failure on Windows). Here the missing
+    /// surface is simulated by taking and destroying the real HWND
+    /// so `state.popup` is `None`, the same state the non-Windows
+    /// stub produces.
+    #[expect(unsafe_code)]
+    #[test]
+    fn popup_verbs_are_recorded_without_popup_hwnd() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view instance; the args
+        // are plain scalar values.
+        unsafe {
+            for _ in 0..2 {
+                // Open — `po:{seq}`; then drop the surface so the
+                // next press sees `popup == None`, exactly what a
+                // non-Windows build sees.
+                view.onKeyDown(0x50, POPUP_VK, 0);
+                if let Some(popup) = view.state.borrow_mut().popup.take() {
+                    win32::destroy(popup);
+                }
+                // Close — `pc:{seq}` must be recorded even though no
+                // HWND existed at toggle time.
+                view.onKeyDown(0x50, POPUP_VK, 0);
+            }
+            let state = view.state.borrow();
+            let popup_tokens: Vec<&str> = state
+                .events
+                .iter()
+                .map(String::as_str)
+                .filter(|token| token.starts_with('p'))
+                .collect();
+            assert_eq!(popup_tokens, ["po:1", "pc:1", "po:2", "pc:2"]);
+        }
+    }
+
+    /// `removed` tears the popup down and resets the logical open
+    /// state, so the next popup key starts a fresh `po:{seq}` cycle —
+    /// a stale open flag would mis-record it as `pc:`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn removed_resets_popup_open_state() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view instance; the args
+        // are plain scalar values.
+        unsafe {
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            view.removed();
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            let state = view.state.borrow();
+            let popup_tokens: Vec<&str> = state
+                .events
+                .iter()
+                .map(String::as_str)
+                .filter(|token| token.starts_with('p'))
+                .collect();
+            assert_eq!(popup_tokens, ["po:1", "po:2"]);
         }
     }
 
