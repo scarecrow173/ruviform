@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The twenty-eight real-window dock cases in run order — metadata
+/// The twenty-nine real-window dock cases in run order — metadata
 /// only. The AC1 remainder rows (`real-multiwindow-focus`,
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
@@ -78,7 +78,14 @@ pub struct RealCatalogRow {
 /// geometry for resize, hide→destroy/show→recreate for visibility,
 /// attach-generation title advance for redock, and the fixture's
 /// `GetWindowTextW` event-log title tokens for input/focus) —
-/// never pixels.
+/// never pixels. `real-editor-popup` (the Issue #630 AC4 shared
+/// remainder) extends the same non-pixel family: `send_key` `VK_P`
+/// toggles the fixture's popup twice and the verdict is judged by
+/// the `po:`/`pc:` title event-log tokens plus a real top-level
+/// `WS_POPUP` HWND oracle (own-process `RuviformTestEditor` class,
+/// `rvf-test-editor-popup-{seq}` title, `GW_OWNER` == the child's
+/// `GA_ROOT`, (0,0) 200x100 rect) and its close/teardown
+/// disappearance.
 /// The AC1/AC6 remainder rows
 /// (`real-session-terminate` and the Issue #389 lifecycle
 /// remainder: `real-session-degraded`, `real-session-recovery`,
@@ -237,6 +244,11 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     },
     RealCatalogRow {
         case: "real-editor-focus",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-editor-popup",
         scenario: SCENARIO,
         required: &[ScenarioCapability::NativePluginDock],
     },
