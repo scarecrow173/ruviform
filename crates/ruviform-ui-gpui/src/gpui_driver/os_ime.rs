@@ -74,6 +74,9 @@ const WM_IME_KEYDOWN_ID: u32 = 0x0290;
 const WM_IME_KEYUP_ID: u32 = 0x0291;
 /// `GCS_RESULTSTR` bit inside a `WM_IME_COMPOSITION` `lParam` — the
 /// OS signalling a committed result string exists (`imm.h`).
+/// Only the Windows delivery path and the tests consume the folding
+/// helpers — keep them out of non-Windows non-test builds (dead code).
+#[cfg(any(windows, test))]
 const GCS_RESULTSTR_BIT: isize = 0x0800;
 
 /// Reports whether this platform has an OS-level IME composition
@@ -455,7 +458,9 @@ fn preflight_inner(probe: &dyn ImeProbe, hwnd: u64) -> PreflightReport {
 
 /// Folds a raw delivery log into the [`ImeDelivery`] flags — pure and
 /// platform-independent so the verdict-relevant analysis is unit
-/// tested everywhere.
+/// tested everywhere. Consumed by the Windows delivery path and the
+/// tests; gated out of non-Windows non-test builds (dead code).
+#[cfg(any(windows, test))]
 fn analyze(messages: Vec<ImeDeliveredMessage>, observed: bool) -> ImeDelivery {
     let mut delivery = ImeDelivery {
         observed,
