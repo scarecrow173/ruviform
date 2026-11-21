@@ -24,8 +24,9 @@
 //! | `real-dcomp-pixel`      | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — docked       |
 //! |                         |             | `test_editor` child HWND の**画面合成画素**に       |
 //! |                         |             | `EDITOR_COLOR` 緑が出るか（screen `BitBlt` が主     |
-//! |                         |             | oracle、`PrintWindow(child)` は補助診断）。既知の    |
-//! |                         |             | GPUI `DComp` topmost occlusion 下では正直な `Fail` |
+//! |                         |             | oracle、`PrintWindow(child)` は補助診断）。採取中は |
+//! |                         |             | 被測定 root を最前面化し（Issue #857）、hit-test が |
+//! |                         |             | 外部 top-level を返す間は fail-closed `NotRun`     |
 //! | `real-dcomp-foreground` | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — GPUI root の |
 //! |                         |             | z-order/foreground を段階変異し hit-test+screen     |
 //! |                         |             | green を再観測して外部 stacking vs compositor 内部  |
@@ -3071,7 +3072,8 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
 
 // ---------------------------------------------------------------------
 // case: real-dcomp-pixel (docked editor screen-composited pixels —
-// the Issue #532 DComp topmost occlusion regression)
+// the Issue #532 regression oracle, with the Issue #857 lane-window
+// de-occlusion + fail-closed external-occlusion gate)
 // ---------------------------------------------------------------------
 
 /// `EDITOR_COLOR` visibility threshold — the fraction of a child's
@@ -3149,9 +3151,10 @@ enum PixelObservation {
     /// At least one child's screen-composited pixels met the green
     /// threshold — the editor surface is actually on screen.
     GreenSeen,
-    /// Every evaluable child was captured and none met the
-    /// threshold — the honest `DComp`-occlusion input. Carries the
-    /// best observed fraction/backend for the `Fail` detail.
+    /// Every evaluable child was captured, none met the threshold,
+    /// and the hit-test resolved inside the measured hierarchy —
+    /// the honest unoccluded-but-dark input. Carries the best
+    /// observed fraction/backend for the `Fail` detail.
     NoGreen {
         /// Highest `green_fraction` observed across children.
         best_fraction: f64,
@@ -3159,6 +3162,20 @@ enum PixelObservation {
         best_backend: &'static str,
         /// How many children produced a screen capture.
         evaluated: usize,
+    },
+    /// Screen captures were produced but at least one hit-test
+    /// point on an evaluated child still resolved to an external
+    /// top-level window — the sampled pixels cannot be attributed
+    /// to the docked child, so the verdict never reads them as
+    /// `Pass` or `Fail` (Issue #857 fail-closed gate).
+    Occluded {
+        /// Hit-test points that resolved to an unrelated
+        /// top-level window across evaluated children.
+        occluded_points: usize,
+        /// How many children produced a screen capture.
+        evaluated: usize,
+        /// The first covering window's identity for the detail.
+        covering: Option<String>,
     },
     /// Screen pixels could not be evaluated at all (window not
     /// presented, no container token, every capture failed) — the
@@ -3195,6 +3212,15 @@ struct PixelVerification {
 /// "the plugin painted green" from "the screen shows green").
 /// Every capture lands as a step row with backend + green stats;
 /// opt-in PNG artifacts are written when `artifacts` is `Some`.
+///
+/// Issue #857: before the captures the measured root is promoted
+/// to the head of the topmost band (bounded + restore contract —
+/// see [`deocclusion_promote`]/[`deocclusion_restore`]) so neither
+/// the lane's own sibling top-level windows nor a topmost-band
+/// foreign window can cover the child rect, and the per-child
+/// hit-test results then feed the fail-closed gate: a capture
+/// whose hit-test still resolves to an external window is never
+/// read as `Pass` or `Fail`.
 fn observe_child_pixels(
     observation: &ChildWindowObservation,
     container: Option<u64>,
@@ -3229,9 +3255,19 @@ fn observe_child_pixels(
         None => return not_evaluable(steps, "top-level presentation query failed"),
     }
 
+    // Sampling-time de-occlusion (Issue #857) — the baseline
+    // snapshot is taken before the promotion and restored after
+    // the captures, same bounded mutation contract the foreground
+    // probe uses.
+    let baseline = deocclusion_promote(&observation.children, steps);
+
     let mut scan = PixelScan::default();
     for (index, child) in observation.children.iter().enumerate() {
         observe_one_child_pixels(index, child, token, artifacts, steps, &mut scan);
+    }
+
+    if let Some(baseline) = baseline.as_ref() {
+        deocclusion_restore(baseline, steps);
     }
 
     if scan.evaluated == 0 {
@@ -3240,6 +3276,12 @@ fn observe_child_pixels(
             scan.first_error
                 .map_or_else(String::new, |e| format!(" — {e}"))
         ))
+    } else if scan.occluded_points > 0 {
+        PixelObservation::Occluded {
+            occluded_points: scan.occluded_points,
+            evaluated: scan.evaluated,
+            covering: scan.covering,
+        }
     } else if scan.any_green {
         PixelObservation::GreenSeen
     } else {
@@ -3265,6 +3307,143 @@ struct PixelScan {
     best: Option<(f64, &'static str)>,
     /// First screen-capture error, for the `NotEvaluable` detail.
     first_error: Option<String>,
+    /// Hit-test points on evaluated children that resolved to an
+    /// external top-level window — the Issue #857 fail-closed gate
+    /// input: while any exist, the sampled pixels cannot be
+    /// attributed to the docked child.
+    occluded_points: usize,
+    /// The first covering window's identity (`hwnd`/`class_name`)
+    /// for the `Occluded` detail — recorded, never fabricated.
+    covering: Option<String>,
+}
+
+/// Issue #857 — the sampling-time de-occlusion arm. Snapshots the
+/// measured root's mutable state through the first observed
+/// child's ancestry (`osmut::observe`), then applies the same
+/// `raise` → `set_topmost` pair the foreground probe uses to head
+/// the topmost band for the capture duration. Returns the baseline
+/// snapshot the paired [`deocclusion_restore`] needs — `None` when
+/// no child exists to resolve a root through, or when `GA_ROOT`
+/// came back null (nothing was mutated either way).
+///
+/// `HWND_TOP` (`raise_to_top`) alone cannot do this job: it only
+/// heads the *non-topmost* band, so any topmost-band window —
+/// measured on a real host: a `Chrome_RenderWidgetHostHWND`
+/// covering the whole screen region — keeps covering the child.
+/// `HWND_TOPMOST` places the root at the head of the topmost band,
+/// above every window on the desktop, for the bounded sampling
+/// duration; [`deocclusion_restore`] then returns the baseline
+/// band, whose flag restoration is the one deterministically
+/// verifiable bit.
+///
+/// The pair mirrors `real-dcomp-foreground`'s proven order — a
+/// cold `HWND_TOPMOST` call at this point in the case flow was
+/// observed to return success without moving the window
+/// (`after.topmost` false, `above_count` unchanged) while the same
+/// call after an in-band `HWND_TOP` took effect. When the
+/// promotion's after-snapshot still lacks the topmost band, one
+/// bounded settle lets GPUI's app thread finish in-flight window
+/// work and a single retry runs; whether it took is reported by
+/// the retry's own snapshot. A window that still covers
+/// afterwards, or a refused `SetWindowPos`, stays for the
+/// fail-closed hit-test gate, which turns it into `NotRun` instead
+/// of letting its pixels reach the verdict.
+fn deocclusion_promote(
+    children: &[ChildWindowFacts],
+    steps: &mut Vec<Value>,
+) -> Option<osmut::RootSnapshot> {
+    let first = children.first()?;
+    let baseline = osmut::observe(first.hwnd);
+    let Some(root) = baseline.root else {
+        steps.push(json!({
+            "step": "deocclusion_baseline",
+            "verdict": "note",
+            "snapshot": snapshot_json(&baseline),
+            "note": "GA_ROOT returned null for the child HWND — no \
+                     root to raise; the hit-test gate decides the \
+                     verdict honestly",
+        }));
+        return None;
+    };
+    steps.push(json!({
+        "step": "deocclusion_baseline",
+        "verdict": "note",
+        "root": root,
+        "snapshot": snapshot_json(&baseline),
+    }));
+    let raise = osmut::raise_to_top(root);
+    steps.push(json!({
+        "step": "deocclusion_apply_raise",
+        "verdict": if raise.applied { "pass" } else { "fail" },
+        "mutation": mutation_json(&raise),
+        "note": "in-band raise first — same order as the foreground \
+                 probe's proven pair (Issue #857); a refused \
+                 SetWindowPos is recorded and the hit-test gate \
+                 reports the occlusion honestly",
+    }));
+    let topmost = osmut::set_topmost(root);
+    steps.push(json!({
+        "step": "deocclusion_apply_topmost",
+        "verdict": if topmost.applied { "pass" } else { "fail" },
+        "mutation": mutation_json(&topmost),
+        "note": "promote the measured root to the head of the \
+                 topmost band for the sampling duration \
+                 (Issue #857) — a refused SetWindowPos leaves the \
+                 arrangement unchanged and the hit-test gate \
+                 reports the occlusion honestly",
+    }));
+    if !topmost.after.topmost {
+        // The API returned success but the band did not take
+        // (observed on a live host — the after-snapshot still
+        // showed the baseline z-order). Give GPUI's app thread a
+        // bounded window to finish in-flight window work, then
+        // retry once; the retry's own snapshot reports whether it
+        // stuck. Whatever remains is the hit-test gate's call.
+        std::thread::sleep(Duration::from_millis(BE_SETTLE_MS));
+        steps.push(json!({
+            "step": "deocclusion_settle",
+            "verdict": "note",
+            "settle_ms": BE_SETTLE_MS,
+            "settle_kind": "std::thread::sleep",
+            "note": "the topmost promotion returned success but \
+                     after.topmost stayed false — settle once so \
+                     GPUI's app thread can finish in-flight window \
+                     work, then retry the band change",
+        }));
+        let retry = osmut::set_topmost(root);
+        steps.push(json!({
+            "step": "deocclusion_apply_topmost_retry",
+            "verdict": if retry.applied { "pass" } else { "fail" },
+            "mutation": mutation_json(&retry),
+            "note": "single bounded retry of the topmost-band \
+                     promotion after the settle — its own \
+                     after-snapshot reports whether the band took",
+        }));
+    }
+    Some(baseline)
+}
+
+/// The paired restore — `osmut::restore` against the pre-raise
+/// baseline, always attempted once the baseline was taken (same
+/// bounded contract as the foreground probe). Restore verification
+/// is recorded honestly on the step row; it is cleanup evidence,
+/// not a verdict input — the captures already happened.
+fn deocclusion_restore(baseline: &osmut::RootSnapshot, steps: &mut Vec<Value>) {
+    let restore = osmut::restore(baseline);
+    let restore_ops_ok = restore
+        .ops
+        .iter()
+        .all(|op| !op.api.starts_with("SetWindowPos") || op.applied);
+    let restored = restore.topmost_restored && restore_ops_ok;
+    steps.push(json!({
+        "step": "deocclusion_restore",
+        "verdict": if restored { "pass" } else { "fail" },
+        "restore": restore_json(&restore),
+        "note": "topmost flag restoration is verified; z-order and \
+                 foreground are best-effort — zorder_before/after and \
+                 foreground_before/final record what could and could \
+                 not be restored, never claimed",
+    }));
 }
 
 /// Records the opt-in PNG artifact for one capture into its step
@@ -3296,8 +3475,11 @@ fn record_pixel_artifact(
 /// of the child's own surface (two `note`-level diagnostics that
 /// separate "the plugin painted green" from "the screen shows
 /// green") → query-only occlusion diagnostics (root exstyle,
-/// sibling z-order, `WindowFromPoint` — `note` level only, they
-/// never feed the oracle).
+/// sibling z-order, `WindowFromPoint`). The diagnostics stay
+/// `note`-level and never touch the green oracle itself, but the
+/// hit-test roles do feed the Issue #857 fail-closed gate: a
+/// capture whose points resolve to an external top-level window
+/// cannot be attributed to the docked child.
 fn observe_one_child_pixels(
     index: usize,
     child: &ChildWindowFacts,
@@ -3335,6 +3517,7 @@ fn observe_one_child_pixels(
         Ok(r) => ospix::capture_screen_rect(r),
         Err(error) => Err(error),
     };
+    let captured = screen.is_ok();
     match &screen {
         Ok(capture) => {
             scan.evaluated += 1;
@@ -3388,12 +3571,36 @@ fn observe_one_child_pixels(
 
     record_printwindow_pixels(index, hwnd, artifacts, steps);
     record_windowdc_pixels(index, hwnd, artifacts, steps);
-    record_occlusion_notes(hwnd, container, steps);
+    let facts = record_occlusion_notes(hwnd, container, steps);
+
+    // Issue #857 fail-closed gate input — count the probe points
+    // that still resolve to an external top-level window. Only an
+    // evaluated capture can mislead the oracle, so the count is
+    // taken on evaluated children only.
+    if captured {
+        for hit in &facts.hits {
+            let role = hit.window.as_ref().map_or("none", |row| {
+                occlusion_role(row.hwnd, hwnd, container, facts.root)
+            });
+            if role == "other" {
+                scan.occluded_points += 1;
+                if scan.covering.is_none() {
+                    scan.covering = hit.window.as_ref().map(|row| {
+                        format!(
+                            "hwnd {} class {}",
+                            row.hwnd,
+                            row.class_name.as_deref().unwrap_or("unknown")
+                        )
+                    });
+                }
+            }
+        }
+    }
 }
 
 /// Query-only occlusion diagnostics for one docked child — three
 /// `note`-level step rows that separate *which layer* hides the
-/// child's pixels without touching the oracle or any verdict:
+/// child's pixels without touching the green oracle:
 ///
 /// - `occlusion_exstyle` — the GPUI root HWND's `GWL_EXSTYLE`
 ///   (`WS_EX_NOREDIRECTIONBITMAP` proves whether
@@ -3408,8 +3615,15 @@ fn observe_one_child_pixels(
 ///
 /// All reads go through [`osoccl::probe`]; every row is
 /// `verdict: "note"` and failures degrade to `error` fields,
-/// never to fabricated observations.
-fn record_occlusion_notes(hwnd: u64, container: u64, steps: &mut Vec<Value>) {
+/// never to fabricated observations. The probed facts are
+/// returned so the caller can feed the hit-test roles into the
+/// Issue #857 fail-closed verdict gate — the rows themselves
+/// stay `note`-level either way.
+fn record_occlusion_notes(
+    hwnd: u64,
+    container: u64,
+    steps: &mut Vec<Value>,
+) -> osoccl::OcclusionFacts {
     let facts = osoccl::probe(hwnd);
     if !facts.supported {
         steps.push(json!({
@@ -3419,11 +3633,12 @@ fn record_occlusion_notes(hwnd: u64, container: u64, steps: &mut Vec<Value>) {
             "supported": false,
             "note": "OS occlusion observation is unsupported on this platform",
         }));
-        return;
+        return facts;
     }
     steps.push(occlusion_exstyle_row(hwnd, &facts));
     steps.push(occlusion_zorder_row(hwnd, container, &facts));
     steps.push(occlusion_hit_test_row(hwnd, container, &facts));
+    facts
 }
 
 /// `occlusion_exstyle` row — the extended style of every window
@@ -3556,12 +3771,15 @@ fn occlusion_zorder_list(
 /// manager's z-order/visibility only — `DComp` visuals and
 /// flip-model presentation planes are not HWNDs and cannot appear
 /// here, so a child answer does not by itself prove compositor-
-/// level occlusion (recorded limitation, not a verdict input).
-/// The hit-test also *skips* hidden and disabled windows and
-/// their subtrees, so a non-child answer means "covered OR
-/// skipped" — the `child_window`/`parent_window`/`root_window`
-/// rows record the chain's probe-time `visible`/`disabled`/
-/// `alive`/exstyle state that disambiguates the two.
+/// level occlusion (recorded limitation — the green oracle reads
+/// the composited screen either way). The row's roles do feed
+/// one verdict path: the Issue #857 fail-closed gate, where an
+/// `other` answer keeps the capture out of the Pass/Fail
+/// decision. The hit-test also *skips* hidden and disabled
+/// windows and their subtrees, so a non-child answer means
+/// "covered OR skipped" — the `child_window`/`parent_window`/
+/// `root_window` rows record the chain's probe-time `visible`/
+/// `disabled`/`alive`/exstyle state that disambiguates the two.
 fn occlusion_hit_test_row(hwnd: u64, container: u64, facts: &osoccl::OcclusionFacts) -> Value {
     let points: Vec<Value> = facts
         .hits
@@ -3781,6 +3999,18 @@ fn pixel_extras(
             "best_backend": best_backend,
             "evaluated_children": evaluated,
         }),
+        PixelObservation::Occluded {
+            occluded_points,
+            evaluated,
+            covering,
+        } => json!({
+            "green_observed": Value::Null,
+            "occluded": {
+                "occluded_points": occluded_points,
+                "evaluated_children": evaluated,
+                "covering": covering,
+            },
+        }),
         PixelObservation::NotEvaluable(reason) => json!({
             "green_observed": Value::Null,
             "not_evaluable": reason,
@@ -3931,11 +4161,14 @@ fn observe_editor_pixel_lifecycle(
 /// `real-dcomp-pixel`: the same real attach path as
 /// `real-editor-attach`, plus the screen-composited pixel oracle —
 /// does `EDITOR_COLOR` green actually appear in the pixels the user
-/// sees? Under the known GPUI `DComp` topmost occlusion the honest
-/// answer is `Fail` (the regression this case pins); `Pass` is only
-/// claimed when green is really observed on screen, and an
-/// unevaluable environment reports `NotRun`, never a fabricated
-/// verdict.
+/// sees? For the sampling duration the measured window hierarchy is
+/// promoted to the head of the topmost band (Issue #857 bounded +
+/// restore de-occlusion), so `Pass` is claimed when green is really
+/// observed on screen, `Fail` only when the hierarchy is hit-test
+/// visible yet the screen shows no green, and `NotRun` when the
+/// pixels are unevaluable — including the fail-closed case where a
+/// hit-test point still resolves to an external top-level window,
+/// whose pixels are never read as a `Pass`/`Fail` either way.
 fn editor_pixel_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -4009,7 +4242,22 @@ fn editor_pixel_body(
                     "editor lifecycle verified but {evaluated} child screen \
                      capture(s) show no EDITOR_COLOR green (best \
                      green_fraction={best_fraction:.3} via {best_backend}) — \
-                     consistent with the known GPUI DComp topmost occlusion"
+                     the hit-test resolved inside the measured hierarchy, so \
+                     the miss is not lane-window occlusion"
+                )),
+                PixelObservation::Occluded {
+                    occluded_points,
+                    evaluated,
+                    covering,
+                } => not_run(format!(
+                    "editor lifecycle verified but the screen-pixel oracle is \
+                     still occluded: {occluded_points} hit-test point(s) \
+                     across {evaluated} evaluated child capture(s) resolve \
+                     to an external top-level window{} — pixels outside the \
+                     measured hierarchy are never read as Pass or Fail",
+                    covering
+                        .as_ref()
+                        .map_or_else(String::new, |c| format!(" ({c})"))
                 )),
                 PixelObservation::NotEvaluable(reason) => not_run(format!(
                     "editor lifecycle verified but screen pixels are not \
