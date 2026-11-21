@@ -3,6 +3,14 @@
 //! `ruviform-plugin-test-vst3-l1-runner` (Issue #630 `test_fault`
 //! slice; oracle `docs/test-specs/issue-630-test-fault.md`).
 //!
+//! Issue #885 extends the suite to `test_editor`: the editor fixture
+//! carries the same in-band `Fault` parameter, so the `abort`/`hang`
+//! tests below instantiate the `test_editor` class and drive the
+//! same arming law — an editor-session-capable instance dying or
+//! wedging inside its own `process()` (the design's
+//! real-session-crash representative fault and the real-session-hang
+//! primary route).
+//!
 //! Every test is `#[ignore]`-gated: they require the fixture cdylib
 //! and the `l1-runner`-feature runner binary, which only
 //! `mise run test-l1-real-plugin` builds deterministically before
@@ -104,6 +112,17 @@ fn expected_gain_id() -> &'static str {
     ))
 }
 
+/// The `test_editor` descriptor id — `TestEditorComponent::CID`'s
+/// `uid(...)` derivation (`editor.rs`).
+fn expected_editor_id() -> &'static str {
+    cid_hex(vst3::uid(
+        0x3F8A_4C62,
+        0x9D1E_7B05,
+        0xA6F3_48D9,
+        0xC2E7_5B81,
+    ))
+}
+
 /// The `test_fault` descriptor the child synthesizes from the class
 /// scan — the `OutOfProcessSpec` oracle must field-match it.
 fn expected_fault_descriptor() -> PluginDescriptor {
@@ -121,6 +140,18 @@ fn expected_gain_descriptor() -> PluginDescriptor {
     PluginDescriptor {
         id: expected_gain_id(),
         name: "test_gain",
+        vendor: "Ruviform Test",
+        version: "0.0.0",
+        features: &["Fx"],
+    }
+}
+
+/// The `test_editor` descriptor the child synthesizes from the class
+/// scan — the `OutOfProcessSpec` oracle must field-match it.
+fn expected_editor_descriptor() -> PluginDescriptor {
+    PluginDescriptor {
+        id: expected_editor_id(),
+        name: "test_editor",
         vendor: "Ruviform Test",
         version: "0.0.0",
         features: &["Fx"],
@@ -1169,6 +1200,143 @@ fn real_test_fault_l1_invalid_emits_nan_block() {
     host.execute(HostCommand::Deactivate { handle }).unwrap();
     host.execute(HostCommand::Destroy { handle }).unwrap();
     assert_eq!(host.lifecycle_state(handle), None);
+}
+
+// ---------------------------------------------------------------------------
+// `test_editor` in-band fault — Issue #885
+// ---------------------------------------------------------------------------
+
+/// `test_editor` `abort` mode (Issue #885): the editor fixture
+/// carries the same in-band `Fault` law — the armed block's
+/// `process()` calls `std::process::abort()` inside the child. The
+/// parent observes `Failed` convergence, exactly one
+/// `InstanceFailed` notification carrying an exit status, defined
+/// `Err(Failed)` rejections, and a bounded `Destroy` — the same
+/// crash vocabulary `test_fault` produces, now on an
+/// editor-session-capable class.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_editor_l1_fault_abort_fails_instance() {
+    assert_fixture_present();
+
+    let expected = expected_editor_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+
+    // normalized 0.125 → plain 1.0 → mode `abort`.
+    arm_fault(&mut host, handle, 0.125);
+
+    wait_host_failed(&host, handle);
+    let (notified, exit, _cause) = wait_host_notification(&mut host);
+    assert_eq!(notified, handle);
+    // Windows reports abort as an exit code, unix as a signal.
+    assert!(
+        exit.code.is_some() || exit.signal.is_some(),
+        "notification carried no exit status"
+    );
+    assert!(host.try_recv_notification().is_none());
+
+    // Defined rejections on a `Failed` instance — no restart.
+    assert_eq!(
+        host.execute(HostCommand::Initialize { handle }),
+        Err(HostError::Failed)
+    );
+    assert_eq!(
+        host.execute(HostCommand::SaveState { handle }),
+        Err(HostError::Failed)
+    );
+    assert_eq!(host.lifecycle_state(handle), Some(LifecycleState::Failed));
+
+    // `process` on the failed leg: `Ok(CONTINUE)` + silence.
+    let in_left = [1.0_f32; FRAMES];
+    let in_right = [-1.0_f32; FRAMES];
+    let input = [&in_left[..], &in_right[..]];
+    let mut out_left = [7.0_f32; FRAMES];
+    let mut out_right = [7.0_f32; FRAMES];
+    let (result, _deltas) = host_block(
+        &mut host,
+        handle,
+        &input,
+        &mut out_left,
+        &mut out_right,
+        EventList::empty(FRAMES_U32),
+    );
+    assert_eq!(result, Ok(ProcessResult::CONTINUE));
+    assert!(out_left.iter().all(|&s| sample_eq(s, 0.0)));
+    assert!(out_right.iter().all(|&s| sample_eq(s, 0.0)));
+
+    // `Destroy` is the escape — `Ok`; the notification was exactly
+    // once.
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+    assert!(host.try_recv_notification().is_none());
+}
+
+/// `test_editor` `hang` mode (Issue #885) + a short
+/// `command_timeout`: the armed block wedges the child's `process()`
+/// forever — audio keeps flowing as defined passthrough/silence
+/// (`Ok(CONTINUE)`), then the next command hits `command_timeout` →
+/// `Err(Ipc)` → `Failed` with `cause: Timeout`, the watchdog kills
+/// the child, and `Destroy` stays bounded. On an
+/// editor-session-capable class this is the design's only primary
+/// route to a real-session hang.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_editor_l1_fault_hang_converges_on_timeout() {
+    assert_fixture_present();
+
+    let expected = expected_editor_descriptor();
+    let mut spec = OutOfProcessSpec::new(expected, runner_program());
+    spec.command_timeout = Duration::from_millis(500);
+    let mut host = PluginHost::new();
+    host.register_out_of_process(spec).unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+    assert!(drive_clean_blocks(&mut host, handle, 16) >= 4);
+    let passthrough_before = host
+        .audio_counters(handle)
+        .map_or(0, |c| c.passthrough_submits);
+
+    // normalized 0.375 → plain 3.0 → mode `hang` — the child's
+    // `process()` never returns.
+    arm_fault(&mut host, handle, 0.375);
+
+    // The audio leg keeps answering `Ok(CONTINUE)` with substituted
+    // (passthrough/silence) output while the child is wedged — a few
+    // submits prove the data plane stays defined.
+    for _ in 0..6 {
+        submit_clean_block(&mut host, handle);
+    }
+
+    // The wedged child cannot answer commands — `command_timeout`
+    // (500 ms) bounds the wait into `Err(Ipc)` and `Failed`.
+    assert_eq!(
+        host.execute(HostCommand::SaveState { handle }),
+        Err(HostError::Ipc)
+    );
+    wait_host_failed(&host, handle);
+    let (notified, _exit, cause) = wait_host_notification(&mut host);
+    assert_eq!(notified, handle);
+    assert_eq!(cause, FailureCause::Timeout);
+
+    // The watchdog killed the child — substituted output kept
+    // accruing while it was wedged.
+    let passthrough_after = host
+        .audio_counters(handle)
+        .map_or(0, |c| c.passthrough_submits);
+    assert!(
+        passthrough_after > passthrough_before,
+        "wedged-leg submits must substitute passthrough output"
+    );
+
+    // `Destroy` on the killed child stays bounded.
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+    assert!(host.try_recv_notification().is_none());
 }
 
 // ---------------------------------------------------------------------------
