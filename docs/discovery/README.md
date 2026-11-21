@@ -107,3 +107,4 @@ Directory: `docs/discovery`
 | DISC-rf768staleOracle01 | Issue #768 l1_fault / l1_stateful E2E staleness oracle 監査（#763 同 class）— findings | final | [issue-768-staleness-oracle.md](./issue-768-staleness-oracle.md) |
 | DISC-rf841spawnDeadline | Issue #841 L1 spawn/handshake deadline flake（SpawnFailed{Timeout}）— 定量・分類ルール・対処方針 | resolved | [issue-841-spawn-deadline-flake.md](./issue-841-spawn-deadline-flake.md) |
 | DISC-034ZbbClipPart000000001 | Issue #839 GPUI fork clip-partition fix — 実測調査記録 | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
+| DISC-034ZccDcompResidual01 | Issue #532 DComp residual — 根治 fix 統合後の残存 Fail class 切り分け記録 | approved | [issue-532-dcomp-residual.md](./issue-532-dcomp-residual.md) |
