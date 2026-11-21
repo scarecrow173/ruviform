@@ -326,3 +326,7 @@ Directory: `docs/test-specs`
 | --- | --- | --- | --- |
 | TSPEC-034WvK9mNqR2sTxYcAbEfG | consumer-impact-check workflow の PR 分類機械検査（記入検査・unknown 解消先・draft 除外） | superseded | [consumer-impact-check-pr-classification.md](./consumer-impact-check-pr-classification.md) |
 | TSPEC-034ZbbClipPart000001 | Issue #839 GPUI fork clip-partition fix — test spec | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
+| TSPEC-034ZccDcompResidual01 | Issue #532 DComp residual — pinned-dep verdict 集合と AC 各行の突合 | approved | [issue-532-dcomp-residual.md](./issue-532-dcomp-residual.md) |
+| TESTSPEC-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel test spec | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
+| TSPEC-034ZccDcompBandEsc01 | Issue #532 dcomp-band-escape — residual class 確定記録（WS_EX_LAYERED 適用不能の確定診断） | approved | [issue-532-dcomp-band-escape.md](./issue-532-dcomp-band-escape.md) |
+| TSPEC-034ZccDcompChildInv01 | Issue #532 dcomp-child-inventory — residual class 確定記録（WS_EX_LAYERED 適用不能の確定診断） | approved | [issue-532-dcomp-child-inventory.md](./issue-532-dcomp-child-inventory.md) |
