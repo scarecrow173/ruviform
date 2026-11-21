@@ -231,7 +231,8 @@ session verb、crash/hang は in-process lane 非生存のため正直
   fixture の process-killing/wedging fault（`test_fault` の
   abort/exit/hang）を生存できず、`L1EditorOps` は crash/hang
   経路を defined refusal する。out-of-process plugin host は
-  未実装」を明記する。
+  未実装」を明記する（out-of-process 化の確定設計は Issue
+  #872 の `docs/designs/issue-872-l1-oos-plugin-editor-host.md`）。
 - verdict 写像は既存規律どおり: refused open（定義済み
   `Unsupported`）→ `Unsupported`、その他の失敗 → `Fail`、setup
   失敗 → `Fail`、観測 verified → case 別 verdict、環境阻害 →
@@ -282,7 +283,9 @@ session verb、crash/hang は in-process lane 非生存のため正直
 ## Deferred Design Concerns
 
 - `real-session-move`・adapter verb 実装・crash/hang の
-  out-of-process 化・実 Window RT 非干渉 — verb/host 基盤が前提
+  out-of-process 化（確定設計は Issue #872 の
+  `docs/designs/issue-872-l1-oos-plugin-editor-host.md`）・
+  実 Window RT 非干渉 — verb/host 基盤が前提
   | 後続 slice | verb 未到着のまま Pass を主張するリスク。
 - `real-dcomp-pixel` 画素 Pass — `scarecrow173/ruviform#532` 決裁
   待ち | 決裁後の専用 slice | 既知 occlusion のまま Pass 誤記の

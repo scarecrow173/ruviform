@@ -217,6 +217,16 @@ negotiation 案（将来 bump 前提・実装しない）:
   実機証拠）充足後の別 Issue — 本 dispatch では `L1EditorOps` の
   Unsupported 表現で境界を固定するに留める。
 
+**注記（Issue #872 — D6 の確定版）**: 上記の capabilities 草案
+（`GUI_OPEN`=1/`GUI_LIFECYCLE`=2/`GUI_REPARENT`=4 の per-verb bit
+交差合意）は非拘束 sketch であり、確定版は Issue #872 の設計
+`docs/designs/issue-872-l1-oos-plugin-editor-host.md` である —
+`Hello.capabilities` の GUI bit は機構族 bit（`GUI_FLOATING`）
+として、`OpenGui`/`CloseGui` payload 拡張と lifecycle 動詞
+（`SetGuiSize`/`SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey`）の
+`WIRE_VERSION` 6 への同時収録が確定版で定義される。「別 Issue」
+とは同 design doc を指す。
+
 ### D7: RT・DSP 独立性規約
 
 - `PluginEditorSession`/`ops` は全て非 RT 専用（GUI thread/イベント

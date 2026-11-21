@@ -96,6 +96,8 @@ Issue #119 は新しいプロトコル機構の実装ではなく、**既に実�
 
 **re-engagement 注記（Issue #118 — 本方針の 2 度目の適用例）**: Issue #118 の video L1 で `WIRE_VERSION` が **2 → 3** へ着地した — video `Command` tag 12-22・`Reply` tag 4-7・`HostError` tag 10 `InvalidValue`・video 型 codec・`WIRE_VIDEO_MAX_*`・`wire::vshm` 定盤の additive 追加を非互換 bump として扱い、ホスト/ランナーは同一版で更新された（`Hello.version` 厳密一致・`capabilities` reserved・shm/vshm header `wire_version` 検証は video verb 系統・video segment にも同じ規則で適用）。audio tag/envelope/scope 規則は不変 — 「最新の単一バージョンのみ」方針どおり v2 の decode は残っていない。
 
+**re-engagement 注記（Issue #872 — 本方針の適用例・設計確定）**: Issue #872 の設計 `docs/designs/issue-872-l1-oos-plugin-editor-host.md` は、GUI 動詞（`OpenGui`/`CloseGui` payload 拡張・`SetGuiSize`/`SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey` 新 tag・`Reply::Opened` `capabilities` field）と `Hello.capabilities` GUI bit の有効化を **`WIRE_VERSION` 6 への非互換 bump** として設計した — 「additive payload/語彙変更は bump を要する」「`capabilities` の非 0 許容解放は bump と同時」の本方針の適用例であり、version 厳密一致・交渉機構非実装の規則は変わらない。実装は後続 Issue（同 design の D-followup）。
+
 ## Why Now
 
 - `wire.rs` は strict-equality の version 照合・reserved 拒否・上限チェックを **実装として** 既に持つが、「なぜ単一バージョンのみか」「いつ bump するか」「交渉を入れないのはなぜか」が設計判断としてどの文書にも記録されていなかった。design の Deferred Design Concerns 行は「初版 `WIRE_VERSION=1` で十分」とだけ述べ、方針の不在を示していた。
