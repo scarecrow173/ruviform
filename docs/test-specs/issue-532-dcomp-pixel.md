@@ -35,7 +35,11 @@ relations:
     - "docs/specs/issue-532-dcomp-residual.md"
     - "docs/discovery/issue-532-dcomp-residual.md"
     - "docs/test-specs/issue-532-dcomp-residual.md"
+    - "docs/discovery/issue-857-pixel-occlusion.md"
+    - "docs/specs/issue-857-pixel-occlusion.md"
+    - "docs/test-specs/issue-857-pixel-occlusion.md"
     - "evidence/rf532/plugin-dock-real-pinned.jsonl"
+    - "evidence/rf857/run-record.md"
   refines: []
   refined-by: []
   derives-from:
@@ -80,6 +84,15 @@ scenario の `real-dcomp-pixel` case）。
   detach・session 収束）全 pass かつ green なしは `Fail`、green
   ありは `Pass`、pixel 評価不能（iconic/非表示/採取失敗）は
   `NotRun`。
+- Rule（Issue #857 で追加）: screen oracle 採取は被測定 root を
+  `raise` → `set_topmost` pair で topmost band 先頭へ昇格する
+  bounded de-occlusion の内側で行い、採取後に `osmut::restore`
+  で baseline band・z-order・foreground を復元する。
+  `occlusion_hit_test` の probe point が role `other`（被測定
+  hierarchy 外 top-level window）を返す間は画素を `Pass`/`Fail`
+  のどちらにも昇格させず `NotRun`（`screen_pixels.occluded`
+  extras 付き）に退避する fail-closed gate — 外部 window の
+  画素は証拠にならない。
 - Rule: `GPUI_DISABLE_DIRECT_COMPOSITION` 生値が real lane 全
   report の `environment["gpui_disable_direct_composition"]`
   に記録される（未設定は `null`）。
@@ -154,9 +167,24 @@ HWND レベル外部遮蔽**。
 Issue 切り出し** — lane の window 配置（複数 top-level window が
 被測定 child 上に重なる scenario 設計）を修正する follow-up で
 扱う。#532 内では class B の既知 Fail として維持し、verdict の
-昇格・文言改竄は行わない。本 case の `detail` 文字列は旧文面
-（"known GPUI DComp topmost occlusion"）のまま残るため、確定
-class への文言追従は follow-up 側の作業とする。
+昇格・文言改竄は行わない。
+
+**follow-up 解決済み（Issue #857・本 slice）**: class B の
+follow-up は `docs/specs/issue-857-pixel-occlusion.md` で設計確定・
+実装済み。sampling 時に被測定 root を `raise` → `set_topmost`
+pair で topmost band 先頭へ昇格する bounded de-occlusion
+（`deocclusion_promote`/`deocclusion_restore`、osmut の bounded +
+restore 契約）を採用し、`occlusion_hit_test` の role `other`
+残存時は `PixelObservation::Occluded` → `NotRun` に退避する
+fail-closed gate を verdict 経路に挿入した。`detail` の旧文面
+（"known GPUI DComp topmost occlusion"）も確定 class に合わせて
+更新済み — `NoGreen` は hit-test が被測定 hierarchy 内を返した
+上での実ミスを報告する文面になった。interactive 実走では
+`deocclusion_apply_topmost` applied・`after.topmost: true`・全 hit
+`editor_child`・`screen_pixels` green `0.999994` で case verdict
+`pass`（`evidence/rf857/run-record.md`・canonical
+`evidence/rf631/plugin-dock-real-scenario.jsonl`）。検証設計は
+`docs/test-specs/issue-857-pixel-occlusion.md` を参照。
 
 切り分けの全証拠: `docs/discovery/issue-532-dcomp-residual.md`、
 `evidence/rf532/plugin-dock-real-pinned.jsonl`、
