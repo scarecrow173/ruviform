@@ -2,7 +2,7 @@
 id: "SPEC-rf806frmlvrf0slice1"
 type: "spec"
 status: "proposed"
-title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser）"
+title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents）"
 created: "2026-11-20"
 updated: "2026-11-21"
 owners: ["scarecrow173"]
@@ -19,6 +19,10 @@ relations:
         path: "crates/ruviform-ui/tests/formal_ipc.proptest-regressions"
       - type: "file"
         path: "crates/ruviform-io-archive/tests/formal_archive.rs"
+      - type: "file"
+        path: "crates/ruviform-io-structured/tests/formal_structured.rs"
+      - type: "file"
+        path: "crates/ruviform-io-structured/tests/formal_structured.proptest-regressions"
       - type: "doc"
         path: "docs/specs/formal-verification.md"
       - type: "dir"
@@ -34,6 +38,10 @@ relations:
         path: "crates/ruviform-io-archive/Cargo.toml"
       - type: "file"
         path: "crates/ruviform-io-archive/tests/common/mod.rs"
+      - type: "file"
+        path: "crates/ruviform-io-structured/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-io-structured/src/input.rs"
       - type: "file"
         path: "mise.toml"
       - type: "file"
@@ -60,13 +68,15 @@ relations:
   derived-by: []
 ---
 
-# Formal Verification — wire codec + archive slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip）
+# Formal Verification — wire codec + archive + structured slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip / json / yaml / toml / csv / xml）
 
 Issue `scarecrow173/ruviform#806` の D 層検証（property-based
 testing → bounded model checking → 将来の TLA+/Lean 昇格）実装
 spec。slice 1 で unsafe を含まない wire codec に proptest と
 Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
-の TAR/ZIP reader と `ArchiveReadLimits` に適用した。
+の TAR/ZIP reader と `ArchiveReadLimits` に、slice 3 で
+`ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader と
+共有 `InputLimits`/`BoundedRead` byte budget に適用した。
 
 ## 対象と検証する契約
 
@@ -90,12 +100,27 @@ Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
 | completion / receipt | `entry.rs` / `receipt.rs` | `finish` / `discard_remaining` / `discard_pending` が authoriative な完了点。receipt は走査した entry 数と payload byte 数の不変条件を満たす。TAR の pending entry は `discard_pending` で回復し reader が継続可能 |
 | roundtrip / codec | `tests/common/` fixture + writer | writer 生成アーカイブ（TAR・ZIP stored/deflate）は reader が同一 name/size/payload で復元する。TAR は payload 完全性を持たない（構造・宣言サイズまで）・ZIP は CRC32 で payload 完全性を検証する |
 
+### slice 3 — structured document readers（`ruviform-io-structured`）
+
+| 対象 | ファイル | 契約 |
+| --- | --- | --- |
+| `InputLimits` / `BoundedRead` | `src/limits.rs` / `src/input.rs` | `max_bytes` は inclusive の hard budget: 丁度 `max_bytes` byte の入力は受理され得るが、超過 1 byte 目で `BoundedRead` の 1-byte probe が `BudgetExceeded` を返し `was_limit_exceeded` が立つ。`Ok(0)` は真の EOF のみ — budget 外の byte を EOF に見せかけない。trip/EOF は共に sticky |
+| 共有 byte budget（全形式） | 各 reader + `BoundedRead` | `limit < len` なら `LimitExceeded`（`limit.name == "max_bytes"`・`max == limit`）。形式ごとに「tail byte が budget 内で先に非 limit error を出す」優先順位は異なる — JSON は strict-EOF check が tail を逐 byte 読むため「budget 内の最初の非空白 byte は `TrailingData`」が正確な境界 |
+| `DocumentErrorKind` 安定集合 | `src/error.rs` + 各 reader | 任意入力で panic せず、`Err` の kind が形式別の文書化集合内に留まる — json {`Io`,`Syntax`,`DataModel`,`TrailingData`,`LimitExceeded`}、yaml {`Io`,`InvalidEncoding`,`Syntax`,`DataModel`,`TrailingData`,`LimitExceeded`,`Unsupported`}、toml {`Io`,`InvalidEncoding`,`Syntax`,`DataModel`,`LimitExceeded`}（trailing byte は `Syntax` — `TrailingData` なし）、csv {`Io`,`InvalidEncoding`,`DataModel`,`LimitExceeded`,`Unsupported`}（緩い文法 — `Syntax`/`TrailingData` なし）、xml {`Io`,`InvalidEncoding`,`Syntax`,`LimitExceeded`,`Unsupported`}（event model — `DataModel`/`TrailingData` なし） |
+| strict EOF / trailing | `src/json.rs` / `src/yaml.rs` / `src/toml.rs` | JSON は文書後の非空白 byte が `TrailingData`（JSON の空白集合は space/tab/LF/CR のみ — form feed は `TrailingData`）。YAML は 2 文書目が `TrailingData`。TOML は trailing continuation byte が `Syntax` |
+| JSON/YAML/TOML roundtrip | 各 `to_writer`/`from_reader` | 生成した型付き値は serialize→parse で同値に復元される |
+| YAML depth/alias gate | `src/yaml.rs` | `max_depth` は入れ子深度 `d` が `d > m` で `LimitExceeded`（`limit.name == "max_depth"`）・alias 爆弾は `max_aliases` で同様に gate |
+| CSV 独立 limit | `src/csv.rs` | `max_record_bytes` は buffer capacity gate（`data.len() >= max` が `OutputFull` で発火 — terminator を伴う record は `r >= m` で trip）、`max_field_bytes` は `s > m`、`max_fields` は `f > m`、`max_records` は `min(k,m)` 個の後 `LimitExceeded`（header は data record に数えない）。全て `DocumentError::limit` に option 名が載る |
+| CSV streaming / cursor | `src/csv.rs` | `CsvReader` は record を入力順に 0-based data-record index で返し `record_index` が一致する。`read_typed` は失敗時も丁度 1 record を消費し cursor が進む（`DataModel` 後も後続 record が読める）。`flexible=false` で ragged は `DataModel`・`true` で受理。`field_str` は非 UTF-8 を `InvalidEncoding`。`delimiter == quote` dialect は `Unsupported` |
+| CSV BOM | `src/csv.rs` | UTF-8 BOM は `StripUtf8`（default）で除去・`Preserve` で先頭 field byte として保持。UTF-16 系 BOM は構築時 `InvalidEncoding` |
+| XML event reader | `src/xml.rs` | `read_event` は EOF で `Ok(None)` を安定に繰り返し、error 後は poison されて再 read も同 kind で失敗する。`max_depth`/`max_attributes`/`max_event_bytes`/`max_events` は各 named limit で `LimitExceeded`。secure default で DTD/doctype・非 UTF-8 宣言・非事前定義 general entity は `Unsupported`・数値 char reference は `Reference` event |
+
 ## Lane 構成
 
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
-| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` | なし（pure Rust・MSRV 内・CI と同一入口） |
+| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` の 2 invocation（両方 pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` の根拠は Kani bound の節を参照） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 
 `test-formal` は常時実行可能な第一層。`test-formal-kani` は
 環境検出つきの第二層で、次の順に解決する。
@@ -136,6 +161,20 @@ proptest の concrete coverage に委譲する。
 | `tar_declared_size_gate` | 同上 skeleton で declared size field を symbolic 化（bounded u64）| `max_entry_uncompressed_bytes` 境界±1 以外の組合せ・total gate との複合 | proptest `tar_declared_size_limits` / `tar_total_uncompressed_limit` で担保 |
 | `zip_index_gates` | concrete ZIP skeleton（1 local header + 1 central record + EOCD）で EOCD count field を symbolic u16 | 複数 entry・ZIP64・deflate payload・local/central 不整合の全組合せ | proptest `zip_index_limit_gates` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
 
+### slice 3 structured harness（`tests/formal_structured.rs` の `#[cfg(kani)] mod proofs` + `src/input.rs` の in-src proof）
+
+slice 2 と同じ「concrete skeleton + symbolic gate field」型のみ。
+任意 stream は proptest に委譲する。`BoundedRead` は `pub(crate)`
+なので byte-budget の証明だけ `src/input.rs` 内の
+`#[cfg(kani)] mod proofs` に置く（`cargo kani --tests` は lib target
+の harness も test mode でカバーする）。
+
+| Harness | Bound | 未証明領域 | 補完 |
+| --- | --- | --- | --- |
+| `bounded_read_budget_gate`（in-src） | concrete 6 byte input + symbolic `max_bytes:u64`（全値）を 2 byte/read の `read` loop で drive。`#[kani::unwind(16)]` | 任意長・任意 backend reader の組合せ・probe 対象 byte の値（`Read` 契約上 0/1 のみ効く） | proptest 各形式の `*_max_bytes_gate`（concrete skeleton + tail/offset）が reader 実経路で担保 |
+| `csv_max_records_gate` | concrete skeleton `h\nr1\nr2\nr3\n` + symbolic `max_records:u64`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 record 内容・他 limit との複合・4 record 超 | proptest `csv_max_records_gate` が任意 `k`/`m`・非 header 経路も担保 |
+| `csv_max_field_bytes_gate` | concrete skeleton `a,bb\n` + symbolic `max_field_bytes:usize`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 field 内容・複数 field 超過パターン・buffer 成長境界（`max_record_bytes` は concrete） | proptest `csv_max_field_bytes_gate` / `csv_max_record_bytes_gate` が `s`/`r`/`m` 全組合せで担保 |
+
 仮定:
 
 - `kani::assume(len <= STREAM_LEN)` で stream 長を bound 内に制限
@@ -152,6 +191,18 @@ proptest の concrete coverage に委譲する。
   `String` 生成の RawVec unwind コストを回避できる。`Ok` 以外を
   early return するのは入力型の制約であって契約弱化の `assume`
   ではない（`&str` 引数に invalid UTF-8 は型上到達不能）。
+- CSV harness 固有: `CsvReader::new` が呼ぶ `csv_core` の
+  `build_dfa` は `for c in 0..256` が dominant loop（完全証明には
+  unwind >= 257 が必要）。skeleton の byte は全て < 128 であり、
+  c >= 128 の DFA row は concrete 入力から到達不能なので、
+  io-structured invocation は `#[kani::unwind(128)]` +
+  `--no-unwinding-checks` で当該 loop を意図的に truncate する
+  （全 256 row の unwind は式をほぼ 2 倍に膨らませ、参照 WSL2
+  環境を枯渇させることを実測）。truncate 領域が到達不能である
+  保証は harness の assert 自体が検査する — table が byte < 128
+  で現実と乖離していれば concrete 期待値（field 内容・error
+  kind）の assert が落ちる。それ以外の全 loop（NFA_STATES・
+  `for _ in 0..4`・reader 内部）は bound 内で完全に網羅される。
 - serde_json の float 復号精度: `float_roundtrip` feature は無効の
   ため、最短表現 decimal が parse 時に 1 ulp ずれる場合がある。
   proptest 側は `json_value_eq`（整数は厳密・float は 1 ulp 以内）
@@ -194,7 +245,13 @@ manual/opt-in）。
 revert 後の再検証結果を残す。slice 2 では例として TAR reader の
 limit gate または ZIP reader の CRC/size 整合チェックを 1 箇所だけ
 破り、`formal_archive` の該当 property が shrink つき fail する
-ことを記録する。
+ことを記録する。slice 3 では `BoundedRead` の probe 比較
+（`remaining == 0`）を 1 箇所だけ破り、`formal_structured` の
+max_bytes gate property が shrink つき fail することを記録する
+（観測上の注意: probe 比較を早めに効かせる変異は、read 粒度が
+細かい backend（serde_json の逐 byte trailing check）でのみ発火
+する — 大量 fill する backend は `remaining` を 1 跨いで 0 まで
+一読みで落とすため変異がマスクされる。ledger にこの観察を残す）。
 
 ## 判定語彙と fail-closed
 
@@ -210,7 +267,7 @@ Kani（bounded model checking）への次の昇格候補:
 
 | 候補 target | 対象 crate / 契約 | Kani が向く理由 |
 | --- | --- | --- |
-| parser family | `ruviform-io-structured`（pull-based CSV 等の構造化 parse）、`ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で本形を適用済み |
+| parser family | `ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で、`ruviform-io-structured`（JSON/YAML/TOML/CSV/XML reader・`InputLimits`/`BoundedRead` byte budget・`DocumentErrorKind` 安定集合・per-format named limit gate）は slice 3 で本形を適用済み |
 | unsafe 局在コード | `ruviform-math`（SIMD dispatch）、`ruviform-audio-device` / `ruviform-midi-device` / `ruviform-observability` の `#[expect(unsafe_code)]` 局所箇所 | unsafe ブロックの前後条件・pointer/len 不変条件を symbolic に検証 — 通常 test では到達不能な入力経路をカバーできる（harness は unsafe 自体ではなく公開境界の契約を検証する設計にする） |
 | DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすく、全サイズ証明が必要になった段階で Lean へ再昇格できる |
 

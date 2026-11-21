@@ -6822,6 +6822,7 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "csv-core",
+ "proptest",
  "quick-xml 0.42.0",
  "ruviform-io-file",
  "serde",

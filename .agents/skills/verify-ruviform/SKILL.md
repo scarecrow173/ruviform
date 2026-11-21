@@ -324,31 +324,53 @@ mise run bench-frozen-e2e --write-baseline <path>  # emit an un-promoted baselin
 
 D-layer property + bounded-model-check lanes (Issue #806 — slice 1
 wire codecs `rvf.ipc.v1` / `rvf.uitest.v1`, slice 2 archive parsers
-`ruviform-io-archive`):
+`ruviform-io-archive`, slice 3 structured document readers
+`ruviform-io-structured`):
 
 ```sh
-mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive
+mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive + formal_structured
 mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
 ```
 
 - Test files live next to the crates: `crates/ruviform-ui/tests/
   formal_ipc.rs` (`parse_intent`, `valid_op`, `Event::to_json`),
   `crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
-  `write_frame`), and `crates/ruviform-io-archive/tests/
+  `write_frame`), `crates/ruviform-io-archive/tests/
   formal_archive.rs` (TAR/ZIP reader `ArchiveReadLimits` gates,
   `ArchiveErrorKind` stable classification, receipt invariants, and
-  `Pending`/`discard_pending` recovery). Kani proofs sit in a
-  `#[cfg(kani)] mod proofs` at the bottom of the same file — never in
-  product sources. The archive proofs use a concrete skeleton plus a
-  symbolic gate field (typeflag byte / limit budget); arbitrary byte
-  streams stay concrete-only in proptest.
+  `Pending`/`discard_pending` recovery), and
+  `crates/ruviform-io-structured/tests/formal_structured.rs`
+  (JSON/YAML/TOML `from_reader`/`to_writer` round-trips, pull-based
+  CSV `CsvReader` and XML `XmlEventReader`, the shared
+  `InputLimits`/`BoundedRead` inclusive byte budget, stable
+  `DocumentErrorKind` sets per format, named `DocumentLimit` gates:
+  CSV `max_record_bytes`/`max_field_bytes`/`max_fields`/`max_records`,
+  YAML `max_depth`/`max_aliases`, XML `max_depth`/`max_attributes`/
+  `max_event_bytes`/`max_events`, strict-EOF `TrailingData`, BOM and
+  invalid-encoding handling, poisoned-reader semantics). The structured
+  suite is feature-gated per format (`#[cfg(feature = "...")]`) and the
+  lane runs it with `--all-features` because the crate's
+  `default = []`. Kani proofs sit in a `#[cfg(kani)] mod proofs` at
+  the bottom of the same file — plus one deliberate exception: the
+  `BoundedRead` proof lives in a `#[cfg(kani)] mod proofs` inside
+  `src/input.rs` because the type is `pub(crate)` and
+  `cargo kani --tests` covers lib-target proofs. All other proofs stay
+  out of product sources. The proofs use a concrete skeleton plus a
+  symbolic gate field (record/field limits, the byte budget); arbitrary
+  byte streams stay concrete-only in proptest.
 - `test-formal` is the always-runnable first layer (pure Rust, MSRV,
   same entry as CI). `test-formal-kani` resolves an environment in
   order: native `cargo kani` → a WSL2 distro with `cargo` +
   `cargo kani` (Windows path mapped to `/mnt/<drive>/`, builds in a
   WSL-native target dir, never through `/mnt`) → `not_run` +
   `environment_blocked` + exit 0. A real CBMC counterexample is `fail`
-  + exit 1; environment absence is never reported as `pass`.
+  + exit 1; environment absence is never reported as `pass`. The Kani
+  lane runs two `cargo kani` invocations — one for the wire/archive
+  crates and a separate `--all-features --no-unwinding-checks` one
+  for `ruviform-io-structured` — and aggregates: `pass` only when
+  both verify. The flag bounds `csv_core`'s `build_dfa` byte-table
+  loop at 128 (skeleton bytes are all < 128, so truncated rows are
+  unreachable); see `docs/specs/formal-verification.md`.
 - Bounds and assumptions (what is proven vs unproven, float 1-ulp
   semantics, cap-path complementarity between proptest and Kani) are
   the contract of record: `docs/specs/formal-verification.md`. Keep it
