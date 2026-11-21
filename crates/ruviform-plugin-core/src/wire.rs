@@ -55,9 +55,12 @@
 //! integer generation of the communication contract — bumped on
 //! incompatible protocol changes only, not tied to `SemVer` or crate
 //! versions — and a bump means host and runner ship the same
-//! revision together. `Hello.capabilities` stays reserved and must
-//! be `0`; enabling a capability is itself designed as a protocol
-//! change. The full policy is recorded in
+//! revision together. `Hello.capabilities` carries the assigned
+//! capability bits — under `WIRE_VERSION` `6` bit 0
+//! ([`WIRE_CAPABILITY_GUI_FLOATING`]) is the only one defined, and
+//! decode rejects any other bit as [`WireError::Malformed`]; enabling
+//! a capability is itself designed as a protocol change. The full
+//! policy is recorded in
 //! `docs/designs/plugin-l1-out-of-process.md`.
 //!
 //! ## Bounded reads and defined rejections
@@ -96,10 +99,10 @@ use ruviform_video_core::{
 };
 
 use crate::{
-    Event, EventKind, EventList, GuiHandle, HostError, LifecycleError, LifecycleEvent,
-    LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned,
-    PlainParamValue, PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult,
-    ProcessStatus, TransportInfo, VideoProcessConfig,
+    Event, EventKind, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize,
+    HostError, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamFlags, ParamId,
+    ParamValue, ParentLease, PlainParamInfoOwned, PlainParamValue, PluginDescriptor, PluginHandle,
+    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
@@ -116,7 +119,29 @@ use crate::{
 /// `parent` field changed from a raw `u64` token to the
 /// generation-bound [`ParentLease`] (`u32` generation + `u64`
 /// payload); verb tag 8 and every other tag are unchanged.
-pub const WIRE_VERSION: u16 = 5;
+/// `6` is the Issue #872/#882 GUI floating revision —
+/// [`Command::OpenGui`]'s payload grew from `{parent}` to `{mode,
+/// parent, size}` (verb tag 8 unchanged), the GUI floating verbs
+/// [`Command::SetGuiSize`]/[`Command::SetGuiVisibility`]/
+/// [`Command::SetGuiFocus`]/[`Command::SendGuiKey`] arrived as tags
+/// 24-27, [`Reply::Opened`] gained `capabilities` (reply tag 3
+/// unchanged), and `Hello.capabilities` bit 0
+/// ([`WIRE_CAPABILITY_GUI_FLOATING`]) became defined — the v5
+/// "capabilities must be `0`" rule is frozen with v5.
+pub const WIRE_VERSION: u16 = 6;
+
+/// `Hello.capabilities` bit 0 — the child advertises it implements
+/// the GUI floating verb family ([`Command::OpenGui`],
+/// [`Command::CloseGui`], [`Command::SetGuiSize`],
+/// [`Command::SetGuiVisibility`], [`Command::SetGuiFocus`] and
+/// [`Command::SendGuiKey`]). One bit covers the family atomically —
+/// a mechanism fact, not a per-verb grant: verb-level refusals stay
+/// in the reply vocabulary (`Err(HostError::Unsupported)` and
+/// [`Reply::Opened`]'s `capabilities`). The advertisement is
+/// child→parent only — `Hello` is the child's one first frame and
+/// `WIRE_VERSION` `6` defines no parent→child path. An unassigned
+/// capabilities bit is [`WireError::Malformed`] on decode.
+pub const WIRE_CAPABILITY_GUI_FLOATING: u32 = 0x1;
 
 /// Maximum frames per processing block carried on the wire
 /// (`Activate` configs and shm block payloads share this bound).
@@ -602,10 +627,12 @@ pub enum Message {
     Hello {
         /// Protocol version — [`WIRE_VERSION`] on a live handshake.
         version: u16,
-        /// Capability bitmask reserved for protocol extensions;
-        /// must be `0` under [`WIRE_VERSION`] `4` — decode rejects a
-        /// nonzero value as [`WireError::Malformed`], like any other
-        /// nonzero reserved field.
+        /// Capability bitmask for protocol extensions. Under
+        /// [`WIRE_VERSION`] `6` bit 0
+        /// ([`WIRE_CAPABILITY_GUI_FLOATING`]) is the only assigned
+        /// bit — decode rejects any other bit as
+        /// [`WireError::Malformed`], like any other nonzero reserved
+        /// field.
         capabilities: u32,
     },
     /// Parent → child: one serialized command, correlated by `seq`.
@@ -669,7 +696,13 @@ pub enum Message {
 /// bytes they describe travel a per-instance [`vshm`] segment, never
 /// the pipe. Tag 23 is the wire-v4 (Issue #253) report verb —
 /// [`Command::DrainOutputReports`] pulls the instance's
-/// plugin→host [`Event`] reports over the control plane.
+/// plugin→host [`Event`] reports over the control plane. Tags 24-27
+/// are the wire-v6 (Issue #872/#882) GUI floating verbs —
+/// [`Command::SetGuiSize`], [`Command::SetGuiVisibility`],
+/// [`Command::SetGuiFocus`] and [`Command::SendGuiKey`]. Every GUI
+/// verb is instance-scoped: the envelope `instance` alone names the
+/// surface (≤1 surface per instance), so no [`GuiHandle`] rides a
+/// command payload — it stays [`Reply::Opened`]'s proof vocabulary.
 ///
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new verbs arrive only with a [`WIRE_VERSION`] bump. It is
@@ -728,15 +761,24 @@ pub enum Command {
         /// Bytes produced by an earlier `SaveState`.
         bytes: Vec<u8>,
     },
-    /// Open the plugin GUI under an opaque parent-window lease →
-    /// [`Reply::Opened`].
+    /// Open the plugin GUI → [`Reply::Opened`]. Wire v6 (Issue
+    /// #872/#882) extends the v5 `{parent}` payload with the leading
+    /// `mode` and trailing `size` fields; verb tag 8 is unchanged.
     OpenGui {
-        /// Generation-bound parent-window lease (opaque vocabulary —
-        /// L1 GUI is not implemented; the verb is carried for the
-        /// future cross-process contract only).
+        /// Attach mode — `Floating` is the only implemented value;
+        /// `Docked` is defined vocabulary the child answers
+        /// `Err(HostError::Unsupported)` until a docked design lands.
+        mode: OpenGuiMode,
+        /// Generation-bound parent-window lease — the floating
+        /// mode's owner hint.
         parent: ParentLease,
+        /// Initial editor size — `{0, 0}` opens at the plugin's
+        /// preferred size.
+        size: GuiSize,
     },
-    /// Close the plugin GUI.
+    /// Close the plugin GUI → [`Reply::Ok`]. An instance with no
+    /// live surface is `Err(HostError::InvalidValue)` — the defined
+    /// value-domain refusal, not a protocol violation.
     CloseGui,
     /// Register a new video plugin instance in the child under the
     /// envelope `instance` handle → [`Reply::Ok`] — the
@@ -837,6 +879,36 @@ pub enum Command {
     /// is chunked child-side across successive drains, so a single
     /// host-side drain may take several round-trips.
     DrainOutputReports,
+    /// Resize the open GUI → [`Reply::Ok`] — wire tag 24, the
+    /// wire-v6 (Issue #872/#882) GUI floating verb. The child calls
+    /// `plugin.set_gui_size` on its UI thread; a plugin that declines
+    /// resize answers `HostError::Unsupported`/`PluginFailed`.
+    SetGuiSize {
+        /// Requested logical size.
+        size: GuiSize,
+    },
+    /// Show (`visible = 1`) or hide (`visible = 0`) the GUI's
+    /// child-owned container → [`Reply::Ok`] — wire tag 25. The
+    /// plugin view survives: hidden is a container state, not a
+    /// detach.
+    SetGuiVisibility {
+        /// Strict `{0,1}` byte — `0` hides, `1` shows; any other
+        /// value is [`WireError::Malformed`] on decode.
+        visible: u8,
+    },
+    /// Give (`focused = 1`) or remove (`focused = 0`) keyboard focus
+    /// on the open GUI → [`Reply::Ok`] — wire tag 26.
+    SetGuiFocus {
+        /// Strict `{0,1}` byte — `0` removes, `1` gives focus; any
+        /// other value is [`WireError::Malformed`] on decode.
+        focused: u8,
+    },
+    /// Deliver one key event to the open GUI → [`Reply::Ok`] — wire
+    /// tag 27.
+    SendGuiKey {
+        /// The key event (press or release).
+        event: GuiKeyEvent,
+    },
 }
 
 /// The reply payload of a successful wire [`Command`].
@@ -860,10 +932,20 @@ pub enum Reply {
         /// Serialized state.
         bytes: Vec<u8>,
     },
-    /// `OpenGui` result: token for the opened surface.
+    /// `OpenGui` result: token for the opened surface plus the
+    /// child's reported GUI capabilities — wire v6 (Issue #872/#882)
+    /// extends the v5 `{gui}` payload; reply tag 3 is unchanged.
     Opened {
         /// Handle of the opened GUI surface.
         gui: GuiHandle,
+        /// GUI capability bitfield the child reports. The wire layer
+        /// carries the `u32` verbatim — no mask validation; unknown
+        /// bits a child sets are the host's to ignore. Bits 0-9 are
+        /// `EditorCapabilities`' fields in declaration order
+        /// (`ruviform-plugin-host` `editor_session.rs`): `dock`,
+        /// `float`, `resize`, `hide_show`, `reparent`, `ime`,
+        /// `popup`, `close`, `input`, `focus`.
+        capabilities: u32,
     },
     /// `VideoRender` result — wire tag 4. The byte-placement
     /// descriptor of the frame the plugin rendered into the `vshm`
@@ -901,6 +983,30 @@ pub enum Reply {
         /// Drained events, oldest first.
         events: Vec<Event>,
     },
+}
+
+/// The `mode` vocabulary of [`Command::OpenGui`] — how the child
+/// attaches the plugin editor (wire v6, Issue #872/#882).
+///
+/// `Floating` is the only implemented value: the child opens the GUI
+/// in a runner-owned floating window. `Docked` is defined but
+/// unimplemented — the wire assigns it a value now so a future
+/// docked design lands without a payload change; decode accepts it
+/// and the child answers `Err(HostError::Unsupported)` — a defined
+/// reply, not a decode rejection. Any other wire byte is
+/// [`WireError::Malformed`].
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new modes arrive only with a [`WIRE_VERSION`] bump.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OpenGuiMode {
+    /// Floating window owned by the runner (the v6 implementation).
+    Floating,
+    /// Docked inside the host layout — defined, unimplemented.
+    Docked,
 }
 
 /// The owned wire form of a [`PluginDescriptor`].
@@ -1161,6 +1267,11 @@ impl<'a> Reader<'a> {
     /// Reads one little-endian `u64`.
     pub fn read_u64(&mut self) -> Result<u64, WireError> {
         Ok(u64::from_le_bytes(*self.array::<8>()?))
+    }
+
+    /// Reads one little-endian `i16`.
+    pub fn read_i16(&mut self) -> Result<i16, WireError> {
+        Ok(i16::from_le_bytes(*self.array::<2>()?))
     }
 
     /// Reads one little-endian `i32`.
@@ -1428,10 +1539,11 @@ pub fn decode(frame: &[u8]) -> Result<Message, WireError> {
         KIND_HELLO => {
             let version = reader.read_u16()?;
             let capabilities = reader.read_u32()?;
-            // Reserved under this protocol revision — no capability
-            // bits are defined, so a nonzero value is the same defined
-            // rejection as any other nonzero reserved field.
-            if capabilities != 0 {
+            // `!WIRE_CAPABILITY_GUI_FLOATING` is the mask of
+            // unassigned capability bits — v6 assigns bit 0 only, so
+            // any other bit set is the same defined rejection the v5
+            // "must be 0" rule applied to the whole field.
+            if capabilities & !WIRE_CAPABILITY_GUI_FLOATING != 0 {
                 return Err(WireError::Malformed);
             }
             Message::Hello {
@@ -1535,6 +1647,10 @@ fn push_u64(out: &mut Vec<u8>, value: u64) {
     out.extend_from_slice(&value.to_le_bytes());
 }
 
+fn push_i16(out: &mut Vec<u8>, value: i16) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+
 fn push_i32(out: &mut Vec<u8>, value: i32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
@@ -1581,9 +1697,11 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             push_u8(out, 7);
             push_bytes(out, bytes);
         }
-        Command::OpenGui { parent } => {
+        Command::OpenGui { mode, parent, size } => {
             push_u8(out, 8);
+            push_u8(out, encode_open_gui_mode(*mode));
             encode_parent_lease(parent, out);
+            encode_gui_size(size, out);
         }
         Command::CloseGui => push_u8(out, 9),
         Command::CreateInstance {
@@ -1634,6 +1752,22 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             encode_plain_param_value(value, out);
         }
         Command::DrainOutputReports => push_u8(out, 23),
+        Command::SetGuiSize { size } => {
+            push_u8(out, 24);
+            encode_gui_size(size, out);
+        }
+        Command::SetGuiVisibility { visible } => {
+            push_u8(out, 25);
+            push_u8(out, *visible);
+        }
+        Command::SetGuiFocus { focused } => {
+            push_u8(out, 26);
+            push_u8(out, *focused);
+        }
+        Command::SendGuiKey { event } => {
+            push_u8(out, 27);
+            encode_gui_key_event(event, out);
+        }
     }
     Ok(())
 }
@@ -1654,9 +1788,22 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
         7 => Ok(Command::RestoreState {
             bytes: reader.read_bytes(WIRE_MAX_STATE_BYTES)?,
         }),
-        8 => Ok(Command::OpenGui {
-            parent: decode_parent_lease(reader)?,
-        }),
+        8 => {
+            // `mode` leads the v6 payload — `0`/`1` are the assigned
+            // vocabulary (`Docked` decodes: the child layer's defined
+            // `Err(HostError::Unsupported)` reply refuses it, not the
+            // codec); any other byte is the typed-field rejection.
+            let mode = match reader.read_u8()? {
+                0 => OpenGuiMode::Floating,
+                1 => OpenGuiMode::Docked,
+                _ => return Err(WireError::Malformed),
+            };
+            Ok(Command::OpenGui {
+                mode,
+                parent: decode_parent_lease(reader)?,
+                size: decode_gui_size(reader)?,
+            })
+        }
         9 => Ok(Command::CloseGui),
         10 => {
             let plugin_id = reader.read_string()?;
@@ -1711,6 +1858,28 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             value: decode_plain_param_value(reader)?,
         }),
         23 => Ok(Command::DrainOutputReports),
+        24 => Ok(Command::SetGuiSize {
+            size: decode_gui_size(reader)?,
+        }),
+        25 => Ok(Command::SetGuiVisibility {
+            visible: decode_u8_flag(reader)?,
+        }),
+        26 => Ok(Command::SetGuiFocus {
+            focused: decode_u8_flag(reader)?,
+        }),
+        27 => Ok(Command::SendGuiKey {
+            event: decode_gui_key_event(reader)?,
+        }),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Reads a strict `{0,1}` `u8` flag byte — the same small-domain
+/// typed-field rule the `PlainParamValue::Boolean` tag applies;
+/// anything outside `{0,1}` is [`WireError::Malformed`].
+fn decode_u8_flag(reader: &mut Reader<'_>) -> Result<u8, WireError> {
+    match reader.read_u8()? {
+        byte @ (0 | 1) => Ok(byte),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1732,9 +1901,10 @@ fn encode_reply(reply: &Reply, out: &mut Vec<u8>) -> Result<(), WireError> {
             push_u8(out, 2);
             push_bytes(out, bytes);
         }
-        Reply::Opened { gui } => {
+        Reply::Opened { gui, capabilities } => {
             push_u8(out, 3);
             encode_gui_handle(gui, out);
+            push_u32(out, *capabilities);
         }
         Reply::Rendered { output } => {
             push_u8(out, 4);
@@ -1788,6 +1958,9 @@ fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
         }),
         3 => Ok(Reply::Opened {
             gui: decode_gui_handle(reader)?,
+            // Verbatim `u32` — the wire layer owns no bit mask for the
+            // child's reported GUI capabilities.
+            capabilities: reader.read_u32()?,
         }),
         4 => Ok(Reply::Rendered {
             output: decode_video_frame_desc(reader)?,
@@ -1929,6 +2102,87 @@ pub fn decode_parent_lease(reader: &mut Reader<'_>) -> Result<ParentLease, WireE
     let generation = reader.read_u32()?;
     let payload = reader.read_u64()?;
     Ok(ParentLease::new(generation, payload))
+}
+
+/// The [`OpenGuiMode`] discriminant byte — see the tag-8 arm of
+/// `decode_command` for the decode direction.
+fn encode_open_gui_mode(mode: OpenGuiMode) -> u8 {
+    match mode {
+        OpenGuiMode::Floating => 0,
+        OpenGuiMode::Docked => 1,
+    }
+}
+
+/// Appends a [`GuiSize`] (`f64` width + `f64` height — wire v6,
+/// Issue #872/#882).
+pub fn encode_gui_size(size: &GuiSize, out: &mut Vec<u8>) {
+    push_f64(out, size.width);
+    push_f64(out, size.height);
+}
+
+/// Reads a [`GuiSize`] — a non-finite `width`/`height` is
+/// [`WireError::Malformed`]: a logical GUI size is always finite, the
+/// same finiteness rule `decode_plain_param_value` applies to
+/// `Double`.
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_gui_size(reader: &mut Reader<'_>) -> Result<GuiSize, WireError> {
+    let width = reader.read_f64()?;
+    let height = reader.read_f64()?;
+    if !width.is_finite() || !height.is_finite() {
+        return Err(WireError::Malformed);
+    }
+    Ok(GuiSize { width, height })
+}
+
+/// The [`GuiKeyDirection`] discriminant byte.
+fn encode_gui_key_direction(direction: GuiKeyDirection) -> u8 {
+    match direction {
+        GuiKeyDirection::Down => 0,
+        GuiKeyDirection::Up => 1,
+    }
+}
+
+/// Appends a [`GuiKeyEvent`] (`u8` direction tag, `u32` key char
+/// scalar, `i16` adapter-space key code, `u16` modifier bits — wire
+/// v6, Issue #872/#882).
+pub fn encode_gui_key_event(event: &GuiKeyEvent, out: &mut Vec<u8>) {
+    push_u8(out, encode_gui_key_direction(event.direction));
+    push_u32(out, event.key as u32);
+    push_i16(out, event.key_code);
+    push_u16(out, event.modifiers.bits);
+}
+
+/// Reads a [`GuiKeyEvent`] — an unassigned `direction` tag or a `key`
+/// that is not a char scalar (a surrogate half or `> 0x10FFFF`) is
+/// [`WireError::Malformed`]. A supplementary-plane `key` is a valid
+/// scalar: it decodes here and the adapter layer answers
+/// `HostError::InvalidValue` — [`GuiKeyEvent`]'s BMP contract is
+/// enforced downstream, not by the codec. `key_code` and `modifiers`
+/// are opaque bit patterns and decode verbatim.
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_gui_key_event(reader: &mut Reader<'_>) -> Result<GuiKeyEvent, WireError> {
+    let direction = match reader.read_u8()? {
+        0 => GuiKeyDirection::Down,
+        1 => GuiKeyDirection::Up,
+        _ => return Err(WireError::Malformed),
+    };
+    let key = char::from_u32(reader.read_u32()?).ok_or(WireError::Malformed)?;
+    let key_code = reader.read_i16()?;
+    let modifiers = GuiModifiers {
+        bits: reader.read_u16()?,
+    };
+    Ok(GuiKeyEvent {
+        direction,
+        key,
+        key_code,
+        modifiers,
+    })
 }
 
 /// Appends a [`PluginHandle`] (`u32` slot, `u16` generation).
@@ -3382,18 +3636,36 @@ mod tests {
                 capabilities: 0,
             }
         );
-        // `capabilities` is reserved under this revision: nonzero
-        // bits are a defined rejection, not a silent carry.
-        let mut frame = Vec::new();
-        encode(
-            &Message::Hello {
+        // Under v6 `capabilities` is a mask with one assigned bit —
+        // `WIRE_CAPABILITY_GUI_FLOATING` decodes; every unassigned
+        // bit stays the defined rejection the v5 reserved rule
+        // applied.
+        assert_eq!(
+            roundtrip(&Message::Hello {
                 version: WIRE_VERSION,
-                capabilities: 0b1011,
-            },
-            &mut frame,
-        )
-        .unwrap();
-        assert_eq!(decode(&frame), Err(WireError::Malformed));
+                capabilities: WIRE_CAPABILITY_GUI_FLOATING,
+            }),
+            Message::Hello {
+                version: WIRE_VERSION,
+                capabilities: WIRE_CAPABILITY_GUI_FLOATING,
+            }
+        );
+        for capabilities in [0b1011_u32, 0b10, 0xFFFF_FFFE] {
+            let mut frame = Vec::new();
+            encode(
+                &Message::Hello {
+                    version: WIRE_VERSION,
+                    capabilities,
+                },
+                &mut frame,
+            )
+            .unwrap();
+            assert_eq!(
+                decode(&frame),
+                Err(WireError::Malformed),
+                "unassigned capability bits {capabilities:#b} must be rejected",
+            );
+        }
     }
 
     #[test]
@@ -3427,7 +3699,26 @@ mod tests {
             ),
             (
                 Command::OpenGui {
+                    mode: OpenGuiMode::Floating,
                     parent: ParentLease::new(0x1234_5678, 0xABCD_EF12_3456_7890),
+                    size: GuiSize {
+                        width: 800.0,
+                        height: 600.0,
+                    },
+                },
+                0,
+            ),
+            // `Docked` is assigned vocabulary — it encodes and
+            // decodes; the child layer's defined `Unsupported`
+            // reply refuses it, not the codec.
+            (
+                Command::OpenGui {
+                    mode: OpenGuiMode::Docked,
+                    parent: ParentLease::new(1, 2),
+                    size: GuiSize {
+                        width: 0.0,
+                        height: 0.0,
+                    },
                 },
                 0,
             ),
@@ -3435,6 +3726,30 @@ mod tests {
             // Wire v4 (Issue #253) — instance-scoped like every
             // non-`Scan` verb.
             (Command::DrainOutputReports, 0),
+            // Wire v6 (Issue #872/#882) — the GUI floating verbs,
+            // instance-scoped like every non-`Scan` verb.
+            (
+                Command::SetGuiSize {
+                    size: GuiSize {
+                        width: 1_024.5,
+                        height: 768.25,
+                    },
+                },
+                0,
+            ),
+            (Command::SetGuiVisibility { visible: 1 }, 0),
+            (Command::SetGuiFocus { focused: 0 }, 0),
+            (
+                Command::SendGuiKey {
+                    event: GuiKeyEvent {
+                        direction: GuiKeyDirection::Down,
+                        key: 'a',
+                        key_code: 0x41,
+                        modifiers: GuiModifiers::SHIFT.union(GuiModifiers::CONTROL),
+                    },
+                },
+                0,
+            ),
         ] {
             let message = Message::Command {
                 seq: 7,
@@ -3458,6 +3773,10 @@ mod tests {
             },
             Reply::Opened {
                 gui: GuiHandle::new(42),
+                // Wire v6 — the child's reported GUI capability
+                // bitfield, carried verbatim (all ten
+                // `EditorCapabilities` bits set).
+                capabilities: 0x3FF,
             },
             // Wire v4 (Issue #253) — the drained `Event` stream,
             // both kinds, producer order.
@@ -3622,6 +3941,19 @@ mod tests {
             )),
             Err(WireError::Malformed)
         );
+        // The wire-v6 GUI floating verbs (tags 24-27) are
+        // instance-scoped too — `WIRE_INSTANCE_NONE` is the same
+        // scope violation, decided before the payload is read.
+        for tag in [24_u8, 25, 26, 27] {
+            assert_eq!(
+                decode(&raw_frame(
+                    KIND_COMMAND,
+                    &command_payload(1, WIRE_INSTANCE_NONE, tag)
+                )),
+                Err(WireError::Malformed),
+                "verb tag {tag} must reject the child scope",
+            );
+        }
         // …and with a live handle it decodes to the unit verb.
         assert_eq!(
             decode(&raw_frame(KIND_COMMAND, &command_payload(1, 0, 23))),
@@ -3815,20 +4147,20 @@ mod tests {
 
     #[test]
     fn frame_layout_is_little_endian_and_length_prefixed() {
-        // Hello{version: WIRE_VERSION, capabilities: 3} → len 6,
-        // kind 0, LE fields.
+        // Hello{version: WIRE_VERSION, capabilities:
+        // WIRE_CAPABILITY_GUI_FLOATING} → len 6, kind 0, LE fields.
         let mut frame = Vec::new();
         encode(
             &Message::Hello {
                 version: WIRE_VERSION,
-                capabilities: 3,
+                capabilities: WIRE_CAPABILITY_GUI_FLOATING,
             },
             &mut frame,
         )
         .unwrap();
         let mut expected = vec![6, 0, 0, 0, KIND_HELLO];
         expected.extend_from_slice(&WIRE_VERSION.to_le_bytes());
-        expected.extend_from_slice(&3_u32.to_le_bytes());
+        expected.extend_from_slice(&WIRE_CAPABILITY_GUI_FLOATING.to_le_bytes());
         assert_eq!(frame, expected);
         assert_eq!(frame.len(), WIRE_FRAME_HEADER_LEN + 6);
 
@@ -4258,7 +4590,7 @@ mod tests {
             Err(WireError::UnsupportedVariant)
         );
         assert_eq!(out, before);
-        assert_eq!(WIRE_VERSION, 5);
+        assert_eq!(WIRE_VERSION, 6);
     }
 
     #[test]
@@ -4575,8 +4907,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v5() {
-        assert_eq!(WIRE_VERSION, 5);
+    fn wire_version_is_v6() {
+        assert_eq!(WIRE_VERSION, 6);
     }
 
     #[test]
@@ -5380,10 +5712,11 @@ mod tests {
     // --- wire v3: Hello ----------------------------------------------------
 
     #[test]
-    fn hello_v3_keeps_version_verbatim_and_capabilities_reserved() {
+    fn hello_keeps_version_verbatim_and_gates_capability_bits() {
         // `version` is carried verbatim — the handshake, not the
         // codec, compares it against `WIRE_VERSION`. A v2 hello
-        // decodes as version 2 (≠ 3 → handshake-fails downstream).
+        // decodes as version 2 (≠ current → handshake-fails
+        // downstream).
         assert_eq!(
             roundtrip(&Message::Hello {
                 version: 2,
@@ -5394,17 +5727,25 @@ mod tests {
                 capabilities: 0
             }
         );
-        // `capabilities` stays reserved under v3.
-        let mut frame = Vec::new();
-        encode(
-            &Message::Hello {
-                version: WIRE_VERSION,
-                capabilities: 1,
-            },
-            &mut frame,
-        )
-        .unwrap();
-        assert_eq!(decode(&frame), Err(WireError::Malformed));
+        // Under v6 bit 0 (`WIRE_CAPABILITY_GUI_FLOATING`) is the one
+        // assigned bit — every unassigned bit stays the defined
+        // rejection the reserved rule applied before.
+        for capabilities in [0b10_u32, 0xFFFF_FFFE] {
+            let mut frame = Vec::new();
+            encode(
+                &Message::Hello {
+                    version: WIRE_VERSION,
+                    capabilities,
+                },
+                &mut frame,
+            )
+            .unwrap();
+            assert_eq!(
+                decode(&frame),
+                Err(WireError::Malformed),
+                "unassigned capability bits {capabilities:#b} must be rejected",
+            );
+        }
     }
 
     // --- wire v3: bounded decode -----------------------------------------------
@@ -5446,5 +5787,145 @@ mod tests {
             decode(&raw_frame(KIND_COMMAND, &command)),
             Err(WireError::Truncated)
         );
+    }
+
+    // --- wire v6: GUI floating verbs ----------------------------------------
+
+    /// One tag-8 `OpenGui` command frame with `mode` encoded by hand —
+    /// the mode-vocabulary tests need bytes `encode` cannot produce.
+    fn open_gui_frame(mode: u8) -> Vec<u8> {
+        let mut payload = command_payload(1, 0, 8);
+        push_u8(&mut payload, mode);
+        encode_parent_lease(&ParentLease::new(7, 9), &mut payload);
+        encode_gui_size(
+            &GuiSize {
+                width: 640.0,
+                height: 480.0,
+            },
+            &mut payload,
+        );
+        raw_frame(KIND_COMMAND, &payload)
+    }
+
+    #[test]
+    fn open_gui_mode_vocabulary() {
+        // `mode` leads the tag-8 payload: 0/1 are the assigned
+        // vocabulary — `Docked` (1) decodes so the child layer can
+        // answer the defined `Err(HostError::Unsupported)` reply;
+        // only unassigned bytes fail at the codec.
+        for (byte, expected) in [(0_u8, OpenGuiMode::Floating), (1, OpenGuiMode::Docked)] {
+            let Ok(Message::Command { cmd, .. }) = decode(&open_gui_frame(byte)) else {
+                panic!("assigned mode byte {byte} must decode");
+            };
+            let Command::OpenGui { mode, .. } = cmd else {
+                panic!("verb tag 8 must decode to OpenGui");
+            };
+            assert_eq!(mode, expected);
+        }
+        for byte in [2_u8, 0x7F, 0xFF] {
+            assert_eq!(
+                decode(&open_gui_frame(byte)),
+                Err(WireError::Malformed),
+                "unassigned mode byte {byte} must be rejected",
+            );
+        }
+    }
+
+    #[test]
+    fn gui_size_codec_roundtrip_and_finite_rule() {
+        for size in [
+            GuiSize {
+                width: 0.0,
+                height: 0.0,
+            },
+            GuiSize {
+                width: 1_024.5,
+                height: 768.25,
+            },
+            GuiSize {
+                width: f64::MAX,
+                height: f64::MIN_POSITIVE,
+            },
+        ] {
+            assert_eq!(
+                field_roundtrip(&size, encode_gui_size, decode_gui_size),
+                size
+            );
+        }
+        // Non-finite fields are Malformed — a logical GUI size is
+        // always finite (the `PlainParamValue::Double` rule).
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for (width, height) in [(bad, 1.0), (1.0, bad)] {
+                let mut payload = Vec::new();
+                push_f64(&mut payload, width);
+                push_f64(&mut payload, height);
+                let mut reader = Reader::new(&payload);
+                assert_eq!(
+                    decode_gui_size(&mut reader),
+                    Err(WireError::Malformed),
+                    "non-finite ({width}, {height}) must be rejected",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn gui_key_event_codec() {
+        for event in [
+            GuiKeyEvent {
+                direction: GuiKeyDirection::Down,
+                key: 'a',
+                key_code: 0x41,
+                modifiers: GuiModifiers::SHIFT.union(GuiModifiers::CONTROL),
+            },
+            GuiKeyEvent {
+                direction: GuiKeyDirection::Up,
+                key: '\0',
+                key_code: -1,
+                modifiers: GuiModifiers { bits: 0xFFFF },
+            },
+            // Supplementary-plane char — a valid scalar, so the wire
+            // carries it and the adapter layer answers
+            // `HostError::InvalidValue` (the BMP contract lives
+            // downstream, not in the codec).
+            GuiKeyEvent {
+                direction: GuiKeyDirection::Down,
+                key: '𝄞',
+                key_code: 0,
+                modifiers: GuiModifiers::NONE,
+            },
+        ] {
+            assert_eq!(
+                field_roundtrip(&event, encode_gui_key_event, decode_gui_key_event),
+                event
+            );
+        }
+        // An unassigned `direction` byte is the typed-field rejection.
+        for byte in [2_u8, 0xFF] {
+            let mut payload = vec![byte];
+            push_u32(&mut payload, 'a' as u32);
+            push_i16(&mut payload, 0);
+            push_u16(&mut payload, 0);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_gui_key_event(&mut reader),
+                Err(WireError::Malformed),
+                "direction byte {byte} must be rejected",
+            );
+        }
+        // `key` must be a char scalar — surrogate halves and values
+        // `> 0x10FFFF` are Malformed.
+        for bad in [0xD800_u32, 0xDFFF, 0x11_0000, u32::MAX] {
+            let mut payload = vec![0_u8];
+            push_u32(&mut payload, bad);
+            push_i16(&mut payload, 0);
+            push_u16(&mut payload, 0);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_gui_key_event(&mut reader),
+                Err(WireError::Malformed),
+                "non-scalar key {bad:#X} must be rejected",
+            );
+        }
     }
 }
