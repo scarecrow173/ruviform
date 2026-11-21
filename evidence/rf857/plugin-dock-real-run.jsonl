@@ -1,0 +1,1 @@
+{"type":"run","run_id":"rf631-plugin-dock-real","lane":"test-ui-plugin-dock-real","repo":{"sha":"9c9c1e896a1276adfcfce61e4008caa94476341d"},"os":"windows","arch":"x86_64","plugin_path_env":"RUVIFORM_PLUGIN_DOCK_TEST_VST3"}
