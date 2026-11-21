@@ -33,6 +33,7 @@ relations:
     - "docs/discovery/issue-839-gpui-dcomp.md"
     - "docs/test-specs/issue-839-gpui-dcomp.md"
     - "evidence/rf532/clipfix-results.md"
+    - "evidence/rf532/pinned-dep-results.md"
   refines: []
   refined-by: []
   derives-from:
@@ -46,9 +47,7 @@ relations:
     - "docs/test-specs/issue-839-gpui-dcomp.md"
   references:
     - "https://github.com/scarecrow173/ruviform/issues/631"
-  defers:
-    - "gpui fork の push / tag `v0.2.2-rf2`"
-    - "ruviform `Cargo.lock` の gpui 依存 pin 更新"
+  defers: []
   deferred-by: []
 metadata:
   issue: 839
@@ -90,5 +89,8 @@ branch `b3144f2`）。
   `real-dcomp-bandescape` / `real-dcomp-childinv`
   （`WS_EX_LAYERED` 適用可否の診断 case）— いずれも
   既知の honest Fail で、本 fix とは別課題。
-- gpui fork の push / tag `v0.2.2-rf2`、ruviform `Cargo.lock`
-  の pin 更新 — 次 slice へ defer。
+- ~~gpui fork の push / tag `v0.2.2-rf2`、ruviform `Cargo.lock`
+  の pin 更新~~ — 後続 slice で完了: tag `v0.2.2-rf2`
+  （`b3144f2`）を `crates/ruviform-ui-gpui/Cargo.toml` +
+  `Cargo.lock` に pin し、pinned dep で real lane を再検証
+  （`evidence/rf532/pinned-dep-results.md`）。

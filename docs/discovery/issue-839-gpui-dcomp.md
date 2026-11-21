@@ -33,6 +33,7 @@ relations:
     - "docs/test-specs/issue-839-gpui-dcomp.md"
     - "evidence/rf532/clipfix-results.md"
     - "evidence/rf532/clipfix-pixels/"
+    - "evidence/rf532/pinned-dep-results.md"
   refines: []
   refined-by: []
   derives-from:
@@ -121,8 +122,11 @@ aux の 3 run。詳細と verdict 表は
 
 - gpui 側 commit: `scarecrow173/gpui` branch
   `rf839-dcomp-child-raster` rev
-  `b3144f286b942fbb5f478da73db13a826cef054a`（local commit
-  済み・未 push — push/tag `v0.2.2-rf2` は slice2）。
+  `b3144f286b942fbb5f478da73db13a826cef054a`（本 doc 初版時点
+  では local commit のみ — 後続 slice で tag `v0.2.2-rf2`
+  として push 済み。ruviform 側は manifest tag pin +
+  `Cargo.lock` で同 rev を解決、pinned dep 実測は
+  `evidence/rf532/pinned-dep-results.md`）。
 - ruviform worktree root `Cargo.toml` に uncommitted で
   追加した override:
 

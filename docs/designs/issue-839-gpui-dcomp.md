@@ -32,6 +32,7 @@ relations:
     - "docs/discovery/issue-839-gpui-dcomp.md"
     - "docs/test-specs/issue-839-gpui-dcomp.md"
     - "evidence/rf532/clipfix-results.md"
+    - "evidence/rf532/pinned-dep-results.md"
   refines: []
   refined-by: []
   derives-from:
@@ -50,7 +51,11 @@ metadata:
 # Issue #839 clip-partition — 設計
 
 実装 commit: gpui fork `rf839-dcomp-child-raster` branch
-`b3144f2`（`G:\repositry\audio-products\gpui`）。
+`b3144f2`（`G:\repositry\audio-products\gpui`）— tag
+`v0.2.2-rf2` として push 済み。ruviform 側は
+`crates/ruviform-ui-gpui/Cargo.toml` の manifest tag pin +
+`Cargo.lock` で参照（`[patch]`/path override 不使用）、
+pinned dep 実測は `evidence/rf532/pinned-dep-results.md`。
 
 ## 機構の要点
 
