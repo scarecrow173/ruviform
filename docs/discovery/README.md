@@ -108,3 +108,4 @@ Directory: `docs/discovery`
 | DISC-rf841spawnDeadline | Issue #841 L1 spawn/handshake deadline flake（SpawnFailed{Timeout}）— 定量・分類ルール・対処方針 | resolved | [issue-841-spawn-deadline-flake.md](./issue-841-spawn-deadline-flake.md) |
 | DISC-034ZbbClipPart000000001 | Issue #839 GPUI fork clip-partition fix — 実測調査記録 | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
 | DISC-034ZccDcompResidual01 | Issue #532 DComp residual — 根治 fix 統合後の残存 Fail class 切り分け記録 | approved | [issue-532-dcomp-residual.md](./issue-532-dcomp-residual.md) |
+| DISC-034ZcdPopupKey01 | Issue #855 popup_key_toggles_plugin_owned_window 非 Windows 決定的 defect — 原因分類記録 | approved | [issue-855-popup-key-ci.md](./issue-855-popup-key-ci.md) |
