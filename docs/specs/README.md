@@ -319,3 +319,4 @@ Directory: `docs/specs`
 | SPEC-034N3JBtBP4dPi8ob9HwDV | video-proc RT 検証レーンへの assert_no_alloc 適用（Issue #126） | implemented | [video-proc-rt-verification-lane.md](./video-proc-rt-verification-lane.md) |
 | SPEC-034ZbbClipPart0000001 | Issue #839 GPUI fork clip-partition fix — child HWND raster を DComp 経路に載せる根本 fix | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
 | SPEC-034ZccDcompResidual01 | Issue #532 DComp residual — 残存 Fail の class 切り分けと処遇決定（docs-only disposition） | approved | [issue-532-dcomp-residual.md](./issue-532-dcomp-residual.md) |
+| SPEC-rf857PixelOcclusion | Issue #857 pixel-occlusion — real-dcomp-pixel lane 自身 top-level window 遮蔽（class B）処遇設計 | approved | [issue-857-pixel-occlusion.md](./issue-857-pixel-occlusion.md) |
