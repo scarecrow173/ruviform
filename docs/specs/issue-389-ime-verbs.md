@@ -132,7 +132,9 @@ composite L0 routing → VST3/CLAP adapter）へ実装し、lane の
   `ParentLease` を plugin へ渡す。
 - composite: L0 verb を `OutOfProcess` slot へ流さず defined
   `HostError::Unsupported` を返す。`wire::Command` 追加・
-  `WIRE_VERSION` bump は対象外（L1 GUI verb は別 Issue 級）。
+  `WIRE_VERSION` bump は対象外（L1 GUI verb は別 Issue 級 —
+  確定設計は Issue #872 の
+  `docs/designs/issue-872-l1-oos-plugin-editor-host.md`）。
 - VST3 adapter: `canResize`→`checkSizeConstraint`→`onSize`、
   hide=`removed()`/show=`setFrame`+`attached` 再構成、
   `set_gui_parent`=remove+新 parent attach（失敗時 old parent
@@ -154,7 +156,9 @@ composite L0 routing → VST3/CLAP adapter）へ実装し、lane の
 ### 対象外
 
 - L1/out-of-process GUI verb（`L1EditorOps` は全 op refusal-only
-  のまま。`wire::Command`・`WIRE_VERSION` 変更なし）。
+  のまま。`wire::Command`・`WIRE_VERSION` 変更なし — L1 GUI
+  verb の確定設計は Issue #872 の
+  `docs/designs/issue-872-l1-oos-plugin-editor-host.md`）。
 - `AttachMode::Floating`（依然 `Unsupported`）。
 - plugin→host GUI request、crash/hang 受入、pixel gate、
   consumer gate（issue #389 後続 slice）。
