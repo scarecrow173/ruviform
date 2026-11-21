@@ -7,7 +7,7 @@
 //! slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-eight
+//! windows* through [`RealOsGuiTest`] and records the twenty-nine
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -110,6 +110,10 @@
 //! | `real-editor-focus`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_focus`    |
 //! |                         |             | true→false を実 lease 経由で実行し、child HWND title   |
 //! |                         |             | の fixture event log（`f:` token）を検証               |
+//! | `real-editor-popup`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `send_key`     |
+//! |                         |             | `VK_P` popup toggle ×2: child title event log          |
+//! |                         |             | （`po:`/`pc:` token）+ own-process top-level           |
+//! |                         |             | `WS_POPUP` HWND oracle + close/teardown 収束           |
 //! | `real-session-crash`    | `RealOs`    | `Unsupported` — in-process lane は fixture の         |
 //! |                         |             | process-killing fault を生存不能（out-of-process      |
 //! |                         |             | host 未実装）                                         |
@@ -196,7 +200,7 @@ use crate::scenario::{
 /// `real-session-terminate`, `real-session-degraded`,
 /// `real-session-recovery`, `real-session-timeout`,
 /// `real-editor-visibility`, `real-editor-input`,
-/// `real-editor-focus`) consume it.
+/// `real-editor-focus`, `real-editor-popup`) consume it.
 type PluginPair = (Vst3Library, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
@@ -594,7 +598,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 28] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 29] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -798,6 +802,13 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 28] {
             required: &[ScenarioCapability::NativePluginDock],
             spec_extras: editor_attach_extras,
             run: real_editor_focus_case,
+        },
+        ScenarioEntry {
+            case: "real-editor-popup",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_editor_popup_case,
         },
         ScenarioEntry {
             case: "real-session-crash",
@@ -1320,7 +1331,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1374,7 +1385,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -5149,6 +5160,7 @@ fn top_level_window_json(window: &ospres::TopLevelWindow, own_pid: u32) -> Value
         "hwnd": window.hwnd,
         "z_index": window.z_index,
         "class_name": window.class_name,
+        "title": window.title,
         "rect": occlusion_rect_json(window.rect),
         "visible": window.visible,
         "alive": window.alive,
@@ -10501,6 +10513,64 @@ fn observe_editor_redock_lifecycle(
 // AC3 non-pixel editor op cases (input / focus)
 // ---------------------------------------------------------------------
 
+/// The fixture event-log suffix check shared by the verb and popup
+/// observations — every re-enumerated child HWND title must end
+/// with `expected` (`rvf-test-editor-attach-{n}|{tokens}`). `None`
+/// when there is nothing to judge (the `child_enumerated`/
+/// `child_contract` rows already recorded that failure);
+/// `Some(false)` records a fail row on a mismatch.
+fn title_log_check(
+    observation: &ChildWindowObservation,
+    expected: &str,
+    step: &str,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> Option<bool> {
+    if observation.children.is_empty() {
+        return None;
+    }
+    let mismatches: Vec<String> = observation
+        .children
+        .iter()
+        .enumerate()
+        .filter(|(_, child)| !child.title.ends_with(expected))
+        .map(|(index, child)| {
+            format!(
+                "child[{index}] hwnd={:#x} title={child:?}",
+                child.hwnd,
+                child = child.title,
+            )
+        })
+        .collect();
+    if mismatches.is_empty() {
+        steps.push(json!({
+            "step": step,
+            "verdict": "pass",
+            "children": observation
+                .children
+                .iter()
+                .map(|child| json!({
+                    "hwnd": child.hwnd,
+                    "title": child.title,
+                }))
+                .collect::<Vec<_>>(),
+        }));
+        Some(true)
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            step,
+            format!(
+                "accepted verb but no child HWND title carries the event \
+                 log {expected:?}: {}",
+                mismatches.join("; "),
+            ),
+        );
+        Some(false)
+    }
+}
+
 /// The per-case constants of the input/focus verb observation —
 /// step name plus the window-text suffix the fixture's event log
 /// must carry once the verbs land.
@@ -10526,7 +10596,6 @@ struct EditorVerbCase {
 /// `[Attached{Docked}, Closed]` event sequence. No pixel capture —
 /// the oracle is the fixture's OS-readable event log, never pixels.
 #[expect(clippy::too_many_arguments)]
-#[expect(clippy::too_many_lines)]
 fn observe_editor_verb_lifecycle(
     gui: &RealOsGuiTest,
     container: Option<u64>,
@@ -10583,50 +10652,18 @@ fn observe_editor_verb_lifecycle(
                 let effect_step = format!("{}_effect", verb.step);
                 let (after, after_ok) = observe_attached_children(container, steps, &mut failure);
                 attach_ok = attach_ok && after_ok;
-                let mismatches: Vec<String> = after
-                    .children
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, child)| !child.title.ends_with(verb.expected_suffix))
-                    .map(|(index, child)| {
-                        format!(
-                            "child[{index}] hwnd={:#x} title={child:?}",
-                            child.hwnd,
-                            child = child.title,
-                        )
-                    })
-                    .collect();
-                if after.children.is_empty() {
-                    // `child_enumerated`/`child_contract` already
-                    // recorded the failure.
-                    effect_ok = false;
-                } else if mismatches.is_empty() {
-                    effect_confirmed = true;
-                    steps.push(json!({
-                        "step": effect_step,
-                        "verdict": "pass",
-                        "children": after
-                            .children
-                            .iter()
-                            .map(|child| json!({
-                                "hwnd": child.hwnd,
-                                "title": child.title,
-                            }))
-                            .collect::<Vec<_>>(),
-                    }));
-                } else {
-                    record_obs_fail(
-                        steps,
-                        &mut failure,
-                        &effect_step,
-                        format!(
-                            "accepted verb but no child HWND title carries \
-                             the event log {:?}: {}",
-                            verb.expected_suffix,
-                            mismatches.join("; "),
-                        ),
-                    );
-                    effect_ok = false;
+                match title_log_check(
+                    &after,
+                    verb.expected_suffix,
+                    &effect_step,
+                    steps,
+                    &mut failure,
+                ) {
+                    Some(true) => effect_confirmed = true,
+                    // `None`/`Some(false)` — `child_enumerated`/
+                    // `child_contract` or this check already recorded
+                    // the failure.
+                    _ => effect_ok = false,
                 }
                 observation = after;
             }
@@ -10764,6 +10801,533 @@ fn observe_editor_focus_lifecycle(
             session.set_focus(ops, false)
         },
     )
+}
+
+// ---------------------------------------------------------------------
+// AC3 non-pixel editor op cases (popup — Issue #630 AC4 shared
+// remainder)
+// ---------------------------------------------------------------------
+
+/// The `key_code` that toggles the fixture's plugin-owned popup —
+/// `VK_P` (`0x50`), the `POPUP_VK` the `test_editor` `IPlugView`
+/// maps `onKeyDown` onto `popup_toggle` with.
+const POPUP_KEY_CODE: i16 = 0x50;
+
+/// The UTF-16 key char paired with [`POPUP_KEY_CODE`] — `'p'`
+/// (`0x0070`), so the fixture's title event log records
+/// `kd:0070:0050:0000`/`ku:0070:0050:0000` around each
+/// `po:{seq}`/`pc:{seq}` toggle token.
+const POPUP_KEY: char = 'p';
+
+/// The window class the fixture registers its editor surfaces
+/// under — the popup shares the child's `RuviformTestEditor`
+/// class (`win32::popup` → `CreateWindowExW` on the same
+/// registered class), so class alone does not discriminate the
+/// popup from the child: the `WS_POPUP` style bit and the top-level
+/// enumeration do.
+const POPUP_CLASS: &str = "RuviformTestEditor";
+
+/// The title prefix `win32::popup` stamps — `rvf-test-editor-
+/// popup-{seq}` where `seq` is the fixture's per-view popup
+/// generation (`popup_seq`).
+const POPUP_TITLE_PREFIX: &str = "rvf-test-editor-popup-";
+
+/// `WS_POPUP` (`0x8000_0000`) — the `GWL_STYLE` bit that makes the
+/// popup a top-level window, which is exactly why
+/// `EnumChildWindows(container)` never sees it.
+const WS_POPUP_STYLE: u64 = 0x8000_0000;
+
+/// `WS_CHILD` (`0x4000_0000`) — must be clear on the popup; a set
+/// bit means the oracle found the editor child, not the popup.
+const WS_CHILD_STYLE: u64 = 0x4000_0000;
+
+/// The fixture's fixed popup geometry — `win32::popup` creates the
+/// HWND at screen origin (0,0) with size 200x100.
+const POPUP_RECT: (i32, i32, u32, u32) = (0, 0, 200, 100);
+
+/// The child-title event-log suffix after one accepted popup-open
+/// toggle — `onKeyDown` stamps `kd:` first, then `popup_toggle`
+/// appends `po:{seq}`, and `onKeyUp` appends `ku:`.
+const POPUP_OPEN_LOG_SUFFIX: &str = "|kd:0070:0050:0000,po:1,ku:0070:0050:0000";
+
+/// The full event-log suffix after the accepted open + close cycle
+/// — the second `onKeyDown` toggles `popup_open` off and appends
+/// `pc:{seq}`.
+const POPUP_CYCLE_LOG_SUFFIX: &str =
+    "|kd:0070:0050:0000,po:1,ku:0070:0050:0000,kd:0070:0050:0000,pc:1,ku:0070:0050:0000";
+
+/// Own-process top-level windows matching the fixture's popup
+/// identity — class `RuviformTestEditor`, a `rvf-test-editor-
+/// popup-{seq}` title, and `owner` as the `GW_OWNER` window (the
+/// fixture anchors the popup to the editor child's `GA_ROOT`).
+/// `owner: None` matches nothing: an owner the oracle could not
+/// resolve is a recorded check failure upstream, never a wildcard.
+fn find_fixture_popups(
+    inventory: &ospres::Inventory,
+    owner: Option<u64>,
+) -> Vec<&ospres::TopLevelWindow> {
+    let Some(owner) = owner else {
+        return Vec::new();
+    };
+    inventory
+        .own_windows
+        .iter()
+        .filter(|window| {
+            window.class_name.as_deref() == Some(POPUP_CLASS)
+                && window.owner == Some(owner)
+                && window
+                    .title
+                    .as_deref()
+                    .is_some_and(|title| title.starts_with(POPUP_TITLE_PREFIX))
+        })
+        .collect()
+}
+
+/// Own-process fixture popups regardless of owner — the
+/// post-close residual check: a popup whose owner (or the whole
+/// anchor chain) already died still leaks across cases, and
+/// `GA_ROOT` is unresolvable once the child is destroyed.
+fn residual_fixture_popups(inventory: &ospres::Inventory) -> Vec<&ospres::TopLevelWindow> {
+    inventory
+        .own_windows
+        .iter()
+        .filter(|window| {
+            window.class_name.as_deref() == Some(POPUP_CLASS)
+                && window
+                    .title
+                    .as_deref()
+                    .is_some_and(|title| title.starts_with(POPUP_TITLE_PREFIX))
+        })
+        .collect()
+}
+
+/// The real-HWND oracle for an accepted popup open: exactly one
+/// fixture popup owned by the editor child's `GA_ROOT` must appear
+/// in the top-level inventory — alive, `WS_POPUP` set, `WS_CHILD`
+/// clear, and at the fixture's fixed (0,0) 200x100 rect. Every
+/// violated check lands as a recorded failure: an accepted open
+/// whose HWND never materialized is a contract `Fail`, never a
+/// `NotRun`. Returns the popup HWND plus the recorded identity for
+/// `observed` extras on agreement.
+fn check_popup_open_hwnd(
+    child_hwnd: Option<u64>,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (Option<u64>, Value) {
+    // The popup's `GW_OWNER` is `GetAncestor(child, GA_ROOT)` — the
+    // same root `osmut::observe` resolves from the live child HWND
+    // (fixture contract; `root: None` below makes the finder empty,
+    // so an unresolvable owner fails honestly rather than matching
+    // an unowned window).
+    let expected_owner = child_hwnd.and_then(|hwnd| osmut::observe(hwnd).root);
+    let inventory = ospres::inventory();
+    let popups = find_fixture_popups(&inventory, expected_owner);
+    if popups.len() != 1 {
+        let candidates: Vec<Value> = residual_fixture_popups(&inventory)
+            .iter()
+            .map(|window| {
+                json!({
+                    "hwnd": window.hwnd,
+                    "title": window.title,
+                    "owner": window.owner,
+                })
+            })
+            .collect();
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_open_hwnd",
+            format!(
+                "accepted popup open but found {} own-process {POPUP_CLASS} \
+                 window(s) titled {POPUP_TITLE_PREFIX}* owned by root \
+                 {expected_owner:?} (expected 1; unfiltered candidates \
+                 {candidates:?})",
+                popups.len(),
+            ),
+        );
+        return (None, Value::Null);
+    }
+    let popup = popups[0];
+    let inventory_row = oschild::inventory(popup.hwnd);
+    let mut problems: Vec<String> = Vec::new();
+    if !inventory_row.alive {
+        problems.push("not-alive".to_string());
+    }
+    match &inventory_row.style {
+        Ok(style) => {
+            if style & WS_POPUP_STYLE == 0 {
+                problems.push("WS_POPUP-clear".to_string());
+            }
+            if style & WS_CHILD_STYLE != 0 {
+                problems.push("WS_CHILD-set".to_string());
+            }
+        }
+        Err(error) => problems.push(format!("style-unreadable:{error}")),
+    }
+    let (expect_left, expect_top, expect_width, expect_height) = POPUP_RECT;
+    let rect_ok = matches!(
+        popup.rect,
+        Some(rect) if rect.left == expect_left
+            && rect.top == expect_top
+            && rect.width == expect_width
+            && rect.height == expect_height
+    );
+    if !rect_ok {
+        problems.push(format!(
+            "rect!=({expect_left},{expect_top}){expect_width}x{expect_height}"
+        ));
+    }
+    // `GetParent` on a `WS_POPUP` answers the *owner* (Win32
+    // contract), so `inventory_row.parent` is auxiliary owner
+    // evidence — recorded, never a verdict input of its own.
+    let record = json!({
+        "hwnd": popup.hwnd,
+        "z_index": popup.z_index,
+        "class_name": popup.class_name,
+        "title": popup.title,
+        "owner": popup.owner,
+        "expected_owner": expected_owner,
+        "owner_via_getparent": inventory_row.parent,
+        "rect": occlusion_rect_json(popup.rect),
+        "style": inventory_row.style.as_ref().ok(),
+        "exstyle": inventory_row.exstyle.as_ref().ok(),
+        "visible": popup.visible,
+        "alive": popup.alive,
+    });
+    if problems.is_empty() {
+        steps.push(json!({
+            "step": "editor_popup_open_hwnd",
+            "verdict": "pass",
+            "popup": record,
+        }));
+        (Some(popup.hwnd), record)
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_open_hwnd",
+            format!("popup HWND contract violated: {}", problems.join("+")),
+        );
+        steps.push(json!({
+            "step": "editor_popup_open_hwnd_facts",
+            "verdict": "note",
+            "popup": record,
+        }));
+        (None, record)
+    }
+}
+
+/// The real-HWND oracle for the accepted popup close: the
+/// re-enumerated top-level inventory must contain no fixture popup
+/// owned by the child's `GA_ROOT`, and — when the open phase
+/// recorded one — the recorded HWND must be dead (`IsWindow == 0`,
+/// the fixture's `win32::destroy` effect).
+fn check_popup_closed_hwnd(
+    child_hwnd: Option<u64>,
+    popup_hwnd: Option<u64>,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let expected_owner = child_hwnd.and_then(|hwnd| osmut::observe(hwnd).root);
+    let inventory = ospres::inventory();
+    let remaining = find_fixture_popups(&inventory, expected_owner);
+    // When the open phase never observed a popup, liveness is
+    // vacuous — inventory-empty is then the whole contract.
+    let recorded_dead = popup_hwnd.is_none_or(|hwnd| !oschild::is_alive(hwnd));
+    if remaining.is_empty() && recorded_dead {
+        steps.push(json!({
+            "step": "editor_popup_closed_hwnd",
+            "verdict": "pass",
+            "closed_hwnd": popup_hwnd,
+        }));
+        true
+    } else {
+        let remaining_hwnds: Vec<u64> = remaining.iter().map(|window| window.hwnd).collect();
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_closed_hwnd",
+            format!(
+                "accepted popup close but {} fixture popup(s) remain in \
+                 the top-level inventory {remaining_hwnds:?} (recorded \
+                 hwnd {popup_hwnd:?} alive={})",
+                remaining.len(),
+                popup_hwnd.is_some_and(oschild::is_alive),
+            ),
+        );
+        false
+    }
+}
+
+/// The post-close residual check — `removed()` destroys the popup
+/// along with the child HWND (`win32::destroy`), so no own-process
+/// fixture popup may remain in the top-level inventory. A leftover
+/// is a fixture/teardown contract `Fail` and a lane-hygiene
+/// hazard: the popup sits at screen origin (0,0) 200x100 and would
+/// occlude later cases' observations.
+fn check_popup_teardown(steps: &mut Vec<Value>, failure: &mut Option<String>) -> bool {
+    let inventory = ospres::inventory();
+    let residual = residual_fixture_popups(&inventory);
+    if residual.is_empty() {
+        steps.push(json!({
+            "step": "editor_popup_teardown",
+            "verdict": "pass",
+        }));
+        true
+    } else {
+        let leftover: Vec<Value> = residual
+            .iter()
+            .map(|window| {
+                json!({
+                    "hwnd": window.hwnd,
+                    "title": window.title,
+                    "owner": window.owner,
+                })
+            })
+            .collect();
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_teardown",
+            format!(
+                "{} fixture popup(s) survived session close: {leftover:?}",
+                leftover.len(),
+            ),
+        );
+        false
+    }
+}
+
+/// `real-editor-popup` post-open observation (Issue #630 AC4 shared
+/// remainder): child-HWND attach contract → `session.send_key`
+/// down+up of the fixture's `VK_P` (`'p'`/`0x50`) through the
+/// production `InProcessEditorOps` → the child HWND title must carry
+/// `kd:`/`po:{seq}`/`ku:` tokens AND exactly one real `WS_POPUP`
+/// top-level HWND titled `rvf-test-editor-popup-{seq}` owned by the
+/// child's `GA_ROOT` must exist (class `RuviformTestEditor`, alive,
+/// `WS_POPUP` set / `WS_CHILD` clear, (0,0) 200x100) → a second
+/// down+up must append `pc:{seq}` and the popup must leave the
+/// inventory (`IsWindow == 0`) → the session stays `Attached` →
+/// close convergence plus a residual-popup teardown check
+/// (`removed()` destroys the popup too — a leftover at (0,0) would
+/// occlude later cases). No pixel capture — the oracles are the
+/// title event log and the HWND inventory, never pixels.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
+fn observe_editor_popup_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+
+    let mut landing = OpLanding::Other;
+    let mut effect_ok = true;
+    let mut popup_hwnd: Option<u64> = None;
+    let mut popup_record = Value::Null;
+    let key = |direction| GuiKeyEvent {
+        direction,
+        key: POPUP_KEY,
+        key_code: POPUP_KEY_CODE,
+        modifiers: GuiModifiers::NONE,
+    };
+
+    // Phase B — toggle 1 (open): `send_key` down+up through the
+    // production ops adapter. The fixture's `onKeyDown` records
+    // `kd:`, runs `popup_toggle` (popup_seq→1, `win32::popup`
+    // creates the HWND, `popup_open`=true), appends `po:1`;
+    // `onKeyUp` appends `ku:`.
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        session
+            .send_key(&mut ops, key(GuiKeyDirection::Down))
+            .and_then(|()| session.send_key(&mut ops, key(GuiKeyDirection::Up)))
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_popup_open",
+                "verdict": "unsupported",
+                "detail": "session.send_key VK_P down+up → InProcessEditorOps \
+                           → HostCommand::SendGuiKey → the plugin declined \
+                           key delivery — the defined EditorOpError::Unsupported",
+            }));
+            landing = OpLanding::Refused;
+        }
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": "editor_popup_open",
+                "verdict": "pass",
+                "detail": "send_key 'p' down+up accepted — verifying the \
+                           title event log and the real WS_POPUP HWND",
+                "expected_suffix": POPUP_OPEN_LOG_SUFFIX,
+            }));
+            landing = OpLanding::Accepted;
+            // Effect oracles — re-enumerate while attached: (a) every
+            // child title must carry the `kd:`/`po:1`/`ku:` log and
+            // (b) exactly one real top-level popup HWND must exist
+            // with the fixture's identity. An accepted toggle whose
+            // effects never materialized is a contract failure,
+            // never a `NotRun`.
+            if observation.supported {
+                let (after, after_ok) = observe_attached_children(container, steps, &mut failure);
+                attach_ok = attach_ok && after_ok;
+                if title_log_check(
+                    &after,
+                    POPUP_OPEN_LOG_SUFFIX,
+                    "editor_popup_open_log",
+                    steps,
+                    &mut failure,
+                ) != Some(true)
+                {
+                    effect_ok = false;
+                }
+                let child = after.children.first().map(|child| child.hwnd);
+                let (hwnd, record) = check_popup_open_hwnd(child, steps, &mut failure);
+                popup_hwnd = hwnd;
+                popup_record = record;
+                if hwnd.is_none() {
+                    effect_ok = false;
+                }
+                observation = after;
+            }
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_popup_open", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_popup_open",
+                "editor session vanished before the popup open toggle",
+            );
+        }
+    }
+
+    // Phase C — toggle 2 (close): the same `send_key` pair must
+    // append `kd:`/`pc:1`/`ku:` and the popup must leave the
+    // top-level inventory. Runs only when the open toggle was
+    // accepted — a refused or failed open leaves `popup_open` false,
+    // so a second VK_P would OPEN a popup instead of closing one.
+    if landing == OpLanding::Accepted {
+        match sessions.session_mut(session_id).map(|session| {
+            let mut ops = real_editor_ops(gui, host, handle);
+            session
+                .send_key(&mut ops, key(GuiKeyDirection::Down))
+                .and_then(|()| session.send_key(&mut ops, key(GuiKeyDirection::Up)))
+        }) {
+            Some(Ok(())) => {
+                steps.push(json!({
+                    "step": "editor_popup_close",
+                    "verdict": "pass",
+                    "detail": "second send_key 'p' down+up accepted — verifying \
+                               pc:1 and the popup's removal",
+                    "expected_suffix": POPUP_CYCLE_LOG_SUFFIX,
+                }));
+                if observation.supported {
+                    let (after, after_ok) =
+                        observe_attached_children(container, steps, &mut failure);
+                    attach_ok = attach_ok && after_ok;
+                    if title_log_check(
+                        &after,
+                        POPUP_CYCLE_LOG_SUFFIX,
+                        "editor_popup_close_log",
+                        steps,
+                        &mut failure,
+                    ) != Some(true)
+                    {
+                        effect_ok = false;
+                    }
+                    let child = after.children.first().map(|child| child.hwnd);
+                    if !check_popup_closed_hwnd(child, popup_hwnd, steps, &mut failure) {
+                        effect_ok = false;
+                    }
+                    observation = after;
+                }
+            }
+            // A refused or failed second toggle after an accepted
+            // open is a contract surprise — never a `Refused`
+            // landing (the op demonstrably exists on this surface).
+            Some(Err(error)) => {
+                record_obs_fail(steps, &mut failure, "editor_popup_close", error.to_string());
+                effect_ok = false;
+            }
+            None => {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "editor_popup_close",
+                    "editor session vanished before the popup close toggle",
+                );
+                effect_ok = false;
+            }
+        }
+    }
+
+    // Non-fatal contract: an accepted or refused toggle leaves the
+    // session `Attached` — any other landing is a violation.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let attached = sessions
+            .session(session_id)
+            .is_some_and(|session| matches!(session.state(), EditorSessionState::Attached { .. }));
+        if attached {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": "Attached",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                "session did not stay Attached after editor_popup",
+            );
+            state_ok = false;
+        }
+    }
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+
+    // Phase D — residual popup leak check: `removed()` must have
+    // destroyed the popup with the child. Runs on every supported
+    // host, accepted or not — a leaked popup would occlude later
+    // cases at screen origin.
+    let teardown_ok = !observation.supported || check_popup_teardown(steps, &mut failure);
+
+    let mut extras = child_extras(container, &observation, &rendered);
+    extras.insert("popup".to_string(), popup_record);
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed: landing == OpLanding::Accepted && effect_ok && teardown_ok,
+        verified: attach_ok
+            && state_ok
+            && effect_ok
+            && close_ok
+            && detach_ok
+            && converged_ok
+            && teardown_ok,
+        failure,
+        extras: Value::Object(extras),
+    }
 }
 
 /// Shared body for the non-pixel editor-op cases — identical
@@ -11054,6 +11618,50 @@ fn real_editor_focus_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
                 evidence: "editor-focus:real-title-event-log-effect",
             },
             observe_editor_focus_lifecycle,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-editor-popup` case (Issue #630 AC4 shared remainder):
+/// pre-flight requires `NativePluginDock`, then the body drives the
+/// real attach chain plus two `send_key` `VK_P` toggles — judged by
+/// the fixture's title event log (`po:1`/`pc:1`), the real
+/// `WS_POPUP` top-level HWND oracle (class/title/owner/style/rect),
+/// popup disappearance, and the post-close residual check, never
+/// pixels.
+fn real_editor_popup_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "session.send_key(down+up 'p' x2) accepted through \
+                              the REAL container lease; the child HWND title \
+                              carried the fixture's event log (po:1/pc:1 via \
+                              GetWindowTextW), exactly one WS_POPUP top-level \
+                              rvf-test-editor-popup-1 HWND owned by \
+                              GA_ROOT(child) was observed and removed, the \
+                              session stayed Attached, events \
+                              [Attached{Docked}, Closed], and close + \
+                              popup-residual convergence verified — no pixels",
+                evidence: "editor-popup:real-hwnd-open-close",
+            },
+            observe_editor_popup_lifecycle,
         ))
     });
     finalize_case(
@@ -12406,11 +13014,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 28, "twenty-eight real-dock cases");
+        assert_eq!(reports.len(), 29, "twenty-nine real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -12443,7 +13051,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 28] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");

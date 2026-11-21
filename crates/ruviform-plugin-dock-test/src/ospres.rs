@@ -16,9 +16,9 @@
 //!   `WS_EX_TRANSPARENT`/layered, and DWM-cloaked windows, so a
 //!   hit-test answer of "the child" cannot rule out a visual cover
 //!   the hit-test never sees. The inventory records every
-//!   top-level window's class/rect/visibility/liveness/disabled/
-//!   exstyle/owner/pid so the caller can isolate child-rect
-//!   intersections and own-process vs foreign covers.
+//!   top-level window's class/title/rect/visibility/liveness/
+//!   disabled/exstyle/owner/pid so the caller can isolate
+//!   child-rect intersections and own-process vs foreign covers.
 //! - [`attributes`] — per-HWND presentation attributes:
 //!   `DWMWA_CLOAKED` (DWM composition state), `GetWindowRgn` +
 //!   `GetRgnBox` (window clip region), `GetUpdateRect` (pending
@@ -52,6 +52,14 @@ pub(crate) struct TopLevelWindow {
     pub z_index: u32,
     /// `GetClassNameW` result — `None` when the query fails.
     pub class_name: Option<String>,
+    /// `GetWindowTextW` — the window's title text. `None` when the
+    /// query fails or the window has no title (the two outcomes
+    /// are indistinguishable through `GetWindowTextLengthW`; the
+    /// popup-identity oracle needs no `Some("")`/failure split).
+    /// The fixture's popup stamps `rvf-test-editor-popup-{seq}`
+    /// here (Issue #630 AC4 shared remainder), which is part of
+    /// its real-HWND identity.
+    pub title: Option<String>,
     /// `GetWindowRect` in virtual-screen coordinates — `None` on
     /// query failure or an empty rectangle.
     pub rect: Option<ScreenRect>,
@@ -194,8 +202,8 @@ mod platform {
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetLayeredWindowAttributes,
-        GetWindow, GetWindowLongPtrW, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
-        WS_DISABLED,
+        GetWindow, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
+        GetWindowThreadProcessId, IsWindow, IsWindowVisible, WS_DISABLED,
     };
 
     use super::{
@@ -290,7 +298,7 @@ mod platform {
         }
     }
 
-    /// One top-level window's facts — class/rect/visibility/
+    /// One top-level window's facts — class/title/rect/visibility/
     /// liveness/disabled/exstyle/owner/pid, all query-only.
     fn top_level_window(hwnd: u64, z_index: u32) -> TopLevelWindow {
         let hwnd_t = hwnd as HWND;
@@ -321,6 +329,7 @@ mod platform {
                 hwnd,
                 z_index,
                 class_name: class_name(hwnd_t),
+                title: window_text(hwnd_t),
                 rect: crate::ospix::window_screen_rect(hwnd).ok(),
                 visible: IsWindowVisible(hwnd_t) != 0,
                 alive: IsWindow(hwnd_t) != 0,
@@ -383,6 +392,29 @@ mod platform {
         }
         let len = usize::try_from(len).unwrap_or(0).min(buffer.len());
         Some(String::from_utf16_lossy(&buffer[..len]))
+    }
+
+    /// `GetWindowTextW` — the window's title text. `None` when the
+    /// read fails or the title is empty: `GetWindowTextLengthW`
+    /// answers 0 for both, and no caller needs the split.
+    fn window_text(hwnd: HWND) -> Option<String> {
+        // SAFETY: read-only title query; `buf` is a valid writable
+        // buffer sized to the length the first call reported (+1
+        // for the terminator `GetWindowTextW` writes within
+        // `nMaxCount`).
+        unsafe {
+            let len = GetWindowTextLengthW(hwnd);
+            if len <= 0 {
+                return None;
+            }
+            let mut buf = vec![0u16; usize::try_from(len).unwrap_or(0) + 1];
+            let got = GetWindowTextW(hwnd, buf.as_mut_ptr(), len + 1);
+            if got <= 0 {
+                return None;
+            }
+            let got = usize::try_from(got).unwrap_or(0).min(buf.len());
+            Some(String::from_utf16_lossy(&buf[..got]))
+        }
     }
 
     /// `DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED)` — the DWM

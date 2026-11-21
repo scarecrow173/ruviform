@@ -1818,3 +1818,121 @@ claim なし（self-check 通過、26/26 row）。
 - `real-dcomp-pixel`/`real-dcomp-bandescape` の `Fail` — 既知・
   既存のまま据え置き（Issue #532 系、本 slice 非関連）。
 - macOS/Linux GUI — `Unsupported`/`Deferred` 据え置き。
+
+# Slice 追記: Issue #631 editor popup real-HWND host harness（`real-editor-popup` — Issue #630 AC4 共有残課題）
+
+- Date: 2026-11-21
+- Lane JSONL repo_sha: `b27fb6a1`（実走時 HEAD — 本 slice は
+  uncommitted working tree で実走。evidence の `repo.sha` は
+  実行時 HEAD を正直に記録する契約どおり）
+- 対象: `real-editor-popup` 1 case 追加（real catalog 28→29 rows、
+  console 投影 37→38 rows）、`ospres::TopLevelWindow.title` 欄追加
+  （`GetWindowTextW`、query-only）、fixture title event-log suffix
+  照合の `title_log_check` 共有化（verb case inline 実装から集約）。
+  変更は `crates/ruviform-plugin-dock-test`（+tests/evidence/docs）
+  と `mise.toml` の description 文言のみ — fixture/plugin-host/
+  production crate は非接触。
+
+## Static lanes（全 pass）
+
+| Command | Result |
+| --- | --- |
+| `cargo fmt --all -- --check` | pass |
+| `mise run check ruviform-plugin-dock-test` | pass |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass |
+| `mise run lint ruviform-plugin-dock-test` | pass |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass（`-D warnings`） |
+| `mise run test ruviform-plugin-dock-test` | pass（unit 2 + console 14 + plugin_dock 4） |
+| `cargo test --locked -p ruviform-plugin-dock-test --features real-dock` | pass（unit 17 + console 14 + plugin_dock 5） |
+| `mise run test-ui-scenario-contract`（fake/gpui 両 lane） | pass（fake 17 + gpui 7） |
+| `mise run check-ui-driver-boundary` | pass（dep-graph/signature/allowlist） |
+| `mise run test-ui-plugin-dock` | pass — `plugin-dock-scenario.jsonl` 再生成 |
+| `mise run test-ui-plugin-dock-console` | pass — `plugin-dock-console.jsonl` 再生成（`--list --include-real` = 38 row: 9 headless + 29 real） |
+| `mise run test-ui-plugin-dock-real-headless` | pass（exit 0 — 29 row 全て `not_run`+`environment_blocked`。`plugin-dock-real-headless.jsonl` 再生成） |
+| `mise run test-ui-plugin-dock-real` | **exit 1（設計どおり）** — `real-dcomp-bandescape`/`real-dcomp-childinv` の既存 Issue #532 系 `Fail` 2 件のみ。`plugin-dock-real-scenario.jsonl` 再生成 |
+
+## `test-ui-plugin-dock-real` 実走（29 case、interactive Windows desktop）
+
+| case | verdict |
+| --- | --- |
+| `real-window-mount` | pass |
+| `real-native-slot` | pass |
+| `real-editor-attach` | pass |
+| `real-capture` | pass |
+| `real-dcomp-pixel` | pass |
+| `real-dcomp-foreground` | pass |
+| `real-dcomp-present` | pass |
+| `real-dcomp-uncovered` | pass |
+| `real-dcomp-bandescape` | **fail**（既存 `be_apply_layered_exstyle refused` — 本 slice 非関連の Issue #532 系 environmental fail 据え置き） |
+| `real-dcomp-childinv` | **fail**（既存 child-inventory/capture-plane 診断の既知残余 — 同上、本 slice 非関連） |
+| `real-dcomp-rasterfix` | pass |
+| `real-multiwindow-focus` | pass |
+| `real-os-input` | pass |
+| `real-command-receipt` | pass |
+| `real-window-dpi` | pass |
+| `real-window-ime` | unsupported |
+| `real-window-close` | pass |
+| `real-editor-resize` | pass |
+| `real-editor-redock` | pass |
+| `real-session-terminate` | pass |
+| `real-session-degraded` | pass |
+| `real-session-recovery` | pass |
+| `real-session-timeout` | pass |
+| `real-editor-visibility` | pass |
+| `real-editor-input` | pass |
+| `real-editor-focus` | pass |
+| `real-editor-popup` | **pass**（本 slice 新規 — 下記実測） |
+| `real-session-crash` | unsupported |
+| `real-session-hang` | unsupported |
+
+分布: 24 pass / 2 fail / 3 unsupported（29 rows）。
+`plugin-dock-real-scenario.jsonl` 再生成（1 header + 29 rows）。
+
+### `real-editor-popup` oracle 実測
+
+- `editor_popup_open`: `session.send_key` down+up `'p'`/`0x50` が
+  production `InProcessEditorOps` → `HostCommand::SendGuiKey` 経由で
+  accept — pass。
+- `editor_popup_open_log`: 再 enumerate した child HWND title が
+  `rvf-test-editor-attach-1|kd:0070:0050:0000,po:1,ku:0070:0050:0000`
+  で終了 — pass。
+- `editor_popup_open_hwnd`: `ospres::inventory().own_windows` に
+  fixture popup ちょうど 1 個 — hwnd=69080690、class
+  `RuviformTestEditor`、title `rvf-test-editor-popup-1`、
+  `GW_OWNER`=11470798 == `osmut::observe(child).root`（`GA_ROOT`）
+  == `GetParent`（auxiliary owner evidence）、rect (0,0) 200x100、
+  `GWL_STYLE`=0x94000000（`WS_POPUP` set・`WS_CHILD` clear）、
+  alive/visible — pass。
+- `editor_popup_close`/`editor_popup_close_log`: 2 回目 down+up accept、
+  title suffix `…,kd:0070:0050:0000,pc:1,ku:0070:0050:0000` — pass。
+- `editor_popup_closed_hwnd`: top-level inventory に同条件 popup 0 個、
+  記録 hwnd `IsWindow==0`（`win32::destroy` の効果）— pass。
+- `session_state_after_op`=`Attached`、`session.close`→`IsWindow==0`→
+  `Closed`+`concluded`、events=`[Attached{Docked}, Closed]`、
+  `editor_popup_teardown`（owner 非依存の残存 popup 0 個）— pass。
+
+## `test-ui-plugin-dock-real-headless`（`--blocked-probe`）
+
+`mise run test-ui-plugin-dock-real-headless` — pass（exit 0）。
+`plugin-dock-real-headless.jsonl` 再生成: 29 case 全て `not_run` +
+`observed.observed="environment_blocked"`、`environment_kind` は
+`deterministic-backend`（`real-window` claim なし）。`real-editor-popup`
+行も同一形状（`required: ["native-plugin-dock"]`、session-scoped 欄なし）。
+
+## NotRun / Unsupported / Deferred（本 slice）
+
+- Issue #630 本体の consumer 実走 gate（AC2 実行面）は本 slice 非対象 —
+  host harness（real-HWND oracle）のみの共有残課題消化。Issue #630 は
+  open のまま。
+- popup の pixel oracle・popup 内部描画の検証は対象外 — 本 case は
+  non-pixel family（title event log + HWND inventory のみ）。
+- `docs/**/README.md` の索引は本 slice では未同期 — Coordinator が
+  統合時に整備する。
+- `real-window-ime`（`Ime` 未 claim、Issue #389 scope）・
+  `real-session-crash`/`real-session-hang`（in-process lane の
+  architectural boundary）の `unsupported` は据え置き。
+- `real-dcomp-bandescape`/`real-dcomp-childinv` の `Fail` — Issue
+  #532 系の既存・既知 environmental fail のまま据え置き（本 slice
+  非関連。lane exit 1 の唯一の原因であり、popup 結果と区別する）。
+- local verification は merge 後 CI/integration acceptance の代替
+  ではない — 統合受入は merged-main SHA の CI を正本とする。

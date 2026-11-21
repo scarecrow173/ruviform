@@ -101,7 +101,10 @@
 //! `Unsupported` refusal with `Attached` preserved;
 //! `real-editor-input`/`real-editor-focus` — the `send_key`/
 //! `set_focus` verbs judged by the fixture's OS-observable
-//! `GetWindowTextW` event log; and the honest
+//! `GetWindowTextW` event log; `real-editor-popup` — the
+//! `send_key` `VK_P` popup toggle judged by the `po:`/`pc:`
+//! event-log tokens plus a real top-level `WS_POPUP` HWND oracle
+//! (Issue #630 AC4 shared remainder); and the honest
 //! `Unsupported` boundaries `real-session-crash`/`real-session-hang`
 //! — process-killing/wedging fault modes the in-process lane cannot
 //! survive).
