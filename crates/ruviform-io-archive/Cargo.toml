@@ -38,6 +38,13 @@ ruviform-io-file = { path = "../ruviform-io-file" }
 # tar.gz composition tests: the TAR layer's finish must be separable
 # from the compression layer's trailer verification.
 ruviform-io-compression = { path = "../ruviform-io-compression", features = ["gzip"] }
+# - proptest: Issue #806 D層 formal verification slice 2 — archive
+#   parser family（tar/zip reader の `ArchiveReadLimits` gate・
+#   `ArchiveErrorKind` 安定分類・receipt 不変量）の property suite
+#   （tests/formal_archive.rs）に使用する生成入力検査器。
+#   dev-dep のみで本番依存グラフへ波及しない。MIT OR Apache-2.0・
+#   pure Rust。MSRV 1.89 適合。
+proptest = "1"
 
 [lints]
 workspace = true

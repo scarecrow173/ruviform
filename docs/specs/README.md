@@ -255,7 +255,7 @@ Directory: `docs/specs`
 | SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | SPEC-034Z78vorbxe5h4YnZofGo | Issue #744 bounded 非 RT JobExecutor 実装（ruviform-exec executor module） | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
-| SPEC-rf806frmlvrf0slice1 | Issue #806 Formal Verification D 層 slice 1 — wire codec の proptest + Kani 検証基盤 | proposed | [formal-verification.md](./formal-verification.md) |
+| SPEC-rf806frmlvrf0slice1 | Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser） | proposed | [formal-verification.md](./formal-verification.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |

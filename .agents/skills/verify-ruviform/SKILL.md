@@ -322,19 +322,26 @@ mise run bench-frozen-e2e --write-baseline <path>  # emit an un-promoted baselin
 
 ## Formal
 
-D-layer property + bounded-model-check lanes for the wire codecs
-(Issue #806, slice 1 — `rvf.ipc.v1` / `rvf.uitest.v1`):
+D-layer property + bounded-model-check lanes (Issue #806 — slice 1
+wire codecs `rvf.ipc.v1` / `rvf.uitest.v1`, slice 2 archive parsers
+`ruviform-io-archive`):
 
 ```sh
-mise run test-formal        # proptest: formal_ipc + formal_transport
+mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive
 mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
 ```
 
 - Test files live next to the crates: `crates/ruviform-ui/tests/
-  formal_ipc.rs` (`parse_intent`, `valid_op`, `Event::to_json`) and
+  formal_ipc.rs` (`parse_intent`, `valid_op`, `Event::to_json`),
   `crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
-  `write_frame`). Kani proofs sit in a `#[cfg(kani)] mod proofs` at the
-  bottom of the same file — never in product sources.
+  `write_frame`), and `crates/ruviform-io-archive/tests/
+  formal_archive.rs` (TAR/ZIP reader `ArchiveReadLimits` gates,
+  `ArchiveErrorKind` stable classification, receipt invariants, and
+  `Pending`/`discard_pending` recovery). Kani proofs sit in a
+  `#[cfg(kani)] mod proofs` at the bottom of the same file — never in
+  product sources. The archive proofs use a concrete skeleton plus a
+  symbolic gate field (typeflag byte / limit budget); arbitrary byte
+  streams stay concrete-only in proptest.
 - `test-formal` is the always-runnable first layer (pure Rust, MSRV,
   same entry as CI). `test-formal-kani` resolves an environment in
   order: native `cargo kani` → a WSL2 distro with `cargo` +

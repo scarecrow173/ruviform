@@ -2,9 +2,9 @@
 id: "SPEC-rf806frmlvrf0slice1"
 type: "spec"
 status: "proposed"
-title: "Issue #806 Formal Verification D 層 slice 1 — wire codec の proptest + Kani 検証基盤"
+title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser）"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -17,6 +17,8 @@ relations:
         path: "crates/ruviform-ui-test/tests/formal_transport.rs"
       - type: "file"
         path: "crates/ruviform-ui/tests/formal_ipc.proptest-regressions"
+      - type: "file"
+        path: "crates/ruviform-io-archive/tests/formal_archive.rs"
       - type: "doc"
         path: "docs/specs/formal-verification.md"
       - type: "dir"
@@ -28,6 +30,10 @@ relations:
         path: "crates/ruviform-ui/Cargo.toml"
       - type: "file"
         path: "crates/ruviform-ui-test/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-io-archive/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-io-archive/tests/common/mod.rs"
       - type: "file"
         path: "mise.toml"
       - type: "file"
@@ -54,14 +60,17 @@ relations:
   derived-by: []
 ---
 
-# Formal Verification — wire codec slice（rvf.ipc.v1 / rvf.uitest.v1）
+# Formal Verification — wire codec + archive slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip）
 
-Issue `scarecrow173/ruviform#806` slice 1 の実装 spec。D 層検証
-（property-based testing → bounded model checking → 将来の TLA+/Lean
-昇格）の第一弾として、unsafe を含まない wire codec を対象に
-proptest と Kani の 2 層を常設する。
+Issue `scarecrow173/ruviform#806` の D 層検証（property-based
+testing → bounded model checking → 将来の TLA+/Lean 昇格）実装
+spec。slice 1 で unsafe を含まない wire codec に proptest と
+Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
+の TAR/ZIP reader と `ArchiveReadLimits` に適用した。
 
 ## 対象と検証する契約
+
+### slice 1 — wire codec
 
 | 対象 | ファイル | 契約 |
 | --- | --- | --- |
@@ -71,12 +80,22 @@ proptest と Kani の 2 層を常設する。
 | `read_frame` | `crates/ruviform-ui-test/src/transport.rs` | `Frame` / `Eof` / `TooLarge` / `Err(UnexpectedEof)` / `Err(InvalidData)` の tri-class が宣言長と残バイト数で一意に決まる。`TooLarge` は宣言本文を drain してストリーム整列を保つ |
 | `write_frame` | 同上 | `MAX_INTENT_BYTES` 超過を `InvalidInput` で拒否。in-cap 本文は `u32le` 長 + UTF-8 で書き出し、`read_frame` で同一文字列が復元される |
 
+### slice 2 — archive reader（`ruviform-io-archive`）
+
+| 対象 | ファイル | 契約 |
+| --- | --- | --- |
+| TAR streaming reader | `crates/ruviform-io-archive/src/tar/`（`read.rs` / `header.rs`） | 任意 byte 列で panic せず、`Err` の `ArchiveErrorKind` は安定集合（`Io`/`InvalidInput`/`InvalidState`/`Truncated`/`Malformed`/`Inconsistent`/`ChecksumMismatch`/`SizeMismatch`/`LimitExceeded`/`Overlap`/`Unsupported`）に留まる。typeflag は surfaced entry / folded extension / `Unsupported` のいずれか一つに一意分類される |
+| ZIP reader | `crates/ruviform-io-archive/src/zip/` | 任意 byte 列で panic せず `Err` は同じ安定 kind 集合。central-directory/local-header の不整合は `Inconsistent`、CRC 不一致は `ChecksumMismatch`、宣言/実測サイズ不整合は `SizeMismatch`、EOCD の multi-disk・ZIP64 必須は `Unsupported`（entry 数・metadata gate より先） |
+| `ArchiveReadLimits` | `crates/ruviform-io-archive/src/limits.rs` | `max_entries` / `max_metadata_bytes` / `max_path_bytes` / `max_path_depth` / `max_entry_uncompressed_bytes` / `max_total_uncompressed_bytes` の各 gate が allocation/parse 前および streaming/decompress 中に `LimitExceeded` を返す |
+| completion / receipt | `entry.rs` / `receipt.rs` | `finish` / `discard_remaining` / `discard_pending` が authoriative な完了点。receipt は走査した entry 数と payload byte 数の不変条件を満たす。TAR の pending entry は `discard_pending` で回復し reader が継続可能 |
+| roundtrip / codec | `tests/common/` fixture + writer | writer 生成アーカイブ（TAR・ZIP stored/deflate）は reader が同一 name/size/payload で復元する。TAR は payload 完全性を持たない（構造・宣言サイズまで）・ZIP は CRC32 で payload 完全性を検証する |
+
 ## Lane 構成
 
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
-| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test` | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` | なし（pure Rust・MSRV 内・CI と同一入口） |
+| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 
 `test-formal` は常時実行可能な第一層。`test-formal-kani` は
 環境検出つきの第二層で、次の順に解決する。
@@ -103,6 +122,19 @@ proptest と Kani の 2 層を常設する。
 | `event_to_json_wellformed` | id = 6 byte 任意列のうち valid UTF-8・`result_ok`・`params=Null`。`#[kani::unwind(80)]` | 他 variant・大きな params | proptest `event_to_json_versioned_envelope` が全 variant・任意 `Value` で担保 |
 | `read_frame_contract` | stream = ≤32 byte 任意 byte 列。`#[kani::unwind(48)]` | 32 byte 超の stream・1 MiB 超 `declared` の drain 実走（symbolic u32 で `TooLarge` 判定自体は到達可） | proptest `read_frame_arbitrary_stream` / `too_large_drains_and_stays_aligned` で担保 |
 | `write_read_roundtrip` | body = 16 byte 任意列のうち valid UTF-8。`#[kani::unwind(40)]` | in-cap だが 16 byte 超または無効 UTF-8 の body（`&str` 引数のため構造上到達不可） | proptest `write_read_roundtrip`（in-cap 任意・exact-cap 境界含む）で担保 |
+
+### slice 2 archive harness（`tests/formal_archive.rs` の `#[cfg(kani)] mod proofs`）
+
+slice 1 の教訓（任意 symbolic byte 列 × parser は CBMC unwind が非実用的）
+を踏まえ、archive harness は「concrete な最小 valid skeleton 上の
+symbolic gate field」のみを対象にする。任意 malformed stream は
+proptest の concrete coverage に委譲する。
+
+| Harness | Bound | 未証明領域 | 補完 |
+| --- | --- | --- | --- |
+| `tar_typeflag_classification` | 512 byte 固定 TAR header block（name は concrete、typeflag byte 156 のみ symbolic・全 256 値）。checksum は closed-form（`TAR_HEADER_BASE` + digit sum）で構築 | 複数 header・extension payload 中身・GNU/PAX 長名・数値 field 全体 | proptest `tar_arbitrary_stream_error_set` / `tar_pax_gnu_extensions` / roundtrip 系で担保 |
+| `tar_declared_size_gate` | 同上 skeleton で declared size field を symbolic 化（bounded u64）| `max_entry_uncompressed_bytes` 境界±1 以外の組合せ・total gate との複合 | proptest `tar_declared_size_limits` / `tar_total_uncompressed_limit` で担保 |
+| `zip_index_gates` | concrete ZIP skeleton（1 local header + 1 central record + EOCD）で EOCD count field を symbolic u16 | 複数 entry・ZIP64・deflate payload・local/central 不整合の全組合せ | proptest `zip_index_limit_gates` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
 
 仮定:
 
@@ -159,7 +191,10 @@ manual/opt-in）。
 
 変異・観測した fail・revert の 3 点セットを `evidence/rf806/` に
 記録する。変異の持ち越し（revert 漏れ）は禁止 — verification.md に
-revert 後の再検証結果を残す。
+revert 後の再検証結果を残す。slice 2 では例として TAR reader の
+limit gate または ZIP reader の CRC/size 整合チェックを 1 箇所だけ
+破り、`formal_archive` の該当 property が shrink つき fail する
+ことを記録する。
 
 ## 判定語彙と fail-closed
 
@@ -175,7 +210,7 @@ Kani（bounded model checking）への次の昇格候補:
 
 | 候補 target | 対象 crate / 契約 | Kani が向く理由 |
 | --- | --- | --- |
-| parser family | `ruviform-io-structured`（pull-based CSV 等の構造化 parse）、`ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる |
+| parser family | `ruviform-io-structured`（pull-based CSV 等の構造化 parse）、`ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で本形を適用済み |
 | unsafe 局在コード | `ruviform-math`（SIMD dispatch）、`ruviform-audio-device` / `ruviform-midi-device` / `ruviform-observability` の `#[expect(unsafe_code)]` 局所箇所 | unsafe ブロックの前後条件・pointer/len 不変条件を symbolic に検証 — 通常 test では到達不能な入力経路をカバーできる（harness は unsafe 自体ではなく公開境界の契約を検証する設計にする） |
 | DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすく、全サイズ証明が必要になった段階で Lean へ再昇格できる |
 
