@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #532 dcomp-pixel test spec"
 created: "2026-11-16"
-updated: "2026-11-16"
+updated: "2026-11-21"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -13,7 +13,9 @@ relations:
     added:
       - type: "file"
         path: "docs/test-specs/issue-532-dcomp-pixel.md"
-    modified: []
+    modified:
+      - type: "file"
+        path: "docs/test-specs/issue-532-dcomp-pixel.md"
     deleted: []
     renamed: []
     moved: []
@@ -30,6 +32,10 @@ relations:
   related:
     - "docs/specs/issue-532-dcomp-pixel.md"
     - "docs/designs/issue-532-dcomp-pixel.md"
+    - "docs/specs/issue-532-dcomp-residual.md"
+    - "docs/discovery/issue-532-dcomp-residual.md"
+    - "docs/test-specs/issue-532-dcomp-residual.md"
+    - "evidence/rf532/plugin-dock-real-pinned.jsonl"
   refines: []
   refined-by: []
   derives-from:
@@ -120,3 +126,38 @@ scenario の `real-dcomp-pixel` case）。
   evidence/文書に明記。
 - env-on の exit-127 が lane を落とす → 観測結果として捕捉・記録
   し、成功条件を弱めない。
+
+## 残存 Fail の class 切り分け（2026-11-21 residual slice）
+
+根治 fix（Issue #839、gpui `v0.2.2-rf2`）統合後の pinned-dep run
+（`57c4619b`、DComp on）で本 case は引き続き `fail` を記録したが、
+`occlusion_*` instrumentation の measured fact により、失敗の
+class が **本 spec が対象とした DComp topmost 遮蔽とは別** である
+ことが確定した。
+
+確定した class: **lane 内の別 top-level `Zed::Window` による
+HWND レベル外部遮蔽**。
+
+- `occlusion_hit_test`: docked child rect 内の全 5 probe point が
+  hwnd `160105518`（class `Zed::Window`、rect `184,89,1552x903`、
+  role `other`）を返す。`window_identities` の w2–w4（同一
+  geometry の姉妹 top-level window）が child rect 全体を被覆する
+  lane 配置であり、screen `BitBlt` oracle は covering window 側の
+  画素を採取する。
+- `windowdc_pixels`/`printwindow_pixels` はいずれも green `1.0` —
+  child の raster 自体は根治 fix により存在している。
+- `occlusion_zorder` は w1 階層内で sibling 遮蔽がないことを示す
+  （`above_editor: false`）。遮蔽源は window 階層の**外**の
+  top-level window であり、compositor plane の不具合ではない。
+
+処遇（`docs/specs/issue-532-dcomp-residual.md` の決定）: **別
+Issue 切り出し** — lane の window 配置（複数 top-level window が
+被測定 child 上に重なる scenario 設計）を修正する follow-up で
+扱う。#532 内では class B の既知 Fail として維持し、verdict の
+昇格・文言改竄は行わない。本 case の `detail` 文字列は旧文面
+（"known GPUI DComp topmost occlusion"）のまま残るため、確定
+class への文言追従は follow-up 側の作業とする。
+
+切り分けの全証拠: `docs/discovery/issue-532-dcomp-residual.md`、
+`evidence/rf532/plugin-dock-real-pinned.jsonl`、
+`evidence/rf532/residual-disposition.md`。

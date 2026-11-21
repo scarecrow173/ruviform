@@ -95,3 +95,16 @@ slice1 の patched run と同一集合（AC6 維持）。lane exit 1
   DComp path のみに効く）。
 - `lint-ui-gpui` の `cast_sign_loss` 修正は main 既存問題
   として別途対応。
+
+## 追記（2026-11-21 residual slice — verdict 数値の訂正）
+
+上の「verdict 集合: **24 pass + 3 unsupported + 3 既知 fail**」の
+要約行は stale。`plugin-dock-real-pinned.jsonl` の実測は
+**22 pass + 3 unsupported + 3 fail**（28 case rows、catalog
+`real_entries` = `[ScenarioEntry; 28]` と一致）で、本 doc の
+verdict 表（`real-dcomp-rasterfix` +「その他 21 case」= 22 pass）
+とも一致する。「24」の数値は本 JSONL と対応しないため、実測
+22 pass を正とする（AC6 の「既存 pass case 維持」は充足 —
+pass→fail の回帰は無く、`real-dcomp-rasterfix` は fail→pass の
+改善）。詳細は `evidence/rf532/residual-disposition.md` および
+`docs/discovery/issue-532-dcomp-residual.md`。
