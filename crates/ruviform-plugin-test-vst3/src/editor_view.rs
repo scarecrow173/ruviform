@@ -807,6 +807,69 @@ mod tests {
         }
     }
 
+    /// The `po:`/`pc:` verb tokens are recorded even when the popup
+    /// HWND never materialized — the toggle's open/close oracle is
+    /// the logical open state, not `state.popup` (Issue #855: an
+    /// HWND-based oracle left `pc:` unreachable wherever
+    /// `win32::popup` answers `None` — every non-Windows build, and
+    /// any `CreateWindowExW` failure on Windows). Here the missing
+    /// surface is simulated by taking and destroying the real HWND
+    /// so `state.popup` is `None`, the same state the non-Windows
+    /// stub produces.
+    #[expect(unsafe_code)]
+    #[test]
+    fn popup_verbs_are_recorded_without_popup_hwnd() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view instance; the args
+        // are plain scalar values.
+        unsafe {
+            for _ in 0..2 {
+                // Open — `po:{seq}`; then drop the surface so the
+                // next press sees `popup == None`, exactly what a
+                // non-Windows build sees.
+                view.onKeyDown(0x50, POPUP_VK, 0);
+                if let Some(popup) = view.state.borrow_mut().popup.take() {
+                    win32::destroy(popup);
+                }
+                // Close — `pc:{seq}` must be recorded even though no
+                // HWND existed at toggle time.
+                view.onKeyDown(0x50, POPUP_VK, 0);
+            }
+            let state = view.state.borrow();
+            let popup_tokens: Vec<&str> = state
+                .events
+                .iter()
+                .map(String::as_str)
+                .filter(|token| token.starts_with('p'))
+                .collect();
+            assert_eq!(popup_tokens, ["po:1", "pc:1", "po:2", "pc:2"]);
+        }
+    }
+
+    /// `removed` tears the popup down and resets the logical open
+    /// state, so the next popup key starts a fresh `po:{seq}` cycle —
+    /// a stale open flag would mis-record it as `pc:`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn removed_resets_popup_open_state() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view instance; the args
+        // are plain scalar values.
+        unsafe {
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            view.removed();
+            view.onKeyDown(0x50, POPUP_VK, 0);
+            let state = view.state.borrow();
+            let popup_tokens: Vec<&str> = state
+                .events
+                .iter()
+                .map(String::as_str)
+                .filter(|token| token.starts_with('p'))
+                .collect();
+            assert_eq!(popup_tokens, ["po:1", "po:2"]);
+        }
+    }
+
     /// `canResize` honestly accepts (the fixture's `onSize` resizes
     /// the child HWND); `checkSizeConstraint` accepts a valid rect
     /// and rejects null.
