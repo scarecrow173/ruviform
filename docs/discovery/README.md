@@ -110,4 +110,4 @@ Directory: `docs/discovery`
 | DISC-034ZccDcompResidual01 | Issue #532 DComp residual — 根治 fix 統合後の残存 Fail class 切り分け記録 | approved | [issue-532-dcomp-residual.md](./issue-532-dcomp-residual.md) |
 | DISC-rf855popupKeyToggle | Issue #855 popup_key_toggles_plugin_owned_window 非 Windows 決定的 defect — 原因分類記録 | approved | [issue-855-popup-key-ci.md](./issue-855-popup-key-ci.md) |
 | DISC-rf857PixelOcclusion | Issue #857 pixel-occlusion — real-dcomp-pixel lane 自身 top-level window 遮蔽（class B）調査記録 | approved | [issue-857-pixel-occlusion.md](./issue-857-pixel-occlusion.md) |
-| DISC-01M7Y96P5AVRW761HK2XP77XF2 | Issue #631 real-editor-popup real-HWND harness — 調査記録 | approved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
+| DISC-01M7Y96P5AVRW761HK2XP77XF2 | Issue #631 real-editor-popup real-HWND harness — 調査記録 | resolved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
