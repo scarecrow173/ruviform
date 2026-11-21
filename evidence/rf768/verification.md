@@ -95,3 +95,33 @@ round-trip）は全 run で pass — substituted call を計数対象から
   bounded resend 不要の監査結論どおり・観測上も fail なし。
 - ローカル検証＝変更範囲の検証。統合受入は merge 後の対象 SHA の
   必須 CI 結果（Coordinator が確認）。
+
+## 第 3 slice（post-fix 着地 site の再監査 — HEAD `c58fc946`）
+
+第 1/2 slice merge 後に追加された site（`ruviform#842` output
+events drain・`ruviform#885` test_editor fault・`ruviform#849`
+instantiate retry）を含む HEAD で canonical lane を再実施。
+本 slice は test file zero-diff の再監査 + doc addendum のみ —
+per-crate `check`/`lint`/`test` lane は fixture src 非変更のため
+対象外とし、test file を型検査・実行する l1-real-plugin lane の
+再実施で確認した。
+
+### Canonical verification（mise）
+
+| lane | command | result |
+| ---- | ------- | ------ |
+| canonical E2E | `mise run test-l1-real-plugin` | Pass（exit 0・Windows）— `l1_real` 10/10×2・`l1_fault` 20/20+21/21（`output_events_drain`・`test_editor` 各系含む）・`l1_stateful` 3/3+5/5（両 ABI・`-- --ignored` 実走・fail 0） |
+| typecheck | `mise run check-l1-real-plugin` | Pass（exit 0） |
+| lint | `mise run lint-l1-real-plugin` | Pass（exit 0・`-D warnings`） |
+| fmt | `mise run fmt-check` | Pass（exit 0） |
+| hooks | `mise exec -- prek run --all-files` | Pass（doc addendum 適用後に実施） |
+
+### 判定（第 3 slice）
+
+- 監査範囲全 site が `#766` 基準（LegDeltas 分類・matched-only
+  計数・bounded resend・gate 不変）に compliant — residual 0 件で
+  test file zero-diff（詳細は discovery doc 第 3 slice 節）。
+- 先行 run で flaky だった `hang` 系（`SpawnFailed{Timeout}` at
+  instantiate）も本 run では pass — `ruviform#849` の bounded
+  re-instantiate 着地後の環境は安定。同経路の残存 flake 追跡は
+  `ruviform#841` の scope。
