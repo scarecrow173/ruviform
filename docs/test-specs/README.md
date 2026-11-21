@@ -333,3 +333,4 @@ Directory: `docs/test-specs`
 | TSPEC-rf857PixelOcclusion | Issue #857 pixel-occlusion — real-dcomp-pixel lane 自身 top-level window 遮蔽（class B）検証仕様 | draft | [issue-857-pixel-occlusion.md](./issue-857-pixel-occlusion.md) |
 | TSPEC-01M7Y96P5AREWKR3Y63G1N66DX | Issue #631 real-editor-popup real-HWND harness — 検証仕様 | approved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
 | TSPEC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — canonical real-dock verdict 集合と AC 各行の突合 | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
+| TSPEC-01KBZWINDOWIME0TESTSPEC00A1 | Issue #389 real-window-ime テスト仕様 — OsImeOutcome 語彙・ImeProbe mock seam・配達ログ解析・verdict lattice の判定 | approved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
