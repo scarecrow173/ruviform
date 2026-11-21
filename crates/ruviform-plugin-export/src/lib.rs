@@ -590,10 +590,19 @@ impl InstanceEntry {
                     .and_then(|inner| inner)
                     .map(|()| WireReply::Ok)
             }
-            WireCommand::OpenGui { parent } => {
+            // `mode`/`size` stay unread — wire v6 dispatch (the UI
+            // thread and `Hello.capabilities` advertisement) is a
+            // later slice; `Docked` and an unimplemented hook both
+            // land on `HostError::Unsupported` as before.
+            WireCommand::OpenGui { parent, .. } => {
                 guarded(&mut *self.instance, |plugin| plugin.open_gui(parent))
                     .and_then(|inner| inner)
-                    .map(|gui| WireReply::Opened { gui })
+                    // `capabilities: 0` is the placeholder until the
+                    // dispatch slice reports real GUI capabilities.
+                    .map(|gui| WireReply::Opened {
+                        gui,
+                        capabilities: 0,
+                    })
             }
             WireCommand::CloseGui => guarded(&mut *self.instance, ErasedPlugin::close_gui)
                 .and_then(|inner| inner)
