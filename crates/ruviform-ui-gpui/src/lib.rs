@@ -48,6 +48,10 @@ mod gpui_driver {
     /// Consumer observation seam (Issue #429) — `gpui-test` only.
     #[cfg(feature = "gpui-test")]
     pub mod observe;
+    /// OS-level IME composition drive + delivered `WM_IME_*` message
+    /// observation for real-window verification (Issue #389 —
+    /// IMM32 on Windows, `Unsupported` elsewhere).
+    pub mod os_ime;
     /// OS-level keyboard/pointer injection for real-OS smoke
     /// verification (Issue #313 — `SendInput` on Windows,
     /// `Unsupported` elsewhere).
@@ -1576,6 +1580,8 @@ pub use gpui_driver::observe::{
     ComponentDrawn, ComponentObservation, DrawnBar, DrawnCell, DrawnMark, DrawnPlan,
     DrawnWaveformChannel, GpuiObserver, ViewDrawn, ViewObservation,
 };
+#[cfg(feature = "gpui")]
+pub use gpui_driver::os_ime;
 #[cfg(feature = "gpui")]
 pub use gpui_driver::os_input;
 #[cfg(feature = "real-scenario")]

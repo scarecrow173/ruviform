@@ -1641,7 +1641,7 @@ mod tests {
             );
             assert!(len > 0, "GetClassNameW must report the class");
             (
-                String::from_utf16_lossy(&name[..len as usize]),
+                String::from_utf16_lossy(&name[..usize::try_from(len).expect("len asserted > 0")]),
                 GetClassLongPtrW(hwnd, GCL_STYLE) as u64,
             )
         };

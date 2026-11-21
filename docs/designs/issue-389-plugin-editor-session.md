@@ -566,3 +566,65 @@ issue-389-ime-verbs.*`）。
   `AttachMode::Floating`、plugin→host GUI request、crash/hang
   受入、`#532` 画素 gate、consumer gate — issue #389 は
   OPEN のまま。
+
+## 改訂 5: real-window IME slice（2026-11-21・rf389-window-ime）
+
+`real-window-ime` を capability-preflight `Unsupported` から
+OS-level IME drive + 非画素配達 oracle の実判定へ flip した
+slice（`docs/discovery|specs|test-specs/issue-389-window-ime.md`）。
+
+- **drive 経路**: VST3 `IPlugView`/CLAP `clap.gui` に IME verb
+  は存在しないため、session verb・`HostCommand`・wire を捏造
+  せず、OS-delivery 層で完結する `os_ime` モジュールを
+  `gpui_driver` に新設（`os_input.rs` 同型 — `ImeProbe` OS
+  seam + `OsImeOutcome::{Injected,Unsupported,
+  EnvironmentBlocked,NotRun}`）。Windows IMM32 で
+  `SetFocus → ImmGetContext → ImmSetOpenStatus →
+  ImmSetCompositionStringW(SCS_SETSTR|GCS_COMPSTR) →
+  ImmNotifyIME(NI_COMPOSITIONSTR, CPS_COMPLETE) →
+  ImmReleaseContext` を駆動。本ホスト実測で MS-IME（TSF TIP）
+  への IMM32→TSF bridge が成立することを確認済み。
+- **oracle**: `ImmGetCompositionStringW` の事後 read-back は
+  callback 文脈外で空/不正値（実測で確定）のため棄却し、
+  caller-side `GWLP_WNDPROC` 一時 subclass + bounded
+  same-thread `PeekMessage`/`DispatchMessage` pump による
+  `WM_IME_*`/`WM_CHAR` 配達ログを採用。tap proc は lane
+  binary 内コード（fixture cdylib の unload-safety 制約を
+  回避 — `editor_view.rs` 非変更）。commit 判定は
+  `WM_IME_COMPOSITION` の `lParam & GCS_RESULTSTR` + committed
+  text 流通（`WM_IME_CHAR`/`WM_CHAR` または dispatch 内
+  `GCS_RESULTSTR` 読み取り）— conversion-dependent な本文一致
+  ではなく delivery sequence を見る。
+- **capability**: `supported_capabilities()` が
+  `os_ime::supported()`（IMM32 backend presence =
+  `cfg!(windows)`）のときだけ `ScenarioCapability::Ime` を
+  claim — IME install/enabled の実効は claim 条件に含めず、
+  `preflight`/`drive` の診断で `NotRun`+`environment_blocked`
+  へ写像する（`RealOsPointerOrKeyboard` と同規約）。
+- **verdict lattice**: `OpLanding::Blocked` を新設。
+  accepted+`commit_confirmed` のみ `Pass`、preflight 不成立
+  /drive 環境拒否は `NotRun`+`observed:"environment_blocked"`
+  marker、前提未達は `NotRun`、accepted+oracle 不一致は
+  `Fail`、oracle 不能は `NotRun`（accepted-but-unverifiable）。
+- **honesty 境界**: `EditorCapabilities.ime`/
+  `SlotCapabilities.ime`/`WindowCapabilities.ime` の語彙は
+  claim しない — OS-delivery が editor の semantic IME 処理を
+  証明しないため。`driver.rs`・`editor_view.rs` の条件付き
+  lease は不使用。`L1EditorOps` refusal-only 不変、
+  `WIRE_VERSION` 不変。
+- **`real-session-move` 不採用**: `real-editor-redock` が同
+  lease 上の reattach を実観測済みで、第 2 slot lease への
+  move は別 case 級 — 本 slice の AC に観測価値を増さない
+  （discovery doc に採否記録）。
+
+### reconcile 結果
+
+- 実走証拠: `evidence/rf631/plugin-dock-real-scenario.jsonl`
+  の `real-window-ime` 行（append — verdict/steps/observed が
+  正本）。unit test は `os_ime.rs` の mock seam で
+  blocked/precondition/analysis 分岐を網羅。
+- 残存: `real-session-crash`/`real-session-hang`（in-process
+  限界・別 Issue 級）、semantic IME 語彙（
+  `EditorCapabilities.ime` 等 — oracle 未定）、GPUI host
+  window 自身の IME 経路、L1 wire GUI verb 系の前残件 —
+  issue #389 は OPEN のまま。
