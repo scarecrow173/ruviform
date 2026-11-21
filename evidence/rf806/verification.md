@@ -196,3 +196,99 @@ wire 上の意味的同一性を検証する。
 - 変更ファイルに生産 `src/` 差分なし（mutation は完全 revert）。
   `Cargo.lock` は proptest dev-dep 解決分のみ。`tests/common/mod.rs`
   は `Debug` derive 追加のみ（proptest 診断表示用・意味論不変）。
+
+## slice 3 — structured document readers（ruviform-io-structured JSON/YAML/TOML/CSV/XML）
+
+- Date: 2026-11-21
+- OS: Windows (x86_64) — proptest/通常 lane。Kani lane は WSL2 Ubuntu
+  （`cargo kani` 検出 → `/mnt/g` パス写像 → WSL ネイティブ target dir）
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1（Windows）;
+  rustc 1.99.0 / Kani Rust Verifier 0.68.0 / CBMC 6.11.0（WSL2）
+- Repo SHA: `e7fcf22ec2683cc518e2e3b6c64ad26dbe280b9a`（`origin/main`
+  起点。各 JSONL の `repo_sha` は実行時 HEAD を記録）
+- ローカル検証 = 変更範囲の検証。統合検証は merge 後の対象 SHA に
+  対する必須 CI 結果が証拠（本記録はそれを代替しない）。
+
+### 検証対象（slice 3）
+
+- `crates/ruviform-io-structured` の serde-typed JSON/YAML/TOML reader・
+  pull-based CSV `CsvReader`・pull-based XML `XmlEventReader`・
+  共有 `InputLimits`/`BoundedRead` byte budget（`src/limits.rs` /
+  `src/input.rs`）・安定 `DocumentErrorKind` 分類 —
+  `tests/formal_structured.rs`（35 properties + `#[cfg(kani)] mod
+  proofs` 2 harness + `src/input.rs` の in-src `BoundedRead` proof
+  1 harness）。
+- 生産コードの意味論は変更なし。`src/input.rs` への追加は末尾の
+  `#[cfg(kani)] mod proofs` のみ（`cfg(kani)` 下でしか存在しない
+  検証コード — `cargo kani --tests` が lib target をカバーするため
+  in-src 配置。mutation 注入・完全 revert 済み、`git diff` の
+  意味論差分ゼロで確認）。
+
+### Actions → resulting state（slice 3）
+
+| # | Action (command) | Resulting state |
+| --- | --- | --- |
+| 1 | `mise run test-formal` | `formal_ipc` 7/7 + `formal_transport` 4/4 + `formal_archive` 18/18 + `formal_structured` 35/35 pass・exit 0。記録: `slice3/test-formal.txt` |
+| 2 | `mise run test-formal-kani` | invocation 1（wire/archive）は CBMC 4 並列が WSL2 の 31 GiB を枯渇させ途中 kill（per-harness verdict なし）。invocation 2（structured）は初回 `csv_max_*_gate` が `csv_core::build_dfa` の unwinding assertion で FAILED → bound を 128 + `--no-unwinding-checks`（skeleton byte < 128 のみ到達）に調整後、3/3 harness SUCCESSFUL。記録: `slice3/kani-io-structured.txt`・`slice3/kani-bounded-read.txt` |
+| 3 | mutation 注入: `src/input.rs` `BoundedRead::read` の probe 比較 `remaining == 0` → `remaining <= 1`（inclusive 境界を 1 byte 早く効かせる） | `json_max_bytes_gate` が shrink つき反例 `tail = [], offset = 0`（`limit == len` の丁度 budget 文書が `LimitExceeded` を返す）で FAILED（34 passed / 1 failed）。suite が契約違反を検出できることの実証。記録: `slice3/mutation-fail.txt` |
+| 4 | 変異の完全 revert → `cargo test -p ruviform-io-structured --all-features --test formal_structured` 再実行 | 35/35 green・EXIT=0・`git diff` src/ は `#[cfg(kani)]` 追加のみ（変異持ち越しなし）。記録: `slice3/post-revert-green.txt` |
+| 5 | `mise run fmt-check` / `check-io-structured` / `lint-io-structured` / `test-io-structured` | 全 pass（feature matrix: default・xml・xml+file・all-features の 4 系統。lint は `doc_markdown`・`single_match`・`int_plus_one`・`match_same_arms`・`semicolon` 指摘を修正済みの最終形で clippy `-D warnings` clean） |
+| 6 | `mise exec -- prek run --all-files` | （下部 lane table を参照） |
+
+### Lane / verification results（slice 3）
+
+| Command | OS | Exit | Verdict | 備考 |
+| --- | --- | --- | --- | --- |
+| `mise run test-formal` | Windows x64 | 0 | pass | proptest 7+4+18+35=64 properties 全 pass |
+| `mise run test-formal-kani` | WSL2 Ubuntu x64 | 1 | fail | invocation 1（wire/archive）: CBMC OOM kill・per-harness verdict なし（slice 2 と同じ WSL2 31 GiB 枯渇 — 環境起因）。invocation 2（structured）: 3/3 harness SUCCESSFUL（下記の個別行を参照） |
+| `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured`（structured invocation 単独再実行） | WSL2 Ubuntu x64 | 0 | pass | `bounded_read_budget_gate` 0/532 failed（62.7s）・`csv_max_field_bytes_gate` 0/5812（17.4s）・`csv_max_records_gate` 0/5794（17.5s） — "3 successfully verified harnesses, 0 failures" |
+| `cargo test … formal_structured`（mutant 注入時） | Windows x64 | 101 | fail（期待どおり） | `json_max_bytes_gate` が `tail=[], offset=0` を縮小提示 |
+| `cargo test … formal_structured`（revert 後） | Windows x64 | 0 | pass | 変異なしで緑に復帰 |
+| `mise run fmt-check` | Windows x64 | 0 | pass | |
+| `mise run check-io-structured` | Windows x64 | 0 | pass | `--all-targets` × feature matrix 4 系統（新規 test ターゲット含む） |
+| `mise run lint-io-structured` | Windows x64 | 0 | pass | clippy `-D warnings` clean × matrix |
+| `mise run test-io-structured` | Windows x64 | 0 | pass | パッケージ全テスト × matrix（all-features で structured 129 + formal 35 + doctests） |
+| `mise exec -- prek run --all-files` | Windows x64 | 0 | pass | repo hooks 全量（trailing whitespace の auto-fix 後の再実行で green） |
+
+### Bounds and assumptions（Kani・slice 3）
+
+`docs/specs/formal-verification.md` の「slice 3 structured harness」
+表が正本。要約:
+
+- `bounded_read_budget_gate`（in-src `src/input.rs`）: concrete
+  6 byte input × symbolic `max_bytes:u64`（全値）— delivered byte
+  総量が `min(len, max)` に一致・`Ok(0)` が真の EOF のみ・
+  trip flag ⇔ byte が budget 外に存在・error/EOF とも sticky、を
+  exhaustive に尽きる。
+- `csv_max_records_gate` / `csv_max_field_bytes_gate`（
+  `tests/formal_structured.rs`）: concrete skeleton（`h\nr1\nr2\nr3\n`
+  / `a,bb\n`）× symbolic limit — gate comparison のみ symbolic で、
+  buffer 成長系 option は concrete に抑える（RawVec unwind 回避は
+  slice 1/2 の教訓どおり）。
+
+### Honest notes（slice 3）
+
+- mutation（probe 比較 `== 0` → `<= 1`）を検出したのは
+  `json_max_bytes_gate` のみ — 発火条件は「read() が丁度
+  `remaining == 1` で呼ばれる」ことで、serde_json の逐 byte
+  trailing check は頻繁にその境界に着地するが、yaml/toml/csv/xml
+  の backend は大きな fill で `remaining` を 1 跨いで 0 まで一度に
+  落とすため、この変異は read 粒度の関係でマスクされる。検出能力
+  の差は変異の性質によるもので gate 欠陥ではない — `limit < len`
+  → `LimitExceeded` の本線は全形式で pin 済み（probe を越えて読む
+  必要がある input では backend 非依存）。
+- `max_record_bytes` の実効境界は `r >= m`（terminator 付き record
+  では buffer が丁度満杯でも `OutputFull` が発火 — terminator 処理に
+  出力 headroom が必要）。`max_field_bytes`・`max_fields` の
+  `s > m` / `f > m` と異なり buffer-capacity 由来の半開区間 —
+  spec 側の slice 3 表に実測どおり記録した。
+- JSON の strict-EOF 空白集合は {space, tab, LF, CR} — ASCII 空白の
+  form feed（0x0C）は `TrailingData`。`is_ascii_whitespace` との差は
+  property が実測で検出（seed `tail=[12]` は
+  `formal_structured.proptest-regressions` に保存済み・毎回再生）。
+- in-budget tail byte が probe 発火より先に非 limit error
+  （`Syntax`/`InvalidEncoding`/`Io`）を出し得るのは backend の
+  読み順依存 — そのため各形式の `*_max_bytes_gate` は
+  「in-budget で誤分類し得ない tail」を選んで deterministic に
+  pin し、任意 tail の kind 集合 membership は arbitrary drive に
+  分離した（JSON のみ逐 byte モデルで正確な規則を証明）。

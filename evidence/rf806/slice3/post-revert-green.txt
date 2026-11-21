@@ -1,0 +1,45 @@
+   Compiling ruviform-io-structured v0.1.0 (G:\orca\workspaces\ruviform\rf806-slice3-structured\crates\ruviform-io-structured)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.45s
+     Running tests\formal_structured.rs (target\debug\deps\formal_structured-0ca5be34aa7fd37e.exe)
+
+running 35 tests
+test csv_props::csv_typed_failure_keeps_cursor_aligned ... ok
+test csv_props::csv_dialect_unsupported ... ok
+test json_props::json_max_bytes_gate ... ok
+test json_props::json_trailing_data_gate ... ok
+test toml_props::toml_max_bytes_gate ... ok
+test toml_props::toml_trailing_is_syntax ... ok
+test json_props::json_roundtrip ... ok
+test csv_props::csv_bom_policy ... ok
+test xml_props::xml_attribute_gate ... ok
+test toml_props::toml_roundtrip ... ok
+test csv_props::csv_max_record_bytes_gate ... ok
+test xml_props::xml_depth_gate ... ok
+test xml_props::xml_event_bytes_gate ... ok
+test xml_props::xml_event_count_gate ... ok
+test csv_props::csv_max_field_bytes_gate ... ok
+test xml_props::xml_max_bytes_gate ... ok
+test csv_props::csv_max_fields_gate ... ok
+test xml_props::xml_secure_defaults ... ok
+test csv_props::csv_ragged_is_data_model_unless_flexible ... ok
+test csv_props::csv_max_records_gate ... ok
+test xml_props::xml_stream_alignment ... ok
+test csv_props::csv_field_str_encoding ... ok
+test json_props::json_arbitrary_stream_error_set ... ok
+test csv_props::csv_max_bytes_gate ... ok
+test csv_props::csv_streaming_roundtrip ... ok
+test toml_props::toml_arbitrary_stream_error_set ... ok
+test xml_props::xml_arbitrary_stream_error_set ... ok
+test yaml_props::yaml_max_bytes_gate ... ok
+test yaml_props::yaml_depth_gate ... ok
+test yaml_props::yaml_second_document_is_trailing_data ... ok
+test csv_props::csv_typed_roundtrip ... ok
+test yaml_props::yaml_alias_gate ... ok
+test yaml_props::yaml_roundtrip ... ok
+test csv_props::csv_arbitrary_stream_error_set ... ok
+test yaml_props::yaml_arbitrary_stream_error_set ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+mbx[cache]: 0 hits, 0 misses, 1 not looked up, 2 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 3d 23h unspent across 5658 builds. compounding, in a sense.

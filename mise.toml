@@ -296,17 +296,23 @@ cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- drive --out evidence/rf8
 # archive-parser slice-2 suite covering TAR/ZIP reader
 # ArchiveReadLimits gates, ArchiveErrorKind classification and
 # receipt invariants
-# (crates/ruviform-io-archive/tests/formal_archive.rs). It is a plain
-# `cargo test` lane and runs natively on every host — the 1-command
-# re-run entry for AC#1.
+# (crates/ruviform-io-archive/tests/formal_archive.rs) — plus the
+# structured-document slice-3 suite covering JSON/YAML/TOML/CSV/XML
+# readers, the shared InputLimits/BoundedRead byte budget, stable
+# DocumentErrorKind sets and per-format named limits
+# (crates/ruviform-io-structured/tests/formal_structured.rs — the
+# crate's `default = []` feature set requires --all-features). It is
+# a plain `cargo test` lane and runs natively on every host — the
+# 1-command re-run entry for AC#1.
 [tasks.test-formal]
-description = "Issue #806 D-layer formal lane (manual/opt-in — NOT a CI-required gate): run the wire-codec + archive-parser proptest suites — `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` (rvf.ipc.v1 parse_intent/valid_op/Event::to_json + rvf.uitest.v1 read_frame/write_frame + TAR/ZIP reader limits/error/receipt contracts; runs natively; writes only target/)"
+description = "Issue #806 D-layer formal lane (manual/opt-in — NOT a CI-required gate): run the wire-codec + archive-parser + structured-document proptest suites — `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` (rvf.ipc.v1 parse_intent/valid_op/Event::to_json + rvf.uitest.v1 read_frame/write_frame + TAR/ZIP reader limits/error/receipt contracts + JSON/YAML/TOML/CSV/XML reader limits/error-kind contracts; runs natively; writes only target/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 cargo test --locked -p ruviform-ui --test formal_ipc
 cargo test --locked -p ruviform-ui-test --test formal_transport
 cargo test --locked -p ruviform-io-archive --test formal_archive
+cargo test --locked -p ruviform-io-structured --all-features --test formal_structured
 '''
 
 # test-formal-kani is the Issue #806 D-layer bounded-proof lane
@@ -317,13 +323,24 @@ cargo test --locked -p ruviform-io-archive --test formal_archive
 # (Kani cannot run on native Windows). In WSL the repository is
 # reached via /mnt/<drive> but the target dir is forced onto the
 # WSL native filesystem (/mnt builds are too slow; the Windows-side
-# cargo output dir is untouched). No usable environment reports
-# verdict `not_run` + reason + provision guidance and exits 0 — a
-# missing environment is not a lane failure. Exit 1 is reserved for
-# a real verification failure (fail-closed). Provision runbook:
+# cargo output dir is untouched). Slice 3 (structured documents) is
+# a separate `cargo kani` invocation with `--all-features`: the
+# crate's `default = []` feature set means the JSON/YAML/TOML/CSV/XML
+# proofs only compile with features on — including the in-src
+# `BoundedRead` proof in `src/input.rs`. The structured invocation
+# passes `--no-unwinding-checks`: the CSV harnesses unwind
+# `csv_core`'s `build_dfa` byte-table loop to 128 (skeleton bytes are
+# all < 128, so truncated rows are unreachable); full 256-row
+# coverage roughly doubles the formula beyond the reference WSL2
+# environment. The verdict aggregates both
+# invocations: pass only when every harness verifies; fail if any
+# fails. No usable environment reports verdict `not_run` + reason +
+# provision guidance and exits 0 — a missing environment is not a
+# lane failure. Exit 1 is reserved for a real verification failure
+# (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs + tests/formal_archive.rs (WSL target dir on the native FS, never /mnt); honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs + tests/formal_archive.rs, plus a separate `--all-features` invocation for tests/formal_structured.rs + the in-src BoundedRead proof (WSL target dir on the native FS, never /mnt); verdict aggregates both invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -335,7 +352,10 @@ verdict() {
 # 1) native cargo kani (Linux/macOS hosts, or a Windows host that
 #    already runs kani natively)
 if cargo kani --version >/dev/null 2>&1; then
-  if cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive; then
+  rc=0
+  cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive || rc=1
+  cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured || rc=1
+  if [ "$rc" -eq 0 ]; then
     verdict pass "native cargo kani verification succeeded"
     exit 0
   else
@@ -362,7 +382,10 @@ if command -v wsl.exe >/dev/null 2>&1; then
       verdict not_run "environment_blocked: WSL distro $DISTRO cannot map repo path $WIN_PWD (run the lane from a /mnt/<drive>-visible path)"
       exit 0
     fi
-    if wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive"; then
+    rc=0
+    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive" || rc=1
+    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured" || rc=1
+    if [ "$rc" -eq 0 ]; then
       verdict pass "WSL2 ($DISTRO) cargo kani verification succeeded"
       exit 0
     else

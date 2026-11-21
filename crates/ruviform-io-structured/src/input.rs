@@ -139,3 +139,68 @@ pub(crate) fn read_to_string(
         )
     })
 }
+
+/// Kani proofs of the `BoundedRead` contract — the shared byte-budget
+/// gate every format reader drives through. `BoundedRead` is
+/// `pub(crate)`, so the harness lives in-source; `cargo kani --tests`
+/// covers lib-target proofs (run via `mise run test-formal-kani`).
+///
+/// Slice-1 lesson applied: no symbolic streams — a fixed 6-byte input
+/// plus a symbolic budget keeps the model tiny while still covering
+/// every branch of the gate (in-budget, boundary, probe, sticky).
+#[cfg(kani)]
+mod proofs {
+    use super::BoundedRead;
+    use std::io::Read;
+
+    /// Delivered bytes never exceed `min(len, max_bytes)`; `Ok(0)` is
+    /// reported only when everything deliverable was delivered (a byte
+    /// past the budget can never masquerade as EOF); the trip flag is
+    /// set iff the stream held a byte beyond the budget; and both the
+    /// honest EOF and the budget error are sticky across reads.
+    #[kani::proof]
+    #[kani::unwind(16)]
+    fn bounded_read_budget_gate() {
+        const INPUT: &[u8] = b"abcdef"; // 6 bytes
+        let max_bytes: u64 = kani::any();
+        let want = usize::try_from((INPUT.len() as u64).min(max_bytes)).unwrap_or(usize::MAX);
+        let mut bounded = BoundedRead::new(INPUT, max_bytes);
+        let mut buf = [0u8; 2];
+        let mut delivered = 0usize;
+        let mut terminal = false;
+        for _ in 0..8 {
+            match bounded.read(&mut buf) {
+                Ok(0) => {
+                    // Honest EOF: all `want` bytes were delivered, the
+                    // flag stayed clear, and the next read is `Ok(0)`
+                    // again.
+                    assert!(delivered == want);
+                    assert!(!bounded.was_limit_exceeded());
+                    assert!(bounded.read(&mut buf).unwrap_or(1) == 0);
+                    terminal = true;
+                    break;
+                }
+                Ok(n) => {
+                    assert!(n <= buf.len());
+                    delivered += n;
+                    assert!(delivered <= want);
+                }
+                Err(_) => {
+                    // Budget trip: a byte lay past the budget, the flag
+                    // is set, and the next read errors again.
+                    assert!((INPUT.len() as u64) > max_bytes);
+                    assert!(delivered == want);
+                    assert!(bounded.was_limit_exceeded());
+                    assert!(bounded.read(&mut buf).is_err());
+                    terminal = true;
+                    break;
+                }
+            }
+        }
+        // The stream always terminates: `want <= 6` bytes at 2 per read
+        // plus one probe is well inside the loop bound.
+        assert!(terminal);
+        assert!(delivered == want);
+        assert!(bounded.was_limit_exceeded() == ((INPUT.len() as u64) > max_bytes));
+    }
+}
