@@ -330,3 +330,4 @@ Directory: `docs/test-specs`
 | TESTSPEC-034Yf0GO1eY84kAmbq6BBv | Issue #532 dcomp-pixel test spec | approved | [issue-532-dcomp-pixel.md](./issue-532-dcomp-pixel.md) |
 | TSPEC-034ZccDcompBandEsc01 | Issue #532 dcomp-band-escape — residual class 確定記録（WS_EX_LAYERED 適用不能の確定診断） | approved | [issue-532-dcomp-band-escape.md](./issue-532-dcomp-band-escape.md) |
 | TSPEC-034ZccDcompChildInv01 | Issue #532 dcomp-child-inventory — residual class 確定記録（WS_EX_LAYERED 適用不能の確定診断） | approved | [issue-532-dcomp-child-inventory.md](./issue-532-dcomp-child-inventory.md) |
+| TSPEC-rf857PixelOcclusion | Issue #857 pixel-occlusion — real-dcomp-pixel lane 自身 top-level window 遮蔽（class B）検証仕様 | draft | [issue-857-pixel-occlusion.md](./issue-857-pixel-occlusion.md) |
