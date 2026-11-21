@@ -1,0 +1,55 @@
+# rf767 observation aggregate — 30 iters x 2 binaries (clap+vst3) = 60 runs
+# env: RUVIFORM_L1_PROBE=1, binaries staged at evidence/rf767/bin/
+# generated: 2026-11-21
+
+## drop attribution (rf767-probe lines)
+   1884 slot-busy
+total drops: 1885
+
+## per-call counter lines (rf767)
+block calls: 9540
+pump calls: 2760
+calls with drop=1: 1884
+calls with pt=1: 4603
+
+## failed_obs distribution
+  12299 failed_obs=0
+
+## results_dropped distribution
+  12297 results_dropped=0
+
+## drop seq distribution (top 30)
+    107 seq=0x8000000000000003
+    101 seq=0x8000000000000004
+     90 seq=0x8000000000000005
+     84 seq=0x8000000000000006
+     81 seq=0x8000000000000009
+     81 seq=0x8000000000000008
+     79 seq=0x800000000000000a
+     65 seq=0x800000000000000b
+     64 seq=0x8000000000000007
+     62 seq=0x8000000000000013
+     62 seq=0x800000000000000f
+     57 seq=0x8000000000000015
+     51 seq=0x800000000000000e
+     49 seq=0x8000000000000012
+     48 seq=0x8000000000000018
+     48 seq=0x8000000000000014
+     48 seq=0x8000000000000011
+     48 seq=0x800000000000000d
+     45 seq=0x8000000000000010
+     43 seq=0x800000000000000c
+     40 seq=0x8000000000000019
+     38 seq=0x8000000000000017
+     37 seq=0x800000000000001a
+     35 seq=0x800000000000001e
+     35 seq=0x800000000000001d
+     35 seq=0x8000000000000016
+     29 seq=0x8000000000000023
+     25 seq=0x800000000000002b
+     25 seq=0x800000000000001f
+     23 seq=0x8000000000000028
+
+## runs with drops / total
+60
+60
