@@ -195,7 +195,10 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-ime",
         scenario: SCENARIO,
-        required: &[ScenarioCapability::Ime],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::Ime,
+        ],
     },
     RealCatalogRow {
         case: "real-window-close",

@@ -79,7 +79,12 @@
 //! | `real-window-dpi`       | `RealOs`    | `Pass`/`Fail`/`NotRun` — live `window_geometry` +   |
 //! |                         |             | lifecycle `Resized`/`ScaleFactorChanged` 整合を      |
 //! |                         |             | 観測判定（DPI 変更経路は未駆動 — 観測のみ）           |
-//! | `real-window-ime`       | `RealOs`    | `Unsupported` — `Ime` capability は未 claim（#389）  |
+//! | `real-window-ime`       | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — docked        |
+//! |                         |             | `test_editor` child HWND へ IMM32 で IME              |
+//! |                         |             | composition+commit を OS-level 駆動し、caller 側    |
+//! |                         |             | subclass が観測した `WM_IME_*` 配達列（非画素       |
+//! |                         |             | oracle）で判定。IME 不在/無効は `NotRun`+           |
+//! |                         |             | `environment_blocked`（#389）                        |
 //! | `real-window-close`     | `RealOs`    | `Pass`/`Fail`/`NotRun` — armed `Veto`/`Defer`→        |
 //! |                         |             | `Approve`/既定 `Approve` の `CloseRequested`→         |
 //! |                         |             | `Destroyed` を B/C window で実観測（A は sentinel）   |
@@ -153,6 +158,7 @@ use ruviform_ui::native_slot::{
 };
 use ruviform_ui::view::{AttachEpochAllocator, ComponentKey, ComponentSnapshot, ViewHost};
 use ruviform_ui::{CloseDecision, LogicalPosition, WindowId, WindowSpec};
+use ruviform_ui_gpui::os_ime::{self, ImeDelivery, OsImeOutcome};
 use ruviform_ui_gpui::os_input::{OsInputOutcome, OsKey, PreflightScope};
 use ruviform_ui_gpui::{
     OsWindowGeometry, RealOsGuiTest, RealWindowMount, RealWindowOptions, ViewMount,
@@ -729,8 +735,11 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 29] {
         ScenarioEntry {
             case: "real-window-ime",
             scenario: SCENARIO,
-            required: &[ScenarioCapability::Ime],
-            spec_extras: real_window_extras,
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::Ime,
+            ],
+            spec_extras: editor_attach_extras,
             run: real_window_ime_case,
         },
         ScenarioEntry {
@@ -9593,20 +9602,308 @@ fn real_window_dpi_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> S
     finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
-/// `real-window-ime`: `Ime` is never claimed by the adapter's
-/// `supported_capabilities()` (IME composition is Issue #389
-/// scope), so the capability preflight reports `Unsupported`
-/// before the body runs. The body stays as a defensive honest
-/// `NotRun` — unreachable today, correct if the vocabulary ever
-/// changes.
+/// `real-window-ime` (Issue #389): `NativePluginDock` + `Ime` must
+/// both be claimed for the body to run — the case needs the real
+/// dock chain to produce the editor child HWND and the IMM32 backend
+/// to drive it. The body attaches `test_editor` under the real
+/// lease, probes IME presence on the caller thread, drives a real
+/// composition + commit through `os_ime` (OS-level, never semantic
+/// dispatch), and judges delivery through the subclass-recorded
+/// `WM_IME_*` message log — the non-pixel oracle a real IME-aware
+/// editor window would consume.
 fn real_window_ime_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        Ok(not_run(
-            "Ime capability is not provided by the adapter — IME \
-             composition judgment stays deferred (Issue #389)",
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(editor_op_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+            &EditorOpIdentity {
+                pass_detail: "OS-level IME composition + commit driven into \
+                              the docked test_editor child HWND through \
+                              IMM32 (SetFocus → ImmSetCompositionStringW → \
+                              ImmNotifyIME(CPS_COMPLETE)); the caller-side \
+                              subclass oracle observed the delivered \
+                              WM_IME_STARTCOMPOSITION → \
+                              WM_IME_COMPOSITION(GCS_RESULTSTR) → \
+                              WM_IME_ENDCOMPOSITION sequence with committed \
+                              text, the session stayed Attached, events \
+                              [Attached{Docked}, Closed], and close \
+                              convergence verified — no pixels",
+                evidence: "ime:composition-delivered:real-editor",
+            },
+            observe_editor_ime_lifecycle,
         ))
     });
-    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// The composition text the case drives — hiragana exercises the
+/// real IME pipeline (composition → conversion → commit). The
+/// committed result is conversion-dependent (MS-IME may convert
+/// `かな`), so the oracle asserts *delivery* — the `WM_IME_*`
+/// sequence plus committed-text flow — never an exact codepoint
+/// match.
+const IME_PROBE_TEXT: &str = "かな";
+
+/// Pump budget for the delivered-message drain — posted `WM_IME_*`
+/// arrive synchronously with the drive, so this is only a safety
+/// bound, not a wait-the-OS budget.
+const IME_DRAIN_BUDGET: Duration = Duration::from_millis(500);
+
+/// Retained-message bound — a pathological flood stays finite.
+const IME_LOG_LIMIT: usize = 128;
+
+/// Maps an [`OsImeOutcome`] to its step verdict tag — the lane
+/// verdict vocabulary mirrored honestly (`Injected` is the only
+/// drive-accepted landing; `EnvironmentBlocked`/`NotRun` stay
+/// distinct, never collapsed into `fail`). `#[non_exhaustive]`
+/// variants land as `not_run`, never a neutral tag.
+fn ime_outcome_tag(outcome: &OsImeOutcome) -> (&'static str, String) {
+    match outcome {
+        OsImeOutcome::Injected { detail, .. } => ("pass", detail.clone()),
+        OsImeOutcome::Unsupported { reason } => ("unsupported", reason.clone()),
+        OsImeOutcome::EnvironmentBlocked { detail } => ("environment_blocked", detail.clone()),
+        OsImeOutcome::NotRun { reason } => ("not_run", reason.clone()),
+        _ => (
+            "not_run",
+            "unlisted OsImeOutcome variant — drive effect cannot be proven".to_string(),
+        ),
+    }
+}
+
+/// The `ime_delivery` step row's `delivery` payload — the analysed
+/// flags plus every recorded message (name + params + app-side
+/// string reads), self-describing for JSONL evidence.
+fn delivery_json(delivery: &ImeDelivery) -> Value {
+    json!({
+        "observed": delivery.observed,
+        "commit_confirmed": delivery.commit_confirmed(),
+        "start_composition": delivery.start_composition,
+        "result_composition": delivery.result_composition,
+        "end_composition": delivery.end_composition,
+        "committed_chars": delivery.committed_chars,
+        "committed_text": delivery.committed_text,
+        "result_text": delivery.result_text,
+        "composition_text": delivery.composition_text,
+        "messages": delivery
+            .messages
+            .iter()
+            .map(|msg| json!({
+                "name": os_ime::message_name(msg.message),
+                "id": msg.message,
+                "wparam": format!("{:#x}", msg.wparam),
+                "lparam": format!("{:#x}", msg.lparam),
+                "text": msg.text,
+                "comp_str": msg.comp_str,
+                "result_str": msg.result_str,
+            }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+/// `real-window-ime` post-open observation: child-HWND attach
+/// contract → `os_ime::preflight` (IME installed/enabled on the
+/// caller thread — `effective == false` is `environment_blocked`)
+/// → `os_ime::drive_composition` on the docked `test_editor` child
+/// HWND → `os_ime::collect_ime_messages` records which `WM_IME_*`/
+/// `WM_CHAR` the OS actually delivered through a temporary
+/// caller-side `GWLP_WNDPROC` subclass — the non-pixel delivery
+/// oracle. An accepted drive whose delivered log lacks the commit
+/// sequence is a contract failure (`Fail`), never `NotRun`; an
+/// oracle that could not run at all leaves `effect_confirmed` false
+/// on an otherwise-verified observation (accepted-but-unverifiable →
+/// `NotRun`). Session state and close convergence run the unchanged
+/// `[Attached{Docked}, Closed]` contract — an OS-level drive mints
+/// no session events.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
+fn observe_editor_ime_lifecycle(
+    _gui: &RealOsGuiTest,
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+
+    let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    let mut effect_ok = true;
+    // Whether extras stamp `observed: "environment_blocked"` — only
+    // environmental causes (preflight ineffective, drive refused for
+    // an environment reason); a plain unmet precondition (`NotRun`)
+    // stays unmarked.
+    let mut env_blocked = false;
+    let mut delivery_extra: Option<Value> = None;
+    let target = observation
+        .children
+        .iter()
+        .find(|child| child.attach.parent_matches)
+        .or_else(|| observation.children.first());
+    if let Some(child) = target.filter(|_| observation.supported) {
+        let preflight = os_ime::preflight(child.hwnd);
+        steps.push(json!({
+            "step": "ime_preflight",
+            "verdict": if preflight.effective { "pass" } else { "environment_blocked" },
+            "target_hwnd": child.hwnd,
+            "checks": preflight
+                .checks
+                .iter()
+                .map(|check| json!({
+                    "family": check.family,
+                    "effective": check.effective,
+                    "detail": check.detail,
+                }))
+                .collect::<Vec<_>>(),
+        }));
+        if preflight.effective {
+            // The tap wraps the drive — `WM_IME_*` arrive
+            // synchronously into the child HWND's WndProc during the
+            // IMM32 calls, so a post-drive oracle would miss the
+            // envelope and only see queued `WM_CHAR`s.
+            let (outcome, delivery) = os_ime::drive_composition_observed(
+                child.hwnd,
+                IME_PROBE_TEXT,
+                IME_DRAIN_BUDGET,
+                IME_LOG_LIMIT,
+            );
+            let (tag, detail) = ime_outcome_tag(&outcome);
+            steps.push(json!({
+                "step": "ime_drive",
+                "verdict": tag,
+                "detail": detail,
+                "target_hwnd": child.hwnd,
+                "text": IME_PROBE_TEXT,
+            }));
+            if delivery.observed {
+                delivery_extra = Some(delivery_json(&delivery));
+            }
+            match outcome {
+                OsImeOutcome::Injected { .. } => {
+                    landing = OpLanding::Accepted;
+                    if !delivery.observed {
+                        steps.push(json!({
+                            "step": "ime_delivery",
+                            "verdict": "not_run",
+                            "detail": "delivery oracle could not run (no \
+                                       tap/pump on this thread) — the \
+                                       accepted drive's effect is \
+                                       unobservable",
+                        }));
+                    } else if delivery.commit_confirmed() {
+                        effect_confirmed = true;
+                        steps.push(json!({
+                            "step": "ime_delivery",
+                            "verdict": "pass",
+                        }));
+                    } else {
+                        record_obs_fail(
+                            steps,
+                            &mut failure,
+                            "ime_delivery",
+                            format!(
+                                "drive accepted but the delivered-message \
+                                 log lacks the commit sequence \
+                                 (start={}, result_composition={}, end={}, \
+                                 committed_chars={}, result_text={:?})",
+                                delivery.start_composition,
+                                delivery.result_composition,
+                                delivery.end_composition,
+                                delivery.committed_chars,
+                                delivery.result_text,
+                            ),
+                        );
+                        effect_ok = false;
+                    }
+                }
+                OsImeOutcome::EnvironmentBlocked { .. } => {
+                    landing = OpLanding::Blocked;
+                    env_blocked = true;
+                }
+                OsImeOutcome::NotRun { .. } => {
+                    landing = OpLanding::Blocked;
+                }
+                _ => {
+                    // `Unsupported`/`#[non_exhaustive]` landings: on
+                    // Windows the IMM32 backend always exists, so an
+                    // unlisted/impossible landing is fail-closed.
+                    landing = OpLanding::Other;
+                }
+            }
+        } else {
+            landing = OpLanding::Blocked;
+            env_blocked = true;
+        }
+    }
+
+    // The OS-level drive mints no session events — the session must
+    // stay `Attached` regardless of the drive landing.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let attached = sessions
+            .session(session_id)
+            .is_some_and(|session| matches!(session.state(), EditorSessionState::Attached { .. }));
+        if attached {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": "Attached",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                "session did not stay Attached after the IME drive",
+            );
+            state_ok = false;
+        }
+    }
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+
+    let mut extras = child_extras(container, &observation, &rendered);
+    extras.insert("ime_text".to_string(), json!(IME_PROBE_TEXT));
+    if let Some(delivery) = delivery_extra {
+        extras.insert("ime_delivery".to_string(), delivery);
+    }
+    if env_blocked {
+        extras.insert("observed".to_string(), json!("environment_blocked"));
+    }
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(extras),
+    }
 }
 
 /// Bounded wait for `window`'s lifecycle `event` count to reach
@@ -9992,6 +10289,12 @@ enum OpLanding {
     /// The op returned `Ok` — an `effect_confirmed` observation then
     /// gates `Pass`; without it the honest verdict stays `NotRun`.
     Accepted,
+    /// The OS-level drive could not run to an observable effect —
+    /// the environment blocked it (no IME, refused composition) or a
+    /// run precondition was unmet. Maps to `NotRun`; the
+    /// `environment_blocked` marker rides in `extras` when the cause
+    /// is environmental.
+    Blocked,
     /// Any other landing — a contract error or a vanished session;
     /// `EditorOpVerification::failure` carries the detail.
     Other,
@@ -11440,6 +11743,23 @@ fn editor_op_body(
                      event check agreed, but no oracle confirms the \
                      op's effect took place — judgment deferred until \
                      a session/HWND oracle lands",
+                )
+            }
+            Some(verification)
+                if verification.verified && verification.landing == OpLanding::Blocked =>
+            {
+                // The OS-level drive could not run to an observable
+                // effect — an environment diagnosis (no IME
+                // installed/enabled, a refused programmatic
+                // composition) or an unmet run precondition. Honest
+                // `NotRun`: extras carry `observed:
+                // "environment_blocked"` when the cause is
+                // environmental; a plain precondition carries no
+                // marker.
+                not_run(
+                    "the OS-level op could not run on this session — the \
+                     environment or a run precondition blocked it (see \
+                     steps/extras for the diagnosis)",
                 )
             }
             Some(verification) => fail(format!(

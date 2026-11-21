@@ -91,6 +91,7 @@ use ruviform_ui_test::scenario::{
 };
 
 use super::capture::OsWindowGeometry;
+use super::os_ime;
 use super::os_input::{
     self, OsInputOutcome, OsKey, PreflightCheck, PreflightReport, PreflightScope,
 };
@@ -899,9 +900,13 @@ enum Aim {
 /// Windows only in this slice (Issue #313); the claim records backend
 /// *presence* — a blocked environment stays claimed and each `os_*`
 /// op reports `EnvironmentBlocked` through the preflight gate instead.
-/// `NativePluginDock` requires a surface backend that mints real
-/// native container parents — Windows child HWNDs only, never
-/// `gpui-test` (Issue #631).
+/// `Ime` follows the same presence convention through
+/// [`os_ime::supported`] — Win32 IMM32 composition drive + the
+/// `WM_IME_*` delivery oracle (Issue #389); a session without an
+/// installed/enabled IME reports `environment_blocked` per-case,
+/// never a fabricated pass. `NativePluginDock` requires a surface
+/// backend that mints real native container parents — Windows child
+/// HWNDs only, never `gpui-test` (Issue #631).
 fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     let mut capabilities = BTreeSet::from([
         ScenarioCapability::SemanticAction,
@@ -912,6 +917,9 @@ fn supported_capabilities() -> BTreeSet<ScenarioCapability> {
     }
     if os_input::supported() {
         capabilities.insert(ScenarioCapability::RealOsPointerOrKeyboard);
+    }
+    if os_ime::supported() {
+        capabilities.insert(ScenarioCapability::Ime);
     }
     if native_dock_backend_available() {
         capabilities.insert(ScenarioCapability::NativePluginDock);
@@ -1721,7 +1729,9 @@ mod tests {
             os_input::supported()
         );
         assert!(!caps.contains(&ScenarioCapability::SimulatedPointerOrKeyboard));
-        assert!(!caps.contains(&ScenarioCapability::Ime));
+        // OS-level IME composition is claimed exactly where `os_ime`
+        // has an IMM32 backend — Windows only in this slice (#389).
+        assert_eq!(caps.contains(&ScenarioCapability::Ime), os_ime::supported());
         // NativePluginDock tracks the surface backend's ability to
         // mint a real container parent — Windows child HWNDs only,
         // never under `gpui-test` (Issue #631).
