@@ -79,8 +79,14 @@ distinct from the `ruviform-plugin-vst3` adapter fixture's `"Gain"` /
 
 ## `test_editor` semantics
 
-- Parameterless pass-through processor — the class exists to carry
-  the suite's `IPlugView` editor fixture, not to exercise DSP.
+- Pass-through processor carrying the shared stepped `Fault`
+  parameter — `test_fault`'s in-band armed-fault law verbatim
+  (`fault.rs` is the single source of truth): unarmed (`none`) it
+  is pure pass-through, and a `ParamValue` event arms
+  `abort`/`exit`/`hang`/`error`/`rt_alloc`/`bad_time`/`invalid`
+  inside the arming block's `process()` (Issue #885). The class
+  exists to carry the suite's `IPlugView` editor fixture and, now,
+  the editor-session crash/hang fault oracle.
 - `createView("editor")` returns an owned `IPlugView`; every other
   view name returns null. The view reports a fixed 640x480 size,
   refuses resize (`canResize` → `kResultFalse`, symmetric with the

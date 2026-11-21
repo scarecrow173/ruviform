@@ -221,7 +221,9 @@ impl IPluginFactoryTrait for TestGainFactory {
             TestEditorComponent::CID => {
                 ComWrapper::new(TestEditorComponent::new()).to_com_ptr::<FUnknown>()
             }
-            EDITOR_CONTROLLER_CID => ComWrapper::new(TestEditorController).to_com_ptr::<FUnknown>(),
+            EDITOR_CONTROLLER_CID => {
+                ComWrapper::new(TestEditorController::new()).to_com_ptr::<FUnknown>()
+            }
             TestStatefulComponent::CID => {
                 ComWrapper::new(TestStatefulComponent::new()).to_com_ptr::<FUnknown>()
             }

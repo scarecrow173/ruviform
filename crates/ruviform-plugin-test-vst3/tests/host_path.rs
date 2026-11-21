@@ -448,26 +448,31 @@ fn fault_invalid_mode_fills_nan_outputs() {
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
 }
 
-/// `test_editor`'s parameter surface through the production path:
-/// its distributed controller declares **zero** parameters — the
-/// surface the component's sentinel `param_id` mirrors by rejecting
-/// every `IParamValueQueue` point.
+/// `test_editor`'s parameter surface through the production path
+/// (Issue #885): its distributed controller declares the shared
+/// stepped `Fault` parameter — plain range `[0.0, 8.0]`, default
+/// `0.0` (`none`) — the same descriptor `test_fault` reports.
 #[test]
-fn editor_reports_no_params() {
+fn editor_reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
     assert_eq!(factories.len(), 7);
     let plugin = factories[2].create();
-    assert!(
-        plugin.params().is_empty(),
-        "test_editor exposes no parameters"
-    );
+    let params = plugin.params();
+    assert_eq!(params.len(), 1, "test_editor exposes exactly one parameter");
+    let fault = params[0];
+    assert_eq!(fault.id.0, 0);
+    assert_eq!(fault.name, "Fault");
+    assert_eq!(fault.min_value, 0.0);
+    assert_eq!(fault.max_value, 8.0);
+    assert_eq!(fault.default_value, 0.0);
 }
 
-/// `test_editor` audio through the production path: a parameterless
-/// pass-through — `out == in` bitwise — and a foreign `ParamValue`
-/// event (which the class cannot produce) is dropped by the
-/// component's queue filter, changing nothing.
+/// `test_editor` audio through the production path: unarmed the
+/// class is pure pass-through — `out == in` bitwise — and a
+/// `ParamValue` event on a foreign parameter id (anything but the
+/// `Fault` id `0`) is dropped by the component's `wanted` queue
+/// filter, arming nothing and changing nothing.
 #[test]
 fn editor_processes_audio_as_pass_through() {
     let mut plugin = prepared_editor_plugin();
@@ -475,11 +480,53 @@ fn editor_processes_audio_as_pass_through() {
     let events = [Event::new(
         0,
         EventKind::ParamValue(ParamEvent {
-            param_id: ParamId(0),
+            param_id: ParamId(1),
             value: ParamValue::new(0.75).unwrap(),
         }),
     )];
     let (result, [left, right]) = drive_block(&mut *plugin, &events);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_editor` `error` mode through the real ABI (Issue #885):
+/// normalized `0.5` → plain `4.0` — the `Fault` event passes the
+/// component's `wanted` filter, arms inside the block's `process()`,
+/// and the plugin returns `kResultFalse`, which the production
+/// bridge reports as `ProcessStatus::Error` — a defined rejection,
+/// not a crash. The instance stays alive: a follow-up `none` event
+/// (normalized `0.0`) restores pass-through.
+#[test]
+fn editor_fault_error_mode_is_defined_rejection() {
+    let mut plugin = prepared_editor_plugin();
+
+    let error_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.5).unwrap(),
+        }),
+    )];
+    let (result, _out) = drive_block(&mut *plugin, &error_events);
+    assert_eq!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Error,
+        "armed error mode must surface as a defined process error"
+    );
+
+    // Disarm: normalized 0.0 → plain 0.0 → mode `none`.
+    let none_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.0).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &none_events);
     assert!(matches!(
         result.status,
         ruviform_plugin_core::ProcessStatus::Continue
