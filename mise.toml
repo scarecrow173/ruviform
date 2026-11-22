@@ -1320,6 +1320,44 @@ run = "cargo test -p ruviform-midi-device --test loopback -- --ignored --test-th
 description = "Run the `#[ignore]`-gated OS-endpoint wiring legs (`-p ruviform-audio-test --test os_endpoint -- --ignored`) — requires a provisioned virtual audio endpoint pair (VB-CABLE/VAC family) and/or MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
 run = "cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1"
 
+# OS-endpoint MIDI e2e lane (Issue #253 virtual-first slice — lane
+# integration follow-up): the `#[ignore]`-gated fail-closed verifier
+# in `crates/ruviform-plugin-test-vst3/tests/
+# os_endpoint_midi_e2e.rs` drives the production WinMM backend →
+# bidirectional name-match loopback-style pair → `InputTx::pump` →
+# `InputStage` → `attach` → `PluginNode` → typed `GraphRuntime` →
+# out-of-process real-ABI VST3 `test_instrument` chain end-to-end,
+# so it needs a provisioned virtual MIDI loopback pair (loopMIDI /
+# Windows MIDI Services loopback) AND both fixture artifacts — the
+# crate's own cdylib (`crate-type = ["cdylib", "rlib"]`) plus the
+# `ruviform-plugin-test-vst3-l1-runner` runner binary
+# (`required-features = ["l1-runner"]`). Like `test-l1-real-plugin`
+# the lane builds those artifacts first: their absence is an
+# `assert!` failure (Fail), not a `NotRun` (test-spec R2). This
+# task is the only canonical entry point for the test — `#![cfg(
+# feature = "l1-runner")]` + `#[ignore]` + `required-features`
+# keep it out of default `cargo test`, and no other lane collects
+# it (`test-midi-virtual-endpoint` selects `--test loopback` in a
+# different crate; `test-l1-real-plugin` selects only its own named
+# `--test` targets). With no pair provisioned the verifier prints
+# `verdict: NotRun — NOT_PROVISIONED` and exits honestly
+# (fail-closed, never a Pass — the name match is a loopback
+# candidate, not a `virtual-os-endpoint` claim). Provisioning-
+# dependent manual lane: never in CI; run records live under
+# `evidence/rf253/`. The canonical `run` carries no `--nocapture`
+# — verdict lines sit inside libtest capture, so verdict harvest
+# uses the auxiliary direct cargo invocation recorded in the
+# evidence. `--test-threads=1` serializes real port opens like the
+# other virtual-endpoint lanes. Lint coverage needs no dedicated
+# lane: `lint-l1-real-plugin` (`cargo clippy --all-targets
+# --features …/l1-runner`) already lints this test target.
+[tasks.test-os-endpoint-midi-e2e]
+description = "Build the test-fixture cdylib + `l1-runner` runner bin, then run the `#[ignore]`-gated OS-endpoint MIDI e2e verifier (`-p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored`) — requires a provisioned virtual MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
+run = [
+  "cargo build -p ruviform-plugin-test-vst3 --features l1-runner",
+  "cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1",
+]
+
 # RF-SCRIPT-01 PoC（Issue #559）— poc/script-coexist は `[workspace]` を持つ
 # 独立 workspace のため、ルートの `check`/`lint`/`test`（`-p <package>`）
 # では対象にできない。poc/ui・poc/plugin-gui と同じ隔離 PoC 先例に従い、
