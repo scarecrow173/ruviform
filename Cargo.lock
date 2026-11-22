@@ -6845,6 +6845,7 @@ dependencies = [
 name = "ruviform-io-wav"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "ruviform-audio-core",
  "ruviform-io-file",
  "ruviform-io-symphonia",

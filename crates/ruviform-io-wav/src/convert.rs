@@ -117,3 +117,104 @@ mod tests {
         assert_eq!(bytes(SampleFormat::F32, f32::NAN), f32::NAN.to_le_bytes());
     }
 }
+
+/// Kani proof of the documented conversion policy — `write_sample` is
+/// `pub(crate)`, so the harness lives in-source; `cargo kani --tests`
+/// covers lib-target proofs (run via `mise run test-formal-kani`).
+///
+/// Slice-1 lesson applied: symbolic scalars (`value`, a format
+/// selector) on a concrete empty sink — no symbolic containers, no
+/// `format!` on any path. Verified on the slice-4 WSL2 box at
+/// `unwind(16)` — see `evidence/rf806/slice4/`.
+#[cfg(kani)]
+mod proofs {
+    use super::*;
+
+    /// For a symbolic `f32` and every `SampleFormat`: wire formats
+    /// emit exactly `bits_per_sample / 8` little-endian bytes that
+    /// satisfy the documented policy (`NaN` → silence code point,
+    /// `>= 1.0` → positive full scale, `<= -1.0` → negative full
+    /// scale, `F32` bit-verbatim); formats outside the wire set emit
+    /// nothing.
+    #[kani::proof]
+    #[kani::unwind(16)]
+    fn write_sample_documented_policy() {
+        let sel: u8 = kani::any();
+        let format = match sel % 10 {
+            0 => SampleFormat::F32,
+            1 => SampleFormat::F64,
+            2 => SampleFormat::U8,
+            3 => SampleFormat::S8,
+            4 => SampleFormat::U16,
+            5 => SampleFormat::S16,
+            6 => SampleFormat::U24,
+            7 => SampleFormat::S24,
+            8 => SampleFormat::U32,
+            _ => SampleFormat::S32,
+        };
+        let value: f32 = kani::any();
+        let mut out = Vec::with_capacity(4);
+        write_sample(&mut out, format, value);
+        match format {
+            SampleFormat::U8 => {
+                assert!(out.len() == 1);
+                if value.is_nan() {
+                    assert!(out[0] == 128);
+                }
+                if value >= 1.0 {
+                    assert!(out[0] == 255);
+                }
+                if value <= -1.0 {
+                    assert!(out[0] == 0);
+                }
+            }
+            SampleFormat::S16 => {
+                assert!(out.len() == 2);
+                let s = i16::from_le_bytes([out[0], out[1]]);
+                if value.is_nan() {
+                    assert!(s == 0);
+                }
+                if value >= 1.0 {
+                    assert!(s == i16::MAX);
+                }
+                if value <= -1.0 {
+                    assert!(s == i16::MIN);
+                }
+            }
+            SampleFormat::S24 => {
+                assert!(out.len() == 3);
+                let sign = if out[2] & 0x80 == 0 { 0 } else { 0xFF };
+                let s = i32::from_le_bytes([out[0], out[1], out[2], sign]);
+                if value.is_nan() {
+                    assert!(s == 0);
+                }
+                if value >= 1.0 {
+                    assert!(s == 8_388_607);
+                }
+                if value <= -1.0 {
+                    assert!(s == -8_388_608);
+                }
+            }
+            SampleFormat::S32 => {
+                assert!(out.len() == 4);
+                let s = i32::from_le_bytes([out[0], out[1], out[2], out[3]]);
+                if value.is_nan() {
+                    assert!(s == 0);
+                }
+                if value >= 1.0 {
+                    assert!(s == i32::MAX);
+                }
+                if value <= -1.0 {
+                    assert!(s == i32::MIN);
+                }
+            }
+            SampleFormat::F32 => {
+                assert!(out.len() == 4);
+                assert!(out[..] == value.to_le_bytes()[..]);
+            }
+            _ => {
+                assert!(out.is_empty());
+            }
+        }
+    }
+}
