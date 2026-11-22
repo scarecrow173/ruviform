@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 1512f982a1ffe61cf706a291c172bbb72d4ac5a103fdc23283e24b17af92fa1f # shrinks to spec = WavOutputSpec { sample_rate: SampleRate(1), layout: Mono, sample_format: S16 }, frames = 3, ticks = 0, samples = [0.4151574]

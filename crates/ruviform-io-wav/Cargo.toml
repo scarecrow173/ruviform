@@ -23,6 +23,13 @@ ruviform-io-symphonia = { path = "../ruviform-io-symphonia" }
 # Staged-publish lifecycle in the contract tests (Issue #305): the
 # backend is generic over `MediaSink`; `StagedFile` satisfies it.
 ruviform-io-file = { path = "../ruviform-io-file" }
+# - proptest: Issue #806 D層 formal verification slice 4 — RIFF/WAVE
+#   serialization・canonical f32→wire conversion・muxer
+#   finalize/WavReceipt 契約の property suite
+#   （tests/formal_wav.rs）に使用する生成入力検査器。dev-dep のみで
+#   本番依存グラフへ波及しない。MIT OR Apache-2.0・pure Rust。
+#   MSRV 1.89 適合。
+proptest = "1"
 
 [lints]
 workspace = true

@@ -1,0 +1,52 @@
+   Compiling ruviform-io-wav v0.1.0 (G:\orca\workspaces\ruviform\rf806-formal-slice4\crates\ruviform-io-wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.16s
+     Running tests\formal_wav.rs (target\debug\deps\formal_wav-d4da866a3f60c09a.exe)
+
+running 9 tests
+test wire_gate_is_exact_membership_plus_byte_rate ... ok
+test declaration_mutations_keep_stable_error_kinds ... ok
+test sample_conversion_matches_documented_policy ... FAILED
+test muxer_rejections_are_invalid_data_and_not_sticky ... ok
+test open_muxer_writes_complete_header ... ok
+test encoder_rejections_are_invalid_data_and_not_sticky ... ok
+test muxer_finalize_receipt_backpatch_one_shot ... ok
+test encoder_packet_stream_is_the_frame_stream ... ok
+test wav_roundtrip_decodes_through_symphonia ... ok
+
+failures:
+
+---- sample_conversion_matches_documented_policy stdout ----
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+proptest: Saving this and future failures in G:\orca\workspaces\ruviform\rf806-formal-slice4\crates\ruviform-io-wav\tests\formal_wav.proptest-regressions
+proptest: If this test was run on a CI system, you may wish to add the following line to your copy of the file. (You may need to create it.)
+cc 1512f982a1ffe61cf706a291c172bbb72d4ac5a103fdc23283e24b17af92fa1f
+
+thread 'sample_conversion_matches_documented_policy' (64948) panicked at crates\ruviform-io-wav\tests\formal_wav.rs:486:1:
+Test failed: assertion failed: `(left == right)`
+  left: `[35, 53, 35, 53, 35, 53]`,
+ right: `[36, 53, 36, 53, 36, 53]` at crates\ruviform-io-wav\tests\formal_wav.rs:721.
+minimal failing input: spec = WavOutputSpec {
+    sample_rate: SampleRate(
+        1,
+    ),
+    layout: Mono,
+    sample_format: S16,
+}, frames = 3, ticks = 0, samples = [
+    0.4151574,
+]
+	successes: 2
+	local rejects: 0
+	global rejects: 0
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sample_conversion_matches_documented_policy
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+error: test failed, to rerun pass `-p ruviform-io-wav --test formal_wav`
+mbx[cache]: 0 hits, 0 misses, 1 not looked up, 2 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 216224 compilations retrieved with a straight face.
