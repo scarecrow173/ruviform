@@ -325,10 +325,10 @@ mise run bench-frozen-e2e --write-baseline <path>  # emit an un-promoted baselin
 D-layer property + bounded-model-check lanes (Issue #806 — slice 1
 wire codecs `rvf.ipc.v1` / `rvf.uitest.v1`, slice 2 archive parsers
 `ruviform-io-archive`, slice 3 structured document readers
-`ruviform-io-structured`):
+`ruviform-io-structured`, slice 4 PCM WAV backend `ruviform-io-wav`):
 
 ```sh
-mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive + formal_structured
+mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
 mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
 ```
 
@@ -347,17 +347,22 @@ mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
   CSV `max_record_bytes`/`max_field_bytes`/`max_fields`/`max_records`,
   YAML `max_depth`/`max_aliases`, XML `max_depth`/`max_attributes`/
   `max_event_bytes`/`max_events`, strict-EOF `TrailingData`, BOM and
-  invalid-encoding handling, poisoned-reader semantics). The structured
-  suite is feature-gated per format (`#[cfg(feature = "...")]`) and the
+  invalid-encoding handling, poisoned-reader semantics), and
+  `crates/ruviform-io-wav/tests/formal_wav.rs` (RIFF/WAVE header
+  serialization, canonical f32→wire sample conversion, muxer
+  finalize/`WavReceipt` contracts, stable `WavError` kinds). The
+  structured suite is feature-gated per format (`#[cfg(feature = "...")]`) and the
   lane runs it with `--all-features` because the crate's
   `default = []`. Kani proofs sit in a `#[cfg(kani)] mod proofs` at
-  the bottom of the same file — plus one deliberate exception: the
-  `BoundedRead` proof lives in a `#[cfg(kani)] mod proofs` inside
-  `src/input.rs` because the type is `pub(crate)` and
-  `cargo kani --tests` covers lib-target proofs. All other proofs stay
-  out of product sources. The proofs use a concrete skeleton plus a
-  symbolic gate field (record/field limits, the byte budget); arbitrary
-  byte streams stay concrete-only in proptest.
+  the bottom of the same file — plus deliberate exceptions where the
+  type under proof is `pub(crate)`: the `BoundedRead` proof lives in a
+  `#[cfg(kani)] mod proofs` inside `src/input.rs`, and the slice-4
+  `write_sample`/`Wire`/`fmt` proofs live in `ruviform-io-wav/src/
+  convert.rs`/`wav.rs`, because `cargo kani --tests` covers
+  lib-target proofs. All other proofs stay out of product sources. The
+  proofs use a concrete skeleton plus a symbolic gate field (record/field
+  limits, the byte budget); arbitrary byte streams stay concrete-only in
+  proptest.
 - `test-formal` is the always-runnable first layer (pure Rust, MSRV,
   same entry as CI). `test-formal-kani` resolves an environment in
   order: native `cargo kani` → a WSL2 distro with `cargo` +
@@ -365,12 +370,15 @@ mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
   WSL-native target dir, never through `/mnt`) → `not_run` +
   `environment_blocked` + exit 0. A real CBMC counterexample is `fail`
   + exit 1; environment absence is never reported as `pass`. The Kani
-  lane runs two `cargo kani` invocations — one for the wire/archive
-  crates and a separate `--all-features --no-unwinding-checks` one
-  for `ruviform-io-structured` — and aggregates: `pass` only when
-  both verify. The flag bounds `csv_core`'s `build_dfa` byte-table
-  loop at 128 (skeleton bytes are all < 128, so truncated rows are
-  unreachable); see `docs/specs/formal-verification.md`.
+  lane runs three `cargo kani` invocations — one for the
+  wire/archive crates, a separate `--all-features
+  --no-unwinding-checks` one for `ruviform-io-structured`, and a
+  separate `-j1` one for `ruviform-io-wav` (concurrent WAV CBMC
+  harnesses exhaust the reference WSL2 envelope) — and aggregates:
+  `pass` only when all invocations verify. The structured flag bounds
+  `csv_core`'s `build_dfa` byte-table loop at 128 (skeleton bytes
+  are all < 128, so truncated rows are unreachable); see
+  `docs/specs/formal-verification.md`.
 - Bounds and assumptions (what is proven vs unproven, float 1-ulp
   semantics, cap-path complementarity between proptest and Kani) are
   the contract of record: `docs/specs/formal-verification.md`. Keep it
