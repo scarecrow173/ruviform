@@ -5,10 +5,10 @@ status: "draft"
 lifecycle: "draft"
 title: "オーディオデバイス・MIDI の検証記録"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-24"
 owners: []
 relations:
-  source: ["https://github.com/scarecrow173/ruviform/issues/188", "https://github.com/scarecrow173/ruviform/issues/253", "https://github.com/scarecrow173/ruviform/issues/565", "https://github.com/scarecrow173/ruviform/issues/629", "https://github.com/scarecrow173/ruviform/issues/707"]
+  source: ["https://github.com/scarecrow173/ruviform/issues/188", "https://github.com/scarecrow173/ruviform/issues/251", "https://github.com/scarecrow173/ruviform/issues/253", "https://github.com/scarecrow173/ruviform/issues/565", "https://github.com/scarecrow173/ruviform/issues/629", "https://github.com/scarecrow173/ruviform/issues/707"]
   informs: []
   explains: []
   supersedes: []
@@ -93,6 +93,16 @@ MIDI backend の故障注入は、mock による決定的な再現と、実 devi
 MIDI cancellation の fault slice として、正負 6 test と mock の unit test 4 件を追加した。cancelled read が Backend("cancelled") と subscription 終了を再現し、非終端の Backend("cancelled")・inject_dropped・inject_unsupported が終了しない負例も pass した。canonical 検証は fmt-check・check/lint/test × ruviform-audio-core・ruviform-audio-test・test-rt・prek が全て exit 0 で、git merge origin/main は Already up to date だった (Issue #707)。
 
 実 MIDI device/endpoint の fault 実 timing は EXT-L3 で NotRun と記録された（#629/#630 領域）。Issue close 判定で「Err vs stats 分解」の妥当性が問われる可能性が Risks に記録済みである (Issue #707)。
+
+## Issue #251 OS-L1 CI 証拠の再照合（2026-11-24）
+
+Issue #251 の OS-L1 受入（3 OS での Build/Link・Mock/headless/RT 回帰の対象 SHA 照合）の証拠を、候補 SHA `fc355d5c`（収集時点の main HEAD）で再照合した。対象 SHA 自体の completed CI run は存在せず（`ci.yml` は workflow_dispatch 専用）、対象 SHA の統合検証は NotRun（Pending）のまま正直に記録した (Issue #251)。
+
+補助証拠として、audio 関連 crate（`ruviform-audio-device`/`ruviform-audio-core`/`ruviform-audio`）の差分がゼロである直近の completed run `45248600736` @ `a0e34564`（workflow_dispatch・`expected_sha` 一致・ci-summary verdict: PASS・全 23 job success・2026-11-23）を採用した。job log 実測では ruviform-audio-device の lib unittests が ubuntu/macos で 59・windows で 75（`wasapi_input` 16 件含む）passed、`mock_backend` 4・`mock_input_backend` 12・Doc-tests 6・rt_ contract 2+2 (filtered) で、いずれも前回照合（run 43428172820 @ `e93c438a`・PR #604）と同じ回帰内容が同じコードに対して確認された (Issue #251)。
+
+#629 由来の仮想 endpoint lane はこの run でも実行されなかった。`ruviform-audio-device/tests/virtual_endpoint.rs` は `real-device` feature gate で 0 tests compile、`ruviform-audio-test/tests/os_endpoint.rs` の `audio_virtual_endpoint_round_trip` は全 3 OS で `#[ignore]` の ignored 表示だった。EXT-L3 実走・独立 Oracle 判定は引き続き provisioned runner 待ちの gate（Issue #629・blockedBy #762）で、NotRun—NOT_PROVISIONED 系の fail-closed 記録を維持する (Issue #629, Issue #251)。
+
+対象 SHA・採用 run・job 証拠・OS×Backend×Device×Case の最新 matrix と判定語彙の正本は `evidence/rf251-audio-input/report.md` を参照 (Issue #251)。
 
 ## 記録の範囲と限界
 
