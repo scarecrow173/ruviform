@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #465 Legacy WebView P0/P1 — 分類ポリシーと文書歴史化の設計"
 created: "2026-11-10"
-updated: "2026-11-10"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -160,6 +160,33 @@ driver 境界 guard の機械可読 ruleset であり、棚卸し記録の置き
 ない。今回の変更は文書・doc コメントのみで fixture 契約に影響しない
 ため、許可されていた編集権は行使しない。
 
+### D6. 行別削除判定は「削除可/保留/例外」の 3 値で inventory に記録する（2026-11-24 追加）
+
+物理削除判定の設計。判定ルールは Issue 本文（2026-11-10 節）の
+「Legacy consumer 利用なし・独立 Oracle PASS・同一 SHA tuple
+PASS・rollback 可能な行だけ消す」+ 削除順「AL #189 / SV #232 の
+製品撤去 → 共通撤去」を正本とし、P0/P1 の 3 値分類（現行/legacy/
+共有）・`evidence/rf465` の 4 値（remove_candidate/reuse/
+provisional/exception）と以下で対応付ける。
+
+| 判定 | 意味 | 対応する分類 |
+| --- | --- | --- |
+| 削除可 | 4 条件をすべて満たし、撤去 slice で条件付き実施可能 | remove_candidate のうち consumer 非依存の leaf |
+| 保留 | 順序ルールまたは consumer/保持契約依存で現時点では削除不可 | provisional・依存中の remove_candidate |
+| 例外 | 削除禁止（共用正本の移転前）または AC の保管方針 | reuse（共用 fixture）・exception（歴史証拠） |
+
+監査は行別に 3 手順で行う: (a) consumer/vendor 参照 grep（両 repo
+の `sync-ruviform-ui.mjs` PACKAGES・全ソース参照・lock pin 実測）、
+(b) fixture 共有監査（保持契約側からの直接参照 — 例:
+`ipc_conformance.rs:24`→`ui/guitest/fixtures`）、(c) 代替 Oracle
+実在照合（削除判定の根拠となる driver-neutral/headless lane が
+`mise.toml` に実在すること — `test-ui-driver-contract`/
+`test-ui-parity` 等。存在しない代替を根拠にしない）。「削除可」は
+package 丸ごとの一律判定ではなく、依存・fixture・設定行まで条件を
+記録する（例: `ui/browser-test`+`ui/showcase` は `@rvf/showcase` →
+`../showcase/dist` 依存のため原子的撤去が条件）。判定結果の正本は
+[inventory §5](../discovery/issue-465-legacy-webview-inventory.md)。
+
 ## File Map
 
 | ファイル | 変更 |
@@ -189,3 +216,17 @@ driver 境界 guard の機械可読 ruleset であり、棚卸し記録の置き
 - `mise run fmt-check` / `check` / `lint` / `test`
 - `mise run check-ui-driver-boundary` / `test-ui-driver-contract`
 - `node .agents/skills/doc-maintenance/scripts/doc_maintenance.js plan --json` で doc audit が新規 broken relation を出さないこと
+
+## 現行化記録（2026-11-24）
+
+- gate 状態: #419 CONDITIONAL 採用・status=accepted（PR #718）、#532
+  close（class C は honest Fail 維持）、#262/#294/#464/#627 全
+  CLOSED。残 gate = AL #189/SV #232（製品撤去）+ #630/#631
+  （virtual-first L3/L2 証拠経路、OPEN）+ consumer Native 受入。
+- consumer pin 再実測: AL `e4c9f6f0`・SV `cd4213a1`（tuple 分岐）。
+  SV PR #618/#619（headless PluginDock panel + doc chain）着地済み。
+- 行別削除判定監査（D6）を実施し、判定結果を inventory §5 に記録
+  — `ui/browser-test`+`ui/showcase` 条件付き削除可、`ui/guitest/
+  fixtures` 削除禁止（移転まで）、`poc/{ui,plugin-gui}` 例外（保持）、
+  共通部は順序ルール上すべて保留。本 slice は docs/監査記録のみで
+  物理削除は対象外。
