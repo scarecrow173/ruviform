@@ -13297,7 +13297,9 @@ fn real_editor_visibility_case(
 /// `real-session-crash`: the fixture's crash fault modes
 /// (`test_fault` abort/exit) kill the plugin cdylib — which shares
 /// the host process in this lane — so the in-process real-window
-/// lane cannot survive them. The honest verdict is `Unsupported`,
+/// lane cannot survive them, and no out-of-process plugin host
+/// exists yet. `L1EditorOps` refuses every editor op with the
+/// defined `Unsupported`. The honest verdict is `Unsupported`,
 /// recorded inside the real session without touching GUI/session
 /// state — never a fabricated `NotRun` (the catalog row is
 /// executable; the boundary is architectural) and never a `Pass`.
@@ -13307,7 +13309,9 @@ fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
         outcome.detail = Some(
             "the in-process lane cannot survive the fixture's \
              process-killing crash fault (test_fault abort/exit — \
-             the plugin cdylib shares the host process)"
+             the plugin cdylib shares the host process) and no \
+             out-of-process plugin host exists yet; L1EditorOps \
+             refuses every editor op with the defined Unsupported"
                 .to_string(),
         );
         outcome
@@ -13321,7 +13325,9 @@ fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -
 /// `real-session-hang`: the fixture's hang fault mode
 /// (`test_fault` hang) wedges the plugin call — which shares the
 /// host process in this lane — so the in-process real-window lane
-/// cannot survive it either. The honest verdict is `Unsupported`,
+/// cannot survive it either, and no out-of-process plugin host
+/// exists yet. `L1EditorOps` refuses every editor op with the
+/// defined `Unsupported`. The honest verdict is `Unsupported`,
 /// recorded inside the real session without touching GUI/session
 /// state — never a fabricated `NotRun` and never a `Pass`.
 fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
@@ -13330,7 +13336,9 @@ fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
         outcome.detail = Some(
             "the in-process lane cannot survive the fixture's \
              wedging hang fault (test_fault hang — the plugin call \
-             never returns and shares the host process)"
+             never returns and shares the host process) and no \
+             out-of-process plugin host exists yet; L1EditorOps \
+             refuses every editor op with the defined Unsupported"
                 .to_string(),
         );
         outcome
