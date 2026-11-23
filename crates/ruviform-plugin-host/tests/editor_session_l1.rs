@@ -141,29 +141,31 @@ fn l1_editor_ops_holds_the_gate_where_the_mechanism_is_absent() {
     let (mut host, instance) = gui_host();
     let mut sessions = PluginEditorSessions::new();
     let session = sessions.begin_session(instance).unwrap();
-    let mut ops = L1EditorOps::new(&mut host, instance);
+    {
+        let mut ops = L1EditorOps::new(&mut host, instance);
 
-    assert_eq!(ops.capabilities(session), Err(EditorOpError::Unsupported));
-    for mode in [AttachMode::Docked, AttachMode::Floating] {
+        assert_eq!(ops.capabilities(session), Err(EditorOpError::Unsupported));
+        for mode in [AttachMode::Docked, AttachMode::Floating] {
+            assert_eq!(
+                ops.open(session, &lease(), SIZE, mode),
+                Err(EditorOpError::Unsupported)
+            );
+        }
+        assert_eq!(ops.close(session), Err(EditorOpError::Unsupported));
+        assert_eq!(ops.set_size(session, SIZE), Err(EditorOpError::Unsupported));
         assert_eq!(
-            ops.open(session, &lease(), SIZE, mode),
+            ops.set_visibility(session, true),
+            Err(EditorOpError::Unsupported)
+        );
+        assert_eq!(
+            ops.set_focus(session, true),
+            Err(EditorOpError::Unsupported)
+        );
+        assert_eq!(
+            ops.send_key(session, key()),
             Err(EditorOpError::Unsupported)
         );
     }
-    assert_eq!(ops.close(session), Err(EditorOpError::Unsupported));
-    assert_eq!(ops.set_size(session, SIZE), Err(EditorOpError::Unsupported));
-    assert_eq!(
-        ops.set_visibility(session, true),
-        Err(EditorOpError::Unsupported)
-    );
-    assert_eq!(
-        ops.set_focus(session, true),
-        Err(EditorOpError::Unsupported)
-    );
-    assert_eq!(
-        ops.send_key(session, key()),
-        Err(EditorOpError::Unsupported)
-    );
     // The gate refused before the wire — the child still answers.
     assert_eq!(
         host.execute(HostCommand::SetGuiVisibility {
