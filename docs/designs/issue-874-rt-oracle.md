@@ -217,9 +217,18 @@ instance を同一 thread から駆動する same-thread 観測として
 
 ## Deferred Design Concerns
 
-- cross-thread 同一 instance pump の Pass 化 — `scarecrow173/
+- ~~cross-thread 同一 instance pump の Pass 化 — `scarecrow173/
   ruviform#872`（L1 out-of-process host）または GUI-capable
-  `create_sendable` 契約の将来 Issue。
+  `create_sendable` 契約の将来 Issue~~ — **`scarecrow173/
+  ruviform#920` が正式な追跡先として収束済み**（route (b):
+  `PluginHost::prepare_endpoint` が `Slot::OutOfProcess` の
+  `RtLeg` を `Send` `PluginEndpoint` へ checkout する既存公開
+  API で cross-thread 同一 instance pump を実現 —
+  `docs/designs/issue-920-rt-boundary.md`）。本項目は歴史的
+  記録として残す。#874/#872 は Closed で依存登録不能のため
+  参照の整合のみ。(a) 側の GUI-capable `create_sendable`
+  契約は #920 の評価で不採用（契約変更規模 — L0 docked 固有
+  の観測が必要になる場合は別 Issue で追跡）。
 - `rt_runtime` helper-thread leg — ambient 負荷で同一
   instance 観測にならないため不採用（本 doc「採否」節参照）。
 

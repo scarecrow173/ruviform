@@ -109,12 +109,18 @@ pub struct RealCatalogRow {
 /// real-window RT non-interference oracle: the same-thread leg
 /// interleaves `InProcessHost::process` blocks around the real
 /// session verbs and judges `Continue` + bit-exact pass-through +
-/// `Processing` maintained, the negative-control leg proves the
-/// observation path catches `test_fault`'s `rt_alloc` marker, and
-/// the boundary row stays an honest `Unsupported` record because
-/// cross-thread same-instance pumping is impossible on the current
-/// API (`!Send` plugin → `Plain` slot; `attach_endpoint`/`l0` not
-/// public).
+/// `Processing` maintained, and the negative-control leg proves
+/// the observation path catches `test_fault`'s `rt_alloc` marker.
+/// The boundary row (Issue #920, route (b)) proves the
+/// cross-thread same-instance pump on the public API: a dedicated
+/// L1 child hosts `test_editor`, `PluginHost::prepare_endpoint`
+/// detaches its `RtLeg` into a `Send` `PluginEndpoint` a
+/// `std::thread` pumps, and the UI thread concurrently runs the
+/// same instance's `L1EditorOps` floating session verbs —
+/// `host.process` answers the defined `EndpointUnavailable` while
+/// checked out and resumes when the leg returns. The
+/// `OutOfProcessPluginHost` claim gates it: a host that never
+/// proved the route reports the capability-gated `Unsupported`.
 pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-mount",
@@ -304,6 +310,9 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-session-rt-boundary",
         scenario: SCENARIO,
-        required: &[ScenarioCapability::NativePluginDock],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::OutOfProcessPluginHost,
+        ],
     },
 ];
