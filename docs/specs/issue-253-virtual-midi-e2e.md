@@ -228,3 +228,27 @@ verdict）と `tests/l1_real_test_plugin_e2e.rs`（fixture spawn →
   L1 pacing・PCM oracle の先例）。
 - `POLICIES.md` §2.1（仮想優先の受入・証拠要件）・§5（ローカル
   検証と Daily CI の責務分離）。
+
+## 追記（2026-11-23）— canonical lane `test-os-endpoint-midi-e2e` 登録済み
+
+上記 Out of Scope の「`mise.toml` への新 verifier lane 登録（別
+Worker 占有 — 本 slice では行わず、canonical 検証は
+`check-l1-real-plugin`/`lint-l1-real-plugin` の `--all-targets`
+compile/lint まで）」および Deferred Design Concerns の
+「`mise.toml` への本 verifier 収集 lane 登録 — 別 Worker 占有の
+ため本 slice 対象外。再開条件: Coordinator による lane 統合」は、
+lane 統合 slice で解消された。`mise.toml` に
+`[tasks.test-os-endpoint-midi-e2e]` を登録し、本 verifier の
+canonical 起動式は `mise run test-os-endpoint-midi-e2e`（fixture
+cdylib + `l1-runner` runner bin の build → `cargo test -p
+ruviform-plugin-test-vst3 --features l1-runner --test
+os_endpoint_midi_e2e -- --ignored --test-threads=1`）。本 lane は
+`#![cfg]` + `#[ignore]` + `required-features` で既定 `cargo test`
+から分離された当該 test の唯一の canonical 実行入口であり、
+provisioned pair の無いホストでは `verdict: NotRun —
+NOT_PROVISIONED` で fail-closed に終わる（Pass 偽装なし）。
+`check-l1-real-plugin`/`lint-l1-real-plugin` の `--all-targets`
+compile/lint 収集は変わらず有効で、専用 lint lane は設けない。
+provisioned pair での実走 Pass は引き続き
+`scarecrow173/ruviform#762` の provisioned Windows runner が
+gate する。実行記録は `evidence/rf253/`。

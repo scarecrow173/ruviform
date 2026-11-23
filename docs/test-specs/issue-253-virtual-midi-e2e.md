@@ -150,3 +150,19 @@ end-to-end
 - `mapped == delivered` 等の counter 仮定が edge case で崩れる
   危険 — stamped span を `MAX_BLOCKS` で事前制限し、崩れた場合は
   観測値を verdict に残して Fail とする（silent pass にしない）。
+
+## 追記（2026-11-23）— canonical lane 登録に伴う Non-goals の確定
+
+上記 Non-goals の「`test-l1-real-plugin`/`test-midi-real-device`
+lane への自動収録（`mise.toml` は別 Worker 占有 — 本 file は個名
+指定の手動 opt-in）」は、lane 統合 slice で
+`test-os-endpoint-midi-e2e` が登録されたことで確定した。本
+verifier は引き続き `test-l1-real-plugin`（別 `--test` 個名指定）
+と `test-midi-real-device`（対象 package 外）の収集対象外であり、
+`mise run test-os-endpoint-midi-e2e` が唯一の canonical 実行入口
+となる（`#![cfg]` + `#[ignore]` + `required-features` で既定
+`cargo test` から分離）。pair 未 provision 環境での
+`verdict: NotRun — NOT_PROVISIONED` は R1 の設計どおりの正直な
+結果であり、Fail でも Pass でもない。fixture artifact の欠落は
+引き続き R2 どおり `assert!` Fail であり、lane が先に build step
+を実行するのはこの契約を保つためである。

@@ -1,0 +1,47 @@
+# Issue #253 virtual-first slice — test-os-endpoint-midi-e2e canonical lane self-run
+# date: 2026-11-23 / host: windows-local (DESKTOP-NH00KUI, MINGW64_NT-10.0-26300 x86_64) / toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13), mise-managed
+# host has NO provisioned virtual MIDI loopback pair (0 input / 1 output ports enumerated) -> the #[ignore] verifier exits honestly with verdict: NotRun — NOT_PROVISIONED (fail-closed)
+# canonical lane = 'mise run test-os-endpoint-midi-e2e'; the direct cargo --nocapture run below is auxiliary evidence only (verdict lines sit inside libtest capture in the canonical run)
+
+=== canonical lane: mise run test-os-endpoint-midi-e2e ===
+[test-os-endpoint-midi-e2e] $ cargo build -p ruviform-plugin-test-vst3 --features l1-runner
+   Compiling … (dependency build; full log elided — see `mise run` output)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.41s
+[test-os-endpoint-midi-e2e] $ cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1
+   Compiling … (dependency build; full log elided — see `mise run` output)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.43s
+     Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-716c380e87839407.exe)
+
+running 1 test
+test os_endpoint_midi_loopback_drives_test_instrument ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+(lane exit code: 0 — the `ok` above is the honest early return; the verdict line is inside libtest capture and harvested by the auxiliary run below)
+
+
+=== auxiliary evidence: mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --nocapture ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-716c380e87839407.exe)
+
+running 1 test
+enumerated: 0 input ports, 1 output ports
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match; provision a loopMIDI/Windows MIDI Services loopback pair first)
+test os_endpoint_midi_loopback_drives_test_instrument ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+(exit code: 0)
+
+=== notes ===
+- canonical = mise lane (`mise run test-os-endpoint-midi-e2e`); the direct cargo
+  invocation above is auxiliary evidence for verdict-line harvest only.
+- The lane's build step produced the fixture cdylib + `l1-runner` runner bin
+  (`assert_fixture_present` passed — fixture plumbing verified up to the
+  enumeration gate), then the production `SystemBackend` enumerated 0 input /
+  1 output ports with no bidirectional name match, so the verifier printed
+  `verdict: NotRun — NOT_PROVISIONED` and returned early with zero asserts.
+- This is the designed fail-closed path (test-spec R1), NOT a Pass. No
+  `environment_kind=virtual-os-endpoint` claim is made anywhere.
+- Real end-to-end Pass remains gated on the provisioned Windows runner
+  (scarecrow173/ruviform#762) — not obtained and not claimed in this slice.

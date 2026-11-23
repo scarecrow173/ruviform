@@ -278,3 +278,24 @@ PCM 出力まで — を 1 本の `#[ignore]`-gated verifier で検証する。
   `verdict: NotRun — NOT_PROVISIONED`（0 input / 1 output
   ports、assert 0 件）を `evidence/rf253/
   os-endpoint-midi-e2e-verification-windows-local.txt` に記録。
+
+## 追記（2026-11-23）— canonical lane `test-os-endpoint-midi-e2e` 登録済み
+
+Context 節の「lane 収集」（新 file が `test-l1-real-plugin` にも
+`test-midi-real-device` にも自動収集されず、`mise.toml` は別
+Worker 占有のため lane 登録は本 slice 対象外とする記述）と
+Deferred Design Concerns の「lane 登録（`mise.toml`）— 別
+Worker 占有、Coordinator 統合時」は、lane 統合 slice で解消
+された。`mise run test-os-endpoint-midi-e2e` が本 verifier の
+唯一の canonical 実行入口となった（`cargo build -p
+ruviform-plugin-test-vst3 --features l1-runner` → `cargo test
+-p ruviform-plugin-test-vst3 --features l1-runner --test
+os_endpoint_midi_e2e -- --ignored --test-threads=1`）。
+Non-Functional Constraints の「canonical lane は compile/lint
+のみ収集し、実行は provisioning 済み環境の手動操作」という
+当時の前提もこれに伴い更新される — lane は実行入口でもある
+が、pair 未 provision では `verdict: NotRun — NOT_PROVISIONED`
+で fail-closed に終わる（Pass 偽装なし）。`check-l1-real-plugin`/
+`lint-l1-real-plugin` の `--all-targets` compile/lint 収集は
+変わらず有効で、専用 lint lane は設けない。実行記録は
+`evidence/rf253/`。
