@@ -324,3 +324,5 @@ Directory: `docs/specs`
 | SPEC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — AC 各行の disposition 決定・検証 Scope・採否決裁形態の提案（docs-only disposition） | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
 | SPEC-01KBZWINDOWIME0SPECDOC0000A1 | Issue #389 real-window-ime — ScenarioCapability::Ime claim + OS-level IMM32 composition drive + WM_IME_* 配達 oracle + 正直な fallback | approved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
 | SPEC-Rf767SbmtDrpKm3hXwNq7Yt4 | Issue #767 — L1 submit 経路の drop(queue shedding)契約 | proposed | [issue-767-submit-drop.md](./issue-767-submit-drop.md) |
+| SPEC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — spec | approved | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
+| SPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |

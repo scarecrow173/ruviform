@@ -116,3 +116,5 @@ Directory: `docs/discovery`
 | DISC-01KBZWINDOWIME0DISCOVERY00A1 | Issue #389 real-window-ime — ホスト IME 実測、IMM32 駆動経路、oracle channel と capability claim の確定 | resolved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
 | DISC-0351ujnK1guLRroTqT6pcS | Issue #872 L1 OOS editor host — docked 越境 vs child 所有 toplevel・動詞/bit 設計・fault 経路・isolation 選択の比較と却下理由 | resolved | [issue-872-l1-oos-plugin-editor-host.md](./issue-872-l1-oos-plugin-editor-host.md) |
 | DISC-Rf767SbmtDrpXv4nQyZk8Hw2 | Issue #767 dropped_submits の周期的発生 — L1 submit 経路の drop 原因調査 | resolved | [issue-767-submit-drop.md](./issue-767-submit-drop.md) |
+| DISC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — 現状棚卸し | final | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
+| DISC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 調査記録 | resolved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
