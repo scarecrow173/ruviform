@@ -9531,7 +9531,8 @@ fn real_command_receipt_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec)
 // ---------------------------------------------------------------------
 // cases: real-window-dpi / real-window-ime / real-window-close
 // (AC1 — dpi/close flipped to real verdicts on the window-surface
-// observation API; ime stays Unsupported — `Ime` unclaimed, #389)
+// observation API; ime judges an OS-level IMM32 composition drive
+// through the subclass-recorded `WM_IME_*` delivery oracle, #389)
 // ---------------------------------------------------------------------
 
 /// The DPI/geometry attempt: two `window_geometry` reads must

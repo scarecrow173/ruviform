@@ -61,8 +61,12 @@ pub struct RealCatalogRow {
 /// slice turned `real-window-dpi`/`real-window-close` into real
 /// verdicts on the window-surface observation API
 /// (`window_geometry`/`window_events`/`request_close`/
-/// `respond_close`/`arm_close_response`); `real-window-ime` stays
-/// `Unsupported` (`Ime` unclaimed, Issue #389 scope). The
+/// `respond_close`/`arm_close_response`); `real-window-ime` judges an
+/// OS-level IMM32 composition+commit drive into the docked
+/// `test_editor` child HWND through the caller-side subclass
+/// `WM_IME_*` delivery oracle — `Ime` claimed on backend presence,
+/// IME absent/disabled stays `NotRun` + `environment_blocked`
+/// (Issue #389). The
 /// command-receipt slice added `real-command-receipt`: the AC1
 /// Command→Receipt link plus AC4 receipt population — a real
 /// window hosts the command-minting fader fixture, semantic
