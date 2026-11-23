@@ -16,9 +16,9 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, Event, EventList, GuiKeyEvent, GuiRequest, GuiRequestSink, GuiSize, Lifecycle,
-    LifecycleError, LifecycleEvent, LifecycleState, PrepareError, ProcessConfig, ProcessContext,
-    ProcessResult, TransportInfo,
+    BusDescriptor, DirtyNotice, Event, EventList, GuiKeyEvent, GuiRequest, GuiRequestSink, GuiSize,
+    Lifecycle, LifecycleError, LifecycleEvent, LifecycleState, PrepareError, ProcessConfig,
+    ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -1139,6 +1139,45 @@ impl InProcessHost {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.drain_gui_requests(out);
                     Ok(())
+                })
+            }
+        }
+    }
+
+    /// Drains the instance's pending plugin→host state-dirty
+    /// notifications (Issue #891) — the pull surface the neutral
+    /// [`DirtyNotice`] vocabulary drains through on L0.
+    ///
+    /// Same delivery shape as [`Self::drain_output_reports`]/`drain_gui_requests`:
+    /// a pull-based read appending to `out`; nothing drains
+    /// implicitly. `Plain` slots call the plugin directly; `Shared`
+    /// slots run the pinned lock protocol. Lifecycle-ungated like the
+    /// report drain — the pending queue is plugin state.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// and the `Shared` arm takes the `core` mutex. Never call from
+    /// inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when a `Shared` instance has already
+    /// converged.
+    pub fn drain_dirty_notices(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<DirtyNotice>,
+    ) -> Result<ReportDrain, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.drain_dirty_notices(out);
+                Ok(ReportDrain::Drained)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.drain_dirty_notices(out);
+                    Ok(ReportDrain::Drained)
                 })
             }
         }

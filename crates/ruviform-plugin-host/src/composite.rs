@@ -48,8 +48,9 @@ use ruviform_audio_core::SampleRate;
 use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
-    PluginDescriptor, PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
+    DirtyNotice, Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId,
+    PlainParamValue, PluginDescriptor, PrepareError, ProcessResult, TransportInfo,
+    VideoProcessConfig,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
@@ -1042,6 +1043,48 @@ impl PluginHost {
             }
             Slot::OutOfProcess(instance) => {
                 instance.drain_output_reports(out)?;
+                Ok(ReportDrain::Drained)
+            }
+            Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
+        }
+    }
+
+    /// The consumer-facing plugin→host dirty-notification pull
+    /// (Issue #891): L0 slots drain through [`InProcessHost`]'s
+    /// direct call; L1 audio slots pull over the wire
+    /// (`DrainDirtyNotices` → `Reply::DirtyNotices`, chunked inside
+    /// [`L1Instance`]); `OutOfProcessVideo` slots answer
+    /// [`ReportDrain::Unavailable`] — the video family has no
+    /// dirty-notification surface at all, so "no notices" is never
+    /// confused with a drained-empty queue.
+    ///
+    /// Same since-last-drain, pull-only contract as
+    /// [`Self::drain_output_reports`]: nothing reaches `out` without
+    /// this call, and a returned [`ReportDrain::Drained`] with an
+    /// unchanged `out` is the defined "nothing pending" answer.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate,
+    /// the L0 `Shared` arm takes the instance's `core` mutex, and the
+    /// L1 arm waits at most `command_timeout` per wire verb. Never
+    /// call from inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when an L0 `Shared` instance or an L1
+    /// audio instance has already converged.
+    pub fn drain_dirty_notices(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<DirtyNotice>,
+    ) -> Result<ReportDrain, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.drain_dirty_notices(inner, out)
+            }
+            Slot::OutOfProcess(instance) => {
+                instance.drain_dirty_notices(out)?;
                 Ok(ReportDrain::Drained)
             }
             Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
@@ -2488,6 +2531,81 @@ mod tests {
         }
     }
 
+    /// An L0 plugin carrying a pending [`DirtyNotice`] queue — the
+    /// dirty-drain routing oracle (Issue #891). The factory seeds it
+    /// so `drain_dirty_notices` has observable traffic; the
+    /// since-last-drain semantics then leave the repeat drain empty.
+    struct DirtyGain {
+        notices: Vec<DirtyNotice>,
+    }
+
+    impl PluginProcessor for DirtyGain {
+        fn prepare(
+            &mut self,
+            _config: &ProcessConfig,
+            _context: &mut ProcessContext,
+        ) -> Result<(), PrepareError> {
+            Ok(())
+        }
+
+        fn process<I, O>(
+            &mut self,
+            _inputs: &[I],
+            _outputs: &mut [O],
+            _events: EventList<'_>,
+            _transport: Option<TransportInfo>,
+            _context: &mut ProcessContext,
+        ) -> ProcessResult
+        where
+            I: BufferView,
+            O: BufferViewMut,
+        {
+            ProcessResult::CONTINUE
+        }
+    }
+
+    impl Plugin for DirtyGain {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn params(&self) -> &[ParamInfo] {
+            &[]
+        }
+        fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
+            out.append(&mut self.notices);
+        }
+    }
+
+    struct DirtyGainFactory;
+
+    impl PluginFactory for DirtyGainFactory {
+        fn descriptor(&self) -> PluginDescriptor {
+            DESCRIPTOR
+        }
+        fn create(&self) -> Box<dyn ErasedPlugin> {
+            erase(DirtyGain {
+                notices: dirty_pair(),
+            })
+        }
+        fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
+            Some(erase_sendable(DirtyGain {
+                notices: dirty_pair(),
+            }))
+        }
+    }
+
+    /// The fixture's drained payload — one edit plus the flag edge
+    /// the edit latches, in the queue's drain order.
+    fn dirty_pair() -> Vec<DirtyNotice> {
+        vec![
+            DirtyNotice::ParamEdited {
+                param_id: ParamId(7),
+                value: ParamValue::new(0.25).unwrap(),
+            },
+            DirtyNotice::StateDirty,
+        ]
+    }
+
     /// Register `factory`, instantiate its plugin and drive the
     /// instance to `Processing` — `Activated` when `start` is false.
     fn l0_instance(factory: Box<dyn PluginFactory>, start: bool) -> (PluginHost, PluginHandle) {
@@ -2598,6 +2716,60 @@ mod tests {
         // Stale handle — never minted.
         assert_eq!(
             host.drain_output_reports(PluginHandle::new(77, 0), &mut out),
+            Err(HostError::InvalidHandle)
+        );
+    }
+
+    /// Issue #891: the composite dirty drain routes by slot kind —
+    /// L0 delegates to `InProcessHost::drain_dirty_notices` (notices
+    /// reach the caller in drain order), the L1 audio arm issues the
+    /// wire-v7 `DrainDirtyNotices` verb (the childless fixture
+    /// answers the defined transport failure `Ipc` — routing is
+    /// proven by *not* getting `Unavailable`), the L1 video slot
+    /// keeps the honest `Unavailable` (the video family has no
+    /// dirty surface), and stale handles take `InvalidHandle`.
+    #[test]
+    fn drain_dirty_notices_routes_by_slot_kind() {
+        // L0 — the pending queue reaches the caller through the
+        // `Shared` slot's `shared_verb`.
+        let (mut host, handle) = l0_instance(Box::new(DirtyGainFactory), true);
+        let mut out = Vec::new();
+        assert_eq!(
+            host.drain_dirty_notices(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, dirty_pair());
+        // Repeat drain — `Drained` with nothing appended.
+        assert_eq!(
+            host.drain_dirty_notices(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, dirty_pair());
+
+        // L1 audio — the wire-v7 verb is issued; the childless
+        // fixture's request fails the defined transport `Ipc`
+        // (routing proven: no `Unavailable`, no fabricated drain).
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let mut out = vec![DirtyNotice::StateClean];
+        let sentinel = out.clone();
+        assert_eq!(
+            host.drain_dirty_notices(handle, &mut out),
+            Err(HostError::Ipc)
+        );
+        assert_eq!(out, sentinel);
+
+        // L1 video — `Unavailable`, `out` untouched.
+        let mut host = PluginHost::new();
+        let handle = mint_video(&mut host, LifecycleState::Processing);
+        assert_eq!(
+            host.drain_dirty_notices(handle, &mut out),
+            Ok(ReportDrain::Unavailable)
+        );
+        assert_eq!(out, sentinel);
+
+        // Stale handle — never minted.
+        assert_eq!(
+            host.drain_dirty_notices(PluginHandle::new(77, 0), &mut out),
             Err(HostError::InvalidHandle)
         );
     }

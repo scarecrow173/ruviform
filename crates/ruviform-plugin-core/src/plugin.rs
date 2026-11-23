@@ -11,7 +11,8 @@
 //! them without a host↔runner dependency.
 
 use crate::boundary::{
-    GuiHandle, GuiKeyEvent, GuiRequest, GuiRequestVerdict, GuiSize, HostError, ParentLease,
+    DirtyNotice, GuiHandle, GuiKeyEvent, GuiRequest, GuiRequestVerdict, GuiSize, HostError,
+    ParentLease,
 };
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
@@ -318,6 +319,28 @@ pub trait Plugin: PluginProcessor {
     ///
     /// **RT contract:** non-RT only — the `out` append may allocate.
     fn drain_gui_requests(&mut self, _out: &mut Vec<GuiRequest>) {}
+
+    /// Drains the plugin's pending plugin→host state-dirty
+    /// notifications (Issue #891) — the pull counterpart of the
+    /// formats' spontaneous dirty signals (CLAP
+    /// `clap_host_state` `mark_dirty`, VST3 `IComponentHandler::performEdit`
+    /// / `IComponentHandler2::setDirty` / `restartComponent`), which
+    /// the adapter captures into an instance-local bounded queue and
+    /// this drain empties.
+    ///
+    /// Same since-last-drain, producer-ordered semantics as
+    /// [`crate::PluginProcessor::drain_output_reports`], but the
+    /// payload is the flag-style [`DirtyNotice`] vocabulary, not
+    /// sample-accurate [`Event`]s — a dirty notification is
+    /// lifecycle-adjacent (coalesced flag state + edit backlog), so
+    /// it lives on [`Plugin`] rather than the RT `PluginProcessor`
+    /// surface.
+    ///
+    /// The default drains nothing: a plugin without a dirty
+    /// notification surface produces none.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    fn drain_dirty_notices(&mut self, _out: &mut Vec<DirtyNotice>) {}
 }
 
 /// One registered plugin type: descriptor plus instance construction.
@@ -426,6 +449,12 @@ pub trait ErasedPlugin {
     fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
         let _ = out;
     }
+    /// [`Plugin::drain_dirty_notices`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
+        let _ = out;
+    }
     /// [`PluginProcessor::drain_output_reports`].
     ///
     /// **RT contract:** non-RT only.
@@ -506,6 +535,9 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
         self.0.drain_gui_requests(out);
+    }
+    fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
+        self.0.drain_dirty_notices(out);
     }
     fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
         self.0.drain_output_reports(out);
