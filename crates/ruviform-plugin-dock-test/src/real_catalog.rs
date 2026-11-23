@@ -52,7 +52,7 @@ pub struct RealCatalogRow {
     pub required: &'static [ScenarioCapability],
 }
 
-/// The twenty-nine real-window dock cases in run order — metadata
+/// The thirty-two real-window dock cases in run order — metadata
 /// only. The AC1 remainder rows (`real-multiwindow-focus`,
 /// `real-os-input`, `real-window-dpi`, `real-window-ime`,
 /// `real-window-close`) judge the remaining adopted capabilities
@@ -95,6 +95,17 @@ pub struct RealCatalogRow {
 /// state oracles only — crash/hang stay honest `Unsupported`
 /// boundary rows because the in-process lane cannot survive the
 /// fixture's process-killing/wedging fault modes.
+/// The Issue #874 rows (`real-session-rt-samethread`,
+/// `real-session-rt-fault`, `real-session-rt-boundary`) are the
+/// real-window RT non-interference oracle: the same-thread leg
+/// interleaves `InProcessHost::process` blocks around the real
+/// session verbs and judges `Continue` + bit-exact pass-through +
+/// `Processing` maintained, the negative-control leg proves the
+/// observation path catches `test_fault`'s `rt_alloc` marker, and
+/// the boundary row stays an honest `Unsupported` record because
+/// cross-thread same-instance pumping is impossible on the current
+/// API (`!Send` plugin → `Plain` slot; `attach_endpoint`/`l0` not
+/// public).
 pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-window-mount",
@@ -262,6 +273,21 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     },
     RealCatalogRow {
         case: "real-session-hang",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-rt-samethread",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-rt-fault",
+        scenario: SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-session-rt-boundary",
         scenario: SCENARIO,
         required: &[ScenarioCapability::NativePluginDock],
     },
