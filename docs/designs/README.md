@@ -327,3 +327,4 @@ Directory: `docs/designs`
 | DES-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル設計 | draft | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | DES-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 設計 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
 | DESIGN-891dirtyNoticePull9x | Issue #891 plugin→host state dirty 通知経路設計（DirtyNotice + 専用 pull verb、wire v7） | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
+| DESIGN-rf920-rt-boundary-01 | Issue #920 cross-thread 同一 instance RT pump 収束設計（L1 endpoint 経路） | approved | [issue-920-rt-boundary.md](./issue-920-rt-boundary.md) |
