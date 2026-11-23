@@ -56,16 +56,58 @@ bin は step 4 が生成）。
 - 対象 file は本 slice の lease 外のため変更せず、Issue には別途
   報告する。
 
-## その他 lane（全て PASS）
+## その他 lane — canonical（`mise run`）記録
+
+全て head `09f9760c`（PR #911 head）・Windows で実施。
 
 | lane | 結果 |
 | --- | --- |
-| `mise run fmt` → `cargo fmt --all -- --check` | PASS |
-| `mise exec -- cargo check`（plugin-core / plugin-host / plugin-export / plugin-clap+host / plugin-vst3+host / plugin-test-clap+l1-runner / plugin-test-vst3+l1-runner、各 `--all-targets`） | PASS |
-| `mise run check-l1-real-plugin` 相当（上記 feature 和の `cargo check --all-targets`） | PASS |
-| `mise run lint-l1-real-plugin` 相当（同 feature 和の `cargo clippy --all-targets -- -D warnings`） | PASS |
-| `mise run test` 系: plugin-core・plugin-host・plugin-export・plugin-clap・plugin-vst3・plugin-test-clap・plugin-test-vst3 | PASS（235/57/18/5/8/190/115+6ignored/23/36/15/3 等 — 本 slice 追加 test を含む全件 green） |
-| `editor_session_l1` 再実行 | PASS（初回の 1 件 fail は再現せず transient 判定） |
+| `mise run fmt-check` | PASS（exit 0） |
+| `mise run check ruviform-plugin-core` | PASS |
+| `mise run check ruviform-plugin-host` | PASS |
+| `mise run check ruviform-plugin-export` | PASS |
+| `mise run check ruviform-plugin-clap` | PASS |
+| `mise run check ruviform-plugin-vst3` | PASS |
+| `mise run check ruviform-plugin-test-clap` | PASS |
+| `mise run check ruviform-plugin-test-vst3` | PASS |
+| `mise run lint ruviform-plugin-core` | PASS（`-D warnings`） |
+| `mise run lint ruviform-plugin-host` | PASS |
+| `mise run lint ruviform-plugin-export` | PASS |
+| `mise run lint ruviform-plugin-vst3` | PASS |
+| `mise run lint ruviform-plugin-test-clap` | PASS |
+| `mise run lint ruviform-plugin-test-vst3` | PASS |
+| `mise run lint ruviform-plugin-clap` | **FAIL（既存破損 — 後述）** |
+| `mise run test ruviform-plugin-core` | PASS（199 tests green） |
+| `mise run test ruviform-plugin-host` | PASS（192 green・6 ignored — `drain_dirty_notices_routes_by_slot_kind` を含む） |
+| `mise run test ruviform-plugin-export` | PASS（59 green） |
+| `mise run test ruviform-plugin-clap` | PASS（57 green） |
+| `mise run test ruviform-plugin-vst3` | PASS（44 green） |
+| `mise run test ruviform-plugin-test-clap` | PASS（100 green・`mark_dirty` 発火 test を含む） |
+| `mise run test ruviform-plugin-test-vst3` | PASS（24 green） |
+| `mise run check-l1-real-plugin` | PASS（host/l1-runner feature 和の canonical check） |
+| `mise run lint-l1-real-plugin` | PASS（同 feature 和の canonical `-D warnings` lint） |
+| `mise run test-l1-real-plugin` | **step 3 で ERROR（既存破損 — 上表の step 記録どおり step 4–8 は全 green）** |
+
+### `mise run lint ruviform-plugin-clap` の既存破損
+
+default feature（`host` 無し）の lint は `adapt.rs` の
+`translate_output_event`/`translate_note_event` が dead_code で
+`-D warnings` に落ちる — 両関数は `host` feature 配下の
+`host.rs` のみが使うため default feature では定義から未使用。
+`adapt.rs` は本 slice の diff 外・base `fcb35203` で同一 — plain
+`mise run lint ruviform-plugin-clap` は base でも同じく fail する
+（この crate の canonical lint は feature 付きの
+`lint-l1-real-plugin` で、そちらは PASS）。
+
+## 補助証拠（`mise exec --` 直コマンド — canonical 記録の再現確認用）
+
+- `mise exec -- cargo fmt --all -- --check` — PASS。
+- `mise exec -- cargo check/clippy --all-targets`（plugin-core /
+  host / export / clap+host / vst3+host / test-clap+l1-runner /
+  test-vst3+l1-runner）— 全て PASS（canonical lane の対象 feature
+  和と同じ集合）。
+- `editor_session_l1` 再実行 — PASS（初回の 1 件 fail は再現せず
+  transient 判定）。
 
 ## 本 slice の新規 oracle（全て PASS）
 
