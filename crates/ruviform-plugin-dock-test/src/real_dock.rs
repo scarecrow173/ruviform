@@ -119,10 +119,15 @@
 //! |                         |             | `VK_P` popup toggle ×2: child title event log          |
 //! |                         |             | （`po:`/`pc:` token）+ own-process top-level           |
 //! |                         |             | `WS_POPUP` HWND oracle + close/teardown 収束           |
-//! | `real-session-crash`    | `RealOs`    | `Unsupported` — in-process lane は fixture の         |
-//! |                         |             | process-killing fault を生存不能（out-of-process      |
-//! |                         |             | host 未実装）                                         |
-//! | `real-session-hang`     | `RealOs`    | `Unsupported` — 同上（wedging fault で lane 非生存）  |
+//! | `real-session-crash`    | `RealOs`    | `Pass`/`Fail`/`Unsupported` — dedicated L1 child 上   |
+//! |                         |             | の `test_editor` を `open(Floating)` で attach し、   |
+//! |                         |             | in-band `Fault` `abort` で child kill →             |
+//! |                         |             | `InstanceFailed` → `Terminated{HostLost}` → `Closed` |
+//! |                         |             | + lane 生存を判定（`OutOfProcessPluginHost` claim    |
+//! |                         |             | 未証明なら capability-gated `Unsupported`）（#886）   |
+//! | `real-session-hang`     | `RealOs`    | `Pass`/`Fail`/`Unsupported` — 同上 + `Fault` `hang`  |
+//! |                         |             | で child wedge → `SaveState` probe `Err(Ipc)` →      |
+//! |                         |             | watchdog kill `Failed{Timeout}`（#886）              |
 //! | `real-session-rt-samethread` | `RealOs` | `Pass`/`Fail`/`NotRun`/`Unsupported` — `Processing` |
 //! |                         |             | の `test_editor` で `host.process` block を実        |
 //! |                         |             | session verb の前後に interleave し、Continue +      |
@@ -153,18 +158,19 @@
 //! **RT contract:** non-RT only — real OS window, dlopen,
 //! filesystem. **Test-only:** nothing here ships.
 
-use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
+use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_audio_test::EnvironmentKind;
 use ruviform_plugin_core::{
     Event as PluginEvent, EventKind, EventList, HostInput, HostOutput, LifecycleState, ParamEvent,
-    ParamId, ParamValue, ProcessResult, ProcessStatus,
+    ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, ProcessStatus, wire,
 };
 use ruviform_plugin_host::{
-    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionState, EditorSize, GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand,
-    HostError, HostReply, InProcessEditorOps, InProcessHost, MonotonicSessionClock, OpenOutcome,
-    ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId, PluginEditorSessions,
-    PluginHandle, SessionDeadlinePolicy, SessionFailCause,
+    AttachMode, ChildExit, EditorCapabilities, EditorOpError, EditorSessionError,
+    EditorSessionEvent, EditorSessionState, EditorSize, FailureCause, GuiKeyDirection, GuiKeyEvent,
+    GuiModifiers, HostCommand, HostError, HostNotification, HostReply, InProcessEditorOps,
+    InProcessHost, L1EditorOps, MonotonicSessionClock, OpenOutcome, OutOfProcessIsolation,
+    OutOfProcessSpec, ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId,
+    PluginEditorSessions, PluginHandle, PluginHost, SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
@@ -307,6 +313,13 @@ struct RealDockContext<'a> {
     plugin: Option<&'a PluginPair>,
     /// Why the plugin is unavailable, when it is.
     plugin_error: Option<&'a PluginUnavailable>,
+    /// The session-probed out-of-process L1 route — `Some` only
+    /// when [`probe_out_of_process_route`] verified the
+    /// runner/fixture/`GUI_FLOATING` advertisement inside this
+    /// session (the `OutOfProcessPluginHost` claim). The
+    /// crash/hang cases consume it; `None` keeps them at the
+    /// capability-gated `Unsupported` pre-flight verdict.
+    oos: Option<&'a OosRoute>,
     /// The artifact evidence identity, when the artifact loaded.
     artifact: Option<&'a PluginArtifactEvidence>,
     /// Opt-in pixel-artifact directory for `real-dcomp-pixel` and
@@ -490,6 +503,18 @@ pub fn run_all_with_pixel_artifacts(
             // session start; `finalize_case` stamps it into every
             // real case's `environment.display_adapters`.
             let display_adapters = display_adapters_json(&osgpu::display_adapters());
+            // The Issue #886 `OutOfProcessPluginHost` claim gate —
+            // one spawn probe per session, inside the live window
+            // set: the runner + `test_editor` fixture resolve, a
+            // `Dedicated` child instantiates, and its negotiated
+            // mask advertises `GUI_FLOATING`. `None` leaves the
+            // capability unclaimed and the crash/hang rows at the
+            // defined `Unsupported` pre-flight verdict — a host
+            // that cannot prove the route never claims it.
+            let oos_route = probe_out_of_process_route(plugin.as_ref().ok());
+            if oos_route.is_some() {
+                gui.claim_capability(ScenarioCapability::OutOfProcessPluginHost);
+            }
             // The session-scoped catalog — `real_entries` rows run
             // through `run_entries` against the live context.
             let entries = real_entries();
@@ -507,6 +532,7 @@ pub fn run_all_with_pixel_artifacts(
                 env,
                 plugin: plugin.as_ref().ok(),
                 plugin_error: plugin_error.as_ref(),
+                oos: oos_route.as_ref(),
                 artifact: plugin_evidence.as_ref(),
                 pixel_artifacts,
             };
@@ -841,14 +867,20 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 32] {
         ScenarioEntry {
             case: "real-session-crash",
             scenario: SCENARIO,
-            required: &[ScenarioCapability::NativePluginDock],
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::OutOfProcessPluginHost,
+            ],
             spec_extras: real_window_extras,
             run: real_session_crash_case,
         },
         ScenarioEntry {
             case: "real-session-hang",
             scenario: SCENARIO,
-            required: &[ScenarioCapability::NativePluginDock],
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::OutOfProcessPluginHost,
+            ],
             spec_extras: real_window_extras,
             run: real_session_hang_case,
         },
@@ -939,6 +971,140 @@ fn load_plugin(env: &LaneEnvironment) -> Result<PluginPair, PluginUnavailable> {
             version,
         },
     ))
+}
+
+// ---------------------------------------------------------------------
+// out-of-process (L1) plugin host route — Issue #886 crash/hang lane
+// ---------------------------------------------------------------------
+
+/// The resolved L1 route the `real-session-crash`/`real-session-hang`
+/// cases instantiate their fixture through — `descriptor` is the
+/// lane-discovered `test_editor` identity the spawn handshake
+/// field-matches against the child's own `Scanned` report, `program`
+/// is the `ruviform-plugin-test-vst3-l1-runner` executable path.
+/// `Some` only after [`probe_out_of_process_route`] *proved* the
+/// route end-to-end inside the live session — the
+/// `OutOfProcessPluginHost` claim follows the proof, never precedes
+/// it.
+struct OosRoute {
+    /// `test_editor`'s descriptor — `Instantiate` selects it.
+    descriptor: PluginDescriptor,
+    /// The L1 runner executable the route spawns.
+    program: std::ffi::OsString,
+}
+
+/// Bound on `Instantiate` retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 signature. A stalled
+/// spawn-path wait is an environment deadline event, not a contract
+/// verdict: `SpawnFailed` is pre-mint only, so a fresh attempt is
+/// the defined recovery. The bound keeps a persistent stall an
+/// honest failure instead of an absorbed flake
+/// (`l1_fault_test_plugin_e2e.rs`'s `SPAWN_TIMEOUT_RETRIES`
+/// precedent).
+const OOS_SPAWN_RETRIES: u32 = 3;
+
+/// `Instantiate` with a bounded retry on the pre-mint
+/// `SpawnFailed{cause: Timeout}` signature — every attempt is
+/// step-recorded; any other error, an exhausted bound, or a
+/// non-`Instantiated` reply returns `Err` for the caller's honest
+/// step failure (never panics, never absorbs a persistent stall).
+fn oos_instantiate(host: &mut PluginHost, plugin_id: &str) -> Result<PluginHandle, String> {
+    for attempt in 0..=OOS_SPAWN_RETRIES {
+        match host.execute(HostCommand::Instantiate {
+            plugin_id: plugin_id.to_owned(),
+        }) {
+            Ok(HostReply::Instantiated { handle }) => return Ok(handle),
+            Ok(other) => return Err(format!("Instantiate replied {other:?}")),
+            Err(HostError::SpawnFailed {
+                cause: FailureCause::Timeout,
+                ..
+            }) => {
+                if attempt == OOS_SPAWN_RETRIES {
+                    return Err(
+                        "Instantiate SpawnFailed{Timeout} outlasted the retry bound".to_string()
+                    );
+                }
+            }
+            Err(error) => return Err(format!("Instantiate failed: {error}")),
+        }
+    }
+    unreachable!("the loop exits only through `return`")
+}
+
+/// The runner executable the `l1-runner` feature builds — resolved
+/// as a `current_exe` sibling (the `cargo run`/`cargo build`
+/// layout) or its parent directory (the `cargo test` `deps/`
+/// layout). `None` means the artifact is absent — the honest
+/// capability-refusal input, never a fabricated claim.
+fn l1_runner_program() -> Option<std::ffi::OsString> {
+    let file_name = format!(
+        "ruviform-plugin-test-vst3-l1-runner{}",
+        std::env::consts::EXE_SUFFIX
+    );
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    for candidate in [
+        dir.join(&file_name),
+        dir.parent().unwrap_or(dir.as_path()).join(&file_name),
+    ] {
+        if candidate.is_file() {
+            return Some(candidate.into_os_string());
+        }
+    }
+    None
+}
+
+/// The Issue #886 claim-gate probe — runs once per lane session,
+/// inside the live `RealOsGuiTest` window set (claim conditions (a)
+/// `cfg!(windows)` and (b) an interactive session are already proven
+/// by the caller's reachability). Conditions (c)/(d): the runner
+/// executable and the loaded `test_editor` descriptor resolve, the
+/// `Dedicated` route spawns a child, and the negotiated capability
+/// mask advertises `GUI_FLOATING`. Every step is honestly gated —
+/// any failure returns `None`, which keeps
+/// `OutOfProcessPluginHost` unclaimed and the two cases at the
+/// defined `Unsupported` pre-flight verdict.
+fn probe_out_of_process_route(plugin: Option<&PluginPair>) -> Option<OosRoute> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let (library, _) = plugin?;
+    let descriptor = library
+        .descriptors()
+        .iter()
+        .find(|d| d.name == "test_editor")
+        .copied()?;
+    let program = l1_runner_program()?;
+    // The runner resolves the fixture cdylib as its own sibling
+    // (`RUVIFORM_L1_REAL_PLUGIN_DIR` unset — the
+    // `l1_fault_test_plugin_e2e.rs` convention); confirm the same
+    // dir the lane's `load_plugin` found the artifact under.
+    let sibling = PathBuf::from(&program)
+        .parent()
+        .map(|dir| dir.join(artifact::fixture_lib_name()));
+    if !sibling.is_some_and(|path| path.is_file()) {
+        return None;
+    }
+    let mut host = PluginHost::new();
+    let mut spec = OutOfProcessSpec::new(descriptor, program.clone());
+    spec.isolation = OutOfProcessIsolation::Dedicated;
+    if host.register_out_of_process(spec).is_err() {
+        return None;
+    }
+    let handle = oos_instantiate(&mut host, descriptor.id).ok()?;
+    // `Instantiate` succeeded — the child advertised `Hello`. The
+    // negotiated GUI mask is the claim's capability proof (d):
+    // `GUI_FLOATING` must be set or the floating verb family the
+    // crash/hang cases drive would gate-refuse `Unsupported`.
+    let floating = host
+        .negotiated_gui_capabilities(handle)
+        .is_ok_and(|mask| mask & wire::WIRE_CAPABILITY_GUI_FLOATING != 0);
+    // Teardown is best-effort evidence hygiene — the probe's own
+    // verdict was already decided by the negotiation read.
+    let _ = host.execute(HostCommand::Destroy { handle });
+    floating.then_some(OosRoute {
+        descriptor,
+        program,
+    })
 }
 
 /// The declarative slot spec for the real window's dock region —
@@ -13295,57 +13461,948 @@ fn real_editor_visibility_case(
     )
 }
 
-/// `real-session-crash`: the fixture's crash fault modes
-/// (`test_fault` abort/exit) kill the plugin cdylib — which shares
-/// the host process in this lane — so the in-process real-window
-/// lane cannot survive them, and no out-of-process plugin host
-/// exists yet. `L1EditorOps` refuses every editor op with the
-/// defined `Unsupported`. The honest verdict is `Unsupported`,
-/// recorded inside the real session without touching GUI/session
-/// state — never a fabricated `NotRun` (the catalog row is
-/// executable; the boundary is architectural) and never a `Pass`.
-fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-        outcome.detail = Some(
-            "the in-process lane cannot survive the fixture's \
-             process-killing crash fault (test_fault abort/exit — \
-             the plugin cdylib shares the host process) and no \
-             out-of-process plugin host exists yet; L1EditorOps \
-             refuses every editor op with the defined Unsupported"
-                .to_string(),
+// ---------------------------------------------------------------------
+// cases: real-session-crash / real-session-hang (Issue #886 —
+//        out-of-process L1 editor session fault oracle)
+// ---------------------------------------------------------------------
+
+/// Frames per `host.process` block the crash/hang cases submit —
+/// `u32` for the `EventList` frame counts.
+const OOS_FRAMES_U32: u32 = 512;
+
+/// `OOS_FRAMES_U32` as `usize` — buffer shapes.
+const OOS_FRAMES: usize = OOS_FRAMES_U32 as usize;
+
+/// Bounded poll for the `Failed`/`InstanceFailed` convergence — the
+/// same 10 s bound the `l1_fault_test_plugin_e2e.rs` notification
+/// waits use.
+const OOS_NOTIFY_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Cap on armed-submit resends — the fire-and-forget L1 submit path
+/// can drop a busy slot wholesale, events included (`dropped_submits`);
+/// the fault event rides every call until a `dropped` delta of `0`
+/// reports a landing. Crash/hang modes fire on the first landed
+/// block, and the fixture keeps the *last* `Fault` event of a
+/// block, so resends are idempotent (`ARM_RESEND_CALLS` precedent).
+const OOS_ARM_RESEND_CALLS: u32 = 8;
+
+/// `command_timeout` for the hang route — the wedged child can
+/// never answer `SaveState`, so the probe must converge inside a
+/// bound, not the 10 s default (`l1_fault_test_plugin_e2e.rs`'s
+/// 500 ms pin).
+const OOS_HANG_COMMAND_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Consecutive substituted `process` outputs that prove the hang
+/// wedge landed. The driver's command/submit drain is not FIFO
+/// across channels, so a `SaveState` sent too early overtakes the
+/// queued armed `BlockIn` and is answered before the wedge; the
+/// probe must wait until the child's `serve_loop` is provably
+/// inside the armed `process()` — observable only as a dead stop
+/// of completed blocks (every call substitutes). A merely-slow
+/// child keeps interleaving real completions and breaks the
+/// streak.
+const OOS_WEDGE_STREAK: u32 = 12;
+
+/// The child-owned floating container class — `open_floating`'s
+/// `RuviformL1GuiContainer` toplevel in the L1 child process
+/// (`plugin-export/gui.rs`). The window oracle attributes it by
+/// `pid != own_pid`: no public child-pid accessor exists, so the
+/// class name plus foreign-pid membership is the honest
+/// substitute.
+const OOS_CONTAINER_CLASS: &str = "RuviformL1GuiContainer";
+
+/// `test_editor`'s `Fault` parameter (`ParamId(0)`, plain `[0,8)`)
+/// — `TestEditorProcessor` embeds `TestFaultProcessor`, so the
+/// shared fault law applies (Issue #885).
+const OOS_FAULT_PARAM: ParamId = ParamId(0);
+
+/// `Fault` normalized value arming `abort` — plain `1.0` lands in
+/// the `[1,2)` band; the armed block's `process()` calls
+/// `std::process::abort()` inside the child.
+const OOS_FAULT_ABORT: f64 = 0.125;
+
+/// `Fault` normalized value arming `hang` — plain `3.0` lands in
+/// the `[3,4)` band; the armed block's `process()` spins forever
+/// inside the child.
+const OOS_FAULT_HANG: f64 = 0.375;
+
+/// The fault kind the shared body arms — the normalized `Fault`
+/// value, the verdict's evidence marker prefix, and the hang leg's
+/// probe behavior diverge per kind.
+#[derive(Clone, Copy)]
+enum OosFaultKind {
+    /// `real-session-crash` — in-band `abort`: the armed block's
+    /// `process()` never returns because the child process died.
+    Crash,
+    /// `real-session-hang` — in-band `hang`: the armed block's
+    /// `process()` never returns because the child wedges inside
+    /// it; the watchdog's `command_timeout`/`Timeout` convergence
+    /// kills it.
+    Hang,
+}
+
+/// `PluginHost::process` on the L1 route is fire-and-forget —
+/// submits reach the child's shm queue asynchronously and a wedged
+/// or dead child still yields `Ok(CONTINUE)` with substituted
+/// (passthrough/silence) output. One block returns the result plus
+/// the leg's `passthrough_submits`/`dropped_submits` deltas so the
+/// arm knows whether this call's block — event included — reached
+/// the child at all.
+fn oos_host_block(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    events: EventList<'_>,
+) -> (Result<ProcessResult, HostError>, u64, u64) {
+    let counters = |host: &PluginHost| {
+        host.audio_counters(handle)
+            .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
+    };
+    let before = counters(host);
+    let in_left = [0.5_f32; OOS_FRAMES];
+    let in_right = [-0.25_f32; OOS_FRAMES];
+    let input = [&in_left[..], &in_right[..]];
+    let mut out_left = [0.0_f32; OOS_FRAMES];
+    let mut out_right = [0.0_f32; OOS_FRAMES];
+    let input_view = PlanarBufferView::new(&input[..]).expect("stereo input view");
+    let inputs = [HostInput(&input_view)];
+    let mut out_list = [&mut out_left[..], &mut out_right[..]];
+    let mut output_view = PlanarBufferViewMut::new(&mut out_list).expect("stereo output view");
+    let mut outputs = [HostOutput(&mut output_view)];
+    let result = host.process(handle, &inputs, &mut outputs, events, None);
+    let after = counters(host);
+    (result, after.0 - before.0, after.1 - before.1)
+}
+
+/// One `Fault` `ParamValue` event at frame offset `0` — `normalized`
+/// is the wire value (`plain = normalized × 8.0`).
+fn oos_fault_event(normalized: f64) -> PluginEvent {
+    PluginEvent::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: OOS_FAULT_PARAM,
+            value: ParamValue::new(normalized).expect("normalized fault value is in [0,1]"),
+        }),
+    )
+}
+
+/// Drives the instance `Created → Processing`: `Initialize` +
+/// `Activate` (48 kHz, block `1..=512`) + `StartProcessing`. The
+/// first failure is recorded and the drive stops — every step that
+/// ran is in `steps`.
+fn oos_drive_to_processing(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let Some(config) = SampleRate::new(48_000)
+        .ok()
+        .and_then(|rate| ProcessConfig::new(rate, 1, OOS_FRAMES_U32).ok())
+    else {
+        record_obs_fail(
+            steps,
+            failure,
+            "process_config",
+            "ProcessConfig (48kHz, 1..=512) rejected",
         );
+        return false;
+    };
+    for (name, command) in [
+        ("initialize", HostCommand::Initialize { handle }),
+        ("activate", HostCommand::Activate { handle, config }),
+        ("start_processing", HostCommand::StartProcessing { handle }),
+    ] {
+        match host.execute(command) {
+            Ok(_) => steps.push(json!({ "step": name, "verdict": "pass" })),
+            Err(error) => {
+                record_obs_fail(steps, failure, name, error.to_string());
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Submits `blocks` clean pass-through blocks, counting how many
+/// the child actually rendered (`dropped == 0` *and* `passthrough
+/// == 0` — a substituted block replays stale output, never delivery
+/// evidence). Submit acceptance errors stop the count honestly —
+/// the step reports the matched count, not a fabricated one.
+fn oos_drive_clean_blocks(host: &mut PluginHost, handle: PluginHandle, blocks: u32) -> u32 {
+    let empty = EventList::empty(OOS_FRAMES_U32);
+    let mut matched = 0_u32;
+    for _ in 0..blocks {
+        std::thread::sleep(Duration::from_millis(5));
+        let (result, passthrough, dropped) = oos_host_block(&mut *host, handle, empty);
+        if result.is_err() {
+            break;
+        }
+        if passthrough == 0 && dropped == 0 {
+            matched += 1;
+        }
+    }
+    matched
+}
+
+/// Arms `normalized` on the shared `Fault` parameter — the event
+/// rides every submit until a `dropped` delta of `0` reports the
+/// block (and its event) reached the child's queue. `true` on a
+/// landing inside [`OOS_ARM_RESEND_CALLS`]; `false` is the honest
+/// unarmed report — the case must not poll a fault that never
+/// landed.
+fn oos_arm_fault(host: &mut PluginHost, handle: PluginHandle, normalized: f64) -> bool {
+    let events = [oos_fault_event(normalized)];
+    for _ in 0..OOS_ARM_RESEND_CALLS {
+        let list = EventList::new(&events, OOS_FRAMES_U32).expect("fixed fault event list");
+        let (_result, _passthrough, dropped) = oos_host_block(&mut *host, handle, list);
+        if dropped == 0 {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    false
+}
+
+/// Bounded poll for the child-owned floating container — the L1
+/// child's `RuviformL1GuiContainer` toplevel attributed by
+/// `pid != own_pid` (no public child-pid accessor exists; the
+/// class + foreign-pid pair is the honest substitute). Returns the
+/// container HWND plus its enumerated children, or `None` when the
+/// window never appeared inside the bound.
+#[cfg(windows)]
+fn oos_observe_floating_window() -> Option<(u64, ChildWindowObservation)> {
+    let own_pid = std::process::id();
+    let deadline = Instant::now() + OOS_NOTIFY_TIMEOUT;
+    loop {
+        let inv = ospres::inventory();
+        if let Some(window) = inv.windows.iter().find(|window| {
+            window.class_name.as_deref() == Some(OOS_CONTAINER_CLASS)
+                && window.pid.is_some_and(|pid| pid != own_pid)
+        }) {
+            return Some((window.hwnd, oschild::observe(window.hwnd)));
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Off-Windows stub — the claim gate keeps this unreachable (the
+/// capability is never claimed outside Windows), but the case must
+/// still compile per-target.
+#[cfg(not(windows))]
+fn oos_observe_floating_window() -> Option<(u64, ChildWindowObservation)> {
+    None
+}
+
+/// Bounded polls for the instance's `Failed` convergence and its
+/// `InstanceFailed` notification. Returns `(failed_ok, Option<(notified,
+/// exit, cause)>)` — `failed_ok` is the `lifecycle_state == Failed`
+/// observation; the notification tuple carries the notified handle so
+/// the caller can pin attribution (`None` when none arrived inside the
+/// bound). `try_recv` is the non-blocking drain — the poll sleeps
+/// between reads.
+fn oos_wait_failed_and_notification(
+    host: &mut PluginHost,
+    handle: PluginHandle,
+) -> (bool, Option<(PluginHandle, ChildExit, FailureCause)>) {
+    let deadline = Instant::now() + OOS_NOTIFY_TIMEOUT;
+    let mut failed = false;
+    while Instant::now() < deadline {
+        if host.lifecycle_state(handle) == Some(LifecycleState::Failed) {
+            failed = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let mut notification = None;
+    let deadline = Instant::now() + OOS_NOTIFY_TIMEOUT;
+    while Instant::now() < deadline {
+        if let Some(HostNotification::InstanceFailed {
+            handle: notified,
+            exit,
+            cause,
+            ..
+        }) = host.try_recv_notification()
+        {
+            notification = Some((notified, exit, cause));
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    (failed, notification)
+}
+
+/// The shared Issue #886 out-of-process session body: dedicated L1
+/// child on the session-probed route → `test_editor` floating
+/// attach → child-window oracle → in-band `Fault` arm →
+/// convergence (`Failed` + exactly one `InstanceFailed`) →
+/// `notify_terminated(HostLost)` → `[Attached{Floating},
+/// Terminated{HostLost}]` → `Closed`+concluded → notification
+/// drain + `Destroy` + lane-survival pin. `hang` additionally pins
+/// the wedged-leg probe (`SaveState` → `Err(Ipc)` inside
+/// `command_timeout`, `cause: Timeout`, substituted passthrough
+/// accrual = the watchdog kill).
+#[expect(clippy::too_many_lines)]
+fn oos_session_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    route: Option<&OosRoute>,
+    kind: OosFaultKind,
+) -> ScenarioOutcome {
+    let mut steps: Vec<Value> = Vec::new();
+    let mut failure: Option<String> = None;
+    let mut extras = Map::new();
+    let mut cleanup: Vec<String> = Vec::new();
+
+    let Some(_plugin) = plugin else {
+        return match plugin_error {
+            Some(unavailable) if unavailable.prerequisite => not_run(format!(
+                "plugin artifact unavailable: {}",
+                unavailable.detail
+            )),
+            Some(unavailable) => fail(format!(
+                "plugin artifact failed to load: {}",
+                unavailable.detail
+            )),
+            None => not_run("plugin artifact unavailable".to_string()),
+        };
+    };
+    let Some(route) = route else {
+        // Unreachable in practice — the capability claim follows the
+        // probe, so `run_scenario` pre-flights `Unsupported` before
+        // this body ever sees `None`. A claimed-but-routeless lane
+        // is a wiring defect, reported honestly as `Fail`.
+        return fail(
+            "OutOfProcessPluginHost was claimed but no probed route was recorded".to_string(),
+        );
+    };
+
+    // --- route spawn + instantiate -------------------------------
+    let mut host = PluginHost::new();
+    let mut spec = OutOfProcessSpec::new(route.descriptor, route.program.clone());
+    spec.isolation = OutOfProcessIsolation::Dedicated;
+    if matches!(kind, OosFaultKind::Hang) {
+        spec.command_timeout = OOS_HANG_COMMAND_TIMEOUT;
+    }
+    if let Err(error) = host.register_out_of_process(spec) {
+        steps.push(json!({
+            "step": "register_route",
+            "verdict": "fail",
+            "error": error.to_string(),
+        }));
+        let mut outcome = fail(format!("register_route: {error}"));
+        outcome.observed = Some(json!({ "steps": steps }));
+        return outcome;
+    }
+    steps.push(json!({ "step": "register_route", "verdict": "pass" }));
+
+    let handle = match oos_instantiate(&mut host, route.descriptor.id) {
+        Ok(handle) => {
+            steps.push(json!({ "step": "instantiate", "verdict": "pass" }));
+            handle
+        }
+        Err(detail) => {
+            record_obs_fail(&mut steps, &mut failure, "instantiate", detail.clone());
+            let mut outcome = fail(failure.take().expect("recorded failure"));
+            outcome.observed = Some(json!({ "steps": steps }));
+            return outcome;
+        }
+    };
+    extras.insert("plugin_id".to_string(), json!(route.descriptor.id));
+
+    // --- negotiated GUI_FLOATING gate (claim condition d re-checked
+    // on the case's own spawn) -----------------------------------
+    let floating = host
+        .negotiated_gui_capabilities(handle)
+        .map(|mask| mask & wire::WIRE_CAPABILITY_GUI_FLOATING != 0);
+    match floating {
+        Ok(true) => steps.push(json!({
+            "step": "gui_floating_negotiated",
+            "verdict": "pass",
+        })),
+        other => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "gui_floating_negotiated",
+                format!("expected advertised GUI_FLOATING bit, got {other:?}"),
+            );
+        }
+    }
+
+    // --- Processing drive + a few matched clean blocks ----------
+    let processing_ok = oos_drive_to_processing(&mut host, handle, &mut steps, &mut failure);
+    let clean = if processing_ok {
+        oos_drive_clean_blocks(&mut host, handle, 16)
+    } else {
+        0
+    };
+    if processing_ok && clean >= 4 {
+        steps.push(json!({
+            "step": "clean_blocks",
+            "verdict": "pass",
+            "matched": clean,
+        }));
+    } else if processing_ok {
+        record_obs_fail(
+            &mut steps,
+            &mut failure,
+            "clean_blocks",
+            format!("only {clean} matched clean blocks of 16 submits"),
+        );
+    }
+    extras.insert("clean_blocks".to_string(), json!(clean));
+
+    // --- floating editor session --------------------------------
+    let mut sessions = PluginEditorSessions::new();
+    let mut session_id = None;
+    let mut attached_ok = false;
+    if failure.is_none() {
+        match sessions.begin_session(handle) {
+            Ok(id) => {
+                session_id = Some(id);
+                steps.push(json!({
+                    "step": "begin_session",
+                    "verdict": "pass",
+                    "session": session_id_json(id),
+                }));
+            }
+            Err(error) => {
+                record_obs_fail(&mut steps, &mut failure, "begin_session", error.to_string());
+            }
+        }
+    }
+    if let Some(id) = session_id {
+        let open_result = sessions.session_mut(id).map(|session| {
+            session.open(
+                &mut L1EditorOps::new(&mut host, handle),
+                &ParentSlotLease::new(0),
+                editor_size(),
+                AttachMode::Floating,
+            )
+        });
+        match open_result {
+            Some(Ok(_capabilities)) => {
+                attached_ok = true;
+                steps.push(json!({
+                    "step": "session_open_floating",
+                    "verdict": "pass",
+                    "session": session_id_json(id),
+                }));
+            }
+            Some(Err(error)) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "session_open_floating",
+                    error.to_string(),
+                );
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "session_open_floating",
+                    "session vanished before open",
+                );
+            }
+        }
+    }
+
+    // --- child-owned floating window oracle ----------------------
+    // The container toplevel lives in the *child* process —
+    // `ospres::inventory` attributes it by class + foreign pid;
+    // `oschild::observe` then enumerates the fixture's editor child
+    // HWND under it (query-only Win32, cross-process safe).
+    if attached_ok {
+        match oos_observe_floating_window() {
+            Some((container, observation)) => {
+                let child_hwnds: Vec<u64> = observation.children.iter().map(|c| c.hwnd).collect();
+                extras.insert("floating_container_hwnd".to_string(), json!(container));
+                extras.insert("floating_children".to_string(), json!(child_hwnds));
+                if child_hwnds.is_empty() {
+                    record_obs_fail(
+                        &mut steps,
+                        &mut failure,
+                        "floating_child_window",
+                        "RuviformL1GuiContainer found but has no editor child HWND",
+                    );
+                } else {
+                    steps.push(json!({
+                        "step": "floating_child_window",
+                        "verdict": "pass",
+                        "container": container,
+                        "children": child_hwnds,
+                    }));
+                }
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "floating_child_window",
+                    "no RuviformL1GuiContainer toplevel with a foreign pid \
+                     appeared inside the bound",
+                );
+            }
+        }
+    }
+
+    // --- fault arm (the first landed block fires inside the child)
+    let mut armed = false;
+    if failure.is_none() && attached_ok {
+        let normalized = match kind {
+            OosFaultKind::Crash => OOS_FAULT_ABORT,
+            OosFaultKind::Hang => OOS_FAULT_HANG,
+        };
+        armed = oos_arm_fault(&mut host, handle, normalized);
+        if armed {
+            steps.push(json!({
+                "step": "fault_armed",
+                "verdict": "pass",
+                "normalized": normalized,
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "fault_armed",
+                format!("the armed submit never landed within {OOS_ARM_RESEND_CALLS} calls"),
+            );
+        }
+    }
+
+    // --- hang leg probe: wedge-landed wait, then SaveState times
+    // out into Err(Ipc) inside the 500 ms command_timeout --------
+    if matches!(kind, OosFaultKind::Hang) && armed {
+        let passthrough_before = host
+            .audio_counters(handle)
+            .map_or(0, |c| c.passthrough_submits);
+        // The wedge is observable only through the data plane: the
+        // armed `BlockIn` rides the child's stdin FIFO, and the
+        // driver's command/submit drain lets a command overtake
+        // queued submits — a `SaveState` sent before the wedge
+        // lands is answered (the fixture's defined `Unsupported`),
+        // never timing out and never converging the child. Drive
+        // clean submits until `OOS_WEDGE_STREAK` consecutive
+        // substituted outputs prove the child's `serve_loop` is
+        // inside the armed `process()` — a merely-slow child keeps
+        // interleaving real completions and breaks the streak.
+        let wedge_deadline = Instant::now() + OOS_NOTIFY_TIMEOUT;
+        let mut streak = 0_u32;
+        let mut wedge_landed = false;
+        let mut wedge_probe_blocks = 0_u32;
+        while Instant::now() < wedge_deadline {
+            let (result, passthrough, _dropped) =
+                oos_host_block(&mut host, handle, EventList::empty(OOS_FRAMES_U32));
+            if result.is_err() {
+                break;
+            }
+            wedge_probe_blocks += 1;
+            if passthrough > 0 {
+                streak += 1;
+                if streak >= OOS_WEDGE_STREAK {
+                    wedge_landed = true;
+                    break;
+                }
+            } else {
+                streak = 0;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        extras.insert("wedge_probe_blocks".to_string(), json!(wedge_probe_blocks));
+        if wedge_landed {
+            steps.push(json!({
+                "step": "wedge_landed",
+                "verdict": "pass",
+                "streak": streak,
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "wedge_landed",
+                format!(
+                    "no {OOS_WEDGE_STREAK}-call substituted-output streak inside the bound \
+                     ({wedge_probe_blocks} probe blocks)"
+                ),
+            );
+        }
+        match host.execute(HostCommand::SaveState { handle }) {
+            Err(HostError::Ipc) => {
+                steps.push(json!({
+                    "step": "save_state_probe_ipc_timeout",
+                    "verdict": "pass",
+                }));
+            }
+            other => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "save_state_probe_ipc_timeout",
+                    format!("expected Err(HostError::Ipc) on the wedged child, got {other:?}"),
+                );
+            }
+        }
+        let passthrough_after = host
+            .audio_counters(handle)
+            .map_or(0, |c| c.passthrough_submits);
+        let passthrough_delta = passthrough_after.saturating_sub(passthrough_before);
+        extras.insert(
+            "passthrough_submits_delta".to_string(),
+            json!(passthrough_delta),
+        );
+        // The wedged-leg substituted-output accrual is the
+        // watchdog-kill evidence (`l1:watchdog-kill`): submits that
+        // produced no matched child block prove the leg kept
+        // answering while the child's `process()` spun — zero means
+        // the wedge was never actually exercised.
+        if passthrough_delta > 0 {
+            steps.push(json!({
+                "step": "wedged_leg_passthrough",
+                "verdict": "pass",
+                "delta": passthrough_delta,
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "wedged_leg_passthrough",
+                "no substituted-output accrual while the child was wedged",
+            );
+        }
+    }
+
+    // --- convergence: Failed + exactly one InstanceFailed -------
+    // The wait runs whenever the fault armed — even when the hang
+    // probe answered an unexpected shape, the convergence
+    // observation is evidence (and the `cause` check below still
+    // pins `Timeout` for hang).
+    let mut converged = false;
+    if armed {
+        let (failed, notification) = oos_wait_failed_and_notification(&mut host, handle);
+        if failed {
+            steps.push(json!({
+                "step": "instance_failed",
+                "verdict": "pass",
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "instance_failed",
+                "instance never reached LifecycleState::Failed inside the bound",
+            );
+        }
+        match notification {
+            Some((notified, exit, cause)) => {
+                let attribution_ok = notified == handle;
+                let cause_ok = match kind {
+                    OosFaultKind::Hang => cause == FailureCause::Timeout,
+                    OosFaultKind::Crash => true,
+                };
+                if attribution_ok && cause_ok {
+                    steps.push(json!({
+                        "step": "instance_failed_notification",
+                        "verdict": "pass",
+                        "exit_code": exit.code,
+                        "exit_signal": exit.signal,
+                        "cause": format!("{cause:?}"),
+                    }));
+                    converged = true;
+                } else {
+                    record_obs_fail(
+                        &mut steps,
+                        &mut failure,
+                        "instance_failed_notification",
+                        format!(
+                            "expected InstanceFailed{{handle, cause:{}}} got \
+                             (attribution:{attribution_ok}, cause:{cause:?})",
+                            if matches!(kind, OosFaultKind::Hang) {
+                                "Timeout"
+                            } else {
+                                "any"
+                            }
+                        ),
+                    );
+                }
+                extras.insert("exit_code".to_string(), json!(exit.code));
+                extras.insert("exit_signal".to_string(), json!(exit.signal));
+                extras.insert("cause".to_string(), json!(format!("{cause:?}")));
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "instance_failed_notification",
+                    "InstanceFailed notification never arrived inside the bound",
+                );
+            }
+        }
+        // exactly-once — a second notification is a lane-invariant
+        // violation, not a drain convenience.
+        if host.try_recv_notification().is_none() {
+            steps.push(json!({
+                "step": "notification_exactly_once",
+                "verdict": "pass",
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "notification_exactly_once",
+                "a second host notification arrived — exactly-once violated",
+            );
+        }
+    }
+
+    // --- session termination: notify_terminated(HostLost) →
+    // [Attached{Floating}, Terminated{HostLost}] → Closed ---------
+    let mut session_ok = false;
+    if converged
+        && attached_ok
+        && let Some(id) = session_id
+    {
+        sessions.notify_terminated(handle, SessionFailCause::HostLost);
+        steps.push(json!({
+            "step": "notify_terminated",
+            "verdict": "pass",
+            "cause": "host-lost",
+        }));
+        let (converged_ok, rendered) = check_session_converged(
+            &mut sessions,
+            id,
+            &mut steps,
+            &mut failure,
+            &[
+                EditorSessionEvent::Attached {
+                    mode: AttachMode::Floating,
+                },
+                EditorSessionEvent::Terminated {
+                    cause: SessionFailCause::HostLost,
+                },
+            ],
+        );
+        extras.insert("events".to_string(), json!(rendered));
+        // exactly-once — the first notify removed the instance
+        // binding, so a repeated notify (or any late callback)
+        // emits nothing.
+        sessions.notify_terminated(handle, SessionFailCause::HostLost);
+        let after = sessions
+            .session_mut(id)
+            .map_or_else(Vec::new, PluginEditorSession::drain_events);
+        if after.is_empty() {
+            steps.push(json!({
+                "step": "notify_terminated_again",
+                "verdict": "pass",
+                "result": "no-op",
+            }));
+            session_ok = converged_ok;
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "notify_terminated_again",
+                format!(
+                    "second notify_terminated produced events: {:?}",
+                    events_debug(&after)
+                ),
+            );
+        }
+    }
+
+    // --- teardown: Destroy frees the Failed slot bounded, the
+    // concluded session retires, and the host's command surface +
+    // the lane window must still answer (AC3 lane survival) ------
+    let mut teardown_ok = true;
+    match host.execute(HostCommand::Destroy { handle }) {
+        Ok(_) => {
+            steps.push(json!({ "step": "destroy", "verdict": "pass" }));
+            cleanup.push("instance-destroyed".to_string());
+        }
+        Err(error) => {
+            // A wedged child the watchdog has not yet reaped can
+            // refuse Destroy — bound the teardown with kill_child
+            // (the same defined route the design names as the crash
+            // trigger) and retry once.
+            let _ = host.kill_child(handle);
+            match host.execute(HostCommand::Destroy { handle }) {
+                Ok(_) => {
+                    steps.push(json!({
+                        "step": "destroy",
+                        "verdict": "pass",
+                        "after": "kill_child",
+                    }));
+                    cleanup.push("instance-destroyed-after-kill".to_string());
+                }
+                Err(retry) => {
+                    record_obs_fail(
+                        &mut steps,
+                        &mut failure,
+                        "destroy",
+                        format!("{error} (retry after kill_child: {retry})"),
+                    );
+                    teardown_ok = false;
+                }
+            }
+        }
+    }
+    if host.lifecycle_state(handle).is_none() {
+        steps.push(json!({ "step": "slot_freed", "verdict": "pass" }));
+    } else {
+        record_obs_fail(
+            &mut steps,
+            &mut failure,
+            "slot_freed",
+            "instance handle still resolves after Destroy",
+        );
+        teardown_ok = false;
+    }
+    if let Some(id) = session_id {
+        match sessions.end_session(id) {
+            Ok(()) => cleanup.push("session-ended".to_string()),
+            Err(error) => {
+                cleanup.push(format!("session-end-failed: {error}"));
+            }
+        }
+    }
+    match host.execute(HostCommand::Scan) {
+        Ok(HostReply::Scanned(_)) => {
+            steps.push(json!({ "step": "host_survives", "verdict": "pass" }));
+        }
+        other => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "host_survives",
+                format!("Scan returned {other:?} after the child died"),
+            );
+            teardown_ok = false;
+        }
+    }
+    match gui.window_geometry(window) {
+        Ok(_) => {
+            steps.push(json!({ "step": "lane_window_alive", "verdict": "pass" }));
+        }
+        Err(error) => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "lane_window_alive",
+                format!("lane window stopped answering: {error}"),
+            );
+            teardown_ok = false;
+        }
+    }
+    match gui.settle() {
+        Ok(()) => {
+            steps.push(json!({ "step": "lane_settles", "verdict": "pass" }));
+        }
+        Err(error) => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "lane_settles",
+                format!("lane window queue stopped draining: {error}"),
+            );
+            teardown_ok = false;
+        }
+    }
+
+    extras.insert("steps".to_string(), json!(steps));
+    extras.insert("cleanup".to_string(), json!(cleanup));
+    extras.insert("isolation".to_string(), json!("dedicated-out-of-process"));
+
+    let verified = failure.is_none() && session_ok && teardown_ok;
+    let mut outcome = if verified {
+        ScenarioOutcome::new(ScenarioVerdict::Pass)
+    } else {
+        fail(failure.unwrap_or_else(|| "out-of-process session fault oracle violated".to_string()))
+    };
+    outcome.observed = Some(Value::Object(extras));
+    if verified {
+        match kind {
+            OosFaultKind::Crash => {
+                outcome
+                    .evidence
+                    .push("session:crash:out-of-process".to_string());
+            }
+            OosFaultKind::Hang => {
+                outcome
+                    .evidence
+                    .push("session:hang:out-of-process".to_string());
+                outcome.evidence.push("l1:watchdog-kill".to_string());
+            }
+        }
+        outcome.evidence.push("l1:instance-failed".to_string());
         outcome
             .evidence
-            .push("session:crash:in-process-lane-nonviable".to_string());
-        Ok(outcome)
+            .push("session:terminated:host-lost".to_string());
+    }
+    outcome
+}
+
+/// `real-session-crash` (Issue #886): `test_editor` runs inside a
+/// dedicated L1 child on the session-probed route; `session.
+/// open(Floating)` attaches the editor into the child-owned
+/// `RuviformL1GuiContainer` toplevel (observed by class +
+/// foreign-pid attribution). The in-band `Fault` `abort` kill —
+/// the fixture's representative crash — converges the instance to
+/// `Failed` with exactly one `InstanceFailed`; the lane drains it,
+/// notifies `Terminated{HostLost}`, and observes `Closed` +
+/// `concluded`, then proves the lane survived (host `Scan`, lane
+/// window geometry + settle). The verdict is `Pass`/`Fail` — the
+/// capability-gated `Unsupported` is the pre-flight verdict when
+/// the lane never proved the route, never this body's verdict.
+fn real_session_crash_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let route = ctx.oos;
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(oos_session_body(
+            gui,
+            window,
+            plugin,
+            plugin_error,
+            route,
+            OosFaultKind::Crash,
+        ))
     });
     finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
-/// `real-session-hang`: the fixture's hang fault mode
-/// (`test_fault` hang) wedges the plugin call — which shares the
-/// host process in this lane — so the in-process real-window lane
-/// cannot survive it either, and no out-of-process plugin host
-/// exists yet. `L1EditorOps` refuses every editor op with the
-/// defined `Unsupported`. The honest verdict is `Unsupported`,
-/// recorded inside the real session without touching GUI/session
-/// state — never a fabricated `NotRun` and never a `Pass`.
+/// `real-session-hang` (Issue #886): the same dedicated L1 route
+/// and floating attach as `real-session-crash`, but the armed
+/// `Fault` `hang` wedges the child's `process()` forever — the
+/// audio leg keeps answering `Ok(CONTINUE)` on substituted output
+/// while the non-session `SaveState` probe hits `command_timeout`
+/// → `Err(HostError::Ipc)`. The watchdog kills the child
+/// (`passthrough_submits` accrual is its evidence), the instance
+/// converges `Failed{cause: Timeout}` with exactly one
+/// `InstanceFailed`, and the session observes
+/// `Terminated{HostLost}` → `Closed` + lane survival. The verdict
+/// is `Pass`/`Fail` — a wedged child that never converges, a
+/// different cause, or a duplicate notification is `Fail`, never
+/// the old in-process `Unsupported`.
 fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-        outcome.detail = Some(
-            "the in-process lane cannot survive the fixture's \
-             wedging hang fault (test_fault hang — the plugin call \
-             never returns and shares the host process) and no \
-             out-of-process plugin host exists yet; L1EditorOps \
-             refuses every editor op with the defined Unsupported"
-                .to_string(),
-        );
-        outcome
-            .evidence
-            .push("session:hang:in-process-lane-nonviable".to_string());
-        Ok(outcome)
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let route = ctx.oos;
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(oos_session_body(
+            gui,
+            window,
+            plugin,
+            plugin_error,
+            route,
+            OosFaultKind::Hang,
+        ))
     });
     finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }

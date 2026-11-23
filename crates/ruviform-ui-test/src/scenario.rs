@@ -219,6 +219,14 @@ pub enum ScenarioCapability {
     MultiWindow,
     /// Native plugin dock surface (Issues #388/#389 + consumer side).
     NativePluginDock,
+    /// Out-of-process (L1) plugin host route — the lane can spawn a
+    /// dedicated child process for the plugin instance, attach its
+    /// editor via the negotiated floating-GUI verb family, and
+    /// observe child death/wedging as `InstanceFailed` without dying
+    /// itself (Issue #886). Claimed only when a lane-init probe
+    /// proved the runner/fixture resolve and the child advertises
+    /// `GUI_FLOATING` — never a mechanism-name-only claim.
+    OutOfProcessPluginHost,
 }
 
 /// Which adapter produced a [`ScenarioReport`]. The value is the

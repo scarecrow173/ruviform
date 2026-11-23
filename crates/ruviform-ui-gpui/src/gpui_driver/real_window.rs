@@ -265,6 +265,13 @@ pub struct RealOsGuiTest {
     /// injecting into the void; `os_input_preflight` probes the
     /// missing families of its scope once.
     os_preflight: RefCell<BTreeMap<&'static str, PreflightCheck>>,
+    /// Lane-injected claims unioned into
+    /// [`capabilities`](SemanticGuiTest::capabilities) — populated
+    /// only through [`claim_capability`](Self::claim_capability)
+    /// after the lane's own session-scoped probe *proved* the
+    /// capability, so the honest-claim lattice stays fail-closed
+    /// by default (empty here).
+    lane_claimed: BTreeSet<ScenarioCapability>,
 }
 
 /// How the session `body` ended — lets [`RealOsGuiTest::run`] tear
@@ -369,6 +376,7 @@ impl RealOsGuiTest {
             events,
             close_responses,
             os_preflight: RefCell::new(BTreeMap::new()),
+            lane_claimed: BTreeSet::new(),
         };
 
         let outcome = match gui.settle_n(startup_settle_ticks) {
@@ -781,6 +789,20 @@ impl RealOsGuiTest {
             .filter(|(id, _)| *id == window)
             .map(|(_, event)| *event)
             .collect()
+    }
+
+    /// Records a capability the lane *proved inside this session* —
+    /// the injection port for adapter-external evidence (e.g. a
+    /// plugin-host capability `ruviform-ui-gpui` cannot observe
+    /// itself, like the out-of-process L1 plugin route the dock
+    /// lane probes once at session start). The caller attests the
+    /// capability was demonstrated on this session — "claim は
+    /// 実証された能力のみ" — so a lane that did not run its probe
+    /// must not call this. The claim unions into
+    /// [`capabilities`](SemanticGuiTest::capabilities) for the rest
+    /// of the session.
+    pub fn claim_capability(&mut self, capability: ScenarioCapability) {
+        self.lane_claimed.insert(capability);
     }
 
     /// Queues the veto-able close request — the real-window
@@ -1377,7 +1399,9 @@ impl SemanticGuiTest for RealOsGuiTest {
     }
 
     fn capabilities(&self) -> BTreeSet<ScenarioCapability> {
-        supported_capabilities()
+        let mut capabilities = supported_capabilities();
+        capabilities.extend(self.lane_claimed.iter().copied());
+        capabilities
     }
 
     fn windows(&self) -> Vec<WindowId> {
