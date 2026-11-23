@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #532 band-escape probe — 設計（container mutation family・verified-write・2 経路の試行順序）"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -105,16 +105,32 @@ window class の `CS_OWNDC`/`CS_CLASSDC` 保有。判別には
 `repaint_container` + `be_settle`（500ms `std::thread::sleep` —
 `uc_settle` と同じ方式）+ `be_observe_*` を置く。
 
-### D5: verdict は mutation 拒否を strict fail とする
+### D5: verdict は required mutation 拒否を strict fail とする（Issue #917 で as-child layered を期待値化）
 
-`RedrawWindow`/`SetWindowLongPtrW`/`SetLayeredWindowAttributes`/
-`SetParent`/`SetWindowPos` は自 process の live window への
-正規呼出であり、legitimate な拒否経路を持たない — 拒否は
-「probe が設計どおり完走しなかった」事実として `fail`。
+`RedrawWindow`/`SetWindowPos`/`SetParent` は自 process の live
+window への正規呼出であり、legitimate な拒否経路を持たない —
+拒否は「probe が設計どおり完走しなかった」事実として `fail`。
 pixel/hit-test の観測値は verdict を決めない note 級 data。
-これは既存 foreground/uncovered case と同じ意味論であり、
-実走では `be_apply_layered_exstyle` の拒否により
-`fail` が記録された（evidence に「評価不能」と解釈を明記）。
+これは既存 foreground/uncovered case と同じ意味論である。
+
+当初 D5 は `GWL_EXSTYLE`/`SetLayeredWindowAttributes` の拒否も
+一律 `fail` とし、実走では `be_apply_layered_exstyle` の拒否に
+より `fail` が記録された。その後の確定診断（class C —
+`docs/discovery/issue-532-dcomp-residual.md`）で、as-child
+`WS_EX_LAYERED` write の silent drop と続く `LWA_ALPHA` の
+`ERROR_INVALID_PARAMETER` 拒否は `WS_CHILD` window に対する
+確定制約であることが判明した。Issue #917 で verdict 契約を
+意図的改訂: `be_apply_layered_exstyle`/`be_apply_layered_lwa`
+は「確定機序どおりの期待拒否」の診断行（`verdict: note` +
+`expected_outcome` — `record_expected_refusal_row`）として
+verdict 入力から分離した。refusal の `applied`/`win32_error`/
+`after` 記録は維持され、Fail→Pass の改竄ではなく期待値検証へ
+の re-scope である。as-child latch 成功は確定機序と矛盾する
+OS 依存の新規 data として `contradicts_confirmed_mechanism`
+flag で記録し Pass を妨げない — lane が計るのは probe 契約の
+完遂であり OS 実装詳細の不変性ではない。frame commit・
+repaint・reparent・restore の required op は従来どおり
+strict。
 
 ### D6: restore は parent → exstyle → frame → rect → z-order の順
 
@@ -141,18 +157,21 @@ z-order は記録のみ（topmost 以外 exact を主張しない —
 6. `be_restore`（verified）→ `be_observe_restore`
 7. `conclude_editor_session` — lifecycle 収束
 
-## verdict 契約（不変）
+## verdict 契約（Issue #917 で意図的改訂 — as-child layered を期待値化）
 
-- `pass`: 全必須 mutation applied + restore verified + session
-  lifecycle 収束。
-- `fail`: 必須 mutation の拒否/失敗、restore 検証の不一致、
+- `pass`: required mutation（repaint/frame/reparent/restore 系）
+  applied + restore verified + session lifecycle 収束。as-child
+  `be_apply_layered_exstyle`/`be_apply_layered_lwa` の拒否は
+  確定 class-C の期待値であり `verdict: note` の診断行として
+  記録される（Issue #917）。
+- `fail`: required mutation の拒否/失敗、restore 検証の不一致、
   session 破壊。
 - `not_run`/`unsupported`: capability/session 不在（headless や
   real-attach 不可では fail-closed で `not_run`）。
-- green/hit-test/class_style/z-order は verdict を動かさない
-  note 級 data。**screen green が正でも Issue #532 は閉じない**
-  — 本 probe の成功は「経路が画素を現すか」の観測であって
-  修正の完了ではない。
+- green/hit-test/class_style/z-order/as-child latch 成否は
+  verdict を動かさない note 級 data。**screen green が正でも
+  Issue #532 は閉じない** — 本 probe の成功は「経路が画素を
+  現すか」の観測であって修正の完了ではない。
 
 ## 判断の解釈表（設計時点の予約 → 実走結果で確定）
 

@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #532 band-escape probe slice（container の layered/reparent presentation 変異で child pixel 脱出可否を判別）"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -156,8 +156,19 @@ metadata:
   snapshot を `ContainerMutationOutcome` として JSONL に残す。
 - FR4: `restore_container` は parent/exstyle/rect を deterministic
   に検証し、sibling z-order は記録のみ（exact を主張しない）。
-- FR5: 必須 mutation の拒否は `fail`（probe 未完走）。green/
-  hit-test は verdict を決めない。
+- FR5: required mutation op（repaint/frame/reparent/restore 系 —
+  いずれも legitimate な拒否経路を持たない）の拒否は `fail`
+  （probe 未完走）。as-child `WS_EX_LAYERED`/`LWA_ALPHA` op
+  （`*_apply_layered_exstyle`/`*_apply_layered_lwa`）の拒否は
+  確定 class-C 診断の期待値として `verdict: note` +
+  `expected_outcome` 付きの診断 data であり verdict 入力に
+  しない（Issue #917 による verdict 契約の意図的改訂 —
+  `WS_EX_LAYERED` は `WS_CHILD` に latch しない、
+  `docs/discovery/issue-532-dcomp-residual.md`。refusal の
+  `applied`/`win32_error`/`after` 記録は維持）。as-child
+  layered が latch する観測は確定機序と矛盾する OS 依存の新規
+  data であり、`contradicts_confirmed_mechanism` flag で記録し
+  verdict を動かさない。green/hit-test は verdict を決めない。
 
 ### 非機能要件
 
