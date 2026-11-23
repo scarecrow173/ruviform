@@ -15328,8 +15328,9 @@ fn real_session_rt_fault_case(
 /// verdict is `Unsupported`, recorded inside the real session — the
 /// `real-session-crash`/`real-session-hang` architectural-boundary
 /// precedent, never a fabricated `NotRun` and never a `Pass`.
-/// Deferred to Issue #872 (L1 out-of-process host) or a future
-/// GUI-capable `create_sendable` contract.
+/// Deferred to Issue #920 — the tracked `attach_endpoint`/
+/// GUI-capable `create_sendable` contract (Issue #872 closed
+/// without taking this residual).
 fn real_session_rt_boundary_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
@@ -15343,7 +15344,7 @@ fn real_session_rt_boundary_case(
              pub(crate) and answers EndpointUnavailable for Plain slots, and \
              PluginHost.l0 is private — nothing public can pump the same \
              instance from an RT-class thread while the UI thread drives \
-             session verbs (deferred: Issue #872)"
+             session verbs (deferred: Issue #920)"
                 .to_string(),
         );
         outcome

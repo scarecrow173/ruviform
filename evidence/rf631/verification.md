@@ -2057,3 +2057,139 @@ evidence/rf631/plugin-dock-console-list-include-real.jsonl` — 投影台帳を
 - `docs/**/README.md` の索引は未同期のまま — Coordinator が統合時に整備。
 - local verification は merge 後 CI/integration acceptance の代替ではない
   — 統合受入は merged-main SHA の CI を正本とする。
+
+# Slice 追記: Issue #631 lane 文書・evidence 同期（Issue #886 crash/hang out-of-process L1 flip・Issue #917 class-C re-scope・PR #918 rf630 re-pin 着地後 — docs+evidence slice、コード・verdict 変更なし）
+
+- Date: 2026-11-24
+- OS: Windows (x86_64)
+- Canonical ledger repo_sha: `8145861b817decc4d9a3213b9b7b34a9c4677cca`
+  — `evidence/rf631/plugin-dock-real-scenario.jsonl` の run row が記録する
+  実走 HEAD（`run_id=rf631-plugin-dock-real`・
+  `lane=test-ui-plugin-dock-real`・`os=windows`・`arch=x86_64`）。この SHA は
+  PR #919 の head で、squash merge `bf5c4107`（現行 main HEAD）と同一の
+  lane 内容を持つ。interactive 再実走は本 slice の対象外 — ledger は HEAD
+  で収束済みであり、provenance の正本は ledger が保持する。
+- 経緯: 下記 3 件の着地後も lane 文書が pre-#886 記述のまま残っていた
+  （README verdict 表が crash/hang を旧 `Unsupported` 記述・verdict 表に
+  `real-editor-popup` 行欠落・console 節が `26 rows` stale、
+  development-environment.md が `12 case` stale、
+  `test-ui-plugin-dock-real` の description/comment が IME を
+  `honest Unsupported` と記述）。本 slice は文書・記録の同期のみ —
+  catalog・verdict・canonical ledger の変更はない（`real_dock.rs` は
+  Coordinator 許可の lease 拡張で追跡先参照文言のみ更新 — 挙動・
+  verdict 不変。後述）。
+
+## 前提着地の記録（本 slice が同期した 3 変更）
+
+### (a) Issue #886 — `real-session-crash`/`real-session-hang` を out-of-process L1 実走へ flip（merge `5ea61d83`・PR #916）
+
+Dedicated L1 child（`ruviform-plugin-test-vst3-l1-runner`、
+`required-features = ["l1-runner"]` — `test-ui-plugin-dock-real` が
+`cargo build -p ruviform-plugin-test-vst3 --features l1-runner` を前段に
+持つのはこのため）上で `test_editor` を `OutOfProcessPluginHost` 経由で
+走らせ、floating child-owned toplevel として attach する。ledger 実測:
+両 case とも `verdict: pass`・`required: ["native-plugin-dock",
+"out-of-process-plugin-host"]`・`isolation: "dedicated-out-of-process"`・
+events `[Attached { mode: Floating }, Terminated { cause: HostLost }]`。
+`real-session-crash` は `Fault` abort で child kill → `InstanceFailed`
+通知（exit_code `-1073740791`・cause `Transport`・1 回限り）→
+`notify_terminated` → `Terminated{HostLost}` → session concluded →
+`host_survives`/`lane_window_alive`/`lane_settles`（evidence tags:
+`session:crash:out-of-process`・`l1:instance-failed`・
+`session:terminated:host-lost`）。`real-session-hang` は `Fault` hang で
+child wedge → `SaveState` probe IPC timeout・wedged leg pass-through
+継続（`passthrough_submits` delta 12）→ watchdog kill（exit_code 1・
+cause `Timeout`）→ 同一 terminated 収束（evidence tags 追加:
+`l1:watchdog-kill`）。`OutOfProcessPluginHost` claim は session-probe
+（runner・fixture 解決 + child の `GUI_FLOATING` advertisement）であり、
+capability 未実証の host では capability-gated `Unsupported` を記録する
+— verdict marker は `Unsupported` から実測 `pass` へ置き換わった。
+
+### (b) Issue #917 — `real-dcomp-{bandescape,childinv}` の as-child `WS_EX_LAYERED` 拒否を確定 class-C 期待値へ re-scope（merge `bf5c4107`・PR #919）
+
+`WS_CHILD` window への `WS_EX_LAYERED`/`LWA_ALPHA` 拒否は確定済み
+class-C 機序（`docs/discovery/issue-532-dcomp-residual.md`）であり、両
+case の refusal step は `verdict: fail` ではなく `verdict: note` 級へ
+re-scope された。ledger 実測: `be_apply_layered_exstyle`・
+`be_apply_layered_lwa`・`ci_apply_layered_exstyle`・
+`ci_apply_layered_lwa`・`ci_layered_as_child`/`ci_layered_as_toplevel`
+step が `expected_outcome`（"refused — WS_EX_LAYERED does not latch on a
+WS_CHILD window (class C confirmed mechanism)" 等）と
+`contradicts_confirmed_mechanism: false` を伴う `note` で記録され、refusal
+の `applied`/`win32_error`/`after` 実測値は維持される。case verdict は
+両方 `pass` — Fail→Pass の改竄ではなく期待値検証化（観測値は verdict
+入力ではない診断データのまま）。
+
+### (c) PR #918 — rf630 consumer-oracle re-pin（merge `3d3f33fd`）
+
+Issue #630 AC7 consumer-oracle — fixture contract manifest re-pin +
+declared face 再照合。#916（`5ea61d83`）と #919（`bf5c4107`）の間に
+着地した provenance 記録として転記する（本 slice の文書同期対象は
+#631 lane のみで、rf630 evidence 側は PR #918 本体で完結済み）。
+
+## Canonical ledger 現行 verdict（`evidence/rf631/plugin-dock-real-scenario.jsonl` — 32 case 全て verdict 発行）
+
+| verdict | 前回記録（HEAD `05f7450f`、32 rows） | 現行 ledger（repo_sha `8145861b`、32 rows） |
+| --- | --- | --- |
+| pass | 27 | 31 |
+| fail | 2（`real-dcomp-bandescape`/`real-dcomp-childinv` — pre-#917 verdict 位置づけ） | 0 |
+| unsupported | 3（`real-session-crash`/`real-session-hang`/`real-session-rt-boundary` — pre-#886 verdict 位置づけ） | 1（`real-session-rt-boundary` のみ） |
+
+`real-session-rt-boundary` の `unsupported` は構造的 boundary の正直な
+記録として継続（`test_editor`/`test_fault` が `!Send`・
+`attach_endpoint` が Plain slot に `EndpointUnavailable`・
+`PluginHost.l0` private — cross-thread 同一 instance pump 不可）。
+追跡先は `scarecrow173/ruviform#920`（OPEN — cross-thread 同一
+instance RT pump・`attach_endpoint`/`create_sendable` 契約）へ移行。
+#872 は CLOSED で同残余を引き取っていない。
+
+environment provenance（全 32 case に記録 — ledger 引用）:
+`environment_kind: real-window`、`os: windows`、`arch: x86_64`、
+`scale_factor: 1.0`、`gpui_disable_direct_composition: null`（env 未設定
+= DComp 経路）、`display_adapters`（`EnumDisplayDevicesW` census）=
+`NVIDIA GeForce RTX 4070 SUPER`、`window_identities`（w1〜w4 各
+id/title/geometry/sha256）、`case_seed`・`plugin_artifact`（
+`ruviform_plugin_test_vst3.dll` + sha256 付き artifact digest）も全 case
+に実測記録。
+
+## 変更した文書（本 slice の diff 範囲）
+
+- `crates/ruviform-plugin-dock-test/README.md` — `real-session-crash`/
+  `real-session-hang` verdict intent を #886 out-of-process L1 実態へ
+  更新（pass 可・capability-gated `Unsupported` 併記）、
+  `real-editor-popup` 行を verdict 表へ追加、`real-session-rt-boundary`
+  の追跡先を #920 へ修正、console `--list --include-real` の `26 rows`
+  stale を catalog 宣言へ整合。
+- `docs/development-environment.md` — `test-ui-plugin-dock-real` 行を
+  現行へ（`l1-runner` 前段 build・`12 case` stale 解消・verdict 語彙
+  更新）。
+- `mise.toml` — `test-ui-plugin-dock-real` の description と直上 comment
+  block のみ（DPI/IME/close の verdict 語彙を現行化。`run` は無変更）。
+- `crates/ruviform-plugin-dock-test/src/real_dock.rs` — Coordinator の
+  lease 拡張で追加。#872 参照文言 2 箇所のみ更新（`real-session-rt-boundary`
+  の doc comment と runtime detail string を #920 へ。挙動・verdict
+  不変）。canonical JSONL との整合確認: 現行 ledger の
+  `real-session-rt-boundary` 行 `detail` は変更前文字列
+  `"(deferred: Issue #872)"` と verbatim 一致（repo_sha `8145861b`
+  実走時点のコードが生成した歴史記録 — ledger は再生成せず正本のまま。
+  今後の lane 実走は `(deferred: Issue #920)` を記録する）。
+- 本ファイル — 本節の追記。
+
+## Lane results（docs+evidence slice の軽量検証 — canonical = mise）
+
+| Command | Result |
+| --- | --- |
+| `mise exec -- prek run --all-files` | pass（exit 0 — trailing whitespace/end-of-files/yaml/toml/line-ending/BOM/private-key/actionlint 全 hook pass） |
+| `mise run fmt-check` | pass（exit 0 — `cargo fmt --all -- --check`） |
+| `mise run check ruviform-plugin-dock-test` | pass（exit 0 — `cargo check -p ruviform-plugin-dock-test`。`mise.toml` の構文・タスク定義の健全性確認も兼ねる） |
+
+## NotRun / Unsupported / Deferred（本追記）
+
+- real lane の再実走・canonical ledger 再生成は対象外 — HEAD で収束済み
+  （interactive Windows desktop 不要の docs slice）。verdict 引用元は
+  現行 ledger が正本。
+- `real-session-rt-boundary` の Pass 化本体は
+  `scarecrow173/ruviform#920` が追跡 Owner — 本 slice は参照修正のみ。
+- `docs/**/README.md` の索引は未同期のまま — Coordinator が統合時に整備。
+- local verification は merge 後 CI/integration acceptance の代替ではない
+  — 統合受入は merged-main SHA の CI を正本とする。
