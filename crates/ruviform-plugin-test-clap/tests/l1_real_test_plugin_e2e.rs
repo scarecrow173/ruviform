@@ -28,7 +28,7 @@ use ruviform_media_core::{
 use ruviform_plugin_core::{
     Event, EventKind, EventList, FailureCause, GuiSize, HostError, HostInput, HostOutput,
     LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig,
-    ProcessResult, TransportInfo,
+    ProcessResult, TransportInfo, wire,
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
@@ -429,14 +429,48 @@ fn wait_host_notification(host: &mut PluginHost) -> (PluginHandle, ChildExit) {
     }
 }
 
+/// The `OpenGui`/`CloseGui` refusals a GUI-less fixture instance
+/// gives under the negotiated `WIRE_CAPABILITY_GUI_FLOATING` bit
+/// (wire v6): a child that never advertised it — every non-Windows
+/// runner today — is refused `Err(Unsupported)` host-side before
+/// the wire; an advertising child carries the verb over the wire,
+/// where `OpenGui` still returns `Err(Unsupported)` (the fixture's
+/// `open_gui` hook declines — no GUI surface) and `CloseGui` on a
+/// surfaceless instance answers the defined `Err(InvalidValue)`
+/// (wire.rs `CloseGui` doc).
+fn assert_gui_refusals(host: &mut PluginHost, handle: PluginHandle) {
+    let gui_floating_advertised = host
+        .negotiated_gui_capabilities(handle)
+        .is_ok_and(|mask| mask & wire::WIRE_CAPABILITY_GUI_FLOATING != 0);
+    assert_eq!(
+        host.execute(HostCommand::OpenGui {
+            handle,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0
+            },
+        }),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        host.execute(HostCommand::CloseGui { handle }),
+        Err(if gui_floating_advertised {
+            HostError::InvalidValue
+        } else {
+            HostError::Unsupported
+        })
+    );
+}
+
 /// The full L1 series over a real test-fixture `.clap` binary:
 /// `Scan` → `Instantiate` (spawn + handshake — the child-synthesized
 /// descriptor field-matches the parent's pin) → `Initialize` →
 /// `Activate` → `StartProcessing` → N stereo blocks through shm
 /// with a `ParamValue` event → `SaveState`/`RestoreState` defined
-/// `Err(Unsupported)` wire replies + `OpenGui`/`CloseGui` host-side
-/// `Err(Unsupported)` short-circuits → `StopProcessing`
-/// → `Deactivate` → `Destroy` → clean child exit.
+/// `Err(Unsupported)` wire replies + `OpenGui`/`CloseGui` defined
+/// refusals under the negotiated `GUI_FLOATING` gate →
+/// `StopProcessing` → `Deactivate` → `Destroy` → clean child exit.
 #[test]
 #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
 fn real_test_plugin_l1_full_series() {
@@ -555,11 +589,7 @@ fn real_test_plugin_l1_full_series() {
     // `SaveState`/`RestoreState` ride the wire and come back as
     // defined `Err(Unsupported)` replies — the bridge never calls
     // the standard's state verbs (the fixture declares no state
-    // extension; no fake round-trip is claimed). `OpenGui`/
-    // `CloseGui` never reach the wire at all:
-    // `L1Instance::execute` short-circuits them host-side as
-    // `Err(Unsupported)` (L1 GUI is deferred) — a defined rejection,
-    // not a round-trip.
+    // extension; no fake round-trip is claimed).
     assert_eq!(
         host.execute(HostCommand::SaveState { handle }),
         Err(HostError::Unsupported)
@@ -571,21 +601,9 @@ fn real_test_plugin_l1_full_series() {
         }),
         Err(HostError::Unsupported)
     );
-    assert_eq!(
-        host.execute(HostCommand::OpenGui {
-            handle,
-            parent: ParentLease::new(0, 0),
-            size: GuiSize {
-                width: 0.0,
-                height: 0.0
-            },
-        }),
-        Err(HostError::Unsupported)
-    );
-    assert_eq!(
-        host.execute(HostCommand::CloseGui { handle }),
-        Err(HostError::Unsupported)
-    );
+    // `OpenGui`/`CloseGui` follow the negotiated `GUI_FLOATING`
+    // gate — the refusal vocabulary lives in `assert_gui_refusals`.
+    assert_gui_refusals(&mut host, handle);
 
     // Clean teardown — the child exits 0 on the defined shutdown
     // path, so no `InstanceFailed` notification exists.
