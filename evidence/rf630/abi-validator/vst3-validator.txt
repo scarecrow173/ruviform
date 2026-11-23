@@ -1,6 +1,6 @@
 * Loading module...
 
-	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-Mx6B7S\ruviform-plugin-test-vst3.vst3
+	C:\Users\akiyoshi\AppData\Local\Temp\rf630-vst3-WkIIGD\ruviform-plugin-test-vst3.vst3
 
 * Check valid bundle structure...
 
@@ -657,7 +657,9 @@ Info:  => Event Buses: [0 In(s) => 0 Out(s)]
 
 [Scan Parameters]
 Info:  ===Scan Parameters ====================================
-Info:  This component does not export any parameters!
+Info:  This component exports 1 parameter(s)
+Info:     Parameter 000 (id=0): [title="Fault"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:  Warning: No bypass parameter found. Is this intended ?
 [Succeeded]
 
 [MIDI Mapping]
@@ -805,13 +807,11 @@ Info:  ===In: Mono: 1 Channels, Out: Mono: 1 Channels ==========================
 [Succeeded]
 
 [Accuracy: Block, 1 Parameters, Change every100 Samples]
-Info:  ===Accuracy: Block, All Parameters, Change every100 Samples ====================================
-Info:  No Parameters present.
+Info:  ===Accuracy: Block, 1 Parameters, Change every100 Samples ====================================
 [Succeeded]
 
 [Accuracy: Sample, 1 Parameters, Change every100 Samples]
-Info:  ===Accuracy: Sample, All Parameters, Change every100 Samples ====================================
-Info:  No Parameters present.
+Info:  ===Accuracy: Sample, 1 Parameters, Change every100 Samples ====================================
 [Succeeded]
 
 -------------------------------------------------------------
@@ -881,15 +881,13 @@ Info:  64bit Audio Processing not supported.
 Failed to teardown test!
 
 [Accuracy: Block, 1 Parameters, Change every100 Samples]
-Info:  ===Accuracy: Block, All Parameters, Change every100 Samples ====================================
-Info:  No Parameters present.
+Info:  ===Accuracy: Block, 1 Parameters, Change every100 Samples ====================================
 Info:  64bit Audio Processing not supported.
 [Succeeded]
 Failed to teardown test!
 
 [Accuracy: Sample, 1 Parameters, Change every100 Samples]
-Info:  ===Accuracy: Sample, All Parameters, Change every100 Samples ====================================
-Info:  No Parameters present.
+Info:  ===Accuracy: Sample, 1 Parameters, Change every100 Samples ====================================
 Info:  64bit Audio Processing not supported.
 [Succeeded]
 Failed to teardown test!
