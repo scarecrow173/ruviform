@@ -142,3 +142,86 @@ production chain へ実装。`rf631.plugin-dock-real` lane の
   fail-closed proof、本 slice で再実走）
 - `evidence/rf389/plugin-dock-real-scenario.jsonl` /
   `plugin-dock-real-headless.jsonl`（本 slice snapshot コピー）
+
+---
+
+# 追記 — real-window-ime slice 着地確認と HEAD `ff7013dc` 再実走記録
+
+Issue `scarecrow173/ruviform#389` の `real-window-ime` slice
+（`ScenarioCapability::Ime` backend-presence claim + IMM32 OS-level
+composition drive + caller-side subclass `WM_IME_*` 配達 oracle +
+正直な `environment_blocked` fallback）は `scarecrow173/ruviform#875`
+で main 着地済み（`scarecrow173/ruviform#879` で非 Windows
+dead-code 修正が追従）。本記録は、着地後に main へ入った
+`scarecrow173/ruviform#906`（io-structured・無関係）と
+`scarecrow173/ruviform#907`（plugin-host L1EditorOps +
+composite/host GUI routing — dock lane の session/attach 経路に
+隣接）を含む HEAD での全 lane 再実走による回帰確認と、
+`real_catalog.rs`/`real_dock.rs` に残存していた pre-#875
+stale 説明文の修正に対する検証記録。canonical = `mise` lane。
+
+- Date: 2026-11-23
+- OS: Windows (x86_64) — interactive desktop session あり（real lane 実走）
+- Toolchain: rustc 1.99.1 / cargo 1.99.1（mise 管理）
+- Repo SHA: lane JSONL の `repo.sha`/`environment.repo_sha` は
+  `ff7013dc7fab47e2277f872347973c662e06ea8e`（branch HEAD —
+  stale comment 修正 commit。実走は commit 済み tree で実施）。
+- Host IME: active layout `HKL 0x04110411`（Microsoft Japanese
+  IME）— `ime_preflight` step が `ime_layout`/`ime_context`/
+  `ime_ui` 全 check `effective:true` で `pass`。
+
+## Lane results
+
+| Command | Result |
+| --- | --- |
+| `mise run fmt-check` | pass (exit 0) |
+| `mise run check ruviform-ui-gpui` | pass (exit 0) |
+| `mise run lint ruviform-ui-gpui` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-ui-gpui` | pass (exit 0 — default feature では real-window 系 test は cfg で非対象・0 test) |
+| `mise run check ruviform-ui-gpui --features real-scenario` | pass (exit 0) |
+| `mise run lint ruviform-ui-gpui --features real-scenario` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-ui-gpui --features real-scenario` | **flaky 1 件** — `tests/real_window.rs::real_os_input_scenario` が初回 `NotRun — window w1 is not the focused window`（foreground-lock 環境 timing）で fail、単独再実行で **pass**。`os_input` 系の既存 flaky 性で本 diff（comment のみ）と無関係。`os_ime` unit test 8/8 を含む他 42 test は全 green |
+| `mise run check ruviform-plugin-dock-test` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test` | pass (exit 0 — unit 2 + console 14 + plugin_dock 4) |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | pass (exit 0 — unit 17 + console 14 + plugin_dock 5) |
+| `mise run check ruviform-plugin-dock-test --features lab-gui` | pass (exit 0) |
+| `mise run lint ruviform-plugin-dock-test --features lab-gui` | pass (exit 0, `-D warnings`) |
+| `mise run test ruviform-plugin-dock-test --features lab-gui` | pass (exit 0 — lab bin unit 7 を含む全 green) |
+| `mise run build ruviform-plugin-test-vst3` | pass (exit 0) |
+| `mise run test ruviform-plugin-host --test editor_session --test editor_session_driver` | pass (exit 0 — 57/57 + 18/18、`l1_editor_ops_refuses_every_op_on_an_unadvertised_child` を含む) |
+| `mise run test-ui-plugin-dock` | pass (exit 0 — `plugin-dock-scenario.jsonl` 再生成) |
+| `mise run test-ui-plugin-dock-console` | pass (exit 0 — `plugin-dock-console.jsonl` 再生成) |
+| `mise run test-ui-plugin-dock-real-headless` | pass (exit 0 — blocked-probe 32 row 全て `not_run` + `environment_blocked`、violation 0) |
+| `mise run test-ui-plugin-dock-real` | exit 1 — 既知 class C `real-dcomp-bandescape`/`real-dcomp-childinv` の `fail` による設計通りの exit code（interactive 実走・全 32 case `real-window` で実行） |
+| `mise run test-ui-scenario-contract` | pass (exit 0 — fake 17/17 + gpui 7/7) |
+| `mise run check-ui-driver-boundary` | pass (exit 0 — dep-graph/signature/allowlist 全 pass) |
+| `mise exec -- prek run --all-files` | pass (exit 0) |
+
+## Real lane verdicts（`evidence/rf631/plugin-dock-real-scenario.jsonl` @ `ff7013dc`）
+
+| case | verdict | 内容 |
+| --- | --- | --- |
+| `real-window-ime` | **pass** | `Ime` capability claim（capabilities 行に `ime` 出現）→ docked `test_editor` child HWND attach → `ime_preflight` pass（`ImmIsIME`/`ImmGetContext`/`ImmGetDefaultIMEWnd` 全 effective）→ `ime_drive` pass（composition `かな` + `CPS_COMPLETE` accepted — acceptance≠delivery）→ `ime_delivery` pass（caller-side subclass の `WM_IME_*` log が commit sequence を観測）→ session `Attached` 維持 → `[Attached{Docked}, Closed]` + close 収束を実測。`thread_affinity` step は documented D1 deviation の `note` のまま |
+| `real-dcomp-bandescape` / `real-dcomp-childinv` | fail | 既知 class C（Issue #532 系・対象外）— `real-dcomp-pixel` は本 run では pass |
+| `real-session-crash` / `real-session-hang` / `real-session-rt-boundary` | unsupported | honest boundary row（in-process lane の構造限界・本 slice 対象外） |
+
+その他の real row 27 case は全て `pass` — `05f7450f` 時点の
+分布（27 pass / 2 fail / 3 unsupported）と同一で、#907 着地後の
+回帰なし。
+
+## Evidence
+
+- `evidence/rf631/plugin-dock-real-scenario.jsonl`（canonical —
+  `ff7013dc` で interactive 再実走）
+- `evidence/rf631/plugin-dock-real-headless.jsonl`（blocked-probe
+  fail-closed proof — 再実走）
+- `evidence/rf631/plugin-dock-scenario.jsonl` /
+  `plugin-dock-console.jsonl` / `plugin-dock-console-list.jsonl`
+  （headless lane 再生成。`plugin-dock-console-list.jsonl` の
+  diff は JSON key 順のみ — 補助証拠、canonical = mise）
+- `evidence/rf389/plugin-dock-real-scenario.jsonl` /
+  `plugin-dock-real-headless.jsonl`（本 slice snapshot コピー —
+  旧 `62d595b6`/`b6d0cc6a` 世代から `ff7013dc` へ刷新）
