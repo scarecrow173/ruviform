@@ -96,9 +96,14 @@ pub struct RealCatalogRow {
 /// `real-session-timeout`, `real-session-crash`, `real-session-hang`)
 /// judge the session
 /// lifecycle paths through session events, child-HWND, and session
-/// state oracles only — crash/hang stay honest `Unsupported`
-/// boundary rows because the in-process lane cannot survive the
-/// fixture's process-killing/wedging fault modes.
+/// state oracles only. Crash/hang (Issue #886) run the fixture on a
+/// dedicated out-of-process L1 child (`OutOfProcessPluginHost` —
+/// session-probed: runner + fixture resolvable and the child
+/// advertises `GUI_FLOATING`), attach `test_editor` as a floating
+/// child-owned toplevel, and judge `InstanceFailed` →
+/// `Terminated{HostLost}` → `Closed` plus lane survival — a host
+/// where the capability was not proven reports the capability-gated
+/// `Unsupported`, never a fabricated verdict.
 /// The Issue #874 rows (`real-session-rt-samethread`,
 /// `real-session-rt-fault`, `real-session-rt-boundary`) are the
 /// real-window RT non-interference oracle: the same-thread leg
@@ -273,12 +278,18 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-session-crash",
         scenario: SCENARIO,
-        required: &[ScenarioCapability::NativePluginDock],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::OutOfProcessPluginHost,
+        ],
     },
     RealCatalogRow {
         case: "real-session-hang",
         scenario: SCENARIO,
-        required: &[ScenarioCapability::NativePluginDock],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::OutOfProcessPluginHost,
+        ],
     },
     RealCatalogRow {
         case: "real-session-rt-samethread",

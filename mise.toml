@@ -151,7 +151,10 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 '''
 
 # Issue #631 real-window dock lane (manual/opt-in — NOT a CI-required
-# gate): builds the real plugin-test-vst3 VST3 cdylib, then runs
+# gate): builds the real plugin-test-vst3 VST3 cdylib plus its
+# `l1-runner`-feature runner binary (`ruviform-plugin-test-vst3-l1-runner`
+# — `required-features = ["l1-runner"]`; Issue #886's out-of-process
+# crash/hang cases spawn it as the Dedicated L1 child), then runs
 # crates/ruviform-plugin-dock-test's `rf631.plugin-dock-real` cases
 # through `RealOsGuiTest` real OS windows — NativeSlot declare →
 # bind → renderer projection → `lease_parent` (real container HWND
@@ -163,23 +166,30 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # attach → detach). The catalog also carries the AC1 remainder rows
 # (2-window focus transfer, real OS input injection, and honest
 # `Unsupported` judgments for DPI/IME/window-close where no adapter
-# API exists) and the AC3 non-pixel editor op rows
+# API exists), the AC3 non-pixel editor op rows
 # (`real-editor-resize`/`real-editor-redock`/`real-editor-visibility`/
 # `real-editor-input`/`real-editor-focus` — session event/HWND
-# oracles only, never pixels). Requires an interactive desktop
-# session; on a headless host every case records NotRun +
-# observed="environment_blocked" (fail-closed — never a fake pass,
-# exit code stays 0). Honest verdicts only: `real-capture` stays
-# window/slot-region pixels; the Issue #532 `real-dcomp-*` cases
-# observe the docked editor child's pixels as occlusion-bisect
-# evidence (editor-pixel dock acceptance stays deferred). Real OS
-# windows — run unattended (writes only target/ + evidence/rf631/).
+# oracles only, never pixels), and the Issue #886 out-of-process
+# session rows (`real-session-crash`/`real-session-hang` — a
+# Dedicated L1 child runs `test_editor`, the lane survives the
+# child's death/wedging as `InstanceFailed` → `Terminated{HostLost}`
+# → `Closed`; the `OutOfProcessPluginHost` claim is session-probed —
+# an interactive host without the runner/fixture/`GUI_FLOATING`
+# advertisement records the capability-gated `Unsupported`).
+# Requires an interactive desktop session; on a headless host every
+# case records NotRun + observed="environment_blocked" (fail-closed —
+# never a fake pass, exit code stays 0). Honest verdicts only:
+# `real-capture` stays window/slot-region pixels; the Issue #532
+# `real-dcomp-*` cases observe the docked editor child's pixels as
+# occlusion-bisect evidence (editor-pixel dock acceptance stays
+# deferred). Real OS windows — run unattended (writes only target/ +
+# evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]
-description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib (test_editor real IPlugView for real-editor-attach) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock/visibility/input/focus/popup); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib + l1-runner bin (test_editor real IPlugView for real-editor-attach; runner is the Issue #886 Dedicated L1 child for real-session-crash/hang — OutOfProcessPluginHost is session-probed, capability-gated Unsupported otherwise) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock/visibility/input/focus/popup); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-cargo build --locked -p ruviform-plugin-test-vst3
+cargo build --locked -p ruviform-plugin-test-vst3 --features l1-runner
 mkdir -p evidence/rf631
 cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --out evidence/rf631/plugin-dock-real-scenario.jsonl
 '''
