@@ -326,3 +326,4 @@ Directory: `docs/designs`
 | DESIGN-0351ujlVkI9Du0Jm1todAT | Issue #872 L1 out-of-process プラグインエディタホスト設計（child 所有 toplevel Floating・wire v6 GUI 動詞・GUI_FLOATING bit・crash/hang oracle・5 slice 分割） | draft | [issue-872-l1-oos-plugin-editor-host.md](./issue-872-l1-oos-plugin-editor-host.md) |
 | DES-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル設計 | draft | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | DES-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 設計 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
+| DESIGN-891dirtyNoticePull9x | Issue #891 plugin→host state dirty 通知経路設計（DirtyNotice + 専用 pull verb、wire v7） | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |

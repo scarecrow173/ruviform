@@ -118,3 +118,4 @@ Directory: `docs/discovery`
 | DISC-Rf767SbmtDrpXv4nQyZk8Hw2 | Issue #767 dropped_submits の周期的発生 — L1 submit 経路の drop 原因調査 | resolved | [issue-767-submit-drop.md](./issue-767-submit-drop.md) |
 | DISC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — 現状棚卸し | final | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | DISC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 調査記録 | resolved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
+| DISC-Rf895DrpSbtCse7nQ2xKw4Y9 | Issue #895 dropped_submits の条件別分離 — carrier 選定と集約 counter 扱いの調査 | resolved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |
