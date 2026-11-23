@@ -10,7 +10,9 @@
 //! so that both the host and an out-of-process plugin runner can name
 //! them without a host↔runner dependency.
 
-use crate::boundary::{GuiHandle, GuiKeyEvent, GuiSize, HostError, ParentLease};
+use crate::boundary::{
+    GuiHandle, GuiKeyEvent, GuiRequest, GuiRequestVerdict, GuiSize, HostError, ParentLease,
+};
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
     PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
@@ -60,6 +62,20 @@ impl BufferViewMut for HostOutput<'_> {
         self.0.channel_mut(index)
     }
 }
+
+/// The delivery endpoint a host installs so a plugin's spontaneous
+/// GUI requests reach adjudication — the synchronous half of the
+/// plugin→host GUI request channel (Issue #873).
+///
+/// The sink is synchronous by contract: the caller blocks on the
+/// [`GuiRequestVerdict`], so adapters only invoke it from threads
+/// that may synchronously adjudicate (e.g. VST3 `resizeView` runs on
+/// the plugin's UI thread). `Send` so a `Send`-capable plugin may
+/// hold it across its `&mut` hooks; `FnMut` because the arbiter may
+/// keep decision state.
+///
+/// **RT contract:** non-RT only — GUI-thread only.
+pub type GuiRequestSink = dyn FnMut(GuiRequest) -> GuiRequestVerdict + Send;
 
 /// One hosted plugin instance, driven through the host's command and
 /// RT surfaces.
@@ -276,6 +292,32 @@ pub trait Plugin: PluginProcessor {
     fn send_gui_key(&mut self, _event: GuiKeyEvent) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
+
+    /// Installs the plugin→host GUI-request sink — `None` detaches.
+    /// The host (session adapter) installs it so synchronous-verdict
+    /// request surfaces (VST3 `IPlugFrame::resizeView`) can deliver
+    /// [`GuiRequest`]s and return the verdict inline.
+    ///
+    /// The default drops the sink: a plugin without a synchronous
+    /// request channel keeps each request at its format's defined
+    /// refusal (e.g. `kResultFalse`) rather than claiming a route
+    /// that never lands.
+    ///
+    /// **RT contract:** non-RT only — GUI-thread only.
+    fn set_gui_request_sink(&mut self, _sink: Option<Box<GuiRequestSink>>) {}
+
+    /// Drains plugin→host GUI requests the plugin queued since the
+    /// last drain — the pull counterpart of
+    /// [`Plugin::set_gui_request_sink`] for formats whose request
+    /// verbs are async-ack (CLAP `[thread-safe]` `request_*`). The
+    /// caller adjudicates each [`GuiRequest`] and composes the
+    /// plugin-side reply through the ordinary host→plugin verbs.
+    ///
+    /// The default drains nothing: a plugin without a queued channel
+    /// produces no requests.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    fn drain_gui_requests(&mut self, _out: &mut Vec<GuiRequest>) {}
 }
 
 /// One registered plugin type: descriptor plus instance construction.
@@ -372,6 +414,18 @@ pub trait ErasedPlugin {
     fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError>;
     /// [`Plugin::send_gui_key`].
     fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_request_sink`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn set_gui_request_sink(&mut self, sink: Option<Box<GuiRequestSink>>) {
+        let _ = sink;
+    }
+    /// [`Plugin::drain_gui_requests`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
+        let _ = out;
+    }
     /// [`PluginProcessor::drain_output_reports`].
     ///
     /// **RT contract:** non-RT only.
@@ -446,6 +500,12 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
         self.0.send_gui_key(event)
+    }
+    fn set_gui_request_sink(&mut self, sink: Option<Box<GuiRequestSink>>) {
+        self.0.set_gui_request_sink(sink);
+    }
+    fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
+        self.0.drain_gui_requests(out);
     }
     fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
         self.0.drain_output_reports(out);

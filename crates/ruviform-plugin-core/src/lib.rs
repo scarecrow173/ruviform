@@ -101,8 +101,9 @@ mod video_plugin;
 pub mod wire;
 
 pub use boundary::{
-    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError,
-    ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiRequest,
+    GuiRequestRefusal, GuiRequestVerdict, GuiSize, HostError, ParentLease, ParentSlotLease,
+    PluginEditorSessionId, PluginHandle,
 };
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};
@@ -118,7 +119,8 @@ pub use param_write::{
 };
 pub use plain_param::{PlainParamInfo, PlainParamInfoOwned, PlainParamValue};
 pub use plugin::{
-    ErasedPlugin, HostInput, HostOutput, Plugin, PluginFactory, erase, erase_sendable,
+    ErasedPlugin, GuiRequestSink, HostInput, HostOutput, Plugin, PluginFactory, erase,
+    erase_sendable,
 };
 pub use processor::{
     BufferView, BufferViewMut, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
