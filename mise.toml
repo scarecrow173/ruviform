@@ -164,9 +164,13 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # selects the `test_editor` descriptor whose plugin-side `IPlugView`
 # creates a real child HWND under the container lease (OS-observed
 # attach → detach). The catalog also carries the AC1 remainder rows
-# (2-window focus transfer, real OS input injection, and honest
-# `Unsupported` judgments for DPI/IME/window-close where no adapter
-# API exists), the AC3 non-pixel editor op rows
+# (2-window focus transfer, real OS input injection, command
+# receipt, and the window-state verdict rows — `real-window-dpi`
+# judges live-geometry read-back against the lifecycle
+# Resized/ScaleFactorChanged stream, `real-window-ime` drives a
+# real IMM32 composition+commit into the docked editor child, and
+# `real-window-close` drives the armed Veto→Approve close
+# lifecycle — all pass-capable verdicts), the AC3 non-pixel editor op rows
 # (`real-editor-resize`/`real-editor-redock`/`real-editor-visibility`/
 # `real-editor-input`/`real-editor-focus` — session event/HWND
 # oracles only, never pixels), and the Issue #886 out-of-process
@@ -185,7 +189,7 @@ cargo run --locked -p ruviform-plugin-dock-test --bin plugin-dock-console -- --r
 # deferred). Real OS windows — run unattended (writes only target/ +
 # evidence/rf631/).
 [tasks.test-ui-plugin-dock-real]
-description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib + l1-runner bin (test_editor real IPlugView for real-editor-attach; runner is the Issue #886 Dedicated L1 child for real-session-crash/hang — OutOfProcessPluginHost is session-probed, capability-gated Unsupported otherwise) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, honest Unsupported for IME) and AC3 non-pixel editor op rows (resize/re-dock/visibility/input/focus/popup); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
+description = "Issue #631 real-window plugin-dock lane (manual/opt-in — NOT a CI-required gate): real plugin-test-vst3 cdylib + l1-runner bin (test_editor real IPlugView for real-editor-attach; runner is the Issue #886 Dedicated L1 child for real-session-crash/hang — OutOfProcessPluginHost is session-probed, capability-gated Unsupported otherwise) + RealOsGuiTest real OS windows drive NativeSlot → container-HWND lease → ParentSlotLease → InProcessEditorOps redeem → session.open(Docked) plus the AC1 remainder rows (2-window focus, real OS input, command receipt, live-geometry DPI verdict, armed-lifecycle close verdict, IMM32-driven IME composition verdict) and AC3 non-pixel editor op rows (resize/re-dock/visibility/input/focus/popup); JSONL to evidence/rf631/plugin-dock-real-scenario.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf631/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
