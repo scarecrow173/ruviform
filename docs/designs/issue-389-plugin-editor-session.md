@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #389 Driver-neutral PluginEditorSession 設計（state machine / typed HostPort / L0-L1 写像・wire negotiation 方針）"
 created: "2026-11-07"
-updated: "2026-11-15"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -75,10 +75,17 @@ Issue #389 は規格別 Gui/View を Ruviform Window/Dock Presentation へ
 （discovery F2/F3/F4）が確定した現実:
 
 - L1 `OpenGui`/`CloseGui` は defined `Unsupported` rejection（wire 到達なし）。
+  （改訂 6 訂正: #872 設計の着地 — #884・PR #907 `f6958503` — で
+  `GUI_FLOATING` advertisement 持ち child へは wire 到達する。
+  無 advertisement への拒否は defined `Unsupported` のまま）
 - L0 `InProcessHost::open_gui` 経路は live だが全 adapter が既定
   `Unsupported`。（改訂 2 時点: VST3・CLAP adapter は `open_gui`/
   `close_gui` を実装済み — R5・S2 参照）
 - wire GUI 動詞は keep-for-future で存在するが lifecycle 実動詞なし。
+  （改訂 6 訂正: `WIRE_VERSION` 6 — Issue #872/#882 GUI floating
+  revision で `SetGuiSize`/`SetGuiVisibility`/`SetGuiFocus`/
+  `SendGuiKey` が収録され lifecycle 実動詞が存在する。現行
+  `WIRE_VERSION` は 7 — Issue #891 dirty-notification revision）
 
 本設計は**新 Session 面を追加しつつ上記現実を変えない** — L1 は
 Unsupported のまま、L0 は ops 経由で既存 `open_gui` 経路を再利用、
@@ -197,6 +204,15 @@ pub trait EditorSessionOps {
   返す定義済み拒否（現行 `L1Instance::execute` の short-circuit と
   同じ意味を session 面で表現）。**wire に出さない・子 proc に
   届かない・L0 へ退化させない**。`capabilities` も同様に拒否。
+  （改訂 6 訂正: #884・PR #907 `f6958503` で `L1EditorOps` は
+  `GUI_FLOATING` advertisement 持ち child へ floating verb family
+  （`OpenGui`/`CloseGui`/`SetGuiSize`/`SetGuiVisibility`/
+  `SetGuiFocus`/`SendGuiKey`）を wire 経由で routing する形へ着地。
+  `Docked` attach・`reattach`・plugin→host request channel は拒否
+  by design のまま（wire v6 に `SetGuiParent`・request 動詞なし —
+  #115/#873 scope）。無 advertisement child への全 op 拒否は
+  `l1_editor_ops_refuses_every_op_on_an_unadvertised_child` が pin
+  — 上記「L0 へ退化させない」の不変条件は維持）
 
 これにより「L1 対応を黙って L0 へ退化させない」確定仕様を、実装
 語彙として強制する。
@@ -225,7 +241,13 @@ negotiation 案（将来 bump 前提・実装しない）:
 として、`OpenGui`/`CloseGui` payload 拡張と lifecycle 動詞
 （`SetGuiSize`/`SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey`）の
 `WIRE_VERSION` 6 への同時収録が確定版で定義される。「別 Issue」
-とは同 design doc を指す。
+とは同 design doc を指す。（改訂 6 訂正: Issue #872 は CLOSED —
+確定版は #884・PR #907 `f6958503`（host 側 `L1EditorOps` +
+composite routing）・#885・PR #887 `dc32b8f0`（fixture `Fault`）・
+#886・PR #916 `5ea61d83`（OOS 実走 lane）・#910・PR #914
+`5099cbe5`（negotiated `GUI_FLOATING` 照合）で実装・着地済み。
+現行 `WIRE_VERSION` は 7 — v6 GUI floating revision の上に
+Issue #891 の dirty-notification revision）
 
 ### D7: RT・DSP 独立性規約
 
@@ -253,7 +275,7 @@ negotiation 案（将来 bump 前提・実装しない）:
 | `PluginEditorSessionId`/`ParentSlotLease` | **追加**（plugin-core boundary） |
 | `PluginEditorSession`/`Sessions`/`Ops`/`State`/`Event`/`Error`/`Capabilities`/`AttachMode` | **追加**（plugin-host editor_session） |
 | `HostError` | **保持** — 新 variant 追加なし（ops 側で `EditorOpError` へ写像） |
-| `WIRE_VERSION`=5/`Hello.capabilities` | **保持** — 現行値 5（改訂 2 時点）。`capabilities` は reserved u32・非 0 は `Malformed` hardening のまま。negotiation は設計のみ |
+| `WIRE_VERSION`=5/`Hello.capabilities` | **保持** — 現行値 5（改訂 2 時点）。`capabilities` は reserved u32・非 0 は `Malformed` hardening のまま。negotiation は設計のみ（改訂 6 訂正: その後 v6 — Issue #872/#882 GUI floating revision で `capabilities` bit0 `GUI_FLOATING` が定義化、`OpenGui` payload が `{mode,parent,size}` へ拡張、lifecycle 動詞 tag 24-27 収録。現行値は 7 — Issue #891 dirty-notification。無割当 bit の `Malformed` 規約は維持） |
 
 ## Data and Control Flow
 
@@ -296,11 +318,22 @@ consumer(GUI Driver / app):
   composition root（`ruviform-ui-gpui`/`ruviform-engine` 利用側）。
 - L1 wire 動詞（`open`/`close`/`set_size`/`set_visibility`/
   `reattach`）と `Hello.capabilities` GUI bit の bump 実施（issue-115
-  解除条件充足後の別 Issue）。
+  解除条件充足後の別 Issue）。（改訂 6 訂正: floating verb family
+  と `GUI_FLOATING` bit は `WIRE_VERSION` 6・#884・PR #907 で着地
+  済み。wire v6 は `SetGuiParent` を持たないため docked/reparent
+  の L1 は拒否 by design — issue #115 CLOSED 時点の設計判断）
 - 各 OS adapter の `open_gui` 実装本体（CLAP `clap_plugin_gui`/
   VST3 `IPlugView` の HWND/NSView/XID attach）— 別 Issue 級。
+  （改訂 6 訂正: Windows HWND attach は VST3・CLAP とも実装済み
+  — 改訂 2・R5 参照。NSView/XID は macOS/Linux GUI-L2/EXT-L3
+  Deferred 方針の対象外のまま）
 - 実 Dock PASS の必須ケース実行（hide/tab/resize/float/re-dock/
-  2Window/DPI/crash/hang/IME/popup/a11y/RT 非停止）。
+  2Window/DPI/crash/hang/IME/popup/a11y/RT 非停止）。（改訂 6 訂正:
+  real lane 32 case で hide・resize・re-dock・DPI・IME・popup・
+  crash・hang・RT 非停止・multi-window・input・focus が実測
+  `pass`（`evidence/rf631/plugin-dock-real-scenario.jsonl`）。
+  tab・a11y は lane case 外の残件 — 2 window は
+  `real-multiwindow-focus` が相当部分を実測）
 - timeout の wall-clock 監視基盤（GUI runtime 側の timer/cancel —
   現行 port は request 世代で「完了対照」を強制するに留める）。
 
@@ -391,7 +424,7 @@ Capability Matrix）を現行コードに照らして再検証し、発見した
 | L0 / CLAP | Supported（`clack-extensions` `gui` ext `PluginGui` 経由の `open_gui`/`close_gui`）※ ext 非対応 plugin は honest `Unsupported` | Unsupported（同上・非 Docked 明示拒否） | Supported（`can_resize`/`set_size` — 改訂 4） | Supported（`hide`/`show` — 改訂 4） | Supported（`set_parent` — 改訂 4） | Supported（`close_gui` 実装） | `ruviform-plugin-clap/src/host.rs`。`clap.gui` ext を持たない plugin/fixture は `Unsupported`（`open_gui_without_gui_extension_is_unsupported`）。実外部 CLAP 証拠は `evidence/rf389-clap-editor/`（task `issue-389-clap-l0-editor-attach` done）。verb は headless contract で検証済み（実 CLAP binary の verb lane は未実施 — VST3 lane のみ real-window oracle あり） |
 | L0 / AU（macOS） | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | 対象外 | ADR `plugin-architecture-clap-vst3`: AU は初期対象外。adapter crate なし |
 | L0 / Ruviform 製 GPUI Plugin | NotRun | NotRun | NotRun | NotRun | NotRun | NotRun | plugin 側 GPUI editor の adapter・実装なし |
-| L1 out-of-process（全規格） | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | Unsupported | `L1EditorOps` 全 op 拒否・`l1/mod.rs` の `OpenGui`/`CloseGui` 拒否 |
+| L1 out-of-process（全規格） | Unsupported | Supported（`GUI_FLOATING` advertisement 持ち child の floating attach — #884・#886 着地後の改訂 6 訂正。無 advertisement は拒否） | Supported（同上・`SetGuiSize` wire verb — 改訂 6 訂正） | Supported（同上・`SetGuiVisibility` — 改訂 6 訂正） | Unsupported（wire v6 に `SetGuiParent` なし・拒否 by design — #115 scope） | Supported（`CloseGui` wire verb — 改訂 6 訂正） | `L1EditorOps` — 改訂 2 時点は全 op 拒否（`l1/mod.rs` の `OpenGui`/`CloseGui` 拒否と一致）。改訂 6 訂正: #884・PR #907 `f6958503` で negotiated `GUI_FLOATING` 前提の floating family routing へ着地。実走証拠は `real-session-crash`/`real-session-hang`（floating attach 下での OOS L1 実走 `pass`） |
 | Fake ops（contract・既定 `FakeOps::ok`） | Supported（fake） | 成功する（fake は mode/caps を強制しない） | 成功する（fake） | 成功する（fake） | 成功する（fake） | Supported（fake） | 状態機械の契約検証のみ。fake の既定 caps は dock/close のみで、op は caps を検査しない。**実 Dock PASS ではない** |
 
 Ruviform 製 GPUI Plugin 対 外部 DAW の埋込み方向は、本 PR では
@@ -493,9 +526,9 @@ container HWND → `ParentSlotLease` → `InProcessEditorOps` redeem
 | `real-session-degraded` | **pass** | `open_or_degrade(Floating, Docked)` — Floating は `InProcessEditorOps` が `Unsupported` で拒否、Docked fallback が attach。`OpenOutcome::Degraded{Docked}` + event 列 `[Degraded{Docked}, Closed]`（`Attached` 非発火）+ child HWND 契約を実測 |
 | `real-session-recovery` | **pass** | `open(Floating)` refused（`editor_live=false`）→ `recover(Docked)` で attach。event 列 `[Failed{Unsupported}, Recovered{Docked}, Closed]` + child HWND 契約を実測 |
 | `real-session-timeout` | **pass** | attach 後 ZERO `SessionDeadlinePolicy` + `begin_detach` → `tick_all()==1` で `Failed{Timeout}`。event 列 `[Attached{Docked}, Failed{Timeout}, Closed]` + child HWND teardown を実測 |
-| `real-editor-visibility` | **unsupported** | `set_visibility(false)` は定義済み `EditorOpError::Unsupported` — session は `Attached{Docked}` 維持・`Hidden`/`Shown` event 0 件を確認した上で refused boundary として正直に記録 |
-| `real-session-crash` | **unsupported** | in-process lane は fixture の process-killing crash fault を生存できず、out-of-process plugin host は存在しない — 実行せず boundary row として記録 |
-| `real-session-hang` | **unsupported** | 同上 — wedging/hang fault は lane を永久に塞ぐため実行しない。architectural boundary を明示 |
+| `real-editor-visibility` | **pass**（改訂 6 訂正 — 改訂 3 実走時点の記録は `unsupported`） | 改訂 3 実走時点: `set_visibility(false)` は定義済み `EditorOpError::Unsupported` — session は `Attached{Docked}` 維持・`Hidden`/`Shown` event 0 件を確認した上で refused boundary として正直に記録。（改訂 6 訂正: 改訂 4 の verb 実装・PR #754 `0450f92f` で実実行 + effect oracle へ flip。現行 ledger では hide→全 child 破棄 `Hidden{Docked}`・show→新 generation `Attached{Docked}` の実測 `pass`） |
+| `real-session-crash` | **pass**（改訂 6 訂正 — 改訂 3 実走時点の記録は `unsupported`） | 改訂 3 実走時点: in-process lane は fixture の process-killing crash fault を生存できず、out-of-process plugin host は存在しない — 実行せず boundary row として記録。（改訂 6 訂正: #886・PR #916 `5ea61d83` で dedicated out-of-process L1 child（`ruviform-plugin-test-vst3-l1-runner`・`required-features = ["l1-runner"]`）+ 交渉済み `GUI_FLOATING` + in-band `Fault` `abort` で実走へ flip — `InstanceFailed{exit_code,cause}` exactly-once → `Terminated{HostLost}` → `host_survives`/`lane_window_alive`/`lane_settles` の lane 生存判定で実測 `pass`。runner・fixture・`GUI_FLOATING` advertisement の capability 未実証 host では capability-gated `Unsupported` を記録する設計は不変） |
+| `real-session-hang` | **pass**（改訂 6 訂正 — 改訂 3 実走時点の記録は `unsupported`） | 改訂 3 実走時点: 同上 — wedging/hang fault は lane を永久に塞ぐため実行しない。architectural boundary を明示。（改訂 6 訂正: #886 で同一 dedicated L1 lane 上の `Fault` `hang` — `SaveState` probe IPC timeout・wedged leg pass-through 継続・watchdog kill → 同一 `Terminated{HostLost}` 収束の実測 `pass`。capability-gated `Unsupported` 併記は crash と同じ） |
 
 ### S5: capability/DoD reconcile
 
@@ -503,7 +536,10 @@ container HWND → `ParentSlotLease` → `InProcessEditorOps` redeem
   が非 Docked を明示拒否）」は本 slice の degraded/recovery 実測で
   **裏付けられた**（拒否は fake ではなく実 lease chain 上で観測）。
   `set_visibility`/`reattach`/`set_size` の Unsupported も同様に
-  実 window 上で確認。
+  実 window 上で確認（改訂 6 訂正: これは改訂 3 時点の記録。
+  改訂 4・PR #754 `0450f92f` で 3 verb は production chain 実装済み
+  — `real-editor-resize`/`real-editor-redock`/`real-editor-visibility`
+  が effect oracle 付き `pass`）。
 - R6「Floating / Recovery の安全 fallback」: 実 editor への degrade
   attach が **達成**（`real-session-degraded`/`real-session-recovery`
   Pass・`evidence/rf389/`）。L0 Floating attach 自体は依然
@@ -511,13 +547,31 @@ container HWND → `ParentSlotLease` → `InProcessEditorOps` redeem
   Floating 成功ではない。
 - crash/hang の実機受入は **依然 NotRun 相当** — in-process lane の
   architectural boundary として `Unsupported` を維持。process 分離
-  host（L1 実装）が前提の後続 slice。
+  host（L1 実装）が前提の後続 slice。（改訂 6 訂正: その後続 slice
+  が着地 — #886・PR #916 `5ea61d83` で dedicated out-of-process L1
+  child 実走へ flip し、現行 ledger では両 case 実測 `pass`。
+  in-process lane での実行不能は依然 architectural boundary だが、
+  受入自体は OOS L1 経路で達成済み）
 - `real-dcomp-pixel` の `fail`（GPUI DComp topmost occlusion・
-  #532 決裁待ち）は本 slice でも不変 — 既知・対象外。
+  #532 決裁待ち）は本 slice でも不変 — 既知・対象外。（改訂 6 訂正:
+  現行 ledger では `real-dcomp-pixel` は `pass` — #857 由来の
+  in-band raise/topmost deocclusion 機構で screen-composited green
+  を実測し、`dcomp-pixel:editor-green-on-screen` の evidence 付き。
+  `real-dcomp-bandescape`/`real-dcomp-childinv` は #917・PR #919
+  `bf5c4107` で as-child `WS_EX_LAYERED`/`LWA_ALPHA` 拒否を確定
+  class-C 期待値（`note` 級・`expected_outcome` +
+  `contradicts_confirmed_mechanism` 記録付き）へ re-scope され両
+  case `pass` — Fail→Pass 改竄ではなく期待値検証化。Native Dock
+  画素合成の residual 帰属は RF #388/#532（両 CLOSED・
+  `docs/discovery/issue-532-dcomp-residual.md` が class-C 機序の
+  権威）のまま維持）
 - headless fail-closed: `test-ui-plugin-dock-real-headless` が
   21 row 全て `not_run` + `observed.environment_blocked` を記録
   （violation 0）。catalog と executable entry の同期は
-  `real_catalog_matches_entries` test が gate。
+  `real_catalog_matches_entries` test が gate。（改訂 6 訂正: 現行
+  headless ledger `evidence/rf631/plugin-dock-real-headless.jsonl`
+  は 32 row — 全 `not_run`+`environment_blocked`・violation 0 の
+  fail-closed 規約は不変）
 
 ## 改訂 4: adapter editor verbs slice（2026-11-18・rf389-ime-verbs）
 
@@ -575,7 +629,18 @@ issue-389-ime-verbs.*`）。
   `Hello.capabilities` GUI bit — issue `#115` scope）、
   `AttachMode::Floating`、plugin→host GUI request、crash/hang
   受入、`#532` 画素 gate、consumer gate — issue #389 は
-  OPEN のまま。
+  OPEN のまま。（改訂 6 訂正: 改訂 4 時点の残存リストのうち、
+  L1 wire GUI verb は #872/#882 GUI floating revision（
+  `WIRE_VERSION` 6・`GUI_FLOATING` bit・lifecycle 動詞）と
+  #884・PR #907 `f6958503` の host 側 routing で着地済み、
+  crash/hang 受入は #886・PR #916 `5ea61d83` で OOS L1 実走
+  `pass`、`#532` 画素 gate は #917・PR #919 `bf5c4107` の
+  class-C 期待値検証化で lane 収束（residual の帰属は
+  `docs/discovery/issue-532-dcomp-residual.md` 維持）。残る
+  真正の残件: `AttachMode::Floating`（L0 — L1 OOS floating
+  family は着地済みだが L0 in-process floating は依然拒否）、
+  plugin→host GUI request channel（wire に request 動詞なし・
+  Issue #873 の channel は L0-local）、consumer gate）
 
 ## 改訂 5: real-window IME slice（2026-11-21・rf389-window-ime）
 
@@ -621,7 +686,11 @@ slice（`docs/discovery|specs|test-specs/issue-389-window-ime.md`）。
   claim しない — OS-delivery が editor の semantic IME 処理を
   証明しないため。`driver.rs`・`editor_view.rs` の条件付き
   lease は不使用。`L1EditorOps` refusal-only 不変、
-  `WIRE_VERSION` 不変。
+  `WIRE_VERSION` 不変（いずれも本 slice 無変更の記録 — 改訂 6
+  訂正: その後 #884・PR #907 `f6958503` で `L1EditorOps` は
+  `GUI_FLOATING` advertisement 持ち child へ floating verb
+  family を wire 経由で routing する形へ着地、`WIRE_VERSION`
+  は 6 を経て現行 7）。
 - **`real-session-move` 不採用**: `real-editor-redock` が同
   lease 上の reattach を実観測済みで、第 2 slot lease への
   move は別 case 級 — 本 slice の AC に観測価値を増さない
@@ -637,4 +706,113 @@ slice（`docs/discovery|specs|test-specs/issue-389-window-ime.md`）。
   限界・別 Issue 級）、semantic IME 語彙（
   `EditorCapabilities.ime` 等 — oracle 未定）、GPUI host
   window 自身の IME 経路、L1 wire GUI verb 系の前残件 —
-  issue #389 は OPEN のまま。
+  issue #389 は OPEN のまま。（改訂 6 訂正: crash/hang は
+  #886・PR #916 `5ea61d83` で dedicated OOS L1 実走 `pass`
+  へ着地済み — 本リストから除去。L1 wire GUI verb 系も
+  #872/#882 revision + #884・PR #907 で floating family が
+  着地済み — #115 scope の残件は docked/reparent（
+  `SetGuiParent`）で、wire v6 が動詞を持たない拒否 by design
+  として残る（#115 は CLOSED — 拒否は設計判断として確定）。
+  残る本 Issue 残件は semantic IME 語彙と GPUI host window
+  自身の IME 経路のみ）
+
+## 改訂 6: close 判定用 reconcile（2026-11-24・rf389-close-reconcile）
+
+#884（`L1EditorOps` + composite/host GUI routing・`f6958503`・PR
+#907）・#885（`test_editor` in-band `Fault`・`dc32b8f0`・PR
+#887）・#886（`real-session-crash`/`real-session-hang` を
+out-of-process L1 実走へ flip・`5ea61d83`・PR #916）・#910
+（`*_full_series` の `CloseGui` 期待値を negotiated
+`GUI_FLOATING` へ照合・`5099cbe5`・PR #914）・#917
+（`real-dcomp-{bandescape,childinv}` の as-child layered 拒否を
+確定 class-C 期待値へ re-scope・`bf5c4107`・PR #919）・#921
+（#631 lane 文書・evidence 同期・`65878cc1`）着地後に実施した
+文書 reconcile。本書の stale 記述を現行コードと canonical
+ledger へ照合し、決定履歴・各改訂の当時記録は維持したまま
+「（改訂 6 訂正: …）」注記で訂正を示した。本 slice は文書
+reconcile のみ — コード・verdict・ledger の変更なし。
+
+### 現行 canonical ledger
+
+`evidence/rf631/plugin-dock-real-scenario.jsonl`
+（`environment.repo_sha` = `8145861b817decc4d9a3213b9b7b34a9c4677cca`
+— rf917-dcomp-verdict workspace HEAD で、squash merge `bf5c4107`
+として同内容が main 着地）は **32 case 全て verdict 発行・31
+`pass` + `real-session-rt-boundary` のみ `unsupported`（fail
+0）**。session lifecycle 面の写像:
+
+| AC 動詞 | lane case | verdict |
+| --- | --- | --- |
+| Open/Attach | `real-editor-attach` | pass |
+| Move（re-dock） | `real-editor-redock` | pass |
+| Close | `real-session-terminate` + `real-window-close` | pass |
+| Crash | `real-session-crash`（#886 OOS L1） | pass |
+| Hang | `real-session-hang`（#886 OOS L1） | pass |
+| Recovery | `real-session-recovery` | pass |
+| Timeout | `real-session-timeout` | pass |
+| Degraded | `real-session-degraded` | pass |
+| Resize | `real-editor-resize` | pass |
+| Visibility | `real-editor-visibility` | pass |
+| IME | `real-window-ime` | pass |
+| Input/Focus/Popup | `real-editor-input`/`real-editor-focus`/`real-editor-popup` | pass |
+| RT 非干渉 | `real-session-rt-samethread` + `real-session-rt-fault` | pass |
+| cross-thread RT pump | `real-session-rt-boundary` | **unsupported** |
+
+`real-session-rt-boundary` は構造的 boundary の正直な
+`unsupported` — `test_editor`/`test_fault` が `!Send` →
+`create_sendable`=None → Plain slot → `attach_endpoint` が
+`EndpointUnavailable` を返し、cross-thread 同一 instance pump が
+現行 API で不可能であることの確証付き記録。追跡先は
+`scarecrow173/ruviform#920`（OPEN — cross-thread 同一 instance
+RT pump・`attach_endpoint`/`create_sendable` 契約）。#872 は
+CLOSED で同残余を引き取っていない。
+
+全 case が `environment_kind=real-window` で
+`ruviform_plugin_test_vst3.dll`（`test_editor`・#630 正規 ABI・
+artifact sha256 記録付き）を production chain
+（`NativeSlot` → `GpuiSurfaceAdapter` → `ParentSlotLease` →
+`InProcessEditorOps` redeem — crash/hang は dedicated L1 runner
+経由）で実走。fail-closed の対偶は
+`evidence/rf631/plugin-dock-real-headless.jsonl`（32 row 全て
+`not_run` + `environment_blocked`・violation 0）。実走
+provenance の正本は ledger であり、本書・各 evidence の引用は
+全てそこへ帰る。
+
+### 主な訂正の要約（詳細は各所の「改訂 6 訂正」注記）
+
+- S4 verdict 表・S5・改訂 4/5 の「残存」リスト: `real-session-crash`/
+  `real-session-hang` の `unsupported`（in-process 限界）は
+  #886 の dedicated OOS L1 実走 `pass` へ着地済み。
+  `real-editor-visibility` の `unsupported` は改訂 4 の verb
+  実装で `pass` へ着地済み。`real-dcomp-pixel` の `fail`
+  記述は #857 機序による現行 `pass`、bandescape/childinv は
+  #917 の class-C `note` 期待値検証化で `pass` へ収束。
+- Context・D5・D6・D8・R5・Deferred Design Concerns:
+  「`L1EditorOps` は全 op 拒否」「wire lifecycle 実動詞なし」
+  「`WIRE_VERSION`=5 / `Hello.capabilities` reserved」の
+  記述は、#872/#882 GUI floating revision と #884 host routing
+  の着地で古い — negotiated `GUI_FLOATING` 前提の floating
+  verb family が wire 経由で駆動し、現行 `WIRE_VERSION` は 7。
+  拒否 by design（docked/reparent・plugin→host request）と
+  unadvertised child への defined `Unsupported` は不変。
+
+### 残る真正の残件（issue #389 は OPEN のまま）
+
+- semantic IME 語彙（`EditorCapabilities.ime`/`SlotCapabilities.ime`/
+  `WindowCapabilities.ime` — oracle 未定）
+- GPUI host window 自身の IME 経路
+- `AttachMode::Floating`（L0 in-process — L1 OOS floating family
+  は着地済みだが L0 の非 Docked 明示拒否は不変）
+- plugin→host GUI request channel（wire に request 動詞なし・
+  Issue #873 の channel は L0-local）
+- L1 docked/reparent（`SetGuiParent` は wire v6 未収録・拒否
+  by design — #115 CLOSED 時点の設計判断）
+- consumer/product gate（`scarecrow173/synvelis#176`・
+  `scarecrow173/ruviform#630` AC4・`scarecrow173/audio-lens#127`
+  — 各 repo Owner の責務）
+- close 対象 SHA の 3OS CI 実走証拠収集（Coordinator の gate
+  作業 — 本 slice 対象外）
+
+Issue #389 受入条件の全行と着地 PR・evidence・verdict の対応表は
+`evidence/rf389/ac-reconciliation.md`（本 slice で新規作成 —
+close 判定材料であり、いずれの行も本 slice で達成宣言しない）。
