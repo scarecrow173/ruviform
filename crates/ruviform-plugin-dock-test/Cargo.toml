@@ -18,6 +18,7 @@ publish.workspace = true
 real-dock = [
     "dep:ruviform-ui-gpui",
     "ruviform-ui-gpui/real-scenario",
+    "dep:ruviform-plugin-clap",
     "dep:windows-sys",
 ]
 # `lab-gui` (Issue #631 Test Lab slice): the opt-in/manual GPUI
@@ -64,6 +65,13 @@ ruviform-ui = { path = "../ruviform-ui" }
 #   (`Vst3Library::load`/`descriptors()`/`factories()`) that dlopens
 #   the real test_gain cdylib — the same path the L1 runner uses.
 ruviform-plugin-vst3 = { path = "../ruviform-plugin-vst3", features = ["host"] }
+# - ruviform-plugin-clap (`host` feature; optional — `real-dock`
+#   feature only, Issue #630 AC4 CLAP leg): the production CLAP host
+#   bridge (`ClapLibrary::load`/`descriptors()`/`factories()`) that
+#   dlopens the real `ruviform_plugin_test_clap` cdylib's
+#   `test_editor` for the real-window CLAP lane. Optional so the
+#   default/headless lane's dep tree stays unchanged.
+ruviform-plugin-clap = { path = "../ruviform-plugin-clap", features = ["host"], optional = true }
 # - ruviform-plugin-host: InProcessHost command surface
 #   (Scan/Instantiate/Initialize/Activate/Destroy), PluginEditorSessions
 #   + InProcessEditorOps for the honest editor-attach attempt.
@@ -151,6 +159,10 @@ windows-sys = { version = "0.61", optional = true, features = [
 # production dependency graph; precedent: ruviform-plugin-test-vst3's
 # own host_path.rs dev-dep on ruviform-plugin-vst3).
 ruviform-plugin-test-vst3 = { path = "../ruviform-plugin-test-vst3" }
+# Builds the `ruviform_plugin_test_clap` cdylib (the Issue #630 AC4
+# CLAP `test_editor` fixture) into deps/ under the same dev-dep edge
+# rule — same shape as the VST3 fixture above.
+ruviform-plugin-test-clap = { path = "../ruviform-plugin-test-clap" }
 
 [lints]
 workspace = true

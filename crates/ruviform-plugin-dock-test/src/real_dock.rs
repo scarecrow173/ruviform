@@ -169,9 +169,11 @@
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_audio_test::EnvironmentKind;
+use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
     Event as PluginEvent, EventKind, EventList, HostInput, HostOutput, LifecycleState, ParamEvent,
-    ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult, ProcessStatus, wire,
+    ParamId, ParamValue, PluginDescriptor, PluginFactory, ProcessConfig, ProcessResult,
+    ProcessStatus, wire,
 };
 use ruviform_plugin_host::{
     AttachMode, ChildExit, EditorCapabilities, EditorOpError, EditorSessionError,
@@ -228,15 +230,147 @@ use crate::osmut;
 use crate::osoccl;
 use crate::ospix;
 use crate::ospres;
-use crate::real_catalog::{LANE, SCENARIO};
-// The run id is shared with the console's catalog metadata —
-// re-exported so `real_dock::RUN_ID` keeps working for the lane.
-pub use crate::real_catalog::RUN_ID;
+use crate::real_catalog::{CLAP_SCENARIO, LANE, SCENARIO};
+// The run ids are shared with the console's catalog metadata —
+// re-exported so `real_dock::RUN_ID`/`CLAP_RUN_ID` keep working for
+// the lane.
+pub use crate::real_catalog::{CLAP_RUN_ID, RUN_ID};
 use crate::scenario::{
     activate_test_gain, editor_size, events_debug, fail, finalize, host_error_outcome, not_run,
     register_factories, rejecting_editor_ops, semantic_tree_json, session_closed_concluded,
     session_failed_unsupported, session_id_json,
 };
+
+/// Which real plugin-binary format a lane run exercises — the
+/// Issue #630 AC4 legs. Selects the artifact env var, fixture lib
+/// name, L1 runner executable, run/scenario identity, editor pixel
+/// predicate, and the child-window oracle constants; the lane never
+/// mixes formats inside one run (the CLAP catalog is a separate
+/// [`real_clap_entries`] table with its own JSONL output).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PluginFormat {
+    /// `ruviform_plugin_test_vst3` — the Issue #631 canonical lane.
+    Vst3,
+    /// `ruviform_plugin_test_clap` — the Issue #630 AC4 CLAP leg.
+    Clap,
+}
+
+impl PluginFormat {
+    /// The explicit-path env var the lane reads for this format —
+    /// the binary parses it into [`LaneEnvironment::plugin_path`].
+    #[must_use]
+    pub fn path_env(self) -> &'static str {
+        match self {
+            Self::Vst3 => artifact::PLUGIN_PATH_ENV,
+            Self::Clap => artifact::PLUGIN_PATH_ENV_CLAP,
+        }
+    }
+
+    /// The fixture cdylib file name the artifact resolution and the
+    /// L1-runner sibling check look for.
+    fn fixture_lib_name(self) -> String {
+        match self {
+            Self::Vst3 => artifact::fixture_lib_name(),
+            Self::Clap => artifact::fixture_lib_name_clap(),
+        }
+    }
+
+    /// The run id stamped into every report of this format's lane.
+    #[must_use]
+    pub fn run_id(self) -> &'static str {
+        match self {
+            Self::Vst3 => RUN_ID,
+            Self::Clap => CLAP_RUN_ID,
+        }
+    }
+
+    /// The L1 runner executable name this format's out-of-process
+    /// route spawns (`<name>{EXE_SUFFIX}` resolved as a
+    /// `current_exe` sibling).
+    fn l1_runner_file_name(self) -> String {
+        let base = match self {
+            Self::Vst3 => "ruviform-plugin-test-vst3-l1-runner",
+            Self::Clap => "ruviform-plugin-test-clap-l1-runner",
+        };
+        format!("{base}{}", std::env::consts::EXE_SUFFIX)
+    }
+
+    /// The catalog's executable entry table for this format.
+    fn entries<'a>(self) -> Vec<ScenarioEntry<RealDockContext<'a>>> {
+        match self {
+            Self::Vst3 => real_entries().into(),
+            Self::Clap => real_clap_entries().into(),
+        }
+    }
+
+    /// The `test_editor` `EDITOR_COLOR` predicate — VST3 green
+    /// (`0x00_00_FF_00`) vs CLAP blue (`0x00_FF_00_00` COLORREF).
+    fn is_editor_color(self, r: u8, g: u8, b: u8) -> bool {
+        match self {
+            Self::Vst3 => is_editor_green(r, g, b),
+            Self::Clap => is_editor_blue(r, g, b),
+        }
+    }
+
+    /// The evidence key prefix for the pixel oracle's step/extras
+    /// fields (`"green"`/`"blue"`) — the recorded keys stay honest
+    /// about which color was actually sampled.
+    fn editor_color_key(self) -> &'static str {
+        match self {
+            Self::Vst3 => "green",
+            Self::Clap => "blue",
+        }
+    }
+}
+
+/// The dlopened fixture library behind [`PluginPair`] — the same
+/// `descriptors()`/`factories()` surface both format adapters
+/// expose (`Vst3Library::load`/`ClapLibrary::load`), unified so the
+/// lane's catalog machinery never sees the concrete format.
+enum PluginLibrary {
+    /// `ruviform_plugin_test_vst3` — VST3 host bridge.
+    Vst3(Vst3Library),
+    /// `ruviform_plugin_test_clap` — CLAP host bridge.
+    Clap(ClapLibrary),
+}
+
+impl PluginLibrary {
+    /// `format`'s `*Library::load` on `path` — the non-RT dynamic
+    /// load + descriptor scan.
+    fn load(format: PluginFormat, path: &Path) -> Result<Self, String> {
+        match format {
+            PluginFormat::Vst3 => Vst3Library::load(path)
+                .map(Self::Vst3)
+                .map_err(|error| format!("Vst3Library::load failed: {error}")),
+            PluginFormat::Clap => ClapLibrary::load(path)
+                .map(Self::Clap)
+                .map_err(|error| format!("ClapLibrary::load failed: {error}")),
+        }
+    }
+
+    /// The scanned descriptor set (cached at load).
+    fn descriptors(&self) -> &[PluginDescriptor] {
+        match self {
+            Self::Vst3(library) => library.descriptors(),
+            Self::Clap(library) => library.descriptors(),
+        }
+    }
+
+    /// Registers every scanned factory with `host` — the same
+    /// `Box<dyn PluginFactory>` registration the VST3-only helper
+    /// performed.
+    fn register_factories(&self, host: &mut InProcessHost) {
+        match self {
+            Self::Vst3(library) => register_factories(host, library),
+            Self::Clap(library) => {
+                for factory in library.factories() {
+                    host.register_factory(Box::new(factory) as Box<dyn PluginFactory>);
+                }
+            }
+        }
+    }
+}
 
 /// The resolved plugin binary + its evidence identity — only the
 /// editor/session cases (`real-editor-attach`, `real-dcomp-pixel`,
@@ -246,8 +380,9 @@ use crate::scenario::{
 /// `real-session-terminate`, `real-session-degraded`,
 /// `real-session-recovery`, `real-session-timeout`,
 /// `real-editor-visibility`, `real-editor-input`,
-/// `real-editor-focus`, `real-editor-popup`) consume it.
-type PluginPair = (Vst3Library, PluginArtifactEvidence);
+/// `real-editor-focus`, `real-editor-popup` plus the `real-clap-*`
+/// mirrors) consume it.
+type PluginPair = (PluginLibrary, PluginArtifactEvidence);
 
 /// Why the plugin binary could not be loaded — `prerequisite`
 /// distinguishes an absent artifact (`NotRun`, fail-closed) from a
@@ -341,6 +476,10 @@ struct RealDockContext<'a> {
     /// `real-dcomp-foreground` (`--pixel-artifacts`); `None` records
     /// stats only.
     pixel_artifacts: Option<&'a Path>,
+    /// Which real-plugin format this run exercises — selects the
+    /// fixture library, artifact env var, run/scenario identity,
+    /// `EDITOR_COLOR` predicate, and CLAP-specific case oracles.
+    format: PluginFormat,
 }
 
 /// Runs the catalog's real-window cases inside one `RealOsGuiTest`
@@ -361,7 +500,7 @@ struct RealDockContext<'a> {
 /// condition (environment failures are reported as `NotRun`).
 #[must_use]
 pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
-    run_all_with_pixel_artifacts(env, None)
+    run_all_with_format(env, None, PluginFormat::Vst3)
 }
 
 /// [`run_all`] plus the opt-in pixel-artifact path: when `dir` is
@@ -373,187 +512,216 @@ pub fn run_all(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 ///
 /// # Panics
 /// Same contract as [`run_all`].
-#[expect(clippy::too_many_lines)]
 #[must_use]
 pub fn run_all_with_pixel_artifacts(
     env: &LaneEnvironment,
     pixel_artifacts: Option<&Path>,
 ) -> Vec<ScenarioReport> {
-    let run_id = RunId::new(RUN_ID);
-    let plugin = load_plugin(env);
+    run_all_with_format(env, pixel_artifacts, PluginFormat::Vst3)
+}
+
+/// The format-parametrized real-window lane (Issue #630 AC4 CLAP
+/// leg): `format` selects the catalog (`real_entries` for VST3,
+/// `real_clap_entries` for CLAP), the run/scenario identity, the
+/// fixture library + artifact env var, and the format's
+/// `EDITOR_COLOR` oracle. The VST3 lane mounts windows A–D (the
+/// multiwindow/close/command cases' targets); the CLAP catalog
+/// exercises only the dock itself, so it mounts the single sentinel
+/// window A — honest evidence records one mounted window, never
+/// three unused ones.
+///
+/// # Panics
+/// Same contract as [`run_all`].
+#[expect(clippy::too_many_lines)]
+#[must_use]
+pub fn run_all_with_format(
+    env: &LaneEnvironment,
+    pixel_artifacts: Option<&Path>,
+    format: PluginFormat,
+) -> Vec<ScenarioReport> {
+    let run_id = RunId::new(format.run_id());
+    let plugin = load_plugin(env, format);
     let plugin_evidence = plugin.as_ref().ok().map(|(_, evidence)| evidence.clone());
     let plugin_error = plugin.as_ref().err().cloned();
 
     let view = ViewInstanceId::new(631).expect("view instance id 631 is non-zero");
-    let view_b = ViewInstanceId::new(632).expect("view instance id 632 is non-zero");
-    let view_c = ViewInstanceId::new(633).expect("view instance id 633 is non-zero");
-    let view_d = ViewInstanceId::new(634).expect("view instance id 634 is non-zero");
     let mut epochs = AttachEpochAllocator::new();
     let mut host = ViewHost::new(view, epochs.mint());
     host.mount(plugin_dock_view_spec())
         .expect("plugin dock view spec mounts");
     host.drain_events();
-    let mut host_b = ViewHost::new(view_b, epochs.mint());
-    host_b
-        .mount(plugin_dock_view_spec())
-        .expect("plugin dock view spec mounts");
-    host_b.drain_events();
-    let mut host_c = ViewHost::new(view_c, epochs.mint());
-    host_c
-        .mount(plugin_dock_view_spec())
-        .expect("plugin dock view spec mounts");
-    host_c.drain_events();
-    // Window D hosts the command-minting fader fixture — the dock
-    // spec carries no command bindings, so `real-command-receipt`
-    // needs a view whose controls mint receipt-expecting intents.
-    let mut host_d = ViewHost::new(view_d, epochs.mint());
-    host_d
-        .mount(sv_fader_dock_fixture().spec)
-        .expect("fader dock fixture spec mounts");
-    host_d.drain_events();
 
-    // Four mounts: window A stays the sentinel every later case
-    // builds on (the GPUI platform loop exits when its last window
-    // closes), window B gives `real-multiwindow-focus` a
-    // focus-transfer target and `real-window-close` its
-    // veto/defer/approve target, window C is the close case's
-    // default-approve target, and window D hosts the fader fixture
-    // `real-command-receipt` drives. B/C/D are offset right of A so
-    // the windows never overlap (an OS click on A's panel center
-    // must land on A).
-    let window_spec_b = WindowSpec {
-        title: "ruviform plugin-dock B".to_string(),
-        position: Some(LogicalPosition::new(1450, 80)),
-        ..WindowSpec::default()
-    };
-    let window_spec_c = WindowSpec {
-        title: "ruviform plugin-dock C".to_string(),
-        position: Some(LogicalPosition::new(2900, 80)),
-        ..WindowSpec::default()
-    };
-    let window_spec_d = WindowSpec {
-        title: "ruviform fader-dock D".to_string(),
-        position: Some(LogicalPosition::new(4350, 80)),
-        ..WindowSpec::default()
-    };
-    // Mount titles in window order (A–D) — the window-identity
-    // digest's canonical input; `WindowSpec::default().title` is
-    // window A's "ruviform".
-    let window_titles = [
-        WindowSpec::default().title,
-        window_spec_b.title.clone(),
-        window_spec_c.title.clone(),
-        window_spec_d.title.clone(),
-    ];
-    let outcome = RealOsGuiTest::run(
-        vec![
-            RealWindowMount {
+    // Mount set per format — the VST3 catalog's multiwindow/close/
+    // command-receipt cases need windows B–D; the CLAP catalog runs
+    // dock cases on the sentinel window A alone. `window_titles`
+    // (mount order) is the window-identity digest's canonical input;
+    // `WindowSpec::default().title` is window A's "ruviform".
+    let (mounts, window_titles, view_d) = if format == PluginFormat::Vst3 {
+        let view_b = ViewInstanceId::new(632).expect("view instance id 632 is non-zero");
+        let view_c = ViewInstanceId::new(633).expect("view instance id 633 is non-zero");
+        let view_d = ViewInstanceId::new(634).expect("view instance id 634 is non-zero");
+        let mut host_b = ViewHost::new(view_b, epochs.mint());
+        host_b
+            .mount(plugin_dock_view_spec())
+            .expect("plugin dock view spec mounts");
+        host_b.drain_events();
+        let mut host_c = ViewHost::new(view_c, epochs.mint());
+        host_c
+            .mount(plugin_dock_view_spec())
+            .expect("plugin dock view spec mounts");
+        host_c.drain_events();
+        // Window D hosts the command-minting fader fixture — the
+        // dock spec carries no command bindings, so
+        // `real-command-receipt` needs a view whose controls mint
+        // receipt-expecting intents.
+        let mut host_d = ViewHost::new(view_d, epochs.mint());
+        host_d
+            .mount(sv_fader_dock_fixture().spec)
+            .expect("fader dock fixture spec mounts");
+        host_d.drain_events();
+        let window_spec_b = WindowSpec {
+            title: "ruviform plugin-dock B".to_string(),
+            position: Some(LogicalPosition::new(1450, 80)),
+            ..WindowSpec::default()
+        };
+        let window_spec_c = WindowSpec {
+            title: "ruviform plugin-dock C".to_string(),
+            position: Some(LogicalPosition::new(2900, 80)),
+            ..WindowSpec::default()
+        };
+        let window_spec_d = WindowSpec {
+            title: "ruviform fader-dock D".to_string(),
+            position: Some(LogicalPosition::new(4350, 80)),
+            ..WindowSpec::default()
+        };
+        (
+            vec![
+                RealWindowMount {
+                    window: WindowSpec::default(),
+                    view: ViewMount { host, theme: None },
+                },
+                RealWindowMount {
+                    window: window_spec_b.clone(),
+                    view: ViewMount {
+                        host: host_b,
+                        theme: None,
+                    },
+                },
+                RealWindowMount {
+                    window: window_spec_c.clone(),
+                    view: ViewMount {
+                        host: host_c,
+                        theme: None,
+                    },
+                },
+                RealWindowMount {
+                    window: window_spec_d.clone(),
+                    view: ViewMount {
+                        host: host_d,
+                        theme: None,
+                    },
+                },
+            ],
+            vec![
+                WindowSpec::default().title,
+                window_spec_b.title,
+                window_spec_c.title,
+                window_spec_d.title,
+            ],
+            view_d,
+        )
+    } else {
+        (
+            vec![RealWindowMount {
                 window: WindowSpec::default(),
                 view: ViewMount { host, theme: None },
-            },
-            RealWindowMount {
-                window: window_spec_b,
-                view: ViewMount {
-                    host: host_b,
-                    theme: None,
-                },
-            },
-            RealWindowMount {
-                window: window_spec_c,
-                view: ViewMount {
-                    host: host_c,
-                    theme: None,
-                },
-            },
-            RealWindowMount {
-                window: window_spec_d,
-                view: ViewMount {
-                    host: host_d,
-                    theme: None,
-                },
-            },
-        ],
-        RealWindowOptions::default(),
-        |gui| {
-            let mut windows = gui.windows().into_iter();
-            let Some(window) = windows.next() else {
-                return blocked_reports(
-                    &run_id,
-                    env,
-                    plugin_evidence.as_ref(),
-                    "real-window session reported no mounted window",
-                );
-            };
-            let window_b = windows.next();
-            let window_c = windows.next();
-            let window_d = windows.next();
-            // The session's primary-window scale factor, measured
-            // once — stamped into every case's `environment.
-            // scale_factor` (AC4; a failed read stays the honest
-            // `null`).
-            let session_scale_factor = gui
-                .window_geometry(window)
-                .ok()
-                .map(|geometry| geometry.scale_factor);
-            // Session-scoped window identities (AC4 window hash) —
-            // one canonical-string digest per mounted window from
-            // its session-start geometry, window id, and mount
-            // title; `finalize_case` stamps the census into every
-            // real case's `environment.window_identities`.
-            let window_identities = Value::Array(
-                [
-                    Some((window, window_titles[0].as_str())),
-                    window_b.map(|w| (w, window_titles[1].as_str())),
-                    window_c.map(|w| (w, window_titles[2].as_str())),
-                    window_d.map(|w| (w, window_titles[3].as_str())),
-                ]
+            }],
+            vec![WindowSpec::default().title],
+            view,
+        )
+    };
+
+    let outcome = RealOsGuiTest::run(mounts, RealWindowOptions::default(), |gui| {
+        let mut windows = gui.windows().into_iter();
+        let Some(window) = windows.next() else {
+            return blocked_reports(
+                &run_id,
+                env,
+                plugin_evidence.as_ref(),
+                "real-window session reported no mounted window",
+                format,
+            );
+        };
+        let window_b = windows.next();
+        let window_c = windows.next();
+        let window_d = windows.next();
+        // The session's primary-window scale factor, measured
+        // once — stamped into every case's `environment.
+        // scale_factor` (AC4; a failed read stays the honest
+        // `null`).
+        let session_scale_factor = gui
+            .window_geometry(window)
+            .ok()
+            .map(|geometry| geometry.scale_factor);
+        // Session-scoped window identities (AC4 window hash) —
+        // one canonical-string digest per mounted window from
+        // its session-start geometry, window id, and mount
+        // title; `finalize_case` stamps the census into every
+        // real case's `environment.window_identities`.
+        let titles = window_titles.iter().map(String::as_str);
+        let window_identities = Value::Array(
+            [window]
                 .into_iter()
-                .flatten()
+                .chain([window_b, window_c, window_d].into_iter().flatten())
+                .zip(titles)
                 .map(|(w, title)| window_identity_entry(w, title, gui.window_geometry(w).ok()))
                 .collect(),
-            );
-            // Session-scoped display-adapter inventory (AC4 'OS
-            // and GPU' — the GPU portion): the
-            // `EnumDisplayDevicesW` census recorded once at
-            // session start; `finalize_case` stamps it into every
-            // real case's `environment.display_adapters`.
-            let display_adapters = display_adapters_json(&osgpu::display_adapters());
-            // The Issue #886 `OutOfProcessPluginHost` claim gate —
-            // one spawn probe per session, inside the live window
-            // set: the runner + `test_editor` fixture resolve, a
-            // `Dedicated` child instantiates, and its negotiated
-            // mask advertises `GUI_FLOATING`. `None` leaves the
-            // capability unclaimed and the crash/hang rows at the
-            // defined `Unsupported` pre-flight verdict — a host
-            // that cannot prove the route never claims it.
-            let oos_route = probe_out_of_process_route(plugin.as_ref().ok());
-            if oos_route.is_some() {
-                gui.claim_capability(ScenarioCapability::OutOfProcessPluginHost);
-            }
-            // The session-scoped catalog — `real_entries` rows run
-            // through `run_entries` against the live context.
-            let entries = real_entries();
-            let mut ctx = RealDockContext {
-                gui,
-                window,
-                window_b,
-                window_c,
-                window_d,
-                session_scale_factor,
-                window_identities,
-                display_adapters,
-                view,
-                view_d,
-                env,
-                plugin: plugin.as_ref().ok(),
-                plugin_error: plugin_error.as_ref(),
-                oos: oos_route.as_ref(),
-                artifact: plugin_evidence.as_ref(),
-                pixel_artifacts,
-            };
-            run_entries(&entries, &run_id, &mut ctx)
-        },
-    );
+        );
+        // Session-scoped display-adapter inventory (AC4 'OS
+        // and GPU' — the GPU portion): the
+        // `EnumDisplayDevicesW` census recorded once at
+        // session start; `finalize_case` stamps it into every
+        // real case's `environment.display_adapters`.
+        let display_adapters = display_adapters_json(&osgpu::display_adapters());
+        // The Issue #886 `OutOfProcessPluginHost` claim gate —
+        // one spawn probe per session, inside the live window
+        // set: the runner + `test_editor` fixture resolve, a
+        // `Dedicated` child instantiates, and its negotiated
+        // mask advertises `GUI_FLOATING`. `None` leaves the
+        // capability unclaimed and the crash/hang rows at the
+        // defined `Unsupported` pre-flight verdict — a host
+        // that cannot prove the route never claims it. For CLAP
+        // the probe always returns `None` (per-plugin_id routing
+        // makes a co-resident fault arm impossible — see
+        // [`real_catalog::REAL_CLAP_CATALOG`]).
+        let oos_route = probe_out_of_process_route(plugin.as_ref().ok(), format);
+        if oos_route.is_some() {
+            gui.claim_capability(ScenarioCapability::OutOfProcessPluginHost);
+        }
+        // The session-scoped catalog — the format's entry rows run
+        // through `run_entries` against the live context.
+        let entries = format.entries();
+        let mut ctx = RealDockContext {
+            gui,
+            window,
+            window_b,
+            window_c,
+            window_d,
+            session_scale_factor,
+            window_identities,
+            display_adapters,
+            view,
+            view_d,
+            env,
+            plugin: plugin.as_ref().ok(),
+            plugin_error: plugin_error.as_ref(),
+            oos: oos_route.as_ref(),
+            artifact: plugin_evidence.as_ref(),
+            pixel_artifacts,
+            format,
+        };
+        run_entries(&entries, &run_id, &mut ctx)
+    });
 
     match outcome {
         Ok(reports) => reports,
@@ -562,6 +730,7 @@ pub fn run_all_with_pixel_artifacts(
             env,
             plugin_evidence.as_ref(),
             &format!("real-window session could not start: {error}"),
+            format,
         ),
     }
 }
@@ -935,25 +1104,25 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 32] {
 /// (`test_gain`) would degrade the case back to `Unsupported` and
 /// fake the slice's intent — a missing `test_editor` is an honest
 /// `Fail`, not a silent retreat.
-fn load_plugin(env: &LaneEnvironment) -> Result<PluginPair, PluginUnavailable> {
+fn load_plugin(
+    env: &LaneEnvironment,
+    format: PluginFormat,
+) -> Result<PluginPair, PluginUnavailable> {
     let unavailable = |detail: String, prerequisite: bool| PluginUnavailable {
         detail,
         prerequisite,
     };
-    let path = artifact::resolve_artifact(env.plugin_path.as_deref())
-        .map_err(|detail| unavailable(detail, true))?;
+    let path =
+        artifact::resolve_artifact_named(env.plugin_path.as_deref(), &format.fixture_lib_name())
+            .map_err(|detail| unavailable(detail, true))?;
     let sha256 = artifact::sha256_hex(&path).map_err(|error| {
         unavailable(
             format!("artifact hash failed for {}: {error}", path.display()),
             false,
         )
     })?;
-    let library = Vst3Library::load(&path).map_err(|error| {
-        unavailable(
-            format!("Vst3Library::load failed for {}: {error}", path.display()),
-            false,
-        )
-    })?;
+    let library = PluginLibrary::load(format, &path)
+        .map_err(|error| unavailable(format!("{}: {error}", path.display()), false))?;
     let identity = {
         let Some(descriptor) = library
             .descriptors()
@@ -1054,11 +1223,8 @@ fn oos_instantiate(host: &mut PluginHost, plugin_id: &str) -> Result<PluginHandl
 /// layout) or its parent directory (the `cargo test` `deps/`
 /// layout). `None` means the artifact is absent — the honest
 /// capability-refusal input, never a fabricated claim.
-fn l1_runner_program() -> Option<std::ffi::OsString> {
-    let file_name = format!(
-        "ruviform-plugin-test-vst3-l1-runner{}",
-        std::env::consts::EXE_SUFFIX
-    );
+fn l1_runner_program(format: PluginFormat) -> Option<std::ffi::OsString> {
+    let file_name = format.l1_runner_file_name();
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     for candidate in [
         dir.join(&file_name),
@@ -1081,8 +1247,21 @@ fn l1_runner_program() -> Option<std::ffi::OsString> {
 /// any failure returns `None`, which keeps
 /// `OutOfProcessPluginHost` unclaimed and the two cases at the
 /// defined `Unsupported` pre-flight verdict.
-fn probe_out_of_process_route(plugin: Option<&PluginPair>) -> Option<OosRoute> {
+fn probe_out_of_process_route(
+    plugin: Option<&PluginPair>,
+    format: PluginFormat,
+) -> Option<OosRoute> {
     if !cfg!(windows) {
+        return None;
+    }
+    if format == PluginFormat::Clap {
+        // Decision 2(c): the CLAP `test_editor` is parameterless —
+        // no in-band fault arm — and `PluginHost` routes are keyed
+        // by `plugin_id` with per-route Bundled pools, so no
+        // co-resident `test_fault` kill arm can exist through the
+        // existing API. The capability is never claimed for CLAP;
+        // the `real-clap-session-crash`/`-hang` bodies record the
+        // structural ground themselves.
         return None;
     }
     let (library, _) = plugin?;
@@ -1091,14 +1270,14 @@ fn probe_out_of_process_route(plugin: Option<&PluginPair>) -> Option<OosRoute> {
         .iter()
         .find(|d| d.name == "test_editor")
         .copied()?;
-    let program = l1_runner_program()?;
+    let program = l1_runner_program(format)?;
     // The runner resolves the fixture cdylib as its own sibling
     // (`RUVIFORM_L1_REAL_PLUGIN_DIR` unset — the
     // `l1_fault_test_plugin_e2e.rs` convention); confirm the same
     // dir the lane's `load_plugin` found the artifact under.
     let sibling = PathBuf::from(&program)
         .parent()
-        .map(|dir| dir.join(artifact::fixture_lib_name()));
+        .map(|dir| dir.join(format.fixture_lib_name()));
     if !sibling.is_some_and(|path| path.is_file()) {
         return None;
     }
@@ -1561,10 +1740,11 @@ fn blocked_reports(
     env: &LaneEnvironment,
     artifact: Option<&PluginArtifactEvidence>,
     detail: &str,
+    format: PluginFormat,
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
+    let entries: Vec<ScenarioEntry<RealDockContext<'static>>> = format.entries();
     entries
         .iter()
         .map(|entry| {
@@ -1602,12 +1782,25 @@ fn blocked_reports(
 /// *mapping*, never an observed headless run.
 #[must_use]
 pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
+    blocked_probe_with_format(env, PluginFormat::Vst3)
+}
+
+/// [`blocked_probe`] parametrized over [`PluginFormat`] — the CLAP
+/// catalog's own rows produce the same fail-closed `NotRun` +
+/// `observed.environment_blocked` mapping under their own run id
+/// (Issue #630 AC4 CLAP leg).
+#[must_use]
+pub fn blocked_probe_with_format(
+    env: &LaneEnvironment,
+    format: PluginFormat,
+) -> Vec<ScenarioReport> {
     blocked_reports(
-        &RunId::new(RUN_ID),
+        &RunId::new(format.run_id()),
         env,
         None,
         "blocked-probe: RealOsGuiTest session start not attempted — \
          exercising the fail-closed mapping a headless host hits",
+        format,
     )
 }
 
@@ -1618,7 +1811,17 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
+    blocked_probe_violations_with_format(reports, PluginFormat::Vst3)
+}
+
+/// [`blocked_probe_violations`] parametrized over [`PluginFormat`]
+/// — checks `reports` against the format's own catalog rows.
+#[must_use]
+pub fn blocked_probe_violations_with_format(
+    reports: &[ScenarioReport],
+    format: PluginFormat,
+) -> Vec<String> {
+    let entries: Vec<ScenarioEntry<RealDockContext<'static>>> = format.entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -2995,7 +3198,7 @@ fn prepare_editor_host(
     };
     let plugin_id = artifact.plugin_id.clone();
     let mut host = InProcessHost::new();
-    register_factories(&mut host, library);
+    library.register_factories(&mut host);
 
     let handle = match activate_test_gain(&mut host, &plugin_id) {
         Ok(handle) => handle,
@@ -3349,7 +3552,7 @@ fn real_capture_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> Scen
 /// surface lands near 1.0 and a fully occluded one near 0.0; 0.5
 /// separates the two unambiguously. The measured fraction is always
 /// recorded in the step rows, so the threshold stays reviewable.
-const GREEN_VISIBLE_FRACTION: f64 = 0.5;
+const EDITOR_COLOR_VISIBLE_FRACTION: f64 = 0.5;
 
 /// `EDITOR_COLOR` (`0x00_00_FF_00` = RGB(0,255,0)) tolerance box —
 /// a solid-brush fill survives compositing unchanged, so any pixel
@@ -3358,23 +3561,32 @@ fn is_editor_green(r: u8, g: u8, b: u8) -> bool {
     g >= 200 && r <= 80 && b <= 80
 }
 
-/// `(green_pixels, total_pixels)` over an RGBA8 frame.
-fn green_stats(rgba: &[u8]) -> (u64, u64) {
-    let mut green = 0u64;
+/// CLAP `test_editor` `EDITOR_COLOR` (`0x00_FF_00_00` COLORREF =
+/// RGB(0,0,255)) tolerance box — the Issue #630 AC4 CLAP leg's
+/// mirror of [`is_editor_green`].
+fn is_editor_blue(r: u8, g: u8, b: u8) -> bool {
+    b >= 200 && r <= 80 && g <= 80
+}
+
+/// `(editor_color_pixels, total_pixels)` over an RGBA8 frame —
+/// `is_editor_color` is the format's `EDITOR_COLOR` predicate
+/// ([`PluginFormat::is_editor_color`]).
+fn editor_color_stats(rgba: &[u8], is_editor_color: impl Fn(u8, u8, u8) -> bool) -> (u64, u64) {
+    let mut matched = 0u64;
     let mut total = 0u64;
     for px in rgba.as_chunks::<4>().0 {
         total += 1;
-        if is_editor_green(px[0], px[1], px[2]) {
-            green += 1;
+        if is_editor_color(px[0], px[1], px[2]) {
+            matched += 1;
         }
     }
-    (green, total)
+    (matched, total)
 }
 
 /// `green/total` as `f64` — counts saturate at `u32::MAX` before the
 /// (exact) `u32`→`f64` conversion so no lossy `u64` cast is needed;
 /// real captures are far below that bound. `total == 0` reports 0.0.
-fn green_fraction(green: u64, total: u64) -> f64 {
+fn editor_color_fraction(green: u64, total: u64) -> f64 {
     let g = u32::try_from(green).unwrap_or(u32::MAX);
     let t = u32::try_from(total).unwrap_or(u32::MAX).max(1);
     f64::from(g) / f64::from(t)
@@ -3414,15 +3626,16 @@ fn save_pixel_artifact(
 /// The aggregated screen-pixel outcome — this case's verdict input
 /// on top of the shared lifecycle gate.
 enum PixelObservation {
-    /// At least one child's screen-composited pixels met the green
-    /// threshold — the editor surface is actually on screen.
-    GreenSeen,
+    /// At least one child's screen-composited pixels met the
+    /// format's `EDITOR_COLOR` threshold — the editor surface is
+    /// actually on screen.
+    EditorColorSeen,
     /// Every evaluable child was captured, none met the threshold,
     /// and the hit-test resolved inside the measured hierarchy —
     /// the honest unoccluded-but-dark input. Carries the best
     /// observed fraction/backend for the `Fail` detail.
-    NoGreen {
-        /// Highest `green_fraction` observed across children.
+    NoEditorColor {
+        /// Highest color fraction observed across children.
         best_fraction: f64,
         /// Backend that produced the best frame.
         best_backend: &'static str,
@@ -3492,6 +3705,7 @@ fn observe_child_pixels(
     container: Option<u64>,
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
+    format: PluginFormat,
 ) -> PixelObservation {
     // Evaluability — the top-level window must be presented or the
     // screen says nothing about the editor (minimized/hidden →
@@ -3529,7 +3743,26 @@ fn observe_child_pixels(
 
     let mut scan = PixelScan::default();
     for (index, child) in observation.children.iter().enumerate() {
-        observe_one_child_pixels(index, child, token, artifacts, steps, &mut scan);
+        // The docked child HWND is owned by THIS caller thread
+        // (thread_affinity note) — which never pumps its own queue
+        // inside the scenario. Both fixtures fill via the class
+        // `hbrBackground` on `WM_ERASEBKGND`/`WM_PAINT`, so a queued
+        // initial paint can sample as a zero-fraction frame — the
+        // Issue #532 (a2) `drain_paint` finding. Drain the child's
+        // pending paint on its owner thread before sampling;
+        // recorded as a note, never a verdict input.
+        let drain = osmut::drain_paint(child.hwnd);
+        steps.push(json!({
+            "step": "drain_paint",
+            "verdict": "note",
+            "child_index": index,
+            "hwnd": child.hwnd,
+            "update_before": drain.update_before,
+            "dispatched": drain.dispatched,
+            "update_after": drain.update_after,
+            "cleared": drain.cleared,
+        }));
+        observe_one_child_pixels(index, child, token, artifacts, steps, &mut scan, format);
     }
 
     if let Some(baseline) = baseline.as_ref() {
@@ -3548,11 +3781,11 @@ fn observe_child_pixels(
             evaluated: scan.evaluated,
             covering: scan.covering,
         }
-    } else if scan.any_green {
-        PixelObservation::GreenSeen
+    } else if scan.any_editor_color {
+        PixelObservation::EditorColorSeen
     } else {
         let (best_fraction, best_backend) = scan.best.unwrap_or((0.0, "none"));
-        PixelObservation::NoGreen {
+        PixelObservation::NoEditorColor {
             best_fraction,
             best_backend,
             evaluated: scan.evaluated,
@@ -3567,8 +3800,8 @@ fn observe_child_pixels(
 struct PixelScan {
     /// Children whose screen capture succeeded.
     evaluated: usize,
-    /// Any child met [`GREEN_VISIBLE_FRACTION`].
-    any_green: bool,
+    /// Any child met [`EDITOR_COLOR_VISIBLE_FRACTION`].
+    any_editor_color: bool,
     /// Best `(green_fraction, backend)` across children.
     best: Option<(f64, &'static str)>,
     /// First screen-capture error, for the `NotEvaluable` detail.
@@ -3753,8 +3986,10 @@ fn observe_one_child_pixels(
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
     scan: &mut PixelScan,
+    format: PluginFormat,
 ) {
     let hwnd = child.hwnd;
+    let color_key = format.editor_color_key();
 
     // screen_rect — GetWindowRect in virtual-screen coordinates.
     let rect = ospix::window_screen_rect(hwnd);
@@ -3787,17 +4022,18 @@ fn observe_one_child_pixels(
     match &screen {
         Ok(capture) => {
             scan.evaluated += 1;
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
-            if fraction >= GREEN_VISIBLE_FRACTION {
-                scan.any_green = true;
+            let (matched, total) =
+                editor_color_stats(&capture.rgba, |r, g, b| format.is_editor_color(r, g, b));
+            let fraction = editor_color_fraction(matched, total);
+            if fraction >= EDITOR_COLOR_VISIBLE_FRACTION {
+                scan.any_editor_color = true;
             }
             if scan.best.is_none_or(|(f, _)| fraction > f) {
                 scan.best = Some((fraction, capture.backend));
             }
             let mut row = json!({
                 "step": "screen_pixels",
-                "verdict": if fraction >= GREEN_VISIBLE_FRACTION {
+                "verdict": if fraction >= EDITOR_COLOR_VISIBLE_FRACTION {
                     "pass"
                 } else {
                     "fail"
@@ -3806,12 +4042,14 @@ fn observe_one_child_pixels(
                 "backend": capture.backend,
                 "width": capture.width,
                 "height": capture.height,
-                "green_pixels": green,
                 "total_pixels": total,
-                "green_fraction": fraction,
-                "threshold": GREEN_VISIBLE_FRACTION,
+                "threshold": EDITOR_COLOR_VISIBLE_FRACTION,
                 "capture_sha256": rgba_sha256(&capture.rgba),
             });
+            // The measured-color keys name the format's EDITOR_COLOR
+            // honestly — `green_*` for VST3, `blue_*` for CLAP.
+            row[format!("{color_key}_pixels")] = json!(matched);
+            row[format!("{color_key}_fraction")] = json!(fraction);
             record_pixel_artifact(
                 &mut row,
                 artifacts,
@@ -3835,8 +4073,8 @@ fn observe_one_child_pixels(
         }
     }
 
-    record_printwindow_pixels(index, hwnd, artifacts, steps);
-    record_windowdc_pixels(index, hwnd, artifacts, steps);
+    record_printwindow_pixels(index, hwnd, artifacts, steps, format);
+    record_windowdc_pixels(index, hwnd, artifacts, steps, format);
     let facts = record_occlusion_notes(hwnd, container, steps);
 
     // Issue #857 fail-closed gate input — count the probe points
@@ -4159,11 +4397,14 @@ fn record_windowdc_pixels(
     hwnd: u64,
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
+    format: PluginFormat,
 ) {
     match ospix::capture_window_dc(hwnd) {
         Ok(capture) => {
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
+            let (matched, total) =
+                editor_color_stats(&capture.rgba, |r, g, b| format.is_editor_color(r, g, b));
+            let fraction = editor_color_fraction(matched, total);
+            let color_key = format.editor_color_key();
             let mut row = json!({
                 "step": "windowdc_pixels",
                 "verdict": "note",
@@ -4171,13 +4412,13 @@ fn record_windowdc_pixels(
                 "backend": capture.backend,
                 "width": capture.width,
                 "height": capture.height,
-                "green_pixels": green,
                 "total_pixels": total,
-                "green_fraction": fraction,
                 "note": "child's own window-DC surface via GetDC+BitBlt — \
                         NOT the on-screen composition; diagnostic only",
                 "capture_sha256": rgba_sha256(&capture.rgba),
             });
+            row[format!("{color_key}_pixels")] = json!(matched);
+            row[format!("{color_key}_fraction")] = json!(fraction);
             record_pixel_artifact(
                 &mut row,
                 artifacts,
@@ -4206,11 +4447,14 @@ fn record_printwindow_pixels(
     hwnd: u64,
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
+    format: PluginFormat,
 ) {
     match ospix::capture_print_window(hwnd) {
         Ok(capture) => {
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
+            let (matched, total) =
+                editor_color_stats(&capture.rgba, |r, g, b| format.is_editor_color(r, g, b));
+            let fraction = editor_color_fraction(matched, total);
+            let color_key = format.editor_color_key();
             let mut row = json!({
                 "step": "printwindow_pixels",
                 "verdict": "note",
@@ -4218,13 +4462,13 @@ fn record_printwindow_pixels(
                 "backend": capture.backend,
                 "width": capture.width,
                 "height": capture.height,
-                "green_pixels": green,
                 "total_pixels": total,
-                "green_fraction": fraction,
                 "note": "child's own raster via PrintWindow — NOT \
                         the on-screen composition; diagnostic only",
                 "capture_sha256": rgba_sha256(&capture.rgba),
             });
+            row[format!("{color_key}_pixels")] = json!(matched);
+            row[format!("{color_key}_fraction")] = json!(fraction);
             record_pixel_artifact(
                 &mut row,
                 artifacts,
@@ -4251,26 +4495,32 @@ fn pixel_extras(
     observation: &ChildWindowObservation,
     events: &[String],
     pixels: &PixelObservation,
+    format: PluginFormat,
 ) -> Map<String, Value> {
     let mut extras = child_extras(container, observation, events);
+    let color_key = format.editor_color_key();
+    let observed_key = format!("{color_key}_observed");
     let summary = match pixels {
-        PixelObservation::GreenSeen => json!({ "green_observed": true }),
-        PixelObservation::NoGreen {
+        PixelObservation::EditorColorSeen => json!({ observed_key: true }),
+        PixelObservation::NoEditorColor {
             best_fraction,
             best_backend,
             evaluated,
-        } => json!({
-            "green_observed": false,
-            "best_green_fraction": best_fraction,
-            "best_backend": best_backend,
-            "evaluated_children": evaluated,
-        }),
+        } => {
+            let mut row = json!({
+                observed_key: false,
+                "best_backend": best_backend,
+                "evaluated_children": evaluated,
+            });
+            row[format!("best_{color_key}_fraction")] = json!(best_fraction);
+            row
+        }
         PixelObservation::Occluded {
             occluded_points,
             evaluated,
             covering,
         } => json!({
-            "green_observed": Value::Null,
+            observed_key: Value::Null,
             "occluded": {
                 "occluded_points": occluded_points,
                 "evaluated_children": evaluated,
@@ -4278,7 +4528,7 @@ fn pixel_extras(
             },
         }),
         PixelObservation::NotEvaluable(reason) => json!({
-            "green_observed": Value::Null,
+            observed_key: Value::Null,
             "not_evaluable": reason,
         }),
     };
@@ -4292,6 +4542,7 @@ fn pixel_extras(
 /// (a bare closure literal inside the struct cannot infer them).
 fn pixel_observe(
     artifacts: Option<&Path>,
+    format: PluginFormat,
 ) -> impl FnOnce(
     &RealOsGuiTest,
     Option<u64>,
@@ -4305,7 +4556,7 @@ fn pixel_observe(
 + '_ {
     move |_gui, container, _lease_raw, sessions, session_id, host, handle, steps| {
         observe_editor_pixel_lifecycle(
-            container, sessions, session_id, host, handle, artifacts, steps,
+            container, sessions, session_id, host, handle, artifacts, steps, format,
         )
     }
 }
@@ -4360,6 +4611,7 @@ fn present_observe(
 /// then — while still attached — the screen-composited pixel
 /// observation ([`observe_child_pixels`]), then the shared close →
 /// detach → convergence tail ([`conclude_editor_session`]).
+#[expect(clippy::too_many_arguments)]
 fn observe_editor_pixel_lifecycle(
     container: Option<u64>,
     sessions: &mut PluginEditorSessions,
@@ -4368,6 +4620,7 @@ fn observe_editor_pixel_lifecycle(
     handle: PluginHandle,
     artifacts: Option<&Path>,
     steps: &mut Vec<Value>,
+    format: PluginFormat,
 ) -> PixelVerification {
     let mut failure: Option<String> = None;
 
@@ -4394,7 +4647,7 @@ fn observe_editor_pixel_lifecycle(
     // Issue #532 oracle). Off-Windows there is no pixel concept
     // either — recorded as not evaluable, never fabricated.
     let pixels = if observation.supported {
-        observe_child_pixels(&observation, container, artifacts, steps)
+        observe_child_pixels(&observation, container, artifacts, steps, format)
     } else {
         steps.push(json!({
             "step": "screen_pixels",
@@ -4419,22 +4672,29 @@ fn observe_editor_pixel_lifecycle(
         supported: observation.supported,
         lifecycle_ok: attach_ok && close_ok && detach_ok && converged_ok,
         lifecycle_failure: failure,
-        extras: Value::Object(pixel_extras(container, &observation, &rendered, &pixels)),
+        extras: Value::Object(pixel_extras(
+            container,
+            &observation,
+            &rendered,
+            &pixels,
+            format,
+        )),
         pixels,
     }
 }
 
-/// `real-dcomp-pixel`: the same real attach path as
-/// `real-editor-attach`, plus the screen-composited pixel oracle —
-/// does `EDITOR_COLOR` green actually appear in the pixels the user
-/// sees? For the sampling duration the measured window hierarchy is
-/// promoted to the head of the topmost band (Issue #857 bounded +
-/// restore de-occlusion), so `Pass` is claimed when green is really
-/// observed on screen, `Fail` only when the hierarchy is hit-test
-/// visible yet the screen shows no green, and `NotRun` when the
-/// pixels are unevaluable — including the fail-closed case where a
-/// hit-test point still resolves to an external top-level window,
-/// whose pixels are never read as a `Pass`/`Fail` either way.
+/// `real-dcomp-pixel`/`real-clap-dcomp-pixel`: the same real attach
+/// path as `real-editor-attach`, plus the screen-composited pixel
+/// oracle — does the format's `EDITOR_COLOR` fill actually appear
+/// in the pixels the user sees? For the sampling duration the
+/// measured window hierarchy is promoted to the head of the topmost
+/// band (Issue #857 bounded + restore de-occlusion), so `Pass` is
+/// claimed when the editor color is really observed on screen,
+/// `Fail` only when the hierarchy is hit-test visible yet the
+/// screen shows none of it, and `NotRun` when the pixels are
+/// unevaluable — including the fail-closed case where a hit-test
+/// point still resolves to an external top-level window, whose
+/// pixels are never read as a `Pass`/`Fail` either way.
 fn editor_pixel_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -4442,6 +4702,7 @@ fn editor_pixel_body(
     plugin: Option<&PluginPair>,
     plugin_error: Option<&PluginUnavailable>,
     artifacts: Option<&Path>,
+    format: PluginFormat,
 ) -> ScenarioOutcome {
     let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
         Ok(pair) => pair,
@@ -4458,7 +4719,7 @@ fn editor_pixel_body(
         &mut steps,
         AttachDrive {
             drive_open: drive_open_docked,
-            observe_open: pixel_observe(artifacts),
+            observe_open: pixel_observe(artifacts, format),
         },
     );
 
@@ -4487,29 +4748,31 @@ fn editor_pixel_body(
                     .unwrap_or("unknown mismatch")
             )),
             Some(verification) => match &verification.pixels {
-                PixelObservation::GreenSeen => {
+                PixelObservation::EditorColorSeen => {
                     let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
-                    outcome.detail = Some(
+                    outcome.detail = Some(format!(
                         "docked test_editor child HWND's screen-composited \
-                         pixels show EDITOR_COLOR green — the editor \
-                         surface is actually visible on screen"
-                            .to_string(),
-                    );
-                    outcome
-                        .evidence
-                        .push("dcomp-pixel:editor-green-on-screen".to_string());
+                         pixels show EDITOR_COLOR {} — the editor \
+                         surface is actually visible on screen",
+                        format.editor_color_key()
+                    ));
+                    outcome.evidence.push(format!(
+                        "dcomp-pixel:editor-{}-on-screen",
+                        format.editor_color_key()
+                    ));
                     outcome
                 }
-                PixelObservation::NoGreen {
+                PixelObservation::NoEditorColor {
                     best_fraction,
                     best_backend,
                     evaluated,
                 } => fail(format!(
                     "editor lifecycle verified but {evaluated} child screen \
-                     capture(s) show no EDITOR_COLOR green (best \
-                     green_fraction={best_fraction:.3} via {best_backend}) — \
+                     capture(s) show no EDITOR_COLOR {key} (best \
+                     {key}_fraction={best_fraction:.3} via {best_backend}) — \
                      the hit-test resolved inside the measured hierarchy, so \
-                     the miss is not lane-window occlusion"
+                     the miss is not lane-window occlusion",
+                    key = format.editor_color_key()
                 )),
                 PixelObservation::Occluded {
                     occluded_points,
@@ -4553,6 +4816,15 @@ fn editor_pixel_body(
 /// plus the screen-pixel observation — or reports the honest
 /// artifact/session/environment outcome.
 fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    dcomp_pixel_case(ctx, spec)
+}
+
+/// The format-shared `dcomp-pixel` body — `real-dcomp-pixel`
+/// (VST3) and `real-clap-dcomp-pixel` (CLAP) drive the identical
+/// attach + screen-pixel lifecycle through [`editor_pixel_body`]
+/// with the context's `EDITOR_COLOR` predicate ([`RealDockContext::format`]).
+fn dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> ScenarioReport {
+    let format = ctx.format;
     let window = ctx.window;
     let view = ctx.view;
     let plugin = ctx.plugin;
@@ -4567,6 +4839,7 @@ fn real_dcomp_pixel_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
             plugin,
             plugin_error,
             pixel_artifacts,
+            format,
         ))
     });
     finalize_case(
@@ -4789,8 +5062,8 @@ fn record_foreground_observation(
     let screen = ospix::window_screen_rect(hwnd).and_then(ospix::capture_screen_rect);
     let mut screen_json = match &screen {
         Ok(capture) => {
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
+            let (green, total) = editor_color_stats(&capture.rgba, is_editor_green);
+            let fraction = editor_color_fraction(green, total);
             let mut row = json!({
                 "backend": capture.backend,
                 "width": capture.width,
@@ -4798,7 +5071,7 @@ fn record_foreground_observation(
                 "green_pixels": green,
                 "total_pixels": total,
                 "green_fraction": fraction,
-                "threshold": GREEN_VISIBLE_FRACTION,
+                "threshold": EDITOR_COLOR_VISIBLE_FRACTION,
                 "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
@@ -5624,8 +5897,8 @@ fn record_present_capture(
 ) {
     match result {
         Ok(capture) => {
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
+            let (green, total) = editor_color_stats(&capture.rgba, is_editor_green);
+            let fraction = editor_color_fraction(green, total);
             let mut row = json!({
                 "step": step,
                 "verdict": "note",
@@ -5855,8 +6128,8 @@ fn probe_one_child_presentation(
     );
     let screen_capture = match &screen {
         Ok(capture) => {
-            let (green, total) = green_stats(&capture.rgba);
-            let fraction = green_fraction(green, total);
+            let (green, total) = editor_color_stats(&capture.rgba, is_editor_green);
+            let fraction = editor_color_fraction(green, total);
             let mut row = json!({
                 "step": "pres_screen",
                 "verdict": "note",
@@ -5868,7 +6141,7 @@ fn probe_one_child_presentation(
                 "green_pixels": green,
                 "total_pixels": total,
                 "green_fraction": fraction,
-                "threshold": GREEN_VISIBLE_FRACTION,
+                "threshold": EDITOR_COLOR_VISIBLE_FRACTION,
                 "capture_sha256": rgba_sha256(&capture.rgba),
             });
             record_pixel_artifact(
@@ -8424,7 +8697,7 @@ struct RasterfixProbeOutcome {
     /// First violated probe check (`name: detail`).
     failure: Option<String>,
     /// The arm whose stage produced user-visible screen green ≥
-    /// [`GREEN_VISIBLE_FRACTION`] — `"baseline"`/`"pump"`/
+    /// [`EDITOR_COLOR_VISIBLE_FRACTION`] — `"baseline"`/`"pump"`/
     /// `"reparent"`/`"layered"`. `None` means every evaluated arm
     /// left the child covered — an honestly rejected hypothesis,
     /// never a probe-internal failure.
@@ -8511,8 +8784,8 @@ fn rf_screen_green(
 ) -> Option<f64> {
     let result = ospix::window_screen_rect(hwnd).and_then(ospix::capture_screen_rect);
     let fraction = result.as_ref().ok().map(|capture| {
-        let (green, total) = green_stats(&capture.rgba);
-        green_fraction(green, total)
+        let (green, total) = editor_color_stats(&capture.rgba, is_editor_green);
+        editor_color_fraction(green, total)
     });
     record_present_capture(
         steps,
@@ -8542,8 +8815,8 @@ fn rf_raster_green(
 ) -> Option<f64> {
     let result = ospix::capture_window_dc(hwnd);
     let fraction = result.as_ref().ok().map(|capture| {
-        let (green, total) = green_stats(&capture.rgba);
-        green_fraction(green, total)
+        let (green, total) = editor_color_stats(&capture.rgba, is_editor_green);
+        editor_color_fraction(green, total)
     });
     record_present_capture(
         steps,
@@ -8566,7 +8839,7 @@ fn rf_raster_green(
 ///
 /// 1. `rf_baseline_state` + baseline observation — container/child/
 ///    root snapshots and the baseline screen green. A baseline that
-///    already meets [`GREEN_VISIBLE_FRACTION`] means the fix under
+///    already meets [`EDITOR_COLOR_VISIBLE_FRACTION`] means the fix under
 ///    test (private container class) reached the screen unaided —
 ///    the arms are skipped, `fix_arm = "baseline"`.
 /// 2. Arm `pump` (a2) — `osmut::drain_paint` (`UpdateWindow` +
@@ -8651,7 +8924,7 @@ fn rasterfix_probe_children(
         .greens
         .insert("baseline".to_string(), json!(baseline_green));
 
-    if baseline_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+    if baseline_green.is_some_and(|f| f >= EDITOR_COLOR_VISIBLE_FRACTION) {
         outcome.fix_arm = Some("baseline");
         steps.push(json!({
             "step": "rf_arms",
@@ -8679,7 +8952,7 @@ fn rasterfix_probe_children(
     outcome.greens.insert("pump".to_string(), json!(pump_green));
     observe_all_children("pump", observation, token, artifacts, steps, RF_LABELS);
 
-    if pump_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+    if pump_green.is_some_and(|f| f >= EDITOR_COLOR_VISIBLE_FRACTION) {
         outcome.fix_arm = Some("pump");
         return outcome;
     }
@@ -8758,7 +9031,7 @@ fn rasterfix_probe_children(
         .insert("reparent".to_string(), json!(reparent_green));
     observe_all_children("reparent", observation, token, artifacts, steps, RF_LABELS);
 
-    if reparent_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+    if reparent_green.is_some_and(|f| f >= EDITOR_COLOR_VISIBLE_FRACTION) {
         outcome.fix_arm = Some("reparent");
     } else {
         // The layered-surface airspace path — the bit the
@@ -8782,7 +9055,7 @@ fn rasterfix_probe_children(
             .greens
             .insert("layered".to_string(), json!(layered_green));
         observe_all_children("layered", observation, token, artifacts, steps, RF_LABELS);
-        if layered_green.is_some_and(|f| f >= GREEN_VISIBLE_FRACTION) {
+        if layered_green.is_some_and(|f| f >= EDITOR_COLOR_VISIBLE_FRACTION) {
             outcome.fix_arm = Some("layered");
         }
     }
@@ -8908,7 +9181,7 @@ fn observe_editor_rasterfix_probe(
         "rasterfix_oracle".to_string(),
         json!({
             "fix_arm": probe.fix_arm,
-            "screen_green_threshold": GREEN_VISIBLE_FRACTION,
+            "screen_green_threshold": EDITOR_COLOR_VISIBLE_FRACTION,
             "screen_green": probe.greens,
         }),
     );
@@ -9023,7 +9296,7 @@ fn editor_rasterfix_body(
                     let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
                     outcome.detail = Some(format!(
                         "arm `{arm}` produced user-visible screen green \
-                         (≥ {GREEN_VISIBLE_FRACTION}) — the child's raster \
+                         (≥ {EDITOR_COLOR_VISIBLE_FRACTION}) — the child's raster \
                          reached the composed screen with lifecycle and \
                          restore verified"
                     ));
@@ -15394,7 +15667,7 @@ fn session_rt_fault_body(
     let fault_plugin_id = descriptor.id.to_string();
     let mut steps = Vec::new();
     let mut host = InProcessHost::new();
-    register_factories(&mut host, library);
+    library.register_factories(&mut host);
     let handle = match activate_test_gain(&mut host, &fault_plugin_id) {
         Ok(handle) => handle,
         Err(error) => return host_error_outcome("activate(test_fault)", error),
@@ -16320,10 +16593,1172 @@ fn real_session_rt_boundary_case(
     )
 }
 
+// ---------------------------------------------------------------------
+// Issue #630 AC4 CLAP leg — real_clap_entries + CLAP-specific oracles
+// ---------------------------------------------------------------------
+
+/// `run_scenario` + `finalize_case` boilerplate shared by every
+/// `real-clap-*` case — the same `EnvironmentKind::RealWindow` +
+/// plugin-artifact stamping the VST3 wrappers produce.
+fn clap_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+    body: impl FnOnce(
+        &mut RealOsGuiTest,
+        WindowId,
+        ViewInstanceId,
+        Option<&PluginPair>,
+        Option<&PluginUnavailable>,
+    ) -> ScenarioOutcome,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(body(gui, window, view, plugin, plugin_error))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// [`clap_case`] specialization for the `editor_child_body`
+/// lifecycle cases — one `ChildLifecycle` (drive + observe +
+/// CLAP-flavored identity) is all a case fn supplies.
+fn clap_child_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+    lifecycle: ChildLifecycle<'_>,
+) -> ScenarioReport {
+    clap_case(ctx, spec, move |gui, window, view, plugin, plugin_error| {
+        editor_child_body(gui, window, view, plugin, plugin_error, lifecycle)
+    })
+}
+
+/// [`clap_case`] specialization for the `editor_op_body` cases —
+/// one [`EditorOpIdentity`] plus the `observe_open` fn item is all
+/// a case fn supplies.
+fn clap_op_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+    case: &'static EditorOpIdentity,
+    observe_open: impl FnOnce(
+        &RealOsGuiTest,
+        Option<u64>,
+        u64,
+        &mut PluginEditorSessions,
+        PluginEditorSessionId,
+        &mut InProcessHost,
+        PluginHandle,
+        &mut Vec<Value>,
+    ) -> EditorOpVerification,
+) -> ScenarioReport {
+    clap_case(ctx, spec, move |gui, window, view, plugin, plugin_error| {
+        editor_op_body(gui, window, view, plugin, plugin_error, case, observe_open)
+    })
+}
+
+/// `real-clap-editor-attach` — the CLAP `test_editor`'s
+/// `clap.ext.gui` `create`/`set_parent`/`show` embeds a real
+/// `WS_CHILD` HWND under the leased container; `hide`+`destroy` on
+/// close tears it down. Same child-HWND contract and event tail as
+/// the VST3 case — only the fixture surface differs.
+fn real_clap_editor_attach_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_child_case(
+        ctx,
+        spec,
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_editor_child_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "test_editor real clap.ext.gui embed attached a \
+                              real child HWND under the leased container HWND \
+                              and destroyed it on close \
+                              (EnumChildWindows/GetParent/IsWindowVisible \
+                              observed; IsWindow(child)==0 after destroy; \
+                              events [Attached{Docked}, Closed])",
+                evidence: "clap-editor-attach:real-child-hwnd-lifecycle",
+                label: "child-HWND",
+            },
+        },
+    )
+}
+
+/// `real-clap-dcomp-pixel` — the shared attach + screen-pixel
+/// lifecycle with the CLAP fixture's `EDITOR_COLOR` blue oracle
+/// (`is_editor_blue`), never the VST3 green.
+fn real_clap_dcomp_pixel_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    dcomp_pixel_case(ctx, spec)
+}
+
+/// `real-clap-editor-resize` — the CLAP fixture genuinely resizes
+/// (`can_resize` → true, `set_size` moves the child HWND), so the
+/// shared geometry oracle applies verbatim.
+fn real_clap_editor_resize_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.set_size(800x600) accepted through the \
+                          REAL container lease; the child HWND's \
+                          GetWindowRect reported the requested size \
+                          (the CLAP fixture's set_size resized its own \
+                          window), the session stayed Attached, events \
+                          [Attached{Docked}, Closed], and close \
+                          convergence verified — no pixels",
+            evidence: "clap-editor-resize:real-hwnd-geometry-effect",
+        },
+        observe_editor_resize_lifecycle,
+    )
+}
+
+/// `real-clap-editor-redock` post-open observation — the CLAP
+/// re-dock law. CLAP's embedded-GUI contract is single-embed:
+/// in-place `session.reattach` → `HostCommand::SetGuiParent` →
+/// `clap_gui.set_parent` on a live embedded GUI lands the fixture's
+/// defined `gui already embedded` plugin refusal
+/// (`HostError::PluginFailed` → `EditorOpError::Plugin` →
+/// `Failed{PluginFailed}`). The format's re-dock path is then
+/// `session.close` (generation-1 `destroy`) + a FRESH session's
+/// `open` (`open_gui` mints generation 2 under the same live
+/// lease — `recover` cannot mint a new GUI on the still-embedded
+/// generation 1, and `Closed` is terminal). The oracle: every
+/// generation-1 child HWND dead, a new child contract under the
+/// container on a disjoint HWND set, session-1 events
+/// `[Attached{Docked}, Detached, Failed{PluginFailed}, Closed]`,
+/// session-2 events `[Attached{Docked}, Closed]`.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
+fn observe_clap_redock_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (pre_observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+    // Generation-1 child identities — the CLAP re-open oracle:
+    // every recorded child must die on close and the re-opened
+    // generation must be a disjoint HWND set (the fixture stamps no
+    // title tag, so HWND-set disjointness is the generation proof).
+    let pre_hwnds: Vec<u64> = pre_observation
+        .children
+        .iter()
+        .map(|child| child.hwnd)
+        .collect();
+    let mut observation = pre_observation;
+
+    let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    let mut effect_ok = true;
+    let mut state_ok = true;
+
+    // Leg 1 — in-place reattach on the live embedded GUI. The CLAP
+    // single-embed refusal is the EXPECTED landing — recorded as a
+    // pass step (the defined plugin refusal), never a surprise.
+    let refused_expected = match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        session.reattach(&mut ops, &ParentSlotLease::new(lease_raw))
+    }) {
+        Some(Err(error @ EditorSessionError::Ops(EditorOpError::Plugin))) => {
+            steps.push(json!({
+                "step": "editor_redock_refusal",
+                "verdict": "pass",
+                "detail": "session.reattach → InProcessEditorOps::reattach \
+                           → HostCommand::SetGuiParent → clap_gui.set_parent \
+                           on a live embedded GUI — the fixture's defined \
+                           `gui already embedded` refusal landed \
+                           EditorOpError::Plugin; the session must now land \
+                           Failed{PluginFailed} per contract",
+                "error": error.to_string(),
+            }));
+            true
+        }
+        Some(Ok(())) => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_redock_refusal",
+                "reattach was ACCEPTED on the live embedded GUI — the \
+                 CLAP single-embed contract expected the defined \
+                 `gui already embedded` plugin refusal",
+            );
+            effect_ok = false;
+            false
+        }
+        Some(Err(error)) => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_redock_refusal",
+                format!("reattach landed an unexpected refusal kind: {error}"),
+            );
+            effect_ok = false;
+            false
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_redock_refusal",
+                "editor session vanished before reattach",
+            );
+            effect_ok = false;
+            false
+        }
+    };
+    if refused_expected {
+        let failed = sessions.session(session_id).is_some_and(|session| {
+            matches!(session.state(), EditorSessionState::Failed { cause } if cause == SessionFailCause::PluginFailed)
+        });
+        if failed {
+            steps.push(json!({
+                "step": "session_state_after_refusal",
+                "verdict": "pass",
+                "state": "Failed{PluginFailed}",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_refusal",
+                "the defined plugin refusal did not land \
+                 Failed{PluginFailed}",
+            );
+            state_ok = false;
+        }
+    }
+
+    // Leg 2 — `session.close` destroys the still-embedded
+    // generation-1 GUI (`close_gui` on a Failed session runs the
+    // production `removed()` → `DestroyWindow` path) and converges
+    // session 1 to Closed+concluded. The CLAP re-dock path then
+    // needs a FRESH session on the same live lease: `recover`
+    // cannot mint a new GUI — it re-runs `ops.open` on the
+    // still-embedded generation 1 and would hit the same
+    // `gui already embedded` refusal — and `Closed` is terminal.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
+    let (gen1_converged, mut rendered) = check_session_converged(
+        sessions,
+        session_id,
+        steps,
+        &mut failure,
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Detached,
+            EditorSessionEvent::Failed {
+                cause: SessionFailCause::PluginFailed,
+            },
+            EditorSessionEvent::Closed,
+        ],
+    );
+
+    // Leg 3 — a fresh session re-opens on the same live lease;
+    // `begin_session` retires the concluded session-1 slot and
+    // `open_gui` mints generation 2.
+    let session_id_gen2 = match sessions.begin_session(handle) {
+        Ok(id) => {
+            steps.push(json!({
+                "step": "begin_session_gen2",
+                "verdict": "pass",
+                "session": session_id_json(id),
+            }));
+            Some(id)
+        }
+        Err(error) => {
+            record_obs_fail(steps, &mut failure, "begin_session_gen2", error.to_string());
+            effect_ok = false;
+            None
+        }
+    };
+    if let Some(id2) = session_id_gen2 {
+        match open_session_docked(
+            gui,
+            host,
+            handle,
+            sessions,
+            id2,
+            ParentSlotLease::new(lease_raw),
+        ) {
+            Some(Ok(_)) => {
+                landing = OpLanding::Accepted;
+                steps.push(json!({
+                    "step": "editor_redock_reopen",
+                    "verdict": "pass",
+                    "detail": "a fresh session re-opened Docked on the same \
+                               live lease — close_gui destroyed generation \
+                               1; open_gui minted generation 2",
+                }));
+                let attached = sessions.session(id2).is_some_and(|session| {
+                    matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+                });
+                if attached {
+                    steps.push(json!({
+                        "step": "session_state_after_reopen",
+                        "verdict": "pass",
+                        "state": "Attached{Docked}",
+                    }));
+                } else {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "session_state_after_reopen",
+                        "accepted re-open did not land Attached{Docked}",
+                    );
+                    state_ok = false;
+                }
+                // Generation oracle — every generation-1 HWND dead;
+                // the child contract holds under the container on a
+                // disjoint HWND set (the CLAP fixture stamps no
+                // title tag, so HWND-set disjointness is the
+                // generation proof).
+                if observation.supported {
+                    let survivors: Vec<String> = pre_hwnds
+                        .iter()
+                        .filter(|hwnd| oschild::is_alive(**hwnd))
+                        .map(|hwnd| format!("hwnd={hwnd:#x}"))
+                        .collect();
+                    let (reopened, reopened_ok) =
+                        observe_attached_children(container, steps, &mut failure);
+                    attach_ok = attach_ok && reopened_ok;
+                    let new_hwnds: Vec<u64> =
+                        reopened.children.iter().map(|child| child.hwnd).collect();
+                    let disjoint = !new_hwnds.is_empty()
+                        && new_hwnds.iter().all(|hwnd| !pre_hwnds.contains(hwnd));
+                    if survivors.is_empty() && reopened_ok && disjoint {
+                        effect_confirmed = true;
+                        steps.push(json!({
+                            "step": "editor_redock_effect",
+                            "verdict": "pass",
+                            "detail": "generation-1 children destroyed; a \
+                                       new attach generation lives under \
+                                       the container (HWND sets disjoint)",
+                            "pre_hwnds": pre_hwnds,
+                            "post_hwnds": new_hwnds,
+                        }));
+                    } else {
+                        let mut problems = Vec::new();
+                        if !survivors.is_empty() {
+                            problems.push(format!(
+                                "generation-1 child HWND(s) still alive: {}",
+                                survivors.join(", ")
+                            ));
+                        }
+                        if new_hwnds.is_empty() {
+                            problems.push("no child re-appeared under the container".to_string());
+                        } else if !disjoint {
+                            problems.push(
+                                "re-opened children share HWNDs with \
+                                 generation 1 — no new generation observed"
+                                    .to_string(),
+                            );
+                        }
+                        record_obs_fail(
+                            steps,
+                            &mut failure,
+                            "editor_redock_effect",
+                            format!(
+                                "accepted re-open without a verified \
+                                 close/reopen generation: {}",
+                                problems.join("; ")
+                            ),
+                        );
+                        effect_ok = false;
+                    }
+                    observation = reopened;
+                }
+            }
+            Some(Err(error)) => {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "editor_redock_reopen",
+                    error.to_string(),
+                );
+                effect_ok = false;
+            }
+            None => {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "editor_redock_reopen",
+                    "editor session vanished before re-open",
+                );
+                effect_ok = false;
+            }
+        }
+
+        // Convergence — generation-2 close (`destroy`), post-detach
+        // `IsWindow(child) == 0`, and session 2's plain
+        // `[Attached{Docked}, Closed]` tail.
+        let final_close_ok = close_editor_session(sessions, id2, host, handle, steps, &mut failure);
+        let detach_ok = !observation.supported
+            || check_detached_children(&mut observation, steps, &mut failure);
+        let (gen2_converged, rendered2) =
+            check_session_converged(sessions, id2, steps, &mut failure, ATTACH_CLOSE_EVENTS);
+        rendered.extend(rendered2);
+        return EditorOpVerification {
+            supported: observation.supported,
+            landing,
+            effect_confirmed,
+            verified: attach_ok
+                && state_ok
+                && effect_ok
+                && close_ok
+                && gen1_converged
+                && final_close_ok
+                && detach_ok
+                && gen2_converged,
+            failure,
+            extras: Value::Object(child_extras(container, &observation, &rendered)),
+        };
+    }
+
+    // `begin_session` failed — generation 2 never minted; converge
+    // the verification on what was observed (session 1's tail is
+    // already drained by `check_session_converged` above).
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed,
+        verified: false,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-clap-editor-redock` case — the CLAP re-dock law:
+/// defined single-embed refusal on in-place `set_parent`, then
+/// close + a fresh session re-open produces the new attach
+/// generation.
+fn real_clap_editor_redock_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.reattach on the live embedded GUI landed \
+                          the fixture's defined `gui already embedded` \
+                          refusal (EditorOpError::Plugin → \
+                          Failed{PluginFailed}); session.close destroyed \
+                          generation 1 and a FRESH session's open(Docked) \
+                          minted a new attach generation under the \
+                          container (HWND sets disjoint) — session-1 events \
+                          [Attached{Docked}, Detached, Failed{PluginFailed}, \
+                          Closed], session-2 events [Attached{Docked}, \
+                          Closed] — no pixels",
+            evidence: "clap-editor-redock:close-reopen-generation",
+        },
+        observe_clap_redock_lifecycle,
+    )
+}
+
+/// `real-clap-editor-visibility` post-open observation — the CLAP
+/// hide/show law. `set_gui_visibility` calls the plugin's
+/// `hide`/`show` on the LIVE child HWND (`ShowWindow` — no
+/// destroy/recreate the way VST3's `removed()`/`attached` cycle
+/// tears down): the same HWND set must report `IsWindowVisible ==
+/// false` post-hide and `== true` post-show, session lands
+/// `Hidden{Docked}`/`Attached{Docked}`, events `[Attached{Docked},
+/// Hidden, Shown{Docked}, Closed]`.
+#[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
+fn observe_clap_visibility_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+) -> EditorOpVerification {
+    let mut failure: Option<String> = None;
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+    // Pre-hide child identities — the CLAP live-hide oracle: the
+    // SAME HWND set must be alive-but-hidden post-hide and alive-
+    // and-visible post-show; no generation change may occur.
+    let pre_hwnds: Vec<u64> = observation
+        .children
+        .iter()
+        .map(|child| child.hwnd)
+        .collect();
+
+    let mut landing = OpLanding::Other;
+    let mut effect_confirmed = false;
+    let mut effect_ok = true;
+    let mut state_ok = true;
+    let mut shown = false;
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        session.set_visibility(&mut ops, false)
+    }) {
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_visibility",
+                "verdict": "unsupported",
+                "detail": "session.set_visibility(false) → \
+                           InProcessEditorOps::set_visibility → \
+                           HostCommand::SetGuiVisibility → the plugin \
+                           declined hide — the defined \
+                           EditorOpError::Unsupported",
+            }));
+            landing = OpLanding::Refused;
+            let attached = sessions.session(session_id).is_some_and(|session| {
+                matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+            });
+            if attached {
+                steps.push(json!({
+                    "step": "session_state_after_op",
+                    "verdict": "pass",
+                    "state": "Attached{Docked}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_op",
+                    "refused set_visibility did not leave Attached{Docked}",
+                );
+                state_ok = false;
+            }
+        }
+        Some(Ok(())) => {
+            landing = OpLanding::Accepted;
+            steps.push(json!({
+                "step": "editor_visibility_hide",
+                "verdict": "pass",
+                "detail": "set_visibility(false) accepted — verifying \
+                           Hidden{Docked} and the live-child hide",
+            }));
+            let hidden = sessions.session(session_id).is_some_and(|session| {
+                matches!(session.state(), EditorSessionState::Hidden { mode } if mode == AttachMode::Docked)
+            });
+            if hidden {
+                steps.push(json!({
+                    "step": "session_state_after_hide",
+                    "verdict": "pass",
+                    "state": "Hidden{Docked}",
+                }));
+            } else {
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    "session_state_after_hide",
+                    "accepted hide did not land Hidden{Docked}",
+                );
+                state_ok = false;
+            }
+            // CLAP hide effect oracle — `hide` is `ShowWindow` on
+            // the live child: the SAME HWND set must still be alive
+            // under the container, all `IsWindowVisible == false`
+            // (`check_attached_children` cannot run here — it
+            // requires visible children).
+            if observation.supported {
+                let hidden_enum = match container {
+                    Some(token) => oschild::observe(token),
+                    None => oschild::empty(),
+                };
+                let dead: Vec<String> = pre_hwnds
+                    .iter()
+                    .filter(|hwnd| !oschild::is_alive(**hwnd))
+                    .map(|hwnd| format!("hwnd={hwnd:#x}"))
+                    .collect();
+                let new_hwnds: Vec<u64> = hidden_enum
+                    .children
+                    .iter()
+                    .filter(|child| !pre_hwnds.contains(&child.hwnd))
+                    .map(|child| child.hwnd)
+                    .collect();
+                let still_visible: Vec<String> = hidden_enum
+                    .children
+                    .iter()
+                    .filter(|child| child.attach.visible)
+                    .map(|child| format!("hwnd={:#x}", child.hwnd))
+                    .collect();
+                let same_set = !pre_hwnds.is_empty()
+                    && new_hwnds.is_empty()
+                    && hidden_enum.children.len() == pre_hwnds.len();
+                if dead.is_empty() && same_set && still_visible.is_empty() {
+                    steps.push(json!({
+                        "step": "editor_visibility_hide_effect",
+                        "verdict": "pass",
+                        "detail": "every pre-hide child HWND still ALIVE \
+                                   under the container, all \
+                                   IsWindowVisible==false — the CLAP \
+                                   live-child hide, no teardown",
+                        "pre_hwnds": pre_hwnds,
+                    }));
+                } else {
+                    let mut problems = Vec::new();
+                    if !dead.is_empty() {
+                        problems.push(format!(
+                            "pre-hide child HWND(s) destroyed on hide \
+                             (VST3 teardown semantics): {}",
+                            dead.join(", ")
+                        ));
+                    }
+                    if !new_hwnds.is_empty() {
+                        problems.push(format!("new child HWND(s) appeared on hide: {new_hwnds:?}"));
+                    }
+                    if !still_visible.is_empty() {
+                        problems.push(format!(
+                            "child HWND(s) still visible after hide: {}",
+                            still_visible.join(", ")
+                        ));
+                    }
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_hide_effect",
+                        format!(
+                            "accepted hide did not land the CLAP \
+                             live-child hidden state: {}",
+                            problems.join("; ")
+                        ),
+                    );
+                    effect_ok = false;
+                }
+            }
+            // Show half — the same verb surface in reverse.
+            match sessions.session_mut(session_id).map(|session| {
+                let mut ops = real_editor_ops(gui, host, handle);
+                session.set_visibility(&mut ops, true)
+            }) {
+                Some(Ok(())) => {
+                    shown = true;
+                    steps.push(json!({
+                        "step": "editor_visibility_show",
+                        "verdict": "pass",
+                        "detail": "set_visibility(true) accepted — \
+                                   verifying Attached{Docked} and the \
+                                   same live child set visible again",
+                    }));
+                    let attached = sessions.session(session_id).is_some_and(|session| {
+                        matches!(session.state(), EditorSessionState::Attached { mode } if mode == AttachMode::Docked)
+                    });
+                    if attached {
+                        steps.push(json!({
+                            "step": "session_state_after_show",
+                            "verdict": "pass",
+                            "state": "Attached{Docked}",
+                        }));
+                    } else {
+                        record_obs_fail(
+                            steps,
+                            &mut failure,
+                            "session_state_after_show",
+                            "accepted show did not land Attached{Docked}",
+                        );
+                        state_ok = false;
+                    }
+                    // Show effect oracle — the child contract must
+                    // hold again AND on the SAME HWND set (live
+                    // show, not recreation).
+                    if observation.supported {
+                        let (reshown, reshown_ok) =
+                            observe_attached_children(container, steps, &mut failure);
+                        attach_ok = attach_ok && reshown_ok;
+                        let same_set = !reshown.children.is_empty()
+                            && reshown.children.len() == pre_hwnds.len()
+                            && reshown
+                                .children
+                                .iter()
+                                .all(|child| pre_hwnds.contains(&child.hwnd));
+                        if reshown_ok && same_set {
+                            effect_confirmed = true;
+                            steps.push(json!({
+                                "step": "editor_visibility_show_effect",
+                                "verdict": "pass",
+                                "detail": "child contract re-established \
+                                           on the SAME HWND set — the CLAP \
+                                           live-child show",
+                                "pre_hwnds": pre_hwnds,
+                                "post_hwnds": reshown
+                                    .children
+                                    .iter()
+                                    .map(|child| child.hwnd)
+                                    .collect::<Vec<_>>(),
+                            }));
+                        } else {
+                            record_obs_fail(
+                                steps,
+                                &mut failure,
+                                "editor_visibility_show_effect",
+                                "accepted show did not restore the same \
+                                 live child set visible (HWND set changed \
+                                 or contract failed)",
+                            );
+                            effect_ok = false;
+                        }
+                        observation = reshown;
+                    }
+                }
+                Some(Err(error)) => {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_show",
+                        error.to_string(),
+                    );
+                    effect_ok = false;
+                }
+                None => {
+                    record_obs_fail(
+                        steps,
+                        &mut failure,
+                        "editor_visibility_show",
+                        "editor session vanished before set_visibility(true)",
+                    );
+                    effect_ok = false;
+                }
+            }
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_visibility", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_visibility",
+                "editor session vanished before set_visibility",
+            );
+        }
+    }
+
+    // Convergence — identical event vocabulary to the VST3 case:
+    // refused keeps `[Attached{Docked}, Closed]`; accepted hide+show
+    // produces `[Attached{Docked}, Hidden, Shown{Docked}, Closed]`;
+    // an accepted hide whose show failed produces
+    // `[Attached{Docked}, Hidden, Closed]`.
+    let close_ok = close_editor_session(sessions, session_id, host, handle, steps, &mut failure);
+    let detach_ok =
+        !observation.supported || check_detached_children(&mut observation, steps, &mut failure);
+    let expected: &[EditorSessionEvent] = if landing == OpLanding::Refused {
+        ATTACH_CLOSE_EVENTS
+    } else if shown {
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Hidden,
+            EditorSessionEvent::Shown {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Closed,
+        ]
+    } else {
+        &[
+            EditorSessionEvent::Attached {
+                mode: AttachMode::Docked,
+            },
+            EditorSessionEvent::Hidden,
+            EditorSessionEvent::Closed,
+        ]
+    };
+    let (events_ok, rendered) =
+        check_session_converged(sessions, session_id, steps, &mut failure, expected);
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && events_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// `real-clap-editor-visibility` case — the CLAP live-child
+/// hide/show oracle (same HWND set, `IsWindowVisible` toggled),
+/// never the VST3 destroy/recreate law.
+fn real_clap_editor_visibility_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.set_visibility(false→true) accepted through \
+                          the REAL container lease; Hidden{Docked} left \
+                          every pre-hide child HWND ALIVE and \
+                          IsWindowVisible==false (the CLAP hide/show is \
+                          ShowWindow on the live child — no \
+                          destroy/recreate), Attached{Docked} restored the \
+                          same HWND set visible, events [Attached{Docked}, \
+                          Hidden, Shown{Docked}, Closed], and close \
+                          convergence verified — no pixels",
+            evidence: "clap-editor-visibility:live-child-hide-show",
+        },
+        observe_clap_visibility_lifecycle,
+    )
+}
+
+/// `real-clap-editor-input` — `send_key` on a CLAP plugin lands the
+/// trait-default `Err(Unsupported)` on `ClapPlugin::send_gui_key`,
+/// so the shared verb observer records the defined refusal through
+/// the real lease and [`editor_op_body`] reports the honest
+/// `Unsupported` (Coordinator decision 1 — the verb is absent on
+/// the CLAP L0 ops surface, never a fabricated delivery).
+fn real_clap_editor_input_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.send_key(down+up 'a') accepted through \
+                          the REAL container lease (unused — the CLAP \
+                          ops surface refuses SendGuiKey with the defined \
+                          Unsupported)",
+            evidence: "clap-editor-input:defined-refusal-real-lease",
+        },
+        observe_editor_input_lifecycle,
+    )
+}
+
+/// `real-clap-editor-focus` — same defined-refusal law as
+/// `real-clap-editor-input`: `set_gui_focus` is a trait-default
+/// `Err(Unsupported)` on `ClapPlugin`.
+fn real_clap_editor_focus_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.set_focus(true→false) accepted through \
+                          the REAL container lease (unused — the CLAP \
+                          ops surface refuses SetGuiFocus with the \
+                          defined Unsupported)",
+            evidence: "clap-editor-focus:defined-refusal-real-lease",
+        },
+        observe_editor_focus_lifecycle,
+    )
+}
+
+/// `real-clap-editor-popup` — the popup toggle is driven by
+/// `send_key`, which refuses `Unsupported` on the CLAP ops surface;
+/// the shared observer skips the second toggle, verifies no popup
+/// leaked, and lands the honest `Unsupported`.
+fn real_clap_editor_popup_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_op_case(
+        ctx,
+        spec,
+        &EditorOpIdentity {
+            pass_detail: "session.send_key(down+up 'p' x2) accepted through \
+                          the REAL container lease (unused — the CLAP \
+                          ops surface refuses SendGuiKey with the \
+                          defined Unsupported)",
+            evidence: "clap-editor-popup:defined-refusal-real-lease",
+        },
+        observe_editor_popup_lifecycle,
+    )
+}
+
+/// `real-clap-session-terminate` — `host Destroy` converges the
+/// session to `Terminated{HostLost}` exactly once; format-agnostic
+/// lifecycle, CLAP-flavored identity.
+fn real_clap_session_terminate_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_child_case(
+        ctx,
+        spec,
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_session_terminate_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "test_editor real clap.ext.gui embed attached \
+                              under the leased container HWND; host Destroy \
+                              converged the session to \
+                              Terminated{HostLost} exactly once (repeated \
+                              notify is a no-op), the child HWND tore down \
+                              (IsWindow(child)==0), and the host survived",
+                evidence: "clap-session-terminate:host-loss-exactly-once",
+                label: "session-terminate",
+            },
+        },
+    )
+}
+
+/// `real-clap-session-degraded` — `open_or_degrade(Floating→Docked)`
+/// refuses the preferred mode `Unsupported` at the ops layer (the
+/// L0 surface is docked-only), falls back to Docked, and lands
+/// `Degraded{Docked}` — never `Attached`. Format-agnostic drive.
+fn real_clap_session_degraded_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_child_case(
+        ctx,
+        spec,
+        ChildLifecycle {
+            drive_open: drive_open_degraded,
+            observe_open: observe_session_degraded_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "open_or_degrade(Floating→Docked) refused the \
+                              preferred mode with the defined Unsupported, \
+                              fell back to Docked, attached the real \
+                              clap.ext.gui embed child HWND under the \
+                              leased container, and emitted \
+                              Degraded{Docked} — never Attached — then \
+                              closed cleanly (events [Degraded{Docked}, \
+                              Closed])",
+                evidence: "clap-session-degraded:open-or-degrade-docked-fallback",
+                label: "session-degraded",
+            },
+        },
+    )
+}
+
+/// `real-clap-session-recovery` — refused `open(Floating)` lands
+/// `Failed{Unsupported}`; `recover(Docked)` attaches the real child
+/// and emits `Recovered{Docked}`. Format-agnostic drive.
+fn real_clap_session_recovery_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_child_case(
+        ctx,
+        spec,
+        ChildLifecycle {
+            drive_open: drive_open_recovery,
+            observe_open: observe_session_recovery_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "open(Floating) landed the defined \
+                              Failed{Unsupported} (editor_live=false), \
+                              recover(Docked) attached the real \
+                              clap.ext.gui embed child HWND under the \
+                              leased container and emitted \
+                              Recovered{Docked} (events \
+                              [Failed{Unsupported}, Recovered{Docked}, \
+                              Closed])",
+                evidence: "clap-session-recovery:refused-open-recover-docked",
+                label: "session-recovery",
+            },
+        },
+    )
+}
+
+/// `real-clap-session-timeout` — zero deadline +
+/// `begin_detach`/`tick_all` expires the in-flight detach into
+/// `Failed{Timeout}` on the real attached editor. Format-agnostic
+/// drive.
+fn real_clap_session_timeout_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_child_case(
+        ctx,
+        spec,
+        ChildLifecycle {
+            drive_open: drive_open_docked,
+            observe_open: observe_session_timeout_lifecycle,
+            case: &ChildCaseIdentity {
+                pass_detail: "ZERO SessionDeadlinePolicy + begin_detach + \
+                              tick_all expired the in-flight detach into \
+                              Failed{Timeout} on the real attached editor \
+                              (events [Attached{Docked}, Failed{Timeout}, \
+                              Closed]); the child HWND tore down on close",
+                evidence: "clap-session-timeout:deadline-policy-zero-tick",
+                label: "session-timeout",
+            },
+        },
+    )
+}
+
+/// The Issue #886 crash/hang verdict for the CLAP leg — decision
+/// 2(c). The CLAP `test_editor` is parameterless (no shared `Fault`
+/// param to arm in-band) and `PluginHost` routes are keyed by
+/// `plugin_id` with per-route `Bundled` pools, so a co-resident
+/// `test_fault` kill arm cannot exist through the existing API.
+/// The honest verdict is `Unsupported` with the structural ground —
+/// never a `Pass` the fixture cannot produce, never a `NotRun`
+/// that pretends an environment gap.
+fn clap_oos_unsupported_body(oracle: &'static str) -> ScenarioOutcome {
+    let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+    outcome.detail = Some(format!(
+        "{oracle}: the CLAP leg cannot arm a fault — test_editor is \
+         parameterless (no in-band Fault arm) and PluginHost routes are \
+         keyed by plugin_id with per-route Bundled pools, so a co-resident \
+         test_fault instance cannot exist through the existing API \
+         (Coordinator decision 2, option (c)); the L1 {oracle} oracle is \
+         defined but not exercisable for CLAP"
+    ));
+    outcome
+        .evidence
+        .push(format!("clap-session-{oracle}:no-co-resident-arm-route"));
+    outcome
+}
+
+/// `real-clap-session-crash` — decision 2(c): `Unsupported` with
+/// the structural ground recorded.
+fn real_clap_session_crash_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_case(ctx, spec, move |_, _, _, _, _| {
+        clap_oos_unsupported_body("crash")
+    })
+}
+
+/// `real-clap-session-hang` — decision 2(c): `Unsupported` with
+/// the structural ground recorded.
+fn real_clap_session_hang_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    clap_case(ctx, spec, move |_, _, _, _, _| {
+        clap_oos_unsupported_body("hang")
+    })
+}
+
+/// The CLAP real-window catalog — the executable counterpart of
+/// [`real_catalog::REAL_CLAP_CATALOG`] (the feature-gated
+/// catalog/entries agreement test asserts the two never drift).
+/// Fourteen rows mirroring the CLAP catalog in run order.
+#[expect(clippy::too_many_lines)]
+fn real_clap_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 14] {
+    use ScenarioCapability as C;
+    [
+        ScenarioEntry {
+            case: "real-clap-editor-attach",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_attach_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-dcomp-pixel",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock, C::VisualCapture],
+            spec_extras: editor_attach_extras,
+            run: real_clap_dcomp_pixel_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-resize",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_resize_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-redock",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_redock_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-visibility",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_visibility_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-input",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_input_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-focus",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_focus_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-editor-popup",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_editor_popup_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-terminate",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_terminate_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-degraded",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_degraded_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-recovery",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_recovery_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-timeout",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_timeout_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-crash",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_crash_case,
+        },
+        ScenarioEntry {
+            case: "real-clap-session-hang",
+            scenario: CLAP_SCENARIO,
+            required: &[C::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_clap_session_hang_case,
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::real_catalog::REAL_CATALOG;
+    use crate::real_catalog::{REAL_CATALOG, REAL_CLAP_CATALOG};
 
     /// The declared slot spec must never claim capabilities the
     /// Windows surface backend refuses — capability honesty is the
@@ -16366,7 +17801,7 @@ mod tests {
     fn blocked_reports_fail_closed() {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
-        let reports = blocked_reports(&run_id, &env, None, "test: no session");
+        let reports = blocked_reports(&run_id, &env, None, "test: no session", PluginFormat::Vst3);
         assert_eq!(reports.len(), 32, "thirty-two real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
@@ -16412,6 +17847,30 @@ mod tests {
             assert_eq!(
                 entry.required, row.required,
                 "required-capability drift for `{}`",
+                entry.case
+            );
+        }
+    }
+
+    /// Issue #630 AC4 CLAP leg — the same catalog/entries agreement
+    /// check for [`real_catalog::REAL_CLAP_CATALOG`] vs
+    /// [`real_clap_entries`]: the fourteen CLAP rows must agree on
+    /// `case`/`scenario`/`required` — drift fails here, not in the
+    /// lane.
+    #[test]
+    fn real_clap_catalog_matches_entries() {
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 14] = real_clap_entries();
+        assert_eq!(
+            entries.len(),
+            REAL_CLAP_CATALOG.len(),
+            "clap catalog row count"
+        );
+        for (entry, row) in entries.iter().zip(REAL_CLAP_CATALOG.iter()) {
+            assert_eq!(entry.case, row.case, "clap case id drift");
+            assert_eq!(entry.scenario, row.scenario, "clap scenario id drift");
+            assert_eq!(
+                entry.required, row.required,
+                "clap required-capability drift for `{}`",
                 entry.case
             );
         }

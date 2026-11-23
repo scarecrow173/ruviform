@@ -16,7 +16,10 @@ use sha2::{Digest, Sha256};
 use crate::artifact::PLUGIN_PATH_ENV;
 
 /// Renders the full JSONL document: one `run` header line followed
-/// by one `case` line per report, each terminated by `'\n'`.
+/// by one `case` line per report, each terminated by `'\n'`. The
+/// header's `plugin_path_env` records the VST3 artifact env var —
+/// the historical default every pre-CLAP lane caller shares
+/// ([`PLUGIN_PATH_ENV`]).
 #[must_use]
 pub fn render_jsonl(
     run_id: &str,
@@ -24,7 +27,23 @@ pub fn render_jsonl(
     repo_sha: Option<&str>,
     reports: &[ScenarioReport],
 ) -> String {
-    let mut out = header_line(run_id, lane, repo_sha);
+    render_jsonl_with_path_env(run_id, lane, repo_sha, PLUGIN_PATH_ENV, reports)
+}
+
+/// [`render_jsonl`] with the artifact env var named explicitly —
+/// the Issue #630 AC4 lanes record which explicit-path env var the
+/// run actually consulted (`RUVIFORM_PLUGIN_DOCK_TEST_VST3` for
+/// VST3, `RUVIFORM_PLUGIN_DOCK_TEST_CLAP` for CLAP) so evidence
+/// never mislabels the artifact provenance.
+#[must_use]
+pub fn render_jsonl_with_path_env(
+    run_id: &str,
+    lane: &str,
+    repo_sha: Option<&str>,
+    plugin_path_env: &str,
+    reports: &[ScenarioReport],
+) -> String {
+    let mut out = header_line(run_id, lane, repo_sha, plugin_path_env);
     for report in reports {
         out.push_str(&case_line(report));
         out.push('\n');
@@ -33,7 +52,7 @@ pub fn render_jsonl(
 }
 
 /// The `run` header: lane identity + host facts + repo SHA.
-fn header_line(run_id: &str, lane: &str, repo_sha: Option<&str>) -> String {
+fn header_line(run_id: &str, lane: &str, repo_sha: Option<&str>, plugin_path_env: &str) -> String {
     let header = json!({
         "type": "run",
         "run_id": run_id,
@@ -43,7 +62,7 @@ fn header_line(run_id: &str, lane: &str, repo_sha: Option<&str>) -> String {
         },
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "plugin_path_env": PLUGIN_PATH_ENV,
+        "plugin_path_env": plugin_path_env,
     });
     format!(
         "{}\n",
