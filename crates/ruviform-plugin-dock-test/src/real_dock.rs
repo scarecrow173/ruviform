@@ -142,10 +142,14 @@
 //! |                         |             | fault を arm/disarm し、`output[0][0] == 200.0`      |
 //! |                         |             | marker が armed 状態に正確に追従することを判定       |
 //! |                         |             | （Issue #874 negative-control leg）                  |
-//! | `real-session-rt-boundary` | `RealOs` | `Unsupported` — cross-thread 同一 instance pump は |
-//! |                         |             | 現行 API では不可能（`create_sendable`→`None` で    |
-//! |                         |             | `!Send`→Plain slot・`attach_endpoint` 非公開等）—    |
-//! |                         |             | architectural boundary の正直記録（Issue #874）     |
+//! | `real-session-rt-boundary` | `RealOs` | `Pass`/`Fail`/`Unsupported` — dedicated L1 child 上 |
+//! |                         |             | の `test_editor` を `prepare_endpoint` で RT leg    |
+//! |                         |             | checkout し、`std::thread` pump が                |
+//! |                         |             | `endpoint.process` を駆動する間、UI thread が同一  |
+//! |                         |             | instance の floating session verbs を成立させる    |
+//! |                         |             | cross-thread oracle（`OutOfProcessPluginHost`     |
+//! |                         |             | claim 未証明なら capability-gated `Unsupported`） |
+//! |                         |             | （Issue #920 — route (b) L1 endpoint）            |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -171,11 +175,12 @@ use ruviform_plugin_core::{
 };
 use ruviform_plugin_host::{
     AttachMode, ChildExit, EditorCapabilities, EditorOpError, EditorSessionError,
-    EditorSessionEvent, EditorSessionState, EditorSize, FailureCause, GuiKeyDirection, GuiKeyEvent,
-    GuiModifiers, HostCommand, HostError, HostNotification, HostReply, InProcessEditorOps,
-    InProcessHost, L1EditorOps, MonotonicSessionClock, OpenOutcome, OutOfProcessIsolation,
-    OutOfProcessSpec, ParentLease, ParentSlotLease, PluginEditorSession, PluginEditorSessionId,
-    PluginEditorSessions, PluginHandle, PluginHost, SessionDeadlinePolicy, SessionFailCause,
+    EditorSessionEvent, EditorSessionState, EditorSize, EndpointBounds, FailureCause,
+    GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand, HostError, HostNotification,
+    HostReply, InProcessEditorOps, InProcessHost, L1EditorOps, MonotonicSessionClock, OpenOutcome,
+    OutOfProcessIsolation, OutOfProcessSpec, ParentLease, ParentSlotLease, PluginEditorSession,
+    PluginEditorSessionId, PluginEditorSessions, PluginEndpoint, PluginHandle, PluginHost,
+    SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
@@ -205,6 +210,11 @@ use ruviform_ui_test::{
 };
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
 use std::time::{Duration, Instant};
 
 use ruviform_ui_test::golden::RgbaImage;
@@ -906,7 +916,10 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 32] {
         ScenarioEntry {
             case: "real-session-rt-boundary",
             scenario: SCENARIO,
-            required: &[ScenarioCapability::NativePluginDock],
+            required: &[
+                ScenarioCapability::NativePluginDock,
+                ScenarioCapability::OutOfProcessPluginHost,
+            ],
             spec_extras: real_window_extras,
             run: real_session_rt_boundary_case,
         },
@@ -13829,6 +13842,209 @@ fn oos_wait_failed_and_notification(
     (failed, notification)
 }
 
+// ---------------------------------------------------------------------
+// real-session-rt-boundary helpers (Issue #920 — route (b) L1
+// endpoint cross-thread pump)
+// ---------------------------------------------------------------------
+
+/// The pump thread's callback-cadence model — one activated block
+/// period (512 frames @ 48 kHz ≈ 10.667 ms). The `std::thread`
+/// pump is explicitly *not* a true RT callback: normal-priority OS
+/// scheduling decides the real period, and the report records
+/// measured wall time. The sleep sits outside the measured call —
+/// per-call `endpoint.process` elapsed is the non-blocking
+/// observation, the cadence only paces submits like a real driver
+/// would.
+const OOS_RT_PUMP_PERIOD: Duration = Duration::from_micros(10_667);
+
+/// Pump call bound — the pump stops at this many
+/// `endpoint.process` calls even if the UI side never raises the
+/// stop flag (defensive ceiling; the verb window is far shorter).
+const OOS_RT_PUMP_MAX_CALLS: u64 = 1024;
+
+/// Pump wall-clock ceiling — with the call bound, the second leg
+/// of the pump's own termination contract.
+const OOS_RT_PUMP_DEADLINE: Duration = Duration::from_secs(15);
+
+/// The gross-block detector bound on one `endpoint.process` call.
+/// A live L1 leg does `try_push`/staging/`try_pop` only — µs-scale
+/// — so a call over this bound means real blocking occurred. It is
+/// deliberately *not* an RT-deadline claim: a normal-priority
+/// `std::thread` inherits scheduling jitter the endpoint contract
+/// does not cover.
+const OOS_RT_CALL_BOUND: Duration = Duration::from_millis(250);
+
+/// Join bound for the pump report — the "every call returned"
+/// gate. `endpoint.process` cannot block by contract, so a report
+/// that never lands inside the bound is a real wedge — recorded
+/// `Fail`, never absorbed.
+const OOS_RT_PUMP_JOIN_BOUND: Duration = Duration::from_secs(10);
+
+/// What the detached-leg pump thread observed — the cross-thread
+/// half of `real-session-rt-boundary`'s oracle. Every field is a
+/// measurement, never a claim: `calls`/`continued`/`errors` count
+/// `endpoint.process` outcomes, `max_call_ns` is the worst
+/// measured per-call wall time, `wall_ns` the whole pump window.
+#[derive(Default)]
+struct RtPumpReport {
+    /// `endpoint.process` calls executed.
+    calls: u64,
+    /// Calls answered `Ok` with `ProcessStatus::Continue`.
+    continued: u64,
+    /// Calls answered `Err` or a non-`Continue` status.
+    errors: u64,
+    /// First non-`Continue` observation — the `Fail` detail seed.
+    first_error: Option<String>,
+    /// Worst measured per-call wall time (ns).
+    max_call_ns: u64,
+    /// Pump window wall time (ns).
+    wall_ns: u64,
+}
+
+/// The detached `RtLeg` drive — owns the checked-out
+/// [`PluginEndpoint`] on a dedicated `std::thread` and calls
+/// `endpoint.process` at the activated block cadence until `stop`
+/// rises (or the call/wall bounds hit). This is the cross-thread
+/// leg of Issue #920's (b) route: the same instance the UI thread
+/// drives session verbs on, pumped through the public endpoint
+/// contract.
+///
+/// Nothing here waits on the child: `endpoint.process` is the
+/// documented RT-suitable surface (`try_push`/staging/`try_pop`
+/// over the armed ring — never a wait, never an allocation on the
+/// call path). Buffers and views are stack/borrowed per call — no
+/// heap traffic in the loop; a view-construction failure counts as
+/// an honest error, never a panic.
+fn oos_rt_pump(mut endpoint: PluginEndpoint, stop: &AtomicBool) -> RtPumpReport {
+    let mut report = RtPumpReport::default();
+    let wall = Instant::now();
+    let in_left = [0.5_f32; OOS_FRAMES];
+    let in_right = [-0.25_f32; OOS_FRAMES];
+    let mut out_left = [0.0_f32; OOS_FRAMES];
+    let mut out_right = [0.0_f32; OOS_FRAMES];
+    while !stop.load(Ordering::Relaxed)
+        && report.calls < OOS_RT_PUMP_MAX_CALLS
+        && wall.elapsed() < OOS_RT_PUMP_DEADLINE
+    {
+        let input = [&in_left[..], &in_right[..]];
+        let mut out_list = [&mut out_left[..], &mut out_right[..]];
+        let Some((input_view, mut output_view)) = PlanarBufferView::new(&input[..])
+            .ok()
+            .zip(PlanarBufferViewMut::new(&mut out_list).ok())
+        else {
+            report.calls += 1;
+            report.errors += 1;
+            report
+                .first_error
+                .get_or_insert_with(|| "planar view construction failed".to_string());
+            break;
+        };
+        let inputs = [HostInput(&input_view)];
+        let mut outputs = [HostOutput(&mut output_view)];
+        let started = Instant::now();
+        let result = endpoint.process(
+            &inputs,
+            &mut outputs,
+            EventList::empty(OOS_FRAMES_U32),
+            None,
+        );
+        report.max_call_ns = report
+            .max_call_ns
+            .max(u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX));
+        report.calls += 1;
+        match result {
+            Ok(result) if matches!(result.status, ProcessStatus::Continue) => {
+                report.continued += 1;
+            }
+            Ok(result) => {
+                report.errors += 1;
+                report
+                    .first_error
+                    .get_or_insert_with(|| format!("unexpected status {:?}", result.status));
+            }
+            Err(error) => {
+                report.errors += 1;
+                report.first_error.get_or_insert_with(|| error.to_string());
+            }
+        }
+        std::thread::sleep(OOS_RT_PUMP_PERIOD);
+    }
+    report.wall_ns = u64::try_from(wall.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    report
+}
+
+/// Bounded absence poll — the inverse of
+/// [`oos_observe_floating_window`]: `true` once no
+/// `RuviformL1GuiContainer` toplevel with a foreign pid remains
+/// (the child's `CloseGui` teardown removed it). `false` means a
+/// container lingered at the deadline — an honest teardown
+/// failure, never synthesized.
+#[cfg(windows)]
+fn oos_wait_floating_gone() -> bool {
+    let own_pid = std::process::id();
+    let deadline = Instant::now() + OOS_NOTIFY_TIMEOUT;
+    loop {
+        let inv = ospres::inventory();
+        if !inv.windows.iter().any(|window| {
+            window.class_name.as_deref() == Some(OOS_CONTAINER_CLASS)
+                && window.pid.is_some_and(|pid| pid != own_pid)
+        }) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Off-Windows stub — no container exists; the claim gate keeps
+/// this unreachable anyway (the capability is never claimed
+/// outside Windows).
+#[cfg(not(windows))]
+fn oos_wait_floating_gone() -> bool {
+    true
+}
+
+/// Records one session verb's step row driven under the running
+/// pump. `Ok` answers cleanly; the plugin's defined
+/// `EditorOpError::Unsupported` refusal is recorded `unsupported`
+/// — the command channel still answered, so it is cross-thread
+/// liveness evidence, never a failure. Only a real `Err`/`None`
+/// lands in `failure`. Returns `true` only on a clean `Ok` — the
+/// caller tracks which state-changing events (`Hidden`/`Shown`)
+/// the verb stream must replay.
+fn oos_verb_step(
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+    name: &str,
+    result: Option<Result<(), EditorSessionError>>,
+) -> bool {
+    match result {
+        Some(Ok(())) => {
+            steps.push(json!({ "step": name, "verdict": "pass" }));
+            true
+        }
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": name,
+                "verdict": "unsupported",
+                "detail": "the plugin declined the verb — a defined refusal, \
+                           still an answered verb under the pump",
+            }));
+            false
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, failure, name, error.to_string());
+            false
+        }
+        None => {
+            record_obs_fail(steps, failure, name, "session vanished mid-verb");
+            false
+        }
+    }
+}
+
 /// The shared Issue #886 out-of-process session body: dedicated L1
 /// child on the session-probed route → `test_editor` floating
 /// attach → child-window oracle → in-band `Fault` arm →
@@ -15316,43 +15532,792 @@ fn real_session_rt_fault_case(
     )
 }
 
-/// `real-session-rt-boundary`: cross-thread same-instance RT
-/// observation is not possible on the current API — `test_editor`/
-/// `test_fault` are `!Send` (`create_sendable` → `None` on both the
-/// VST3 and CLAP host paths, so `Instantiate` selects a `Plain`
-/// slot), `prepare_endpoint`/`attach_endpoint` answer the defined
-/// `EndpointUnavailable` for `Plain` slots, `InProcessHost::
-/// attach_endpoint` is `pub(crate)`, and `PluginHost.l0` is private
-/// — no public surface can pump the same instance from an RT-class
-/// thread while the UI thread drives session verbs. The honest
-/// verdict is `Unsupported`, recorded inside the real session — the
-/// `real-session-crash`/`real-session-hang` architectural-boundary
-/// precedent, never a fabricated `NotRun` and never a `Pass`.
-/// Deferred to Issue #920 — the tracked `attach_endpoint`/
-/// GUI-capable `create_sendable` contract (Issue #872 closed
-/// without taking this residual).
+/// `real-session-rt-boundary` body — Issue #920's (b) route, the
+/// crash/hang `oos_session_body` sibling. Dedicated L1 child on
+/// the session-probed route → `Processing` → `prepare_endpoint`
+/// checks the `RtLeg` out into a `Send` `PluginEndpoint` → a
+/// `std::thread` pump drives `endpoint.process` at the activated
+/// block cadence → the UI thread runs the floating session
+/// lifecycle (`begin_session` → `open(Floating)` → child-window
+/// oracle → `set_size`/`set_visibility`/`set_focus` verbs) on the
+/// *same* instance through `L1EditorOps` → pump stops → the leg
+/// returns and `host.process` resumes → `close` converges on the
+/// driven event stream → defined teardown + lane survival.
+///
+/// Oracles (verdict inputs, each step-recorded): every pump call
+/// must return inside the join bound with `Ok(CONTINUE)` per the
+/// defined output table and stay under the gross-block bound;
+/// session verbs must answer while the pump runs (a plugin's
+/// defined `Unsupported` refusal still proves the channel);
+/// `host.process` must answer the defined `EndpointUnavailable`
+/// while the leg is checked out and resume `Ok` after the drop;
+/// `audio_counters` must account for the submitted blocks
+/// (substituted output — the first `lookahead_blocks` underflow
+/// included — and backpressure drops are recorded, `results_
+/// failed`/`results_dropped` must stay zero and at least one
+/// block must land); the session must converge exactly on the
+/// driven event stream; the lane window must still answer.
+#[expect(clippy::too_many_lines)]
+fn oos_rt_boundary_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+    route: Option<&OosRoute>,
+) -> ScenarioOutcome {
+    let mut steps: Vec<Value> = Vec::new();
+    let mut failure: Option<String> = None;
+    let mut extras = Map::new();
+    let mut cleanup: Vec<String> = Vec::new();
+
+    let Some(_plugin) = plugin else {
+        return match plugin_error {
+            Some(unavailable) if unavailable.prerequisite => not_run(format!(
+                "plugin artifact unavailable: {}",
+                unavailable.detail
+            )),
+            Some(unavailable) => fail(format!(
+                "plugin artifact failed to load: {}",
+                unavailable.detail
+            )),
+            None => not_run("plugin artifact unavailable".to_string()),
+        };
+    };
+    let Some(route) = route else {
+        // Unreachable in practice — the capability claim follows
+        // the probe, so `run_scenario` pre-flights `Unsupported`
+        // before this body ever sees `None`.
+        return fail(
+            "OutOfProcessPluginHost was claimed but no probed route was recorded".to_string(),
+        );
+    };
+
+    // --- route spawn + instantiate (the crash/hang precedent) --
+    let mut host = PluginHost::new();
+    let mut spec = OutOfProcessSpec::new(route.descriptor, route.program.clone());
+    spec.isolation = OutOfProcessIsolation::Dedicated;
+    if let Err(error) = host.register_out_of_process(spec) {
+        steps.push(json!({
+            "step": "register_route",
+            "verdict": "fail",
+            "error": error.to_string(),
+        }));
+        let mut outcome = fail(format!("register_route: {error}"));
+        outcome.observed = Some(json!({ "steps": steps }));
+        return outcome;
+    }
+    steps.push(json!({ "step": "register_route", "verdict": "pass" }));
+
+    let handle = match oos_instantiate(&mut host, route.descriptor.id) {
+        Ok(handle) => {
+            steps.push(json!({ "step": "instantiate", "verdict": "pass" }));
+            handle
+        }
+        Err(detail) => {
+            record_obs_fail(&mut steps, &mut failure, "instantiate", detail.clone());
+            let mut outcome = fail(failure.take().expect("recorded failure"));
+            outcome.observed = Some(json!({ "steps": steps }));
+            return outcome;
+        }
+    };
+    extras.insert("plugin_id".to_string(), json!(route.descriptor.id));
+
+    // --- negotiated GUI_FLOATING re-check on this spawn --------
+    let floating = host
+        .negotiated_gui_capabilities(handle)
+        .map(|mask| mask & wire::WIRE_CAPABILITY_GUI_FLOATING != 0);
+    match floating {
+        Ok(true) => steps.push(json!({
+            "step": "gui_floating_negotiated",
+            "verdict": "pass",
+        })),
+        other => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "gui_floating_negotiated",
+                format!("expected advertised GUI_FLOATING bit, got {other:?}"),
+            );
+        }
+    }
+
+    // --- Processing drive + matched clean blocks on the
+    // in-place leg (the baseline the detached leg is checked
+    // against) -------------------------------------------------
+    let processing_ok = oos_drive_to_processing(&mut host, handle, &mut steps, &mut failure);
+    let clean = if processing_ok {
+        oos_drive_clean_blocks(&mut host, handle, 16)
+    } else {
+        0
+    };
+    if processing_ok && clean >= 4 {
+        steps.push(json!({
+            "step": "clean_blocks",
+            "verdict": "pass",
+            "matched": clean,
+        }));
+    } else if processing_ok {
+        record_obs_fail(
+            &mut steps,
+            &mut failure,
+            "clean_blocks",
+            format!("only {clean} matched clean blocks of 16 submits"),
+        );
+    }
+    extras.insert("clean_blocks".to_string(), json!(clean));
+
+    // --- endpoint mint: the RtLeg checks out of the instance ---
+    let endpoint = if failure.is_none() {
+        match host.prepare_endpoint(
+            handle,
+            EndpointBounds {
+                max_frames: OOS_FRAMES_U32,
+                channels: 2,
+            },
+        ) {
+            Ok(endpoint) => {
+                steps.push(json!({
+                    "step": "endpoint_mint",
+                    "verdict": "pass",
+                    "latency_frames": endpoint.latency_frames(),
+                }));
+                extras.insert(
+                    "endpoint_latency_frames".to_string(),
+                    json!(endpoint.latency_frames()),
+                );
+                Some(endpoint)
+            }
+            Err(error) => {
+                record_obs_fail(&mut steps, &mut failure, "endpoint_mint", error.to_string());
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // --- defined rejections while the leg is checked out ------
+    // `host.process` must answer `EndpointUnavailable` (the
+    // processing surface moved to the endpoint); a second mint
+    // must answer the same. Both are step-verified, never assumed.
+    if endpoint.is_some() {
+        let (result, _passthrough, _dropped) =
+            oos_host_block(&mut host, handle, EventList::empty(OOS_FRAMES_U32));
+        match result {
+            Err(HostError::EndpointUnavailable) => {
+                steps.push(json!({
+                    "step": "host_process_checked_out",
+                    "verdict": "pass",
+                    "reply": "EndpointUnavailable",
+                }));
+            }
+            Ok(result) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "host_process_checked_out",
+                    format!(
+                        "in-place process answered Ok({:?}) while the leg was \
+                         checked out — the checkout seat contract broke",
+                        result.status
+                    ),
+                );
+            }
+            Err(error) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "host_process_checked_out",
+                    format!("expected Err(EndpointUnavailable), got {error}"),
+                );
+            }
+        }
+        match host.prepare_endpoint(
+            handle,
+            EndpointBounds {
+                max_frames: OOS_FRAMES_U32,
+                channels: 2,
+            },
+        ) {
+            Err(HostError::EndpointUnavailable) => {
+                steps.push(json!({
+                    "step": "endpoint_second_mint_refused",
+                    "verdict": "pass",
+                    "reply": "EndpointUnavailable",
+                }));
+            }
+            Err(error) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "endpoint_second_mint_refused",
+                    format!("expected Err(EndpointUnavailable), got {error}"),
+                );
+            }
+            Ok(second) => {
+                // Contract violation — a second leg minted while
+                // the first is checked out. Drop it so the
+                // instance is not left half-attached, then fail
+                // honestly.
+                drop(second);
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "endpoint_second_mint_refused",
+                    "a second endpoint minted while the leg was checked out",
+                );
+            }
+        }
+    }
+
+    // --- spawn the pump thread: the endpoint moves to the
+    // detached-leg owner ----------------------------------------
+    let counters_before = if endpoint.is_some() && failure.is_none() {
+        host.audio_counters(handle)
+    } else {
+        None
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let (report_tx, report_rx) = mpsc::channel::<RtPumpReport>();
+    let pump_thread = if failure.is_none() {
+        endpoint.map(|endpoint| {
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                let report = oos_rt_pump(endpoint, &stop);
+                // The send is the join signal — a dead receiver
+                // only means the caller already gave up.
+                let _ = report_tx.send(report);
+            })
+        })
+    } else {
+        None
+    };
+    let pump_started = pump_thread.is_some();
+    if pump_started {
+        steps.push(json!({ "step": "pump_thread_spawned", "verdict": "pass" }));
+    }
+
+    // --- the cross-thread window: floating session verbs while
+    // the pump drives `endpoint.process` on the same instance ---
+    let mut sessions = PluginEditorSessions::new();
+    let mut session_id = None;
+    let mut attached_ok = false;
+    let mut hid = false;
+    let mut shown = false;
+    if pump_started && failure.is_none() {
+        match sessions.begin_session(handle) {
+            Ok(id) => {
+                session_id = Some(id);
+                steps.push(json!({
+                    "step": "begin_session",
+                    "verdict": "pass",
+                    "session": session_id_json(id),
+                }));
+            }
+            Err(error) => {
+                record_obs_fail(&mut steps, &mut failure, "begin_session", error.to_string());
+            }
+        }
+    }
+    if let Some(id) = session_id {
+        let open_result = sessions.session_mut(id).map(|session| {
+            session.open(
+                &mut L1EditorOps::new(&mut host, handle),
+                &ParentSlotLease::new(0),
+                editor_size(),
+                AttachMode::Floating,
+            )
+        });
+        match open_result {
+            Some(Ok(_capabilities)) => {
+                attached_ok = true;
+                steps.push(json!({
+                    "step": "session_open_floating",
+                    "verdict": "pass",
+                    "session": session_id_json(id),
+                }));
+            }
+            Some(Err(error)) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "session_open_floating",
+                    error.to_string(),
+                );
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "session_open_floating",
+                    "session vanished before open",
+                );
+            }
+        }
+    }
+
+    // --- child-owned floating window oracle — the same class +
+    // foreign-pid attribution the crash/hang cases use ---------
+    if attached_ok {
+        match oos_observe_floating_window() {
+            Some((container, observation)) => {
+                let child_hwnds: Vec<u64> = observation.children.iter().map(|c| c.hwnd).collect();
+                extras.insert("floating_container_hwnd".to_string(), json!(container));
+                extras.insert("floating_children".to_string(), json!(child_hwnds));
+                if child_hwnds.is_empty() {
+                    record_obs_fail(
+                        &mut steps,
+                        &mut failure,
+                        "floating_child_window",
+                        "RuviformL1GuiContainer found but has no editor child HWND",
+                    );
+                } else {
+                    steps.push(json!({
+                        "step": "floating_child_window",
+                        "verdict": "pass",
+                        "container": container,
+                        "children": child_hwnds,
+                    }));
+                }
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "floating_child_window",
+                    "no RuviformL1GuiContainer toplevel with a foreign pid \
+                     appeared inside the bound",
+                );
+            }
+        }
+
+        // --- session verbs under the running pump — the
+        // command channel must answer while the RT leg is
+        // detached and pumping. `set_size`/`set_focus` carry no
+        // session state; hide→show must replay `Hidden`/`Shown`
+        // in the event stream. ------------------------------
+        if let Some(id) = session_id {
+            let size = EditorSize {
+                width: 720.0,
+                height: 540.0,
+            };
+            let _ = oos_verb_step(
+                &mut steps,
+                &mut failure,
+                "session_set_size",
+                sessions.session_mut(id).map(|session| {
+                    session.set_size(&mut L1EditorOps::new(&mut host, handle), size)
+                }),
+            );
+            hid = oos_verb_step(
+                &mut steps,
+                &mut failure,
+                "session_hide",
+                sessions.session_mut(id).map(|session| {
+                    session.set_visibility(&mut L1EditorOps::new(&mut host, handle), false)
+                }),
+            );
+            shown = hid
+                && oos_verb_step(
+                    &mut steps,
+                    &mut failure,
+                    "session_show",
+                    sessions.session_mut(id).map(|session| {
+                        session.set_visibility(&mut L1EditorOps::new(&mut host, handle), true)
+                    }),
+                );
+            let _ = oos_verb_step(
+                &mut steps,
+                &mut failure,
+                "session_set_focus",
+                sessions.session_mut(id).map(|session| {
+                    session.set_focus(&mut L1EditorOps::new(&mut host, handle), true)
+                }),
+            );
+        }
+    }
+
+    // --- stop the pump; the join bound is the "every call
+    // returned" gate ---------------------------------------------
+    let mut pump_report: Option<RtPumpReport> = None;
+    let mut pump_ok = false;
+    if let Some(join) = pump_thread {
+        stop.store(true, Ordering::Relaxed);
+        match report_rx.recv_timeout(OOS_RT_PUMP_JOIN_BOUND) {
+            Ok(report) => {
+                let joined_ok = join.join().is_ok();
+                let bounded = Duration::from_nanos(report.max_call_ns) < OOS_RT_CALL_BOUND;
+                let calls_ok = report.calls > 0 && report.errors == 0;
+                extras.insert(
+                    "pump".to_string(),
+                    json!({
+                        "calls": report.calls,
+                        "continued": report.continued,
+                        "errors": report.errors,
+                        "max_call_ns": report.max_call_ns,
+                        "wall_ns": report.wall_ns,
+                    }),
+                );
+                if calls_ok && bounded && joined_ok {
+                    steps.push(json!({
+                        "step": "pump_drive",
+                        "verdict": "pass",
+                        "calls": report.calls,
+                        "max_call_ns": report.max_call_ns,
+                        "wall_ns": report.wall_ns,
+                    }));
+                    pump_ok = true;
+                } else {
+                    record_obs_fail(
+                        &mut steps,
+                        &mut failure,
+                        "pump_drive",
+                        format!(
+                            "calls={} continued={} errors={} first_error={:?} \
+                             max_call_ns={} (bound {}ns) joined_ok={joined_ok}",
+                            report.calls,
+                            report.continued,
+                            report.errors,
+                            report.first_error,
+                            report.max_call_ns,
+                            OOS_RT_CALL_BOUND.as_nanos(),
+                        ),
+                    );
+                }
+                pump_report = Some(report);
+            }
+            Err(_timeout) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "pump_drive",
+                    "the pump thread never produced its report inside the join \
+                     bound — an endpoint.process call wedged although the \
+                     endpoint contract forbids blocking",
+                );
+                // The wedged thread keeps the leg checked out —
+                // detach the JoinHandle so the lane's teardown can
+                // still proceed and report honestly.
+                drop(join);
+            }
+        }
+    }
+
+    // --- counter accounting for the pump window — checkout is a
+    // move, so the detached leg wrote the instance's own cells --
+    let counters_after = if pump_started {
+        host.audio_counters(handle)
+    } else {
+        None
+    };
+    if let (Some(before), Some(after)) = (counters_before, counters_after) {
+        let dropped = after.dropped_submits.saturating_sub(before.dropped_submits);
+        let passthrough = after
+            .passthrough_submits
+            .saturating_sub(before.passthrough_submits);
+        let results_failed = after
+            .results_failed_observed
+            .saturating_sub(before.results_failed_observed);
+        let results_dropped = after.results_dropped.saturating_sub(before.results_dropped);
+        let calls = pump_report.as_ref().map_or(0, |report| report.calls);
+        // Lower bound on real delivered blocks: a call either
+        // lands a real block, reads defined substituted output
+        // (`passthrough` — the first `lookahead_blocks` underflow
+        // included), or drops as backpressure; a dropped submit
+        // can *also* substitute its output, so the subtraction
+        // underestimates, never fabricates.
+        let matched_lb = calls.saturating_sub(passthrough).saturating_sub(dropped);
+        extras.insert(
+            "pump_counters".to_string(),
+            json!({
+                "calls": calls,
+                "dropped_submits": dropped,
+                "passthrough_submits": passthrough,
+                "results_failed_observed": results_failed,
+                "results_dropped": results_dropped,
+                "matched_lower_bound": matched_lb,
+            }),
+        );
+        if results_failed == 0 && results_dropped == 0 && matched_lb > 0 {
+            steps.push(json!({
+                "step": "pump_counters",
+                "verdict": "pass",
+                "matched_lower_bound": matched_lb,
+                "passthrough_submits": passthrough,
+                "dropped_submits": dropped,
+            }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "pump_counters",
+                format!(
+                    "pump window: calls={calls} matched_lb={matched_lb} \
+                     passthrough={passthrough} dropped={dropped} \
+                     results_failed={results_failed} results_dropped={results_dropped} \
+                     — the detached leg never provably delivered a real block",
+                ),
+            );
+        }
+    }
+
+    // --- leg return: `drop(endpoint)` inside the pump pushed the
+    // leg onto the return channel; the next &mut host entry point
+    // drains it and in-place `host.process` resumes -------------
+    if pump_started {
+        let (result, passthrough_delta, dropped_delta) =
+            oos_host_block(&mut host, handle, EventList::empty(OOS_FRAMES_U32));
+        match result {
+            Ok(result) if matches!(result.status, ProcessStatus::Continue) => {
+                steps.push(json!({
+                    "step": "host_process_resumed",
+                    "verdict": "pass",
+                    "status": format!("{:?}", result.status),
+                    "passthrough_delta": passthrough_delta,
+                    "dropped_delta": dropped_delta,
+                }));
+            }
+            Ok(result) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "host_process_resumed",
+                    format!(
+                        "resumed block answered status {:?}, not Continue",
+                        result.status
+                    ),
+                );
+            }
+            Err(error) => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "host_process_resumed",
+                    format!("expected Ok(Continue) after the leg returned, got {error}"),
+                );
+            }
+        }
+    }
+
+    // --- the instance must still be `Processing` — the pump
+    // window and session verbs never tore the DSP lane down ----
+    let state = host.lifecycle_state(handle);
+    let processing_maintained = matches!(state, Some(LifecycleState::Processing));
+    if processing_maintained {
+        steps.push(json!({
+            "step": "rt_processing_state",
+            "verdict": "pass",
+            "lifecycle": format!("{state:?}"),
+        }));
+    } else {
+        record_obs_fail(
+            &mut steps,
+            &mut failure,
+            "rt_processing_state",
+            format!("lifecycle {state:?}, not Processing"),
+        );
+    }
+
+    // --- session close + floating teardown + convergence ------
+    let mut session_ok = true;
+    if attached_ok && let Some(id) = session_id {
+        let close_result = sessions
+            .session_mut(id)
+            .map(|session| session.close(&mut L1EditorOps::new(&mut host, handle)));
+        match close_result {
+            Some(Ok(())) => {
+                steps.push(json!({ "step": "session_close", "verdict": "pass" }));
+            }
+            Some(Err(error)) => {
+                record_obs_fail(&mut steps, &mut failure, "session_close", error.to_string());
+            }
+            None => {
+                record_obs_fail(
+                    &mut steps,
+                    &mut failure,
+                    "session_close",
+                    "session vanished before close",
+                );
+            }
+        }
+        if oos_wait_floating_gone() {
+            steps.push(json!({ "step": "floating_window_gone", "verdict": "pass" }));
+        } else {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "floating_window_gone",
+                "RuviformL1GuiContainer toplevel lingered inside the bound",
+            );
+        }
+        // The expected stream replays exactly the state changes
+        // the verbs produced — a refused verb emits nothing, so
+        // `hid`/`shown` shape the expectation honestly.
+        let mut expected = vec![EditorSessionEvent::Attached {
+            mode: AttachMode::Floating,
+        }];
+        if hid {
+            expected.push(EditorSessionEvent::Hidden);
+        }
+        if shown {
+            expected.push(EditorSessionEvent::Shown {
+                mode: AttachMode::Floating,
+            });
+        }
+        expected.push(EditorSessionEvent::Closed);
+        let (converged_ok, rendered) =
+            check_session_converged(&mut sessions, id, &mut steps, &mut failure, &expected);
+        extras.insert("events".to_string(), json!(rendered));
+        session_ok = converged_ok;
+    }
+
+    // --- teardown: unwind `Processing` → `Initialized` →
+    // `Destroyed`, free the slot, prove the host + lane window
+    // still answer (the crash/hang lane-survival family) -------
+    let mut teardown_ok = true;
+    for (command, label) in [
+        (HostCommand::StopProcessing { handle }, "stop_processing"),
+        (HostCommand::Deactivate { handle }, "deactivate"),
+        (HostCommand::Destroy { handle }, "destroy"),
+    ] {
+        match host.execute(command) {
+            Ok(_) => {
+                steps.push(json!({ "step": label, "verdict": "pass" }));
+                if label == "destroy" {
+                    cleanup.push("instance-destroyed".to_string());
+                }
+            }
+            Err(error) => {
+                record_obs_fail(&mut steps, &mut failure, label, error.to_string());
+                teardown_ok = false;
+            }
+        }
+    }
+    if host.lifecycle_state(handle).is_none() {
+        steps.push(json!({ "step": "slot_freed", "verdict": "pass" }));
+    } else {
+        record_obs_fail(
+            &mut steps,
+            &mut failure,
+            "slot_freed",
+            "instance handle still resolves after Destroy",
+        );
+        teardown_ok = false;
+    }
+    if let Some(id) = session_id {
+        match sessions.end_session(id) {
+            Ok(()) => cleanup.push("session-ended".to_string()),
+            Err(error) => cleanup.push(format!("session-end-failed: {error}")),
+        }
+    }
+    match host.execute(HostCommand::Scan) {
+        Ok(HostReply::Scanned(_)) => {
+            steps.push(json!({ "step": "host_survives", "verdict": "pass" }));
+        }
+        other => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "host_survives",
+                format!("Scan returned {other:?} after the case"),
+            );
+            teardown_ok = false;
+        }
+    }
+    match gui.window_geometry(window) {
+        Ok(_) => {
+            steps.push(json!({ "step": "lane_window_alive", "verdict": "pass" }));
+        }
+        Err(error) => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "lane_window_alive",
+                format!("lane window stopped answering: {error}"),
+            );
+            teardown_ok = false;
+        }
+    }
+    match gui.settle() {
+        Ok(()) => {
+            steps.push(json!({ "step": "lane_settles", "verdict": "pass" }));
+        }
+        Err(error) => {
+            record_obs_fail(
+                &mut steps,
+                &mut failure,
+                "lane_settles",
+                format!("lane window queue stopped draining: {error}"),
+            );
+            teardown_ok = false;
+        }
+    }
+
+    extras.insert("steps".to_string(), json!(steps));
+    extras.insert("cleanup".to_string(), json!(cleanup));
+    extras.insert("isolation".to_string(), json!("dedicated-out-of-process"));
+
+    let verified = failure.is_none() && pump_ok && session_ok && teardown_ok;
+    let mut outcome = if verified {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
+        let (calls, max_call_ns) = pump_report
+            .as_ref()
+            .map_or((0, 0), |report| (report.calls, report.max_call_ns));
+        outcome.detail = Some(format!(
+            "test_editor on a dedicated L1 child pumped cross-thread through \
+             the detached PluginEndpoint on a std::thread — {calls} \
+             endpoint.process calls all answered Ok(Continue) inside the \
+             bound (max call {max_call_ns}ns) while the UI thread ran the \
+             same instance's floating session verbs through L1EditorOps; \
+             host.process was the defined EndpointUnavailable during \
+             checkout and resumed after the leg returned"
+        ));
+        outcome.evidence.push("session:rt:l1-endpoint".to_string());
+        outcome.evidence.push("rt:pump-thread".to_string());
+        outcome.evidence.push("l1:floating-session".to_string());
+        outcome
+    } else {
+        fail(failure.unwrap_or_else(|| "cross-thread rt boundary oracle violated".to_string()))
+    };
+    outcome.observed = Some(Value::Object(extras));
+    outcome
+}
+
+/// `real-session-rt-boundary` case (Issue #920 — route (b) L1
+/// endpoint): the session-probed `OosRoute` spawns a dedicated L1
+/// child running `test_editor`; `PluginHost::prepare_endpoint`
+/// detaches the instance's `RtLeg` into a `Send` `PluginEndpoint`
+/// a `std::thread` pump drives cross-thread while the UI thread
+/// runs the same instance's floating session verbs through
+/// `L1EditorOps`. Pre-flight requires `NativePluginDock` +
+/// `OutOfProcessPluginHost` — a host that never proved the route
+/// reports the capability-gated `Unsupported`, never this body's
+/// verdict.
 fn real_session_rt_boundary_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
 ) -> ScenarioReport {
-    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
-        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-        outcome.detail = Some(
-            "cross-thread same-instance RT observation is not possible on the \
-             current API: test_editor/test_fault are !Send (create_sendable → \
-             None on both host paths → Plain slot), attach_endpoint is \
-             pub(crate) and answers EndpointUnavailable for Plain slots, and \
-             PluginHost.l0 is private — nothing public can pump the same \
-             instance from an RT-class thread while the UI thread drives \
-             session verbs (deferred: Issue #920)"
-                .to_string(),
-        );
-        outcome
-            .evidence
-            .push("session:rt:cross-thread-boundary".to_string());
-        Ok(outcome)
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let route = ctx.oos;
+    let artifact = ctx.artifact;
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(oos_rt_boundary_body(
+            gui,
+            window,
+            plugin,
+            plugin_error,
+            route,
+        ))
     });
-    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
 }
 
 #[cfg(test)]
