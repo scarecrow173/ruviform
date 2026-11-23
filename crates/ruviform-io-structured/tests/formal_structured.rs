@@ -972,6 +972,9 @@ mod csv_props {
         /// silently dropped). `field_bytes` always stays raw. Delimiter
         /// and terminator bytes are filtered out of the field so the
         /// single-field record keeps its shape (quoting is disabled).
+        /// The document-level BOM contract runs before any field: a
+        /// leading UTF-16 BOM is `InvalidEncoding` at construction and
+        /// a leading UTF-8 BOM is stripped under the default policy.
         #[test]
         fn csv_field_str_encoding(
             field in prop::collection::vec(
@@ -988,12 +991,23 @@ mod csv_props {
                 .with_has_headers(false)
                 .with_dialect(CsvDialect::new().with_quoting(false));
             let mut cur = input.as_slice();
+            if field.starts_with(&[0xFF, 0xFE]) || field.starts_with(&[0xFE, 0xFF]) {
+                let err = CsvReader::new(&mut cur, &options)
+                    .expect_err("a leading UTF-16 BOM must fail construction");
+                prop_assert_eq!(err.kind(), DocumentErrorKind::InvalidEncoding);
+                return Ok(());
+            }
+            // A leading UTF-8 BOM is stripped under `StripUtf8`, so the
+            // first field reads back without those bytes.
+            let field = field
+                .strip_prefix(&[0xEF, 0xBB, 0xBF])
+                .unwrap_or(&field);
             let mut reader = CsvReader::new(&mut cur, &options).expect("reader");
             let mut record = CsvRecord::new();
             match reader.read_record(&mut record) {
                 Ok(true) => {
-                    prop_assert_eq!(record.field_bytes(0), Some(field.as_slice()));
-                    match (record.field_str(0), std::str::from_utf8(&field)) {
+                    prop_assert_eq!(record.field_bytes(0), Some(field));
+                    match (record.field_str(0), std::str::from_utf8(field)) {
                         (Ok(Some(s)), Ok(want)) => prop_assert_eq!(s, want),
                         (Err(e), Err(_)) => {
                             prop_assert_eq!(e.kind(), DocumentErrorKind::InvalidEncoding);

@@ -1415,6 +1415,72 @@ mod csv_tests {
     }
 
     #[test]
+    fn write_record_guards_bom_leading_first_field() {
+        // A first field that opens with a byte-order mark must not
+        // lead the document: raw output would be read back as a
+        // stripped UTF-8 BOM or rejected as a UTF-16 BOM.
+        for bom in [
+            b"\xFE\xFF".as_slice(),
+            b"\xFF\xFE".as_slice(),
+            b"\xEF\xBB\xBF".as_slice(),
+        ] {
+            let field = [bom, b"x".as_slice()].concat();
+            let mut out = Vec::new();
+            {
+                let options = csv::CsvWriteOptions::new()
+                    .with_has_headers(false)
+                    .with_flexible(true);
+                let mut writer = csv::CsvWriter::new(&mut out, &options).expect("writer");
+                writer
+                    .write_record([field.as_slice(), b"tail".as_slice()])
+                    .expect("record");
+                writer.write_record([b"later".as_slice()]).expect("record");
+                writer.finish().expect("finish");
+            }
+            assert!(
+                !out.starts_with(bom),
+                "document must not open with BOM bytes"
+            );
+            let mut cur = out.as_slice();
+            let options = read_options().with_has_headers(false).with_flexible(true);
+            let mut reader = csv::CsvReader::new(&mut cur, &options).expect("reader");
+            let mut record = CsvRecord::new();
+            assert!(reader.read_record(&mut record).expect("record 0"));
+            assert_eq!(record.field_bytes(0), Some(field.as_slice()));
+            assert_eq!(record.field_bytes(1), Some(&b"tail"[..]));
+            assert!(reader.read_record(&mut record).expect("record 1"));
+            assert_eq!(record.field_bytes(0), Some(&b"later"[..]));
+            assert!(!reader.read_record(&mut record).expect("eof"));
+        }
+    }
+
+    #[test]
+    fn write_typed_guards_bom_leading_first_field() {
+        // `\u{FEFF}` serializes as the UTF-8 BOM bytes; without a
+        // header row it can still lead the document.
+        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+        struct Named {
+            name: String,
+            pop: u64,
+        }
+        let rows = [Named {
+            name: "\u{FEFF}x".into(),
+            pop: 1,
+        }];
+        let mut out = Vec::new();
+        let options = csv::CsvWriteOptions::new().with_has_headers(false);
+        csv::to_writer(&mut out, &rows, &options).expect("serialize");
+        assert!(
+            !out.starts_with(&[0xEF, 0xBB, 0xBF]),
+            "document must not open with BOM bytes"
+        );
+        let mut cur = out.as_slice();
+        let options = read_options().with_has_headers(false);
+        let back: Vec<Named> = csv::from_reader(&mut cur, &options).expect("parse");
+        assert_eq!(back, rows);
+    }
+
+    #[test]
     fn deterministic_dialect_fuzz() {
         // Seeded generator: random dialect CSV documents — the reader
         // must never panic and every error must be a classified
