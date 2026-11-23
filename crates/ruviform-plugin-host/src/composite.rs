@@ -48,9 +48,8 @@ use ruviform_audio_core::SampleRate;
 use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventList, FailureCause, GuiSize, LifecycleEvent, LifecycleState, ParamId,
-    PlainParamValue, PluginDescriptor, PrepareError, ProcessResult, TransportInfo,
-    VideoProcessConfig,
+    Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
+    PluginDescriptor, PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
@@ -811,6 +810,34 @@ impl PluginHost {
             Slot::InProcess(inner) => self.l0.lifecycle_state(*inner),
             Slot::OutOfProcess(instance) => Some(instance.lifecycle_state()),
             Slot::OutOfProcessVideo(instance) => Some(instance.lifecycle_state()),
+        }
+    }
+
+    /// The instance's negotiated capability mask — the `Hello`
+    /// advertisement its L1 child carried (wire v6; `0` when the
+    /// child advertised nothing). The GUI verb family gates on
+    /// [`WIRE_CAPABILITY_GUI_FLOATING`](ruviform_plugin_core::wire::WIRE_CAPABILITY_GUI_FLOATING):
+    /// an unadvertised instance answers the defined
+    /// `Err(HostError::Unsupported)` for the whole family before
+    /// any wire traffic.
+    ///
+    /// `Err(InvalidHandle)` for a stale/unknown handle;
+    /// `Err(Unsupported)` for a slot whose surface has no
+    /// negotiation vocabulary — `InProcess` (L0 has no `Hello`) and
+    /// `OutOfProcessVideo` (the video runner advertises no GUI
+    /// mechanism).
+    ///
+    /// **RT contract:** `&self`, lock-free — an atomic load for L1
+    /// slots. A control-plane query: non-RT callers only.
+    pub fn negotiated_gui_capabilities(&self, handle: PluginHandle) -> Result<u32, HostError> {
+        let index = handle.slot() as usize;
+        if self.generations.get(index).copied() != Some(handle.generation()) {
+            return Err(HostError::InvalidHandle);
+        }
+        match self.instances.get(index).and_then(Option::as_ref) {
+            Some(Slot::OutOfProcess(instance)) => Ok(instance.negotiated_capabilities()),
+            Some(Slot::InProcess(_) | Slot::OutOfProcessVideo(_)) => Err(HostError::Unsupported),
+            None => Err(HostError::InvalidHandle),
         }
     }
 
@@ -1803,7 +1830,11 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
         HostCommand::Destroy { .. } => HostCommand::Destroy { handle },
         HostCommand::SaveState { .. } => HostCommand::SaveState { handle },
         HostCommand::RestoreState { bytes, .. } => HostCommand::RestoreState { handle, bytes },
-        HostCommand::OpenGui { parent, .. } => HostCommand::OpenGui { handle, parent },
+        HostCommand::OpenGui { parent, size, .. } => HostCommand::OpenGui {
+            handle,
+            parent,
+            size,
+        },
         HostCommand::CloseGui { .. } => HostCommand::CloseGui { handle },
         HostCommand::SetGuiSize { size, .. } => HostCommand::SetGuiSize { handle, size },
         HostCommand::SetGuiVisibility { visible, .. } => {
@@ -1818,21 +1849,15 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
     }
 }
 
-/// `true` for the editor-GUI verbs that exist only on the L0
-/// in-process surface — `SetGuiSize`/`SetGuiVisibility`/
-/// `SetGuiParent`/`SetGuiFocus`/`SendGuiKey` have no
-/// `wire::Command` encoding yet, so an `OutOfProcess` slot answers
-/// the defined `Unsupported` instead of reaching `to_wire` (which
-/// would panic on them).
+/// `true` for the one editor-GUI verb that exists only on the L0
+/// in-process surface: `SetGuiParent` has no `wire::Command`
+/// encoding — Issue #115 owns the docked/reparent verb scope — so
+/// an `OutOfProcess` slot answers the defined `Unsupported`
+/// instead of reaching `to_wire` (which would panic on it). The
+/// rest of the family rides wire v6 through the L1 negotiated
+/// `GUI_FLOATING` gate.
 fn l0_only_gui_verb(command: &HostCommand) -> bool {
-    matches!(
-        command,
-        HostCommand::SetGuiSize { .. }
-            | HostCommand::SetGuiVisibility { .. }
-            | HostCommand::SetGuiParent { .. }
-            | HostCommand::SetGuiFocus { .. }
-            | HostCommand::SendGuiKey { .. }
-    )
+    matches!(command, HostCommand::SetGuiParent { .. })
 }
 
 /// The `wire::Command` mirror of a handle-carrying `HostCommand` —
@@ -1849,27 +1874,28 @@ fn to_wire(command: HostCommand) -> wire::Command {
         HostCommand::Deactivate { .. } => wire::Command::Deactivate,
         HostCommand::SaveState { .. } => wire::Command::SaveState,
         HostCommand::RestoreState { bytes, .. } => wire::Command::RestoreState { bytes },
-        HostCommand::OpenGui { parent, .. } => wire::Command::OpenGui {
-            // Floating is the only v6 implementation; `{0,0}` asks
-            // for the plugin's preferred size.
+        HostCommand::OpenGui { parent, size, .. } => wire::Command::OpenGui {
+            // Floating is the only v6 mode — `Docked` is refused
+            // upstream (the ops layer / runner gate, Issue #115).
             mode: wire::OpenGuiMode::Floating,
             parent,
-            size: GuiSize {
-                width: 0.0,
-                height: 0.0,
-            },
+            size,
         },
         HostCommand::CloseGui { .. } => wire::Command::CloseGui,
+        HostCommand::SetGuiSize { size, .. } => wire::Command::SetGuiSize { size },
+        HostCommand::SetGuiVisibility { visible, .. } => wire::Command::SetGuiVisibility {
+            visible: u8::from(visible),
+        },
+        HostCommand::SetGuiFocus { focused, .. } => wire::Command::SetGuiFocus {
+            focused: u8::from(focused),
+        },
+        HostCommand::SendGuiKey { event, .. } => wire::Command::SendGuiKey { event },
         HostCommand::Scan
         | HostCommand::Instantiate { .. }
         | HostCommand::Destroy { .. }
-        | HostCommand::SetGuiSize { .. }
-        | HostCommand::SetGuiVisibility { .. }
-        | HostCommand::SetGuiParent { .. }
-        | HostCommand::SetGuiFocus { .. }
-        | HostCommand::SendGuiKey { .. } => {
+        | HostCommand::SetGuiParent { .. } => {
             unreachable!(
-                "Scan/Instantiate/Destroy and the L0-only GUI verbs are not wire verbs here"
+                "Scan/Instantiate/Destroy and the L0-only GUI verb are not wire verbs here"
             )
         }
     }
@@ -1921,9 +1947,9 @@ fn host_reply(expected: ReplyKind, reply: wire::Reply) -> Result<HostReply, Host
     match (expected, reply) {
         (ReplyKind::Ok, wire::Reply::Ok) => Ok(HostReply::Ok),
         (ReplyKind::State, wire::Reply::State { bytes }) => Ok(HostReply::State { bytes }),
-        // `capabilities` is dropped — `HostReply::Opened` gains the
-        // field in a later slice.
-        (ReplyKind::Opened, wire::Reply::Opened { gui, .. }) => Ok(HostReply::Opened { gui }),
+        (ReplyKind::Opened, wire::Reply::Opened { gui, capabilities }) => {
+            Ok(HostReply::Opened { gui, capabilities })
+        }
         // Every other pairing — a kind mismatch, `Scanned`, or a
         // future reply kind — is a protocol anomaly.
         _ => Err(HostError::Ipc),
@@ -3623,5 +3649,183 @@ mod tests {
                 "{value:?} must reach the wire"
             );
         }
+    }
+
+    /// The guard shrank to the one verb with no wire encoding:
+    /// `SetGuiParent` stays L0-only (Issue #115); the rest of the
+    /// family is L1-reachable through the negotiated gate.
+    #[test]
+    fn l0_only_guard_keeps_only_set_gui_parent() {
+        let handle = PluginHandle::new(0, 0);
+        for command in [
+            HostCommand::OpenGui {
+                handle,
+                parent: crate::ParentLease::new(0, 0),
+                size: ruviform_plugin_core::GuiSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
+            },
+            HostCommand::CloseGui { handle },
+            HostCommand::SetGuiSize {
+                handle,
+                size: ruviform_plugin_core::GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            },
+            HostCommand::SetGuiVisibility {
+                handle,
+                visible: true,
+            },
+            HostCommand::SetGuiFocus {
+                handle,
+                focused: true,
+            },
+            HostCommand::SendGuiKey {
+                handle,
+                event: ruviform_plugin_core::GuiKeyEvent {
+                    direction: ruviform_plugin_core::GuiKeyDirection::Down,
+                    key: 'a',
+                    key_code: 0x41,
+                    modifiers: ruviform_plugin_core::GuiModifiers::NONE,
+                },
+            },
+        ] {
+            assert!(!l0_only_gui_verb(&command), "{command:?} is wire v6");
+        }
+        assert!(l0_only_gui_verb(&HostCommand::SetGuiParent {
+            handle,
+            parent: crate::ParentLease::new(0, 0),
+        }));
+    }
+
+    /// `to_wire`'s GUI arms — the command payload rides verbatim
+    /// onto wire v6 tags 8/9/24-27 (`OpenGui.mode` is `Floating`,
+    /// the only implemented mode).
+    #[test]
+    fn to_wire_maps_the_gui_verb_family() {
+        let handle = PluginHandle::new(0, 0);
+        let parent = crate::ParentLease::new(3, 0xBEEF);
+        let size = ruviform_plugin_core::GuiSize {
+            width: 640.0,
+            height: 480.0,
+        };
+        let event = ruviform_plugin_core::GuiKeyEvent {
+            direction: ruviform_plugin_core::GuiKeyDirection::Up,
+            key: 'b',
+            key_code: 0x42,
+            modifiers: ruviform_plugin_core::GuiModifiers::SHIFT,
+        };
+        assert_eq!(
+            to_wire(HostCommand::OpenGui {
+                handle,
+                parent,
+                size
+            }),
+            wire::Command::OpenGui {
+                mode: wire::OpenGuiMode::Floating,
+                parent,
+                size
+            }
+        );
+        assert_eq!(
+            to_wire(HostCommand::CloseGui { handle }),
+            wire::Command::CloseGui
+        );
+        assert_eq!(
+            to_wire(HostCommand::SetGuiSize { handle, size }),
+            wire::Command::SetGuiSize { size }
+        );
+        assert_eq!(
+            to_wire(HostCommand::SetGuiVisibility {
+                handle,
+                visible: true
+            }),
+            wire::Command::SetGuiVisibility { visible: 1 }
+        );
+        assert_eq!(
+            to_wire(HostCommand::SetGuiFocus {
+                handle,
+                focused: false
+            }),
+            wire::Command::SetGuiFocus { focused: 0 }
+        );
+        assert_eq!(
+            to_wire(HostCommand::SendGuiKey { handle, event }),
+            wire::Command::SendGuiKey { event }
+        );
+    }
+
+    /// `host_reply`'s `Opened` arm carries the child's
+    /// `capabilities` verbatim — the bitfield `L1EditorOps` maps
+    /// onto `EditorCapabilities`.
+    #[test]
+    fn host_reply_opened_carries_capabilities() {
+        let gui = ruviform_plugin_core::GuiHandle::new(9);
+        assert_eq!(
+            host_reply(
+                expected_reply_kind(&wire::Command::OpenGui {
+                    mode: wire::OpenGuiMode::Floating,
+                    parent: crate::ParentLease::new(0, 0),
+                    size: ruviform_plugin_core::GuiSize {
+                        width: 0.0,
+                        height: 0.0,
+                    },
+                }),
+                wire::Reply::Opened {
+                    gui,
+                    capabilities: 0x82,
+                },
+            ),
+            Ok(HostReply::Opened {
+                gui,
+                capabilities: 0x82,
+            })
+        );
+    }
+
+    /// The negotiated-mask query on the unified surface: an
+    /// `OutOfProcess` fixture slot answers its child's mask, L0
+    /// and stale handles get the defined `Err`s.
+    #[test]
+    fn negotiated_gui_capabilities_reports_the_slot_mask() {
+        let mut host = PluginHost::new();
+        let child = L1Child::test_fixture(0);
+        child.test_set_hello_capabilities(wire::WIRE_CAPABILITY_GUI_FLOATING);
+        let l1 = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture_on(
+            &child,
+            0,
+            LifecycleState::Initialized,
+            None,
+        ))));
+        assert_eq!(
+            host.negotiated_gui_capabilities(l1),
+            Ok(wire::WIRE_CAPABILITY_GUI_FLOATING)
+        );
+        // An unadvertised child reports `0` — the gate's refusal input.
+        let quiet = host.mint(Slot::OutOfProcess(Box::new(L1Instance::test_fixture(
+            LifecycleState::Initialized,
+            None,
+        ))));
+        assert_eq!(host.negotiated_gui_capabilities(quiet), Ok(0));
+        // L0 slots have no `Hello` — `Unsupported`, not a mask.
+        host.register_factory(Box::new(SendGainFactory));
+        let HostReply::Instantiated { handle: l0 } = host
+            .execute(HostCommand::Instantiate {
+                plugin_id: DESCRIPTOR.id.to_owned(),
+            })
+            .unwrap()
+        else {
+            panic!("unexpected reply")
+        };
+        assert_eq!(
+            host.negotiated_gui_capabilities(l0),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            host.negotiated_gui_capabilities(PluginHandle::new(31, 0)),
+            Err(HostError::InvalidHandle)
+        );
     }
 }

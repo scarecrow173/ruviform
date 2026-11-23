@@ -95,6 +95,9 @@ pub enum HostCommand {
         handle: PluginHandle,
         /// Generation-bound parent-window lease.
         parent: ParentLease,
+        /// Requested initial logical size — `GuiSize { 0, 0 }`
+        /// asks the surface for the plugin's preferred size.
+        size: GuiSize,
     },
     /// Close the plugin GUI.
     CloseGui {
@@ -103,10 +106,10 @@ pub enum HostCommand {
     },
     /// Resize the plugin GUI to `size`.
     ///
-    /// L0-only: no `wire::Command` encoding exists yet (Issue #115
-    /// owns the out-of-process GUI verb scope), so composite
-    /// dispatch answers the defined `HostError::Unsupported` for
-    /// `OutOfProcess` slots instead of reaching `to_wire`.
+    /// L1-reachable since wire v6 (`SetGuiSize`, tag 24): an
+    /// `OutOfProcess` slot forwards it through the negotiated
+    /// `GUI_FLOATING` gate — an unadvertised child answers the
+    /// defined `HostError::Unsupported` before the wire.
     SetGuiSize {
         /// Target instance.
         handle: PluginHandle,
@@ -115,7 +118,8 @@ pub enum HostCommand {
     },
     /// Show (`visible = true`) or hide the plugin GUI.
     ///
-    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`].
+    /// L1-reachable since wire v6 (`SetGuiVisibility`, tag 25) —
+    /// same negotiated gate as [`HostCommand::SetGuiSize`].
     SetGuiVisibility {
         /// Target instance.
         handle: PluginHandle,
@@ -125,7 +129,10 @@ pub enum HostCommand {
     /// Re-parent the plugin GUI under a new generation-bound parent
     /// lease (dock move / re-dock).
     ///
-    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`].
+    /// L0-only: no `wire::Command` encoding exists — Issue #115
+    /// owns the docked/reparent verb scope — so composite dispatch
+    /// answers the defined `HostError::Unsupported` for
+    /// `OutOfProcess` slots instead of reaching `to_wire`.
     SetGuiParent {
         /// Target instance.
         handle: PluginHandle,
@@ -135,9 +142,8 @@ pub enum HostCommand {
     /// Give (`focused = true`) or remove keyboard focus from the
     /// plugin GUI.
     ///
-    /// L0-only — same wire boundary as [`HostCommand::SetGuiSize`]
-    /// (Issue #631's editor input/focus verbs ride the in-process
-    /// lane; the out-of-process GUI verb scope stays Issue #115's).
+    /// L1-reachable since wire v6 (`SetGuiFocus`, tag 26) — same
+    /// negotiated gate as [`HostCommand::SetGuiSize`].
     SetGuiFocus {
         /// Target instance.
         handle: PluginHandle,
@@ -146,7 +152,8 @@ pub enum HostCommand {
     },
     /// Deliver one key event (press or release) to the plugin GUI.
     ///
-    /// L0-only — same wire boundary as [`HostCommand::SetGuiFocus`].
+    /// L1-reachable since wire v6 (`SendGuiKey`, tag 27) — same
+    /// negotiated gate as [`HostCommand::SetGuiSize`].
     SendGuiKey {
         /// Target instance.
         handle: PluginHandle,
@@ -175,9 +182,17 @@ pub enum HostReply {
         /// Serialized state.
         bytes: Vec<u8>,
     },
-    /// `OpenGui` result: token for the opened surface.
+    /// `OpenGui` result: token for the opened surface plus the
+    /// surface's reported capability bits.
     Opened {
         /// Handle of the opened GUI surface.
         gui: GuiHandle,
+        /// GUI capability bits in `EditorCapabilities` field-
+        /// declaration order (`dock` = bit 0 … `focus` = bit 9 —
+        /// the wire v6 `Opened.capabilities` layout). For an
+        /// out-of-process surface this is the child's verbatim
+        /// report; an in-process surface reports the bits its
+        /// accepted open proved (`dock` | `close`).
+        capabilities: u32,
     },
 }

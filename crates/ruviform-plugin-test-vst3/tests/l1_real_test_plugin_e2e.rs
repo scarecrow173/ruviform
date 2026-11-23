@@ -26,9 +26,9 @@ use ruviform_media_core::{
     MidiKind, MusicalTimeInfo, NoteKey, TimeBase, TransportStatus,
 };
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleState,
-    ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessResult,
-    TransportInfo,
+    Event, EventKind, EventList, FailureCause, GuiSize, HostError, HostInput, HostOutput,
+    LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig,
+    ProcessResult, TransportInfo,
 };
 use ruviform_plugin_host::{
     ChildExit, HostCommand, HostNotification, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
@@ -451,6 +451,10 @@ fn real_test_plugin_l1_full_series() {
         host.execute(HostCommand::OpenGui {
             handle,
             parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0
+            },
         }),
         Err(HostError::Unsupported)
     );

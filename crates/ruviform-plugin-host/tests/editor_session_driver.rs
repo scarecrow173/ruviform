@@ -123,9 +123,12 @@ impl ScriptedOps {
 
     /// Every lifecycle op refuses with `Unsupported` and caps report
     /// all-`Unsupported` — a defined-refusal adapter. Note this is
-    /// *not* `L1EditorOps`-shaped: the real L1 port also refuses
-    /// `capabilities` with `Err(Unsupported)`, while this fake returns
-    /// `Ok(caps)` (matching `InProcessEditorOps` pre-open).
+    /// *not* `L1EditorOps`-shaped: the real L1 port refuses
+    /// `capabilities` with `Err(Unsupported)` only while the child's
+    /// `Hello` never advertised `GUI_FLOATING` (an advertised child
+    /// reports `{float, close}` pre-open, then the `Opened`
+    /// reply's bits), while this fake returns `Ok(caps)`
+    /// unconditionally (matching `InProcessEditorOps` pre-open).
     fn unsupported() -> Self {
         Self {
             open_default: Err(EditorOpError::Unsupported),

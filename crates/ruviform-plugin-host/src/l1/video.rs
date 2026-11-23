@@ -650,7 +650,7 @@ mod tests {
 
     use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
-    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::{AtomicU32, AtomicU64};
     use std::thread;
 
     use ruviform_media_core::{FrameRate, TimeBase};
@@ -697,6 +697,7 @@ mod tests {
                 }),
                 child: std::sync::OnceLock::new(),
                 next_cmd_seq: AtomicU64::new(0),
+                negotiated_capabilities: AtomicU32::new(0),
                 diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
             }),
             driver_tx: Mutex::new(Some(driver_tx)),

@@ -133,6 +133,12 @@ fn set_state(slot: &SharedSlot, state: LifecycleState) {
     slot.mirror.store(mirror_encode(state), Ordering::Release);
 }
 
+/// The in-process surface has no capability query — an accepted
+/// docked `open_gui` proves `dock` (bit 0) and the close verb
+/// proves `close` (bit 7): `0x81` in the wire v6
+/// `Opened.capabilities` layout.
+const L0_OPENED_CAPABILITIES: u32 = 0x81;
+
 /// The `Failed` convergence every `Shared` observation funnels
 /// into: commit [`LifecycleEvent::Failed`] into the bookkeeping
 /// lifecycle (idempotent — `Failed` re-reports skip the illegal
@@ -272,7 +278,10 @@ impl InProcessHost {
             HostCommand::Destroy { handle } => self.destroy(handle),
             HostCommand::SaveState { handle } => self.save_state(handle),
             HostCommand::RestoreState { handle, bytes } => self.restore_state(handle, &bytes),
-            HostCommand::OpenGui { handle, parent } => self.open_gui(handle, parent),
+            // `size` is advisory on the in-process surface — the
+            // plugin's `open_gui` has no size vocabulary, so L0
+            // opens at the plugin's preferred size.
+            HostCommand::OpenGui { handle, parent, .. } => self.open_gui(handle, parent),
             HostCommand::CloseGui { handle } => self.close_gui(handle),
             HostCommand::SetGuiSize { handle, size } => self.set_gui_size(handle, size),
             HostCommand::SetGuiVisibility { handle, visible } => {
@@ -1162,13 +1171,17 @@ impl InProcessHost {
         match &mut instance.slot {
             InstanceSlot::Plain { plugin, .. } => {
                 let gui: GuiHandle = plugin.open_gui(parent)?;
-                Ok(HostReply::Opened { gui })
+                Ok(HostReply::Opened {
+                    gui,
+                    capabilities: L0_OPENED_CAPABILITIES,
+                })
             }
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
-                    core.plugin
-                        .open_gui(parent)
-                        .map(|gui| HostReply::Opened { gui })
+                    core.plugin.open_gui(parent).map(|gui| HostReply::Opened {
+                        gui,
+                        capabilities: L0_OPENED_CAPABILITIES,
+                    })
                 })
             }
         }
@@ -1907,10 +1920,19 @@ mod tests {
             .execute(HostCommand::OpenGui {
                 handle,
                 parent: ParentLease::new(0, 0),
+                size: GuiSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
             })
             .unwrap()
         {
-            HostReply::Opened { gui } => assert_eq!(gui, GuiHandle::new(7)),
+            HostReply::Opened { gui, capabilities } => {
+                assert_eq!(gui, GuiHandle::new(7));
+                // The L0 surface reports the bits its accepted
+                // docked open proved — `dock` | `close`.
+                assert_eq!(capabilities, 0x81);
+            }
             _ => panic!("unexpected reply"),
         }
         assert_eq!(

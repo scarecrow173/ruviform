@@ -109,7 +109,7 @@ use std::io::Write;
 use std::process::{
     Child, ChildStderr, ChildStdin, ChildStdout, Command as ProcCommand, ExitStatus, Stdio,
 };
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering, fence};
+use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering, fence};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -679,6 +679,14 @@ struct Shared {
     /// [`data::BLOCK_SEQ_FLAG`] space is never drawn from it, so
     /// command seqs can never alias doorbell seqs.
     next_cmd_seq: AtomicU64,
+    /// The child's negotiated capability mask, carried verbatim
+    /// from the `Hello` (child → parent, wire v6 — unknown bits are
+    /// already decode-rejected). Written once by
+    /// [`L1Child::spawn`]'s handshake before the `L1Child` exists;
+    /// child-scope, so a Bundled route's instances all gate on the
+    /// same mask. `0` for a child that advertised nothing (and for
+    /// every test fixture that skips the handshake).
+    negotiated_capabilities: AtomicU32,
     /// The child's live diagnostics capture — created in
     /// [`L1Child::spawn`] before the driver starts so the stderr
     /// drain thread sees it from birth; the spawn/converge paths
@@ -1384,15 +1392,22 @@ fn spawn_child(
 /// through each instance's `InstShared.result_tx` under the `inner`
 /// lock — the driver completes dropped seqs on the same
 /// per-instance channel.
-fn reader_main(mut stdout: ChildStdout, shared: &Shared, hello_tx: &mpsc::Sender<Result<u16, ()>>) {
+fn reader_main(
+    mut stdout: ChildStdout,
+    shared: &Shared,
+    hello_tx: &mpsc::Sender<Result<(u16, u32), ()>>,
+) {
     // One scratch allocation reused across frames — the wire layer
     // owns the framing; EOF and protocol violations share the
     // `Err`/`Failed` path here.
     let mut frame_buf = Vec::new();
     let mut views: HashMap<u32, ReaderView> = HashMap::new();
     match wire::read_message(&mut stdout, &mut frame_buf) {
-        Ok(wire::Message::Hello { version, .. }) => {
-            let _ = hello_tx.send(Ok(version));
+        Ok(wire::Message::Hello {
+            version,
+            capabilities,
+        }) => {
+            let _ = hello_tx.send(Ok((version, capabilities)));
         }
         Ok(_) => {
             // A well-formed non-`Hello` first frame — a handshake
@@ -1932,9 +1947,10 @@ struct SpawnedIo {
 /// `Err(())` reports a spawn-time failure.
 type SpawnRx = mpsc::Receiver<Result<SpawnedIo, ()>>;
 
-/// The reader's handshake channel: `Ok(version)` carries the child's
-/// `Hello` version; `Err(())` reports a broken handshake/data plane.
-type HelloRx = mpsc::Receiver<Result<u16, ()>>;
+/// The reader's handshake channel: `Ok((version, capabilities))`
+/// carries the child's `Hello` version and negotiated capability
+/// mask; `Err(())` reports a broken handshake/data plane.
+type HelloRx = mpsc::Receiver<Result<(u16, u32), ()>>;
 
 /// Spawns the `l1-driver` thread — the child process itself is spawned
 /// *inside* the thread and handed to [`L1Child::spawn`] through
@@ -2094,6 +2110,7 @@ impl L1Child {
             }),
             child: OnceLock::new(),
             next_cmd_seq: AtomicU64::new(0),
+            negotiated_capabilities: AtomicU32::new(0),
             diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
         });
         shared.diag.set_phase(diag::SpawnPhase::Spawn);
@@ -2161,7 +2178,15 @@ impl L1Child {
             }
         };
         match hello_rx.recv_timeout(spawn_timeout) {
-            Ok(Ok(version)) if version == wire::WIRE_VERSION => {}
+            Ok(Ok((version, capabilities))) if version == wire::WIRE_VERSION => {
+                // Publish the negotiated mask before the `L1Child`
+                // exists — every later minted facade shares it, so
+                // a reader sees either 0 (pre-publish impossible:
+                // the publish precedes publication) or this value.
+                shared
+                    .negotiated_capabilities
+                    .store(capabilities, Ordering::Release);
+            }
             other => {
                 // Missing/mismatched `Hello` — the spawn is
                 // unusable; kill + reap, never a live-but-empty
@@ -2221,6 +2246,16 @@ impl L1Child {
         // fresh child, so the record is the spawn attempt's).
         self.shared.diag.record_cause(FailureCause::Handshake);
         Err(HostError::Ipc)
+    }
+
+    /// The child's negotiated capability mask — the `Hello`
+    /// advertisement stored by [`L1Child::spawn`] (`0` when the
+    /// child advertised nothing). Child-scope: every facade minted
+    /// on this child reports the same mask.
+    ///
+    /// **RT contract:** `&self`, lock-free — an atomic load.
+    pub(crate) fn negotiated_capabilities(&self) -> u32 {
+        self.shared.negotiated_capabilities.load(Ordering::Acquire)
     }
 
     /// A fresh child for `spec` — the v2 argv wiring (`program` +
@@ -2988,13 +3023,24 @@ impl L1Instance {
         &self.child
     }
 
+    /// The instance's negotiated capability mask — its child's
+    /// `Hello` advertisement (child-scope, shared by every
+    /// co-resident sibling; the GUI verb family gates on
+    /// [`wire::WIRE_CAPABILITY_GUI_FLOATING`]).
+    ///
+    /// **RT contract:** `&self`, lock-free — an atomic load.
+    pub(crate) fn negotiated_capabilities(&self) -> u32 {
+        self.child.negotiated_capabilities()
+    }
+
     /// Sends one wire command and waits for its reply — the
     /// command/reply parity surface for the L0 command set.
     ///
     /// Defined rejections resolved without touching the wire:
-    /// `Failed` instance → `Err(HostError::Failed)`; `OpenGui`/
-    /// `CloseGui` → `Err(HostError::Unsupported)` (L1 GUI is
-    /// deferred); an `Activate` config over [`wire::WIRE_MAX_FRAMES`]
+    /// `Failed` instance → `Err(HostError::Failed)`; the GUI verb
+    /// family → `Err(HostError::Unsupported)` when the child never
+    /// advertised `GUI_FLOATING` in its `Hello` (the negotiated
+    /// gate); an `Activate` config over [`wire::WIRE_MAX_FRAMES`]
     /// → `Err(HostError::Prepare(PrepareError::UnsupportedConfig))`.
     /// A reply that never arrives inside `command_timeout` is
     /// `Err(HostError::Ipc)` — the timeout is unattributable, so
@@ -3029,10 +3075,18 @@ impl L1Instance {
                 _ => return Err(HostError::Ipc),
             }
         }
+        // The negotiated-capability gate (wire v6): the whole GUI
+        // verb family requires the child's `Hello` —
+        // `GUI_FLOATING` bit. An unadvertised child gets the defined
+        // `Err(Unsupported)` before the command reaches the wire.
+        if gui_family(&cmd)
+            && self.shared.negotiated_capabilities.load(Ordering::Acquire)
+                & wire::WIRE_CAPABILITY_GUI_FLOATING
+                == 0
+        {
+            return Err(HostError::Unsupported);
+        }
         match &cmd {
-            wire::Command::OpenGui { .. } | wire::Command::CloseGui => {
-                return Err(HostError::Unsupported);
-            }
             wire::Command::Activate { config } if config.max_frames() > wire::WIRE_MAX_FRAMES => {
                 return Err(HostError::Prepare(PrepareError::UnsupportedConfig));
             }
@@ -3802,6 +3856,24 @@ fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
     }
 }
 
+/// The wire-v6 GUI verb family — one negotiated mechanism bit
+/// (`WIRE_CAPABILITY_GUI_FLOATING` in the child's `Hello`) covers
+/// all of them atomically: `OpenGui`/`CloseGui`/`SetGuiSize`/
+/// `SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey` (tags 8/9/24-27).
+/// `SetGuiParent` has no wire verb — docked reparenting stays
+/// L0-only (Issue #115).
+fn gui_family(cmd: &wire::Command) -> bool {
+    matches!(
+        cmd,
+        wire::Command::OpenGui { .. }
+            | wire::Command::CloseGui
+            | wire::Command::SetGuiSize { .. }
+            | wire::Command::SetGuiVisibility { .. }
+            | wire::Command::SetGuiFocus { .. }
+            | wire::Command::SendGuiKey { .. }
+    )
+}
+
 #[cfg(test)]
 impl L1Child {
     /// Process-free child fixture for the pool tests — a real
@@ -3852,6 +3924,7 @@ impl L1Child {
                 }),
                 child: OnceLock::new(),
                 next_cmd_seq: AtomicU64::new(0),
+                negotiated_capabilities: AtomicU32::new(0),
                 diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
             }),
             driver_tx: Mutex::new(None),
@@ -3883,6 +3956,15 @@ impl L1Child {
     /// skip-but-not-evict predicate input.
     pub(crate) fn test_set_shutdown_initiated(&self) {
         self.shared.lock().shutdown_initiated = true;
+    }
+
+    /// Stamps the fixture's negotiated capability mask — the gate
+    /// input `Hello`-advertised children would have written through
+    /// `spawn` (fixtures skip the handshake, so the mask starts `0`).
+    pub(crate) fn test_set_hello_capabilities(&self, capabilities: u32) {
+        self.shared
+            .negotiated_capabilities
+            .store(capabilities, Ordering::Release);
     }
 
     /// Stamps `converge_instance(instance)` — the demux table's
@@ -4350,6 +4432,7 @@ mod tests {
             }),
             child: OnceLock::new(),
             next_cmd_seq: AtomicU64::new(0),
+            negotiated_capabilities: AtomicU32::new(0),
             diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
         };
         let mut leg = data::RtLeg::new(
@@ -4523,6 +4606,7 @@ mod tests {
                     }),
                     child: OnceLock::new(),
                     next_cmd_seq: AtomicU64::new(0),
+                    negotiated_capabilities: AtomicU32::new(0),
                     diag: Arc::new(diag::ActiveDiagnostics::new(diag::SpawnPhase::PreSpawn)),
                 },
                 notify_rxs,
@@ -6927,7 +7011,7 @@ mod tests {
         let (mut child, stdout) = emitting_stdout(&stream);
         reader_main(stdout, &fixture.shared, &hello_tx);
         assert_eq!(fixture.shared.diag.cause(), Some(FailureCause::Protocol));
-        assert_eq!(hello_rx.try_recv().unwrap(), Ok(wire::WIRE_VERSION));
+        assert_eq!(hello_rx.try_recv().unwrap(), Ok((wire::WIRE_VERSION, 0)));
         let _ = child.wait();
     }
 
@@ -7036,5 +7120,90 @@ mod tests {
         let fixture = DemuxFixture::live(0, LifecycleState::Processing);
         converge_and_reap(&fixture.shared, FailureCause::Transport);
         assert_eq!(fixture.shared.diag.cause(), Some(FailureCause::Transport));
+    }
+
+    /// One `GuiKeyEvent` for the gate pins — the wire payload shape
+    /// is irrelevant to the gate, the verb family membership is.
+    fn gui_key() -> ruviform_plugin_core::GuiKeyEvent {
+        ruviform_plugin_core::GuiKeyEvent {
+            direction: ruviform_plugin_core::GuiKeyDirection::Down,
+            key: 'a',
+            key_code: 0x41,
+            modifiers: ruviform_plugin_core::GuiModifiers::NONE,
+        }
+    }
+
+    /// The negotiated gate's refusal arm: an unadvertised fixture
+    /// (`Hello` never ran, mask `0`) gets `Err(Unsupported)` on the
+    /// whole GUI verb family — nothing is written toward the wire.
+    #[test]
+    fn gui_gate_refuses_the_family_on_an_unadvertised_child() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Initialized, None);
+        for command in [
+            wire::Command::OpenGui {
+                mode: wire::OpenGuiMode::Floating,
+                parent: ruviform_plugin_core::ParentLease::new(0, 0),
+                size: ruviform_plugin_core::GuiSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
+            },
+            wire::Command::CloseGui,
+            wire::Command::SetGuiSize {
+                size: ruviform_plugin_core::GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            },
+            wire::Command::SetGuiVisibility { visible: 1 },
+            wire::Command::SetGuiFocus { focused: 1 },
+            wire::Command::SendGuiKey { event: gui_key() },
+        ] {
+            assert_eq!(instance.execute(command), Err(HostError::Unsupported));
+        }
+        // A non-GUI verb is untouched by the gate — it proceeds to
+        // `request`, which the driverless fixture fails as `Ipc`.
+        assert_eq!(
+            instance.execute(wire::Command::SaveState),
+            Err(HostError::Ipc)
+        );
+    }
+
+    /// The gate's pass arm: with the `GUI_FLOATING` bit stamped the
+    /// same verbs clear the check and reach `request` — the
+    /// driverless fixture's `Err(Ipc)` is the proof the command was
+    /// headed for the wire, not refused at the gate.
+    #[test]
+    fn gui_gate_passes_the_family_on_an_advertised_child() {
+        let mut instance = L1Instance::test_fixture(LifecycleState::Initialized, None);
+        instance
+            .child()
+            .test_set_hello_capabilities(wire::WIRE_CAPABILITY_GUI_FLOATING);
+        for command in [
+            wire::Command::OpenGui {
+                mode: wire::OpenGuiMode::Floating,
+                parent: ruviform_plugin_core::ParentLease::new(0, 0),
+                size: ruviform_plugin_core::GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            },
+            wire::Command::CloseGui,
+            wire::Command::SetGuiSize {
+                size: ruviform_plugin_core::GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            },
+            wire::Command::SetGuiVisibility { visible: 0 },
+            wire::Command::SetGuiFocus { focused: 0 },
+            wire::Command::SendGuiKey { event: gui_key() },
+        ] {
+            assert_eq!(instance.execute(command), Err(HostError::Ipc));
+        }
+        assert_eq!(
+            instance.negotiated_capabilities(),
+            wire::WIRE_CAPABILITY_GUI_FLOATING
+        );
     }
 }

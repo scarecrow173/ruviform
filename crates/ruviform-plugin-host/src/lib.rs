@@ -205,7 +205,7 @@ pub use editor_session::{
     EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, GuiRequestArbiter,
     GuiRequestArbiterHandle, InProcessEditorOps, L1EditorOps, LeaseRedeemer, MonotonicSessionClock,
     OpenOutcome, PluginEditorSession, PluginEditorSessions, SessionClock, SessionDeadlinePolicy,
-    SessionFailCause, Support,
+    SessionFailCause, Support, pump_notifications,
 };
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::{BusReport, InProcessHost, ReportDrain};
@@ -237,8 +237,8 @@ pub fn version() -> &'static str {
 mod tests {
     use ruviform_audio_core::SampleRate;
     use ruviform_plugin_core::{
-        BufferView, BufferViewMut, Event, EventKind, EventList, LifecycleState, ParamEvent,
-        ParamId, ParamInfo, ParamValue, PluginDescriptor, PrepareError, ProcessConfig,
+        BufferView, BufferViewMut, Event, EventKind, EventList, GuiSize, LifecycleState,
+        ParamEvent, ParamId, ParamInfo, ParamValue, PluginDescriptor, PrepareError, ProcessConfig,
         ProcessContext, ProcessResult, ProcessStatus,
     };
 
@@ -600,6 +600,10 @@ mod tests {
             host.execute(HostCommand::OpenGui {
                 handle,
                 parent: ParentLease::new(0, 0),
+                size: GuiSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
             }),
             Err(HostError::Unsupported)
         );
