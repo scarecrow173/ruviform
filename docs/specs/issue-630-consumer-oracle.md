@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #630 AC7 consumer-oracle slice — fixture contract manifest + consumer oracle 対応表 + dep 非汚染 evidence spec"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -112,7 +112,7 @@ consumer 側の別 slice の責務であり、本 slice の着手条件でも納
 | `scarecrow173/synvelis#101` | `PluginBindingSession`/`check_frame_base`（`crates/synvelis-player/src/binding.rs`） | `test_gain`（param binding・frame offset） |
 | `scarecrow173/synvelis#127` | `ProcessBoundarySession`/`PrecisionProvenance`（`crates/synvelis-player/src/process_boundary.rs`） | `test_gain`+`test_instrument`+`test_fault`（process boundary・MIDI/transport・crash isolation） |
 | `scarecrow173/synvelis#128` | `PluginStatePort`/`StateCaptureQuality`（`crates/synvelis-player/src/plugin_state.rs` + `crates/synvelis-project/src/plugin_state.rs`） | `test_stateful`(+`_single`)・対照として `test_fault`/`test_spawn_fail`（state capability 差） |
-| `scarecrow173/synvelis#176` | PD-01..07 schema dims（`evidence/sv176/pd-01-07-case-definitions.md` + `acceptance-ledger.md`、freeze 済み） | `test_editor`（実 HWND+popup・event token・CLAP floating） |
+| `scarecrow173/synvelis#176` | PD-01..07 schema dims（`evidence/sv176/pd-01-07-case-definitions.md` + `acceptance-ledger.md`、freeze 済み） | `test_editor`（実 HWND+popup・event token・CLAP floating + VST3 shared Fault param carrier — #885 で追加された editor-session crash/hang oracle 面。消費するかは sv#176 側の判断） |
 | `scarecrow173/audio-lens#127` | — | `NotApplicable`（AL は plugin host 機能を製品提供しない — 本文の宣言を記録するのみ） |
 
 ### 3. verdict 表
@@ -154,8 +154,10 @@ consumer 側実走が要る行は `external-owner`/`NotRun` のまま残す。
 ## 非目標
 
 - CLAP output-event の host 側観測経路（`OutputEvents::void` →
-  drain 配線）— Issue #630 残件。後続 slice 対象
-  （`scarecrow173/ruviform#253` の VST3 report wire 再利用見込み）。
+  drain 配線）— 本 slice では残件として記録したが、
+  `scarecrow173/ruviform#842`（`drain_output_reports` canonical
+  drain・`116c1cb2`）で実装済み。manifest の residual は
+  `resolved` として追跡記録を残す。
 - editor popup の real-HWND host harness / L1 editor 面 —
   Issue #630 残件。`scarecrow173/ruviform#631` real-dock lane 責務。
 - AC4 の実 Window/DComp gate（`scarecrow173/ruviform#532` 着地待ちの
