@@ -1,6 +1,6 @@
 //! L1 audio counter source registration — Issue #279 (OBS-04).
 //!
-//! The four diagnostic counters [`super::AudioCounters`] already owns
+//! The six diagnostic counters [`super::AudioCounters`] already owns
 //! for an `InstKind::Audio` registry entry become Observation Sources
 //! through the OBS-02 (`Issue #277`)
 //! [`ObservationRegistrar`]/[`RegistrationLease`] contract: the domain
@@ -29,9 +29,9 @@ use std::fmt;
 use std::time::Duration;
 
 use ruviform_observability::source::{
-    AggregationPolicy, Confidentiality, MetricDescriptor, MetricKind, MetricReader, MetricSource,
+    AggregationPolicy, MetricDescriptor, MetricKind, MetricReader, MetricSource,
     ObservationRegistrar, ObservationScope, ObservationUnit, RegistrationError, RegistrationLease,
-    ReportingHint, ReportingImpact, RetiredSource, SourceSemantics, SourceTemperature,
+    ReportingHint, ReportingImpact, RetiredSource, SourceSemantics,
 };
 
 use super::AudioCounterReaders;
@@ -41,8 +41,9 @@ use super::AudioCounterReaders;
 /// statically bounded (the collector's runtime limits stay its own).
 const ORIGIN: &str = "ruviform-plugin-host::l1";
 
-/// Domain-declared reporting hint for the three fault counters —
-/// `dropped_submits`, `results_failed_observed` and
+/// Domain-declared reporting hint for the five fault counters —
+/// `dropped_submits`, `dropped_submits_slot_busy`,
+/// `dropped_submits_chan_full`, `results_failed_observed` and
 /// `results_dropped` are zero in correct operation, so an increase
 /// is the report-worthy event. `min_interval` is a declared hint,
 /// never a scheduling guarantee.
@@ -52,90 +53,82 @@ const FAULT_REPORTING: ReportingHint = ReportingHint::OnIncrease {
     impact: ReportingImpact::High,
 };
 
-/// The four domain-declared descriptors, in
+/// The six domain-declared descriptors, in
 /// [`AudioCounterReaders`] field order. Each carries the Issue #121
 /// meaning table verbatim so a consumer never has to guess it.
 ///
 /// `passthrough_submits` is deliberately `SnapshotOnly`: its count
 /// includes the warmup blocks every live leg substitutes, so an
 /// unconditional increase report would fault a correct warmup. The
-/// post-warmup abnormal case is covered by the two fault counters'
+/// post-warmup abnormal case is covered by the fault counters'
 /// `OnIncrease` declarations (Issue #279's "別条件で判定").
-fn descriptors() -> [MetricDescriptor; 4] {
+fn descriptors() -> [MetricDescriptor; 6] {
     [
-        MetricDescriptor {
-            kind: MetricKind::Counter,
-            key: "l1.dropped_submits",
-            unit: ObservationUnit::Count,
-            reporting: FAULT_REPORTING,
-            aggregation: AggregationPolicy::Cumulative,
-            buckets: None,
-            semantics: SourceSemantics {
-                meaning: "submit could not be handed to the driver (busy slot or full \
-                          channel); at most +1 per block; never an XRUN or other event",
-                temperature: SourceTemperature::Warm,
-                warmup: None,
-                expected_range: None,
-                origin: ORIGIN,
-                confidentiality: Confidentiality::Internal,
-            },
-        },
-        MetricDescriptor {
-            kind: MetricKind::Counter,
-            key: "l1.passthrough_submits",
-            unit: ObservationUnit::Count,
-            reporting: ReportingHint::SnapshotOnly,
-            aggregation: AggregationPolicy::Cumulative,
-            buckets: None,
-            semantics: SourceSemantics {
-                meaning: "blocks where substitute output actually ran — includes warmup \
-                          blocks, so an increase is not unconditionally abnormal",
-                temperature: SourceTemperature::Warm,
-                warmup: None,
-                expected_range: None,
-                origin: ORIGIN,
-                confidentiality: Confidentiality::Internal,
-            },
-        },
-        MetricDescriptor {
-            kind: MetricKind::Counter,
-            key: "l1.results_failed_observed",
-            unit: ObservationUnit::Count,
-            reporting: FAULT_REPORTING,
-            aggregation: AggregationPolicy::Cumulative,
-            buckets: None,
-            semantics: SourceSemantics {
-                meaning: "RESULT_FAILED results the RT drain actually observed popping \
-                          the result channel — not the count of failures generated",
-                temperature: SourceTemperature::Warm,
-                warmup: None,
-                expected_range: None,
-                origin: ORIGIN,
-                confidentiality: Confidentiality::Internal,
-            },
-        },
-        MetricDescriptor {
-            kind: MetricKind::Counter,
-            key: "l1.results_dropped",
-            unit: ObservationUnit::Count,
-            reporting: FAULT_REPORTING,
-            aggregation: AggregationPolicy::Cumulative,
-            buckets: None,
-            semantics: SourceSemantics {
-                meaning: "reader-side result enqueue failures — not every form of \
-                          result loss",
-                temperature: SourceTemperature::Warm,
-                warmup: None,
-                expected_range: None,
-                origin: ORIGIN,
-                confidentiality: Confidentiality::Internal,
-            },
-        },
+        counter_descriptor(
+            "l1.dropped_submits",
+            FAULT_REPORTING,
+            "submit could not be handed to the driver (busy slot or full channel); \
+             at most +1 per block; never an XRUN or other event; aggregate of \
+             l1.dropped_submits_slot_busy + l1.dropped_submits_chan_full",
+        ),
+        counter_descriptor(
+            "l1.dropped_submits_slot_busy",
+            FAULT_REPORTING,
+            "of l1.dropped_submits, the drops whose shm slot was still busy — the \
+             strict-alternation gate returned before try_push",
+        ),
+        counter_descriptor(
+            "l1.dropped_submits_chan_full",
+            FAULT_REPORTING,
+            "of l1.dropped_submits, the drops whose submit try_push failed on a full \
+             channel — defensive: unreachable while channel capacity equals the slot \
+             depth (a full channel implies every slot busy)",
+        ),
+        counter_descriptor(
+            "l1.passthrough_submits",
+            ReportingHint::SnapshotOnly,
+            "blocks where substitute output actually ran — includes warmup blocks, \
+             so an increase is not unconditionally abnormal",
+        ),
+        counter_descriptor(
+            "l1.results_failed_observed",
+            FAULT_REPORTING,
+            "RESULT_FAILED results the RT drain actually observed popping the result \
+             channel — not the count of failures generated",
+        ),
+        counter_descriptor(
+            "l1.results_dropped",
+            FAULT_REPORTING,
+            "reader-side result enqueue failures — not every form of result loss",
+        ),
     ]
 }
 
+/// One audio-counter descriptor — the six entries share kind,
+/// unit, aggregation and the warm/internal semantics shell; only
+/// key, reporting hint and meaning differ.
+fn counter_descriptor(
+    key: &'static str,
+    reporting: ReportingHint,
+    meaning: &'static str,
+) -> MetricDescriptor {
+    MetricDescriptor {
+        kind: MetricKind::Counter,
+        key,
+        unit: ObservationUnit::Count,
+        reporting,
+        aggregation: AggregationPolicy::Cumulative,
+        buckets: None,
+        semantics: SourceSemantics {
+            meaning,
+            origin: ORIGIN,
+            ..SourceSemantics::default()
+        },
+    }
+}
+
 /// One counter's registration outcome — the per-source view of a
-/// four-source mint. `pub(crate)` crate-internal enum: outside the
+/// six-source mint. `pub(crate)` crate-internal enum: outside the
 /// `#[non_exhaustive]` ADR scope.
 pub(crate) enum AudioSourceSlot {
     /// The registrar accepted the source — the lease is the
@@ -169,7 +162,7 @@ impl fmt::Debug for AudioSourceSlot {
     }
 }
 
-/// The four source registrations one mint produced plus the
+/// The six source registrations one mint produced plus the
 /// [`RetiredSource`] tickets its `retire` returned — the facade's
 /// `source_leases` field. Kept on `L1Instance` (not `InstShared`):
 /// the leases are the domain's lifecycle handles and live exactly as
@@ -180,7 +173,7 @@ impl fmt::Debug for AudioSourceSlot {
 #[derive(Debug)]
 pub(crate) struct AudioSourceLeases {
     /// Per-counter outcomes, in [`AudioCounterReaders`] field order.
-    slots: [AudioSourceSlot; 4],
+    slots: [AudioSourceSlot; 6],
     /// The tickets `retire` collected — kept so `FinalDrain →
     /// Removed` progress stays observable (tests; Issue #293's
     /// integration surface later).
@@ -189,7 +182,7 @@ pub(crate) struct AudioSourceLeases {
 
 impl AudioSourceLeases {
     /// The mint-boundary constructor: `Some` registrar registers
-    /// the four `readers` ([`Self::register`]); `None` leaves every
+    /// the six `readers` ([`Self::register`]); `None` leaves every
     /// slot [`AudioSourceSlot::Unattached`] ([`Self::unattached`]).
     pub(crate) fn mint(
         registrar: Option<&dyn ObservationRegistrar>,
@@ -198,7 +191,7 @@ impl AudioSourceLeases {
         registrar.map_or_else(Self::unattached, |r| Self::register(readers, r))
     }
 
-    /// Registers all four counters with `registrar` — one
+    /// Registers all six counters with `registrar` — one
     /// `register` call per counter so a per-source typed refusal
     /// degrades only that slot and never rolls back its siblings
     /// (per-source degradation, Issue #279). **Non-RT only.**
@@ -206,9 +199,18 @@ impl AudioSourceLeases {
         readers: AudioCounterReaders,
         registrar: &dyn ObservationRegistrar,
     ) -> Self {
-        let [dropped, passthrough, failed_observed, results_dropped] = descriptors();
+        let [
+            dropped,
+            slot_busy,
+            chan_full,
+            passthrough,
+            failed_observed,
+            results_dropped,
+        ] = descriptors();
         let pairs = [
             (dropped, readers.dropped_submits),
+            (slot_busy, readers.dropped_submits_slot_busy),
+            (chan_full, readers.dropped_submits_chan_full),
             (passthrough, readers.passthrough_submits),
             (failed_observed, readers.results_failed_observed),
             (results_dropped, readers.results_dropped),
@@ -236,12 +238,7 @@ impl AudioSourceLeases {
     /// `retire` is a no-op.
     pub(crate) fn unattached() -> Self {
         Self {
-            slots: [
-                AudioSourceSlot::Unattached,
-                AudioSourceSlot::Unattached,
-                AudioSourceSlot::Unattached,
-                AudioSourceSlot::Unattached,
-            ],
+            slots: [const { AudioSourceSlot::Unattached }; 6],
             retired: Vec::new(),
         }
     }
@@ -277,7 +274,7 @@ impl AudioSourceLeases {
 
     /// The slot states, in counter order — test observation only.
     #[cfg(test)]
-    pub(crate) fn slots(&self) -> &[AudioSourceSlot; 4] {
+    pub(crate) fn slots(&self) -> &[AudioSourceSlot; 6] {
         &self.slots
     }
 
@@ -470,32 +467,43 @@ mod tests {
     use super::test_support::RecordingRegistrar;
     use super::{AudioSourceLeases, AudioSourceSlot};
 
-    /// Four fresh counter readers — the same shape `create_instance`
+    /// Six fresh counter readers — the same shape `create_instance`
     /// clones out of `InstShared::audio_counter_readers`, one writer
     /// kept per cell so a test can push observable increments.
-    fn fresh_readers() -> (AudioCounterReaders, [ruviform_observability::Counter; 4]) {
+    fn fresh_readers() -> (AudioCounterReaders, [ruviform_observability::Counter; 6]) {
         let (dropped_w, dropped_r) = counter();
+        let (slot_busy_w, slot_busy_r) = counter();
+        let (chan_full_w, chan_full_r) = counter();
         let (passthrough_w, passthrough_r) = counter();
         let (failed_w, failed_r) = counter();
         let (results_dropped_w, results_dropped_r) = counter();
         (
             AudioCounterReaders {
                 dropped_submits: dropped_r,
+                dropped_submits_slot_busy: slot_busy_r,
+                dropped_submits_chan_full: chan_full_r,
                 passthrough_submits: passthrough_r,
                 results_failed_observed: failed_r,
                 results_dropped: results_dropped_r,
             },
-            [dropped_w, passthrough_w, failed_w, results_dropped_w],
+            [
+                dropped_w,
+                slot_busy_w,
+                chan_full_w,
+                passthrough_w,
+                failed_w,
+                results_dropped_w,
+            ],
         )
     }
 
     #[test]
-    fn register_accepts_four_counter_sources_with_instance_scope() {
-        let registrar = RecordingRegistrar::accepting(8);
+    fn register_accepts_six_counter_sources_with_instance_scope() {
+        let registrar = RecordingRegistrar::accepting(12);
         let (readers, _writers) = fresh_readers();
         let leases = AudioSourceLeases::register(readers, &registrar);
-        assert_eq!(registrar.accepted(), 4);
-        assert_eq!(leases.registered_identities().len(), 4);
+        assert_eq!(registrar.accepted(), 6);
+        assert_eq!(leases.registered_identities().len(), 6);
         // Keys, kinds, units and aggregation pin the Issue #121 /
         // OBS-04 domain declaration; identity minting stays the
         // registrar's.
@@ -505,6 +513,8 @@ mod tests {
             keys,
             [
                 "l1.dropped_submits",
+                "l1.dropped_submits_slot_busy",
+                "l1.dropped_submits_chan_full",
                 "l1.passthrough_submits",
                 "l1.results_failed_observed",
                 "l1.results_dropped",
@@ -516,7 +526,7 @@ mod tests {
             assert_eq!(descriptor.aggregation, AggregationPolicy::Cumulative);
         }
         assert!(matches!(
-            descriptors[1].reporting,
+            descriptors[3].reporting,
             ReportingHint::SnapshotOnly
         ));
         for scope in registrar.scopes() {
@@ -525,12 +535,13 @@ mod tests {
         // Same-domain cells: the registrar's reader copy reads the
         // writer's increments.
         let (readers, writers) = fresh_readers();
-        let registrar = RecordingRegistrar::accepting(8);
+        let registrar = RecordingRegistrar::accepting(12);
         let _leases = AudioSourceLeases::register(readers, &registrar);
         writers[0].increment();
-        writers[3].increment();
-        writers[3].increment();
-        assert_eq!(registrar.counter_values(), [1, 0, 0, 2]);
+        writers[1].increment();
+        writers[5].increment();
+        writers[5].increment();
+        assert_eq!(registrar.counter_values(), [1, 1, 0, 0, 0, 2]);
     }
 
     #[test]
@@ -549,7 +560,7 @@ mod tests {
         let registrar = RecordingRegistrar::accepting(8);
         registrar.fail_next(RegistrationError::CapacityExceeded { limit: 3 });
         registrar.fail_next(RegistrationError::KeyConflict {
-            key: "l1.dropped_submits",
+            key: "l1.dropped_submits_slot_busy",
         });
         let (readers, _writers) = fresh_readers();
         let mut leases = AudioSourceLeases::register(readers, &registrar);
@@ -564,10 +575,12 @@ mod tests {
         ));
         assert!(matches!(slots[2], AudioSourceSlot::Registered(_)));
         assert!(matches!(slots[3], AudioSourceSlot::Registered(_)));
-        // Two refused, two registered — only the registered pair
-        // retires; refused slots carry no lease to retire.
+        assert!(matches!(slots[4], AudioSourceSlot::Registered(_)));
+        assert!(matches!(slots[5], AudioSourceSlot::Registered(_)));
+        // Two refused, four registered — only the registered slots
+        // retire; refused slots carry no lease to retire.
         leases.retire();
-        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Retiring; 2]);
+        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Retiring; 4]);
     }
 
     #[test]
@@ -575,12 +588,12 @@ mod tests {
         let registrar = RecordingRegistrar::accepting(8);
         let (readers, _writers) = fresh_readers();
         let mut leases = AudioSourceLeases::register(readers, &registrar);
-        assert_eq!(leases.registered_identities().len(), 4);
+        assert_eq!(leases.registered_identities().len(), 6);
         leases.retire();
-        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Retiring; 4]);
+        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Retiring; 6]);
         // Retire is idempotent on already-Retired slots.
         leases.retire();
-        assert_eq!(leases.retired_lifecycles().len(), 4);
+        assert_eq!(leases.retired_lifecycles().len(), 6);
         // The collector drives FinalDrain → Removed on its own
         // state clones — observable through the parked tickets.
         for state in registrar.states() {
@@ -588,28 +601,28 @@ mod tests {
         }
         assert_eq!(
             leases.retired_lifecycles(),
-            [SourceLifecycle::FinalDrain; 4]
+            [SourceLifecycle::FinalDrain; 6]
         );
         for state in registrar.states() {
             state.mark_removed().unwrap();
         }
-        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Removed; 4]);
+        assert_eq!(leases.retired_lifecycles(), [SourceLifecycle::Removed; 6]);
     }
 
     #[test]
     fn source_identities_distinguish_same_key_across_mints() {
-        // Two mints of the same four keys on one registrar — the
+        // Three mints of the same six keys on one registrar — the
         // Issue #279 "同名 key・異 Instance" case: series are told
         // apart by `SourceId`, never merged by key.
-        let registrar = RecordingRegistrar::accepting(8);
+        let registrar = RecordingRegistrar::accepting(18);
         let (readers_a, _wa) = fresh_readers();
         let (readers_b, _wb) = fresh_readers();
         let leases_a = AudioSourceLeases::register(readers_a, &registrar);
         let leases_b = AudioSourceLeases::register(readers_b, &registrar);
         let ids_a = leases_a.registered_identities();
         let ids_b = leases_b.registered_identities();
-        assert_eq!(ids_a.len(), 4);
-        assert_eq!(ids_b.len(), 4);
+        assert_eq!(ids_a.len(), 6);
+        assert_eq!(ids_b.len(), 6);
         for (a, b) in ids_a.iter().zip(ids_b.iter()) {
             assert_ne!(a.id(), b.id());
         }
@@ -618,7 +631,9 @@ mod tests {
         registrar.set_generation(7);
         let (readers_c, _wc) = fresh_readers();
         let leases_c = AudioSourceLeases::register(readers_c, &registrar);
-        for c in leases_c.registered_identities() {
+        let ids_c = leases_c.registered_identities();
+        assert_eq!(ids_c.len(), 6);
+        for c in ids_c {
             assert_eq!(c.generation().get(), 7);
         }
     }
@@ -630,7 +645,7 @@ mod tests {
         let registrar = RecordingRegistrar::accepting(8);
         let (readers, _writers) = fresh_readers();
         let leases = AudioSourceLeases::register(readers, &registrar);
-        assert_eq!(leases.registered_identities().len(), 4);
+        assert_eq!(leases.registered_identities().len(), 6);
         drop(leases);
         for state in registrar.states() {
             assert!(state.is_abandoned());
@@ -651,6 +666,6 @@ mod tests {
             .filter(|slot| matches!(slot, AudioSourceSlot::Refused(_)))
             .count();
         assert_eq!(registrar.accepted(), 2);
-        assert_eq!(refused, 2);
+        assert_eq!(refused, 4);
     }
 }

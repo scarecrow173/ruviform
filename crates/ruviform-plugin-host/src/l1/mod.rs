@@ -397,8 +397,15 @@ struct SegmentInfo {
 /// shares the cells; `read` is a `Relaxed` load.
 #[derive(Clone, Debug)]
 pub(crate) struct AudioCounterReaders {
-    /// `RtLeg::process` submit drops (busy slot / full channel).
+    /// `RtLeg::process` submit drops (busy slot / full channel) —
+    /// the aggregate of the two cause counters below (Issue #895).
     pub(crate) dropped_submits: CounterReader,
+    /// Of `dropped_submits`, the slot-still-busy gate drops.
+    pub(crate) dropped_submits_slot_busy: CounterReader,
+    /// Of `dropped_submits`, the full-submit-channel `try_push`
+    /// failures — defensive: unreachable while channel capacity
+    /// equals `depth` (a full channel implies every slot busy).
+    pub(crate) dropped_submits_chan_full: CounterReader,
     /// `RtLeg::pass_through` substituted-output blocks.
     pub(crate) passthrough_submits: CounterReader,
     /// `drain_to` first-pop `RESULT_FAILED` observations.
@@ -407,9 +414,10 @@ pub(crate) struct AudioCounterReaders {
     pub(crate) results_dropped: CounterReader,
 }
 
-/// The four observability counter pairs an `InstKind::Audio` entry
+/// The six observability counter pairs an `InstKind::Audio` entry
 /// owns (Issue #121 — the `ruviform-observability` crate's first
-/// real consumer). The field lives inside the `Audio` arm so a
+/// real consumer; Issue #895 added the two submit-drop cause
+/// counters). The field lives inside the `Audio` arm so a
 /// video entry can never carry audio counters (type-level parity
 /// pin, spec R-B6). Writer halves clone into `RtLeg`
 /// ([`data::RtLegCounters`]) and are read by `push_result`; reader
@@ -418,7 +426,7 @@ pub(crate) struct AudioCounterReaders {
 /// re-minted instance builds fresh pairs starting at zero.
 #[derive(Debug)]
 pub(crate) struct AudioCounters {
-    /// The three leg-side writers — cloned into `RtLeg`.
+    /// The five leg-side writers — cloned into `RtLeg`.
     pub(crate) leg: data::RtLegCounters,
     /// Reader-side `push_result` `try_push` failures — written from
     /// [`InstShared::push_result`] under the `inner` lock.
@@ -431,18 +439,24 @@ impl AudioCounters {
     /// Fresh pairs — **non-RT** (allocates the shared cells).
     pub(crate) fn new() -> Self {
         let (dropped_submits, dropped_r) = ruviform_observability::counter();
+        let (dropped_submits_slot_busy, slot_busy_r) = ruviform_observability::counter();
+        let (dropped_submits_chan_full, chan_full_r) = ruviform_observability::counter();
         let (passthrough_submits, passthrough_r) = ruviform_observability::counter();
         let (results_failed_observed, failed_r) = ruviform_observability::counter();
         let (results_dropped, dropped_results_r) = ruviform_observability::counter();
         Self {
             leg: data::RtLegCounters {
                 dropped_submits,
+                dropped_submits_slot_busy,
+                dropped_submits_chan_full,
                 passthrough_submits,
                 results_failed_observed,
             },
             results_dropped,
             readers: AudioCounterReaders {
                 dropped_submits: dropped_r,
+                dropped_submits_slot_busy: slot_busy_r,
+                dropped_submits_chan_full: chan_full_r,
                 passthrough_submits: passthrough_r,
                 results_failed_observed: failed_r,
                 results_dropped: dropped_results_r,
@@ -482,7 +496,7 @@ enum InstKind {
         /// completions, the driver pushes the synthesized
         /// `mark_failed` every doorbell-less drop owes the leg).
         result_tx: Mutex<ruviform_rt::Producer<u64>>,
-        /// The four observability counter pairs — leg writers feed
+        /// The six observability counter pairs — leg writers feed
         /// `RtLeg` via [`data::RtLegCounters`] clones, `results_dropped`
         /// feeds `push_result`, readers feed the query surface.
         counters: AudioCounters,
@@ -2327,7 +2341,7 @@ impl L1Child {
     /// `depth` is `D = lookahead_blocks + 1` — segment, channels
     /// and `RtLeg` sizing in one. `registrar` is the host-attached
     /// [`ObservationRegistrar`] (Issue #279): a `Some` registers the
-    /// four audio counters' sources on a successful `Live` flip —
+    /// six audio counters' sources on a successful `Live` flip —
     /// per-source typed degradations, never mint failures — while
     /// `None` leaves every lease slot `Unattached`. Registration
     /// runs only on a mint that goes live: a rolled-back mint
@@ -2413,7 +2427,7 @@ impl L1Child {
         if let Ok(wire::Reply::Ok) = create {
             let (went_live, leg_counters, source_readers) = self.flip_live(instance);
             if went_live {
-                // OBS-04: the mint went live, so its four counters
+                // OBS-04: the mint went live, so its six counters
                 // become observation sources — outside the `inner`
                 // lock (a collector may hold its own locks). A
                 // per-source typed refusal degrades only that slot;
@@ -6032,7 +6046,7 @@ mod tests {
     }
 
     /// OBS-04 (Issue #279): a `CreateInstance` that lands `Ok` and
-    /// clears the mid-mint gate registers the mint's four counter
+    /// clears the mid-mint gate registers the mint's six counter
     /// readers with the attached registrar — after the Live flip,
     /// outside the `inner` lock — and hands their leases to the
     /// minted facade. Every accepted source is `Instance`-scoped
@@ -6042,18 +6056,18 @@ mod tests {
     fn create_instance_registers_counter_sources_after_live_flip() {
         let (child, driver_rx) = create_harness();
         let diag = diag::DiagRegistry::new();
-        let registrar = sources::test_support::RecordingRegistrar::accepting(4);
+        let registrar = sources::test_support::RecordingRegistrar::accepting(6);
         let pump = reply_pump(&child, driver_rx, 1);
         let parts = child
             .create_instance(&create_spec(), 3, &diag, Some(&registrar))
             .expect("the live flip minted parts");
         pump.join().expect("reply pump joined");
-        assert_eq!(registrar.accepted(), 4);
-        assert_eq!(parts.source_leases.registered_count(), 4);
-        // Four distinct identities — same keys, separate sources;
+        assert_eq!(registrar.accepted(), 6);
+        assert_eq!(parts.source_leases.registered_count(), 6);
+        // Six distinct identities — same keys, separate sources;
         // the registrar, not the domain, names each series.
         let identities = parts.source_leases.registered_identities();
-        assert_eq!(identities.len(), 4);
+        assert_eq!(identities.len(), 6);
         for window in identities.windows(2) {
             assert_ne!(window[0], window[1]);
         }
@@ -6073,7 +6087,7 @@ mod tests {
             .expect("a live audio entry")
             .passthrough_submits
             .increment();
-        assert_eq!(registrar.counter_values()[1], 1);
+        assert_eq!(registrar.counter_values()[3], 1);
     }
 
     /// No registrar attached — the mint proceeds identically and
@@ -6099,21 +6113,21 @@ mod tests {
     fn create_instance_registration_refusal_degrades_only_its_slot() {
         let (child, driver_rx) = create_harness();
         let diag = diag::DiagRegistry::new();
-        let registrar = sources::test_support::RecordingRegistrar::accepting(4);
+        let registrar = sources::test_support::RecordingRegistrar::accepting(6);
         registrar.fail_next(
-            ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 4 },
+            ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 6 },
         );
         let pump = reply_pump(&child, driver_rx, 1);
         let parts = child
             .create_instance(&create_spec(), 3, &diag, Some(&registrar))
             .expect("a refused source must not fail the mint");
         pump.join().expect("reply pump joined");
-        assert_eq!(registrar.accepted(), 3);
-        assert_eq!(parts.source_leases.registered_count(), 3);
+        assert_eq!(registrar.accepted(), 5);
+        assert_eq!(parts.source_leases.registered_count(), 5);
         assert!(matches!(
             parts.source_leases.slots()[0],
             sources::AudioSourceSlot::Refused(
-                ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 4 }
+                ruviform_observability::source::RegistrationError::CapacityExceeded { limit: 6 }
             )
         ));
         for slot in &parts.source_leases.slots()[1..] {
@@ -6128,7 +6142,7 @@ mod tests {
     fn create_instance_failure_registers_nothing() {
         let (child, driver_rx) = create_harness();
         let diag = Arc::new(diag::DiagRegistry::new());
-        let registrar = Arc::new(sources::test_support::RecordingRegistrar::accepting(4));
+        let registrar = Arc::new(sources::test_support::RecordingRegistrar::accepting(6));
         let (seq, join) = spawn_create(&child, &driver_rx, &diag, Some(registrar.clone()));
         let waiter = child
             .shared
@@ -6152,7 +6166,7 @@ mod tests {
     fn destroy_retires_source_leases_after_removal() {
         let (child, driver_rx) = create_harness();
         let diag = diag::DiagRegistry::new();
-        let registrar = sources::test_support::RecordingRegistrar::accepting(8);
+        let registrar = sources::test_support::RecordingRegistrar::accepting(12);
         // One reply each for `CreateInstance` and `DestroyInstance`.
         let pump = reply_pump(&child, driver_rx, 2);
         let parts = child
@@ -6186,7 +6200,7 @@ mod tests {
             .create_instance(&create_spec(), 3, &diag, Some(&registrar))
             .expect("the re-mint landed");
         pump.join().expect("reply pump joined");
-        assert_eq!(registrar.accepted(), 8);
+        assert_eq!(registrar.accepted(), 12);
         for identity in parts.source_leases.registered_identities() {
             assert!(!first_identities.contains(&identity));
         }
@@ -6809,6 +6823,8 @@ mod tests {
             .increment();
         assert_eq!(readers.passthrough_submits.read(), 2);
         assert_eq!(readers.dropped_submits.read(), 1);
+        assert_eq!(readers.dropped_submits_slot_busy.read(), 0);
+        assert_eq!(readers.dropped_submits_chan_full.read(), 0);
         assert_eq!(readers.results_failed_observed.read(), 0);
         // A re-minted handle's fresh entry counts from zero — the
         // previous generation's totals never bleed through.
@@ -6816,6 +6832,8 @@ mod tests {
         let reminted_readers = reminted.audio_counter_readers().expect("an audio entry");
         assert_eq!(reminted_readers.passthrough_submits.read(), 0);
         assert_eq!(reminted_readers.dropped_submits.read(), 0);
+        assert_eq!(reminted_readers.dropped_submits_slot_busy.read(), 0);
+        assert_eq!(reminted_readers.dropped_submits_chan_full.read(), 0);
         assert_eq!(reminted_readers.results_dropped.read(), 0);
         // The query goes `None` once the entry is gone — post-death
         // diagnostics are stderr retention's job, not the counters'.

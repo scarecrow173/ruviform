@@ -417,7 +417,7 @@ const SCRATCH_CAP: usize = if shm::TRANSPORT_LEN > shm::EVENT_WIRE_SIZE {
 /// counters (Issue #121) — `Clone` shares the cells the
 /// `InstKind::Audio` arm owns, so a leg checked out to an endpoint
 /// or restored after a ring swap keeps writing into the same
-/// counters the non-RT query surface reads. The fourth counter
+/// counters the non-RT query surface reads. The sixth counter
 /// (`results_dropped`, the reader-side `push_result` `try_push`
 /// failure) is not leg-side — the `InstShared` arm owns it.
 ///
@@ -427,8 +427,23 @@ const SCRATCH_CAP: usize = if shm::TRANSPORT_LEN > shm::EVENT_WIRE_SIZE {
 pub(crate) struct RtLegCounters {
     /// Blocks whose submit was dropped — a still-busy slot or a full
     /// submit channel (`try_push` failure); at most +1 per block
-    /// because a busy slot never reaches `try_push`.
+    /// because a busy slot never reaches `try_push`. The aggregate
+    /// of the two cause counters below (Issue #895) — `dropped_submits`
+    /// == `dropped_submits_slot_busy` + `dropped_submits_chan_full`
+    /// holds by construction: every drop arm increments both this
+    /// counter and its own cause.
     pub(crate) dropped_submits: Counter,
+    /// Of [`RtLegCounters::dropped_submits`], the blocks whose slot
+    /// was still busy — the strict-alternation gate returned before
+    /// `try_push` was reached (Issue #895).
+    pub(crate) dropped_submits_slot_busy: Counter,
+    /// Of [`RtLegCounters::dropped_submits`], the blocks whose slot
+    /// gate passed but `submit.try_push` failed on a full channel
+    /// (Issue #895). Unreachable while the channel capacity equals
+    /// `depth` — a full channel implies every slot busy — so this
+    /// is the defensive arm that must stay zero; a nonzero read
+    /// means the capacity/slot invariant broke.
+    pub(crate) dropped_submits_chan_full: Counter,
     /// Blocks that produced substituted output — incremented inside
     /// [`RtLeg::pass_through`] so every caller (underrun, dropped
     /// submit, missing/failed result, endpoint arm anomaly) counts,
@@ -447,10 +462,14 @@ impl RtLegCounters {
     #[cfg(test)]
     pub(crate) fn fresh() -> Self {
         let (dropped_submits, _) = ruviform_observability::counter();
+        let (dropped_submits_slot_busy, _) = ruviform_observability::counter();
+        let (dropped_submits_chan_full, _) = ruviform_observability::counter();
         let (passthrough_submits, _) = ruviform_observability::counter();
         let (results_failed_observed, _) = ruviform_observability::counter();
         Self {
             dropped_submits,
+            dropped_submits_slot_busy,
+            dropped_submits_chan_full,
             passthrough_submits,
             results_failed_observed,
         }
@@ -705,10 +724,12 @@ impl RtLeg {
                 // Channel full → submission abandoned → pass-through
                 // (the seq is consumed but never doorbell'd).
                 self.counters.dropped_submits.increment();
+                self.counters.dropped_submits_chan_full.increment();
             }
         } else {
             // Slot still busy → this block is dropped → pass-through.
             self.counters.dropped_submits.increment();
+            self.counters.dropped_submits_slot_busy.increment();
         }
 
         // (3) The block this call may output is `block - lookahead`
@@ -1177,12 +1198,15 @@ mod tests {
         }
         assert_eq!(counters.passthrough_submits.read(), 3);
         assert_eq!(counters.dropped_submits.read(), 0);
+        assert_eq!(counters.dropped_submits_slot_busy.read(), 0);
+        assert_eq!(counters.dropped_submits_chan_full.read(), 0);
         assert_eq!(counters.results_failed_observed.read(), 0);
     }
 
     /// A still-busy slot drops the block's submit — one counted
     /// drop per block (the alternation gate returns before
-    /// `try_push` is ever reached).
+    /// `try_push` is ever reached), attributed to
+    /// `dropped_submits_slot_busy` (Issue #895).
     #[test]
     fn slot_busy_drops_count_once_per_block() {
         // depth 2 → lookahead 1: block 0 fills slot 0, block 1
@@ -1194,14 +1218,49 @@ mod tests {
             run_block(&mut leg, &INPUT, &mut output).unwrap();
         }
         assert_eq!(counters.dropped_submits.read(), 1);
+        assert_eq!(counters.dropped_submits_slot_busy.read(), 1);
+        assert_eq!(counters.dropped_submits_chan_full.read(), 0);
         // Every block produced substituted output.
         assert_eq!(counters.passthrough_submits.read(), 3);
+    }
+
+    /// A `try_push` failure on a full submit channel counts the
+    /// `dropped_submits_chan_full` arm (Issue #895). Channel
+    /// capacity is `depth`, so in-protocol a full channel implies
+    /// every slot busy and the gate intercepts first — this arm is
+    /// defensive; the fixture reaches it by pre-filling the channel
+    /// before the leg's first call (every slot still `None` → the
+    /// gate passes → `try_push` fails).
+    #[test]
+    fn chan_full_drops_count_their_own_counter() {
+        let counters = RtLegCounters::fresh();
+        let (mut submit_tx, _submit_rx) = ruviform_rt::channel::<Submit>(2);
+        let (_result_tx, result_rx) = ruviform_rt::channel::<u64>(2);
+        // Fill the capacity-2 channel — the elements only occupy
+        // space; no driver ever drains them.
+        for seq in 0..2 {
+            submit_tx
+                .try_push(Submit {
+                    seq: BLOCK_SEQ_FLAG | seq,
+                    generation: 1,
+                })
+                .unwrap();
+        }
+        let mut leg = RtLeg::new(2, 1, submit_tx, result_rx, counters.clone());
+        leg.arm(Arc::new(Staging::new(2, 8, 1)));
+        let mut output = [0.0_f32; 8];
+        run_block(&mut leg, &INPUT, &mut output).unwrap();
+        assert_eq!(counters.dropped_submits.read(), 1);
+        assert_eq!(counters.dropped_submits_slot_busy.read(), 0);
+        assert_eq!(counters.dropped_submits_chan_full.read(), 1);
+        assert_eq!(counters.passthrough_submits.read(), 1);
     }
 
     /// Multiple failure causes on ONE block count at most once —
     /// a busy slot never reaches `try_push`, so "slot busy" and
     /// "channel full" cannot co-increment (the design's structural
-    /// invariant, not a coincidence of this fixture).
+    /// invariant, not a coincidence of this fixture): the split
+    /// counters attribute the drop to the gate alone (Issue #895).
     #[test]
     fn same_block_multiple_failures_count_max_once() {
         // depth 1 → lookahead 0, capacity 1: block 0's submit fills
@@ -1214,6 +1273,8 @@ mod tests {
             run_block(&mut leg, &INPUT, &mut output).unwrap();
         }
         assert_eq!(counters.dropped_submits.read(), 1);
+        assert_eq!(counters.dropped_submits_slot_busy.read(), 1);
+        assert_eq!(counters.dropped_submits_chan_full.read(), 0);
         assert_eq!(counters.passthrough_submits.read(), 2);
     }
 
@@ -1255,6 +1316,8 @@ mod tests {
         }
         assert_eq!(counters.results_failed_observed.read(), 1);
         assert_eq!(counters.dropped_submits.read(), 0);
+        assert_eq!(counters.dropped_submits_slot_busy.read(), 0);
+        assert_eq!(counters.dropped_submits_chan_full.read(), 0);
         assert_eq!(counters.passthrough_submits.read(), 5);
     }
 

@@ -246,13 +246,25 @@ pub enum HostNotification {
 /// A point-in-time read of an L1 audio instance's observability
 /// counters (Issue #121) — the `PluginHost::audio_counters` result.
 ///
-/// **The four fields are independent `Relaxed` reads — they do not
+/// **The six fields are independent `Relaxed` reads — they do not
 /// form an atomic multi-counter snapshot** (each counter is
 /// individually monotone non-decreasing).
 ///
 /// Semantics:
 /// - `dropped_submits`: blocks whose submit was dropped — a busy
-///   slot or a full submit channel, at most +1 per block.
+///   slot or a full submit channel, at most +1 per block. The
+///   aggregate of the two cause counters (Issue #895) —
+///   `dropped_submits` == `dropped_submits_slot_busy` +
+///   `dropped_submits_chan_full` holds by construction.
+/// - `dropped_submits_slot_busy`: of `dropped_submits`, the blocks
+///   dropped because the slot's previous occupant had not
+///   completed (the strict-alternation gate dropped before
+///   `try_push` was reached).
+/// - `dropped_submits_chan_full`: of `dropped_submits`, the blocks
+///   whose `submit.try_push` failed on a full channel. Defensive —
+///   unreachable while the channel capacity equals the slot depth
+///   (a full channel implies every slot busy), so a nonzero value
+///   means the capacity/slot invariant broke.
 /// - `passthrough_submits`: blocks that produced substituted
 ///   output — warmup included.
 /// - `results_failed_observed`: `RESULT_FAILED` elements observed
@@ -264,8 +276,15 @@ pub enum HostNotification {
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AudioCounterSnapshot {
-    /// Submits dropped (busy slot or full submit channel).
+    /// Submits dropped (busy slot or full submit channel) — the
+    /// aggregate of the two cause fields below.
     pub dropped_submits: u64,
+    /// Of `dropped_submits`, the slot-still-busy gate drops (Issue
+    /// #895).
+    pub dropped_submits_slot_busy: u64,
+    /// Of `dropped_submits`, the full-submit-channel `try_push`
+    /// failures (Issue #895) — defensive, see the struct docs.
+    pub dropped_submits_chan_full: u64,
     /// Blocks that produced substituted output — warmup included.
     pub passthrough_submits: u64,
     /// `RESULT_FAILED` elements observed on the result channel.
@@ -278,6 +297,8 @@ impl From<AudioCounterReaders> for AudioCounterSnapshot {
     fn from(readers: AudioCounterReaders) -> Self {
         Self {
             dropped_submits: readers.dropped_submits.read(),
+            dropped_submits_slot_busy: readers.dropped_submits_slot_busy.read(),
+            dropped_submits_chan_full: readers.dropped_submits_chan_full.read(),
             passthrough_submits: readers.passthrough_submits.read(),
             results_failed_observed: readers.results_failed_observed.read(),
             results_dropped: readers.results_dropped.read(),
@@ -457,7 +478,7 @@ pub struct PluginHost {
     /// handle's slot (`record_for_handle` correlation).
     diag: Arc<DiagRegistry>,
     /// The attached observation registrar (Issue #279, OBS-04) —
-    /// `None` leaves every L1 audio mint's four diagnostic counters
+    /// `None` leaves every L1 audio mint's six diagnostic counters
     /// unregistered (the default); `Some` makes each successful mint
     /// register `Instance`-scoped sources and each `Destroy` retire
     /// their leases. Passed to the mint paths as `&dyn` — it never
@@ -899,7 +920,7 @@ impl PluginHost {
     }
 
     /// Attaches (or clears, `None`) the [`ObservationRegistrar`]
-    /// every subsequent L1 audio `Instantiate` registers its four
+    /// every subsequent L1 audio `Instantiate` registers its six
     /// diagnostic counter sources against — Issue #279's OBS-04
     /// wiring to the OBS-02 source contract (the Issue #289
     /// collector plugs in here once it lands). `None` is the
@@ -3121,7 +3142,7 @@ mod tests {
         let mut host = PluginHost::new();
         assert!(host.observation_registrar.is_none());
         let registrar =
-            Arc::new(crate::l1::sources::test_support::RecordingRegistrar::accepting(4));
+            Arc::new(crate::l1::sources::test_support::RecordingRegistrar::accepting(6));
         let as_registrar = || -> Arc<dyn ObservationRegistrar> { registrar.clone() };
         host.set_observation_registrar(Some(as_registrar()));
         assert!(host.observation_registrar.is_some());
@@ -3827,5 +3848,32 @@ mod tests {
             host.negotiated_gui_capabilities(PluginHandle::new(31, 0)),
             Err(HostError::InvalidHandle)
         );
+    }
+
+    /// Issue #895: `AudioCounterSnapshot` carries each reader to
+    /// its own field — a writer→reader pairing swap in
+    /// `AudioCounters::new` or a field swap in the `From` impl
+    /// would swap the attributed causes (the deterministic lane
+    /// pin for the new fields; the burst e2e covers the
+    /// real-child path).
+    #[test]
+    fn audio_counter_snapshot_maps_each_reader_to_its_own_field() {
+        let counters = crate::l1::AudioCounters::new();
+        counters.leg.dropped_submits.increment();
+        counters.leg.dropped_submits.increment();
+        counters.leg.dropped_submits_slot_busy.increment();
+        counters.leg.dropped_submits_chan_full.increment();
+        counters.leg.passthrough_submits.increment();
+        counters.leg.passthrough_submits.increment();
+        counters.leg.passthrough_submits.increment();
+        counters.leg.results_failed_observed.increment();
+        counters.results_dropped.increment();
+        let snapshot = AudioCounterSnapshot::from(counters.readers());
+        assert_eq!(snapshot.dropped_submits, 2);
+        assert_eq!(snapshot.dropped_submits_slot_busy, 1);
+        assert_eq!(snapshot.dropped_submits_chan_full, 1);
+        assert_eq!(snapshot.passthrough_submits, 3);
+        assert_eq!(snapshot.results_failed_observed, 1);
+        assert_eq!(snapshot.results_dropped, 1);
     }
 }
