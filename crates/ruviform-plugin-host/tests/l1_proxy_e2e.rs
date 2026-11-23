@@ -29,9 +29,9 @@ use ruviform_media_core::{
 };
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput, LifecycleError,
-    LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor,
-    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    Event, EventKind, EventList, FailureCause, GuiSize, HostError, HostInput, HostOutput,
+    LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease,
+    PluginDescriptor, PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
 };
 
 use l1::diag::DiagRegistry;
@@ -291,7 +291,12 @@ fn crash_transitions_failed_and_notifies() {
     // `Failed` precedes the `Unsupported` GUI rejection.
     assert_eq!(
         instance.execute(wire::Command::OpenGui {
-            parent: ParentLease::new(0, 0)
+            mode: wire::OpenGuiMode::Floating,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0
+            },
         }),
         Err(HostError::Failed)
     );
@@ -458,7 +463,12 @@ fn gui_defined_rejection() {
 
     assert_eq!(
         instance.execute(wire::Command::OpenGui {
-            parent: ParentLease::new(0, 0)
+            mode: wire::OpenGuiMode::Floating,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0
+            },
         }),
         Err(HostError::Unsupported)
     );

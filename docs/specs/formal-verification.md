@@ -2,9 +2,9 @@
 id: "SPEC-rf806frmlvrf0slice1"
 type: "spec"
 status: "proposed"
-title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents）"
+title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents / slice 4: PCM WAV backend）"
 created: "2026-11-20"
-updated: "2026-11-21"
+updated: "2026-11-22"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -23,6 +23,10 @@ relations:
         path: "crates/ruviform-io-structured/tests/formal_structured.rs"
       - type: "file"
         path: "crates/ruviform-io-structured/tests/formal_structured.proptest-regressions"
+      - type: "file"
+        path: "crates/ruviform-io-wav/tests/formal_wav.rs"
+      - type: "file"
+        path: "crates/ruviform-io-wav/tests/formal_wav.proptest-regressions"
       - type: "doc"
         path: "docs/specs/formal-verification.md"
       - type: "dir"
@@ -42,6 +46,12 @@ relations:
         path: "crates/ruviform-io-structured/Cargo.toml"
       - type: "file"
         path: "crates/ruviform-io-structured/src/input.rs"
+      - type: "file"
+        path: "crates/ruviform-io-wav/Cargo.toml"
+      - type: "file"
+        path: "crates/ruviform-io-wav/src/convert.rs"
+      - type: "file"
+        path: "crates/ruviform-io-wav/src/wav.rs"
       - type: "file"
         path: "mise.toml"
       - type: "file"
@@ -68,7 +78,7 @@ relations:
   derived-by: []
 ---
 
-# Formal Verification — wire codec + archive + structured slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip / json / yaml / toml / csv / xml）
+# Formal Verification — wire codec + archive + structured + WAV slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip / json / yaml / toml / csv / xml / riff-wave）
 
 Issue `scarecrow173/ruviform#806` の D 層検証（property-based
 testing → bounded model checking → 将来の TLA+/Lean 昇格）実装
@@ -76,7 +86,10 @@ spec。slice 1 で unsafe を含まない wire codec に proptest と
 Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
 の TAR/ZIP reader と `ArchiveReadLimits` に、slice 3 で
 `ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader と
-共有 `InputLimits`/`BoundedRead` byte budget に適用した。
+共有 `InputLimits`/`BoundedRead` byte budget に、slice 4 で
+`ruviform-io-wav` の RIFF/WAVE serialization・canonical
+planar `f32`→wire sample 変換・muxer finalize/`WavReceipt`
+契約に適用した。
 
 ## 対象と検証する契約
 
@@ -115,12 +128,23 @@ Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
 | CSV BOM | `src/csv.rs` | UTF-8 BOM は `StripUtf8`（default）で除去・`Preserve` で先頭 field byte として保持。UTF-16 系 BOM は構築時 `InvalidEncoding` |
 | XML event reader | `src/xml.rs` | `read_event` は EOF で `Ok(None)` を安定に繰り返し、error 後は poison されて再 read も同 kind で失敗する。`max_depth`/`max_attributes`/`max_event_bytes`/`max_events` は各 named limit で `LimitExceeded`。secure default で DTD/doctype・非 UTF-8 宣言・非事前定義 general entity は `Unsupported`・数値 char reference は `Reference` event |
 
+### slice 4 — PCM WAV backend（`ruviform-io-wav`）
+
+| 対象 | ファイル | 契約 |
+| --- | --- | --- |
+| `Wire::new` / `wav_capabilities` | `src/wav.rs` | 受理する `SampleFormat` はちょうど wire 集合 `{U8,S16,S24,S32,F32}` — それ以外は `Unsupported`。`channels`/`block_align` は `u16` 範囲、`byte_rate = rate * block_align` は `u32` 範囲 — 超過は `InvalidValue`。`extensible` は channel mask が定義済み bitmask に収まらない layout でのみ立つ |
+| `fmt_chunk_body` / `header` | `src/wav.rs` | `WAVEFORMATEX`（16 byte）か `WAVEFORMATEXTENSIBLE`（40 byte・`cbSize=22`・valid bits・speaker mask・subtype GUID）かは `extensible` で一意。header は `RIFF`+size placeholder+`WAVE`+`fmt `+`data`+size placeholder — open 時の size field はゼロで `data` size offset が backpatch 用に返る |
+| `write_sample`（canonical `f32`→wire） | `src/convert.rs` | `NaN` は scaling 前に silence（0）。`±Inf`・範囲外は `[-1,1]` に clamp して飽和。整数形式は全範囲 scaling + `f32::round`（half away from zero）: U8 `x*128+128`・S16 `x*32768`・S24 `x*8388608`・S32 `x*2147483648` — `-1.0` は負の full-scale、`+1.0` は正の full-scale −1 LSB。F32 は IEEE-754 LE を無変換で書く。dither なし |
+| encoder / packet stream | `src/encoder.rs` / `src/lib.rs` | `encode` は planar `f32` frame を sample 数そのままの packet へ変換し、timestamp/duration は frame のものを保持する。wire 外 format・channel/rate 不一致は `InvalidData` で reject し encoder は再利用可能（非 sticky） |
+| muxer finalize / `WavReceipt` | `src/muxer.rs` / `src/lib.rs` | `finalize` は RIFF/data size を backpatch して `WavReceipt{bytes_written, frames, duration}` を 1 度だけ返す — 2 度目の `finalize`/`write_packet` は `InvalidData`/`InvalidState`。write 済み packet の frame 数・byte 数が receipt の値と一致する |
+| round-trip | `tests/` + `ruviform-io-symphonia` | muxer が書いた byte 列は Symphonia 側が RIFF/WAVE として decode し、format 宣言と frame 内容が復元される |
+
 ## Lane 構成
 
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
-| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` の 2 invocation（両方 pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` の根拠は Kani bound の節を参照） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
+| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` の根拠は Kani bound の節を参照） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 
 `test-formal` は常時実行可能な第一層。`test-formal-kani` は
 環境検出つきの第二層で、次の順に解決する。
@@ -174,6 +198,58 @@ slice 2 と同じ「concrete skeleton + symbolic gate field」型のみ。
 | `bounded_read_budget_gate`（in-src） | concrete 6 byte input + symbolic `max_bytes:u64`（全値）を 2 byte/read の `read` loop で drive。`#[kani::unwind(16)]` | 任意長・任意 backend reader の組合せ・probe 対象 byte の値（`Read` 契約上 0/1 のみ効く） | proptest 各形式の `*_max_bytes_gate`（concrete skeleton + tail/offset）が reader 実経路で担保 |
 | `csv_max_records_gate` | concrete skeleton `h\nr1\nr2\nr3\n` + symbolic `max_records:u64`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 record 内容・他 limit との複合・4 record 超 | proptest `csv_max_records_gate` が任意 `k`/`m`・非 header 経路も担保 |
 | `csv_max_field_bytes_gate` | concrete skeleton `a,bb\n` + symbolic `max_field_bytes:usize`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 field 内容・複数 field 超過パターン・buffer 成長境界（`max_record_bytes` は concrete） | proptest `csv_max_field_bytes_gate` / `csv_max_record_bytes_gate` が `s`/`r`/`m` 全組合せで担保 |
+
+### slice 4 WAV harness（`src/convert.rs` + `src/wav.rs` の in-src proofs + `tests/formal_wav.rs` の `#[cfg(kani)] mod proofs`）
+
+slice 2/3 と同じ責務分割 — symbolic は「契約を一意に決める軸」
+だけに絞り、それ以外は concrete matrix か proptest へ委譲する。
+`SampleRate::new` は `TimeBase::new` 経由で Euclid の `while` loop
+を含み、symbolic rate の nested `%` unroll が参照 WSL2 環境
+（31 GiB）を枯渇させるため、rate を含む harness は全て concrete
+boundary matrix として設計した。
+
+| Harness | Bound | 未証明領域 | 補完 |
+| --- | --- | --- | --- |
+| `write_sample_documented_policy`（in-src `src/convert.rs`） | symbolic `f32`（NaN・±Inf・±0・subnormal・±full-scale・任意内部値を全網羅）× symbolic wire format 選択。`#[kani::unwind(16)]` | 非 wire format（`write_sample` の wire 外への振る舞い）・frame→packet の batch 経路 | 非 wire format は proptest `sample_conversion_matches_documented_policy` が全 10 variant で担保・batch 経路は `encoder_packet_stream_is_the_frame_stream` が担保 |
+| `format_tag_membership_is_wire_formats`（in-src `src/wav.rs`） | symbolic `SampleFormat` 全 10 variant（enum discriminant symbolic）— `format_tag` の `Some/None` と `WIRE_FORMATS` membership の一致を尽きる。`#[kani::unwind(8)]` | —（全 variant を尽きるため gap なし） | `wire_new_non_wire_is_unsupported` が実 `Wire::new` 経路の `Unsupported` kind を concrete 全 5 非 wire format で証明・proptest `wire_gate_is_exact_membership_plus_byte_rate` が encoder/muxer 実経路で担保 |
+| `wire_new_non_wire_is_unsupported`（in-src `src/wav.rs`） | concrete: 全 5 非 wire `SampleFormat` — `Wire::new` が `ErrorKind::Unsupported` を返すことを尽きる。`#[kani::unwind(8)]` | 診断 payload 文面（`cfg(kani)` で簡略化 — 下記仮定参照） | proptest `declaration_mutations_keep_stable_error_kinds` / `wire_gate_is_exact_membership_plus_byte_rate` が kind 安定集合を実経路で担保 |
+| `wire_new_gate_is_exact_{small,mid,large}_align`（in-src `src/wav.rs`） | concrete matrix: 全 13 種の distinct `block_align`（1..128 を 5+4+4 reps に 3 分割）× boundary rate `u32::MAX/align` の ±1。`#[kani::unwind(8)]` | `u32::MAX/align` から ±2 以上離れた interior rate・symbolic rate 全空間 | interior domain は proptest `wire_gate_is_exact_membership_plus_byte_rate`（boundary ±4 band + uniform rate）が担保 |
+| `fmt_and_header_layout`（in-src `src/wav.rs`） | concrete matrix: 5 spec（16 byte `fmt ` 2 件 Mono S16/Stereo F32・extensible 40 byte 3 件 5.1 S24/7.1 F32/custom mask S32）。`#[kani::unwind(64)]`（builtin `memcmp` の byte unroll — 最大比較は 40 byte `fmt ` body） | symbolic byte 内容・header 以外の write 経路 | 任意 spec での header 構造は proptest `open_muxer_writes_complete_header` が担保・wire byte 実経路は roundtrip property が担保 |
+| `open_muxer_spec_contract_{pcm,extensible}`（tests `#[cfg(kani)]`） | concrete success matrix: 16B form 1 spec（Mono U8）・40B form 3 spec（5.1 S24・7.1 F32・custom mask S32）— 固定 80B 配列の最小 `Write+Seek` sink（`KaniSink`）で `Cursor<Vec<u8>>` splice/growth の SSA 膨張を排除。`#[kani::unwind(96)]` | symbolic `WavOutputSpec`・finalize 後 backpatch・複数 stream | finalize/backpatch・one-shot・receipt 値は proptest `muxer_finalize_receipt_backpatch_one_shot` が担保・16B 非 ext の全 byte layout は `fmt_and_header_layout` が担保 |
+| `open_muxer_rejects_invalid_value`（tests `#[cfg(kani)]`） | concrete: byte-rate overflow 1 spec（7.1 F32・rate = `u32::MAX/32+1`）— `open_muxer` が `ErrorKind::InvalidValue` に写像することを証明する Err-direction harness。`#[kani::unwind(4)]`（到達可能 loop は 1 要素の stream 検証と GCD のみ・header write unroll は dead path） | symbolic spec — および verdict 自体: 参照 WSL2 環境（31 GiB）では untrimmed/trimmed/KaniSink/unwind 96/16/4 の全形で cbmc が envelope に張り付き verdict 未発行（`not_run`・環境起因 — `evidence/rf806` slice 4 節を参照） | `wire_new_gate_is_exact_*` が source gate の `InvalidValue` を exhaustive に証明・`open_muxer` の `?` 伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky` が任意 spec で担保 |
+
+仮定（slice 4 固有）:
+
+- `Wire::new` の `Unsupported` 経路は `std::io::Error::new` +
+  `format!`（symbolic `{:?}` 診断）を構築し、その式構築だけで
+  参照 WSL2 環境が枯渇することを実測（concrete 列挙でも同様）。
+  そのため `src/wav.rs` では診断文面の構築を
+  `unsupported_sample_format` helper に隔離し、`cfg(kani)` 時は
+  `format!` を持たない軽量診断に切り替える（`ErrorKind`・分岐
+  条件は不変 — 診断 payload 文面のみの `cfg` 差分）。これにより
+  非 wire format の `Unsupported` kind は
+  `wire_new_non_wire_is_unsupported` が concrete 全 5 variant で
+  証明し、membership の exhaustiveness は
+  `format_tag_membership_is_wire_formats`、encoder/muxer 実経路は
+  proptest が担保する 3 層構成。
+- symbolic `SampleRate::new` は `TimeBase::new` の Euclid `while`
+  loop で nested symbolic `%` を生成し、rate を symbolic に含む
+  harness は全て参照環境で infeasible だった。rate を使う全
+  harness は concrete matrix に留め、「boundary の ±1」という
+  gate 契約が効く点のみを証明する（interior は proptest に委譲
+  — slice 1 の「式を弱めない・bound を正直に記録する」方針と同一）。
+- `#[kani::unwind(N)]` は `fmt ` body の slice 比較（≤40 byte）・
+  builtin memmove/memcmp・GCD loop の concrete unroll を含む
+  最小 bound + 余裕。bound 超過は unwinding assertion として
+  loud に検出される（`fmt_and_header_layout` は `memcmp` loop の
+  unwinding assertion を 1 度検出し、unwind を 16→64 に
+  引き上げて解決した記録あり）。
+- `open_muxer` の Err-direction（「必ず `InvalidValue` で reject
+  される」= Ok 経路の不可達性証明）は、成功 direction の
+  witness 探索と比べ構造的に重く、`open_muxer` 全 CFG encoding
+  が参照環境の ~31 GiB envelope を超過する。verdict 未発行の
+  harness は `not_run` と fail-closed で記録し、`pass` 扱いしない
+  — union 補完の分担は上表のとおり。
 
 仮定:
 
@@ -252,6 +328,11 @@ max_bytes gate property が shrink つき fail することを記録する
 細かい backend（serde_json の逐 byte trailing check）でのみ発火
 する — 大量 fill する backend は `remaining` を 1 跨いで 0 まで
 一読みで落とすため変異がマスクされる。ledger にこの観察を残す）。
+slice 4 では `convert.rs` の S16 全範囲 scaling の `f32::round`
+を `trunc` に 1 箇所だけ変え、`formal_wav` の
+`sample_conversion_matches_documented_policy` が shrink つき
+fail することを記録する（round-half-away-from-zero 契約の検出
+能力を実証 — `.trunc()` は正の内部値で 1 LSB ずれる）。
 
 ## 判定語彙と fail-closed
 
@@ -267,7 +348,7 @@ Kani（bounded model checking）への次の昇格候補:
 
 | 候補 target | 対象 crate / 契約 | Kani が向く理由 |
 | --- | --- | --- |
-| parser family | `ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`）、`ruviform-io-wav`（RIFF header） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で、`ruviform-io-structured`（JSON/YAML/TOML/CSV/XML reader・`InputLimits`/`BoundedRead` byte budget・`DocumentErrorKind` 安定集合・per-format named limit gate）は slice 3 で本形を適用済み |
+| parser family | `ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で、`ruviform-io-structured`（JSON/YAML/TOML/CSV/XML reader・`InputLimits`/`BoundedRead` byte budget・`DocumentErrorKind` 安定集合・per-format named limit gate）は slice 3 で、`ruviform-io-wav`（RIFF/WAVE header・`Wire` gate・canonical `f32`→wire 変換・muxer finalize/`WavReceipt`）は slice 4 で本形を適用済み |
 | unsafe 局在コード | `ruviform-math`（SIMD dispatch）、`ruviform-audio-device` / `ruviform-midi-device` / `ruviform-observability` の `#[expect(unsafe_code)]` 局所箇所 | unsafe ブロックの前後条件・pointer/len 不変条件を symbolic に検証 — 通常 test では到達不能な入力経路をカバーできる（harness は unsafe 自体ではなく公開境界の契約を検証する設計にする） |
 | DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすく、全サイズ証明が必要になった段階で Lean へ再昇格できる |
 

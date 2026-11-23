@@ -36,11 +36,13 @@
 //!   in-band `ParamValue` event arms `abort`/`exit`/`hang`/`error`
 //!   dispatch inside the arming block's `process()` — the L1
 //!   out-of-process crash/hang/timeout/isolation oracle.
-//! - `test_editor` — a parameterless pass-through processor whose
-//!   controller answers `createView("editor")` with a real
-//!   `IPlugView`: on Windows `attached` creates a `WS_CHILD` HWND
-//!   under the host-provided parent (the AC-4 plugin-fixture half);
-//!   every other platform/parent combination is an honest rejection.
+//! - `test_editor` — a pass-through processor carrying the shared
+//!   stepped `Fault` parameter (`test_fault`'s in-band armed-fault
+//!   law — Issue #885) whose controller answers
+//!   `createView("editor")` with a real `IPlugView`: on Windows
+//!   `attached` creates a `WS_CHILD` HWND under the host-provided
+//!   parent (the AC-4 plugin-fixture half); every other
+//!   platform/parent combination is an honest rejection.
 //! - `test_stateful` — the `test_gain` law with a real serialized
 //!   state surface: the gain lives in a shared atomic cell that
 //!   `IComponent::setState`/`getState` and the controller's

@@ -48,8 +48,9 @@ use ruviform_audio_core::SampleRate;
 use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId, PlainParamValue,
-    PluginDescriptor, PrepareError, ProcessResult, TransportInfo, VideoProcessConfig,
+    Event, EventList, FailureCause, GuiSize, LifecycleEvent, LifecycleState, ParamId,
+    PlainParamValue, PluginDescriptor, PrepareError, ProcessResult, TransportInfo,
+    VideoProcessConfig,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L1Endpoint, PluginEndpoint};
@@ -1848,7 +1849,16 @@ fn to_wire(command: HostCommand) -> wire::Command {
         HostCommand::Deactivate { .. } => wire::Command::Deactivate,
         HostCommand::SaveState { .. } => wire::Command::SaveState,
         HostCommand::RestoreState { bytes, .. } => wire::Command::RestoreState { bytes },
-        HostCommand::OpenGui { parent, .. } => wire::Command::OpenGui { parent },
+        HostCommand::OpenGui { parent, .. } => wire::Command::OpenGui {
+            // Floating is the only v6 implementation; `{0,0}` asks
+            // for the plugin's preferred size.
+            mode: wire::OpenGuiMode::Floating,
+            parent,
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        },
         HostCommand::CloseGui { .. } => wire::Command::CloseGui,
         HostCommand::Scan
         | HostCommand::Instantiate { .. }
@@ -1911,7 +1921,9 @@ fn host_reply(expected: ReplyKind, reply: wire::Reply) -> Result<HostReply, Host
     match (expected, reply) {
         (ReplyKind::Ok, wire::Reply::Ok) => Ok(HostReply::Ok),
         (ReplyKind::State, wire::Reply::State { bytes }) => Ok(HostReply::State { bytes }),
-        (ReplyKind::Opened, wire::Reply::Opened { gui }) => Ok(HostReply::Opened { gui }),
+        // `capabilities` is dropped — `HostReply::Opened` gains the
+        // field in a later slice.
+        (ReplyKind::Opened, wire::Reply::Opened { gui, .. }) => Ok(HostReply::Opened { gui }),
         // Every other pairing — a kind mismatch, `Scanned`, or a
         // future reply kind — is a protocol anomaly.
         _ => Err(HostError::Ipc),

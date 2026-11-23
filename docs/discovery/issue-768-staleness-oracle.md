@@ -4,7 +4,7 @@ type: "discovery"
 status: "resolved"
 title: "Issue #768 l1_fault / l1_stateful E2E staleness oracle 監査（#763 同 class）— findings"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-22"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -244,6 +244,36 @@ instrument 面）の全 assertion site を同一基準で監査した。
   substituted skip で到達数が足りなければ正直に fail。
 - production/fixture src は zero-diff（test-file-only slice —
   `ruviform#767` の counter semantics 調査 boundary を侵さない）。
+
+## Findings — 追補: post-fix 着地 site の再監査（第 3 slice）
+
+第 1/2 slice が merge された後に main へ追加された同 class 関連
+site を `c58fc946` で同一基準（LegDeltas per-call 分類・matched
+のみ計数・永続 event の bounded resend）に照合して監査した。
+**residual は 0 件** — 新規 site は全て既存の classified helper
+（`host_block`/`drive_clean_blocks`/`arm_fault`/
+`submit_mutation_until_landed`/`wait_for_gain_output`）経由で
+delta を得て matched のみ計数する構造に倣っている。
+
+| site | 追加 | 判定 |
+| ---- | ---- | ---- |
+| `real_test_fault_l1_output_events_drain`（clap） | `ruviform#842` | compliant — `landed`/`skipped`/`nan_blocks` は全て `deltas.passthrough == 0` で計数。`reports.len() >= 2` は landed armed render が emit した event で構造的に裏付き、phase 2 の matched render は invalid armed のみ（`nan_blocks == 2` が証明）のため drain 汚染は成立しない |
+| `real_test_editor_l1_fault_{abort,hang}`（vst3） | `ruviform#885` | compliant — shared classified helper 経由のみで `host.process` の素呼びなし |
+| `instantiate` の `SpawnFailed{Timeout}` bounded re-instantiate | `ruviform#849` | 別 class — spawn deadline 経路の環境 retry（`ruviform#841` で追跡中の flake 緩和）。process oracle ではないため本 class の分類対象外 |
+| dead-leg post-fail silence assert（abort/exit/bundled/hang 系） | 既存 | class 外維持 — `Failed` leg は counter 非計数で `Ok(CONTINUE)`+silence は host の定義済み応答。matched 分類は不能かつ不要（第 1 slice findings どおり） |
+
+判定根拠: 4 file 内の全 process 経路は counter を記録する
+`host_block`/`submit_block*` helper を経由し、`host.process` を素で
+呼ぶ経路は存在しない。fixture law（`src/fault.rs` last-event-wins
+持続・`src/stateful.rs` plain gain overwrite）上 arm/disarm/
+mutation event の再送は冪等で bounded resend は law-abiding。
+監査時 HEAD `c58fc946` で canonical lane（`mise run
+test-l1-real-plugin`・`check/lint-l1-real-plugin`・`fmt-check`）を
+再実施し全 Pass — `evidence/rf768/verification.md` 第 3 slice 節。
+
+**結論**: `ruviform#768` の受入条件（`#766` 基準の監査 + 同 class
+あれば同 pattern で修正）は merge 済み第 1/2 slice で充足済み。
+本 slice の残件はなく test file は zero-diff。
 
 ## Residual
 

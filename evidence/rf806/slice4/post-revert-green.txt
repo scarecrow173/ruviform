@@ -1,0 +1,19 @@
+   Compiling ruviform-io-wav v0.1.0 (G:\orca\workspaces\ruviform\rf806-formal-slice4\crates\ruviform-io-wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.21s
+     Running tests\formal_wav.rs (target\debug\deps\formal_wav-d4da866a3f60c09a.exe)
+
+running 9 tests
+test declaration_mutations_keep_stable_error_kinds ... ok
+test encoder_rejections_are_invalid_data_and_not_sticky ... ok
+test wire_gate_is_exact_membership_plus_byte_rate ... ok
+test open_muxer_writes_complete_header ... ok
+test muxer_rejections_are_invalid_data_and_not_sticky ... ok
+test muxer_finalize_receipt_backpatch_one_shot ... ok
+test encoder_packet_stream_is_the_frame_stream ... ok
+test sample_conversion_matches_documented_policy ... ok
+test wav_roundtrip_decodes_through_symphonia ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+mbx[cache]: 0 hits, 0 misses, 1 not looked up, 2 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 216224 compilations served. the monocle stays on.

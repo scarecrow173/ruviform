@@ -255,7 +255,7 @@ Directory: `docs/specs`
 | SPEC-732clapLifecycleAudit02 | Issue #732 production CLAP adapter lifecycle 契約監査と同型欠陥修正 | approved | [issue-732-clap-lifecycle-audit.md](./issue-732-clap-lifecycle-audit.md) |
 | SPEC-034Z78vorbxe5h4YnZofGo | Issue #744 bounded 非 RT JobExecutor 実装（ruviform-exec executor module） | approved | [issue-744-job-executor.md](./issue-744-job-executor.md) |
 | SPEC-034N3OsgUWx7hzkr8aicqq | Issue #76 フォローアップ: L1 内部クリーンアップ（frame-I/O dedup・runner_program 解決・gui_open 除去・audio-core doc 修正） | approved | [issue-76-followup-l1-internal-cleanup.md](./issue-76-followup-l1-internal-cleanup.md) |
-| SPEC-rf806frmlvrf0slice1 | Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser） | proposed | [formal-verification.md](./formal-verification.md) |
+| SPEC-rf806frmlvrf0slice1 | Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents / slice 4: PCM WAV backend） | proposed | [formal-verification.md](./formal-verification.md) |
 | SPEC-034X9FvLNoXvw7vU7G3fvH | Linux 配布設計の既存 CI 照合と文書確定（Issue #127） | proposed | [linux-distribution.md](./linux-distribution.md) |
 | SPEC-034JNYkUPfvyc1GQ5hXtHN | workspace MSRV 引上げ（fearless_simd 本番昇格前提） | approved | [msrv-raise-for-fearless-simd.md](./msrv-raise-for-fearless-simd.md) |
 | SPEC-ey1gakUyUmWw9lBalMOE79 | 音楽時間設計（小節/拍/PPQN・テンポマップ） | approved | [music-time-design.md](./music-time-design.md) |
@@ -323,3 +323,4 @@ Directory: `docs/specs`
 | SPEC-01M7Y96P5ACBJBBKRPMWVQJNQC | Issue #631 real-editor-popup real-HWND harness — 設計 | approved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
 | SPEC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — AC 各行の disposition 決定・検証 Scope・採否決裁形態の提案（docs-only disposition） | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
 | SPEC-01KBZWINDOWIME0SPECDOC0000A1 | Issue #389 real-window-ime — ScenarioCapability::Ime claim + OS-level IMM32 composition drive + WM_IME_* 配達 oracle + 正直な fallback | approved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
+| SPEC-Rf767SbmtDrpKm3hXwNq7Yt4 | Issue #767 — L1 submit 経路の drop(queue shedding)契約 | proposed | [issue-767-submit-drop.md](./issue-767-submit-drop.md) |

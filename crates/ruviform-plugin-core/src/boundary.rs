@@ -335,6 +335,118 @@ impl ParentSlotLease {
     }
 }
 
+/// One plugin→host GUI request — the neutral vocabulary every
+/// format's spontaneous GUI verb maps onto (VST3
+/// `IPlugFrame::resizeView`, CLAP `clap_host_gui` `request_*` verbs
+/// and notifications).
+///
+/// Carried by the plugin-side request channel —
+/// [`Plugin::set_gui_request_sink`](crate::Plugin::set_gui_request_sink)
+/// for synchronous-verdict formats (VST3) and
+/// [`Plugin::drain_gui_requests`](crate::Plugin::drain_gui_requests)
+/// for async-ack formats that queue (CLAP `[thread-safe]` verbs).
+/// Never a `HostCommand` — commands travel host→plugin; this enum
+/// travels the other direction.
+///
+/// Notification variants (`ResizeHintsChanged`, `Closed`) carry no
+/// decision — their [`GuiRequestVerdict::Accepted`] is an
+/// acknowledge of receipt, not a grant.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GuiRequest {
+    /// The plugin asks the container to resize its editor surface —
+    /// VST3 `IPlugFrame::resizeView` / CLAP `request_resize`.
+    Resize {
+        /// The requested logical size.
+        size: GuiSize,
+    },
+    /// The plugin asks the host to show its editor surface — CLAP
+    /// `request_show`.
+    Show,
+    /// The plugin asks the host to hide its editor surface — CLAP
+    /// `request_hide`.
+    Hide,
+    /// Notification: the plugin's resize constraints changed — CLAP
+    /// `resize_hints_changed`; the host should re-query the format's
+    /// constraint surface.
+    ResizeHintsChanged,
+    /// Notification: the plugin's editor surface closed or its GUI
+    /// connection was lost — CLAP `closed`. When `was_destroyed` the
+    /// host must run the format's GUI teardown.
+    Closed {
+        /// Whether the plugin's window was already destroyed.
+        was_destroyed: bool,
+    },
+}
+
+/// The adjudication verdict for one [`GuiRequest`] — what the
+/// request path returns to the plugin.
+///
+/// `Accepted` means the container-side effect is confirmed — never
+/// an acknowledgement of a future effect. For [`GuiRequest::Resize`],
+/// `granted` carries the size the container actually applied:
+/// `Some` when the arbiter corrected the request, `None` when the
+/// requested size applied verbatim; the plugin-side notification
+/// (VST3 `onSize`, CLAP `set_size`) then completes the roundtrip.
+/// For variants carrying no size, `granted` is `None`. `Refused`
+/// declines the request with the defined `reason`.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GuiRequestVerdict {
+    /// Accepted — the container-side effect is confirmed.
+    Accepted {
+        /// The applied size for [`GuiRequest::Resize`] — `Some` when
+        /// the arbiter corrected the request, `None` when the
+        /// requested size applied verbatim or the request carries
+        /// no size.
+        granted: Option<GuiSize>,
+    },
+    /// Refused — declined with the defined cause.
+    Refused {
+        /// Why the request was declined.
+        reason: GuiRequestRefusal,
+    },
+}
+
+/// Why a [`GuiRequest`] was refused — the defined-refusal vocabulary
+/// the request path maps onto each format's honest decline (VST3
+/// `kResultFalse`, CLAP `false`).
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GuiRequestRefusal {
+    /// No arbiter is configured or the request surface is not routed
+    /// — the honest "nothing is listening" answer.
+    Unrouted,
+    /// The arbiter/container declined the request — a policy refusal
+    /// (size constraints, hidden slot, …).
+    Rejected,
+    /// The adjudication channel is busy — a re-entrant or concurrent
+    /// request met the in-flight adjudication. Retryable per the
+    /// format's contract.
+    Busy,
+    /// The request's target is gone — the editor/session converged
+    /// while the request was in flight.
+    Gone,
+}
+
 /// Why an L1 child process or a spawn/create attempt failed — the
 /// causal vocabulary carried by [`HostError::SpawnFailed`] and by the
 /// host-side `HostNotification::InstanceFailed.cause` payload.

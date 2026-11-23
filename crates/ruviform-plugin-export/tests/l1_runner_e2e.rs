@@ -29,8 +29,9 @@ use ruviform_media_core::{
 };
 use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as WireReply, shm};
 use ruviform_plugin_core::{
-    Event, EventKind, HostError, ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig,
-    ProcessStatus, TransportInfo,
+    Event, EventKind, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError, ParamEvent,
+    ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessStatus,
+    TransportInfo,
 };
 use shared_memory::{Shmem, ShmemConf};
 
@@ -38,6 +39,7 @@ const RUNNER: &str = env!("CARGO_BIN_EXE_ruviform-plugin-l1-runner");
 const GAIN_ID: &str = "dev.ruviform.mock.gain";
 const PANIC_ID: &str = "dev.ruviform.mock.panic";
 const UNDERWRITE_ID: &str = "dev.ruviform.mock.underwrite";
+const GUI_ID: &str = "dev.ruviform.mock.gui";
 
 const GAIN_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
     id: "dev.ruviform.mock.gain",
@@ -134,10 +136,18 @@ impl MiniHost {
     /// `Reply` — `instance` is `WIRE_INSTANCE_NONE` for `Scan`, the
     /// live handle for everything else.
     fn command(&mut self, instance: u32, cmd: WireCommand) -> Result<WireReply, HostError> {
+        let seq = self.send_command(instance, cmd);
+        self.recv_reply(seq, instance)
+    }
+
+    /// Sends one `Command` envelope without waiting for its reply —
+    /// the wedged-hook fixture needs a no-reply assert, not a hang.
+    /// Returns the seq the reply would echo.
+    fn send_command(&mut self, instance: u32, cmd: WireCommand) -> u64 {
         let seq = self.next_seq;
         self.next_seq += 1;
         self.send(&Message::Command { seq, instance, cmd });
-        self.recv_reply(seq, instance)
+        seq
     }
 
     /// Child-scoped `Scan` — the only verb stamped
@@ -212,7 +222,10 @@ impl MiniHost {
         }
     }
 
-    /// `Hello` must be the first frame, at `WIRE_VERSION`.
+    /// `Hello` must be the first frame, at `WIRE_VERSION` — on
+    /// Windows the audio runner also advertises the GUI-floating
+    /// mechanism bit (wire v6); elsewhere `capabilities` stays `0`
+    /// (the honest non-support answer).
     fn expect_hello(&self) {
         match self.recv() {
             Message::Hello {
@@ -220,6 +233,13 @@ impl MiniHost {
                 capabilities,
             } => {
                 assert_eq!(version, wire::WIRE_VERSION, "Hello wire version");
+                #[cfg(windows)]
+                assert_eq!(
+                    capabilities,
+                    wire::WIRE_CAPABILITY_GUI_FLOATING,
+                    "the audio runner must advertise the GUI floating bit on Windows"
+                );
+                #[cfg(not(windows))]
                 assert_eq!(capabilities, 0);
             }
             other => panic!("expected Hello, got {other:?}"),
@@ -256,7 +276,7 @@ fn expect_scanned(reply: Result<WireReply, HostError>) -> Vec<wire::Descriptor> 
 /// defined rejection" oracle the v2 registry contract pins.
 fn assert_alive(host: &mut MiniHost) {
     let descriptors = expect_scanned(host.scan());
-    assert_eq!(descriptors.len(), 3, "Scan must still enumerate factories");
+    assert_eq!(descriptors.len(), 4, "Scan must still enumerate factories");
 }
 
 /// Rings the assertions on one `BlockDone`: `seq` and `instance`
@@ -1472,5 +1492,384 @@ fn e2e_shutdown_normalizes_all_instances() {
         host.wait_exit().code(),
         Some(0),
         "Shutdown must normalize every entry and exit(0)"
+    );
+}
+
+// --- wire v6 GUI floating (Issue #883, `#[cfg(windows)]`) -------------
+
+/// An `OpenGui{Floating}` attempt — either the real container path
+/// (`Ok(Opened)` — the headless-checkable bound: the marshal
+/// round-trip, the `GuiHandle` token and the `float|close` caps
+/// bits `0x82`) or the defined env-blocked `Err(HostError::Ipc)` a
+/// session-0 window station that cannot create the container
+/// reports. Both are the defined vocabulary; the test's caller
+/// decides which outcome it can exercise further.
+#[cfg(windows)]
+fn try_open_gui_floating(host: &mut MiniHost, instance: u32) -> Result<WireReply, HostError> {
+    host.command(
+        instance,
+        WireCommand::OpenGui {
+            mode: wire::OpenGuiMode::Floating,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        },
+    )
+}
+
+/// The `GuiKeyEvent` `SendGuiKey` carries in the round-trip test.
+fn gui_key_event() -> GuiKeyEvent {
+    GuiKeyEvent {
+        direction: GuiKeyDirection::Down,
+        key: 'a',
+        key_code: 0x41,
+        modifiers: GuiModifiers::NONE,
+    }
+}
+
+/// Wire-v6 floating round trip: `OpenGui{Floating}` → `Opened{gui,
+/// caps}` with `caps & 0x82 == 0x82` (`float|close`, the runner-
+/// mechanism bits — the fixture's window-independent `open_gui`
+/// succeeds once the container exists), every marshaled verb
+/// (`SetGuiSize`/`SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey`)
+/// answering `Ok`, a second `OpenGui` returning the plugin's own
+/// ≤1-surface decline (`PluginFailed`), `CloseGui` → `Ok` + the
+/// no-surface `InvalidValue`, and a `DestroyInstance` with a live
+/// surface folding cleanly into exit(0). An env-blocked container
+/// creation answers `Err(Ipc)` — the defined vocabulary, asserted
+/// as such with the child still serving.
+#[test]
+#[cfg(windows)]
+fn e2e_gui_floating_open_and_verb_round_trip() {
+    let key = unique_key("gui-open");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GUI_ID, &key),
+        Ok(WireReply::Ok)
+    );
+
+    match try_open_gui_floating(&mut host, instance) {
+        Ok(WireReply::Opened { gui, capabilities }) => {
+            assert_eq!(
+                capabilities & 0x82,
+                0x82,
+                "Opened caps must carry the float|close runner bits"
+            );
+            assert!(gui.raw() != 0, "the fixture mints token handles");
+            eprintln!("gui e2e: container path observed (Opened)");
+        }
+        Err(HostError::Ipc) => {
+            // Session-0 window station — container creation is the
+            // defined `Err(Ipc)`; the child still serves commands.
+            eprintln!("gui e2e: env-blocked — container creation reported Err(Ipc)");
+            assert_alive(&mut host);
+            host.send(&Message::Shutdown);
+            assert_eq!(host.wait_exit().code(), Some(0));
+            return;
+        }
+        other => panic!("expected Opened or Err(Ipc), got {other:?}"),
+    }
+
+    // Every marshaled verb answers on the UI-thread path.
+    assert_eq!(
+        host.command(
+            instance,
+            WireCommand::SetGuiSize {
+                size: GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                },
+            },
+        ),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::SetGuiVisibility { visible: 1 }),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::SetGuiVisibility { visible: 0 }),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::SetGuiFocus { focused: 1 }),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(
+            instance,
+            WireCommand::SendGuiKey {
+                event: gui_key_event(),
+            },
+        ),
+        Ok(WireReply::Ok)
+    );
+
+    // A second `OpenGui` is the plugin's own decline — the
+    // ≤1-surface rule lives in the hook, never in a runner gate.
+    assert_eq!(
+        try_open_gui_floating(&mut host, instance),
+        Err(HostError::PluginFailed)
+    );
+
+    // `CloseGui` → `Ok`; a second close is the no-surface vocabulary.
+    assert_eq!(
+        host.command(instance, WireCommand::CloseGui),
+        Ok(WireReply::Ok)
+    );
+    assert_eq!(
+        host.command(instance, WireCommand::CloseGui),
+        Err(HostError::InvalidValue)
+    );
+
+    // A live surface folds with `DestroyInstance` — reopen, destroy,
+    // exit(0). (Reopen env-blocked destroys the still surface-less
+    // entry just as cleanly.)
+    match try_open_gui_floating(&mut host, instance) {
+        Ok(WireReply::Opened { .. }) | Err(HostError::Ipc) => {}
+        other => panic!("expected Opened or Err(Ipc), got {other:?}"),
+    }
+    assert_eq!(
+        host.command(instance, WireCommand::DestroyInstance),
+        Ok(WireReply::Ok)
+    );
+    host.send(&Message::Shutdown);
+    assert_eq!(host.wait_exit().code(), Some(0));
+}
+
+/// The window-independent defined rejections (deterministic even in
+/// a session-0 environment — no container work ever happens): every
+/// GUI verb but `OpenGui` against a surface-less instance is
+/// `Err(InvalidValue)` (`CloseGui`'s settled vocabulary generalized
+/// to the family), `OpenGui mode=Docked` is the defined
+/// `Err(Unsupported)`, and the handle check still precedes the GUI
+/// vocabulary on an unregistered handle.
+#[test]
+#[cfg(windows)]
+fn e2e_gui_defined_rejections_are_window_independent() {
+    let key = unique_key("gui-reject");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GUI_ID, &key),
+        Ok(WireReply::Ok)
+    );
+
+    for cmd in [
+        WireCommand::CloseGui,
+        WireCommand::SetGuiSize {
+            size: GuiSize {
+                width: 1.0,
+                height: 1.0,
+            },
+        },
+        WireCommand::SetGuiVisibility { visible: 1 },
+        WireCommand::SetGuiFocus { focused: 1 },
+        WireCommand::SendGuiKey {
+            event: gui_key_event(),
+        },
+    ] {
+        assert_eq!(
+            host.command(instance, cmd),
+            Err(HostError::InvalidValue),
+            "no-surface GUI verb must be InvalidValue"
+        );
+    }
+
+    // `Docked` is the defined refusal — no container work at all.
+    assert_eq!(
+        host.command(
+            instance,
+            WireCommand::OpenGui {
+                mode: wire::OpenGuiMode::Docked,
+                parent: ParentLease::new(0, 0),
+                size: GuiSize {
+                    width: 0.0,
+                    height: 0.0,
+                },
+            },
+        ),
+        Err(HostError::Unsupported)
+    );
+
+    // The handle check precedes the GUI vocabulary (the shared
+    // dispatch order).
+    assert_eq!(
+        host.command(7, WireCommand::CloseGui),
+        Err(HostError::InvalidHandle)
+    );
+
+    assert_alive(&mut host);
+    host.send(&Message::Shutdown);
+    assert_eq!(host.wait_exit().code(), Some(0));
+}
+
+/// Off Windows the GUI verb family is a uniform defined
+/// `Err(Unsupported)` once the handle resolves — the honest
+/// non-support answer matching the unadvertised capability bit —
+/// and the handle check still precedes on an unregistered handle.
+#[test]
+#[cfg(not(windows))]
+fn e2e_gui_verbs_are_unsupported_off_windows() {
+    let key = unique_key("gui-unsupported");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GUI_ID, &key),
+        Ok(WireReply::Ok)
+    );
+
+    for cmd in [
+        WireCommand::OpenGui {
+            mode: wire::OpenGuiMode::Floating,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        },
+        WireCommand::CloseGui,
+        WireCommand::SetGuiSize {
+            size: GuiSize {
+                width: 1.0,
+                height: 1.0,
+            },
+        },
+        WireCommand::SetGuiVisibility { visible: 1 },
+        WireCommand::SetGuiFocus { focused: 1 },
+        WireCommand::SendGuiKey {
+            event: gui_key_event(),
+        },
+    ] {
+        assert_eq!(
+            host.command(instance, cmd),
+            Err(HostError::Unsupported),
+            "GUI verb must be Unsupported off Windows"
+        );
+    }
+    assert_eq!(
+        host.command(7, WireCommand::CloseGui),
+        Err(HostError::InvalidHandle)
+    );
+
+    assert_alive(&mut host);
+    host.send(&Message::Shutdown);
+    assert_eq!(host.wait_exit().code(), Some(0));
+}
+
+/// `RUVIFORM_GUI_WEDGE` parks the fixture's `open_gui` inside the UI
+/// thread: the marshal reply never arrives, so the `OpenGui` command
+/// gets no reply — and the single-threaded command loop stalls, so a
+/// following `Scan` gets none either — while the child process stays
+/// alive for the parent's `command_timeout` → kill to converge (the
+/// E2E kills it itself). When the session cannot create the
+/// container the same `OpenGui` answers `Err(Ipc)` *before* the hook
+/// runs — the defined env-blocked outcome, child still serving.
+#[test]
+#[cfg(windows)]
+fn e2e_gui_wedged_hook_stalls_the_command_loop() {
+    const WEDGE: Duration = Duration::from_secs(3);
+    let key = unique_key("gui-wedge");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_with_env(&[], &[("RUVIFORM_GUI_WEDGE", "1")]);
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GUI_ID, &key),
+        Ok(WireReply::Ok)
+    );
+
+    host.send_command(
+        instance,
+        WireCommand::OpenGui {
+            mode: wire::OpenGuiMode::Floating,
+            parent: ParentLease::new(0, 0),
+            size: GuiSize {
+                width: 0.0,
+                height: 0.0,
+            },
+        },
+    );
+    match host.inbound.recv_timeout(WEDGE) {
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            eprintln!("gui e2e: wedge observed — no reply inside {WEDGE:?}");
+        }
+        Ok(Ok(Message::Reply {
+            result: Err(HostError::Ipc),
+            ..
+        })) => {
+            eprintln!("gui e2e: env-blocked — container failed before the wedge hook");
+            assert_alive(&mut host);
+            host.send(&Message::Shutdown);
+            assert_eq!(host.wait_exit().code(), Some(0));
+            return;
+        }
+        other => panic!("expected timeout or Err(Ipc), got {other:?}"),
+    }
+
+    // The wedged marshal parks the whole command loop — a `Scan`
+    // after the `OpenGui` gets no reply either.
+    host.send_command(wire::WIRE_INSTANCE_NONE, WireCommand::Scan);
+    assert!(
+        matches!(
+            host.inbound.recv_timeout(WEDGE),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ),
+        "a wedged command loop must not answer Scan"
+    );
+    // The child is alive — only the command loop is stalled; the
+    // parent's kill converges it (the E2E stands in for that kill).
+    assert!(
+        host.child.try_wait().expect("try_wait").is_none(),
+        "the wedged child must still be running"
+    );
+    host.child.kill().expect("kill wedged child");
+    assert!(!host.wait_exit().success());
+}
+
+/// EOF with a live surface — `normalize_all` marshals the surface
+/// fold (plugin `close_gui` + container destroy), drains the UI
+/// thread, joins it, then exits 0. An env-blocked open leaves no
+/// surface; the EOF path exits 0 identically.
+#[test]
+#[cfg(windows)]
+fn e2e_gui_surface_folds_on_eof() {
+    let key = unique_key("gui-eof");
+    let _segment = create_segment(&key);
+    let mut host = MiniHost::spawn_runner();
+    host.expect_hello();
+
+    let instance = 0;
+    assert_eq!(
+        host.create_instance(instance, GUI_ID, &key),
+        Ok(WireReply::Ok)
+    );
+    match try_open_gui_floating(&mut host, instance) {
+        Ok(WireReply::Opened { .. }) => {
+            eprintln!("gui e2e: live surface folds on EOF");
+        }
+        Err(HostError::Ipc) => {
+            eprintln!("gui e2e: env-blocked — EOF fold is surface-less");
+        }
+        other => panic!("expected Opened or Err(Ipc), got {other:?}"),
+    }
+    drop(host.stdin.take());
+    assert_eq!(
+        host.wait_exit().code(),
+        Some(0),
+        "EOF with a GUI surface must still exit(0)"
     );
 }

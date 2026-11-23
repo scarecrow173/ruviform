@@ -202,9 +202,10 @@ pub use composite::{
 // the result types).
 pub use editor_session::{
     AttachMode, DEFAULT_REQUEST_TIMEOUT, EditorCapabilities, EditorOpError, EditorSessionError,
-    EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, InProcessEditorOps,
-    L1EditorOps, LeaseRedeemer, MonotonicSessionClock, OpenOutcome, PluginEditorSession,
-    PluginEditorSessions, SessionClock, SessionDeadlinePolicy, SessionFailCause, Support,
+    EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, GuiRequestArbiter,
+    GuiRequestArbiterHandle, InProcessEditorOps, L1EditorOps, LeaseRedeemer, MonotonicSessionClock,
+    OpenOutcome, PluginEditorSession, PluginEditorSessions, SessionClock, SessionDeadlinePolicy,
+    SessionFailCause, Support,
 };
 pub use endpoint::{EndpointBounds, PluginEndpoint};
 pub use host::{BusReport, InProcessHost, ReportDrain};

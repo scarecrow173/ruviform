@@ -6845,6 +6845,7 @@ dependencies = [
 name = "ruviform-io-wav"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "ruviform-audio-core",
  "ruviform-io-file",
  "ruviform-io-symphonia",
@@ -6977,6 +6978,7 @@ dependencies = [
  "ruviform-plugin-core",
  "ruviform-video-core",
  "shared_memory",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

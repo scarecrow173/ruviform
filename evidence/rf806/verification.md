@@ -3,7 +3,8 @@
 Issue `scarecrow173/ruviform#806` の検証記録。canonical = `mise`
 lane（`test-formal` / `test-formal-kani`）。cargo 直接実行は補助証拠
 （mutation 注入確認・ロック前の下見）として明記済み。slice 1（wire
-codec）と slice 2（archive reader）をそれぞれ記録する。
+codec）・slice 2（archive reader）・slice 3（structured readers）・
+slice 4（WAV muxer/serializer）をそれぞれ記録する。
 
 ## slice 1 — wire codec（rvf.ipc.v1 / rvf.uitest.v1）
 
@@ -292,3 +293,143 @@ wire 上の意味的同一性を検証する。
   「in-budget で誤分類し得ない tail」を選んで deterministic に
   pin し、任意 tail の kind 集合 membership は arbitrary drive に
   分離した（JSON のみ逐 byte モデルで正確な規則を証明）。
+
+## slice 4 — WAV muxer/serializer（ruviform-io-wav）
+
+- Date: 2026-11-22
+- OS: Windows (x86_64) — proptest/通常 lane。Kani lane は WSL2 Ubuntu
+  （`cargo kani` 検出 → `/mnt/g` パス写像 → WSL ネイティブ target dir）。
+  WSL2 VM は本 slice の検証中に `Wsl/Service/E_UNEXPECTED` で繰り返し
+  落ち、CBMC RSS ~1-4.5 GiB で service 死亡・fresh boot では ~31 GiB
+  envelope まで生存する状態依存を示した（environment-caused。
+  反例ではない）。
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1（Windows）;
+  rustc 1.99.0 / Kani Rust Verifier 0.68.0 / CBMC 6.11.0（WSL2）
+- Repo SHA: `c58fc94697be00a718b21dc47d6de795d5430e7c`（`origin/main`
+  起点。各 JSONL の `repo_sha` は実行時 HEAD を記録）
+- ローカル検証 = 変更範囲の検証。統合検証は merge 後の対象 SHA に
+  対する必須 CI 結果が証拠（本記録はそれを代替しない）。
+
+### 検証対象（slice 4）
+
+- `crates/ruviform-io-wav` の wire-format gate（`Wire::new`）・
+  RIFF/WAVE serialization（`WAVEFORMATEX` 16B / `WAVEFORMATEXTENSIBLE`
+  40B `fmt ` body・`data` chunk 配置）・canonical planar `f32` → wire
+  sample 変換（NaN→silence・clamp・全レンジ scaling・round・F32 LE 直通
+  ・no dither）・encoder packet/frame 整合・muxer finalize/backpatch/
+  `WavReceipt` one-shot —
+  `tests/formal_wav.rs`（9 properties + `#[cfg(kani)] mod proofs`
+  3 harness）+ `src/convert.rs` / `src/wav.rs` 末尾の in-src
+  `#[cfg(kani)] mod proofs`（7 harness）。
+- 生産コードの意味論差分は 1 箇所のみ: `src/wav.rs` の `Unsupported`
+  診断構築を `unsupported_sample_format` helper 経由に分離し
+  （`cfg(kani)` 時は `format!` を持たない軽量診断 — `ErrorKind`・
+  分岐条件は不変、診断文面のみ `cfg` 差分）。`std::io::Error::new`
+  + `format!("{sample_format:?}")` を symbolic domain に載せると
+  WSL2 envelope を超えたための feasible 化であり、ゲート契約自体は
+  `format_tag_membership_is_wire_formats` が exhaustive に証明する。
+  mutation 注入・完全 revert 済み、`git diff` の意味論差分ゼロで確認。
+
+### Actions → resulting state（slice 4）
+
+| # | Action (command) | Resulting state |
+| --- | --- | --- |
+| 1 | `mise run test-formal` | `formal_ipc` 7 + `formal_transport` 4 + `formal_archive` 18 + `formal_structured` 35 + `formal_wav` 9 = 73 properties 全 pass・exit 0。記録: `slice4/test-formal.txt` |
+| 2 | `cargo kani --tests -j1 -p ruviform-io-wav`（lane の wav invocation 単独・lib harness 7 本を先に個別実行） | lib 側 7/7 harness SUCCESSFUL（下記 lane table）。記録: `slice4/kani-io-wav-lib.txt` |
+| 3 | test 側 3 harness を個別 `-j1` で実行（環境分裂回避のため harness 毎に分割） | `open_muxer_spec_contract_pcm` 0/4530（15.8s）・`open_muxer_spec_contract_extensible` 0/4536（29.5s）SUCCESSFUL。`open_muxer_rejects_invalid_value` は Err-direction（Ok 到達不能の証明）が fresh VM でも ~31 GiB envelope に張り付き verdict 未発行 — `not_run`（environment-blocked）。記録: `slice4/kani-open_muxer_spec_contract_{pcm,extensible}.txt`・`kani-open_muxer_rejects_invalid_value.txt` |
+| 4 | mutation 注入: `src/convert.rs` S16 arm `f32::round` → `trunc`（round-half-away-from-zero 契約の破壊） | `sample_conversion_matches_documented_policy` が shrink つき反例 `spec{S16, rate=1, Mono}, samples=[0.4151574]`（`0.4151574*32768=13603.97` → round 13604 vs trunc 13603）で FAILED（8 passed / 1 failed・EXIT=101）。seed は `formal_wav.proptest-regressions` に永続化済み。記録: `slice4/mutation-fail.txt` |
+| 5 | 変異の完全 revert → `cargo test --locked -p ruviform-io-wav --test formal_wav` 再実行 | 9/9 green・EXIT=0・`git diff` src/ は `#[cfg(kani)]` 追加と kani 限定診断 helper のみ（変異持ち越しなし）。記録: `slice4/post-revert-green.txt` |
+| 6 | `mise run fmt-check` / `check ruviform-io-wav` / `lint ruviform-io-wav` / `test ruviform-io-wav` | 全 pass（lint は `checked_conversions`・`explicit_counter_loop`・`single_match` 指摘を修正済みの最終形で clippy `-D warnings` clean） |
+| 7 | `mise exec -- prek run --all-files` | （下部 lane table を参照） |
+
+### Lane / verification results（slice 4）
+
+| Command | OS | Exit | Verdict | 備考 |
+| --- | --- | --- | --- | --- |
+| `mise run test-formal` | Windows x64 | 0 | pass | proptest 7+4+18+35+9=73 properties 全 pass |
+| `cargo kani -j1 --output-format terse -p ruviform-io-wav`（lib harnesses） | WSL2 Ubuntu x64 | 0 | pass | 7/7 SUCCESSFUL: `write_sample_documented_policy` 0/482・`format_tag_membership_is_wire_formats` 0/88・`wire_new_gate_is_exact_{small,mid}_align` 0/362+0/362・`wire_new_gate_is_exact_large_align` 0/368・`wire_new_non_wire_is_unsupported` 0/251・`fmt_and_header_layout` 0/890 |
+| `cargo kani --tests -j1 -p ruviform-io-wav --harness open_muxer_spec_contract_{pcm,extensible}` | WSL2 Ubuntu x64 | 0 | pass | 0/4530（15.8s）・0/4536（29.5s）SUCCESSFUL — KaniSink（固定 80B `Write+Seek` sink）化で `Cursor<Vec<u8>>` splice/growth の SSA 膨張を回避 |
+| `cargo kani --tests -j1 -p ruviform-io-wav --harness open_muxer_rejects_invalid_value` | WSL2 Ubuntu x64 | — | not_run | Err-direction（Ok 不可達性）の SAT instance が untrimmed ~31.7 GiB 張り付き。unwind 96→16→4・成功分岐 assert 除去・KaniSink でも支配コストは `open_muxer` 本体の encoding で不変。verdict 未発行のため pass 扱いしない（fail-closed）。契約は `wire_new_gate_is_exact_*`（`InvalidValue` の唯一 rejection を exhaustive 証明）+ proptest `muxer_rejections_are_invalid_data_and_not_sticky` で union 補完 |
+| `mise run test-formal-kani`（全 invocation 一括） | WSL2 Ubuntu x64 | 1 | fail | `-j4` 時代の初回一括実行は invocation 1（wire/archive）で WSL service が `E_UNEXPECTED` 死亡・JSON verdict `fail` を honest に出力 — 環境起因（反例なし）。記録: `slice4/test-formal-kani-invocation-crashed.txt` |
+| `cargo kani --tests -j1 -p ruviform-io-wav`（lane invocation 3 を aggregate 実行） | WSL2 Ubuntu x64 | 137 | partial | aggregate 順（lib 7 → `open_muxer_spec_contract_extensible` → `open_muxer_rejects_invalid_value` → `open_muxer_spec_contract_pcm`）で 8 harness SUCCESSFUL 後、`rejects` が ~12 GiB まで伸長した時点で中断（SIGKILL — 31 GiB envelope 張り付き経路は別個個別実行で実測済み）。`pcm` は queue 順で未到達だが個別実行で verified（上行）。記録: `slice4/kani-io-wav-aggregate.txt` |
+| `cargo test … formal_wav`（mutant 注入時） | Windows x64 | 101 | fail（期待どおり） | `sample_conversion_matches_documented_policy` が `samples=[0.4151574]` を縮小提示 |
+| `cargo test … formal_wav`（revert 後） | Windows x64 | 0 | pass | 変異なしで緑に復帰 |
+| `mise run fmt-check` | Windows x64 | 0 | pass | |
+| `mise run check ruviform-io-wav` | Windows x64 | 0 | pass | `--all-targets`（新規 formal_wav test target 含む） |
+| `mise run lint ruviform-io-wav` | Windows x64 | 0 | pass | clippy `-D warnings` clean |
+| `mise run test ruviform-io-wav` | Windows x64 | 0 | pass | パッケージ全テスト（formal 9 + 既存 tests + doctests） |
+| `mise exec -- prek run --all-files` | Windows x64 | 0 | pass | repo hooks 全量（新規 evidence・test file を含め auto-fix 不要で green） |
+
+### Bounds and assumptions（Kani・slice 4）
+
+`docs/specs/formal-verification.md` の「slice 4 wav harness」表が
+正本。要約:
+
+- `write_sample_documented_policy`: symbolic `f32` 全値（NaN/inf/
+  範囲外含む）× wire 5 format 全て — 変換後 byte 列が documented
+  policy の oracle と bit-exact。symbolic float は `f32::round`/
+  clamp を含むが bounded・無 loop で feasible。
+- `format_tag_membership_is_wire_formats`: symbolic `SampleFormat`
+  全 discriminant — `format_tag` が `Some` を返す集合がちょうど
+  {U8,S16,S24,S32,F32} に一致（`Wire::new` のゲート oracle を分離
+  証明 — 実 `Wire::new` 経路の `Unsupported` kind は
+  `wire_new_non_wire_is_unsupported` + proptest が担当）。
+- `wire_new_gate_is_exact_{small,mid,large}_align`: concrete matrix
+  — distinct `block_align` 値 13 代表 × rate ∈ {u32::MAX/align−1,
+  u32::MAX/align, u32::MAX/align+1}。byte-rate overflow 境界の両側を
+  全 align class で尽くす。symbolic `SampleRate::new` は
+  `TimeBase::new` Euclid loop が nested symbolic `%` を生成し
+  infeasible（slice-1/2 教訓どおり concrete matrix + proptest が
+  任意 rate/layout/format の interior を担当）。3-way split は
+  solver-RAM 対策（semantic ではない）。
+- `wire_new_non_wire_is_unsupported`: non-wire 5 format 各 concrete
+  に `Wire::new` が `ErrorKind::Unsupported` を返すこと。
+  `unsupported_sample_format` helper 分離（`cfg(kani)` で `format!`
+  を持たない診断）により `io::Error::new`+`{:?}` encoding を回避し
+  feasible 化。
+- `fmt_and_header_layout`: concrete matrix — layout class（named
+  ≤2ch/5.1/7.1/custom mask）× format — 16B/40B `fmt ` body の全
+  byte layout・`data` chunk 位置・cbSize/valid-bits/mask/GUID を
+  byte 列で証明。`unwind(64)`（memcmp/slice 比較の builtin unroll。
+  当初 16 で unwinding assertion が loud fail → 引き上げ後 verified）。
+- `open_muxer_spec_contract_{pcm,extensible}`: concrete success
+  matrix（16B form 1 spec・40B form 3 spec — `fmt ` body は
+  `fmt_and_header_layout` で全 layout×format 証明済みのため
+  open_muxer glue は代表のみ）— `KaniSink`（固定 80B 配列の
+  `Write+Seek` 最小 sink）で `Cursor<Vec<u8>>` の splice/growth
+  encoding を排除。
+- `open_muxer_rejects_invalid_value`: byte-rate overflow spec が
+  `ErrorKind::InvalidValue` に写像されることの Err-direction 証明
+  — 本 environment で verdict 未取得（`not_run`、上表参照）。
+  Ok 不可達性の SAT core は成功 direction の witness 探索より
+  構造的に重く、`open_muxer` 全 CFG encoding が ~31 GiB envelope
+  を超過。
+
+### Honest notes（slice 4）
+
+- `open_muxer_rejects_invalid_value` は 5 形態（untrimmed・
+  trimmed body・KaniSink・unwind 16・unwind 4）で計 6 回試行し、
+  fresh VM でも cbmc が ~31 GiB envelope に張り付いたまま
+  verdict を発行しない — 環境起因の `not_run` と正直に記録する
+  （`pass` 扱いしない）。対象契約（overflow → `InvalidValue`
+  伝播）は `wire_new_gate_is_exact_*` が source gate を
+  exhaustive に証明し、`open_muxer` の `?` 伝播は proptest
+  `muxer_rejections_are_invalid_data_and_not_sticky` が任意 spec
+  で pin する union 補完で意味を持つ。
+- WSL2 service は累積不安定で cbmc ~1 GiB でも `E_UNEXPECTED`
+  死亡し得る一方、fresh boot では ~31 GiB まで生存した —
+  同一 box で閾値が数倍振れる。`-j1` 逐次化で並列圧は排除済み。
+- symbolic `SampleRate`（`TimeBase::new` Euclid `while`）は全
+  harness で infeasible だったため、rate 軸は常に concrete —
+  gate 比較自体は `u32::MAX/align` 境界の matrix で尽きる設計。
+  任意 rate/layout/format の interior は proptest が担当。
+- `fmt_and_header_layout` の check 数は `unsupported_sample_format`
+  分離後 3912 → 890 に減少（diagnostic encoding が全 unroll に
+  混入していた）。
+- mutation（S16 `round`→`trunc`）を検出したのは
+  `sample_conversion_matches_documented_policy` — model が
+  production scaling と同一式を独立実装しているため契約逸脱に
+  正確。seed `0.4151574` は regressions file 永続化済み。
+- Kani 検証コードは全て `#[cfg(kani)]` 下 — `cargo test`/lint/
+  通常 lane の compiled surface に影響しない（`check-cfg` は
+  workspace で `cfg(kani)` を既に known 宣言）。

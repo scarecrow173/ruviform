@@ -301,11 +301,14 @@ cargo run --locked -p ruviform-ui-test --bin rvf-ctl -- drive --out evidence/rf8
 # readers, the shared InputLimits/BoundedRead byte budget, stable
 # DocumentErrorKind sets and per-format named limits
 # (crates/ruviform-io-structured/tests/formal_structured.rs — the
-# crate's `default = []` feature set requires --all-features). It is
+# crate's `default = []` feature set requires --all-features) — plus
+# the WAV-backend slice-4 suite covering RIFF/WAVE serialization,
+# canonical f32→wire conversion, and the muxer finalize/WavReceipt
+# contract (crates/ruviform-io-wav/tests/formal_wav.rs). It is
 # a plain `cargo test` lane and runs natively on every host — the
 # 1-command re-run entry for AC#1.
 [tasks.test-formal]
-description = "Issue #806 D-layer formal lane (manual/opt-in — NOT a CI-required gate): run the wire-codec + archive-parser + structured-document proptest suites — `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` (rvf.ipc.v1 parse_intent/valid_op/Event::to_json + rvf.uitest.v1 read_frame/write_frame + TAR/ZIP reader limits/error/receipt contracts + JSON/YAML/TOML/CSV/XML reader limits/error-kind contracts; runs natively; writes only target/)"
+description = "Issue #806 D-layer formal lane (manual/opt-in — NOT a CI-required gate): run the wire-codec + archive-parser + structured-document + WAV-backend proptest suites — `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` (rvf.ipc.v1 parse_intent/valid_op/Event::to_json + rvf.uitest.v1 read_frame/write_frame + TAR/ZIP reader limits/error/receipt contracts + JSON/YAML/TOML/CSV/XML reader limits/error-kind contracts + RIFF/WAVE header serialization, canonical f32→wire conversion and muxer finalize/WavReceipt contracts; runs natively; writes only target/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -313,6 +316,7 @@ cargo test --locked -p ruviform-ui --test formal_ipc
 cargo test --locked -p ruviform-ui-test --test formal_transport
 cargo test --locked -p ruviform-io-archive --test formal_archive
 cargo test --locked -p ruviform-io-structured --all-features --test formal_structured
+cargo test --locked -p ruviform-io-wav --test formal_wav
 '''
 
 # test-formal-kani is the Issue #806 D-layer bounded-proof lane
@@ -332,7 +336,16 @@ cargo test --locked -p ruviform-io-structured --all-features --test formal_struc
 # `csv_core`'s `build_dfa` byte-table loop to 128 (skeleton bytes are
 # all < 128, so truncated rows are unreachable); full 256-row
 # coverage roughly doubles the formula beyond the reference WSL2
-# environment. The verdict aggregates both
+# environment. Slice 4 (PCM WAV) is a third, separate invocation —
+# `-p ruviform-io-wav` covers the `open_muxer` harness in
+# tests/formal_wav.rs plus the in-src `write_sample`/`Wire`/`fmt`
+# proofs in src/convert.rs and src/wav.rs. Unlike the other
+# invocations it runs `-j1`: the WAV proofs unroll `Wire::new` /
+# header serialization repeatedly, and each harness's CBMC process
+# peaks at ~1.5-2 GiB — 4-way concurrency pushed the reference WSL2
+# service past its crash point (`Wsl/Service/E_UNEXPECTED`).
+# Sequential keeps every harness under that ceiling; the lane is
+# manual/opt-in so latency is acceptable. The verdict aggregates all
 # invocations: pass only when every harness verifies; fail if any
 # fails. No usable environment reports verdict `not_run` + reason +
 # provision guidance and exits 0 — a missing environment is not a
@@ -340,7 +353,7 @@ cargo test --locked -p ruviform-io-structured --all-features --test formal_struc
 # (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs + tests/formal_archive.rs, plus a separate `--all-features` invocation for tests/formal_structured.rs + the in-src BoundedRead proof (WSL target dir on the native FS, never /mnt); verdict aggregates both invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs + tests/formal_archive.rs, plus a separate `--all-features` invocation for tests/formal_structured.rs + the in-src BoundedRead proof, plus a separate `-j1 -p ruviform-io-wav` invocation for tests/formal_wav.rs + the in-src write_sample/Wire/fmt proofs (WSL target dir on the native FS, never /mnt; -j1 because concurrent WAV CBMC harnesses exhaust the reference WSL2 service); verdict aggregates all invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
@@ -355,6 +368,7 @@ if cargo kani --version >/dev/null 2>&1; then
   rc=0
   cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive || rc=1
   cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured || rc=1
+  cargo kani --tests -j1 --output-format terse -p ruviform-io-wav || rc=1
   if [ "$rc" -eq 0 ]; then
     verdict pass "native cargo kani verification succeeded"
     exit 0
@@ -385,6 +399,7 @@ if command -v wsl.exe >/dev/null 2>&1; then
     rc=0
     wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive" || rc=1
     wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured" || rc=1
+    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j1 --output-format terse -p ruviform-io-wav" || rc=1
     if [ "$rc" -eq 0 ]; then
       verdict pass "WSL2 ($DISTRO) cargo kani verification succeeded"
       exit 0
@@ -1304,6 +1319,44 @@ run = "cargo test -p ruviform-midi-device --test loopback -- --ignored --test-th
 [tasks.test-os-endpoint-wiring]
 description = "Run the `#[ignore]`-gated OS-endpoint wiring legs (`-p ruviform-audio-test --test os_endpoint -- --ignored`) — requires a provisioned virtual audio endpoint pair (VB-CABLE/VAC family) and/or MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
 run = "cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1"
+
+# OS-endpoint MIDI e2e lane (Issue #253 virtual-first slice — lane
+# integration follow-up): the `#[ignore]`-gated fail-closed verifier
+# in `crates/ruviform-plugin-test-vst3/tests/
+# os_endpoint_midi_e2e.rs` drives the production WinMM backend →
+# bidirectional name-match loopback-style pair → `InputTx::pump` →
+# `InputStage` → `attach` → `PluginNode` → typed `GraphRuntime` →
+# out-of-process real-ABI VST3 `test_instrument` chain end-to-end,
+# so it needs a provisioned virtual MIDI loopback pair (loopMIDI /
+# Windows MIDI Services loopback) AND both fixture artifacts — the
+# crate's own cdylib (`crate-type = ["cdylib", "rlib"]`) plus the
+# `ruviform-plugin-test-vst3-l1-runner` runner binary
+# (`required-features = ["l1-runner"]`). Like `test-l1-real-plugin`
+# the lane builds those artifacts first: their absence is an
+# `assert!` failure (Fail), not a `NotRun` (test-spec R2). This
+# task is the only canonical entry point for the test — `#![cfg(
+# feature = "l1-runner")]` + `#[ignore]` + `required-features`
+# keep it out of default `cargo test`, and no other lane collects
+# it (`test-midi-virtual-endpoint` selects `--test loopback` in a
+# different crate; `test-l1-real-plugin` selects only its own named
+# `--test` targets). With no pair provisioned the verifier prints
+# `verdict: NotRun — NOT_PROVISIONED` and exits honestly
+# (fail-closed, never a Pass — the name match is a loopback
+# candidate, not a `virtual-os-endpoint` claim). Provisioning-
+# dependent manual lane: never in CI; run records live under
+# `evidence/rf253/`. The canonical `run` carries no `--nocapture`
+# — verdict lines sit inside libtest capture, so verdict harvest
+# uses the auxiliary direct cargo invocation recorded in the
+# evidence. `--test-threads=1` serializes real port opens like the
+# other virtual-endpoint lanes. Lint coverage needs no dedicated
+# lane: `lint-l1-real-plugin` (`cargo clippy --all-targets
+# --features …/l1-runner`) already lints this test target.
+[tasks.test-os-endpoint-midi-e2e]
+description = "Build the test-fixture cdylib + `l1-runner` runner bin, then run the `#[ignore]`-gated OS-endpoint MIDI e2e verifier (`-p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored`) — requires a provisioned virtual MIDI loopback pair (loopMIDI / Windows MIDI Services loopback); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
+run = [
+  "cargo build -p ruviform-plugin-test-vst3 --features l1-runner",
+  "cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1",
+]
 
 # RF-SCRIPT-01 PoC（Issue #559）— poc/script-coexist は `[workspace]` を持つ
 # 独立 workspace のため、ルートの `check`/`lint`/`test`（`-p <package>`）
