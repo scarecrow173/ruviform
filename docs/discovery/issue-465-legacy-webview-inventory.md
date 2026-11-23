@@ -319,7 +319,8 @@ Issue 本文の判定ルール（2026-11-10 節・正本）に照らした行別
   adapter 撤去後も残る側の資産が本 corpus に依存する。
 - driver-lab fixture（`crates/ruviform-ui-test/fixtures/driver-lab/`:
   `cases.json`/`stories.json`/`parity/viz-semantic-{audiolens,synvelis}.json`/
-  `themes/{audiolens,synvelis}-dark.dtcg.json`/`boundary/`）は別 corpus
+  `boundary/`）と theme fixture（同 `fixtures/themes/`:
+  `{audiolens,synvelis}-dark.dtcg.json` — driver-lab の兄弟 dir）は別 corpus
   であり、guitest の ipc/binding/scenario corpus を複製していない。
 - `ui/showcase` の検証 fixture は driver-lab へ部分移植済み（theme・
   viz-semantic 系）。未移植残（DOM mount/a11y/theme-matrix の
