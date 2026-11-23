@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #767 — L1 submit 経路の drop(queue shedding)契約"
 created: "2026-11-22"
-updated: "2026-11-22"
+updated: "2026-11-23"
 owners: []
 relations:
   source:
@@ -29,6 +29,7 @@ relations:
   superseded-by: []
   related:
     - "docs/discovery/issue-763-flaky-e2e.md"
+    - "docs/specs/issue-895-dropped-submits.md"
   refines: []
   refined-by: []
   derives-from: []
@@ -53,12 +54,14 @@ relations:
 
 ### C-2: drop 条件はちょうど 2 つ
 
-`dropped_submits` を increment するのは次の 2 分岐のみ(いずれも seq は消費される):
+`dropped_submits` を increment するのは次の 2 分岐のみ(いずれも seq は消費される)。`ruviform#895` 以降、各分岐は集約 `dropped_submits` と自身の原因 counter(`dropped_submits_slot_busy` / `dropped_submits_chan_full`)の両方を increment する:
 
-1. **slot still busy** — 対象 shm slot(`seq % depth`)の前 occupant がまだ complete していない(`cleared[slot] < last_pushed[slot]`)。この分岐は `try_push` に到達しない。
-2. **submit channel full** — slot gate は成立したが `submit.try_push` が bounded channel 容量(`depth`)で拒否した。
+1. **slot still busy** — 対象 shm slot(`seq % depth`)の前 occupant がまだ complete していない(`cleared[slot] < last_pushed[slot]`)。この分岐は `try_push` に到達しない。`dropped_submits` + `dropped_submits_slot_busy` を increment。
+2. **submit channel full** — slot gate は成立したが `submit.try_push` が bounded channel 容量(`depth`)で拒否した。`dropped_submits` + `dropped_submits_chan_full` を increment。
 
-したがって `dropped_submits` は 1 block あたり高々 +1(busy slot は `try_push` に到達しない)。counter doc(`RtLegCounters::dropped_submits`)がこれを保証する。
+したがって `dropped_submits` と各原因 counter はいずれも 1 block あたり高々 +1(busy slot は `try_push` に到達しない)であり、`dropped_submits == dropped_submits_slot_busy + dropped_submits_chan_full` が構築により常に成立する。counter doc(`RtLegCounters::dropped_submits`)がこれを保証する。
+
+補足:channel capacity = `depth` の下では chan-full 分岐は in-protocol 到達不能(channel が満杯なら全 slot が busy で gate が先に落とす)であり、`dropped_submits_chan_full` は `results_dropped` と同種の defensive counter として維持される。非ゼロが観測された場合は capacity/slot 不変条件の破損を意味する。
 
 ### C-3: drop 時の出力は defined pass-through
 
@@ -100,5 +103,5 @@ submit された seq はちょうど 1 個の completion element を順序どお
 
 ## 対象外
 
-- `dropped_submits` の条件別分離(counter 分割や診断面拡張)は行わない — 恒久的な帰属性が必要になった場合の follow-up 候補。
+- `dropped_submits` の条件別分離は `ruviform#895` で実施済み — 上記 C-2 の原因 counter(`dropped_submits_slot_busy` / `dropped_submits_chan_full`)と `docs/specs/issue-895-dropped-submits.md` を参照。本 spec は集約 counter 側の契約(2 分岐・高々 +1/block・defined pass-through)の正本であり続ける。
 - fault/stateful 系 staleness oracle(`ruviform#768` 領域)への影響評価は同 Issue 側の scope。

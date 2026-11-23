@@ -473,6 +473,68 @@ fn real_test_plugin_l1_full_series() {
     assert!(host.try_recv_notification().is_none());
 }
 
+/// Issue #895: `dropped_submits` permanently attributes every drop
+/// to its cause. An unpaced burst provably sheds submits on the
+/// slot-busy arm (the #767 finding's persistent form), the two
+/// cause counters sum back to the aggregate, and `chan_full` stays
+/// at its defensive zero — a full submit channel implies every
+/// slot busy while the channel capacity equals `depth`, so the
+/// alternation gate intercepts first.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_test_plugin_l1_dropped_submits_attributes_causes() {
+    assert_fixture_present();
+    let (mut host, handle) = instrument_host();
+
+    // Unpaced back-to-back calls: `depth = L1_LOOKAHEAD + 1 = 3`
+    // slots fill with the first three submits, and no child
+    // round-trip can complete inside the microsecond-scale burst —
+    // every later call drops on the slot-busy arm.
+    let in_left = [0.5_f32; FRAMES];
+    let in_right = [0.5_f32; FRAMES];
+    let input = [&in_left[..], &in_right[..]];
+    let empty = EventList::empty(FRAMES_U32);
+    for call in 0..24_u32 {
+        let mut out_left = vec![0.0_f32; FRAMES];
+        let mut out_right = vec![0.0_f32; FRAMES];
+        let (result, _deltas) = host_block(
+            &mut host,
+            handle,
+            &input,
+            &mut out_left,
+            &mut out_right,
+            empty,
+        );
+        assert_eq!(result, Ok(ProcessResult::CONTINUE), "call {call}");
+    }
+
+    let counters = host.audio_counters(handle).unwrap();
+    assert!(
+        counters.dropped_submits > 0,
+        "the unpaced burst must shed submits — {counters:?}"
+    );
+    assert_eq!(
+        counters.dropped_submits,
+        counters.dropped_submits_slot_busy + counters.dropped_submits_chan_full,
+        "the aggregate is exactly its two cause counters — {counters:?}"
+    );
+    // Every observed drop attributes to slot-busy — the #767
+    // 60-run finding as a permanent pin; `chan_full` is the
+    // defensive arm that must stay zero.
+    assert_eq!(
+        counters.dropped_submits_slot_busy, counters.dropped_submits,
+        "every observed drop attributes to slot-busy — {counters:?}"
+    );
+    assert_eq!(counters.dropped_submits_chan_full, 0);
+    assert_eq!(counters.results_dropped, 0);
+    assert_eq!(counters.results_failed_observed, 0);
+
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+}
+
 /// `kill_child` on the real-test-plugin child drives the documented
 /// crash path unchanged: `Failed` convergence, exactly one
 /// `InstanceFailed` notification, defined `Err(Failed)` rejections
