@@ -7,7 +7,7 @@
 //! slices).
 //!
 //! [`run_all`] mounts [`plugin_dock_view_spec`] into *real OS
-//! windows* through [`RealOsGuiTest`] and records the twenty-nine
+//! windows* through [`RealOsGuiTest`] and records the thirty-two
 //! cases of the `rf631.plugin-dock-real` scenario:
 //!
 //! | case                    | driver      | honest outcome today                              |
@@ -123,6 +123,19 @@
 //! |                         |             | process-killing fault を生存不能（out-of-process      |
 //! |                         |             | host 未実装）                                         |
 //! | `real-session-hang`     | `RealOs`    | `Unsupported` — 同上（wedging fault で lane 非生存）  |
+//! | `real-session-rt-samethread` | `RealOs` | `Pass`/`Fail`/`NotRun`/`Unsupported` — `Processing` |
+//! |                         |             | の `test_editor` で `host.process` block を実        |
+//! |                         |             | session verb の前後に interleave し、Continue +      |
+//! |                         |             | bit-exact pass-through + lifecycle 維持を判定        |
+//! |                         |             | （Issue #874 same-thread RT oracle）                 |
+//! | `real-session-rt-fault` | `RealOs`    | `Pass`/`Fail`/`NotRun` — `test_fault` の `rt_alloc` |
+//! |                         |             | fault を arm/disarm し、`output[0][0] == 200.0`      |
+//! |                         |             | marker が armed 状態に正確に追従することを判定       |
+//! |                         |             | （Issue #874 negative-control leg）                  |
+//! | `real-session-rt-boundary` | `RealOs` | `Unsupported` — cross-thread 同一 instance pump は |
+//! |                         |             | 現行 API では不可能（`create_sendable`→`None` で    |
+//! |                         |             | `!Send`→Plain slot・`attach_endpoint` 非公開等）—    |
+//! |                         |             | architectural boundary の正直記録（Issue #874）     |
 //!
 //! The chain under test is the production one: `NativeSlot` →
 //! `GpuiSurfaceAdapter` (real container HWND on Windows) →
@@ -140,7 +153,12 @@
 //! **RT contract:** non-RT only — real OS window, dlopen,
 //! filesystem. **Test-only:** nothing here ships.
 
+use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
 use ruviform_audio_test::EnvironmentKind;
+use ruviform_plugin_core::{
+    Event as PluginEvent, EventKind, EventList, HostInput, HostOutput, LifecycleState, ParamEvent,
+    ParamId, ParamValue, ProcessResult, ProcessStatus,
+};
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionState, EditorSize, GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand,
@@ -174,8 +192,9 @@ use ruviform_ui_test::{
     ScenarioVerdict, SemanticGuiTest, TargetQuery, parity_gesture_scenario, run_entries,
     run_scenario, settle_until, sv_fader_dock_fixture,
 };
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ruviform_ui_test::golden::RgbaImage;
 use serde_json::{Map, Value, json};
@@ -604,7 +623,7 @@ fn finalize_case(
 /// capabilities, so the blocked path can never drift from the live
 /// catalog.
 #[expect(clippy::too_many_lines)]
-fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 29] {
+fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 32] {
     [
         ScenarioEntry {
             case: "real-window-mount",
@@ -832,6 +851,27 @@ fn real_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 29] {
             required: &[ScenarioCapability::NativePluginDock],
             spec_extras: real_window_extras,
             run: real_session_hang_case,
+        },
+        ScenarioEntry {
+            case: "real-session-rt-samethread",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_rt_samethread_case,
+        },
+        ScenarioEntry {
+            case: "real-session-rt-fault",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: editor_attach_extras,
+            run: real_session_rt_fault_case,
+        },
+        ScenarioEntry {
+            case: "real-session-rt-boundary",
+            scenario: SCENARIO,
+            required: &[ScenarioCapability::NativePluginDock],
+            spec_extras: real_window_extras,
+            run: real_session_rt_boundary_case,
         },
     ]
 }
@@ -1340,7 +1380,7 @@ fn blocked_reports(
 ) -> Vec<ScenarioReport> {
     // `'static` context: only entry metadata is read here — no
     // `RealDockContext` is ever constructed on this path.
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
     entries
         .iter()
         .map(|entry| {
@@ -1394,7 +1434,7 @@ pub fn blocked_probe(env: &LaneEnvironment) -> Vec<ScenarioReport> {
 /// means the shape held for every catalog row.
 #[must_use]
 pub fn blocked_probe_violations(reports: &[ScenarioReport]) -> Vec<String> {
-    let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
+    let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
     let mut violations = Vec::new();
     if reports.len() != entries.len() {
         violations.push(format!(
@@ -2898,10 +2938,32 @@ fn editor_child_body(
             observe_open: lifecycle.observe_open,
         },
     );
+    child_attempt_outcome(
+        &attempt,
+        verification.as_ref(),
+        lifecycle.case,
+        &steps,
+        &cleanup,
+    )
+}
 
-    let mut outcome = match attach_attempt_failure(&attempt) {
+/// The verdict tail every `editor_child_body`-shape case shares —
+/// [`attach_attempt_failure`] first, then the [`ChildVerification`]
+/// lattice: supported+verified → `Pass` (`pass_detail`/`evidence`),
+/// platform-unsupported observation → `Unsupported`, any contract
+/// mismatch → `Fail` naming the first violated check. `steps` and
+/// `cleanup` fold into `observed` regardless; the verification's
+/// `extras` merge on top.
+fn child_attempt_outcome(
+    attempt: &RealAttachAttempt,
+    verification: Option<&ChildVerification>,
+    case: &ChildCaseIdentity<'_>,
+    steps: &[Value],
+    cleanup: &[String],
+) -> ScenarioOutcome {
+    let mut outcome = match attach_attempt_failure(attempt) {
         Some(outcome) => outcome,
-        None => match verification.as_ref() {
+        None => match verification {
             Some(verification) if verification.supported && verification.verified => {
                 // The real `test_editor` IPlugView attached a real
                 // child HWND under the leased container and every OS
@@ -2909,8 +2971,8 @@ fn editor_child_body(
                 // which lifecycle path ran (graceful close vs host
                 // loss vs degrade/recovery/timeout).
                 let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
-                outcome.detail = Some(lifecycle.case.pass_detail.to_string());
-                outcome.evidence.push(lifecycle.case.evidence.to_string());
+                outcome.detail = Some(case.pass_detail.to_string());
+                outcome.evidence.push(case.evidence.to_string());
                 outcome
             }
             Some(verification) if !verification.supported => {
@@ -2929,7 +2991,7 @@ fn editor_child_body(
             Some(verification) => fail(format!(
                 "editor opened through the REAL container lease but the \
                  {} observation failed: {}",
-                lifecycle.case.label,
+                case.label,
                 verification
                     .failure
                     .as_deref()
@@ -2937,7 +2999,7 @@ fn editor_child_body(
             )),
             None => fail(format!(
                 "editor opened but no {} observation was recorded",
-                lifecycle.case.label
+                case.label
             )),
         },
     };
@@ -2945,7 +3007,7 @@ fn editor_child_body(
         ("steps".to_string(), json!(steps)),
         ("cleanup".to_string(), json!(cleanup)),
     ]);
-    if let Some(verification) = &verification
+    if let Some(verification) = verification
         && let Value::Object(fields) = &verification.extras
     {
         observed.extend(fields.clone());
@@ -13287,6 +13349,858 @@ fn real_session_hang_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
     finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
+// ---------------------------------------------------------------------
+// cases: real-session-rt-* (Issue #874 — real-window RT
+//        non-interference oracle)
+// ---------------------------------------------------------------------
+
+/// Frames per interleaved `host.process` block (`u32` — `EventList`
+/// frame counts); well inside the activated `1..=512` block range.
+const RT_BLOCK_FRAMES_U32: u32 = 8;
+
+/// `RT_BLOCK_FRAMES_U32` as `usize` — buffer shapes.
+const RT_BLOCK_FRAMES: usize = RT_BLOCK_FRAMES_U32 as usize;
+
+/// Input sample every block feeds — the fixtures' pass-through
+/// contract makes `output == input` the bit-exact DSP oracle.
+const RT_INPUT: f32 = 0.5;
+
+/// `test_fault`'s armed `rt_alloc` marker — `f32::from(0xC8)`; the
+/// fixture writes it into `output[0][0]` on every `process` while the
+/// fault is armed (`fault.rs`'s `RT_ALLOC_FILL`).
+const RT_FAULT_MARKER: f32 = 200.0;
+
+/// `test_fault`'s `Fault` parameter — `ParamId(0)` over plain range
+/// `[0,8)`; `rt_alloc` occupies the `[5,6)` band, armed by normalized
+/// `0.625` (plain `5.0`).
+const RT_FAULT_PARAM: ParamId = ParamId(0);
+
+/// Normalized value arming `rt_alloc` — plain `5.0` lands inside the
+/// `[5,6)` band.
+const RT_FAULT_ARM_VALUE: f64 = 0.625;
+
+/// The RT leg's shared gate — every interleaved block appends its
+/// wall time and the first contract violation lands in `failure`.
+/// Shared through `RefCell` because `attempt_real_attach` invokes the
+/// case's drive/observe closures in turn; the trace is read once the
+/// attempt returns.
+#[derive(Default)]
+struct RtTrace {
+    /// First violated RT block contract (`label: detail`) — merges
+    /// into the case's `Fail` detail and gates `verified`.
+    failure: Option<String>,
+    /// `wall_ns` per executed block — observed timing data only,
+    /// never a verdict input.
+    walls_ns: Vec<u128>,
+}
+
+/// Executes one `host.process` block on the scenario caller thread —
+/// stack-allocated mono buffers wrapped in the erased
+/// `HostInput`/`HostOutput` views, so nothing in the measured path
+/// allocates or blocks. `wall_ns` is wall time around the call:
+/// observed data, never a verdict input.
+fn rt_process_block(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    events: &[PluginEvent],
+) -> (
+    Result<ProcessResult, HostError>,
+    [f32; RT_BLOCK_FRAMES],
+    u128,
+) {
+    let input = [RT_INPUT; RT_BLOCK_FRAMES];
+    let mut output = [0.0_f32; RT_BLOCK_FRAMES];
+    let event_list = if events.is_empty() {
+        EventList::empty(RT_BLOCK_FRAMES_U32)
+    } else {
+        // The fixed arming sequences below are defined-valid lists —
+        // construction cannot fail.
+        EventList::new(events, RT_BLOCK_FRAMES_U32).expect("fixed RT event list")
+    };
+    let started = Instant::now();
+    let result = {
+        let in_list = [&input[..]];
+        let input_view = PlanarBufferView::new(&in_list).expect("fixed mono input view");
+        let inputs = [HostInput(&input_view)];
+        let mut out_list = [&mut output[..]];
+        let mut output_view =
+            PlanarBufferViewMut::new(&mut out_list).expect("fixed mono output view");
+        let mut outputs = [HostOutput(&mut output_view)];
+        host.process(handle, &inputs, &mut outputs, event_list, None)
+    };
+    (result, output, started.elapsed().as_nanos())
+}
+
+/// Executes one block through [`rt_process_block`] and records the
+/// verdict row in `steps`. `armed: Some(true)` expects the
+/// `rt_alloc` marker at `output[0][0]` plus tail pass-through (the
+/// `test_fault` negative control); `Some(false)`/`None` expects
+/// bit-exact pass-through. The block's `wall_ns` lands in `trace`
+/// either way; the first violated contract lands in `trace.failure`.
+/// Returns whether the block met the contract (`Ok` + `Continue` +
+/// expected output shape).
+fn rt_record_block(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    events: &[PluginEvent],
+    armed: Option<bool>,
+    label: &'static str,
+    steps: &mut Vec<Value>,
+    trace: &mut RtTrace,
+) -> bool {
+    let (result, output, wall_ns) = rt_process_block(host, handle, events);
+    trace.walls_ns.push(wall_ns);
+    let marker = output[0] == RT_FAULT_MARKER;
+    let passthrough = output == [RT_INPUT; RT_BLOCK_FRAMES];
+    let tail_passthrough = output[1..] == [RT_INPUT; RT_BLOCK_FRAMES][1..];
+    let shape_ok = match armed {
+        Some(true) => marker && tail_passthrough,
+        _ => passthrough,
+    };
+    let mut row = json!({
+        "step": label,
+        "pass_through": passthrough,
+        "marker": marker,
+        "first_sample": output[0],
+        "wall_ns": wall_ns,
+    });
+    if let Some(armed) = armed {
+        row["armed_expected"] = json!(armed);
+    }
+    let ok = match &result {
+        Ok(result) => {
+            row["status"] = json!(format!("{:?}", result.status));
+            row["tail_frames"] = json!(result.tail_frames);
+            matches!(result.status, ProcessStatus::Continue) && shape_ok
+        }
+        Err(error) => {
+            row["error"] = json!(error.to_string());
+            false
+        }
+    };
+    row["verdict"] = Value::from(if ok { "pass" } else { "fail" });
+    if !ok && trace.failure.is_none() {
+        trace.failure = Some(match &result {
+            Ok(result) => format!(
+                "{label}: status {:?}, pass_through={passthrough}, marker={marker}",
+                result.status
+            ),
+            Err(error) => format!("{label}: process block rejected: {error}"),
+        });
+    }
+    steps.push(row);
+    ok
+}
+
+/// One lifecycle command recorded as a step row — `Ok`/`Err` both
+/// honest; the first `Err` lands in `failure`.
+fn rt_command_step(
+    host: &mut InProcessHost,
+    command: HostCommand,
+    label: &'static str,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    match host.execute(command) {
+        Ok(reply) => {
+            steps.push(json!({
+                "step": label,
+                "verdict": "pass",
+                "reply": format!("{reply:?}"),
+            }));
+            true
+        }
+        Err(error) => {
+            if failure.is_none() {
+                *failure = Some(format!("{label}: {error}"));
+            }
+            steps.push(json!({
+                "step": label,
+                "verdict": "fail",
+                "error": error.to_string(),
+            }));
+            false
+        }
+    }
+}
+
+/// Unwinds the instance to `Initialized` — `attempt_real_attach`'s
+/// trailing `Destroy` is only legal below `Activated`. Failures are
+/// recorded honestly into `trace`.
+fn rt_restore_initialized(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    trace: &mut RtTrace,
+) -> bool {
+    if !matches!(
+        host.lifecycle_state(handle),
+        Some(LifecycleState::Processing)
+    ) {
+        return true;
+    }
+    let mut ok = rt_command_step(
+        host,
+        HostCommand::StopProcessing { handle },
+        "rt_stop_processing",
+        steps,
+        &mut trace.failure,
+    );
+    ok = rt_command_step(
+        host,
+        HostCommand::Deactivate { handle },
+        "rt_deactivate",
+        steps,
+        &mut trace.failure,
+    ) && ok;
+    ok
+}
+
+/// Best-effort teardown for an instance left alive when the attach
+/// attempt failed before `observe_open` could unwind it (slot or
+/// session setup refused): `attempt_real_attach`'s trailing
+/// `Destroy` is a silent no-op on a `Processing`/`Activated`
+/// instance, so the lane finishes the honest sequence here.
+/// `Some(ok)` when teardown work ran, `None` when the instance was
+/// already gone (the normal path — `observe_open` unwound and the
+/// attach teardown destroyed it).
+fn rt_teardown_if_alive(
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    trace: &mut RtTrace,
+) -> Option<bool> {
+    match host.lifecycle_state(handle) {
+        Some(LifecycleState::Processing) => {
+            let mut ok = rt_command_step(
+                host,
+                HostCommand::StopProcessing { handle },
+                "rt_stop_processing",
+                steps,
+                &mut trace.failure,
+            );
+            ok &= rt_command_step(
+                host,
+                HostCommand::Deactivate { handle },
+                "rt_deactivate",
+                steps,
+                &mut trace.failure,
+            );
+            ok &= rt_command_step(
+                host,
+                HostCommand::Destroy { handle },
+                "rt_destroy",
+                steps,
+                &mut trace.failure,
+            );
+            Some(ok)
+        }
+        Some(LifecycleState::Activated) => {
+            let mut ok = rt_command_step(
+                host,
+                HostCommand::Deactivate { handle },
+                "rt_deactivate",
+                steps,
+                &mut trace.failure,
+            );
+            ok &= rt_command_step(
+                host,
+                HostCommand::Destroy { handle },
+                "rt_destroy",
+                steps,
+                &mut trace.failure,
+            );
+            Some(ok)
+        }
+        Some(_) => Some(rt_command_step(
+            host,
+            HostCommand::Destroy { handle },
+            "rt_destroy",
+            steps,
+            &mut trace.failure,
+        )),
+        None => None,
+    }
+}
+
+/// `observed.rt` summary — executed block count, frames-per-block,
+/// and the max/total wall times. Observation only: wall times are
+/// evidence context, never a verdict input.
+fn rt_summary_json(trace: &RtTrace) -> Value {
+    json!({
+        "blocks": trace.walls_ns.len(),
+        "block_frames": RT_BLOCK_FRAMES,
+        "wall_ns_max": trace.walls_ns.iter().max(),
+        "wall_ns_total": trace.walls_ns.iter().sum::<u128>(),
+    })
+}
+
+/// The `real-session-rt-samethread` open drive — `rt_pre_open`
+/// baseline block, `session.open(Docked)` through the real lease
+/// (the same step row `drive_open_docked` emits), then the
+/// `rt_post_open` block spanning the verb. A refused/failed open
+/// unwinds `Processing` back to `Initialized` so the attach
+/// teardown's `Destroy` stays legal.
+#[expect(clippy::too_many_arguments)]
+fn drive_open_rt_samethread(
+    gui: &RealOsGuiTest,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    parent_slot_lease: ParentSlotLease,
+    steps: &mut Vec<Value>,
+    rt_trace: &RefCell<RtTrace>,
+) -> Option<Result<EditorCapabilities, EditorSessionError>> {
+    rt_record_block(
+        host,
+        handle,
+        &[],
+        None,
+        "rt_pre_open",
+        steps,
+        &mut rt_trace.borrow_mut(),
+    );
+    let open_result =
+        open_session_docked(gui, host, handle, sessions, session_id, parent_slot_lease);
+    // The same `session.open(Docked)` row `drive_open_docked` emits —
+    // verdict mapping and `failed_unsupported` unchanged.
+    let failed_unsupported = session_failed_unsupported(sessions, session_id);
+    let (open_verdict, open_detail) = match &open_result {
+        Some(Ok(_)) => ("pass", "editor capabilities returned".to_string()),
+        Some(Err(error)) => {
+            let verdict = if matches!(error, EditorSessionError::Ops(EditorOpError::Unsupported)) {
+                "unsupported"
+            } else {
+                "fail"
+            };
+            (verdict, error.to_string())
+        }
+        None => ("fail", "editor session vanished before open".to_string()),
+    };
+    steps.push(json!({
+        "step": "session.open(Docked)",
+        "verdict": open_verdict,
+        "detail": open_detail,
+        "failed_unsupported": failed_unsupported,
+    }));
+    rt_record_block(
+        host,
+        handle,
+        &[],
+        None,
+        "rt_post_open",
+        steps,
+        &mut rt_trace.borrow_mut(),
+    );
+    if !matches!(open_result, Some(Ok(_))) {
+        rt_restore_initialized(host, handle, steps, &mut rt_trace.borrow_mut());
+    }
+    open_result
+}
+
+/// `real-session-rt-samethread` post-open observation — the shared
+/// child-HWND contract plus the interleaved DSP oracle:
+/// `rt_attached_1` after child enumeration, a `set_size` resize verb
+/// through the production `InProcessEditorOps` (its landing is a
+/// defined convergence — recorded, never itself the verdict),
+/// `rt_attached_2` spanning it, the shared close/detach/converge
+/// checks, `rt_post_close` across `session.close`, then
+/// `rt_processing_state` proving the instance never left
+/// `Processing`.
+#[expect(clippy::too_many_arguments)]
+fn observe_rt_samethread_lifecycle(
+    gui: &RealOsGuiTest,
+    container: Option<u64>,
+    _lease_raw: u64,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    steps: &mut Vec<Value>,
+    rt_trace: &RefCell<RtTrace>,
+) -> ChildVerification {
+    /// The resize request the DSP must survive — the same real verb
+    /// `real-editor-resize` oracles on geometry.
+    const RESIZE: EditorSize = EditorSize {
+        width: 800.0,
+        height: 600.0,
+    };
+    let mut failure: Option<String> = None;
+    let (mut observation, attach_ok) = observe_attached_children(container, steps, &mut failure);
+    rt_record_block(
+        host,
+        handle,
+        &[],
+        None,
+        "rt_attached_1",
+        steps,
+        &mut rt_trace.borrow_mut(),
+    );
+
+    // The real resize verb — its landing is a defined convergence
+    // (accepted, or the defined `Unsupported` refusal), recorded for
+    // evidence; the DSP oracle is the block that spans it.
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        session.set_size(&mut ops, RESIZE)
+    }) {
+        Some(Ok(())) => {
+            steps.push(json!({
+                "step": "editor_resize",
+                "verdict": "pass",
+                "detail": "set_size accepted — the resize verb ran through \
+                           the real lease while the instance stayed Processing",
+            }));
+        }
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
+            steps.push(json!({
+                "step": "editor_resize",
+                "verdict": "unsupported",
+                "detail": "session.set_size → the plugin declined resize \
+                           (canResize) — the defined EditorOpError::Unsupported",
+            }));
+        }
+        Some(Err(error)) => {
+            record_obs_fail(steps, &mut failure, "editor_resize", error.to_string());
+        }
+        None => {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "editor_resize",
+                "editor session vanished mid-observation",
+            );
+        }
+    }
+    rt_record_block(
+        host,
+        handle,
+        &[],
+        None,
+        "rt_attached_2",
+        steps,
+        &mut rt_trace.borrow_mut(),
+    );
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
+        sessions,
+        session_id,
+        host,
+        handle,
+        steps,
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+    rt_record_block(
+        host,
+        handle,
+        &[],
+        None,
+        "rt_post_close",
+        steps,
+        &mut rt_trace.borrow_mut(),
+    );
+
+    // The instance must still be `Processing` — the session verbs
+    // never tore the DSP lane down.
+    let state = host.lifecycle_state(handle);
+    let processing_ok = matches!(state, Some(LifecycleState::Processing));
+    if !processing_ok {
+        rt_trace.borrow_mut().failure.get_or_insert_with(|| {
+            format!("rt_processing_state: lifecycle {state:?}, not Processing")
+        });
+    }
+    steps.push(json!({
+        "step": "rt_processing_state",
+        "verdict": if processing_ok { "pass" } else { "fail" },
+        "lifecycle": format!("{state:?}"),
+    }));
+
+    // Unwind `Processing` → `Initialized` so the attach teardown's
+    // trailing `Destroy` stays legal.
+    rt_restore_initialized(host, handle, steps, &mut rt_trace.borrow_mut());
+
+    ChildVerification {
+        supported: observation.supported,
+        verified: attach_ok && close_ok && detach_ok && converged_ok && processing_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
+}
+
+/// The `real-session-rt-samethread` verdict identity.
+static RT_SAMETHREAD_CASE: ChildCaseIdentity<'static> = ChildCaseIdentity {
+    pass_detail: "test_editor stayed in Processing across every real session \
+                  verb — open/set_size/close ran through the real lease while \
+                  interleaved host.process blocks all returned Continue with \
+                  bit-exact pass-through output",
+    evidence: "session-rt-samethread:dsp-survives-real-window-verbs",
+    label: "RT non-interference",
+};
+
+/// `real-session-rt-samethread` body — `editor_child_body`'s sibling:
+/// the same production attach chain, but `test_editor` is driven to
+/// `Processing` first and `host.process` blocks interleave every real
+/// session verb (Issue #874 same-thread leg). The DSP oracle is
+/// per-block `Continue` + bit-exact pass-through + `Processing`
+/// maintained; the session oracle is the shared child-HWND/close/
+/// converge contract.
+fn session_rt_samethread_body(
+    gui: &mut RealOsGuiTest,
+    window: WindowId,
+    view: ViewInstanceId,
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    let (mut host, handle) = match prepare_editor_host(plugin, plugin_error) {
+        Ok(pair) => pair,
+        Err(outcome) => return *outcome,
+    };
+
+    let mut steps = Vec::new();
+    // `process` is only legal from `Processing` — the oracle's own
+    // prerequisite; a refusal is the honest outcome, never fabricated
+    // blocks.
+    if let Err(error) = host.execute(HostCommand::StartProcessing { handle }) {
+        steps.push(json!({
+            "step": "start_processing",
+            "verdict": "fail",
+            "error": error.to_string(),
+        }));
+        let _ = host.execute(HostCommand::Deactivate { handle });
+        let _ = host.execute(HostCommand::Destroy { handle });
+        let mut outcome = host_error_outcome("start_processing", error);
+        outcome.observed = Some(json!({ "steps": steps }));
+        return outcome;
+    }
+    steps.push(json!({ "step": "start_processing", "verdict": "pass" }));
+
+    let rt_trace = RefCell::new(RtTrace::default());
+    let (attempt, mut cleanup, verification) = attempt_real_attach(
+        gui,
+        window,
+        view,
+        &mut host,
+        handle,
+        &mut steps,
+        AttachDrive {
+            drive_open: |gui: &RealOsGuiTest,
+                         host: &mut InProcessHost,
+                         handle: PluginHandle,
+                         sessions: &mut PluginEditorSessions,
+                         session_id: PluginEditorSessionId,
+                         lease: ParentSlotLease,
+                         steps: &mut Vec<Value>| {
+                drive_open_rt_samethread(
+                    gui, host, handle, sessions, session_id, lease, steps, &rt_trace,
+                )
+            },
+            observe_open: |gui: &RealOsGuiTest,
+                           container: Option<u64>,
+                           lease_raw: u64,
+                           sessions: &mut PluginEditorSessions,
+                           session_id: PluginEditorSessionId,
+                           host: &mut InProcessHost,
+                           handle: PluginHandle,
+                           steps: &mut Vec<Value>| {
+                observe_rt_samethread_lifecycle(
+                    gui, container, lease_raw, sessions, session_id, host, handle, steps, &rt_trace,
+                )
+            },
+        },
+    );
+    let mut rt_trace = rt_trace.into_inner();
+
+    // The attach teardown's trailing `Destroy` is a silent no-op on a
+    // `Processing` instance — finish the honest sequence when the
+    // attempt failed before observe could unwind it.
+    if let Some(ok) = rt_teardown_if_alive(&mut host, handle, &mut steps, &mut rt_trace) {
+        cleanup.push(if ok {
+            "rt-instance-teardown".to_string()
+        } else {
+            "rt-instance-teardown-failed".to_string()
+        });
+    }
+
+    let mut verification = verification;
+    if let Some(verification) = verification.as_mut() {
+        // The RT gate spans every block the drive and observe ran.
+        verification.verified &= rt_trace.failure.is_none();
+        if verification.failure.is_none() {
+            verification.failure.clone_from(&rt_trace.failure);
+        }
+        if let Value::Object(extras) = &mut verification.extras {
+            extras.insert("rt".to_string(), rt_summary_json(&rt_trace));
+        }
+    }
+    child_attempt_outcome(
+        &attempt,
+        verification.as_ref(),
+        &RT_SAMETHREAD_CASE,
+        &steps,
+        &cleanup,
+    )
+}
+
+/// `real-session-rt-samethread` case: pre-flight requires
+/// `NativePluginDock`, then the body drives `test_editor` to
+/// `Processing` and runs the production attach chain with
+/// `host.process` blocks interleaved around every session verb —
+/// the Issue #874 same-thread RT non-interference oracle.
+fn real_session_rt_samethread_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let window = ctx.window;
+    let view = ctx.view;
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(session_rt_samethread_body(
+            gui,
+            window,
+            view,
+            plugin,
+            plugin_error,
+        ))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-session-rt-fault` body — the negative-control leg. The
+/// `test_fault` class shares `test_editor`'s cdylib: resolved from
+/// the same `Vst3Library`'s `descriptors()`, driven to `Processing`,
+/// then `rt_alloc` is armed/disarmed through in-block `ParamValue`
+/// events. The oracle proves the observation path catches a known
+/// `process()`-time heap allocation: `output[0][0] == 200.0` exactly
+/// while armed. Only `rt_alloc` is used — `abort`/`exit`/`hang` are
+/// process-killing and stay `Unsupported` boundary (`real-session-
+/// crash`/`real-session-hang`).
+#[expect(clippy::too_many_lines)]
+fn session_rt_fault_body(
+    plugin: Option<&PluginPair>,
+    plugin_error: Option<&PluginUnavailable>,
+) -> ScenarioOutcome {
+    let Some((library, _artifact)) = plugin else {
+        return match plugin_error {
+            Some(unavailable) if unavailable.prerequisite => not_run(format!(
+                "plugin artifact unavailable: {}",
+                unavailable.detail
+            )),
+            Some(unavailable) => fail(format!(
+                "plugin artifact failed to load: {}",
+                unavailable.detail
+            )),
+            None => not_run("plugin artifact unavailable".to_string()),
+        };
+    };
+    let Some(descriptor) = library
+        .descriptors()
+        .iter()
+        .find(|descriptor| descriptor.name == "test_fault")
+    else {
+        // `test_fault` shares `test_editor`'s cdylib — its absence is
+        // a stale-artifact environment gap (`NotRun` +
+        // `environment_blocked`), never a lane verdict.
+        let mut outcome = not_run(
+            "test_fault descriptor missing from the loaded test-plugin cdylib \
+             — the negative-control leg needs the fault fixture"
+                .to_string(),
+        );
+        outcome.observed = Some(json!({
+            "observed": "environment_blocked",
+            "detail": "test_fault descriptor missing",
+        }));
+        return outcome;
+    };
+    let fault_plugin_id = descriptor.id.to_string();
+    let mut steps = Vec::new();
+    let mut host = InProcessHost::new();
+    register_factories(&mut host, library);
+    let handle = match activate_test_gain(&mut host, &fault_plugin_id) {
+        Ok(handle) => handle,
+        Err(error) => return host_error_outcome("activate(test_fault)", error),
+    };
+    if let Err(error) = host.execute(HostCommand::StartProcessing { handle }) {
+        steps.push(json!({
+            "step": "start_processing",
+            "verdict": "fail",
+            "error": error.to_string(),
+        }));
+        let _ = host.execute(HostCommand::Deactivate { handle });
+        let _ = host.execute(HostCommand::Destroy { handle });
+        let mut outcome = host_error_outcome("start_processing", error);
+        outcome.observed = Some(json!({ "steps": steps }));
+        return outcome;
+    }
+    steps.push(json!({ "step": "start_processing", "verdict": "pass" }));
+
+    let arm = [PluginEvent::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: RT_FAULT_PARAM,
+            value: ParamValue::new(RT_FAULT_ARM_VALUE).expect("0.625 normalized"),
+        }),
+    )];
+    let disarm = [PluginEvent::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: RT_FAULT_PARAM,
+            value: ParamValue::new(0.0).expect("0.0 normalized"),
+        }),
+    )];
+    let mut trace = RtTrace::default();
+    let mut ok = rt_record_block(
+        &mut host,
+        handle,
+        &[],
+        Some(false),
+        "rt_fault_baseline",
+        &mut steps,
+        &mut trace,
+    );
+    ok = rt_record_block(
+        &mut host,
+        handle,
+        &arm,
+        Some(true),
+        "rt_fault_armed",
+        &mut steps,
+        &mut trace,
+    ) && ok;
+    ok = rt_record_block(
+        &mut host,
+        handle,
+        &[],
+        Some(true),
+        "rt_fault_still_armed",
+        &mut steps,
+        &mut trace,
+    ) && ok;
+    ok = rt_record_block(
+        &mut host,
+        handle,
+        &disarm,
+        Some(false),
+        "rt_fault_disarmed",
+        &mut steps,
+        &mut trace,
+    ) && ok;
+    ok = rt_record_block(
+        &mut host,
+        handle,
+        &[],
+        Some(false),
+        "rt_fault_post_disarm",
+        &mut steps,
+        &mut trace,
+    ) && ok;
+
+    // Defined teardown — `Processing` → `Initialized` → `Destroyed`.
+    for (command, label) in [
+        (HostCommand::StopProcessing { handle }, "rt_stop_processing"),
+        (HostCommand::Deactivate { handle }, "rt_deactivate"),
+        (HostCommand::Destroy { handle }, "rt_destroy"),
+    ] {
+        ok = rt_command_step(&mut host, command, label, &mut steps, &mut trace.failure) && ok;
+    }
+
+    let extras = json!({
+        "rt_fault": {
+            "plugin_id": fault_plugin_id,
+            "fault": "rt_alloc",
+            "arm_value": RT_FAULT_ARM_VALUE,
+            "marker": RT_FAULT_MARKER,
+        },
+        "rt": rt_summary_json(&trace),
+    });
+    steps_outcome(
+        &steps,
+        if ok {
+            Ok(extras)
+        } else {
+            Err(trace
+                .failure
+                .unwrap_or_else(|| "rt fault oracle mismatch".to_string()))
+        },
+        "test_fault rt_alloc armed the known process()-time heap \
+         allocation and the observation path caught its \
+         output[0][0] == 200.0 marker exactly while armed \
+         (baseline/armed/still-armed/disarmed/post-disarm sequence)",
+        &["session-rt-fault:oracle-catches-rt-alloc"],
+    )
+}
+
+/// `real-session-rt-fault` case: pre-flight requires
+/// `NativePluginDock`, then the body runs the `test_fault` marker
+/// sequence — the Issue #874 negative control proving the
+/// observation path can catch a known `process()`-time allocation.
+fn real_session_rt_fault_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let artifact = ctx.artifact;
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        Ok(session_rt_fault_body(plugin, plugin_error))
+    });
+    finalize_case(
+        report,
+        ctx,
+        EnvironmentKind::RealWindow,
+        artifact,
+        Map::new(),
+    )
+}
+
+/// `real-session-rt-boundary`: cross-thread same-instance RT
+/// observation is not possible on the current API — `test_editor`/
+/// `test_fault` are `!Send` (`create_sendable` → `None` on both the
+/// VST3 and CLAP host paths, so `Instantiate` selects a `Plain`
+/// slot), `prepare_endpoint`/`attach_endpoint` answer the defined
+/// `EndpointUnavailable` for `Plain` slots, `InProcessHost::
+/// attach_endpoint` is `pub(crate)`, and `PluginHost.l0` is private
+/// — no public surface can pump the same instance from an RT-class
+/// thread while the UI thread drives session verbs. The honest
+/// verdict is `Unsupported`, recorded inside the real session — the
+/// `real-session-crash`/`real-session-hang` architectural-boundary
+/// precedent, never a fabricated `NotRun` and never a `Pass`.
+/// Deferred to Issue #872 (L1 out-of-process host) or a future
+/// GUI-capable `create_sendable` contract.
+fn real_session_rt_boundary_case(
+    ctx: &mut RealDockContext<'_>,
+    spec: &ScenarioSpec,
+) -> ScenarioReport {
+    let report = run_scenario(&mut *ctx.gui, spec, |_gui| {
+        let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
+        outcome.detail = Some(
+            "cross-thread same-instance RT observation is not possible on the \
+             current API: test_editor/test_fault are !Send (create_sendable → \
+             None on both host paths → Plain slot), attach_endpoint is \
+             pub(crate) and answers EndpointUnavailable for Plain slots, and \
+             PluginHost.l0 is private — nothing public can pump the same \
+             instance from an RT-class thread while the UI thread drives \
+             session verbs (deferred: Issue #872)"
+                .to_string(),
+        );
+        outcome
+            .evidence
+            .push("session:rt:cross-thread-boundary".to_string());
+        Ok(outcome)
+    });
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -13334,11 +14248,11 @@ mod tests {
         let env = LaneEnvironment::default();
         let run_id = RunId::new(RUN_ID);
         let reports = blocked_reports(&run_id, &env, None, "test: no session");
-        assert_eq!(reports.len(), 29, "twenty-nine real-dock cases");
+        assert_eq!(reports.len(), 32, "thirty-two real-dock cases");
 
         // The blocked path reads the same catalog rows — case ids
         // and required caps must match exactly.
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
         assert_eq!(reports.len(), entries.len());
         for (entry, report) in entries.iter().zip(reports.iter()) {
             assert_eq!(report.case.as_ref().map(CaseId::as_str), Some(entry.case));
@@ -13371,7 +14285,7 @@ mod tests {
     /// here, not in evidence review.
     #[test]
     fn real_catalog_matches_entries() {
-        let entries: [ScenarioEntry<RealDockContext<'static>>; 29] = real_entries();
+        let entries: [ScenarioEntry<RealDockContext<'static>>; 32] = real_entries();
         assert_eq!(entries.len(), REAL_CATALOG.len(), "catalog row count");
         for (entry, row) in entries.iter().zip(REAL_CATALOG.iter()) {
             assert_eq!(entry.case, row.case, "case id drift");
