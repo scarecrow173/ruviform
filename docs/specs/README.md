@@ -326,3 +326,5 @@ Directory: `docs/specs`
 | SPEC-Rf767SbmtDrpKm3hXwNq7Yt4 | Issue #767 — L1 submit 経路の drop(queue shedding)契約 | proposed | [issue-767-submit-drop.md](./issue-767-submit-drop.md) |
 | SPEC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — spec | approved | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | SPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
+| SPEC-891dirtyNoteCtrctPul1 | Issue #891 plugin→host state dirty 通知経路 — 中立語彙・pull 配送・形式別応答契約 | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
+| SPEC-Rf895DrpSbtCse3mQ8xKw2Y7 | Issue #895 dropped_submits の条件別分離 — 原因別 counter の永続的帰属 | approved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |

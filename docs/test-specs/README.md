@@ -336,3 +336,5 @@ Directory: `docs/test-specs`
 | TSPEC-01KBZWINDOWIME0TESTSPEC00A1 | Issue #389 real-window-ime テスト仕様 — OsImeOutcome 語彙・ImeProbe mock seam・配達ログ解析・verdict lattice の判定 | approved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
 | TSPEC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — test specification | approved | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | TSPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle テスト仕様 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
+| TSPEC-891dirtyNoteVerifyQ2x | Issue #891 plugin→host state dirty 通知経路 — 検証仕様 | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
+| TSPEC-Rf895DrpSbtCse9wQ4xKm5Y3 | Issue #895 dropped_submits 条件別分離 — 原因別 counter の検証仕様 | approved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |
