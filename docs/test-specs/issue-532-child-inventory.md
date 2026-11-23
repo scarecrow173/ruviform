@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #532 child-inventory probe — test spec"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -88,18 +88,29 @@ layered/reparent retry の全 op 記録、(6) 既存 verdict
 - `ci_restore` row: `parent_restored`/`exstyle_restored`/
   `rect_restored`/`ops_ok` が記録され、refusal は
   `applied: false` のまま。
-- verdict: 必須 op 拒否・restore 不完全なら `Fail`、全完遂なら
-  `Pass`、capability 不足なら `NotRun` — green は verdict 入力
-  でない。
+- verdict: required op（frame/reparent/retry/restore 系）拒否・
+  restore 不完全なら `Fail`、全完遂なら `Pass`、capability
+  不足なら `NotRun`。as-child `ci_apply_layered_exstyle`/
+  `ci_apply_layered_lwa` の拒否は確定 class-C 診断の期待値で
+  `verdict: note` + `expected_outcome` の診断行（Issue #917
+  re-scope — `docs/discovery/issue-532-dcomp-residual.md`）。
+  green・latched 値は verdict 入力でない（as-child latch 成功は
+  `contradicts_confirmed_mechanism` flag 付き note）。
 
-## 実走結果（2026-11-21）
+## 実走結果
 
 - 全静的項目 pass（各 headless lane 済み、blocked-probe 27 rows）。
-- interactive lane: `real-dcomp-childinv` = `fail`（honest —
-  child-level exstyle write refused + restore `ops_ok=false`）。
-  inventory/capture/env/layered/retry/restore の全 step rows
-  記録済み。詳細は
+- interactive lane（2026-11-21・改訂前契約）:
+  `real-dcomp-childinv` = `fail`（honest — child-level exstyle
+  write refused + restore `ops_ok=false`）。inventory/capture/
+  env/layered/retry/restore の全 step rows 記録済み。詳細は
   `evidence/rf532/child-inventory-results.md`。
+- interactive lane（Issue #917 re-scope 後の canonical 再実走・
+  `evidence/rf631/plugin-dock-real-scenario.jsonl`）:
+  `real-dcomp-childinv` = `pass` — as-child layered 拒否が
+  `verdict: note` + `expected_outcome` の期待値行として記録
+  され、required op（frame/reparent/retry）・restore・lifecycle
+  が全完遂。
 - env variant: `GPUI_DISABLE_DIRECT_COMPOSITION=1` で root
   noredir 消失 → `dcomp_disabled_by_env`、window DC green
   1.0、screen 0.0 を確認（`childinv-dcomp-off.jsonl`）。

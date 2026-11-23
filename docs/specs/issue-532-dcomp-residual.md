@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #532 DComp residual — 残存 Fail の class 切り分けと処遇決定（docs-only disposition）"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -88,12 +88,13 @@ Coordinator が AC 照合で最終判断する。
 | case | class | 決定 | 根拠 |
 | --- | --- | --- | --- |
 | `real-dcomp-pixel` | **B — HWND レベル外部遮蔽**（lane が spawn する別 top-level `Zed::Window` が docked child の screen rect を被覆。DComp plane class とは別） | **別 Issue 切り出し**（起票案は PR 本文）。#532 内では class B の既知 Fail として記録 — lane window 配置の問題であり、#532 が責務を持つ DComp 合成経路の不具合ではない | pinned JSONL `occlusion_hit_test`（全 probe point が hwnd `160105518` `Zed::Window` `184,89,1552x903` role `other`）+ `windowdc`/`printwindow` green `1.0` + w1 内 z-order 正常 |
-| `real-dcomp-bandescape` | **C — `WS_EX_LAYERED` 適用不能の確定診断**（棄却済み fix 経路の可否判定 probe） | **既知 Fail として継続**（#532 内で class C 確定。別 Issue 切り出し不要 — 診断目的達成済みで、追加調査・製品修正の対象が残っていない） | `be_apply_layered_exstyle`/`be_apply_layered_lwa` refused、silent no-op + error 87（`evidence/rf532/band-escape-results.md`） |
-| `real-dcomp-childinv` | **C — 同上**（child-level で同一機構を確定） | **既知 Fail として継続**（同上） | `ci_apply_layered_*` refused、`latched_as_child=false`/`latched_as_toplevel=true`（`evidence/rf532/child-inventory-results.md`）、`WS_CHILD\|WS_EX_LAYERED` 作成 `0x80070006`（issue-839 discovery） |
+| `real-dcomp-bandescape` | **C — `WS_EX_LAYERED` 適用不能の確定診断**（棄却済み fix 経路の可否判定 probe） | ~~既知 Fail として継続~~ → **Issue #917 で verdict 契約を意図的改訂（re-scope）** — as-child layered 拒否を「確定機序どおりの期待値」として `verdict: note` の診断行に転換し、required op 完遂で `Pass` に収束。診断目的達成済みで製品修正の対象は残っていないが、lane exit 1 常態化の解消を目的に #917 が本決定を再審査・更新した（下記「Issue #917 による class C 収束」） | `be_apply_layered_exstyle`/`be_apply_layered_lwa` refused、silent no-op + error 87（`evidence/rf532/band-escape-results.md`） |
+| `real-dcomp-childinv` | **C — 同上**（child-level で同一機構を確定） | ~~既知 Fail として継続~~ → **Issue #917 で verdict 契約を意図的改訂（同上）** | `ci_apply_layered_*` refused、`latched_as_child=false`/`latched_as_toplevel=true`（`evidence/rf532/child-inventory-results.md`）、`WS_CHILD\|WS_EX_LAYERED` 作成 `0x80070006`（issue-839 discovery） |
 
 ### 決定の補足
 
-- **verdict の昇格は行わない。** 3 case の `fail` はいずれも実測に
+- **verdict の昇格は行わない（本 slice の範囲 — Issue #917 での
+  意図的改訂は下記参照）。** 3 case の `fail` はいずれも実測に
   基づく honest 記録で、disposition は「別 class 確定」の記録で
   あって verdict の書き換えではない。Fail→Pass への改竄、Fail→
   `Unsupported` への再基準化はいずれも本 slice では実施しない。
@@ -107,12 +108,33 @@ Coordinator が AC 照合で最終判断する。
   re-baseline は `real_dock.rs`/`real_catalog.rs` の verdict
   意味論変更を要し、fail-closed mapping・console 行数・headless
   非回帰の再検証を伴う — docs-only slice の範囲を超える。
-- **class C の将来選択肢（記録のみ・本 slice では実施しない）**:
-  診断目的を達成した probe を恒久的な lane `fail` として残すか、
-  「拒否を期待結果として検証する」re-scope（refused を Pass の
-  期待値とする断言型への転換）または entry-gate `Unsupported`
-  化へ移すかは、lane の exit 1 常態化をどう扱うかの設計判断。
-  現行は「既知 Fail は正直に残す」方針に従い継続とする。
+  Issue #917 の再審査でもこの分析は維持され、entry-gate
+  `Unsupported` 化は採られなかった（下記）。
+- **class C の将来選択肢 → Issue #917 で実施済み**:
+  本 slice が記録した選択肢のうち、「拒否を期待結果として
+  検証する re-scope」を Issue #917 が採用・実装した。
+  `be_apply_layered_{exstyle,lwa}`/`ci_apply_layered_{exstyle,lwa}`
+  は `record_expected_refusal_row`（`verdict: note` +
+  `expected_outcome` + `contradicts_confirmed_mechanism` flag）
+  の期待拒否診断行へ転換され、refusal の `applied`/
+  `win32_error`/`after`/`latched` 記録は維持される — Fail→Pass
+  の改竄ではなく期待値検証への re-scope。frame/repaint/
+  reparent/retry/restore の required op は strict のまま、
+  reparent 後 top-level での `*_retry_*` op も strict を維持する
+  （top-level layered は文書化された supported 経路であり、
+  拒否は確定機序と矛盾しない異常として `Fail` 扱い）。as-child
+  latch 成功は確定機序と矛盾する OS 依存の新規 data として
+  flag 記録し Pass を妨げない — verdict は OS 実装詳細ではなく
+  probe 契約の完遂を計る。entry-gate `Unsupported` 化は採らな
+  かった: case 自体は unsupported ではなく（上記分析どおり）、
+  entry-gate 化は per-run の refusal evidence を消す。「既知
+  Fail として継続」も採らなかった: lane exit 1 の常態化が
+  Issue #917 の発端そのものであり、診断目的達成後の恒久的な
+  lane fail に継続の理由がない。
+- **Issue #917 の収束確認**: verdict 収束後の canonical 帳簿は
+  `evidence/rf631/plugin-dock-real-scenario.jsonl`（interactive
+  lane 再実走で再生成）。2 case が収束 verdict を返し lane
+  exit code が 0 になることを AC3 として確認する。
 - **`real-dcomp-pixel` の `detail` 文字列の扱い**: JSONL の
   `detail` は旧文面 "consistent with the known GPUI DComp
   topmost occlusion" のまま残る。確定 class（外部 window 遮蔽）

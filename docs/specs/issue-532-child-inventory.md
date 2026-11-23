@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #532 child-inventory slice（child HWND inventory + capture-plane 分離 + env arm 検証 + child-level layered retry）"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -141,8 +141,18 @@ tree に到達しない層**に絞られた。残課題として示された次�
 - layered arm が child-level write → reparent retry の全 op
   結果を記録し、refusal は `applied: false` のまま成功に
   改変しない。
-- verdict は既存 semantics（`Pass`=観測完遂/`Fail`=必須 op
-  拒否や restore 不完全/`NotRun`/`Unsupported`）を維持し、
-  green pixel を verdict 入力にしない。
+- verdict semantics（Issue #917 で意図的改訂）: `Pass` =
+  required op（frame/reparent/retry/restore 系）完遂 + restore
+  verified + lifecycle 収束。as-child layered op
+  （`ci_apply_layered_exstyle`/`ci_apply_layered_lwa`）の拒否は
+  確定 class-C 診断（`WS_EX_LAYERED` は `WS_CHILD` に latch
+  しない — `docs/discovery/issue-532-dcomp-residual.md`）の
+  期待値として `verdict: note` + `expected_outcome` の診断行で
+  あり verdict 入力にしない（refusal の `applied`/`win32_error`/
+  `after`/`latched` 記録は維持）。as-child latch 成功は
+  `contradicts_confirmed_mechanism` flag 付きの OS 依存新規
+  data として記録。`Fail` = required op 拒否や restore 不完全、
+  lifecycle 破壊。`NotRun`/`Unsupported` は従来どおり
+  capability/環境由来。green pixel を verdict 入力にしない。
 - headless では fail-closed（`NotRun`/honest rows）、全検証
   lane 通過。

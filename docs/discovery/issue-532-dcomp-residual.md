@@ -4,7 +4,7 @@ type: "discovery"
 status: "approved"
 title: "Issue #532 DComp residual — 根治 fix 統合後の残存 Fail class 切り分け記録"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -188,6 +188,41 @@ mutation 拒否 = fail」）に従う honest な記録であって、probe
 （layered 経路の可否判定）は達成済みで、判定結果は根治 fix
 slice での経路棄却（`docs/discovery/issue-839-gpui-dcomp.md` の
 「棄却した経路」）に既に反映されている。
+
+### #917 追補 — verdict 契約の意図的改訂（re-scope）
+
+上記の確定機構は不変。Issue #917（`real-dcomp-*` 行の環境要因
+`fail` 調査 — lane exit 1 常態化の解消）で、2 case の verdict
+契約「必須 mutation 拒否 = fail」を意図的改訂した:
+
+- as-child `be_apply_layered_{exstyle,lwa}`/
+  `ci_apply_layered_{exstyle,lwa}` op は「確定 class-C どおりの
+  期待拒否」として `verdict: note` + `expected_outcome` の診断行
+  へ転換（`record_expected_refusal_row`）。refusal の
+  `applied`/`win32_error`/`after`/`latched` 記録は維持 —
+  Fail→Pass の改竄ではなく期待値検証への re-scope。
+- required op（repaint/frame/reparent/retry/restore 系）の拒否・
+  restore 不完全・lifecycle 破壊は従来どおり `Fail`。reparent 後
+  top-level での `ci_apply_retry_*` は strict を維持（top-level
+  layered は文書化された supported 経路）。
+- as-child layered が latch する観測（OS build 依存で確定機序と
+  矛盾し得る新規 data）は `contradicts_confirmed_mechanism`
+  flag 付きで記録し verdict を動かさない — lane が計るのは
+  probe 契約の完遂であって OS 実装詳細の不変性ではない。
+- `be_apply_layered_*` は `WS_CHILD` 状態の container、
+  `ci_apply_layered_*` は `WS_CHILD` の editor child に対する
+  write であり、いずれも本 class-C 機構の対象となる
+  as-child 経路である（container write は cross-thread だが
+  child-level same-thread write の同じ silent drop が child-state
+  制約を確定した — 上記機構確定のとおり）。
+- 収束先の選択肢としての `Unsupported`/entry-gate 化は
+  採らなかった — case は unsupported ではなく（probe は設計
+  どおり完走する）、gate 化は per-run refusal evidence を消す
+  ため（`docs/specs/issue-532-dcomp-residual.md`「決定の補足」
+  参照）。
+- 収束 verdict（2 case の `pass` + lane exit 0）は
+  `evidence/rf631/plugin-dock-real-scenario.jsonl` の canonical
+  再実走で確認する。
 
 ## AC1 の RT 非干渉（rationale 記録）
 

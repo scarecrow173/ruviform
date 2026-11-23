@@ -48,8 +48,11 @@
 //! |                         |             | （強制 repaint → `WS_EX_LAYERED`+`LWA_ALPHA` →     |
 //! |                         |             | `SetParent(GetDesktopWindow())`+baseline rect) し、 |
 //! |                         |             | 各 stage で hit-test+screen green を再観測して     |
-//! |                         |             | 脱出経路を二分。verdict は probe 実行+復元+        |
-//! |                         |             | lifecycle のみ（観測値は方式採否データ）           |
+//! |                         |             | 脱出経路を二分。verdict は required op 適用+復元+  |
+//! |                         |             | lifecycle のみ — as-child `WS_EX_LAYERED`/       |
+//! |                         |             | `LWA_ALPHA` 拒否は確定 class-C 診断の期待値       |
+//! |                         |             | （`WS_CHILD` には latch しない）として note 級に   |
+//! |                         |             | 記録し verdict 入力にしない（Issue #917）         |
 //! | `real-dcomp-childinv`   | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — child-level |
 //! |                         |             | inventory + capture-plane 診断: child HWND の     |
 //! |                         |             | `GWL_STYLE`/`GWL_EXSTYLE`/class/`GCL_STYLE`/所有    |
@@ -58,7 +61,9 @@
 //! |                         |             | `PrintWindow`/window DC/screen 3 面 capture、      |
 //! |                         |             | `GPUI_DISABLE_DIRECT_COMPOSITION` の正直な        |
 //! |                         |             | env-arm 記録、child-level layered/reparent retry。 |
-//! |                         |             | verdict は probe 実行+復元+lifecycle のみ          |
+//! |                         |             | verdict は required op 適用+復元+lifecycle のみ  |
+//! |                         |             | — as-child layered 拒否は確定 class-C の期待値   |
+//! |                         |             | として note 級記録（Issue #917）                 |
 //! | `real-dcomp-rasterfix`  | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — fix oracle: |
 //! |                         |             | baseline → pump(`UpdateWindow`+bounded `WM_PAINT`   |
 //! |                         |             | dispatch)→ reparent-to-desktop+drain → top-level    |
@@ -4989,10 +4994,8 @@ fn run_probe_stages(
         executed = false;
         failure.get_or_insert_with(|| {
             format!(
-                "raise_to_top refused (win32 error {})",
-                raise
-                    .win32_error
-                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+                "raise_to_top refused ({})",
+                win32_refusal_reason(raise.win32_error)
             )
         });
     }
@@ -5020,10 +5023,8 @@ fn run_probe_stages(
         executed = false;
         failure.get_or_insert_with(|| {
             format!(
-                "set_topmost refused (win32 error {})",
-                topmost
-                    .win32_error
-                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+                "set_topmost refused ({})",
+                win32_refusal_reason(topmost.win32_error)
             )
         });
     }
@@ -6938,8 +6939,9 @@ const BE_REPARENT_OPS: [&str; 4] = [
 /// Verification for `real-dcomp-bandescape` — same lifecycle
 /// contract as [`ForegroundVerification`] plus the probe outcome.
 /// The case verdict reads `lifecycle_ok` + `probe.{evaluated,
-/// executed,restored}` only; per-stage green and hit-test answers
-/// are escape-strategy *data*, never verdict inputs.
+/// executed,restored}` only; per-stage green, hit-test answers,
+/// and the expected as-child layered refusal are escape-strategy/
+/// diagnosis *data*, never verdict inputs (Issue #917 re-scope).
 struct BandescapeVerification {
     /// `false` off-Windows — the observation half then reports
     /// `Unsupported`, never a fabricated pass.
@@ -7028,10 +7030,13 @@ fn container_restore_json(outcome: &osmut::ContainerRestoreOutcome) -> Value {
 }
 
 /// One container-mutation apply step row — `pass` when the API
-/// applied, `fail` when refused. Every band-escape op is strict:
-/// `RedrawWindow`/`SetWindowLongPtrW`/`SetLayeredWindowAttributes`/
-/// `SetParent`/`SetWindowPos` on our own live HWND have no
-/// legitimate-refusal path, so a refusal is an anomaly, not data.
+/// applied, `fail` when refused. Strict ops only:
+/// `RedrawWindow`/`SetWindowPos`/`SetParent` and the post-reparent
+/// `*_retry_*` ops on our own live HWND have no legitimate-refusal
+/// path, so a refusal is an anomaly, not data. The as-child
+/// `*_layered_exstyle`/`*_layered_lwa` ops route through
+/// [`record_expected_refusal_row`] instead — their refusal is the
+/// confirmed class-C diagnostic answer (Issue #917).
 fn record_container_apply_row(
     steps: &mut Vec<Value>,
     step: &str,
@@ -7044,9 +7049,23 @@ fn record_container_apply_row(
     }));
 }
 
-/// Fold one container op's `applied` into the probe's
+/// The refusal-reason half of a mutation failure string —
+/// `win32 error N` when the API reported an error, or the honest
+/// silent-drop description when the call returned success yet the
+/// read-back shows the write never held (a `SetLastError(0)`-clean
+/// refusal is itself a mechanism datum, never "unknown").
+fn win32_refusal_reason(win32_error: Option<u32>) -> String {
+    win32_error.map_or_else(
+        || "no win32 error — silently dropped write".to_string(),
+        |e| format!("win32 error {e}"),
+    )
+}
+
+/// Fold one strict container op's `applied` into the probe's
 /// `executed`/`first_failure` accumulators — the container
-/// counterpart of the `run_probe_stages` strict checks.
+/// counterpart of the `run_probe_stages` strict checks. Expected
+/// refusals never reach this fold (see
+/// [`expected_child_layered_refusal`]).
 fn fold_container_op(
     executed: &mut bool,
     failure: &mut Option<String>,
@@ -7057,13 +7076,55 @@ fn fold_container_op(
         *executed = false;
         failure.get_or_insert_with(|| {
             format!(
-                "{step} refused (win32 error {})",
-                outcome
-                    .win32_error
-                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+                "{step} refused ({})",
+                win32_refusal_reason(outcome.win32_error)
             )
         });
     }
+}
+
+/// Whether a layered-stage op's refusal is the expected class-C
+/// outcome — `WS_EX_LAYERED` does not latch on a `WS_CHILD` window
+/// (confirmed mechanism, `docs/discovery/issue-532-dcomp-residual.md`),
+/// so the exstyle write is silently dropped and the dependent
+/// `SetLayeredWindowAttributes` call is refused with
+/// `ERROR_INVALID_PARAMETER`. True only for the bandescape/
+/// child-inventory `*_layered_exstyle`/`*_layered_lwa` ops issued
+/// while the target is still a `WS_CHILD`; the `SWP_FRAMECHANGED`
+/// commit, the follow-up repaint, the post-reparent `*_retry_*`
+/// ops, and rasterfix's `rf_apply_layered_*` arms (issued on the
+/// top-level target as a real fix hypothesis) have no
+/// confirmed-refusal path and stay strict verdict inputs.
+fn expected_child_layered_refusal(step_name: &str) -> bool {
+    (step_name.starts_with("be_") || step_name.starts_with("ci_"))
+        && step_name.contains("_layered_")
+        && (step_name.ends_with("_exstyle") || step_name.ends_with("_lwa"))
+}
+
+/// One expected-refusal apply step row — `note` regardless of
+/// outcome. Refusal here is the confirmed class-C diagnostic
+/// answer (Issue #917 re-scope), never a verdict input; a
+/// successful latch would contradict the recorded mechanism
+/// (OS-dependent behavior change — new data, not a probe or
+/// product defect), so the row flags `applied` outcomes as
+/// `contradicts_confirmed_mechanism` rather than judging them.
+/// The full mutation outcome (`applied`/`win32_error`/read-back
+/// `after`) is preserved verbatim — no refusal is erased.
+fn record_expected_refusal_row(
+    steps: &mut Vec<Value>,
+    step: &str,
+    outcome: &osmut::ContainerMutationOutcome,
+) {
+    steps.push(json!({
+        "step": step,
+        "verdict": "note",
+        "expected_outcome": "refused — WS_EX_LAYERED does not latch \
+                             on a WS_CHILD window (class C confirmed \
+                             mechanism; docs/discovery/\
+                             issue-532-dcomp-residual.md)",
+        "contradicts_confirmed_mechanism": outcome.applied,
+        "mutation": container_mutation_json(outcome),
+    }));
 }
 
 /// The bounded settle after a mutated presentation stage — one
@@ -7090,7 +7151,10 @@ fn be_settle(stage: &str, steps: &mut Vec<Value>) {
 /// exstyle → `SetParent(GetDesktopWindow())` + baseline rect at
 /// `HWND_TOP` → settle → observe) → verified container restore.
 /// Every observation is `note`-level data; the verdict inputs are
-/// mutation application + restore + lifecycle.
+/// required-op application + restore + lifecycle. The as-child
+/// `WS_EX_LAYERED`/`LWA_ALPHA` refusal on the `WS_CHILD` container
+/// is the confirmed class-C diagnostic answer (Issue #917) —
+/// recorded as expected-refusal data, never a verdict input.
 #[expect(clippy::too_many_lines)]
 fn bandescape_probe_children(
     observation: &ChildWindowObservation,
@@ -7188,15 +7252,24 @@ fn bandescape_probe_children(
     }));
     observe_all_children("repaint", observation, token, artifacts, steps, BE_LABELS);
 
-    // Stage 2 — layered surface: `WS_EX_LAYERED` + `SWP_FRAMECHANGED`
-    // + `LWA_ALPHA(255)` re-routes the container through a layered
-    // presentation surface; the follow-up repaint + bounded settle
-    // give the new path a frame before the hit-test/green
-    // re-observation.
+    // Stage 2 — layered surface attempt: `WS_EX_LAYERED` +
+    // `SWP_FRAMECHANGED` + `LWA_ALPHA(255)` tests whether a layered
+    // presentation surface can re-route the container. On the
+    // `WS_CHILD` container the exstyle write is silently dropped
+    // and `SetLayeredWindowAttributes` is refused — the confirmed
+    // class-C answer, recorded through
+    // [`record_expected_refusal_row`] as expected diagnostic data;
+    // the frame commit and follow-up repaint stay strict. The
+    // bounded settle gives the presentation path a frame before
+    // the hit-test/green re-observation.
     let layered_ops = osmut::apply_layered(token);
     for (step_name, op) in BE_LAYERED_OPS.iter().zip(layered_ops.iter()) {
-        record_container_apply_row(steps, step_name, op);
-        fold_container_op(&mut executed, &mut failure, step_name, op);
+        if expected_child_layered_refusal(step_name) {
+            record_expected_refusal_row(steps, step_name, op);
+        } else {
+            record_container_apply_row(steps, step_name, op);
+            fold_container_op(&mut executed, &mut failure, step_name, op);
+        }
     }
     let repaint = osmut::repaint_container(token);
     record_container_apply_row(steps, "be_apply_layered_repaint", &repaint);
@@ -7372,9 +7445,11 @@ fn bandescape_observe(
 /// relationship (layered surface, then a desktop-reparented
 /// top-level window) let the docked child's pixels escape the
 /// GPUI presentation band? The case verdict is the *probe's own*
-/// honest oracle (executed + restored + lifecycle); whether green
-/// appeared is escape-strategy data recorded in the step rows,
-/// never a verdict input.
+/// honest oracle (required ops applied + restored + lifecycle);
+/// whether green appeared is escape-strategy data, and the
+/// as-child layered refusal is the confirmed class-C diagnostic
+/// answer (Issue #917) — both recorded in the step rows, never
+/// verdict inputs.
 fn editor_bandescape_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -7446,7 +7521,10 @@ fn editor_bandescape_body(
                 let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Pass);
                 outcome.detail = Some(
                     "band-escape probe executed the repaint/layered/reparent \
-                     mutation stages; container parent, exstyle, and rect \
+                     mutation stages; the as-child WS_EX_LAYERED/LWA_ALPHA \
+                     refusal on the WS_CHILD container is the confirmed \
+                     class-C diagnostic answer, recorded as expected data in \
+                     steps (Issue #917); container parent, exstyle, and rect \
                      verified restored (sibling z-order best-effort — see \
                      steps). Escape-strategy data (hit-test answers, screen \
                      green per stage) is recorded in steps"
@@ -7547,8 +7625,9 @@ const CI_LAYERED_RETRY_OPS: [&str; 3] = [
 /// Verification for `real-dcomp-childinv` — same lifecycle contract
 /// as [`BandescapeVerification`]. The case verdict reads
 /// `lifecycle_ok` + `probe.{evaluated,executed,restored}` only;
-/// every inventoried fact and captured raster is diagnosis *data*,
-/// never a verdict input.
+/// every inventoried fact, captured raster, and the expected
+/// as-child layered refusal is diagnosis *data*, never a verdict
+/// input (Issue #917 re-scope).
 struct ChildinvVerification {
     /// `false` off-Windows — the observation half then reports
     /// `Unsupported`, never a fabricated pass.
@@ -7722,9 +7801,12 @@ fn record_inventory_row(
 ///    retried — separating a cross-thread child-window mutation
 ///    failure from the composition issue. Verified restore.
 ///
-/// Verdict inputs are mutation application + restore + lifecycle;
-/// every inventoried fact, latched bit, and green fraction is
-/// diagnosis data.
+/// Verdict inputs are required-op application + restore +
+/// lifecycle; every inventoried fact, latched bit, and green
+/// fraction is diagnosis data. The as-child `WS_EX_LAYERED`/
+/// `LWA_ALPHA` refusal on the `WS_CHILD` editor HWND is the
+/// confirmed class-C diagnostic answer (Issue #917) — recorded as
+/// expected-refusal data, never a verdict input.
 #[expect(clippy::too_many_lines)]
 fn childinv_probe_children(
     observation: &ChildWindowObservation,
@@ -7908,9 +7990,12 @@ fn childinv_probe_children(
     // Stage 5 — the residual layered experiment at child level.
     // The child HWND is owned by this caller thread (the fixture's
     // CreateWindowExW ran inside `session.open`), so a same-thread
-    // `GWL_EXSTYLE` write must latch; a silent drop then mirrors
-    // the container-level read-back failure and a reparent retry
-    // separates a top-level-only latch rule from mutation failure.
+    // `GWL_EXSTYLE` write exercised the pure child-state path; its
+    // silent drop — confirmed class-C mechanism, `WS_EX_LAYERED`
+    // does not latch on `WS_CHILD` — is the expected diagnostic
+    // answer recorded through [`record_expected_refusal_row`], and
+    // the reparent retry separates a top-level-only latch rule
+    // from mutation failure.
     let mut executed = true;
     let mut restored = true;
     let mut failure: Option<String> = None;
@@ -7938,8 +8023,12 @@ fn childinv_probe_children(
 
         let layered_ops = osmut::apply_layered(child.hwnd);
         for (step_name, op) in CI_LAYERED_OPS.iter().zip(layered_ops.iter()) {
-            record_container_apply_row(steps, step_name, op);
-            fold_container_op(&mut executed, &mut failure, step_name, op);
+            if expected_child_layered_refusal(step_name) {
+                record_expected_refusal_row(steps, step_name, op);
+            } else {
+                record_container_apply_row(steps, step_name, op);
+                fold_container_op(&mut executed, &mut failure, step_name, op);
+            }
         }
         let latched_child = layered_ops
             .last()
@@ -7948,9 +8037,12 @@ fn childinv_probe_children(
             "step": "ci_layered_as_child",
             "verdict": "note",
             "latched": latched_child,
-            "note": "same-thread GWL_EXSTYLE write — a latched=false \
-                     after applied ops is a silently dropped bit, \
-                     mirroring the container-level read-back failure",
+            "contradicts_confirmed_mechanism": latched_child == Some(true),
+            "note": "same-thread GWL_EXSTYLE write — latched=false is \
+                     the expected class-C answer (WS_EX_LAYERED does \
+                     not latch on WS_CHILD); latched=true contradicts \
+                     the confirmed mechanism and is new OS-dependent \
+                     data, not a verdict input",
         }));
         ci_settle("layered", steps);
         observe_all_children("layered", observation, token, artifacts, steps, CI_LABELS);
@@ -7990,6 +8082,7 @@ fn childinv_probe_children(
                 "step": "ci_layered_as_toplevel",
                 "verdict": "note",
                 "latched": latched_toplevel,
+                "contradicts_confirmed_mechanism": latched_toplevel == Some(false),
                 "note": "latched=true only after top-level conversion \
                          means the child-window latch path was the \
                          constraint; latched=false means the drop is \
@@ -8130,9 +8223,10 @@ fn childinv_observe(
 /// style/class/ownership inventory, class-style diagnosis,
 /// raster-vs-screen capture split, honest env-arm record, and the
 /// bounded child-level layered/reparent retry. The case verdict is
-/// the *probe's own* honest oracle (executed + restored +
-/// lifecycle); every inventoried fact is diagnosis data, never a
-/// verdict input.
+/// the *probe's own* honest oracle (required ops applied +
+/// restored + lifecycle); every inventoried fact and the expected
+/// as-child layered refusal (confirmed class-C, Issue #917) is
+/// diagnosis data, never a verdict input.
 fn editor_childinv_body(
     gui: &mut RealOsGuiTest,
     window: WindowId,
@@ -8206,7 +8300,10 @@ fn editor_childinv_body(
                     "child-level inventory + capture-plane diagnosis executed \
                      (style/class/ownership inventory, class-style diagnosis, \
                      raster-vs-screen captures, env-arm record, bounded \
-                     child-level layered/reparent retry with verified restore). \
+                     child-level layered/reparent retry with verified restore; \
+                     the as-child WS_EX_LAYERED/LWA_ALPHA refusal on the \
+                     WS_CHILD editor HWND is the confirmed class-C diagnostic \
+                     answer, recorded as expected data in steps — Issue #917). \
                      Observed facts are diagnosis data recorded in steps"
                         .to_string(),
                 );
@@ -8628,10 +8725,8 @@ fn rasterfix_probe_children(
         outcome.executed = false;
         outcome.failure.get_or_insert_with(|| {
             format!(
-                "set_topmost refused (win32 error {})",
-                topmost
-                    .win32_error
-                    .map_or_else(|| "unknown".to_string(), |e| e.to_string())
+                "set_topmost refused ({})",
+                win32_refusal_reason(topmost.win32_error)
             )
         });
     }

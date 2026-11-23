@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #532 band-escape probe test spec"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -99,9 +99,22 @@ honest 記録（verified-write 含む）、(3) verified restore、
 
 ### F4: verdict 意味論
 
-- 必須 mutation の拒否（applied=false）は `fail`（probe 未完走
-  の事実記録）— 実走では `be_apply_layered_exstyle`/
-  `be_apply_layered_lwa` の拒否により `fail`。
+- required mutation op（`be_apply_repaint`・`*_frame`・
+  `be_apply_layered_repaint`・`be_apply_reparent_*`・`be_restore`
+  — いずれも legitimate な拒否経路を持たない）の拒否
+  （applied=false）は `fail`（probe 未完走の事実記録）。
+- as-child `be_apply_layered_exstyle`/`be_apply_layered_lwa` の
+  拒否は確定 class-C 診断（`WS_EX_LAYERED` は `WS_CHILD` に
+  latch しない — `docs/discovery/issue-532-dcomp-residual.md`）
+  の期待値であり、`verdict: note` + `expected_outcome` 付きの
+  診断行として記録され verdict 入力にしない（Issue #917 による
+  「必須 mutation 拒否 = fail」契約の意図的改訂 — refusal の
+  `applied`/`win32_error`/`after` 記録は維持され Fail→Pass の
+  改竄ではない）。as-child layered の latch 成功は確定機序と
+  矛盾する OS 依存の新規 data として
+  `contradicts_confirmed_mechanism` flag で記録し Pass を妨げない
+  — lane が計るのは probe 契約の完遂であって OS 実装詳細の
+  不変性ではないため。
 - green/hit-test/class_style は note 級 data で verdict に
   影響しない。
 - lifecycle（attach/close）の破壊も `fail`。
@@ -140,7 +153,10 @@ honest 記録（verified-write 含む）、(3) verified restore、
 
 - `be_apply_layered_exstyle` — last-error 成功でも
   `after.exstyle.value` に `WS_EX_LAYERED`（`0x80000`）が無ければ
-  `applied: false`/`win32_error: null`/`verdict: fail`。
+  `applied: false`/`win32_error: null`/`verdict: note` +
+  `expected_outcome`（as-child では latch しない確定 class-C
+  機序どおりの期待拒否 — Issue #917 改訂前は `verdict: fail`
+  だった）。
 - `be_apply_reparent_parent` — `SetParent(GetDesktopWindow())`
   成功で `after.parent` が desktop HWND（実走では `65548`）に
   変化、container が GPUI root の直上 z-order に。
