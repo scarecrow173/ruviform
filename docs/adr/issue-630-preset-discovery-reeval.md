@@ -4,7 +4,7 @@ type: "adr"
 status: "accepted"
 title: "Issue #630 clap-validator preset-discovery 検証を upstream commit build pin で実施"
 created: "2026-11-17"
-updated: "2026-11-17"
+updated: "2026-11-23"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -30,7 +30,6 @@ relations:
   related:
     - "docs/designs/issue-630-abi-validator.md"
     - "evidence/rf630/preset-discovery-reeval-verification.md"
-    - "docs/impl/ir/issue-630-preset-discovery-reeval.md"
   refines:
     - "docs/designs/issue-630-abi-validator.md"
   refined-by: []
@@ -133,10 +132,9 @@ SHA-256 は `b4bd645877bba3d5abe4300a84c5785312ce16f7d1179a2fd3177eedc45afe26`
 - Affected paths: `ci/plugin-abi-validator/run.mjs`、
   `ci/plugin-abi-validator/tests/run.test.mjs`、
   `evidence/rf630/abi-validator/`、
-  `evidence/rf630/preset-discovery-reeval-verification.md`、
-  `docs/impl/exp/issue-630-preset-discovery-reeval-exp.jsonl`、
-  `docs/impl/ir/issue-630-preset-discovery-reeval.md`、および本 ADR を含む
-  Issue #630 doc chain。
+  `evidence/rf630/preset-discovery-reeval-verification.md`、および本 ADR を
+  含む Issue #630 doc chain（当時記録した `docs/impl/exp`・`docs/impl/ir`
+  の実装記録はワークスペースの文書再編で削除済み）。
 - Constraints: `crates/`・`Cargo.lock`・`mise.toml`・`.github/**`・
   docs index（`docs/**/README.md`）は変更しない。validator binary を
   commit しない。`test_fault` の plugin-level `param-(set|fuzz)` 除外と

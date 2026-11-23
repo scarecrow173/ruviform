@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #630 preset-discovery 外部検証再評価 slice — 設計"
 created: "2026-11-17"
-updated: "2026-11-17"
+updated: "2026-11-23"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -19,8 +19,7 @@ relations:
   implemented-by: []
   depends-on:
     - "docs/specs/issue-630-preset-discovery-reeval.md"
-  blocks:
-    - "docs/plans/issue-630-preset-discovery-reeval.md"
+  blocks: []
   supersedes: []
   superseded-by: []
 ---
