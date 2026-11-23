@@ -334,3 +334,5 @@ Directory: `docs/test-specs`
 | TSPEC-01M7Y96P5AREWKR3Y63G1N66DX | Issue #631 real-editor-popup real-HWND harness — 検証仕様 | approved | [issue-631-real-popup-harness.md](./issue-631-real-popup-harness.md) |
 | TSPEC-rf388-virtual-first-ac-01 | Issue #388 Virtual-first AC 照合 — canonical real-dock verdict 集合と AC 各行の突合 | approved | [issue-388-virtual-first-ac.md](./issue-388-virtual-first-ac.md) |
 | TSPEC-01KBZWINDOWIME0TESTSPEC00A1 | Issue #389 real-window-ime テスト仕様 — OsImeOutcome 語彙・ImeProbe mock seam・配達ログ解析・verdict lattice の判定 | approved | [issue-389-window-ime.md](./issue-389-window-ime.md) |
+| TSPEC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — test specification | approved | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
+| TSPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle テスト仕様 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |

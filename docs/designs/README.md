@@ -324,3 +324,5 @@ Directory: `docs/designs`
 | DESIGN-iwcBlHQ0lcdHJGucocxHOo | 音楽時間モデル設計（小節/拍/PPQN・テンポマップ・プラグイン ABI 整合） | superseded | [music-time-model.md](./music-time-model.md) |
 | DES-034ZbbClipPart00000001 | Issue #839 GPUI fork clip-partition fix — 設計 | approved | [issue-839-gpui-dcomp.md](./issue-839-gpui-dcomp.md) |
 | DESIGN-0351ujlVkI9Du0Jm1todAT | Issue #872 L1 out-of-process プラグインエディタホスト設計（child 所有 toplevel Floating・wire v6 GUI 動詞・GUI_FLOATING bit・crash/hang oracle・5 slice 分割） | draft | [issue-872-l1-oos-plugin-editor-host.md](./issue-872-l1-oos-plugin-editor-host.md) |
+| DES-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル設計 | draft | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
+| DES-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 設計 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
