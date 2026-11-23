@@ -136,6 +136,9 @@ pub mod real_catalog;
 pub mod real_dock;
 pub mod scenario;
 
-pub use artifact::{PLUGIN_PATH_ENV, fixture_lib_name, resolve_artifact, sha256_hex};
+pub use artifact::{
+    PLUGIN_PATH_ENV, PLUGIN_PATH_ENV_CLAP, fixture_lib_name, fixture_lib_name_clap,
+    resolve_artifact, sha256_hex,
+};
 pub use probe::PluginHostProbe;
 pub use scenario::{HEADLESS_MATRIX, LaneEnvironment, run_all, run_selected};

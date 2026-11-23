@@ -37,6 +37,17 @@ pub const LANE: &str = "real-window-dock";
 /// session evidence, never headless proof.
 pub const DRIVER: ScenarioDriver = ScenarioDriver::RealOs;
 
+/// The run id shared by every case of the CLAP real-window dock
+/// lane (Issue #630 AC4 CLAP leg) — deliberately distinct from the
+/// VST3 lane's [`RUN_ID`] so the two formats' evidence can never be
+/// conflated.
+pub const CLAP_RUN_ID: &str = "rf630-plugin-dock-real-clap";
+
+/// CLAP lane scenario id — [`SCENARIO`]'s CLAP counterpart: a
+/// separate run, a separate case-id family (`real-clap-*`), and a
+/// separate JSONL ledger, never interleaved with the VST3 catalog.
+pub const CLAP_SCENARIO: &str = "rf630.plugin-dock-real-clap";
+
 /// One `rf631.plugin-dock-real` catalog row — metadata only. The
 /// executable entries (run fn + spec extras) live behind the
 /// `real-dock` feature in `real_dock::real_entries`; a feature-gated
@@ -314,5 +325,113 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
             ScenarioCapability::NativePluginDock,
             ScenarioCapability::OutOfProcessPluginHost,
         ],
+    },
+];
+
+/// The fourteen CLAP real-window dock cases (Issue #630 AC4 CLAP
+/// leg) in run order — metadata only, mirroring
+/// [`real_dock::real_clap_entries`]. The CLAP lane loads
+/// `ruviform_plugin_test_clap.dll` and runs the same
+/// session/child-HWND oracle family as the VST3 catalog, but every
+/// format-specific expectation is the CLAP fixture's own:
+///
+/// - pixels: the CLAP `test_editor` paints blue
+///   (`EDITOR_COLOR = 0x00FF0000`), not VST3 green;
+/// - visibility: CLAP `hide`/`show` flips `IsWindowVisible` on the
+///   live child — it does not destroy/recreate the way VST3's
+///   `removed()`/`attached` cycle does;
+/// - re-dock: the CLAP embedded-GUI contract is single-embed —
+///   in-place `reattach` lands the fixture's defined
+///   `gui already embedded` plugin refusal
+///   (`Failed{PluginFailed}`), and the format's re-open path is
+///   close + re-open on a fresh session (a new child generation);
+/// - input/focus/popup: `send_gui_key`/`set_gui_focus` are the
+///   trait-default `Err(Unsupported)` on `ClapPlugin` and embedded
+///   `open_gui` never reaches floating — these cases run the verbs
+///   through the real lease and record the defined `Unsupported`
+///   landing honestly (Coordinator decision 1);
+/// - crash/hang: the CLAP `test_editor` is parameterless (no
+///   in-band Fault arm) and `PluginHost` routes are keyed by
+///   `plugin_id` with per-route Bundled pools, so a co-resident
+///   `test_fault` kill arm cannot exist — the cases record
+///   `Unsupported` with that structural ground (Coordinator
+///   decision 2, option (c)).
+///
+/// Session lifecycle (`terminate`/`degraded`/`recovery`/`timeout`)
+/// uses the same format-agnostic session drives and oracles as the
+/// VST3 rows — the verbs and expectations do not differ by format.
+pub const REAL_CLAP_CATALOG: &[RealCatalogRow] = &[
+    RealCatalogRow {
+        case: "real-clap-editor-attach",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-dcomp-pixel",
+        scenario: CLAP_SCENARIO,
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::VisualCapture,
+        ],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-resize",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-redock",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-visibility",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-input",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-focus",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-editor-popup",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-terminate",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-degraded",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-recovery",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-timeout",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-crash",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
+    },
+    RealCatalogRow {
+        case: "real-clap-session-hang",
+        scenario: CLAP_SCENARIO,
+        required: &[ScenarioCapability::NativePluginDock],
     },
 ];

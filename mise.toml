@@ -218,6 +218,56 @@ mkdir -p evidence/rf631
 cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --blocked-probe --out evidence/rf631/plugin-dock-real-headless.jsonl
 '''
 
+# Issue #630 AC4 CLAP leg — the real-window plugin-dock lane run
+# against the real `ruviform_plugin_test_clap` cdylib's
+# `test_editor` (manual/opt-in — NOT a CI-required gate): builds the
+# CLAP fixture cdylib, then runs `plugin-dock-real-scenario
+# --format clap` — the separate `rf630.plugin-dock-real-clap`
+# catalog/run-id/JSONL stream, never interleaved with the VST3
+# lane's evidence. Same `RealOsGuiTest` NativeSlot → container-HWND
+# lease → ParentSlotLease → InProcessEditorOps redeem →
+# session.open(Docked) attach chain; the editor-pixel oracle
+# samples the CLAP fixture's EDITOR_COLOR blue (`blue_*` evidence
+# keys), visibility is the live-child hide/show law (ShowWindow —
+# no VST3 destroy/recreate), re-dock records the defined
+# single-embed `gui already embedded` plugin refusal then close +
+# recover mints the new attach generation, and input/focus/popup
+# record the CLAP ops surface's defined Unsupported refusals. The
+# `real-clap-session-crash`/`real-clap-session-hang` rows record
+# the honest structural Unsupported — test_editor is parameterless
+# (no in-band Fault arm) and PluginHost routes are keyed by
+# plugin_id with per-route Bundled pools, so a co-resident
+# test_fault arm cannot exist through the existing API. JSONL to
+# evidence/rf630/plugin-dock-real-clap.jsonl; headless hosts record
+# NotRun + environment_blocked (writes only target/ +
+# evidence/rf630/).
+[tasks.test-ui-plugin-dock-real-clap]
+description = "Issue #630 real-window plugin-dock CLAP lane (manual/opt-in — NOT a CI-required gate): real plugin-test-clap cdylib test_editor + RealOsGuiTest real OS windows drive the same attach chain as the VST3 lane (blue pixel oracle, live-child hide/show, single-embed re-dock refusal + close/recover generation, defined-Unsupported input/focus/popup, structural-Unsupported crash/hang); JSONL to evidence/rf630/plugin-dock-real-clap.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf630/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+cargo build --locked -p ruviform-plugin-test-clap
+mkdir -p evidence/rf630
+cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --format clap --out evidence/rf630/plugin-dock-real-clap.jsonl
+'''
+
+# Issue #630 AC4 CLAP leg — headless fail-closed proof lane
+# (manual/opt-in — NOT a CI-required gate): the CLAP-format
+# `--blocked-probe` generates the session-start-failure reports
+# without opening a window, asserts every CLAP catalog row is
+# NotRun + observed.environment_blocked with no real-window claim
+# (exit 1 on violation). JSONL to
+# evidence/rf630/plugin-dock-real-clap-headless.jsonl (writes only
+# target/ + evidence/rf630/).
+[tasks.test-ui-plugin-dock-real-clap-headless]
+description = "Issue #630 real-window CLAP headless fail-closed proof lane (manual/opt-in — NOT a CI-required gate): plugin-dock-real-scenario --format clap --blocked-probe generates the session-start-failure reports without opening a window, asserts every CLAP catalog row is NotRun + observed.environment_blocked with no real-window claim (exit 1 on violation); JSONL to evidence/rf630/plugin-dock-real-clap-headless.jsonl (writes only target/ + evidence/rf630/)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p evidence/rf630
+cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugin-dock-real-scenario -- --format clap --blocked-probe --out evidence/rf630/plugin-dock-real-clap-headless.jsonl
+'''
+
 # Issue #631 GPUI Test Lab / Scenario Console lane (manual/opt-in —
 # NOT a CI-required gate): launches `plugin-dock-lab` (feature
 # `lab-gui`) — a real GPUI window that dogfoods the merged catalog

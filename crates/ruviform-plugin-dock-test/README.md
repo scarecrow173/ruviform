@@ -53,10 +53,14 @@ executes nothing and upgrades no verdict.
 ## Artifact resolution
 
 1. `RUVIFORM_PLUGIN_DOCK_TEST_VST3` — explicit file path (env only);
+   `RUVIFORM_PLUGIN_DOCK_TEST_CLAP` is the CLAP lane's mirror
+   (Issue #630 AC4);
 2. `current_exe()`'s `deps/` directory;
 3. `current_exe()`'s own directory.
 
-File name: `{DLL_PREFIX}ruviform_plugin_test_vst3{DLL_SUFFIX}`.
+File names: `{DLL_PREFIX}ruviform_plugin_test_vst3{DLL_SUFFIX}` for
+the VST3 lane, `{DLL_PREFIX}ruviform_plugin_test_clap{DLL_SUFFIX}`
+for the CLAP lane.
 
 ## Lane
 
@@ -166,6 +170,47 @@ no session start was attempted — it evidences the fail-closed
 mapping, never an observed headless run. The
 `test-ui-plugin-dock-real-headless` mise task writes the proof to
 `evidence/rf631/plugin-dock-real-headless.jsonl`.
+
+## Real-window CLAP lane (Issue #630 AC4, opt-in)
+
+`plugin-dock-real-scenario --format clap` runs the CLAP leg of the
+same lane against the real `ruviform_plugin_test_clap` cdylib's
+`test_editor` — a separate `rf630.plugin-dock-real-clap` catalog,
+run id, and JSONL stream (never interleaved with VST3 evidence;
+`plugin_path_env` records which artifact env var the run
+consulted). The same `NativeSlot → container-HWND lease →
+ParentSlotLease → InProcessEditorOps redeem → session.open(Docked)`
+chain drives it; the format differences the CLAP `clap.ext.gui`
+surface imposes land in the oracles, not the verdict vocabulary:
+
+| case | verdict intent |
+| --- | --- |
+| `real-clap-editor-attach` | same child-HWND contract as `real-editor-attach` — `clap.ext.gui` `create`/`set_parent`/`show` embeds a real `RuviformClapTestEditor` child HWND, `hide`+`destroy` on close tears it down |
+| `real-clap-dcomp-pixel` | the shared screen-composited oracle against the CLAP fixture's `EDITOR_COLOR` **blue** (`0x00FF0000` COLORREF); measured keys are `blue_pixels`/`blue_fraction` honestly named — `green_*` never appears |
+| `real-clap-editor-resize` | shared geometry oracle — `can_resize` → true, `set_size` moves the child HWND |
+| `real-clap-editor-redock` | CLAP's single-embed law: in-place `session.reattach` → `clap_gui.set_parent` on the live embedded GUI lands the defined `gui already embedded` plugin refusal (`Failed{PluginFailed}`); `session.close` destroys generation 1 and a **fresh session's** `open(Docked)` mints generation 2 on a disjoint HWND set (`recover` cannot mint a new GUI — `Closed` is terminal). Session-1 events `[Attached{Docked}, Detached, Failed{PluginFailed}, Closed]`, session-2 `[Attached{Docked}, Closed]` |
+| `real-clap-editor-visibility` | CLAP's live-child hide/show law — `set_gui_visibility` calls `hide`/`show` (`ShowWindow`) on the **same** HWND set: post-hide every pre-hide child stays `IsWindow`-alive and `IsWindowVisible==false` (no VST3 destroy/recreate), post-show the same set is visible again; events `[Attached{Docked}, Hidden, Shown{Docked}, Closed]` |
+| `real-clap-editor-input` / `real-clap-editor-focus` / `real-clap-editor-popup` | `Unsupported` — the CLAP L0 ops surface refuses `SendGuiKey`/`SetGuiFocus` with the defined `EditorOpError::Unsupported` (trait defaults); the refusal is observed through the real lease, never fabricated |
+| `real-clap-session-terminate` / `-degraded` / `-recovery` / `-timeout` | the shared session-lifecycle oracles — format-agnostic drives, CLAP-flavored evidence |
+| `real-clap-session-crash` / `real-clap-session-hang` | `Unsupported` with the structural ground: `test_editor` is parameterless (no in-band `Fault` arm) and `PluginHost` routes are keyed by `plugin_id` with per-route `Bundled` pools, so a co-resident `test_fault` arm cannot exist through the existing API — an architectural boundary, never a `Pass` the fixture cannot produce |
+
+The pixel path additionally drains each docked child's pending
+`WM_PAINT` on its owner thread before sampling (`drain_paint`
+note rows — the Issue #532 (a2) finding: the scenario caller
+thread owns the child HWND but never pumps its queue, so the
+`hbrBackground` fill can sit queued past the capture). Same drain
+now runs on the VST3 rows — it changed nothing there (the VST3
+fill was already delivered), and the note rows keep the mechanism
+visible.
+
+```sh
+mise run test-ui-plugin-dock-real-clap          # builds the CLAP cdylib + runs the lane → evidence/rf630/plugin-dock-real-clap.jsonl
+mise run test-ui-plugin-dock-real-clap-headless # headless fail-closed proof → evidence/rf630/plugin-dock-real-clap-headless.jsonl
+```
+
+Manual/opt-in — not a CI-required gate; requires an interactive
+desktop session and fails closed (`NotRun` + `environment_blocked`)
+on headless hosts.
 
 ## Headless scenario console (`plugin-dock-console`)
 

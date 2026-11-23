@@ -1,12 +1,22 @@
-//! `plugin-dock-real-scenario` — the Issue #631 real-window
+//! `plugin-dock-real-scenario` — the Issue #631/#630 real-window
 //! plugin-dock lane entry (feature `real-dock`).
 //!
-//! Runs every `rf631.plugin-dock-real` case inside one
+//! Runs every catalog case of ONE plugin format inside one
 //! `RealOsGuiTest` session — real OS windows on the interactive
 //! desktop — and emits the reports as JSONL in the same shape as
 //! `plugin-dock-scenario` (shared `jsonl` renderer): one `run`
 //! header line followed by one `case` line per [`ScenarioReport`].
 //! Output goes to `--out <path>` or stdout.
+//!
+//! `--format vst3|clap` (default `vst3`) selects the Issue #630 AC4
+//! leg: `vst3` runs the canonical `rf631.plugin-dock-real` catalog
+//! against `ruviform_plugin_test_vst3.dll`; `clap` runs the
+//! `rf630.plugin-dock-real-clap` catalog against
+//! `ruviform_plugin_test_clap.dll`'s `test_editor` — a separate run
+//! id, scenario id, and JSONL evidence stream, never interleaved.
+//! Each format reads its own explicit-path env var
+//! (`RUVIFORM_PLUGIN_DOCK_TEST_VST3` /
+//! `RUVIFORM_PLUGIN_DOCK_TEST_CLAP`, see [`PluginFormat::path_env`]).
 //!
 //! `--pixel-artifacts <dir>` is opt-in: the `real-capture`,
 //! `real-dcomp-pixel`, `real-dcomp-foreground`,
@@ -29,7 +39,8 @@
 //! `environment_kind=real-window`, and exits `1` on any violation.
 //! The reports' detail says plainly that no session start was
 //! attempted: they evidence the fail-closed *mapping*, never an
-//! observed headless run.
+//! observed headless run. The probe is format-aware: under
+//! `--format clap` it proves the CLAP catalog's fail-closed shape.
 //!
 //! Exit code: `0` unless any case verdict is `Fail` (or the
 //! blocked-probe self-check finds a violation); `NotRun`/
@@ -49,10 +60,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use ruviform_plugin_dock_test::LaneEnvironment;
-use ruviform_plugin_dock_test::artifact::PLUGIN_PATH_ENV;
-use ruviform_plugin_dock_test::jsonl::{render_jsonl, repo_sha};
+use ruviform_plugin_dock_test::jsonl::{render_jsonl_with_path_env, repo_sha};
 use ruviform_plugin_dock_test::real_dock::{
-    RUN_ID, blocked_probe, blocked_probe_violations, run_all_with_pixel_artifacts,
+    PluginFormat, blocked_probe_violations_with_format, blocked_probe_with_format,
+    run_all_with_format,
 };
 use ruviform_ui_test::ScenarioVerdict;
 
@@ -60,6 +71,7 @@ fn main() -> ExitCode {
     let mut out: Option<PathBuf> = None;
     let mut pixel_artifacts: Option<PathBuf> = None;
     let mut blocked_probe_mode = false;
+    let mut format = PluginFormat::Vst3;
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -79,6 +91,21 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             }
+            "--format" => match args.next().as_deref() {
+                Some("vst3") => format = PluginFormat::Vst3,
+                Some("clap") => format = PluginFormat::Clap,
+                Some(other) => {
+                    eprintln!(
+                        "plugin-dock-real-scenario: unknown format `{other}` \
+                             (expected vst3|clap)"
+                    );
+                    return ExitCode::from(2);
+                }
+                None => {
+                    eprintln!("plugin-dock-real-scenario: --format requires vst3|clap");
+                    return ExitCode::from(2);
+                }
+            },
             "--blocked-probe" => {
                 blocked_probe_mode = true;
             }
@@ -91,20 +118,26 @@ fn main() -> ExitCode {
 
     let environment = LaneEnvironment {
         repo_sha: repo_sha(),
-        plugin_path: env::var_os(PLUGIN_PATH_ENV).map(PathBuf::from),
+        plugin_path: env::var_os(format.path_env()).map(PathBuf::from),
     };
     let (reports, lane) = if blocked_probe_mode {
         (
-            blocked_probe(&environment),
+            blocked_probe_with_format(&environment, format),
             "test-ui-plugin-dock-real-headless",
         )
     } else {
         (
-            run_all_with_pixel_artifacts(&environment, pixel_artifacts.as_deref()),
+            run_all_with_format(&environment, pixel_artifacts.as_deref(), format),
             "test-ui-plugin-dock-real",
         )
     };
-    let jsonl = render_jsonl(RUN_ID, lane, environment.repo_sha.as_deref(), &reports);
+    let jsonl = render_jsonl_with_path_env(
+        format.run_id(),
+        lane,
+        environment.repo_sha.as_deref(),
+        format.path_env(),
+        &reports,
+    );
 
     let write_result = if let Some(path) = &out {
         std::fs::write(path, &jsonl).map_err(|e| format!("{}: {e}", path.display()))
@@ -118,7 +151,7 @@ fn main() -> ExitCode {
     }
 
     if blocked_probe_mode {
-        let violations = blocked_probe_violations(&reports);
+        let violations = blocked_probe_violations_with_format(&reports, format);
         if !violations.is_empty() {
             for violation in &violations {
                 eprintln!("plugin-dock-real-scenario: blocked-probe violation: {violation}");
