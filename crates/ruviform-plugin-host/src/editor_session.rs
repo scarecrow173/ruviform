@@ -13,10 +13,15 @@
 //! consumes.
 //!
 //! Current-reality note (audit `docs/discovery/
-//! issue-388-389-native-dock-current-state.md`): L1 GUI is still
-//! `Unsupported` — [`L1EditorOps`] expresses that as a defined refusal on
-//! every op and never degrades to L0. L0 dispatch lives through
-//! [`InProcessEditorOps`], which drives the existing
+//! issue-388-389-native-dock-current-state.md`): L1 GUI rides wire v6 —
+//! [`L1EditorOps`] drives the floating verb family through the
+//! composite [`crate::PluginHost`] under the child's negotiated
+//! `GUI_FLOATING` bit; an unadvertised instance gets the defined
+//! `Err(EditorOpError::Unsupported)` before any wire traffic, `Docked`
+//! and `reattach` stay refused (Issue #115 owns the docked/reparent
+//! scope), and the plugin→host request channel keeps its refusal (no
+//! wire verbs exist). It never silently degrades to L0. L0 dispatch
+//! lives through [`InProcessEditorOps`], which drives the existing
 //! [`crate::InProcessHost`] `OpenGui`/`CloseGui` command path; a plugin
 //! whose `open_gui` is still the default `Unsupported` surfaces as
 //! [`EditorOpError::Unsupported`], never a fake success.
@@ -29,12 +34,14 @@ use std::fmt;
 use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, Instant};
 
+use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     GuiKeyEvent, GuiRequest, GuiRequestRefusal, GuiRequestSink, GuiRequestVerdict, GuiSize,
     HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
+use crate::composite::{HostNotification, PluginHost};
 use crate::host::InProcessHost;
 
 /// How a plugin editor is attached to the host presentation.
@@ -1809,6 +1816,35 @@ impl<'a> InProcessEditorOps<'a> {
     }
 }
 
+/// Maps an `Opened.capabilities` bitfield onto
+/// [`EditorCapabilities`] — bits 0-9 name the fields in declaration
+/// order (`dock`..`focus`, the wire v6 `Opened.capabilities` layout a
+/// [`HostReply::Opened`] carries verbatim). A set bit claims
+/// `Supported`; a clear bit stays `Unsupported`, and bits past
+/// `focus` are future-assignment space this version has no field
+/// for — the host ignores them per the wire contract.
+fn capabilities_from_bits(bits: u32) -> EditorCapabilities {
+    let support = |bit: u32| {
+        if bits & (1 << bit) != 0 {
+            Support::Supported
+        } else {
+            Support::Unsupported
+        }
+    };
+    EditorCapabilities {
+        dock: support(0),
+        float: support(1),
+        resize: support(2),
+        hide_show: support(3),
+        reparent: support(4),
+        ime: support(5),
+        popup: support(6),
+        close: support(7),
+        input: support(8),
+        focus: support(9),
+    }
+}
+
 /// Maps a [`HostError`] to [`EditorOpError`].
 fn map_host_error(error: HostError) -> EditorOpError {
     match error {
@@ -1839,7 +1875,7 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
         &mut self,
         session: PluginEditorSessionId,
         lease: &ParentSlotLease,
-        _size: EditorSize,
+        size: EditorSize,
         mode: AttachMode,
     ) -> Result<EditorCapabilities, EditorOpError> {
         // The L0 command surface carries a plain (docked) open only —
@@ -1853,13 +1889,20 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
         match self.host.execute(HostCommand::OpenGui {
             handle: self.instance,
             parent,
+            // Advisory on L0 — the in-process `open_gui` has no size
+            // vocabulary and opens at the plugin's preferred size.
+            size: GuiSize {
+                width: size.width,
+                height: size.height,
+            },
         }) {
-            // An accepted docked open proves dock and close. The
-            // resize/visibility/reparent verbs exist on this surface
-            // now, but per-plugin support is only known when a verb
-            // is invoked (there is no capability query), so the
-            // flags stay unclaimed rather than over-claiming.
-            Ok(HostReply::Opened { .. }) => {
+            // An accepted docked open proves dock and close — the
+            // `0x81` the host reports maps straight onto the caps.
+            // The resize/visibility/reparent verbs exist on this
+            // surface now, but per-plugin support is only known when
+            // a verb is invoked (there is no capability query), so
+            // the flags stay unclaimed rather than over-claiming.
+            Ok(HostReply::Opened { capabilities, .. }) => {
                 if let Some(arbiter) = &self.arbiter {
                     let arbiter = Arc::clone(arbiter);
                     let sink: Box<GuiRequestSink> =
@@ -1874,11 +1917,7 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
                         return Err(map_host_error(error));
                     }
                 }
-                Ok(EditorCapabilities {
-                    dock: Support::Supported,
-                    close: Support::Supported,
-                    ..EditorCapabilities::default()
-                })
+                Ok(capabilities_from_bits(capabilities))
             }
             // Any other successful reply shape is an invariant violation
             // in the host mapping — surfaced as a plugin-level failure.
@@ -2028,63 +2067,203 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
     }
 }
 
-/// L1 editor-session ops: the defined `Unsupported` refusal on every op.
+/// L1 editor-session ops: drives the out-of-process (wire v6) GUI
+/// path for one instance through the composite [`PluginHost`].
 ///
-/// Mirrors the current `L1Instance::execute` short-circuit — L1 GUI is
-/// genuinely unimplemented (no wire verbs reach the child, the OS
-/// embedding mechanisms are unresolved), so every op returns
-/// [`EditorOpError::Unsupported`]. It never silently degrades to L0.
+/// The child's `Hello` carries the negotiated `GUI_FLOATING` bit —
+/// one mechanism bit covering the whole floating verb family. Every
+/// op that produces wire traffic passes the `L1Instance::execute`
+/// gate: an unadvertised child answers the defined
+/// `Err(EditorOpError::Unsupported)` before a frame is written.
+/// [`PluginHost::negotiated_gui_capabilities`] exposes the same mask
+/// to `capabilities`/`open` so a doomed `open` never spends a lease.
+///
+/// Defined refusals that stay refused by design: `Docked` attach and
+/// `reattach` (Issue #115 owns the docked/reparent scope — wire v6
+/// ships no `SetGuiParent` verb), and the plugin→host request channel
+/// (`drain_gui_requests`/`adjudicate_gui_request` — wire v6 has no
+/// request verbs, Issue #873's channel is L0-local). The ops never
+/// silently degrades to L0.
 ///
 /// **RT contract:** non-RT only — UI-thread only.
-#[derive(Debug, Default)]
-pub struct L1EditorOps;
+pub struct L1EditorOps<'a> {
+    /// The composite host — every verb is one `HostCommand` through
+    /// `execute`, so slot/generation routing stays composite-owned.
+    host: &'a mut PluginHost,
+    /// The out-of-process instance this ops drives.
+    instance: PluginHandle,
+    /// The session-lease redeemer — `None` (the [`Self::new`]
+    /// construction) opens an owner-less floating toplevel by
+    /// passing `ParentLease::new(0, 0)`, no hint redeemed.
+    redeemer: Option<Box<LeaseRedeemer<'a>>>,
+    /// The last `Opened.capabilities` a successful `open` reported —
+    /// the reply is the capability-discovery path (L0 precedent:
+    /// pre-open only the mechanism advertisement is claimable).
+    opened_capabilities: Option<EditorCapabilities>,
+}
 
-impl L1EditorOps {
-    /// Creates the refusal-only L1 ops adapter.
+impl<'a> L1EditorOps<'a> {
+    /// Wraps `host` to drive editor ops for the out-of-process
+    /// `instance` with no owner hint — `open` passes
+    /// `ParentLease::new(0, 0)`, a standalone floating toplevel.
     ///
     /// **RT contract:** non-RT only — UI-thread only.
     #[must_use]
-    pub fn new() -> Self {
-        Self
+    pub fn new(host: &'a mut PluginHost, instance: PluginHandle) -> Self {
+        Self {
+            host,
+            instance,
+            redeemer: None,
+            opened_capabilities: None,
+        }
+    }
+
+    /// [`Self::new`] plus a lease redeemer — `open` redeems the
+    /// session's opaque [`ParentSlotLease`] into the [`ParentLease`]
+    /// the wire `OpenGui` payload carries as the owner hint (not
+    /// child-window embedding — Issue #115's banned `SetParent`
+    /// topology stays refused).
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn with_redeemer(
+        host: &'a mut PluginHost,
+        instance: PluginHandle,
+        redeemer: Box<LeaseRedeemer<'a>>,
+    ) -> Self {
+        Self {
+            host,
+            instance,
+            redeemer: Some(redeemer),
+            opened_capabilities: None,
+        }
+    }
+
+    /// `true` while the instance's child advertises
+    /// `GUI_FLOATING` — the negotiated mechanism bit the
+    /// `L1Instance::execute` gate applies to the whole verb family.
+    /// Host-side query errors surface mapped like the ops' own
+    /// commands.
+    fn floating_advertised(&self) -> Result<bool, EditorOpError> {
+        self.host
+            .negotiated_gui_capabilities(self.instance)
+            .map(|mask| mask & wire::WIRE_CAPABILITY_GUI_FLOATING != 0)
+            .map_err(map_host_error)
     }
 }
 
-impl EditorSessionOps for L1EditorOps {
+impl EditorSessionOps for L1EditorOps<'_> {
     fn capabilities(
         &self,
         _session: PluginEditorSessionId,
     ) -> Result<EditorCapabilities, EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        if !self.floating_advertised()? {
+            return Err(EditorOpError::Unsupported);
+        }
+        // Pre-open the advertisement only proves the mechanism —
+        // `float` + `close`. A completed open supersedes it with the
+        // child's `Opened.capabilities` report.
+        Ok(self.opened_capabilities.unwrap_or(EditorCapabilities {
+            float: Support::Supported,
+            close: Support::Supported,
+            ..EditorCapabilities::default()
+        }))
     }
 
     fn open(
         &mut self,
         _session: PluginEditorSessionId,
-        _lease: &ParentSlotLease,
-        _size: EditorSize,
-        _mode: AttachMode,
+        lease: &ParentSlotLease,
+        size: EditorSize,
+        mode: AttachMode,
     ) -> Result<EditorCapabilities, EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        // `Docked` stays refused at the ops layer — wire v6 ships
+        // `Floating` only, so a docked request would fabricate a
+        // floating attach otherwise.
+        match mode {
+            AttachMode::Floating => {}
+            _ => return Err(EditorOpError::Unsupported),
+        }
+        // The negotiated check precedes the redeem: an unadvertised
+        // child must not spend a lease on an op the wire gate will
+        // refuse anyway.
+        if !self.floating_advertised()? {
+            return Err(EditorOpError::Unsupported);
+        }
+        let parent = match &mut self.redeemer {
+            Some(redeemer) => redeemer(lease)?,
+            None => ParentLease::new(0, 0),
+        };
+        match self.host.execute(HostCommand::OpenGui {
+            handle: self.instance,
+            parent,
+            size: GuiSize {
+                width: size.width,
+                height: size.height,
+            },
+        }) {
+            Ok(HostReply::Opened { capabilities, .. }) => {
+                let capabilities = capabilities_from_bits(capabilities);
+                self.opened_capabilities = Some(capabilities);
+                Ok(capabilities)
+            }
+            // Any other successful reply shape is an invariant violation
+            // in the host mapping — surfaced as a plugin-level failure.
+            Ok(_) => Err(EditorOpError::Plugin),
+            Err(error) => Err(map_host_error(error)),
+        }
     }
 
     fn close(&mut self, _session: PluginEditorSessionId) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::CloseGui {
+                handle: self.instance,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn set_size(
         &mut self,
         _session: PluginEditorSessionId,
-        _size: EditorSize,
+        size: EditorSize,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SetGuiSize {
+                handle: self.instance,
+                size: GuiSize {
+                    width: size.width,
+                    height: size.height,
+                },
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn set_visibility(
         &mut self,
         _session: PluginEditorSessionId,
-        _visible: bool,
+        visible: bool,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SetGuiVisibility {
+                handle: self.instance,
+                visible,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn reattach(
@@ -2092,23 +2271,46 @@ impl EditorSessionOps for L1EditorOps {
         _session: PluginEditorSessionId,
         _lease: &ParentSlotLease,
     ) -> Result<(), EditorOpError> {
+        // `SetGuiParent` has no wire verb (Issue #115 owns the
+        // docked/reparent scope) — refused at the ops layer, so it
+        // never reaches dispatch.
         Err(EditorOpError::Unsupported)
     }
 
     fn set_focus(
         &mut self,
         _session: PluginEditorSessionId,
-        _focused: bool,
+        focused: bool,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SetGuiFocus {
+                handle: self.instance,
+                focused,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn send_key(
         &mut self,
         _session: PluginEditorSessionId,
-        _event: GuiKeyEvent,
+        event: GuiKeyEvent,
     ) -> Result<(), EditorOpError> {
-        Err(EditorOpError::Unsupported)
+        match self
+            .host
+            .execute(HostCommand::SendGuiKey {
+                handle: self.instance,
+                event,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
     }
 
     fn drain_gui_requests(
@@ -2116,6 +2318,9 @@ impl EditorSessionOps for L1EditorOps {
         _session: PluginEditorSessionId,
         _out: &mut Vec<GuiRequest>,
     ) -> Result<(), EditorOpError> {
+        // Wire v6 has no request-channel verb — the plugin→host
+        // channel stays L0-local (Issue #873), so L1 keeps the
+        // defined refusal rather than faking an empty drain.
         Err(EditorOpError::Unsupported)
     }
 
@@ -2126,4 +2331,31 @@ impl EditorSessionOps for L1EditorOps {
     ) -> Result<GuiRequestVerdict, EditorOpError> {
         Err(EditorOpError::Unsupported)
     }
+}
+
+/// Delivers pending host notifications to `sessions` — the delivery
+/// contract bridging the composite's `InstanceFailed` fan-out
+/// ([`PluginHost::try_recv_notification`]) and the registry's
+/// `Terminated{HostLost}` exactly-once vocabulary
+/// ([`PluginEditorSessions::notify_terminated`]). Each drained
+/// `InstanceFailed` is forwarded as [`SessionFailCause::HostLost`];
+/// every other notification kind is consumed for its own contract.
+/// Returns how many `InstanceFailed` notifications were delivered.
+///
+/// The pump belongs to the caller that owns the registry — the ops
+/// adapter never subscribes to notifications itself.
+///
+/// **RT contract:** non-RT only — UI-thread only; `try_recv` never
+/// blocks on an empty queue.
+pub fn pump_notifications(host: &mut PluginHost, sessions: &mut PluginEditorSessions) -> usize {
+    let mut delivered = 0;
+    while let Some(notification) = host.try_recv_notification() {
+        // `InstanceFailed` is the only variant today — the
+        // irrefutable `let` keeps a future variant a compile-time
+        // follow-up rather than a silently dropped notification.
+        let HostNotification::InstanceFailed { handle, .. } = notification;
+        sessions.notify_terminated(handle, SessionFailCause::HostLost);
+        delivered += 1;
+    }
+    delivered
 }

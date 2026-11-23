@@ -29,9 +29,10 @@ use ruviform_media_core::{
 };
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    Event, EventKind, EventList, FailureCause, GuiSize, HostError, HostInput, HostOutput,
-    LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamValue, ParentLease,
-    PluginDescriptor, PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
+    Event, EventKind, EventList, FailureCause, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize,
+    HostError, HostInput, HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
+    ParamId, ParamValue, ParentLease, PluginDescriptor, PrepareError, ProcessConfig, ProcessResult,
+    ProcessStatus, TransportInfo,
 };
 
 use l1::diag::DiagRegistry;
@@ -454,28 +455,47 @@ fn spawn_failure_is_spawn_failed() {
     ));
 }
 
-/// `OpenGui`/`CloseGui` are rejected `Unsupported` without touching
-/// the wire — the child stays alive and keeps serving commands.
+/// The whole GUI verb family is rejected `Unsupported` without
+/// touching the wire on a child that advertised
+/// `Hello.capabilities: 0` (the `l1-test-worker` fixture — the
+/// negotiated gate's defined refusal) — the child stays alive and
+/// keeps serving commands.
 #[test]
 fn gui_defined_rejection() {
     let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
     instance.execute(wire::Command::Initialize).unwrap();
 
-    assert_eq!(
-        instance.execute(wire::Command::OpenGui {
+    // One mechanism bit covers the family atomically — every verb
+    // hits the same pre-wire gate.
+    for command in [
+        wire::Command::OpenGui {
             mode: wire::OpenGuiMode::Floating,
             parent: ParentLease::new(0, 0),
             size: GuiSize {
                 width: 0.0,
-                height: 0.0
+                height: 0.0,
             },
-        }),
-        Err(HostError::Unsupported)
-    );
-    assert_eq!(
-        instance.execute(wire::Command::CloseGui),
-        Err(HostError::Unsupported)
-    );
+        },
+        wire::Command::CloseGui,
+        wire::Command::SetGuiSize {
+            size: GuiSize {
+                width: 320.0,
+                height: 240.0,
+            },
+        },
+        wire::Command::SetGuiVisibility { visible: 1 },
+        wire::Command::SetGuiFocus { focused: 1 },
+        wire::Command::SendGuiKey {
+            event: GuiKeyEvent {
+                direction: GuiKeyDirection::Down,
+                key: 'a',
+                key_code: 0x41,
+                modifiers: GuiModifiers::NONE,
+            },
+        },
+    ] {
+        assert_eq!(instance.execute(command), Err(HostError::Unsupported));
+    }
     // Not forwarded: the child still answers normally.
     assert_eq!(
         instance.execute(wire::Command::SaveState),
@@ -2101,9 +2121,9 @@ mod composite_e2e {
 
     use ruviform_audio_core::{AudioBufferViewMut, PlanarBufferView, PlanarBufferViewMut};
     use ruviform_plugin_core::{
-        ErasedPlugin, Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput,
-        LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamInfo, ParamValue,
-        ParentLease, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
+        ErasedPlugin, Event, EventKind, EventList, FailureCause, GuiSize, HostError, HostInput,
+        HostOutput, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamId, ParamInfo,
+        ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessResult, TransportInfo,
     };
     use ruviform_plugin_host::{
         AudioCounterSnapshot, ChildExit, DiagnosticQuery, DiagnosticRecord, EndpointBounds,
@@ -2318,6 +2338,30 @@ mod composite_e2e {
         {
             HostReply::Instantiated { handle } => handle,
             other => panic!("unexpected reply: {other:?}"),
+        }
+    }
+
+    /// GUI on either route is the defined `Unsupported` rejection —
+    /// L1 via the negotiated gate (the `l1-test-worker` child
+    /// advertises no `GUI_FLOATING`), the L0 fixture via its default
+    /// hook — for `CloseGui` as much as `OpenGui`.
+    fn assert_gui_unsupported(host: &mut PluginHost, handles: [PluginHandle; 2]) {
+        for handle in handles {
+            assert_eq!(
+                host.execute(HostCommand::OpenGui {
+                    handle,
+                    parent: ParentLease::new(0, 0),
+                    size: GuiSize {
+                        width: 0.0,
+                        height: 0.0
+                    },
+                }),
+                Err(HostError::Unsupported)
+            );
+            assert_eq!(
+                host.execute(HostCommand::CloseGui { handle }),
+                Err(HostError::Unsupported)
+            );
         }
     }
 
@@ -2655,22 +2699,7 @@ mod composite_e2e {
         let plugin = host.plugin_mut(l0).expect("L0 slot has a plugin");
         assert_eq!(plugin.descriptor(), L0_GAIN_DESCRIPTOR);
         assert!(host.plugin_mut(l1).is_none());
-        // GUI on L1 is the defined `Unsupported` rejection; the L0
-        // fixture's default hook lands the same — for `CloseGui`
-        // as much as `OpenGui`.
-        for handle in [l0, l1] {
-            assert_eq!(
-                host.execute(HostCommand::OpenGui {
-                    handle,
-                    parent: ParentLease::new(0, 0)
-                }),
-                Err(HostError::Unsupported)
-            );
-            assert_eq!(
-                host.execute(HostCommand::CloseGui { handle }),
-                Err(HostError::Unsupported)
-            );
-        }
+        assert_gui_unsupported(&mut host, [l0, l1]);
 
         // Identical teardown on both routes; handles die with the
         // slots.

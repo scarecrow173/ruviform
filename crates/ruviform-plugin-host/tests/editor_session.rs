@@ -6,8 +6,10 @@
 //! invariants; the L0 `InProcessEditorOps` tests drive the real
 //! `InProcessHost` `OpenGui`/`CloseGui` path behind a stub plugin. These
 //! are contract-level results — **not** a real Dock PASS (no GPUI
-//! window, OS parent or real plugin). The L1 adapter remains defined-
-//! `Unsupported` on every op and never degrades to L0.
+//! window, OS parent or real plugin). The L1 adapter routes the
+//! floating verb family under the child's negotiated `GUI_FLOATING`
+//! bit — an unadvertised child keeps the defined `Unsupported` and
+//! the ops never degrades to L0.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -23,9 +25,10 @@ use ruviform_plugin_core::{
 use ruviform_plugin_host::{
     AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
     EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError, HostReply,
-    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, OpenOutcome, ParentSlotLease,
-    Plugin, PluginEditorSessionId, PluginEditorSessions, PluginFactory, PluginHandle, SessionClock,
-    SessionDeadlinePolicy, SessionFailCause, Support, erase,
+    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, OpenOutcome, OutOfProcessSpec,
+    ParentSlotLease, Plugin, PluginEditorSessionId, PluginEditorSessions, PluginFactory,
+    PluginHandle, PluginHost, SessionClock, SessionDeadlinePolicy, SessionFailCause, Support,
+    erase,
 };
 
 // ---- shared fixtures -------------------------------------------------
@@ -1338,18 +1341,69 @@ fn l0_plugin_verb_refusal_maps_to_unsupported_non_fatally() {
     }
 }
 
+/// The descriptor `l1-test-worker` reports for `Scan` — the child
+/// advertises `Hello.capabilities: 0`, so the whole GUI verb family
+/// is the negotiated gate's defined `Unsupported` on it.
+const L1_WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+    id: "org.ruviform.test.l1-test-worker",
+    name: "L1 Test Worker",
+    vendor: "Ruviform",
+    version: "0.1.0",
+    features: &[],
+};
+
+/// A `PluginHost` with one `OutOfProcess` instance minted on the
+/// `l1-test-worker` child — the real spawn path, so the negotiated
+/// mask is the child's genuine `0` advertisement.
+fn l1_host() -> (PluginHost, PluginHandle) {
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(
+        L1_WORKER_DESCRIPTOR,
+        std::ffi::OsString::from(env!("CARGO_BIN_EXE_l1-test-worker")),
+    ))
+    .unwrap();
+    match host
+        .execute(HostCommand::Instantiate {
+            plugin_id: L1_WORKER_DESCRIPTOR.id.to_owned(),
+        })
+        .unwrap()
+    {
+        HostReply::Instantiated { handle } => (host, handle),
+        other => panic!("unexpected reply: {other:?}"),
+    }
+}
+
+/// An unadvertised child (`Hello.capabilities: 0`) gets the defined
+/// `Unsupported` on every GUI op — the negotiated gate refuses
+/// before the wire, `Docked` and `reattach` refuse at the ops
+/// layer regardless of advertisement, and a refused `open` never
+/// spends a lease.
 #[test]
-fn l1_editor_ops_refuses_every_op_and_never_degrades() {
-    let mut ops = L1EditorOps::new();
+fn l1_editor_ops_refuses_every_op_on_an_unadvertised_child() {
+    let (mut host, instance) = l1_host();
+    let redeemed = Rc::new(Cell::new(0usize));
+    let redeemed_in_ops = Rc::clone(&redeemed);
+    let mut ops = L1EditorOps::with_redeemer(
+        &mut host,
+        instance,
+        Box::new(move |_lease| {
+            redeemed_in_ops.set(redeemed_in_ops.get() + 1);
+            Ok(ParentLease::new(1, 0))
+        }),
+    );
     let session_id = PluginEditorSessionId::new(0, 0);
     assert_eq!(
         ops.capabilities(session_id),
         Err(EditorOpError::Unsupported)
     );
-    assert_eq!(
-        ops.open(session_id, &lease(), SIZE, AttachMode::Docked),
-        Err(EditorOpError::Unsupported)
-    );
+    // `Docked` is an ops-layer refusal; `Floating` reaches the
+    // negotiated gate — both are the defined `Unsupported` here.
+    for mode in [AttachMode::Docked, AttachMode::Floating] {
+        assert_eq!(
+            ops.open(session_id, &lease(), SIZE, mode),
+            Err(EditorOpError::Unsupported)
+        );
+    }
     assert_eq!(ops.close(session_id), Err(EditorOpError::Unsupported));
     assert_eq!(
         ops.set_size(session_id, SIZE),
@@ -1371,6 +1425,9 @@ fn l1_editor_ops_refuses_every_op_and_never_degrades() {
         ops.send_key(session_id, key_a(GuiKeyDirection::Down)),
         Err(EditorOpError::Unsupported)
     );
+    // The negotiated check precedes the redeem — no refused `open`
+    // consumed a lease.
+    assert_eq!(redeemed.get(), 0);
 }
 
 #[test]

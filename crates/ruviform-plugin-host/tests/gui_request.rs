@@ -21,8 +21,8 @@ use ruviform_plugin_core::{
 use ruviform_plugin_host::{
     AttachMode, EditorOpError, EditorSessionOps, EditorSessionState, GuiRequestArbiter,
     GuiRequestArbiterHandle, HostCommand, HostError, HostReply, InProcessEditorOps, InProcessHost,
-    L1EditorOps, ParentSlotLease, Plugin, PluginEditorSessionId, PluginEditorSessions,
-    PluginFactory, PluginHandle, erase,
+    L1EditorOps, OutOfProcessSpec, ParentSlotLease, Plugin, PluginEditorSessionId,
+    PluginEditorSessions, PluginFactory, PluginHandle, PluginHost, erase,
 };
 
 // ---- shared fixtures -------------------------------------------------
@@ -518,9 +518,43 @@ fn l0_refused_request_notifies_nothing() {
 
 // ---- L1 defined refusal ----------------------------------------------
 
+/// The descriptor `l1-test-worker` reports for `Scan` — it backs the
+/// `OutOfProcess` slot the L1 ops drives here.
+const L1_WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
+    id: "org.ruviform.test.l1-test-worker",
+    name: "L1 Test Worker",
+    vendor: "Ruviform",
+    version: "0.1.0",
+    features: &[],
+};
+
+/// A `PluginHost` with one `OutOfProcess` instance on
+/// `l1-test-worker`.
+fn l1_host() -> (PluginHost, PluginHandle) {
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(
+        L1_WORKER_DESCRIPTOR,
+        std::ffi::OsString::from(env!("CARGO_BIN_EXE_l1-test-worker")),
+    ))
+    .unwrap();
+    match host
+        .execute(HostCommand::Instantiate {
+            plugin_id: L1_WORKER_DESCRIPTOR.id.to_owned(),
+        })
+        .unwrap()
+    {
+        HostReply::Instantiated { handle } => (host, handle),
+        other => panic!("unexpected reply: {other:?}"),
+    }
+}
+
+/// The request channel has no wire verbs — every L1 request op
+/// stays the defined `Unsupported` (a refused drain propagates
+/// through the `dispatch_gui_requests` default).
 #[test]
 fn l1_ops_refuse_the_whole_request_channel() {
-    let mut ops = L1EditorOps::new();
+    let (mut host, instance) = l1_host();
+    let mut ops = L1EditorOps::new(&mut host, instance);
     let session = PluginEditorSessionId::new(0, 0);
     let mut drained = Vec::new();
     assert_eq!(
