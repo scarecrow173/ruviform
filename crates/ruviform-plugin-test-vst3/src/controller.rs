@@ -36,17 +36,18 @@
 
 use std::ffi::c_char;
 use std::ptr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
 
 use vst3::Steinberg::Vst::{
-    IComponentHandler, IEditController, IEditControllerTrait, ParameterInfo,
-    ParameterInfo_::ParameterFlags_, String128, TChar,
+    IComponentHandler, IComponentHandler2, IComponentHandler2Trait, IComponentHandlerTrait,
+    IEditController, IEditControllerTrait, ParameterInfo, ParameterInfo_::ParameterFlags_,
+    String128, TChar,
 };
 use vst3::Steinberg::{
     FUnknown, IBStream, IPlugView, IPluginBaseTrait, TUID, kInvalidArgument, kNotImplemented,
     kResultFalse, kResultOk, tresult,
 };
-use vst3::{Class, ComWrapper, uid};
+use vst3::{Class, ComRef, ComWrapper, uid};
 
 use crate::editor_view::TestEditorView;
 use crate::stateful::{decode_state_blob, encode_state_blob, stream_read_all, stream_write_all};
@@ -84,6 +85,13 @@ pub(crate) struct ParamController {
     /// `test_stateful`; `test_gain`/`test_fault` keep the honest
     /// `kNotImplemented`.
     stateful: bool,
+    /// The host's `IComponentHandler` — a *borrowed* pointer the VST3
+    /// contract keeps valid for the object's lifetime (the host owns
+    /// the reference), retained so the state verbs can announce a
+    /// dirty document (`IComponentHandler2::setDirty`) and the
+    /// restored parameter value (`performEdit`). Null until the host
+    /// installs it; stateless classes never announce.
+    handler: AtomicPtr<IComponentHandler>,
 }
 
 impl Class for ParamController {
@@ -104,6 +112,7 @@ impl ParamController {
                     .to_bits(),
             ),
             stateful: false,
+            handler: AtomicPtr::new(ptr::null_mut()),
         }
     }
 
@@ -179,8 +188,7 @@ impl IEditControllerTrait for ParamController {
         let Ok(normalized) = self.param.normalize(plain) else {
             return kResultFalse;
         };
-        self.value
-            .store(normalized.get().to_bits(), Ordering::Release);
+        self.adopt_and_announce(normalized);
         kResultOk
     }
 
@@ -204,7 +212,7 @@ impl IEditControllerTrait for ParamController {
         let Ok(value) = ParamValue::new(normalized) else {
             return kResultFalse;
         };
-        self.value.store(value.get().to_bits(), Ordering::Release);
+        self.store_and_mark(value);
         kResultOk
     }
 
@@ -360,9 +368,14 @@ impl IEditControllerTrait for ParamController {
         kResultOk
     }
 
-    /// The fixture does not retain the component handler — recorded.
+    /// Retains the borrowed component-handler pointer — the stateful
+    /// verbs announce their restores through it (`performEdit` for
+    /// the changed value, `IComponentHandler2::setDirty` for the
+    /// dirty edge; Issue #891). Stateless classes retain it too —
+    /// they just never fire.
     #[expect(unsafe_code)]
-    unsafe fn setComponentHandler(&self, _handler: *mut IComponentHandler) -> tresult {
+    unsafe fn setComponentHandler(&self, handler: *mut IComponentHandler) -> tresult {
+        self.handler.store(handler, Ordering::Release);
         kResultOk
     }
 
@@ -370,6 +383,64 @@ impl IEditControllerTrait for ParamController {
     #[expect(unsafe_code)]
     unsafe fn createView(&self, _name: *const c_char) -> *mut IPlugView {
         ptr::null_mut()
+    }
+}
+
+impl ParamController {
+    /// The stored component handler as a borrowed `ComRef` — `None`
+    /// when the host never installed one.
+    #[expect(unsafe_code)]
+    fn host_handler(&self) -> Option<ComRef<'_, IComponentHandler>> {
+        // SAFETY: a non-null stored handler is a live host-provided
+        // `IComponentHandler` per the setComponentHandler contract;
+        // `ComRef::from_raw` borrows without touching the refcount.
+        unsafe { ComRef::from_raw(self.handler.load(Ordering::Acquire)) }
+    }
+
+    /// `setComponentState`'s tail: adopt the normalized value and
+    /// announce — `performEdit` echoes it to the host and
+    /// `IComponentHandler2::setDirty` marks the document dirty. The
+    /// call itself is the change signal (the documented restore
+    /// sequence runs `component.setState` → `setComponentState` only
+    /// when component state was (re)applied), so the announce is
+    /// unconditional: the process-path param flow
+    /// (`IParameterChanges`) never reaches this controller's adopted
+    /// mirror, so a stored-value comparison would wrongly suppress
+    /// restores that genuinely changed the component. Hosts that
+    /// never installed a handler, or whose handler has no
+    /// `IComponentHandler2`, simply never see the request — the
+    /// restore still stores.
+    #[expect(unsafe_code)]
+    fn adopt_and_announce(&self, normalized: ParamValue) {
+        self.value
+            .store(normalized.get().to_bits(), Ordering::Release);
+        let Some(handler) = self.host_handler() else {
+            return;
+        };
+        let _ = unsafe { handler.performEdit(self.param.id.0, normalized.get()) };
+        if let Some(handler2) = handler.cast::<IComponentHandler2>() {
+            let _ = unsafe { handler2.setDirty(1) };
+        }
+    }
+
+    /// `setState`'s tail: store the controller-private state and
+    /// `setDirty` when it actually changed — never a `performEdit`
+    /// echo (controller state is not a parameter edit the host must
+    /// reflect).
+    #[expect(unsafe_code)]
+    fn store_and_mark(&self, normalized: ParamValue) {
+        let previous = self
+            .value
+            .swap(normalized.get().to_bits(), Ordering::AcqRel);
+        if previous == normalized.get().to_bits() {
+            return;
+        }
+        let Some(handler) = self.host_handler() else {
+            return;
+        };
+        if let Some(handler2) = handler.cast::<IComponentHandler2>() {
+            let _ = unsafe { handler2.setDirty(1) };
+        }
     }
 }
 

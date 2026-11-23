@@ -109,8 +109,11 @@
 //!   honest `Err(HostError::Unsupported)`; a declined `save`/`load`
 //!   call answers `Err(HostError::PluginFailed)`. These are non-RT
 //!   verbs — the `Vec`/`Cursor` buffers exist only inside the call.
-//!   The host-side `HostState`/`mark_dirty` notification path is not
-//!   registered (plugin-driven dirty notification is a later slice).
+//!   The host-side `HostState`/`mark_dirty` notification path is
+//!   registered (Issue #891): a plugin's `mark_dirty` enqueues a
+//!   neutral [`DirtyNotice`] into the instance-local bounded
+//!   [`DirtyNoticeQueue`] that `drain_dirty_notices` empties on the
+//!   host's pull cadence — never a process-path `Event` report.
 //! - `open_gui`/`close_gui` drive the plugin's `clap.ext.gui`
 //!   extension through the `PluginGui` host calls (design
 //!   `docs/designs/issue-389-clap-l0-editor-attach.md`): Windows
@@ -156,10 +159,11 @@ use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, HostGui, HostGuiImpl, PluginGui, Window,
 };
 use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
-use clack_extensions::state::PluginState;
+use clack_extensions::state::{HostState, HostStateImpl, PluginState};
 use clack_host::entry::{PluginEntry, PluginEntryError};
 use clack_host::host::{
-    HostError as ClackHostError, HostExtensions, HostHandlers, HostInfo, SharedHandler,
+    HostError as ClackHostError, HostExtensions, HostHandlers, HostInfo, MainThreadHandler,
+    SharedHandler,
 };
 use clack_host::plugin::{
     PluginDescriptor as ClapPluginDescriptor, PluginInstance, PluginMainThreadHandle,
@@ -172,10 +176,10 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiRequest,
-    GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
-    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
+    EventList, GuiHandle, GuiRequest, GuiSize, HostError, ParamFlags, ParamId, ParamInfo,
+    ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
+    ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo, erase,
 };
 
 use crate::adapt::translate_output_event;
@@ -323,6 +327,12 @@ const MAX_GUI_REQUESTS: usize = 64;
 /// each [`GuiRequest`] (Issue #873).
 type GuiRequestQueue = Arc<Mutex<VecDeque<GuiRequest>>>;
 
+/// Shared pending dirty-notification queue — the plugin's
+/// `clap_host_state` `mark_dirty` enqueues here on the `[main-thread]`
+/// surface; `ClapPlugin::drain_dirty_notices` empties it on the
+/// host's pull cadence (Issue #891).
+type DirtyNoticeQueueShared = Arc<Mutex<DirtyNoticeQueue>>;
+
 /// The bridge's `[thread-safe]` host handler — acknowledges the
 /// plugin's restart/process/callback requests without acting on them
 /// (the runner drives everything from its single command thread) and
@@ -332,6 +342,10 @@ struct BridgeShared {
     /// owning `ClapPlugin`; a throwaway instance (param enumeration)
     /// owns a dead-end queue.
     gui_requests: GuiRequestQueue,
+    /// The instance's pending dirty-notification queue — shared with
+    /// the owning `ClapPlugin`; a throwaway instance owns a dead-end
+    /// queue the same way.
+    dirty_notices: DirtyNoticeQueueShared,
 }
 
 impl BridgeShared {
@@ -340,6 +354,7 @@ impl BridgeShared {
     fn new() -> Self {
         Self {
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
         }
     }
 
@@ -372,6 +387,16 @@ impl SharedHandler<'_> for BridgeShared {
 fn drain_gui_request_queue(queue: &GuiRequestQueue, out: &mut Vec<GuiRequest>) {
     if let Ok(mut queue) = queue.lock() {
         out.extend(queue.drain(..));
+    }
+}
+
+/// `ClapPlugin::drain_dirty_notices`' body — moves the shared
+/// queue's pending plugin→host dirty notifications into `out`
+/// (Issue #891). A poisoned lock yields nothing: same honest-silence
+/// rule as [`drain_gui_request_queue`].
+fn drain_dirty_notice_queue(queue: &DirtyNoticeQueueShared, out: &mut Vec<DirtyNotice>) {
+    if let Ok(mut queue) = queue.lock() {
+        queue.drain(out);
     }
 }
 
@@ -430,23 +455,52 @@ struct BridgeAudioProcessor;
 
 impl clack_host::host::AudioProcessorHandler<'_> for BridgeAudioProcessor {}
 
-/// Handler-type bundle tying `BridgeShared`/`()`/`BridgeAudioProcessor`
-/// together for [`PluginInstance`].
+/// The bridge's `[main-thread]` host handler — carries the
+/// `clap_host_state` `mark_dirty` surface (Issue #891) back to the
+/// instance-local queue the owning `ClapPlugin` drains.
+struct BridgeMainThread<'a> {
+    /// The instance's `[thread-safe]` shared handler — borrows the
+    /// same `BridgeShared` the instance constructs it with.
+    shared: &'a BridgeShared,
+}
+
+impl<'a> MainThreadHandler<'a> for BridgeMainThread<'a> {}
+
+impl HostStateImpl for BridgeMainThread<'_> {
+    /// `mark_dirty` latches the dirty flag — the call carries no
+    /// payload and CLAP declares a parameter change implicitly
+    /// dirties the state, so [`DirtyNotice::StateDirty`] is the whole
+    /// notice. A poisoned lock takes the defined drop — the queue
+    /// stays honest (never a fabricated ack of delivery).
+    fn mark_dirty(&self) {
+        if let Ok(mut queue) = self.shared.dirty_notices.lock() {
+            queue.enqueue(DirtyNotice::StateDirty);
+        }
+    }
+}
+
+/// Handler-type bundle tying
+/// `BridgeShared`/`BridgeMainThread`/`BridgeAudioProcessor` together
+/// for [`PluginInstance`].
 struct BridgeHandlers;
 
 impl HostHandlers for BridgeHandlers {
     type Shared<'a> = BridgeShared;
-    type MainThread<'a> = ();
+    type MainThread<'a> = BridgeMainThread<'a>;
     type AudioProcessor<'a> = BridgeAudioProcessor;
 
     fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &BridgeShared) {
         // `HostGui` — the plugin→host GUI request channel (Issue #873);
         // `BridgeShared`'s `HostGuiImpl` queues every verb for the
-        // session's drain→arbitration loop. Still not `HostThreadCheck`
-        // — see the module-level thread-check policy: absence of the
-        // extension is the honest answer, and the fixture's `None`
-        // fallback keeps behavior unchanged.
+        // session's drain→arbitration loop. `HostState` — the
+        // plugin→host dirty-notification channel (Issue #891);
+        // `BridgeMainThread`'s `HostStateImpl` latches `mark_dirty`
+        // into the instance's pull-drained queue. Still not
+        // `HostThreadCheck` — see the module-level thread-check
+        // policy: absence of the extension is the honest answer, and
+        // the fixture's `None` fallback keeps behavior unchanged.
         builder.register::<HostGui>();
+        builder.register::<HostState>();
     }
 }
 
@@ -606,7 +660,7 @@ fn enumerate_params(
 ) -> &'static [ParamInfo] {
     let Ok(mut instance) = PluginInstance::<BridgeHandlers>::new(
         |()| BridgeShared::new(),
-        |_| (),
+        |shared| BridgeMainThread { shared },
         entry,
         plugin_id,
         host_info,
@@ -783,6 +837,11 @@ struct ClapPlugin {
     /// `BridgeShared`, whose `HostGuiImpl` enqueues from arbitrary
     /// threads (Issue #873). `drain_gui_requests` moves them out.
     gui_requests: GuiRequestQueue,
+    /// Pending plugin→host dirty notifications — shared with the
+    /// instance's `BridgeShared`, whose `[main-thread]`
+    /// `HostStateImpl::mark_dirty` latches the flag (Issue #891).
+    /// `drain_dirty_notices` moves the notices out.
+    dirty_notices: DirtyNoticeQueueShared,
     /// Instance-local mint counter for [`GuiHandle`] tokens — the
     /// same `gui_seq` convention the VST3 adapter uses.
     gui_seq: u32,
@@ -818,6 +877,7 @@ impl ClapPlugin {
             report_stats: ReportStats::new(),
             gui: None,
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
             gui_seq: 0,
         }
     }
@@ -1342,7 +1402,7 @@ impl PluginProcessor for ClapPlugin {
 
         let stopped = instance
             .activate(
-                |_, ()| BridgeAudioProcessor,
+                |_, _| BridgeAudioProcessor,
                 PluginAudioConfiguration {
                     sample_rate: f64::from(config.sample_rate().get()),
                     min_frames_count: config.min_frames(),
@@ -1526,9 +1586,13 @@ impl Plugin for ClapPlugin {
             return Err(HostError::PluginFailed);
         }
         let gui_requests = Arc::clone(&self.gui_requests);
+        let dirty_notices = Arc::clone(&self.dirty_notices);
         let instance = PluginInstance::<BridgeHandlers>::new(
-            move |()| BridgeShared { gui_requests },
-            |_| (),
+            move |()| BridgeShared {
+                gui_requests,
+                dirty_notices,
+            },
+            |shared| BridgeMainThread { shared },
             &self.entry,
             &self.plugin_id,
             &self.host_info,
@@ -1797,6 +1861,14 @@ impl Plugin for ClapPlugin {
     /// binary).
     fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
         drain_gui_request_queue(&self.gui_requests, out);
+    }
+
+    /// `drain_dirty_notices` — moves the shared queue's pending
+    /// plugin→host dirty notifications into `out` (Issue #891) —
+    /// the body lives in [`drain_dirty_notice_queue`] so the testable
+    /// surface does not need a `ClapPlugin`.
+    fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
+        drain_dirty_notice_queue(&self.dirty_notices, out);
     }
 }
 
@@ -2326,6 +2398,7 @@ mod tests {
         let queue: GuiRequestQueue = Arc::new(Mutex::new(VecDeque::new()));
         let shared = BridgeShared {
             gui_requests: Arc::clone(&queue),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
         };
 
         assert!(
@@ -2374,6 +2447,7 @@ mod tests {
         let queue: GuiRequestQueue = Arc::new(Mutex::new(VecDeque::new()));
         let shared = BridgeShared {
             gui_requests: Arc::clone(&queue),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
         };
 
         let size = ClapGuiSize {
@@ -2395,5 +2469,30 @@ mod tests {
             queue.lock().map_or(0, |queue| queue.len()),
             MAX_GUI_REQUESTS
         );
+    }
+
+    /// `HostStateImpl::mark_dirty` latches the neutral flag —
+    /// `drain_dirty_notice_queue` emits one `StateDirty` per pending
+    /// flag and a second pull yields nothing (Issue #891).
+    #[test]
+    fn host_state_mark_dirty_enqueues_then_drains() {
+        let queue: DirtyNoticeQueueShared = Arc::new(Mutex::new(DirtyNoticeQueue::new()));
+        let shared = BridgeShared {
+            gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+            dirty_notices: Arc::clone(&queue),
+        };
+        let main_thread = BridgeMainThread { shared: &shared };
+
+        main_thread.mark_dirty();
+        main_thread.mark_dirty();
+
+        let mut out = Vec::new();
+        drain_dirty_notice_queue(&queue, &mut out);
+        // Two marks coalesce into one latched flag edge — "re-save
+        // me" is a state, not an occurrence count.
+        assert_eq!(out, vec![DirtyNotice::StateDirty]);
+        let mut again = Vec::new();
+        drain_dirty_notice_queue(&queue, &mut again);
+        assert_eq!(again, []);
     }
 }

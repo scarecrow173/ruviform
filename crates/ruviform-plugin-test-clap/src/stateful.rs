@@ -61,7 +61,7 @@ use clack_extensions::params::{
 use clack_extensions::preset_discovery::prelude::{
     HostPresetLoad, Location, PluginPresetLoad, PluginPresetLoadImpl,
 };
-use clack_extensions::state::{PluginState, PluginStateImpl};
+use clack_extensions::state::{HostState, PluginState, PluginStateImpl};
 use clack_plugin::extensions::PluginExtensions;
 use clack_plugin::host::{HostAudioProcessorHandle, HostMainThreadHandle, HostSharedHandle};
 use clack_plugin::plugin::{
@@ -581,9 +581,10 @@ impl PluginStateImpl for TestStatefulMainThread<'_> {
 
 impl TestStatefulMainThread<'_> {
     /// Stores a restored plain gain into the mirror and owes the host
-    /// a `VALUES` params rescan when the value changed — the shared
-    /// tail of `clap.ext.state` `load` and `clap.ext.preset-load`,
-    /// both of which restore parameter state outside param events.
+    /// a `VALUES` params rescan plus a `clap_host_state.mark_dirty`
+    /// when the value changed — the shared tail of `clap.ext.state`
+    /// `load` and `clap.ext.preset-load`, both of which restore
+    /// parameter state outside param events.
     ///
     /// **RT contract:** non-RT only — runs on the main thread.
     fn apply_restored_gain(&self, gain: f64) {
@@ -593,11 +594,18 @@ impl TestStatefulMainThread<'_> {
         // (a state restore) must be announced through
         // `clap_host_params.rescan` so the host re-reads them — hosts
         // without the params extension simply never see the request.
+        // A restore also makes the document dirty, so the same change
+        // edge drives `clap_host_state.mark_dirty` — the plugin→host
+        // state-dirty notification Issue #891 wires to the consumer.
         if previous.to_bits() != gain.to_bits()
             && let Some(host) = self.host
-            && let Some(params) = host.get_extension::<HostParams>()
         {
-            params.rescan(&host, ParamRescanFlags::VALUES);
+            if let Some(params) = host.get_extension::<HostParams>() {
+                params.rescan(&host, ParamRescanFlags::VALUES);
+            }
+            if let Some(state) = host.get_extension::<HostState>() {
+                state.mark_dirty(&host);
+            }
         }
     }
 }
@@ -1169,11 +1177,13 @@ mod tests {
     // -- Params rescan contract (state load) ---------------------------------
 
     /// Recording host side: every `clap_host_params.rescan` the plugin
-    /// issues lands in `rescans` — the observable half of the CLAP
+    /// issues lands in `rescans` and every `clap_host_state.mark_dirty`
+    /// lands in `dirty_marks` — the observable halves of the CLAP
     /// contract that a state `load` changing parameter values must
-    /// announce a values rescan.
+    /// announce a values rescan and a dirty document.
     struct RescanProbeShared {
         rescans: Arc<Mutex<Vec<ParamRescanFlags>>>,
+        dirty_marks: Arc<Mutex<u32>>,
     }
 
     struct RescanProbeMainThread<'a> {
@@ -1206,6 +1216,16 @@ mod tests {
         fn clear(&self, _param_id: ClapId, _flags: ParamClearFlags) {}
     }
 
+    impl clack_extensions::state::HostStateImpl for RescanProbeMainThread<'_> {
+        fn mark_dirty(&self) {
+            *self
+                .shared
+                .dirty_marks
+                .lock()
+                .expect("dirty recorder poisoned") += 1;
+        }
+    }
+
     impl HostHandlers for RescanProbeHost {
         type Shared<'a> = RescanProbeShared;
         type MainThread<'a> = RescanProbeMainThread<'a>;
@@ -1213,24 +1233,30 @@ mod tests {
 
         fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &Self::Shared<'_>) {
             builder.register::<HostParams>();
+            builder.register::<HostState>();
         }
     }
 
     /// `clap.ext.state` `load` runs the real ABI path — instantiate
     /// `test_stateful` through the suite entry via clack-host, restore
     /// a blob that changes the gain, and assert the plugin requested a
-    /// `VALUES` params rescan exactly once (and not again when the
-    /// restored value is already current).
+    /// `VALUES` params rescan and a `mark_dirty` exactly once (and not
+    /// again when the restored value is already current).
     #[test]
     fn state_load_requests_params_values_rescan() {
         let rescans = Arc::new(Mutex::new(Vec::new()));
+        let dirty_marks = Arc::new(Mutex::new(0_u32));
         let entry =
             PluginEntry::load_from_clack::<crate::TestSuiteEntry>(c"stateful.clap").unwrap();
         let host_info = HostInfo::new("test host", "ruviform", "", "0.0.1").unwrap();
         let mut instance = PluginInstance::<RescanProbeHost>::new(
             {
                 let rescans = Arc::clone(&rescans);
-                move |()| RescanProbeShared { rescans }
+                let dirty_marks = Arc::clone(&dirty_marks);
+                move |()| RescanProbeShared {
+                    rescans,
+                    dirty_marks,
+                }
             },
             |shared| RescanProbeMainThread { shared },
             &entry,
@@ -1249,11 +1275,13 @@ mod tests {
             *rescans.lock().expect("rescan recorder poisoned"),
             vec![ParamRescanFlags::VALUES]
         );
+        assert_eq!(*dirty_marks.lock().expect("dirty recorder poisoned"), 1);
 
         // Re-load the identical value — nothing changed → no rescan.
         let mut reader = std::io::Cursor::new(encode_state_blob(0.5));
         state.load(&handle, &mut reader).unwrap();
         assert_eq!(rescans.lock().expect("rescan recorder poisoned").len(), 1);
+        assert_eq!(*dirty_marks.lock().expect("dirty recorder poisoned"), 1);
     }
 
     // -- Activation preserves persisted state -------------------------------

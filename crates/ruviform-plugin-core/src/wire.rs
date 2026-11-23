@@ -99,10 +99,11 @@ use ruviform_video_core::{
 };
 
 use crate::{
-    Event, EventKind, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize,
-    HostError, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent, ParamFlags, ParamId,
-    ParamValue, ParentLease, PlainParamInfoOwned, PlainParamValue, PluginDescriptor, PluginHandle,
-    PrepareError, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo, VideoProcessConfig,
+    DirtyNotice, Event, EventKind, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent,
+    GuiModifiers, GuiSize, HostError, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
+    ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned, PlainParamValue,
+    PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult, ProcessStatus,
+    TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
@@ -128,7 +129,10 @@ use crate::{
 /// unchanged), and `Hello.capabilities` bit 0
 /// ([`WIRE_CAPABILITY_GUI_FLOATING`]) became defined — the v5
 /// "capabilities must be `0`" rule is frozen with v5.
-pub const WIRE_VERSION: u16 = 6;
+/// `7` is the Issue #891 dirty-notification revision —
+/// [`Command::DrainDirtyNotices`] (tag 28) and [`Reply::DirtyNotices`]
+/// (tag 9) are additive on top of the v6 tags, which are unchanged.
+pub const WIRE_VERSION: u16 = 7;
 
 /// `Hello.capabilities` bit 0 — the child advertises it implements
 /// the GUI floating verb family ([`Command::OpenGui`],
@@ -152,6 +156,12 @@ pub const WIRE_MAX_CHANNELS: u32 = 16;
 
 /// Maximum number of events in one length-prefixed event list.
 pub const WIRE_MAX_EVENTS: u32 = 1_024;
+
+/// Maximum number of [`DirtyNotice`]s in one [`Reply::DirtyNotices`]
+/// payload (wire v7, Issue #891) — same bounded-reply contract as
+/// [`WIRE_MAX_EVENTS`]; a larger backlog is chunked child-side across
+/// successive drains.
+pub const WIRE_MAX_DIRTY_NOTICES: u32 = 1_024;
 
 /// Maximum `payload_len` a frame may declare — larger declarations
 /// are [`WireError::LimitExceeded`] and never allocate.
@@ -909,6 +919,17 @@ pub enum Command {
         /// The key event (press or release).
         event: GuiKeyEvent,
     },
+    /// `Plugin::drain_dirty_notices` — wire tag 28, the wire-v7
+    /// (Issue #891) dirty-notification pull verb →
+    /// [`Reply::DirtyNotices`]. Pulls the [`DirtyNotice`]s the plugin
+    /// queued since the previous drain — the same since-last-drain
+    /// pull semantics as [`Command::DrainOutputReports`], over the
+    /// flag-style notification vocabulary instead of sample-accurate
+    /// events. Instance-scoped and lifecycle-ungated like the report
+    /// drain (the pending queue is plugin state). One reply carries
+    /// at most [`WIRE_MAX_DIRTY_NOTICES`] notices; a larger backlog
+    /// is chunked child-side across successive drains.
+    DrainDirtyNotices,
 }
 
 /// The reply payload of a successful wire [`Command`].
@@ -982,6 +1003,16 @@ pub enum Reply {
     Reports {
         /// Drained events, oldest first.
         events: Vec<Event>,
+    },
+    /// `DrainDirtyNotices` result — wire tag 9, the wire-v7
+    /// (Issue #891) dirty-notification reply. The [`DirtyNotice`]s
+    /// the plugin produced since the previous drain, in the queue's
+    /// drain order (edit backlog oldest-first, then the latched flag
+    /// edge). At most [`WIRE_MAX_DIRTY_NOTICES`] notices per reply;
+    /// an empty list is the defined "nothing pending" answer.
+    DirtyNotices {
+        /// Drained notices, in drain order.
+        notices: Vec<DirtyNotice>,
     },
 }
 
@@ -1768,6 +1799,7 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             push_u8(out, 27);
             encode_gui_key_event(event, out);
         }
+        Command::DrainDirtyNotices => push_u8(out, 28),
     }
     Ok(())
 }
@@ -1870,6 +1902,7 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
         27 => Ok(Command::SendGuiKey {
             event: decode_gui_key_event(reader)?,
         }),
+        28 => Ok(Command::DrainDirtyNotices),
         _ => Err(WireError::Malformed),
     }
 }
@@ -1938,6 +1971,13 @@ fn encode_reply(reply: &Reply, out: &mut Vec<u8>) -> Result<(), WireError> {
                 encode_event(event, out);
             }
         }
+        Reply::DirtyNotices { notices } => {
+            push_u8(out, 9);
+            push_u32(out, len_u32(notices.len()));
+            for notice in notices {
+                encode_dirty_notice(notice, out);
+            }
+        }
     }
     Ok(())
 }
@@ -1994,6 +2034,18 @@ fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
                 events.push(decode_event(reader)?);
             }
             Ok(Reply::Reports { events })
+        }
+        9 => {
+            // `u32` count + each `DirtyNotice` in order — the same
+            // element bound every wire notice list carries. A
+            // producer whose since-last-drain backlog exceeds it is
+            // chunked child-side, so an honest peer never trips this.
+            let count = reader.read_count(WIRE_MAX_DIRTY_NOTICES)?;
+            let mut notices = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                notices.push(decode_dirty_notice(reader)?);
+            }
+            Ok(Reply::DirtyNotices { notices })
         }
         _ => Err(WireError::Malformed),
     }
@@ -2735,6 +2787,39 @@ pub fn decode_event_list(reader: &mut Reader<'_>) -> Result<(u32, Vec<Event>), W
         events.push(decode_event(reader)?);
     }
     Ok((block_frames, events))
+}
+
+/// Appends one [`DirtyNotice`] — `u8` tag (`0` [`DirtyNotice::StateDirty`],
+/// `1` [`DirtyNotice::StateClean`], `2` [`DirtyNotice::ParamEdited`] +
+/// `u32` param id + `f64` normalized value). Wire v7 (Issue #891).
+pub fn encode_dirty_notice(notice: &DirtyNotice, out: &mut Vec<u8>) {
+    match notice {
+        DirtyNotice::StateDirty => push_u8(out, 0),
+        DirtyNotice::StateClean => push_u8(out, 1),
+        DirtyNotice::ParamEdited { param_id, value } => {
+            push_u8(out, 2);
+            push_u32(out, param_id.0);
+            push_f64(out, value.get());
+        }
+    }
+}
+
+/// Reads one [`DirtyNotice`].
+///
+/// # Errors
+///
+/// [`WireError`] — truncated, an unassigned tag, or a `ParamEdited`
+/// value `ParamValue::new` rejects (non-finite).
+pub fn decode_dirty_notice(reader: &mut Reader<'_>) -> Result<DirtyNotice, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(DirtyNotice::StateDirty),
+        1 => Ok(DirtyNotice::StateClean),
+        2 => Ok(DirtyNotice::ParamEdited {
+            param_id: ParamId(reader.read_u32()?),
+            value: ParamValue::new(reader.read_f64()?).map_err(|_| WireError::Malformed)?,
+        }),
+        _ => Err(WireError::Malformed),
+    }
 }
 
 /// Appends a [`Descriptor`] (four length-prefixed strings +
@@ -3726,6 +3811,9 @@ mod tests {
             // Wire v4 (Issue #253) — instance-scoped like every
             // non-`Scan` verb.
             (Command::DrainOutputReports, 0),
+            // Wire v7 (Issue #891) — the dirty-notification pull
+            // verb, instance-scoped like the report drain.
+            (Command::DrainDirtyNotices, 0),
             // Wire v6 (Issue #872/#882) — the GUI floating verbs,
             // instance-scoped like every non-`Scan` verb.
             (
@@ -3804,6 +3892,25 @@ mod tests {
             },
             // The defined empty answer — "nothing pending".
             Reply::Reports { events: Vec::new() },
+            // Wire v7 (Issue #891) — every `DirtyNotice` variant in
+            // the queue's drain order, plus the defined empty answer.
+            Reply::DirtyNotices {
+                notices: vec![
+                    DirtyNotice::ParamEdited {
+                        param_id: ParamId(1),
+                        value: ParamValue::new(0.5).unwrap(),
+                    },
+                    DirtyNotice::ParamEdited {
+                        param_id: ParamId(u32::MAX),
+                        value: ParamValue::new(0.0).unwrap(),
+                    },
+                    DirtyNotice::StateDirty,
+                    DirtyNotice::StateClean,
+                ],
+            },
+            Reply::DirtyNotices {
+                notices: Vec::new(),
+            },
         ];
         for reply in replies {
             let message = Message::Reply {
@@ -4564,7 +4671,9 @@ mod tests {
         // payload — like `EndpointUnavailable` it has no wire
         // encoding and is never collapsed into `Ipc`/`Unsupported`.
         // `FailureCause`/`diagnostics_id` ride the host-side
-        // `HostError` only, so `WIRE_VERSION` stays unchanged.
+        // `HostError` only, so the variant itself never bumps
+        // `WIRE_VERSION` (the current pin lives in
+        // `wire_version_is_v7`).
         let spawn_failed = HostError::SpawnFailed {
             cause: FailureCause::Handshake,
             diagnostics_id: 42,
@@ -4577,7 +4686,7 @@ mod tests {
         assert!(payload.is_empty(), "nothing is appended on failure");
 
         // Same all-or-nothing append contract through `encode` — no
-        // partial `REPLY_ERR` frame, no wire-version change.
+        // partial `REPLY_ERR` frame.
         let mut out = vec![0xAA, 0xBB];
         let before = out.clone();
         let message = Message::Reply {
@@ -4590,7 +4699,6 @@ mod tests {
             Err(WireError::UnsupportedVariant)
         );
         assert_eq!(out, before);
-        assert_eq!(WIRE_VERSION, 6);
     }
 
     #[test]
@@ -4907,8 +5015,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v6() {
-        assert_eq!(WIRE_VERSION, 6);
+    fn wire_version_is_v7() {
+        assert_eq!(WIRE_VERSION, 7);
     }
 
     #[test]
@@ -4997,13 +5105,14 @@ mod tests {
                 "ParamInfo presence tag {tag} must be rejected",
             );
         }
-        // Reply tags > 8 are outside the v4 vocabulary (tag 8 is the
-        // wire-v4 `Reports` payload — covered above).
+        // Reply tags > 9 are outside the vocabulary (tag 8 is the
+        // wire-v4 `Reports` payload, tag 9 the wire-v7
+        // `DirtyNotices` payload — both covered above).
         let mut payload = Vec::new();
         push_u64(&mut payload, 1);
         push_u32(&mut payload, 0);
         push_u8(&mut payload, REPLY_OK);
-        push_u8(&mut payload, 9);
+        push_u8(&mut payload, 10);
         assert_eq!(
             decode(&raw_frame(KIND_REPLY, &payload)),
             Err(WireError::Malformed)
@@ -5927,5 +6036,68 @@ mod tests {
                 "non-scalar key {bad:#X} must be rejected",
             );
         }
+    }
+
+    #[test]
+    fn dirty_notice_codec() {
+        // Wire v7 (Issue #891): every `DirtyNotice` variant
+        // round-trips field-wise.
+        for notice in [
+            DirtyNotice::StateDirty,
+            DirtyNotice::StateClean,
+            DirtyNotice::ParamEdited {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.5).unwrap(),
+            },
+            DirtyNotice::ParamEdited {
+                param_id: ParamId(u32::MAX),
+                value: ParamValue::new(1.0).unwrap(),
+            },
+        ] {
+            assert_eq!(
+                field_roundtrip(&notice, encode_dirty_notice, decode_dirty_notice),
+                notice
+            );
+        }
+        // Unassigned tags are Malformed.
+        for byte in [3_u8, 0x7F, 0xFF] {
+            let payload = [byte];
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_dirty_notice(&mut reader),
+                Err(WireError::Malformed),
+                "notice tag {byte} must be rejected",
+            );
+        }
+        // A non-finite `ParamEdited` value is Malformed — the
+        // `ParamValue` domain rule rides the wire.
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut payload = vec![2_u8];
+            push_u32(&mut payload, 7);
+            push_f64(&mut payload, bad);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_dirty_notice(&mut reader),
+                Err(WireError::Malformed),
+                "non-finite value {bad} must be rejected",
+            );
+        }
+        // A `ParamEdited` notice shorter than its declared shape is
+        // Truncated, not Malformed.
+        let mut payload = vec![2_u8];
+        push_u32(&mut payload, 7);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_dirty_notice(&mut reader), Err(WireError::Truncated));
+    }
+
+    /// Wire v7 (Issue #891): `Reply::DirtyNotices` decode is bounded
+    /// like `Reply::Reports` — a count past `WIRE_MAX_DIRTY_NOTICES`
+    /// is `LimitExceeded` and allocates nothing.
+    #[test]
+    fn dirty_notices_reply_decode_is_bounded() {
+        let mut payload = vec![9_u8];
+        push_u32(&mut payload, WIRE_MAX_DIRTY_NOTICES + 1);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_reply(&mut reader), Err(WireError::LimitExceeded));
     }
 }

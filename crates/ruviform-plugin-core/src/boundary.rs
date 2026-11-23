@@ -11,9 +11,11 @@
 //! vocabulary that the command surface, the wire protocol and the
 //! plugin-side contracts all reference.
 
+use std::collections::VecDeque;
+
 use core::fmt;
 
-use crate::{LifecycleError, PrepareError};
+use crate::{LifecycleError, ParamId, ParamValue, PrepareError};
 
 /// Opaque reference to one hosted plugin instance.
 ///
@@ -447,6 +449,161 @@ pub enum GuiRequestRefusal {
     Gone,
 }
 
+/// Bounded capacity of one [`DirtyNoticeQueue`]'s `ParamEdited`
+/// backlog — the flag latch can never overflow, so only the edit
+/// backlog needs a bound. A full backlog drops the *oldest* edit:
+/// the newest report is the freshest parameter state, so it is the
+/// one worth keeping (the drop is counted in
+/// [`DirtyNoticeQueue::dropped_edits`]).
+pub const MAX_DIRTY_EDITS: usize = 64;
+
+/// One plugin→host state-dirty notification — the neutral vocabulary
+/// every format's "the plugin's state diverged from what the host
+/// last saved" signal maps onto (CLAP `clap_host_state` `mark_dirty`,
+/// VST3 `IComponentHandler::performEdit` /
+/// `IComponentHandler2::setDirty` /
+/// `restartComponent(kParamValuesChanged)`).
+///
+/// Carried by the pull drain
+/// [`Plugin::drain_dirty_notices`](crate::Plugin::drain_dirty_notices)
+/// — never a `HostCommand` (commands travel host→plugin; this enum
+/// travels the other direction), and never an [`crate::Event`] (the
+/// report stream is sample-accurate process-path data; a dirty
+/// notification is a lifecycle-adjacent flag with no frame offset).
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum DirtyNotice {
+    /// The plugin's state diverged from the host's last saved state
+    /// — the host should re-save it. CLAP `mark_dirty`, VST3
+    /// `setDirty(true)`, VST3 `restartComponent(kParamValuesChanged)`
+    /// and every `performEdit` all map here (an edit is itself a
+    /// state divergence).
+    StateDirty,
+    /// The plugin reports its state is again in sync with the saved
+    /// state — VST3 `setDirty(false)`; CLAP has no clean edge.
+    StateClean,
+    /// A plugin-originated parameter edit — VST3 `performEdit(id,
+    /// value_normalized)`: the plugin changed a parameter outside
+    /// host-driven writes (its own UI, internal state application)
+    /// and reports the resulting normalized value. Non-finite
+    /// reported values never reach the neutral surface — the adapter
+    /// degrades them to [`Self::StateDirty`].
+    ParamEdited {
+        /// The edited parameter.
+        param_id: ParamId,
+        /// The plugin-reported normalized value.
+        value: ParamValue,
+    },
+}
+
+/// The canonical bounded pending store for [`DirtyNotice`]s — the
+/// plugin→host counterpart of an adapter's `pending_reports`
+/// `Vec<Event>`.
+///
+/// Storage is split by payload kind: the dirty flag is a *latch*
+/// (`Option<bool>` — last declaration wins) while `ParamEdited`
+/// payloads are a FIFO backlog bounded by [`MAX_DIRTY_EDITS`].
+/// Coalescing is the defined delivery contract: a dirty→clean→dirty
+/// toggle between drains delivers only the final flag state, because
+/// "re-save me" is a state, not an occurrence count; `ParamEdited`
+/// entries, which carry distinct payloads, are preserved one per
+/// call.
+///
+/// [`Self::drain`] emits the edit backlog first (oldest first), then
+/// the latched flag as the summarizing edge (`Some(true)` →
+/// [`DirtyNotice::StateDirty`], `Some(false)` →
+/// [`DirtyNotice::StateClean`]). `enqueue(DirtyNotice::ParamEdited)`
+/// also latches the flag dirty — a bare `performEdit` still surfaces
+/// the flag for consumers that only track dirty state.
+///
+/// **RT contract:** non-RT only — the `out` append may allocate.
+#[derive(Debug, Default)]
+pub struct DirtyNoticeQueue {
+    /// The latched flag — `Some(true)` dirty, `Some(false)` clean;
+    /// `None` while no flag-carrying call arrived. Last declaration
+    /// wins.
+    flag: Option<bool>,
+    /// FIFO backlog of `ParamEdited` payloads, oldest first.
+    edits: VecDeque<(ParamId, ParamValue)>,
+    /// `ParamEdited` payloads dropped at the [`MAX_DIRTY_EDITS`]
+    /// bound — cumulative back-pressure counter.
+    dropped_edits: usize,
+}
+
+impl DirtyNoticeQueue {
+    /// An empty queue.
+    ///
+    /// **RT contract:** non-RT only — allocates no storage yet.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Enqueues one notice per the defined coalescing contract (see
+    /// the type docs): flag variants update the latch;
+    /// `ParamEdited` appends to the bounded backlog (dropping the
+    /// oldest past [`MAX_DIRTY_EDITS`]) and latches dirty.
+    ///
+    /// **RT contract:** non-RT only — bounded `VecDeque` push.
+    pub fn enqueue(&mut self, notice: DirtyNotice) {
+        match notice {
+            DirtyNotice::StateDirty => self.flag = Some(true),
+            DirtyNotice::StateClean => self.flag = Some(false),
+            DirtyNotice::ParamEdited { param_id, value } => {
+                if self.edits.len() >= MAX_DIRTY_EDITS {
+                    self.edits.pop_front();
+                    self.dropped_edits += 1;
+                }
+                self.edits.push_back((param_id, value));
+                self.flag = Some(true);
+            }
+        }
+    }
+
+    /// Moves the pending notices into `out` — the edit backlog first
+    /// (oldest first), then the latched flag edge when set. A second
+    /// drain without an intervening `enqueue` yields nothing.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    pub fn drain(&mut self, out: &mut Vec<DirtyNotice>) {
+        out.extend(
+            self.edits
+                .drain(..)
+                .map(|(param_id, value)| DirtyNotice::ParamEdited { param_id, value }),
+        );
+        if let Some(dirty) = self.flag.take() {
+            out.push(if dirty {
+                DirtyNotice::StateDirty
+            } else {
+                DirtyNotice::StateClean
+            });
+        }
+    }
+
+    /// `ParamEdited` payloads dropped at the capacity bound so far —
+    /// the back-pressure counter consumers surface for observability.
+    ///
+    /// **RT contract:** RT-suitable — pure read.
+    #[must_use]
+    pub fn dropped_edits(&self) -> usize {
+        self.dropped_edits
+    }
+
+    /// Whether nothing is pending — no latched flag and no backlog.
+    ///
+    /// **RT contract:** RT-suitable — pure read.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.flag.is_none() && self.edits.is_empty()
+    }
+}
+
 /// Why an L1 child process or a spawn/create attempt failed — the
 /// causal vocabulary carried by [`HostError::SpawnFailed`] and by the
 /// host-side `HostNotification::InstanceFailed.cause` payload.
@@ -627,5 +784,132 @@ impl core::error::Error for HostError {}
 impl From<LifecycleError> for HostError {
     fn from(error: LifecycleError) -> Self {
         Self::Lifecycle(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The flag is a latch: between drains only the final declared
+    /// edge is delivered, never the toggle history.
+    #[test]
+    fn flag_edges_coalesce_to_last_declaration() {
+        let mut queue = DirtyNoticeQueue::new();
+        queue.enqueue(DirtyNotice::StateDirty);
+        queue.enqueue(DirtyNotice::StateClean);
+        queue.enqueue(DirtyNotice::StateDirty);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out, [DirtyNotice::StateDirty]);
+        // A second drain without an intervening enqueue yields
+        // nothing — since-last-drain semantics.
+        queue.drain(&mut out);
+        assert_eq!(out, [DirtyNotice::StateDirty]);
+        assert!(queue.is_empty());
+    }
+
+    /// The clean edge is a first-class notification — VST3
+    /// `setDirty(false)` — delivered like the dirty edge.
+    #[test]
+    fn clean_edge_delivers_state_clean() {
+        let mut queue = DirtyNoticeQueue::new();
+        queue.enqueue(DirtyNotice::StateDirty);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out, [DirtyNotice::StateDirty]);
+
+        queue.enqueue(DirtyNotice::StateClean);
+        out.clear();
+        queue.drain(&mut out);
+        assert_eq!(out, [DirtyNotice::StateClean]);
+    }
+
+    /// `ParamEdited` payloads are preserved one per call, in order —
+    /// and each also latches the dirty flag for flag-only consumers.
+    #[test]
+    fn edits_fifo_then_flag_edge_and_edit_implies_dirty() {
+        let mut queue = DirtyNoticeQueue::new();
+        let v1 = ParamValue::new(0.25).unwrap();
+        let v2 = ParamValue::new(0.75).unwrap();
+        queue.enqueue(DirtyNotice::ParamEdited {
+            param_id: ParamId(1),
+            value: v1,
+        });
+        queue.enqueue(DirtyNotice::ParamEdited {
+            param_id: ParamId(2),
+            value: v2,
+        });
+        // A dirty latch exists with no explicit flag call — the bare
+        // `performEdit` still surfaces `StateDirty`.
+        assert!(!queue.is_empty());
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(
+            out,
+            [
+                DirtyNotice::ParamEdited {
+                    param_id: ParamId(1),
+                    value: v1,
+                },
+                DirtyNotice::ParamEdited {
+                    param_id: ParamId(2),
+                    value: v2,
+                },
+                DirtyNotice::StateDirty,
+            ]
+        );
+    }
+
+    /// An edit followed by a clean edge keeps the edit payload and
+    /// reports the latest flag — the drain order is edits-then-flag.
+    #[test]
+    fn edit_then_clean_reports_backlog_then_clean_edge() {
+        let mut queue = DirtyNoticeQueue::new();
+        let value = ParamValue::new(0.5).unwrap();
+        queue.enqueue(DirtyNotice::ParamEdited {
+            param_id: ParamId(3),
+            value,
+        });
+        queue.enqueue(DirtyNotice::StateClean);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(
+            out,
+            [
+                DirtyNotice::ParamEdited {
+                    param_id: ParamId(3),
+                    value,
+                },
+                DirtyNotice::StateClean,
+            ]
+        );
+    }
+
+    /// Past `MAX_DIRTY_EDITS` the oldest edit drops — the newest is
+    /// the freshest parameter state — and the drop is counted.
+    #[test]
+    fn edit_overflow_drops_oldest_and_counts() {
+        let mut queue = DirtyNoticeQueue::new();
+        let value = ParamValue::new(0.5).unwrap();
+        for id in 0..(MAX_DIRTY_EDITS + 2) {
+            queue.enqueue(DirtyNotice::ParamEdited {
+                param_id: ParamId(u32::try_from(id).unwrap()),
+                value,
+            });
+        }
+        assert_eq!(queue.dropped_edits(), 2);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out.len(), MAX_DIRTY_EDITS + 1); // edits + flag
+        // Ids 0 and 1 dropped; the backlog starts at id 2.
+        assert_eq!(
+            out[0],
+            DirtyNotice::ParamEdited {
+                param_id: ParamId(2),
+                value,
+            }
+        );
+        assert_eq!(out[MAX_DIRTY_EDITS], DirtyNotice::StateDirty);
     }
 }
