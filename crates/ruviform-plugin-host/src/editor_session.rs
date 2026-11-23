@@ -26,11 +26,12 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::{
-    GuiKeyEvent, GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
-    PluginHandle,
+    GuiKeyEvent, GuiRequest, GuiRequestRefusal, GuiRequestSink, GuiRequestVerdict, GuiSize,
+    HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
@@ -590,6 +591,74 @@ pub trait EditorSessionOps {
         session: PluginEditorSessionId,
         event: GuiKeyEvent,
     ) -> Result<(), EditorOpError>;
+
+    /// Drains the instance's queued plugin→host GUI requests into
+    /// `out` — the pull side of the request channel (Issue #873) for
+    /// async-ack formats that enqueue instead of calling a
+    /// synchronous sink (CLAP `[thread-safe]` `request_*` verbs).
+    ///
+    /// The default drains nothing and reports `Ok`: an adapter
+    /// without a queued request path produces none.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] on a backend failure (e.g. `HostLost`
+    /// — [`InProcessEditorOps`]) or `Unsupported` when the route does
+    /// not exist at all ([`L1EditorOps`]).
+    fn drain_gui_requests(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _out: &mut Vec<GuiRequest>,
+    ) -> Result<(), EditorOpError> {
+        Ok(())
+    }
+
+    /// Routes one pending plugin→host GUI request to adjudication —
+    /// the queued-channel counterpart of the synchronous request
+    /// sink. An [`GuiRequestVerdict::Accepted`] verdict means the
+    /// container-side effect is confirmed; the caller composes the
+    /// plugin-side reply through the ordinary session verbs
+    /// (`set_size`/`set_visibility`).
+    ///
+    /// The default answers `Ok(Refused{Unrouted})`: an adapter
+    /// without a configured route never claims one.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] when the adjudication machinery
+    /// itself fails (e.g. `Unsupported` on [`L1EditorOps`]) — arbiter
+    /// verdicts travel as `Ok`, including refusals.
+    fn adjudicate_gui_request(
+        &mut self,
+        _session: PluginEditorSessionId,
+        request: GuiRequest,
+    ) -> Result<GuiRequestVerdict, EditorOpError> {
+        let _ = request;
+        Ok(GuiRequestVerdict::Refused {
+            reason: GuiRequestRefusal::Unrouted,
+        })
+    }
+
+    /// Drains the instance's queued plugin→host requests and
+    /// adjudicates each, appending `(request, verdict)` pairs to
+    /// `out` in drain order — the full queued-channel delivery loop.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] on a drain or adjudication-machinery
+    /// failure; requests after the failed one stay in `out`-less
+    /// limbo only when the drain already returned them — see
+    /// [`EditorSessionOps::drain_gui_requests`].
+    fn dispatch_gui_requests(
+        &mut self,
+        session: PluginEditorSessionId,
+        out: &mut Vec<(GuiRequest, GuiRequestVerdict)>,
+    ) -> Result<(), EditorOpError> {
+        let mut pending = Vec::new();
+        self.drain_gui_requests(session, &mut pending)?;
+        for request in pending {
+            let verdict = self.adjudicate_gui_request(session, request)?;
+            out.push((request, verdict));
+        }
+        Ok(())
+    }
 }
 
 /// Which terminal event an in-flight `Creating`/`Recovering` attach
@@ -1623,6 +1692,9 @@ pub struct InProcessEditorOps<'a> {
     host: &'a mut InProcessHost,
     instance: PluginHandle,
     redeemer: Box<LeaseRedeemer<'a>>,
+    /// The configured plugin→host request arbiter — `None` keeps
+    /// every request at the defined `Unrouted` refusal.
+    arbiter: Option<GuiRequestArbiterHandle>,
 }
 
 /// Redeems an opaque [`ParentSlotLease`] into the [`ParentLease`] a
@@ -1639,6 +1711,59 @@ pub struct InProcessEditorOps<'a> {
 ///
 /// **RT contract:** non-RT only — UI-thread only.
 pub type LeaseRedeemer<'a> = dyn FnMut(&ParentSlotLease) -> Result<ParentLease, EditorOpError> + 'a;
+
+/// The injected plugin→host GUI-request adjudicator — the
+/// composition-side seam a GUI driver configures (Issue #873), the
+/// mirror of [`LeaseRedeemer`]: the arbiter owns container-geometry
+/// policy and answers the [`GuiRequestVerdict`] the request path
+/// returns to the plugin.
+///
+/// `Accepted` must mean the container-side effect is confirmed —
+/// the arbiter performs (or synchronously verifies) it before
+/// answering, never grants a request whose effect is still pending.
+/// `Refused` maps onto the format's honest decline (VST3
+/// `kResultFalse`, CLAP `false`).
+///
+/// `Send + 'static` because the plugin-side sink installed at open
+/// outlives the ops borrow; the `Mutex` keeps `FnMut` callable
+/// behind the shared `Arc`.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub type GuiRequestArbiter =
+    dyn FnMut(PluginEditorSessionId, GuiRequest) -> GuiRequestVerdict + Send;
+
+/// Shared handle to a configured [`GuiRequestArbiter`] — the `Arc`
+/// lets the installed plugin-side sink and the ops reference the
+/// same adjudicator. The `Box` makes the handle constructible: an
+/// unsized `Mutex<dyn _>` has no value form, so the arbiter is
+/// boxed behind `Arc<Mutex<Box<dyn _>>>`.
+///
+/// **RT contract:** non-RT only — UI-thread only.
+pub type GuiRequestArbiterHandle = Arc<Mutex<Box<GuiRequestArbiter>>>;
+
+/// Routes one [`GuiRequest`] to `arbiter` — the shared adjudication
+/// step the installed sink and
+/// [`EditorSessionOps::adjudicate_gui_request`] both run. A
+/// `try_lock` failure maps to the defined refusal: `WouldBlock` →
+/// [`GuiRequestRefusal::Busy`] (re-entrant/concurrent request),
+/// `Poisoned` → [`GuiRequestRefusal::Gone`] (the arbiter panicked
+/// mid-adjudication). Never blocks — a synchronous request path
+/// must not wait behind an in-flight adjudication.
+fn arbitrate(
+    arbiter: &GuiRequestArbiterHandle,
+    session: PluginEditorSessionId,
+    request: GuiRequest,
+) -> GuiRequestVerdict {
+    match arbiter.try_lock() {
+        Ok(mut arbiter) => arbiter(session, request),
+        Err(TryLockError::WouldBlock) => GuiRequestVerdict::Refused {
+            reason: GuiRequestRefusal::Busy,
+        },
+        Err(TryLockError::Poisoned(_)) => GuiRequestVerdict::Refused {
+            reason: GuiRequestRefusal::Gone,
+        },
+    }
+}
 
 impl<'a> InProcessEditorOps<'a> {
     /// Wraps `host` to drive editor ops for `instance`, redeeming leases
@@ -1657,6 +1782,29 @@ impl<'a> InProcessEditorOps<'a> {
             host,
             instance,
             redeemer,
+            arbiter: None,
+        }
+    }
+
+    /// [`Self::with_redeemer`] plus the plugin→host request arbiter —
+    /// `open` installs a request sink that routes the plugin's
+    /// synchronous requests (VST3 `resizeView`) to `arbiter`, and
+    /// [`EditorSessionOps::adjudicate_gui_request`] answers queued
+    /// requests (CLAP `request_*`) through the same handle.
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    #[must_use]
+    pub fn with_redeemer_and_arbiter(
+        host: &'a mut InProcessHost,
+        instance: PluginHandle,
+        redeemer: Box<LeaseRedeemer<'a>>,
+        arbiter: GuiRequestArbiterHandle,
+    ) -> Self {
+        Self {
+            host,
+            instance,
+            redeemer,
+            arbiter: Some(arbiter),
         }
     }
 }
@@ -1689,7 +1837,7 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
 
     fn open(
         &mut self,
-        _session: PluginEditorSessionId,
+        session: PluginEditorSessionId,
         lease: &ParentSlotLease,
         _size: EditorSize,
         mode: AttachMode,
@@ -1711,11 +1859,27 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             // now, but per-plugin support is only known when a verb
             // is invoked (there is no capability query), so the
             // flags stay unclaimed rather than over-claiming.
-            Ok(HostReply::Opened { .. }) => Ok(EditorCapabilities {
-                dock: Support::Supported,
-                close: Support::Supported,
-                ..EditorCapabilities::default()
-            }),
+            Ok(HostReply::Opened { .. }) => {
+                if let Some(arbiter) = &self.arbiter {
+                    let arbiter = Arc::clone(arbiter);
+                    let sink: Box<GuiRequestSink> =
+                        Box::new(move |request| arbitrate(&arbiter, session, request));
+                    // Keep the "open ⇒ request route live" invariant: an
+                    // install failure rolls the just-opened GUI back
+                    // rather than leaving an unrouted editor.
+                    if let Err(error) = self.host.set_gui_request_sink(self.instance, Some(sink)) {
+                        let _ = self.host.execute(HostCommand::CloseGui {
+                            handle: self.instance,
+                        });
+                        return Err(map_host_error(error));
+                    }
+                }
+                Ok(EditorCapabilities {
+                    dock: Support::Supported,
+                    close: Support::Supported,
+                    ..EditorCapabilities::default()
+                })
+            }
             // Any other successful reply shape is an invariant violation
             // in the host mapping — surfaced as a plugin-level failure.
             Ok(_) => Err(EditorOpError::Plugin),
@@ -1731,7 +1895,14 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             })
             .map_err(map_host_error)?
         {
-            HostReply::Ok => Ok(()),
+            HostReply::Ok => {
+                if self.arbiter.is_some() {
+                    // The route dies with the editor — a stale frame
+                    // must never reach an arbiter for a dead session.
+                    let _ = self.host.set_gui_request_sink(self.instance, None);
+                }
+                Ok(())
+            }
             _ => Err(EditorOpError::Plugin),
         }
     }
@@ -1832,6 +2003,29 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
             _ => Err(EditorOpError::Plugin),
         }
     }
+
+    fn drain_gui_requests(
+        &mut self,
+        _session: PluginEditorSessionId,
+        out: &mut Vec<GuiRequest>,
+    ) -> Result<(), EditorOpError> {
+        self.host
+            .drain_gui_requests(self.instance, out)
+            .map_err(map_host_error)
+    }
+
+    fn adjudicate_gui_request(
+        &mut self,
+        session: PluginEditorSessionId,
+        request: GuiRequest,
+    ) -> Result<GuiRequestVerdict, EditorOpError> {
+        let Some(arbiter) = &self.arbiter else {
+            return Ok(GuiRequestVerdict::Refused {
+                reason: GuiRequestRefusal::Unrouted,
+            });
+        };
+        Ok(arbitrate(arbiter, session, request))
+    }
 }
 
 /// L1 editor-session ops: the defined `Unsupported` refusal on every op.
@@ -1914,6 +2108,22 @@ impl EditorSessionOps for L1EditorOps {
         _session: PluginEditorSessionId,
         _event: GuiKeyEvent,
     ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
+
+    fn drain_gui_requests(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _out: &mut Vec<GuiRequest>,
+    ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
+
+    fn adjudicate_gui_request(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _request: GuiRequest,
+    ) -> Result<GuiRequestVerdict, EditorOpError> {
         Err(EditorOpError::Unsupported)
     }
 }

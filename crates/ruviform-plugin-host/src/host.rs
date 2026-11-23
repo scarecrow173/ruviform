@@ -16,9 +16,9 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, Event, EventList, GuiKeyEvent, GuiSize, Lifecycle, LifecycleError,
-    LifecycleEvent, LifecycleState, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    TransportInfo,
+    BusDescriptor, Event, EventList, GuiKeyEvent, GuiRequest, GuiRequestSink, GuiSize, Lifecycle,
+    LifecycleError, LifecycleEvent, LifecycleState, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -1046,6 +1046,90 @@ impl InProcessHost {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.drain_output_reports(out);
                     Ok(ReportDrain::Drained)
+                })
+            }
+        }
+    }
+
+    /// Installs the instance's plugin→host GUI-request sink — the
+    /// synchronous half of the neutral request channel (Issue #873)
+    /// for formats whose request verbs need an inline verdict (VST3
+    /// `IPlugFrame::resizeView`). `None` detaches the route.
+    ///
+    /// This is deliberately *not* a [`HostCommand`]: commands travel
+    /// host→plugin while the sink arms the reverse direction; the
+    /// session adapter ([`crate::editor_session`]) installs it at
+    /// open time. `Plain` slots call the plugin directly; `Shared`
+    /// slots run the pinned lock protocol exactly like every other
+    /// `Shared` verb. A plugin that keeps the default
+    /// [`Plugin::set_gui_request_sink`](ruviform_plugin_core::Plugin::set_gui_request_sink)
+    /// drops the sink — its request
+    /// surface stays at the format's defined refusal, never a
+    /// claimed-but-dead route.
+    ///
+    /// **RT contract:** non-RT only — the `Shared` arm takes the
+    /// `core` mutex. Never call from inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when a `Shared` instance has already
+    /// converged.
+    pub fn set_gui_request_sink(
+        &mut self,
+        handle: PluginHandle,
+        sink: Option<Box<GuiRequestSink>>,
+    ) -> Result<(), HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_request_sink(sink);
+                Ok(())
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.set_gui_request_sink(sink);
+                    Ok(())
+                })
+            }
+        }
+    }
+
+    /// Drains the instance's queued plugin→host GUI requests — the
+    /// pull half of the neutral request channel (Issue #873) for
+    /// async-ack formats that enqueue (CLAP `[thread-safe]`
+    /// `request_*` verbs).
+    ///
+    /// Same delivery shape as [`Self::drain_output_reports`]: a
+    /// pull-based read appending to `out`; nothing drains implicitly.
+    /// Adjudication of each [`GuiRequest`] and the plugin-side reply
+    /// compose at the session/driver layer. `Plain` slots call the
+    /// plugin directly; `Shared` slots run the pinned lock protocol.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// and the `Shared` arm takes the `core` mutex. Never call from
+    /// inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when a `Shared` instance has already
+    /// converged.
+    pub fn drain_gui_requests(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<GuiRequest>,
+    ) -> Result<(), HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.drain_gui_requests(out);
+                Ok(())
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.drain_gui_requests(out);
+                    Ok(())
                 })
             }
         }

@@ -137,9 +137,11 @@
 //!   ports, per-port channels) are clamped to `MAX_SCAN_*` caps before
 //!   they can size an allocation or a scan loop.
 
+use std::collections::VecDeque;
 use std::ffi::{CStr, CString, c_void};
 use std::fmt;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use clack_common::events::event_types::{
     MidiEvent as ClapMidiEvent, NoteOffEvent, NoteOnEvent, ParamValueEvent, TransportEvent,
@@ -151,12 +153,14 @@ use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::{ClapId, FixedPoint};
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
 use clack_extensions::gui::{
-    GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, PluginGui, Window,
+    GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, HostGui, HostGuiImpl, PluginGui, Window,
 };
 use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
 use clack_extensions::state::PluginState;
 use clack_host::entry::{PluginEntry, PluginEntryError};
-use clack_host::host::{HostExtensions, HostHandlers, HostInfo, SharedHandler};
+use clack_host::host::{
+    HostError as ClackHostError, HostExtensions, HostHandlers, HostInfo, SharedHandler,
+};
 use clack_host::plugin::{
     PluginDescriptor as ClapPluginDescriptor, PluginInstance, PluginMainThreadHandle,
 };
@@ -168,8 +172,8 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiSize,
-    HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle, GuiRequest,
+    GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
     PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
     ProcessStatus, TransportInfo, erase,
 };
@@ -307,15 +311,116 @@ fn intern_descriptor(raw: &ClapPluginDescriptor, id: &CStr) -> PluginDescriptor 
 // Host callbacks
 // ---------------------------------------------------------------------------
 
+/// Upper bound of queued plugin→host GUI requests — the
+/// `clap_host_gui` verbs are `[thread-safe]` and may enqueue from any
+/// thread, so an undrained backlog is a defined refusal rather than
+/// unbounded growth.
+const MAX_GUI_REQUESTS: usize = 64;
+
+/// Shared pending GUI-request queue — the plugin's `clap_host_gui`
+/// verbs enqueue here from arbitrary threads; the session layer
+/// drains through `ClapPlugin::drain_gui_requests` and adjudicates
+/// each [`GuiRequest`] (Issue #873).
+type GuiRequestQueue = Arc<Mutex<VecDeque<GuiRequest>>>;
+
 /// The bridge's `[thread-safe]` host handler — acknowledges the
-/// plugin's restart/process/callback requests without acting on them;
-/// the runner drives everything from its single command thread.
-struct BridgeShared;
+/// plugin's restart/process/callback requests without acting on them
+/// (the runner drives everything from its single command thread) and
+/// queues `clap_host_gui` requests for the session layer.
+struct BridgeShared {
+    /// The instance's pending GUI-request queue — shared with the
+    /// owning `ClapPlugin`; a throwaway instance (param enumeration)
+    /// owns a dead-end queue.
+    gui_requests: GuiRequestQueue,
+}
+
+impl BridgeShared {
+    /// A handler with a fresh queue — `init` passes the owning
+    /// plugin's queue instead (`enumerate_params`'s throwaway).
+    fn new() -> Self {
+        Self {
+            gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+        }
+    }
+
+    /// Bounded enqueue — `false` when the queue is full or the lock
+    /// poisoned: `request_*` maps it to the honest `Err`/`false`,
+    /// notifications take the defined drop.
+    fn enqueue(&self, request: GuiRequest) -> bool {
+        let Ok(mut queue) = self.gui_requests.lock() else {
+            return false;
+        };
+        if queue.len() >= MAX_GUI_REQUESTS {
+            return false;
+        }
+        queue.push_back(request);
+        true
+    }
+}
 
 impl SharedHandler<'_> for BridgeShared {
     fn request_restart(&self) {}
     fn request_process(&self) {}
     fn request_callback(&self) {}
+}
+
+/// `ClapPlugin::drain_gui_requests`' body — moves the shared
+/// queue's pending plugin→host requests into `out` (Issue #873). A
+/// poisoned lock yields nothing: the queue's contents survive
+/// behind `into_inner`, but a panic while holding it would already
+/// have left the adapter undefined — the honest answer is silence.
+fn drain_gui_request_queue(queue: &GuiRequestQueue, out: &mut Vec<GuiRequest>) {
+    if let Ok(mut queue) = queue.lock() {
+        out.extend(queue.drain(..));
+    }
+}
+
+impl HostGuiImpl for BridgeShared {
+    /// The plugin's resize constraints changed — a notification with
+    /// no verdict; a full queue takes the defined drop.
+    fn resize_hints_changed(&self) {
+        let _ = self.enqueue(GuiRequest::ResizeHintsChanged);
+    }
+
+    /// `Ok` is the enqueue ack — the CLAP async-ack contract: the
+    /// session adjudicates the drained request and answers through
+    /// the plugin's `set_size`. A full queue declines honestly.
+    fn request_resize(&self, new_size: ClapGuiSize) -> Result<(), ClackHostError> {
+        if self.enqueue(GuiRequest::Resize {
+            size: GuiSize {
+                width: f64::from(new_size.width),
+                height: f64::from(new_size.height),
+            },
+        }) {
+            Ok(())
+        } else {
+            Err(ClackHostError::Message("GUI request queue full"))
+        }
+    }
+
+    /// See [`Self::request_resize`] — the enqueue ack contract.
+    fn request_show(&self) -> Result<(), ClackHostError> {
+        if self.enqueue(GuiRequest::Show) {
+            Ok(())
+        } else {
+            Err(ClackHostError::Message("GUI request queue full"))
+        }
+    }
+
+    /// See [`Self::request_resize`] — the enqueue ack contract.
+    fn request_hide(&self) -> Result<(), ClackHostError> {
+        if self.enqueue(GuiRequest::Hide) {
+            Ok(())
+        } else {
+            Err(ClackHostError::Message("GUI request queue full"))
+        }
+    }
+
+    /// The plugin's floating window closed or its GUI connection was
+    /// lost — a notification; a full queue takes the defined drop.
+    fn closed(&self, was_destroyed: bool) {
+        let _ = self.enqueue(GuiRequest::Closed { was_destroyed });
+    }
 }
 
 /// The bridge's `[audio-thread]` host handler — a `Send` marker; the
@@ -334,11 +439,14 @@ impl HostHandlers for BridgeHandlers {
     type MainThread<'a> = ();
     type AudioProcessor<'a> = BridgeAudioProcessor;
 
-    fn declare_extensions(_builder: &mut HostExtensions<Self>, _shared: &BridgeShared) {
-        // No host extensions — notably not `HostThreadCheck`. See the
-        // module-level thread-check policy: absence of the extension is
-        // the honest answer, and the fixture's `None` fallback keeps
-        // behavior unchanged.
+    fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &BridgeShared) {
+        // `HostGui` — the plugin→host GUI request channel (Issue #873);
+        // `BridgeShared`'s `HostGuiImpl` queues every verb for the
+        // session's drain→arbitration loop. Still not `HostThreadCheck`
+        // — see the module-level thread-check policy: absence of the
+        // extension is the honest answer, and the fixture's `None`
+        // fallback keeps behavior unchanged.
+        builder.register::<HostGui>();
     }
 }
 
@@ -497,7 +605,7 @@ fn enumerate_params(
     host_info: &HostInfo,
 ) -> &'static [ParamInfo] {
     let Ok(mut instance) = PluginInstance::<BridgeHandlers>::new(
-        |()| BridgeShared,
+        |()| BridgeShared::new(),
         |_| (),
         entry,
         plugin_id,
@@ -671,6 +779,10 @@ struct ClapPlugin {
     /// (`hide` best-effort + `destroy`) runs in `close_gui` and at
     /// the head of `Drop`, before the instance descent (design D3).
     gui: Option<PluginGui>,
+    /// Pending plugin→host GUI requests — shared with the instance's
+    /// `BridgeShared`, whose `HostGuiImpl` enqueues from arbitrary
+    /// threads (Issue #873). `drain_gui_requests` moves them out.
+    gui_requests: GuiRequestQueue,
     /// Instance-local mint counter for [`GuiHandle`] tokens — the
     /// same `gui_seq` convention the VST3 adapter uses.
     gui_seq: u32,
@@ -705,6 +817,7 @@ impl ClapPlugin {
             pending_reports: Vec::new(),
             report_stats: ReportStats::new(),
             gui: None,
+            gui_requests: Arc::new(Mutex::new(VecDeque::new())),
             gui_seq: 0,
         }
     }
@@ -1412,8 +1525,9 @@ impl Plugin for ClapPlugin {
         if self.instance.is_some() {
             return Err(HostError::PluginFailed);
         }
+        let gui_requests = Arc::clone(&self.gui_requests);
         let instance = PluginInstance::<BridgeHandlers>::new(
-            |()| BridgeShared,
+            move |()| BridgeShared { gui_requests },
             |_| (),
             &self.entry,
             &self.plugin_id,
@@ -1674,6 +1788,15 @@ impl Plugin for ClapPlugin {
         let window = unsafe { Window::from_win32_hwnd(parent.payload() as *mut c_void) };
         // SAFETY: `window` wraps the live redeemed HWND above.
         unsafe { gui.set_parent(&handle, window) }.map_err(|_| HostError::PluginFailed)
+    }
+
+    /// `drain_gui_requests` — moves the shared queue's pending
+    /// plugin→host requests into `out` (Issue #873) — the body lives
+    /// in [`drain_gui_request_queue`] so the testable surface does
+    /// not need a `ClapPlugin` (a `PluginEntry` requires a real
+    /// binary).
+    fn drain_gui_requests(&mut self, out: &mut Vec<GuiRequest>) {
+        drain_gui_request_queue(&self.gui_requests, out);
     }
 }
 
@@ -2193,5 +2316,84 @@ mod tests {
         buffer.clear();
         assert!(buffer.try_push(event.as_ref()).is_ok());
         assert_eq!(buffer.iter().count(), 1);
+    }
+
+    /// `HostGuiImpl` verbs enqueue neutral [`GuiRequest`]s in call
+    /// order — the `request_*` `Ok` is the enqueue ack (Issue #873);
+    /// `drain_gui_request_queue` moves them out on the plugin side.
+    #[test]
+    fn host_gui_verbs_enqueue_then_drain() {
+        let queue: GuiRequestQueue = Arc::new(Mutex::new(VecDeque::new()));
+        let shared = BridgeShared {
+            gui_requests: Arc::clone(&queue),
+        };
+
+        assert!(
+            shared
+                .request_resize(ClapGuiSize {
+                    width: 640,
+                    height: 480,
+                })
+                .is_ok()
+        );
+        assert!(shared.request_show().is_ok());
+        assert!(shared.request_hide().is_ok());
+        shared.resize_hints_changed();
+        shared.closed(true);
+
+        let mut out = Vec::new();
+        drain_gui_request_queue(&queue, &mut out);
+        assert_eq!(
+            out,
+            vec![
+                GuiRequest::Resize {
+                    size: GuiSize {
+                        width: 640.0,
+                        height: 480.0,
+                    }
+                },
+                GuiRequest::Show,
+                GuiRequest::Hide,
+                GuiRequest::ResizeHintsChanged,
+                GuiRequest::Closed {
+                    was_destroyed: true
+                },
+            ]
+        );
+        // Drained — a second pull yields nothing.
+        let mut again = Vec::new();
+        drain_gui_request_queue(&queue, &mut again);
+        assert_eq!(again, Vec::new());
+    }
+
+    /// The bounded queue declines honestly: past `MAX_GUI_REQUESTS`
+    /// the `request_*` verbs answer `Err` and notifications take the
+    /// defined drop — never unbounded growth.
+    #[test]
+    fn host_gui_request_queue_bound_refuses() {
+        let queue: GuiRequestQueue = Arc::new(Mutex::new(VecDeque::new()));
+        let shared = BridgeShared {
+            gui_requests: Arc::clone(&queue),
+        };
+
+        let size = ClapGuiSize {
+            width: 640,
+            height: 480,
+        };
+        for _ in 0..MAX_GUI_REQUESTS {
+            assert!(shared.request_resize(size).is_ok());
+        }
+        // Full — every `request_*` answers the honest `Err`.
+        assert!(shared.request_resize(size).is_err());
+        assert!(shared.request_show().is_err());
+        assert!(shared.request_hide().is_err());
+        // Notifications take the defined drop — the queue stays at
+        // the bound.
+        shared.resize_hints_changed();
+        shared.closed(false);
+        assert_eq!(
+            queue.lock().map_or(0, |queue| queue.len()),
+            MAX_GUI_REQUESTS
+        );
     }
 }

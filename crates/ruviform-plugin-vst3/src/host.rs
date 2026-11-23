@@ -181,6 +181,7 @@ use std::ffi::{c_char, c_void};
 use std::fmt;
 use std::path::Path;
 use std::ptr;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use libloading::Library;
@@ -188,10 +189,10 @@ use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, ErasedPlugin, Event, EventKind, EventList, GuiHandle,
-    GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError, ParamEvent, ParamFlags,
-    ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
-    erase,
+    GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiRequest, GuiRequestSink, GuiRequestVerdict,
+    GuiSize, HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin,
+    PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, TransportInfo, erase,
 };
 use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
 use vst3::Steinberg::KeyModifier_::{kAlternateKey, kCommandKey, kControlKey, kShiftKey};
@@ -213,7 +214,7 @@ use vst3::Steinberg::{
     PClassInfoW, TBool, TUID, ViewRect, char8, kInvalidArgument, kNotImplemented, kResultFalse,
     kResultOk, kResultTrue, tresult,
 };
-use vst3::{Class, ComPtr, ComWrapper, Interface};
+use vst3::{Class, ComPtr, ComRef, ComWrapper, Interface};
 
 use crate::block;
 use crate::midi::{self, BridgeEventList, MidiAssignmentTable, MidiBridgeStats};
@@ -718,26 +719,82 @@ impl IHostApplicationTrait for BridgeHostApplication {
 }
 
 /// Minimal `IPlugFrame` — the host frame handed to `setFrame` before
-/// `attached`. `resizeView` is the plugin-initiated resize request:
-/// the bridge answers the honest `kResultFalse` because container
-/// geometry is owned by the slot side (`NativeSurfaceSlot`/
-/// `set_geometry`) and no neutral channel carries a plugin-requested
-/// resize back to it — acknowledging would fake a resize the bridge
-/// never performs (`docs/designs/issue-389-vst3-l0-editor-attach.md`
-/// D2).
-struct BridgePlugFrame;
+/// `attached`, per-instance so `resizeView` can reach the request
+/// route the session installed (Issue #873). `resizeView` is the
+/// plugin-initiated resize request: with a live route it delivers
+/// [`GuiRequest::Resize`] through the shared sink and answers the
+/// arbiter's verdict — `Accepted` runs the `onSize` roundtrip on the
+/// calling thread before `kResultOk`; `Refused` and every unrouted
+/// state keep the honest `kResultFalse` (container geometry stays
+/// with the slot side, `NativeSurfaceSlot`/`set_geometry` —
+/// `docs/designs/issue-389-vst3-l0-editor-attach.md` D2, updated by
+/// `docs/designs/issue-873-plugin-gui-request.md`).
+struct BridgePlugFrame {
+    /// Shared cell mirroring `Vst3Plugin`'s request-sink slot — the
+    /// session installs `Some` at open and detaches at close; `None`
+    /// inside keeps `resizeView` at the defined refusal.
+    request_sink: Rc<RefCell<Option<Box<GuiRequestSink>>>>,
+}
 
 impl Class for BridgePlugFrame {
     type Interfaces = (IPlugFrame,);
 }
 
 impl IPlugFrameTrait for BridgePlugFrame {
+    /// `resizeView` → request sink → verdict → `onSize` roundtrip.
+    /// The plugin proposed the size itself, so `canResize`/
+    /// `checkSizeConstraint` are not re-run — the container-side
+    /// correction, if any, is the arbiter's `granted`.
     #[expect(unsafe_code)]
-    unsafe fn resizeView(&self, _view: *mut IPlugView, _new_size: *mut ViewRect) -> tresult {
-        // `kResultFalse` — a defined refusal: the plugin keeps its
-        // current size; the bridge cannot move the consumer-owned
-        // container.
-        kResultFalse
+    #[expect(clippy::cast_possible_truncation)]
+    unsafe fn resizeView(&self, view: *mut IPlugView, new_size: *mut ViewRect) -> tresult {
+        if view.is_null() || new_size.is_null() {
+            return kInvalidArgument;
+        }
+        // `try_borrow_mut` — a re-entrant request (e.g. a plugin
+        // calling `resizeView` from inside `onSize`) gets the defined
+        // refusal, never a `RefCell` panic across the ABI.
+        let Ok(mut slot) = self.request_sink.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        let Some(sink) = slot.as_mut() else {
+            return kResultFalse;
+        };
+        // SAFETY: `new_size` checked non-null; `ViewRect` is a POD the
+        // plugin owns for the call.
+        let rect = unsafe { *new_size };
+        let verdict = sink(GuiRequest::Resize {
+            size: GuiSize {
+                width: f64::from(rect.right - rect.left),
+                height: f64::from(rect.bottom - rect.top),
+            },
+        });
+        // Release the borrow before re-entering the plugin through
+        // `onSize` — it may legitimately issue a nested request.
+        drop(slot);
+        let GuiRequestVerdict::Accepted { granted } = verdict else {
+            return kResultFalse;
+        };
+        let applied = granted.unwrap_or(GuiSize {
+            width: f64::from(rect.right - rect.left),
+            height: f64::from(rect.bottom - rect.top),
+        });
+        let mut applied_rect = ViewRect {
+            left: 0,
+            top: 0,
+            right: applied.width.round() as i32,
+            bottom: applied.height.round() as i32,
+        };
+        // SAFETY: `view` checked non-null — `ComRef` borrows the
+        // plugin's `IPlugView` without addref for the call's
+        // duration; `IPlugView` calls run on the caller's UI thread
+        // per the open_gui thread contract. `onSize` carries the
+        // final (possibly corrected) size — the plugin's honest
+        // answer is returned verbatim.
+        let Some(view_ref) = (unsafe { ComRef::<IPlugView>::from_raw(view) }) else {
+            return kResultFalse;
+        };
+        unsafe { view_ref.onSize(&raw mut applied_rect) }
     }
 }
 
@@ -1762,6 +1819,11 @@ struct Vst3Plugin {
     /// The bridge-owned `IPlugFrame` handed to `setFrame` — kept for
     /// the view's open lifetime and released with it.
     plug_frame: Option<ComPtr<IPlugFrame>>,
+    /// The plugin→host GUI-request route the session installed —
+    /// shared with `BridgePlugFrame` so `resizeView` reaches the
+    /// arbiter (Issue #873). `None` keeps `resizeView` at the
+    /// defined `kResultFalse` refusal.
+    gui_request_sink: Rc<RefCell<Option<Box<GuiRequestSink>>>>,
     /// The redeemed parent lease + platform the open view last
     /// attached to — `set_gui_parent`/`set_gui_visibility` re-`attach`
     /// after a `removed()` need both.
@@ -1872,6 +1934,7 @@ impl Vst3Plugin {
             handler: None,
             view: None,
             plug_frame: None,
+            gui_request_sink: Rc::new(RefCell::new(None)),
             gui_parent: None,
             gui_attached: false,
             component_cp: None,
@@ -1962,6 +2025,12 @@ impl Vst3Plugin {
         }
         self.gui_attached = false;
         self.gui_parent = None;
+        // The request route dies with the view — a stale `resizeView`
+        // must meet the defined refusal, not an arbiter for a dead
+        // session. A shared `RefCell` borrow from an in-flight
+        // request is released before `close_view` can run, so a plain
+        // `borrow_mut` cannot panic here.
+        *self.gui_request_sink.borrow_mut() = None;
         drop(self.plug_frame.take());
     }
 
@@ -3099,7 +3168,9 @@ impl Plugin for Vst3Plugin {
         if unsafe { view.isPlatformTypeSupported(platform) } != kResultTrue {
             return Err(HostError::Unsupported);
         }
-        let frame_wrapper = ComWrapper::new(BridgePlugFrame);
+        let frame_wrapper = ComWrapper::new(BridgePlugFrame {
+            request_sink: Rc::clone(&self.gui_request_sink),
+        });
         let Some(frame) = frame_wrapper.to_com_ptr::<IPlugFrame>() else {
             return Err(HostError::PluginFailed);
         };
@@ -3314,6 +3385,16 @@ impl Plugin for Vst3Plugin {
         }
         Ok(())
     }
+
+    /// `set_gui_request_sink` — stores the session-installed route
+    /// in the shared cell `BridgePlugFrame` reads on `resizeView`
+    /// (Issue #873). `try_borrow_mut` is the defined guard against a
+    /// re-entrant install while a request is in flight.
+    fn set_gui_request_sink(&mut self, sink: Option<Box<GuiRequestSink>>) {
+        if let Ok(mut slot) = self.gui_request_sink.try_borrow_mut() {
+            *slot = sink;
+        }
+    }
 }
 
 /// Maps the boundary [`GuiModifiers`] bitmask onto the VST3
@@ -3391,7 +3472,9 @@ mod tests {
     // `ParamValue` here is the *neutral* normalized-value type — the
     // named import shadows the `vst3` `f64` alias brought in by
     // `use super::*`.
-    use ruviform_plugin_core::{Event, EventKind, HostInput, HostOutput, ParamEvent, ParamValue};
+    use ruviform_plugin_core::{
+        Event, EventKind, GuiRequestRefusal, HostInput, HostOutput, ParamEvent, ParamValue,
+    };
     use std::cell::Cell;
     use std::path::PathBuf;
     use std::rc::Rc;
@@ -4561,5 +4644,263 @@ mod tests {
             save_component_state(&comp, Some(&ctrl), false),
             Err(HostError::PluginFailed)
         );
+    }
+
+    // -----------------------------------------------------------------
+    // `BridgePlugFrame` request-route tests (Issue #873) — the frame
+    // is the unit under test; `TestPlugView` is the COM-double view
+    // that receives the `onSize` roundtrip.
+    // -----------------------------------------------------------------
+
+    /// Test-only `IPlugView` — records each `onSize` delivery's
+    /// `(width, height)`; every other verb is a defined stub. The
+    /// `resizeView` verdict logic is the unit under test, not the
+    /// view.
+    struct TestPlugView {
+        /// `(right-left, bottom-top)` per `onSize`, in call order.
+        on_size_log: RefCell<Vec<(i32, i32)>>,
+    }
+
+    impl Class for TestPlugView {
+        type Interfaces = (IPlugView,);
+    }
+
+    impl IPlugViewTrait for TestPlugView {
+        #[expect(unsafe_code)]
+        unsafe fn isPlatformTypeSupported(&self, _type: *const char8) -> tresult {
+            kResultTrue
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn attached(&self, _parent: *mut c_void, _type: *const char8) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn removed(&self) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn onWheel(&self, _distance: f32) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn onKeyDown(&self, _key: u16, _key_code: i16, _modifiers: i16) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn onKeyUp(&self, _key: u16, _key_code: i16, _modifiers: i16) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn getSize(&self, _size: *mut ViewRect) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn onSize(&self, new_size: *mut ViewRect) -> tresult {
+            // SAFETY: the frame passes a live `ViewRect` it owns for
+            // the call's duration.
+            let rect = unsafe { *new_size };
+            self.on_size_log
+                .borrow_mut()
+                .push((rect.right - rect.left, rect.bottom - rect.top));
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn onFocus(&self, _state: TBool) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn setFrame(&self, _frame: *mut IPlugFrame) -> tresult {
+            kResultOk
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn canResize(&self) -> tresult {
+            kResultTrue
+        }
+
+        #[expect(unsafe_code)]
+        unsafe fn checkSizeConstraint(&self, _rect: *mut ViewRect) -> tresult {
+            kResultOk
+        }
+    }
+
+    /// The shared request-sink cell — `Vst3Plugin`'s side in
+    /// production, held directly by the test.
+    type SinkCell = Rc<RefCell<Option<Box<GuiRequestSink>>>>;
+
+    /// A `BridgePlugFrame` COM pair plus a view double sharing the
+    /// request-sink cell — the same shape `open_gui` wires.
+    struct PlugFrameFixture {
+        /// Keeps the frame's `ComWrapper` (vtable holder) alive.
+        _frame_wrapper: ComWrapper<BridgePlugFrame>,
+        frame: ComPtr<IPlugFrame>,
+        /// Keeps the view's `ComWrapper` alive.
+        view_wrapper: ComWrapper<TestPlugView>,
+        view: ComPtr<IPlugView>,
+        cell: SinkCell,
+    }
+
+    fn plug_frame_pair() -> PlugFrameFixture {
+        let cell: SinkCell = Rc::new(RefCell::new(None));
+        let frame_wrapper = ComWrapper::new(BridgePlugFrame {
+            request_sink: Rc::clone(&cell),
+        });
+        let frame = frame_wrapper
+            .to_com_ptr::<IPlugFrame>()
+            .expect("frame exposes IPlugFrame");
+        let view_wrapper = ComWrapper::new(TestPlugView {
+            on_size_log: RefCell::new(Vec::new()),
+        });
+        let view = view_wrapper
+            .to_com_ptr::<IPlugView>()
+            .expect("view exposes IPlugView");
+        PlugFrameFixture {
+            _frame_wrapper: frame_wrapper,
+            frame,
+            view_wrapper,
+            view,
+            cell,
+        }
+    }
+
+    /// A 640×480 `ViewRect` — the plugin's requested size.
+    fn request_rect() -> ViewRect {
+        ViewRect {
+            left: 0,
+            top: 0,
+            right: 640,
+            bottom: 480,
+        }
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn plug_frame_resize_accept_runs_onsize_roundtrip() {
+        let fixture = plug_frame_pair();
+        // Scripted route — accepts with the corrected 320×240.
+        *fixture.cell.borrow_mut() = Some(Box::new(|request| {
+            assert_eq!(
+                request,
+                GuiRequest::Resize {
+                    size: GuiSize {
+                        width: 640.0,
+                        height: 480.0,
+                    }
+                }
+            );
+            GuiRequestVerdict::Accepted {
+                granted: Some(GuiSize {
+                    width: 320.0,
+                    height: 240.0,
+                }),
+            }
+        }));
+        let mut rect = request_rect();
+        // SAFETY: `view`/`frame` are live COM objects for the call's
+        // duration; `rect` is a live `ViewRect`.
+        let result = unsafe {
+            fixture
+                .frame
+                .resizeView(fixture.view.as_ptr(), &raw mut rect)
+        };
+        assert_eq!(result, kResultOk);
+        // The `onSize` roundtrip delivered the granted size, not the
+        // requested one.
+        assert_eq!(*fixture.view_wrapper.on_size_log.borrow(), vec![(320, 240)]);
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn plug_frame_resize_accept_verbatim_onsize() {
+        let fixture = plug_frame_pair();
+        // `granted: None` — the requested size applies verbatim.
+        *fixture.cell.borrow_mut() =
+            Some(Box::new(|_| GuiRequestVerdict::Accepted { granted: None }));
+        let mut rect = request_rect();
+        // SAFETY: live COM objects + a live `ViewRect` for the call.
+        let result = unsafe {
+            fixture
+                .frame
+                .resizeView(fixture.view.as_ptr(), &raw mut rect)
+        };
+        assert_eq!(result, kResultOk);
+        assert_eq!(*fixture.view_wrapper.on_size_log.borrow(), vec![(640, 480)]);
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn plug_frame_resize_refusal_and_unrouted_stay_false() {
+        let fixture = plug_frame_pair();
+        // Unrouted — no sink installed: the defined refusal, no
+        // `onSize` delivery.
+        let mut rect = request_rect();
+        // SAFETY: live COM objects + a live `ViewRect` for the call.
+        assert_eq!(
+            unsafe {
+                fixture
+                    .frame
+                    .resizeView(fixture.view.as_ptr(), &raw mut rect)
+            },
+            kResultFalse
+        );
+        // Routed refusal — the arbiter declines: still `kResultFalse`,
+        // still no `onSize`.
+        *fixture.cell.borrow_mut() = Some(Box::new(|_| GuiRequestVerdict::Refused {
+            reason: GuiRequestRefusal::Rejected,
+        }));
+        // SAFETY: live COM objects + a live `ViewRect` for the call.
+        assert_eq!(
+            unsafe {
+                fixture
+                    .frame
+                    .resizeView(fixture.view.as_ptr(), &raw mut rect)
+            },
+            kResultFalse
+        );
+        // Re-entrant — the cell is borrowed elsewhere when the
+        // request arrives: the defined refusal, never a `RefCell`
+        // panic across the ABI.
+        let guard = fixture.cell.borrow_mut();
+        // SAFETY: live COM objects + a live `ViewRect` for the call.
+        assert_eq!(
+            unsafe {
+                fixture
+                    .frame
+                    .resizeView(fixture.view.as_ptr(), &raw mut rect)
+            },
+            kResultFalse
+        );
+        drop(guard);
+        assert_eq!(*fixture.view_wrapper.on_size_log.borrow(), Vec::new());
+    }
+
+    #[test]
+    #[expect(unsafe_code)]
+    fn plug_frame_resize_rejects_null_arguments() {
+        let fixture = plug_frame_pair();
+        let mut rect = request_rect();
+        // SAFETY: null arguments exercise the defined argument
+        // refusals; live pointers carry the valid call.
+        unsafe {
+            assert_eq!(
+                fixture.frame.resizeView(ptr::null_mut(), &raw mut rect),
+                kInvalidArgument
+            );
+            assert_eq!(
+                fixture
+                    .frame
+                    .resizeView(fixture.view.as_ptr(), ptr::null_mut()),
+                kInvalidArgument
+            );
+        }
     }
 }
