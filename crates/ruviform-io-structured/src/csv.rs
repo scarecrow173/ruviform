@@ -26,7 +26,9 @@
 //! [`DocumentErrorKind::InvalidEncoding`]. A UTF-8 BOM is stripped when
 //! [`CsvReadOptions::bom`] is [`CsvBomPolicy::StripUtf8`] (the default);
 //! UTF-16-family BOM input is rejected as `InvalidEncoding` — no
-//! transcoding is performed.
+//! transcoding is performed. [`CsvWriter`] keeps written output inside
+//! that contract: a document never opens with BOM bytes — a leading
+//! field that would form one is emitted behind an empty line.
 //!
 //! ## Dialect & leniency
 //!
@@ -1197,11 +1199,25 @@ fn grow_record_buffers(
 /// output reached the writer — file sync/publish are separate
 /// guarantees (see the `file` feature's staged publish).
 ///
+/// A written document never opens with a byte-order mark: when the
+/// first field's leading bytes would form one (`EF BB BF`, `FF FE` or
+/// `FE FF`), a bare terminator — an empty line the reader skips — is
+/// emitted ahead of the record. Otherwise the reader's documented BOM
+/// contract breaks the round-trip — a UTF-16 BOM is rejected as
+/// `InvalidEncoding` and a stripped UTF-8 BOM silently alters the
+/// first field.
+///
 /// **RT contract:** non-RT only — may block on I/O and allocate.
 #[derive(Debug)]
 pub struct CsvWriter<'a, W: Write> {
-    /// Buffered backend writer over the borrowed stream.
-    inner: csv::Writer<&'a mut W>,
+    /// Buffered backend writer over the guarded sink — built on the
+    /// first write so a leading empty record can precede a document
+    /// whose first field would otherwise open with a BOM.
+    inner: Option<csv::Writer<HeadGuard<'a, W>>>,
+    /// The borrowed sink until `inner` takes it.
+    wtr: Option<&'a mut W>,
+    /// Write options (copied — `CsvWriteOptions: Copy`).
+    options: CsvWriteOptions,
 }
 
 impl<'a, W: Write> CsvWriter<'a, W> {
@@ -1216,21 +1232,10 @@ impl<'a, W: Write> CsvWriter<'a, W> {
     pub fn new(writer: &'a mut W, options: &CsvWriteOptions) -> Result<Self, DocumentError> {
         let options = *options;
         validate_dialect(&options.dialect)?;
-        let mut builder = csv::WriterBuilder::new();
-        builder
-            .delimiter(options.dialect.delimiter)
-            .quote(options.dialect.quote)
-            .terminator(writer_terminator(options.dialect.terminator))
-            .quote_style(writer_quote_style(options.quote_style))
-            .double_quote(options.dialect.double_quote)
-            .comment(options.dialect.comment)
-            .has_headers(options.has_headers)
-            .flexible(options.flexible);
-        if let Some(escape) = options.dialect.escape {
-            builder.escape(escape);
-        }
         Ok(Self {
-            inner: builder.from_writer(writer),
+            inner: None,
+            wtr: Some(writer),
+            options,
         })
     }
 
@@ -1248,9 +1253,17 @@ impl<'a, W: Write> CsvWriter<'a, W> {
         I: IntoIterator<Item = S>,
         S: AsRef<[u8]>,
     {
-        self.inner
-            .write_record(record)
-            .map_err(|e| map_csv_error(e, None))
+        if let Some(inner) = self.inner.as_mut() {
+            inner
+                .write_record(record)
+                .map_err(|e| map_csv_error(e, None))
+        } else {
+            let mut fields = record.into_iter();
+            let first = fields.next();
+            self.open_inner(first.as_ref().map(AsRef::as_ref))
+                .write_record(first.into_iter().chain(fields))
+                .map_err(|e| map_csv_error(e, None))
+        }
     }
 
     /// Serializes `value` as one record; emits the header row on the
@@ -1263,9 +1276,51 @@ impl<'a, W: Write> CsvWriter<'a, W> {
     ///
     /// `DataModel` for serialize failures, `Io` for writer failures.
     pub fn write_typed<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), DocumentError> {
-        self.inner
-            .serialize(value)
-            .map_err(|e| map_csv_error(e, None))
+        let inner = if let Some(inner) = self.inner.as_mut() {
+            inner
+        } else {
+            // The first serialize may emit a header row, and a
+            // header name or the record's first field can still
+            // lead the document with a BOM (`U+FEFF` serializes
+            // as `EF BB BF`). Render once to inspect the leading
+            // bytes, then emit through the real writer so its
+            // state stays authoritative.
+            let mut buf = Vec::new();
+            {
+                let mut tmp = backend_writer(&mut buf, &self.options);
+                tmp.serialize(value).map_err(|e| map_csv_error(e, None))?;
+                tmp.flush().map_err(io_error)?;
+            }
+            self.open_inner(Some(buf.as_slice()))
+        };
+        inner.serialize(value).map_err(|e| map_csv_error(e, None))
+    }
+
+    /// Builds the backend writer over the sink. When `first_bytes`
+    /// would open the document with a BOM and the quote style leaves
+    /// leading fields raw, the sink's guard is armed with a bare
+    /// terminator — an empty line every CSV reader skips.
+    fn open_inner(&mut self, first_bytes: Option<&[u8]>) -> &mut csv::Writer<HeadGuard<'a, W>> {
+        let guard = first_bytes.is_some_and(opens_with_bom)
+            && matches!(
+                self.options.quote_style,
+                CsvQuoteStyle::Necessary | CsvQuoteStyle::Never
+            );
+        let pending = if guard {
+            terminator_bytes(self.options.dialect.terminator)
+        } else {
+            Vec::new()
+        };
+        let wtr = self.wtr.take().expect("sink");
+        self.inner = Some(backend_writer(
+            HeadGuard {
+                w: wtr,
+                pending,
+                pending_pos: 0,
+            },
+            &self.options,
+        ));
+        self.inner.as_mut().expect("inner")
     }
 
     /// Flushes all buffered output to the writer.
@@ -1279,9 +1334,63 @@ impl<'a, W: Write> CsvWriter<'a, W> {
     ///
     /// `Io` when the final flush fails.
     pub fn finish(mut self) -> Result<(), DocumentError> {
-        self.inner
-            .flush()
-            .map_err(|e| DocumentError::with_source(DocumentErrorKind::Io, FORMAT, e))
+        if self.inner.is_none() {
+            // No records were written — still open the backend so the
+            // flush reaches the sink and surfaces `Io` as before.
+            self.open_inner(None);
+        }
+        if let Some(inner) = self.inner.as_mut() {
+            inner.flush().map_err(io_error)?;
+        }
+        Ok(())
+    }
+}
+
+/// `Write` adapter that replays `pending` ahead of the stream — used
+/// to place a leading empty record before a document whose first
+/// field would otherwise open with a byte-order mark.
+#[derive(Debug)]
+struct HeadGuard<'a, W: Write> {
+    /// The real sink.
+    w: &'a mut W,
+    /// Prefix bytes to emit before anything else.
+    pending: Vec<u8>,
+    /// Bytes of `pending` already emitted.
+    pending_pos: usize,
+}
+
+impl<W: Write> HeadGuard<'_, W> {
+    /// Pushes the rest of `pending` to the sink — byte-exact across
+    /// partial writes and retries.
+    fn drain_pending(&mut self) -> std::io::Result<()> {
+        while self.pending_pos < self.pending.len() {
+            let n = self.w.write(&self.pending[self.pending_pos..])?;
+            if n == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "failed to write leading record",
+                ));
+            }
+            self.pending_pos += n;
+        }
+        Ok(())
+    }
+}
+
+impl<W: Write> Write for HeadGuard<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.drain_pending()?;
+        self.w.write(buf)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        self.drain_pending()?;
+        self.w.write_all(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.drain_pending()?;
+        self.w.flush()
     }
 }
 
@@ -1400,6 +1509,47 @@ pub fn write_file<T: Serialize>(
     publish: ruviform_io_file::PublishOptions,
 ) -> Result<ruviform_io_file::PublishReceipt, crate::DocumentFileWriteError> {
     crate::file::write_document(path, publish, |writer| to_writer(writer, records, options))
+}
+
+/// Builds the `csv` backend writer over `wtr` for `options`.
+fn backend_writer<W: Write>(wtr: W, options: &CsvWriteOptions) -> csv::Writer<W> {
+    let mut builder = csv::WriterBuilder::new();
+    builder
+        .delimiter(options.dialect.delimiter)
+        .quote(options.dialect.quote)
+        .terminator(writer_terminator(options.dialect.terminator))
+        .quote_style(writer_quote_style(options.quote_style))
+        .double_quote(options.dialect.double_quote)
+        .comment(options.dialect.comment)
+        .has_headers(options.has_headers)
+        .flexible(options.flexible);
+    if let Some(escape) = options.dialect.escape {
+        builder.escape(escape);
+    }
+    builder.from_writer(wtr)
+}
+
+/// True when `bytes` begins with a byte-order mark the reader
+/// recognizes: a UTF-8 BOM (`EF BB BF`, stripped under `StripUtf8`)
+/// or a UTF-16-family BOM (`FF FE`/`FE FF`, always rejected).
+fn opens_with_bom(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0xEF, 0xBB, 0xBF])
+        || bytes.starts_with(&[0xFF, 0xFE])
+        || bytes.starts_with(&[0xFE, 0xFF])
+}
+
+/// The on-wire bytes of one record terminator — a bare terminator is
+/// an empty line the reader skips.
+fn terminator_bytes(terminator: CsvTerminator) -> Vec<u8> {
+    match terminator {
+        CsvTerminator::CrLf => b"\r\n".to_vec(),
+        CsvTerminator::Any(byte) => vec![byte],
+    }
+}
+
+/// `Io` carrying the underlying writer failure as `source`.
+fn io_error(e: std::io::Error) -> DocumentError {
+    DocumentError::with_source(DocumentErrorKind::Io, FORMAT, e)
 }
 
 /// Builds the `csv-core` engine for `dialect`.

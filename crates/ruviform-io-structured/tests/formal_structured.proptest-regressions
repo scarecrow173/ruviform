@@ -6,3 +6,5 @@
 # everyone who runs the test benefits from these saved cases.
 cc df5cbf41daa66b4b9966fa8ab6cf8bea00fc3aab268c19c83fbe1df6b6afcafe # shrinks to tail = [12], offset = 0
 cc b189b01ffe56259a0d9235ab934c5cf93709266c0df5d0c5317c0c8acbb398d1 # shrinks to tail = [], offset = 0
+cc 213619e7f967a07ac61de33e404d18703cf083a4ccb1638a987d5706d28eb7a4 # csv_streaming_roundtrip: first field opens with 0xFE 0xFF (CI run 45125155792, windows test-full)
+cc 53a9e65d09e70ed28b5d9e4942914b7ef2f8fa94ba32e167f89d92db83e2850f # csv_field_str_encoding: field = [254, 255] (CI run 45125155792, ubuntu io-structured-verify)
