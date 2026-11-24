@@ -129,3 +129,12 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | 以降 | blocked | fail-closed |
 
 **失敗分析**: build 内 Inf2Cat（`MSB6006 exit=-2`）が signability test で失敗 — INF の `CopyFiles` 参照 `RvfVirtualAudio.sys` が package staging dir（`x64\Release\RvfVirtualAudio\`）に無い。flatten project では INF=プロジェクト dir・sys=x64\Release\ に分離するため必然的に解決不可。catalog 生成は workflow catalog-create stage が `vaudio-pkg\` staging で担う設計（rf961 と同型）のため `<RunInf2Cat>false</RunInf2Cat>` を追加。**残課題**: env の `inf2catKits=0` — Inf2Cat 不在なら makecat fallback（x64 arch-aware・実装済み）が動くかは attempt-6 で実測。
+
+### attempt 6 — run 45497250172（merge SHA `fe712750`・artifact は attempt-5 と同条件のため stage 記録のみ）
+
+| stage | status | detail |
+| --- | --- | --- |
+| driver-build | **error** | `msbuild exit=1` — sys は生成されるが build 内 Inf2Cat が依然実行 |
+| 以降 | blocked | fail-closed |
+
+**失敗分析**: vcxproj `<RunInf2Cat>false</RunInf2Cat>`（PropertyGroup）が無効 — WDK targets の既定値で上書きされた。**attempt-7 修正**: `/p:RunInf2Cat=false` を global property として msbuild コマンドラインで渡す（vcxproj の記述は撤去・comment で経緯を記録）。

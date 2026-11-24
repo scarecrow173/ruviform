@@ -1,0 +1,86 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:04:50Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "error",
+    "detail": "msbuild exit=1",
+    "exit_code": 1,
+    "recorded_utc": "2026-11-24T22:09:34Z"
+  },
+  {
+    "stage": "catalog-create",
+    "status": "blocked",
+    "detail": "driver-build で sys が生成されなかった",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:34Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=FD13E163913C2D8D891E4D7BC76F1AE5D4601325",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:36Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=FD13E163913C2D8D891E4D7BC76F1AE5D4601325; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:36Z"
+  },
+  {
+    "stage": "sign",
+    "status": "blocked",
+    "detail": "証明書または署名対象（sys/cat）が未生成",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:37Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "blocked",
+    "detail": "sign が ok でない",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:37Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "blocked",
+    "detail": "sign-verify が ok でない（package 未署名のまま add しても署名検証失敗が予見されるため未試行）",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:38Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "error",
+    "detail": "inf_in_store=False; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:39Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "blocked",
+    "detail": "INF が driver store に staging されていない",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:09:39Z"
+  },
+  {
+    "stage": "endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=blocked; probe_exit=0; probe_exit=0; endpoints_enumerated=0; virtual_candidates=0; pair_count=0; pairs=",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T22:10:13Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T22:10:14Z"
+  }
+]

@@ -326,7 +326,10 @@ jobs:
           $buildExit = $null
           if ($msbuild -and $toolset.Count) {
             "`n== msbuild RvfVirtualAudio ($arch) ==" | Out-Probe $log
-            & $msbuild drivers\rvf-virtual-audio\RvfVirtualAudio.vcxproj /p:Configuration=Release /p:Platform=$arch /v:m /nologo 2>&1 | Out-Probe $log
+            # /p:RunInf2Cat=false は global property として渡す — vcxproj 内の
+            # PropertyGroup 設定は WDK targets の既定値で上書きされた（attempt-6 実測）。
+            # catalog 生成は catalog-create stage が vaudio-pkg\ staging で行う
+            & $msbuild drivers\rvf-virtual-audio\RvfVirtualAudio.vcxproj /p:Configuration=Release /p:Platform=$arch /p:RunInf2Cat=false /v:m /nologo 2>&1 | Out-Probe $log
             $buildExit = $LASTEXITCODE
             "  msbuild exit=$buildExit" | Out-Probe $log
             $sys = Get-ChildItem drivers\rvf-virtual-audio -Recurse -Filter 'RvfVirtualAudio.sys' -ErrorAction SilentlyContinue | Select-Object -First 1

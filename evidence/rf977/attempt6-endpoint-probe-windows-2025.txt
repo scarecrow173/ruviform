@@ -1,0 +1,69 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling windows-link v0.2.1
+   Compiling windows-strings v0.5.1
+   Compiling windows-result v0.4.1
+   Compiling windows-threading v0.2.1
+   Compiling rustversion v1.0.23
+   Compiling cpal v0.18.2
+   Compiling dasp_sample v0.11.0
+   Compiling ruviform-media-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-media-core)
+   Compiling rtrb v0.4.1
+   Compiling assert_no_alloc v1.1.2
+   Compiling arc-swap v1.9.5
+   Compiling syn v2.0.119
+   Compiling ruviform-audio-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-core)
+   Compiling ruviform-rt v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-rt)
+   Compiling windows-interface v0.59.3
+   Compiling windows-implement v0.60.2
+   Compiling windows-core v0.62.2
+   Compiling windows-collections v0.3.2
+   Compiling windows-numerics v0.3.1
+   Compiling windows-future v0.3.2
+   Compiling windows v0.62.2
+   Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 24.53s
+     Running `target\debug\examples\endpoint_probe.exe`
+endpoint_probe — Issue #629 virtual-endpoint capability probe (WASAPI/MMDevice)
+manual diagnostic; the output is survey evidence, not a test verdict
+
+== environment ==
+  os=windows arch=x86_64 family=windows
+  os_version: Microsoft Windows [Version 10.0.26100.33828]
+
+== WASAPI MMDevice enumeration ==
+
+== production port view (ruviform_audio_device) ==
+  host: WASAPI
+  output devices: 0
+  input devices: 0
+  default_output_device: none
+  default_input_device: none
+
+== pair candidates (virtual name-stem match) ==
+  none — NOT_PROVISIONED
+
+== driver signature observations (best-effort) ==
+  no PnP signed-driver records matched virtual-endpoint name hints
+
+== microphone/capture permission (best-effort) ==
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{2EEF81BE-33FA-4800-9670-1FEE788A9517} => absent
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone => absent
+  HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\NonPackaged => absent
+
+== verdict ==
+  endpoints enumerated: 0
+  virtual-endpoint candidates (name heuristic, unconfirmed): 0
+  render↔capture pair candidates (name-stem match, unconfirmed): 0
+  driver signature / driver metadata: observed
+  microphone/capture permission (HKCU privacy keys): observed
+  provisioning: NOT_PROVISIONED
+  capability notes:
+    mmdevice enumeration (all states) + id/state: observed
+    mix format / IsFormatSupported / device period / stream latency queries: attempted per endpoint (refusals recorded in notes)
+    pair candidate table + driver signature + permission observations: best-effort this slice (see sections above; failures are NotRun notes, never probe failures)
+    streaming proof: tests/virtual_endpoint.rs — `mise run test-audio-virtual-endpoint` (provisioning-dependent manual lane, never CI)
+    virtual hotplug / device-loss / format-switch / permission-denial / xrun / loopback latency: NotRun — need a provisioned endpoint plus the runtime-driven controller (next slice)
+  cleanup: no persistent state — COM references are dropped at scope end; `IAudioClient` is activated for queries only and never `Initialize()`d, so no audio session or stream is created; PowerShell/registry queries are read-only
+  audio virtual-endpoint cases: NotRun — enumeration/pairing is not `virtual-os-endpoint` evidence; the streaming verifier (`tests/virtual_endpoint.rs`) reports its own fail-closed verdict
