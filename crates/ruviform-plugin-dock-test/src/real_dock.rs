@@ -121,12 +121,12 @@
 //! |                         |             | true→false + `set_focus_target` 3 target を実 lease    |
 //! |                         |             | 経由で実行し、child HWND title の fixture event log    |
 //! |                         |             |（`f:`/`fe:` token）+ caller-queue `GetFocus` oracle   |
-//! |                         |             | + HostWindow の宣言された lane-topology landing を    |
+//! |                         |             | + `HostWindow` の宣言された lane-topology landing を   |
 //! |                         |             | 検証                                                  |
 //! | `real-editor-popup`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_popup`    |
 //! |                         |             | {Dialog,ChildWindow} open/close: child title event    |
 //! |                         |             | log（`po:`/`pc:`/`co:`/`cc:` token）+ own-process     |
-//! |                         |             | top-level `WS_POPUP` HWND oracle + EnumChildWindows   |
+//! |                         |             | top-level `WS_POPUP` HWND oracle + `EnumChildWindows`  |
 //! |                         |             | grandchild `WS_CHILD` oracle + close/teardown 収束    |
 //! | `real-session-crash`    | `RealOs`    | `Pass`/`Fail`/`Unsupported` — dedicated L1 child 上   |
 //! |                         |             | の `test_editor` を `open(Floating)` で attach し、   |
@@ -12515,7 +12515,9 @@ fn check_child_popup_open_hwnd(
         .find(|child| child.hwnd == hwnd)
         .map(|child| (child.width, child.height))
         .unwrap_or_default();
-    if (child_facts_width, child_facts_height) != (POPUP_RECT.2 as i32, POPUP_RECT.3 as i32) {
+    if (child_facts_width, child_facts_height)
+        != (POPUP_RECT.2.cast_signed(), POPUP_RECT.3.cast_signed())
+    {
         problems.push(format!(
             "size!={}x{} (got {child_facts_width}x{child_facts_height})",
             POPUP_RECT.2, POPUP_RECT.3
@@ -18082,7 +18084,7 @@ fn real_clap_editor_focus_case(
 
 /// `real-clap-editor-popup` — the CLAP seam delivers `set_popup`
 /// for both kinds; the Dialog leg hits the top-level `WS_POPUP`
-/// oracle (class `RuviformClapTestEditor`) and the ChildWindow leg
+/// oracle (class `RuviformClapTestEditor`) and the `ChildWindow` leg
 /// the `EnumChildWindows` grandchild oracle (the CLAP fixture
 /// titles both kinds `rvf-test-editor-popup-{seq}` on a shared
 /// seq).

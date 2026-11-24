@@ -93,14 +93,27 @@ queue を共有する lane 構成）。
 | --- | --- | --- |
 | `mise run test-ui-plugin-dock-real`（VST3） | 0 | **32 case 全 pass** — `evidence/rf631/plugin-dock-real-scenario.jsonl` 再生成（`run_id=rf631-plugin-dock-real`、`repo.sha=41b8a6ec`）。`real-editor-focus`/`real-editor-popup` の 6-leg/4-leg verb-driven oracle 全 pass |
 | `mise run test-ui-plugin-dock-real-clap`（CLAP） | 0 | **14 case 全 pass** — `evidence/rf630/plugin-dock-real-clap.jsonl` 再生成（`run_id=rf630-plugin-dock-real-clap`、同一 sha）。flip した `real-clap-editor-{input,focus,popup}` 全 pass + `real-clap-session-{crash,hang}`（fault-carrier）も pass |
-| `mise exec -- cargo check -p ruviform-plugin-dock-test` | 0 | Pass |
-| `mise exec -- cargo clippy -p ruviform-plugin-dock-test -- -D warnings` | 0 | Pass |
-| `mise exec -- cargo test -p ruviform-plugin-dock-test` | 0 | Pass |
+| `mise run test-ui-plugin-dock-real-headless`（VST3 `--blocked-probe`） | 0 | **32 row 全 `not_run` + `environment_blocked`** — `evidence/rf631/plugin-dock-real-headless.jsonl` 再生成（`repo.sha=8a000038`）。flip 後 matrix で fail-closed 実証済み |
+| `mise run test-ui-plugin-dock-real-clap-headless`（CLAP `--blocked-probe`） | 0 | **14 row 全 `not_run` + `environment_blocked`** — `evidence/rf630/plugin-dock-real-clap-headless.jsonl` 再生成（`repo.sha=8a000038`） |
+| `mise run test-ui-plugin-dock`（headless catalog 回帰） | 0 | 9 case = 7 pass + `editor-attach` unsupported + `dock-pixels` not_run — 記録済み baseline と一致 |
+| `mise run check ruviform-plugin-dock-test --features real-dock` | 0 | Pass（feature-gated canonical lane — gate 照合で未実測と判明し追走） |
+| `mise run lint ruviform-plugin-dock-test --features real-dock` | 0 | Pass（初走で doc backtick×3 + `cast_possible_wrap`×2 を検出・修正 — feature 配下コードは本 lane が初の canonical lint） |
+| `mise run test ruviform-plugin-dock-test --features real-dock` | 0 | 37 test 全 pass（lib 18 + console 14 + plugin_dock 5） |
+| `mise exec -- cargo check -p ruviform-plugin-dock-test` | 0 | Pass（補助証拠 — canonical = mise） |
 | `node --test ci/plugin-abi-validator/tests/` | 0 | 33 test 全 pass（新規 contract test 含む） |
+| `mise run fmt-check` | 0 | Pass |
+| `mise exec -- prek run --all-files` | 0 | Pass |
 
-注: 初回 lane 実走（`HostWindow` 訂正前）は `real-editor-focus` のみ
+注1: 初回 lane 実走（`HostWindow` 訂正前）は `real-editor-focus` のみ
 fail —— 上述の宣言 landing 訂正で解消し再実走で全 pass。fail 記録は
 訂正の実測根拠として本記録に残す。
+
+注2: gate 照合で指摘された検証欠落（`--features real-dock` 付き
+check/lint/test・`test-ui-plugin-dock`・両 `--blocked-probe` lane）は
+本 commit 範囲で追走済み。`mise.toml` の comment 差分と
+`evidence/rf631/plugin-dock-real-scenario.jsonl`・両 headless ledger の
+再生成差分は Coordinator が lane 生成物差分ルールの事後承認を明示
+（JSONL 再生成指示との矛盾のため）—— 承認済み差分として記録する。
 
 ## 判断・残件
 
