@@ -29,9 +29,9 @@ use ruviform_media_core::{
 };
 use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as WireReply, shm};
 use ruviform_plugin_core::{
-    Event, EventKind, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError, ParamEvent,
-    ParamId, ParamValue, ParentLease, PluginDescriptor, ProcessConfig, ProcessStatus,
-    TransportInfo,
+    Event, EventKind, GuiFocusTarget, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind,
+    GuiSize, HostError, ParamEvent, ParamId, ParamValue, ParentLease, PluginDescriptor,
+    ProcessConfig, ProcessStatus, TransportInfo,
 };
 use shared_memory::{Shmem, ShmemConf};
 
@@ -1576,40 +1576,42 @@ fn e2e_gui_floating_open_and_verb_round_trip() {
         other => panic!("expected Opened or Err(Ipc), got {other:?}"),
     }
 
-    // Every marshaled verb answers on the UI-thread path.
-    assert_eq!(
-        host.command(
-            instance,
-            WireCommand::SetGuiSize {
-                size: GuiSize {
-                    width: 320.0,
-                    height: 240.0,
-                },
+    // Every marshaled verb answers on the UI-thread path — the
+    // wire-v8 pair (tag 29/30) included.
+    for cmd in [
+        WireCommand::SetGuiSize {
+            size: GuiSize {
+                width: 320.0,
+                height: 240.0,
             },
-        ),
-        Ok(WireReply::Ok)
-    );
-    assert_eq!(
-        host.command(instance, WireCommand::SetGuiVisibility { visible: 1 }),
-        Ok(WireReply::Ok)
-    );
-    assert_eq!(
-        host.command(instance, WireCommand::SetGuiVisibility { visible: 0 }),
-        Ok(WireReply::Ok)
-    );
-    assert_eq!(
-        host.command(instance, WireCommand::SetGuiFocus { focused: 1 }),
-        Ok(WireReply::Ok)
-    );
-    assert_eq!(
-        host.command(
-            instance,
-            WireCommand::SendGuiKey {
-                event: gui_key_event(),
-            },
-        ),
-        Ok(WireReply::Ok)
-    );
+        },
+        WireCommand::SetGuiVisibility { visible: 1 },
+        WireCommand::SetGuiVisibility { visible: 0 },
+        WireCommand::SetGuiFocus { focused: 1 },
+        WireCommand::SendGuiKey {
+            event: gui_key_event(),
+        },
+        WireCommand::SetGuiFocusTarget {
+            target: GuiFocusTarget::Editor,
+        },
+        WireCommand::SetGuiFocusTarget {
+            target: GuiFocusTarget::EditorElement { element: 7 },
+        },
+        WireCommand::SetGuiPopup {
+            kind: GuiPopupKind::ChildWindow,
+            open: 1,
+        },
+        WireCommand::SetGuiPopup {
+            kind: GuiPopupKind::Dialog,
+            open: 0,
+        },
+    ] {
+        assert_eq!(
+            host.command(instance, cmd),
+            Ok(WireReply::Ok),
+            "marshaled GUI verb must round-trip to Ok"
+        );
+    }
 
     // A second `OpenGui` is the plugin's own decline — the
     // ≤1-surface rule lives in the hook, never in a runner gate.
@@ -1676,6 +1678,13 @@ fn e2e_gui_defined_rejections_are_window_independent() {
         WireCommand::SetGuiFocus { focused: 1 },
         WireCommand::SendGuiKey {
             event: gui_key_event(),
+        },
+        WireCommand::SetGuiFocusTarget {
+            target: GuiFocusTarget::Editor,
+        },
+        WireCommand::SetGuiPopup {
+            kind: GuiPopupKind::ChildWindow,
+            open: 1,
         },
     ] {
         assert_eq!(
@@ -1751,6 +1760,13 @@ fn e2e_gui_verbs_are_unsupported_off_windows() {
         WireCommand::SetGuiFocus { focused: 1 },
         WireCommand::SendGuiKey {
             event: gui_key_event(),
+        },
+        WireCommand::SetGuiFocusTarget {
+            target: GuiFocusTarget::Editor,
+        },
+        WireCommand::SetGuiPopup {
+            kind: GuiPopupKind::ChildWindow,
+            open: 1,
         },
     ] {
         assert_eq!(

@@ -320,23 +320,23 @@ mod windows {
         ops.send_key(session, key()).unwrap();
 
         // The wire-v8 editor verbs pass the negotiated gate and
-        // reach the child — the mock runner has no fixture seam for
-        // them yet (slices 3/4 own it), so the entry dispatch
-        // catch-all answers the defined `Unsupported` rather than
-        // faking success. The verbs are transported; acceptance is
-        // what later slices add.
-        assert_eq!(
-            ops.set_focus_target(session, GuiFocusTarget::Editor),
-            Err(EditorOpError::Unsupported)
-        );
-        assert_eq!(
-            ops.set_focus_target(session, GuiFocusTarget::HostWindow),
-            Err(EditorOpError::Unsupported)
-        );
-        assert_eq!(
-            ops.set_popup(session, GuiPopupKind::ChildWindow, true),
-            Err(EditorOpError::Unsupported)
-        );
+        // reach the child — the export-side dispatch marshals them
+        // onto the UI thread, where the fixture's hooks answer `Ok`
+        // while the logical surface is open (the same
+        // `view.is_some()` vocabulary as the bool verb). What the
+        // session layer pins is the round-trip and reply
+        // vocabulary — synthetic-verb-delivery: the mock is
+        // window-independent, so the real OS-focus/popup effect
+        // stays with the real-GUI lane.
+        ops.set_focus_target(session, GuiFocusTarget::Editor)
+            .unwrap();
+        ops.set_focus_target(session, GuiFocusTarget::EditorElement { element: 7 })
+            .unwrap();
+        ops.set_focus_target(session, GuiFocusTarget::HostWindow)
+            .unwrap();
+        ops.set_popup(session, GuiPopupKind::ChildWindow, true)
+            .unwrap();
+        ops.set_popup(session, GuiPopupKind::Dialog, false).unwrap();
         ops.close(session).unwrap();
 
         // The runner-side surface vocabulary reaches the session
@@ -348,6 +348,8 @@ mod windows {
             ops.set_visibility(session, true),
             ops.set_focus(session, true),
             ops.send_key(session, key()),
+            ops.set_focus_target(session, GuiFocusTarget::Editor),
+            ops.set_popup(session, GuiPopupKind::ChildWindow, true),
             ops.close(session),
         ] {
             assert_eq!(result, Err(EditorOpError::InvalidValue));
