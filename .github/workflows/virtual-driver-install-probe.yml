@@ -79,6 +79,7 @@ jobs:
       # 再確認・km headers/WDK libs/MSBuild driver targets/inf2cat 類・
       # cert ツール・winget・signtool の leg 別 kit 版を記録する。
       - name: Stage env-build-surface
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -173,14 +174,18 @@ jobs:
 
           if ($msbuild) { Set-ProbeState $state 'msbuild' $msbuild }
           if ($vsInstall) { Set-ProbeState $state 'vs_install' $vsInstall }
+          Set-ProbeState $state 'km_headers' $kmHeaderCount
+          Set-ProbeState $state 'km_libs' $kmLibs.Count
           $detail = "msbuild=$(if ($msbuild) {'present'} else {'absent'}); toolset=$($toolset.Count); kmHeaders=$kmHeaderCount; kmLibs=$($kmLibs.Count); signtoolKits=$(@(Find-Tool 'signtool.exe' -AllKitsHits).Count); inf2catKits=$(@(Find-Tool 'Inf2Cat.exe' -AllKitsHits).Count); winget=$(if (Get-Command winget -ErrorAction SilentlyContinue) {'present'} else {'absent'})"
           Add-StageRecord -JsonPath $json -Stage env-build-surface -Status ok -Detail $detail
+          exit 0
 
       # AC1 前半: driver build。msbuild + WindowsKernelModeDriver toolset が
       # あれば repo 内ソースを build し、なければ winget 由来の job 内 WDK
       # 導入可否を評価して記録する。build 不能なら後続 install 系 stage は
       # 依存 artifacts 不在で blocked となる（absence-is-data）。
       - name: Stage driver-build
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -214,7 +219,14 @@ jobs:
           }
           "toolset($arch): $(if ($toolset.Count) { ($toolset | ForEach-Object { $_.FullName }) -join '; ' } else { 'absent' })" | Out-Probe $log
 
-          if (-not $msbuild -or -not $toolset.Count) {
+          $kmHeaderCount = [int](Get-ProbeState $state 'km_headers')
+          $kmLibCount = [int](Get-ProbeState $state 'km_libs')
+          "km headers: $kmHeaderCount; km libs: $kmLibCount" | Out-Probe $log
+          $dkTasks = @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build" -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue)
+          if ($dkTasks) { $dkTasks | ForEach-Object { "  driverkit task dll: $($_.FullName)" | Out-Probe $log } }
+          else { "  DriverKit build task dll: absent" | Out-Probe $log }
+
+          if (-not $msbuild -or -not $toolset.Count -or -not $kmHeaderCount) {
             "`n== job 内 WDK 導入可否評価（winget / Microsoft.WindowsWDK） ==" | Out-Probe $log
             $wg = Get-Command winget -ErrorAction SilentlyContinue
             if ($wg) {
@@ -233,6 +245,10 @@ jobs:
                 $toolset = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\$arch\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
                 "  toolset after install attempt: $(if ($toolset.Count) { 'present' } else { 'absent' })" | Out-Probe $log
               }
+              $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
+              $kmHeaderCount = @(Get-ChildItem (Join-Path $kitsRoot 'Include') -Recurse -Depth 2 -Filter 'wdm.h' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*\km\*' }).Count
+              "  km headers after install attempt: $kmHeaderCount" | Out-Probe $log
+              Set-ProbeState $state 'km_headers' $kmHeaderCount
             } else { "  winget: absent — job 内導入経路を評価不能" | Out-Probe $log }
           }
 
@@ -255,16 +271,18 @@ jobs:
           if ($built) {
             Set-ProbeState $state 'sys_path' $sysPath
             Add-StageRecord -JsonPath $json -Stage driver-build -Status ok -Detail "arch=$arch; sys=$sysPath" -ExitCode $buildExit
-          } elseif (-not $msbuild -or -not $toolset.Count) {
-            Add-StageRecord -JsonPath $json -Stage driver-build -Status absent -Detail "msbuild=$(if ($msbuild) {'present'} else {'absent'}); toolset=$($toolset.Count); winget-eval は log 参照"
+          } elseif (-not $msbuild -or -not $toolset.Count -or -not $kmHeaderCount) {
+            Add-StageRecord -JsonPath $json -Stage driver-build -Status absent -Detail "msbuild=$(if ($msbuild) {'present'} else {'absent'}); toolset=$($toolset.Count); kmHeaders=$kmHeaderCount; winget-eval は log 参照"
           } else {
             Add-StageRecord -JsonPath $json -Stage driver-build -Status error -Detail "msbuild exit=$buildExit" -ExitCode $buildExit
           }
+          exit 0
 
       # catalog 生成: build 済み sys + INF を probe-pkg に集め、Inf2Cat →
       # makecat（.cdf を job 内生成）の順で .cat を作る。両 tool が無ければ
       # blocked。package 自体も artifact 証拠に含める。
       - name: Stage catalog-create
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -322,10 +340,12 @@ jobs:
               Add-StageRecord -JsonPath $json -Stage catalog-create -Status blocked -Detail 'Inf2Cat/makecat 共に absent または .cat 生成失敗 — job 内 WDK 導入評価は driver-build log 参照'
             }
           }
+          exit 0
 
       # 証明書生成: job 内 self-signed CodeSigning 証明書。build 系 stage と
       # 独立して測れるため build 失敗時でも実施する。
       - name: Stage cert-create
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -353,10 +373,12 @@ jobs:
             "  cert-create error: $($_.Exception.Message)" | Out-Probe $log
             Add-StageRecord -JsonPath $json -Stage cert-create -Status error -Detail $_.Exception.Message
           }
+          exit 0
 
       # store 登録: Root と TrustedPublisher の両 store へ pre-trust。
       # Scream/VB-CABLE の job 内 install 実績と同手順（web-sources §2.3）。
       - name: Stage store-register
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -385,11 +407,13 @@ jobs:
             }
             Add-StageRecord -JsonPath $json -Stage store-register -Status $(if ($ok) { 'ok' } else { 'error' }) -Detail "thumbprint=$thumb; stores=Root+TrustedPublisher"
           }
+          exit 0
 
       # 署名: .sys（embedded）と .cat の両方を signtool /fd sha256 /sha1 で
       # 署名する。signtool は PATH 外の Kits bin 配下を full path 解決し、
       # leg 間の kit 版差異を detail に記録する。
       - name: Stage sign
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -429,9 +453,11 @@ jobs:
               Add-StageRecord -JsonPath $json -Stage sign -Status $(if ($exitSum -eq 0) { 'ok' } else { 'error' }) -Detail "signtool=$signtool; targets=$(($targets | ForEach-Object { Split-Path $_ -Leaf }) -join ',')" -ExitCode $exitSum
             }
           }
+          exit 0
 
       # 署名検証: signtool verify /pa で署名の妥当性を確認する。
       - name: Stage sign-verify
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -459,11 +485,13 @@ jobs:
             }
             Add-StageRecord -JsonPath $json -Stage sign-verify -Status $(if ($exitSum -eq 0) { 'ok' } else { 'error' }) -Detail "targets=$(($targets | ForEach-Object { Split-Path $_ -Leaf }) -join ',')" -ExitCode $exitSum
           }
+          exit 0
 
       # AC1 本体: driver store への staging + install 試行。失敗したら
       # この stage が AC2 の「失敗 stage 特定」材料になる（署名検証・
       # store・引数・class 制約の切り分けは exit code + 出力で記録）。
       - name: Stage pnputil-add-driver
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -492,10 +520,12 @@ jobs:
             else { "  published name: not parsed — add-driver 出力・enum log 参照" | Out-Probe $log }
             Add-StageRecord -JsonPath $json -Stage pnputil-add-driver -Status $(if ($pnExit -eq 0) { 'ok' } else { 'error' }) -Detail "published=$pub" -ExitCode $pnExit
           }
+          exit 0
 
       # staging 反映確認: enum-drivers で INF が driver store に存在する
       # こと・この時点では devnode が無いこと（Get-PnpDevice 0 件）を記録。
       - name: Stage enum-verify
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -530,11 +560,13 @@ jobs:
           else { "  matching PnpDevice: 0" | Out-Probe $log }
           Add-StageRecord -JsonPath $json -Stage enum-verify -Status $(if ($staged) { 'ok' } else { 'error' }) -Detail "inf_in_store=$staged; matching_devnodes=$($devs.Count)"
           Set-ProbeState $state 'inf_staged' $staged
+          exit 0
 
       # AC2 本体: devnode 作成（setupapi/newdev P/Invoke — devcon 非依存）
       # → driver 結合 → PnP 列挙・device status/problem code・driver load
       # 状態を観測する。
       - name: Stage devnode-create
+        if: always()
         shell: pwsh
         run: |
           . ./tools/testsigned-driver/probe-stage.ps1
@@ -581,6 +613,7 @@ jobs:
               Add-StageRecord -JsonPath $json -Stage devnode-create -Status error -Detail $_.Exception.Message
             }
           }
+          exit 0
 
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
       # → 最終 enum 状態。ephemeral VM だが AC2 は uninstall まで記録を
@@ -644,6 +677,7 @@ jobs:
           "  RvfTestSignedNull.inf in store: $($enumOut -match 'RvfTestSignedNull\.inf')" | Out-Probe $log
           Add-StageRecord -JsonPath $json -Stage cleanup -Status $(if ($problems.Count) { 'error' } else { 'ok' }) -Detail ($problems -join ';')
           "  cleanup done" | Out-Probe $log
+          exit 0
 
       - name: Upload probe evidence
         if: always()

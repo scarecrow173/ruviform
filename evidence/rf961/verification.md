@@ -1,6 +1,6 @@
 # evidence/rf961 — virtual-driver-install-probe workflow（test-signed driver install 実測）設計と検証記録
 
-Issue #961（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) Slice B 前提調査・OQ6 経路）の実装記録。`evidence/rf952/probe-env-*.txt` が実測した「GitHub-hosted Windows runner は両 leg で Secure Boot OFF・bcdedit `testsigning Yes`」という出荷状態を前提に、**test-signed driver の install 可否を最小コストで stage 分解して実測する** `workflow_dispatch` 専用 workflow（`.github/workflows/virtual-driver-install-probe.yml`）・最小 driver package（`drivers/testsigned-null/`）・補助スクリプト（`tools/testsigned-driver/`）を新設した。本ファイルは workflow の設計意図・ローカル検証結果・runner 実走の状態を記録する。**runner 実走は未実施（NotRun）** — `workflow_dispatch` は default branch に workflow が存在しないと実行できない制約のため、merge 後に Coordinator が実走・記録する（#955 と同型の分担、§2・§4）。
+Issue #961（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) Slice B 前提調査・OQ6 経路）の実装記録。`evidence/rf952/probe-env-*.txt` が実測した「GitHub-hosted Windows runner は両 leg で Secure Boot OFF・bcdedit `testsigning Yes`」という出荷状態を前提に、**test-signed driver の install 可否を最小コストで stage 分解して実測する** `workflow_dispatch` 専用 workflow（`.github/workflows/virtual-driver-install-probe.yml`）・最小 driver package（`drivers/testsigned-null/`）・補助スクリプト（`tools/testsigned-driver/`）を新設した。本ファイルは workflow の設計意図・ローカル検証結果・runner 実走の状態を記録する。runner 実走は PR merge 後に Coordinator が実施（`workflow_dispatch` は default branch に workflow が存在しないと実行できない制約 — #955 と同型の分担、§2）。**attempt 1（run 45471371020）実施済み — §3.5**。
 
 ## 1. workflow 設計
 
@@ -77,10 +77,34 @@ Issue #961（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 - `probe-stage.ps1` の helper 実動確認（`Out-Probe` 追記・`Add-StageRecord`/`Get-StageStatus`・`Set/Get-ProbeState`・`Find-Tool` — temp dir 上で全 OK。証明書 store・devnode・driver install は未実行）。
 - INF 構造テキスト検査（`local-inf-check.txt`）: `Signature`/`Class`/`CatalogFile`/`PnpLockdown`/`NTamd64`/`NTarm64` 装飾・hwid `ROOT\RvfTestSigned`・`DDInstall.NT`/`Services`/`%Strings%` 解決・workflow 側 `-HardwareId` との一致・vcxproj の `Inf`/`ClCompile` item（21/21 OK）。InfVerif は worker 環境に不在のため構文確認はここまで（Issue 宣言どおり「ローカル検証は INF/署名手順の構文確認まで」— 署名・証明書 store 書き込み・`pnputil` install・devnode 作成・driver build は実行していない。本機は WDK 非搭載のため実効不可能でもある）。
 
+## 3.5 runner 実走記録（merge 後・Coordinator 実施）
+
+### attempt 1 — run 45471371020（2026-11-24・merge SHA `49a2f258`・PR #965 直後の初回実走）
+
+両 leg の artifact を §2 経路で `evidence/rf961/` に記録（`install-probe-<os>-attempt1.json`・`probe-state-<os>-attempt1.json`・`stage-*-<os>-attempt1.txt`）。job conclusion は両 leg failure だが、stage 記録（absence-is-data）は正しく採取された。
+
+| leg | env-build-surface | driver-build | 実測値 |
+| --- | --- | --- | --- |
+| `windows-2025` | ok（toolset=3・kmHeaders=0・kmLibs=0・inf2catKits=0・winget=present） | error（msbuild exit=1 — `wdm.h` not found） | VS 18 Enterprise の `WindowsKernelModeDriver10.0` toolset target は在るが WDK headers/libs は未導入（SDK のみ）。winget は存在するが、初版 workflow は msbuild/toolset 欠如時にのみ導入試行する設計だったため未試行 |
+| `windows-11-arm` | ok（toolset=3・kmHeaders=2・kmLibs=2・inf2catKits=1・winget=absent） | error（msbuild exit=1 — `Microsoft.DriverKit.Build.Tasks.18.0.dll` 欠如 MSB4062） | arm image は `Include\10.0.26100.0\km\` headers+libs+Inf2Cat を同梱するが、VS 18/MSBuild 18 に対応する DriverKit build task アセンブリが無く WDK targets が解決不能 |
+
+判明した workflow 欠陥 2 件（本 PR で修正 — run の stage JSON で実証済み）:
+
+1. **step exit-code 伝播**: pwsh step が最後のネイティブコマンドの `$LASTEXITCODE` を step 終了コードとして伝播するため、stage 記録を `error` として正しく残しても job が failure になる（absence-is-data 契約違反）。全 stage step 末尾に `exit 0` を追加し、probe 機構自体の破損のみが job 失敗になる形に修正。
+2. **後続 stage skip**: stage step に `if: always()` が無く、1 stage の失敗で後続 stage が skip された（cert-create は「build 失敗時でも実施」設計だったが skip）。全 stage step に `if: always()` を追加。
+
+併せて driver-build の WDK 導入可否評価を強化: winget 試行条件を「msbuild/toolset 欠如」から「msbuild/toolset/km headers のいずれか欠如」へ拡張（windows-2025 の `kmHeaders=0` で試行されるようになる）・`Microsoft.DriverKit.Build.Tasks.*.dll` の有無を診断記録に追加（windows-11-arm の失敗要因を stage 記録として構造化）。
+
+AC 評価（attempt 1 時点・部分）:
+
+- AC1/AC2: **未達** — build が両 leg で不成立のため install 系 stage は未実施（blocked/not_run）。
+- AC3: **成立** — build surface・失敗要因・job 内導入に必要なもの（windows-2025: WDK 本体。windows-11-arm: VS18 対応 DriverKit build task。winget 導入経路は windows-2025 のみ存在）を stage 記録として取得。
+- AC4: 材料となる記録を本節に追記。
+
 ## 4. 状態
 
-- workflow 新設: `.github/workflows/virtual-driver-install-probe.yml`（本 PR）。
+- workflow 新設: `.github/workflows/virtual-driver-install-probe.yml`（PR #965 で merge、attempt 1 で検出した欠陥を修正済み — §3.5）。
 - driver package 新設: `drivers/testsigned-null/`（ソースのみ — build 済みバイナリは commit しない）。
 - 補助スクリプト新設: `tools/testsigned-driver/`（`probe-stage.ps1`・`TestDevice.ps1`・`README.md`）。
 - 既存 workflow・required gate・ruleset・`mise.toml`・`crates/**` への変更: **なし**。
-- runner 実走: **NotRun** — `workflow_dispatch` は default branch に workflow が存在しないと実行できない制約のため、merge 後に Coordinator が実走し §2 の経路で記録する。
+- runner 実走: **attempt 1 実施済み**（run 45471371020 — §3.5）。attempt 2（修正版 workflow での再実走）を Coordinator が dispatch し、結果を本節・Issue #961 に記録する。

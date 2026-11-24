@@ -1,0 +1,23 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=2; kmLibs=2; signtoolKits=7; inf2catKits=1; winget=absent",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T19:33:40Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "error",
+    "detail": "msbuild exit=1",
+    "exit_code": 1,
+    "recorded_utc": "2026-11-24T19:33:58Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T19:33:59Z"
+  }
+]
