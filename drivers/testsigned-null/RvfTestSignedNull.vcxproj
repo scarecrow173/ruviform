@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RvfTestSignedNull.vcxproj — Issue #961 最小 WDM null driver の build 定義。
+  runner 上で `msbuild /p:Configuration=Release /p:Platform=<x64|ARM64>` で
+  build する前提（Visual Studio + WDK `WindowsKernelModeDriver10.0`
+  platform toolset が必要 — 有無は workflow の env-build-surface stage が
+  実測する）。署名は workflow の sign stage が job 内生成証明書で行うため、
+  ここでは SignMode=Off に固定する。
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8F2E9C4A-9610-4B0D-9E61-1A2B3C4D5E6F}</ProjectGuid>
+    <RootNamespace>RvfTestSignedNull</RootNamespace>
+    <Configuration Condition="'$(Configuration)'==''">Release</Configuration>
+    <Platform Condition="'$(Platform)'==''">x64</Platform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <SignMode>Off</SignMode>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <ExceptionHandling>false</ExceptionHandling>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies);ntoskrnl.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="RvfTestSignedNull.c" />
+    <Inf Include="RvfTestSignedNull.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

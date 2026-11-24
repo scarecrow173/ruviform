@@ -1,0 +1,14 @@
+{"action":"workflow-lint","command":"mise exec -- actionlint .github/workflows/virtual-driver-install-probe.yml","exit_code":0,"observed":"指摘なし — workflow_dispatch 専用・matrix [windows-2025, windows-11-arm] の新規 manual workflow が構文検査を通過"}
+{"action":"contract-test","command":"mise run test-ci-daily","exit_code":0,"observed":"113 tests pass — ci-yml-contract.test.mjs の全 workflow 走査で新規ファイルに banned trigger（push/pull_request/pull_request_target）なし"}
+{"action":"contract-test","command":"mise run test-ci-tracker","exit_code":0,"observed":"108 tests pass — tracker 側の workflow 契約走査も通過"}
+{"action":"hygiene","command":"mise exec -- prek run --all-files","exit_code":0,"observed":"trailing-whitespace/end-of-file/check-yaml/check-toml/mixed-line-ending/BOM/private-key/actionlint 全て Pass"}
+{"action":"format","command":"mise run fmt-check","exit_code":0,"observed":"cargo fmt --all -- --check exit 0（crates 非変更のため無差分）"}
+{"action":"cargo-verify","command":"-","exit_code":"n/a","observed":"NotApplicable — crates/** 変更なし（POLICIES §5 設定変更区分）。check/lint/test/build・*-full は対象外"}
+{"action":"pwsh-parse","command":"Parser.ParseFile on tools/testsigned-driver/{probe-stage.ps1,TestDevice.ps1}; Parser.ParseInput on 12 extracted workflow run: blocks","exit_code":0,"observed":"ps1 2/2 OK・run ブロック 12/12 OK — 生出力 local-syntax-check.txt"}
+{"action":"csharp-compile","command":"Add-Type -TypeDefinition (TestDevice.ps1 内の setupapi/newdev P/Invoke C#) — コンパイルのみ・P/Invoke 未実行","exit_code":0,"observed":"[RvfTestDevice] 型解決 OK — 生出力 local-syntax-check.txt"}
+{"action":"helper-runtime","command":"probe-stage.ps1 helper の temp dir 実動（Out-Probe/Add-StageRecord/Get-StageStatus/Set・Get-ProbeState/Find-Tool）","exit_code":0,"observed":"全関数 OK — 生出力 local-syntax-check.txt。証明書 store・devnode・driver install は未実行"}
+{"action":"inf-structure","command":"RvfTestSignedNull.inf 構造テキスト検査（セクション参照・%Strings% 解決・arch 装飾・hwid 一致）","exit_code":0,"observed":"21/21 OK — 生出力 local-inf-check.txt。InfVerif は worker 環境に absent のため構文確認まで"}
+{"action":"design-decision","command":"-","exit_code":"n/a","observed":"最小 driver は WDM null driver を採用 — KMDF なら INF に KmdfService/co-installer 経路の評価が必要で install 可否判定に過剰。wdm.h+ntoskrnl.lib のみ・coinstaller 無しの最小構成に留めた"}
+{"action":"design-decision","command":"-","exit_code":"n/a","observed":"devnode 作成は devcon 非依存（setupapi DIF_REGISTERDEVICE + newdev UpdateDriverForPlugAndPlayDevices の P/Invoke）— devcon は runner に absent 確定済み。devcon job 内導入は再配布条項確認が要るため代替案に留める"}
+{"action":"design-decision","command":"-","exit_code":"n/a","observed":"bcdedit/testsigning flag 設定・reboot は workflow に含めない — testsigning=Yes は出荷状態（run 45453855000 実測）、job 内 reboot は runner session を kill（web-sources §2.3）"}
+{"action":"runner-run","command":"gh workflow run virtual-driver-install-probe.yml --ref main","exit_code":"n/a","observed":"NotRun — workflow_dispatch は default branch に workflow が無いと実行不可。merge 後 Coordinator が実走・evidence/rf961/ へ記録（#955 と同型分担）"}

@@ -1,0 +1,56 @@
+; RvfTestSignedNull.inf — Issue #961 install 可否判定用の最小 driver package。
+; root-enumerated software device（hardware id ROOT\RvfTestSigned）に結合する
+; WDM function driver（RvfTestSignedNull.sys）を install する。
+; 目的は test-signing 経路の成立可否の実測のみ — audio/MIDI 機能は持たない。
+; 両 leg 対応のため model セクションを NTamd64 / NTarm64 に装飾する
+; （DDInstall は universal INF 形式どおり無装飾の .NT を共有）。
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider    = %ProviderName%
+DriverVer   = 11/25/2026,1.0.0.0
+CatalogFile = RvfTestSignedNull.cat
+PnpLockdown = 1
+
+[Manufacturer]
+%MfgName% = Standard,NTamd64,NTarm64
+
+[Standard.NTamd64]
+%DeviceDesc% = RvfTestSignedNull_Device, ROOT\RvfTestSigned
+
+[Standard.NTarm64]
+%DeviceDesc% = RvfTestSignedNull_Device, ROOT\RvfTestSigned
+
+[RvfTestSignedNull_Device.NT]
+CopyFiles = RvfTestSignedNull.Files
+
+[RvfTestSignedNull.Files]
+RvfTestSignedNull.sys
+
+[RvfTestSignedNull_Device.NT.Services]
+AddService = RvfTestSignedNull,0x00000002,RvfTestSignedNull.Service
+
+[RvfTestSignedNull.Service]
+ServiceType   = 1    ; SERVICE_KERNEL_DRIVER
+StartType     = 3    ; SERVICE_DEMAND_START
+ErrorControl  = 1    ; SERVICE_ERROR_NORMAL
+ServiceBinary = %12%\RvfTestSignedNull.sys
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+RvfTestSignedNull.sys = 1
+
+[DestinationDirs]
+DefaultDestDir          = 12 ; DIRID_DRIVERS（%windir%\system32\drivers）
+RvfTestSignedNull.Files = 12
+
+[Strings]
+ProviderName = "ruviform"
+MfgName      = "ruviform (test-signed probe)"
+DeviceDesc   = "ruviform test-signed null device"
+SvcDesc      = "ruviform test-signed null driver"
+DiskName     = "ruviform test-signed driver install disk"
