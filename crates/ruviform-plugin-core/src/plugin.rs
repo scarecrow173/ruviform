@@ -11,8 +11,8 @@
 //! them without a host↔runner dependency.
 
 use crate::boundary::{
-    DirtyNotice, GuiHandle, GuiKeyEvent, GuiRequest, GuiRequestVerdict, GuiSize, HostError,
-    ParentLease,
+    DirtyNotice, GuiFocusTarget, GuiHandle, GuiKeyEvent, GuiPopupKind, GuiRequest,
+    GuiRequestVerdict, GuiSize, HostError, ParentLease,
 };
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
@@ -267,7 +267,9 @@ pub trait Plugin: PluginProcessor {
     }
 
     /// Gives (`focused = true`) or removes keyboard focus from the
-    /// GUI opened by [`Plugin::open_gui`].
+    /// GUI opened by [`Plugin::open_gui`] — the
+    /// [`GuiFocusTarget::Editor`] shorthand of
+    /// [`Plugin::set_gui_focus_target`].
     ///
     /// **RT contract:** non-RT only.
     ///
@@ -291,6 +293,39 @@ pub trait Plugin: PluginProcessor {
     /// [`HostError::InvalidValue`] when the event cannot be
     /// represented in the adapter's event vocabulary.
     fn send_gui_key(&mut self, _event: GuiKeyEvent) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
+    /// Directs keyboard focus at `target` — the parameterized form
+    /// of [`Plugin::set_gui_focus`]: [`GuiFocusTarget::Editor`] is
+    /// the same destination `set_gui_focus(true)` names, while
+    /// [`GuiFocusTarget::EditorElement`] and
+    /// [`GuiFocusTarget::HostWindow`] carry the targets the bool
+    /// verb cannot (Issue #630).
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins whose editor
+    /// cannot take a focus target decline the command;
+    /// [`HostError::InvalidValue`] when `target` cannot be
+    /// represented in the adapter's vocabulary.
+    fn set_gui_focus_target(&mut self, _target: GuiFocusTarget) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
+    /// Opens (`open = true`) or closes a plugin-owned popup of
+    /// `kind` while the GUI opened by [`Plugin::open_gui`] stays
+    /// attached (Issue #630).
+    ///
+    /// **RT contract:** non-RT only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] by default — plugins that own no
+    /// popup surface of `kind` decline the command.
+    fn set_gui_popup(&mut self, _kind: GuiPopupKind, _open: bool) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
 
@@ -437,6 +472,20 @@ pub trait ErasedPlugin {
     fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError>;
     /// [`Plugin::send_gui_key`].
     fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError>;
+    /// [`Plugin::set_gui_focus_target`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn set_gui_focus_target(&mut self, target: GuiFocusTarget) -> Result<(), HostError> {
+        let _ = target;
+        Err(HostError::Unsupported)
+    }
+    /// [`Plugin::set_gui_popup`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn set_gui_popup(&mut self, kind: GuiPopupKind, open: bool) -> Result<(), HostError> {
+        let _ = (kind, open);
+        Err(HostError::Unsupported)
+    }
     /// [`Plugin::set_gui_request_sink`].
     ///
     /// **RT contract:** non-RT only.
@@ -529,6 +578,12 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
         self.0.send_gui_key(event)
+    }
+    fn set_gui_focus_target(&mut self, target: GuiFocusTarget) -> Result<(), HostError> {
+        self.0.set_gui_focus_target(target)
+    }
+    fn set_gui_popup(&mut self, kind: GuiPopupKind, open: bool) -> Result<(), HostError> {
+        self.0.set_gui_popup(kind, open)
     }
     fn set_gui_request_sink(&mut self, sink: Option<Box<GuiRequestSink>>) {
         self.0.set_gui_request_sink(sink);
