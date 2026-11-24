@@ -12,7 +12,7 @@
 //!
 //! **RT contract:** non-RT only.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
@@ -2574,6 +2574,152 @@ pub fn intent_from_gesture(
             reason: reason.clone(),
         }),
         _ => None,
+    }
+}
+
+/// One user-entered parameter value — a member of [`CommandParams`],
+/// the typed profile for [`CommandIntent::Action`]'s `params` field
+/// (Issue #944). The variants cover the basic types a widget produces
+/// at runtime: discrete/continuous numbers, free text, closed-set
+/// variant names, booleans, and 2-D coordinates.
+///
+/// Each variant serializes to a canonical JSON shape through
+/// [`CommandParam::to_value`], and [`CommandParam::from_value`]
+/// accepts exactly those shapes. `Enum` is wire-identical to `Text` —
+/// both serialize as a JSON string, because membership in the variant
+/// set is the consumer's action-schema concern, not a wire-level
+/// distinction. A decoded string therefore always comes back `Text`.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommandParam {
+    /// Discrete integer parameter (indices, counts, PPQN). Serializes
+    /// as a JSON integer.
+    Integer(i64),
+    /// Continuous parameter. Serializes as a JSON number; a non-finite
+    /// value has no wire representation — `to_value` returns `None`.
+    Number(f64),
+    /// Free-text parameter. Serializes as a JSON string.
+    Text(String),
+    /// Closed-set variant name. Serializes as a JSON string —
+    /// wire-identical to `Text`.
+    Enum(String),
+    /// Boolean parameter. Serializes as a JSON boolean.
+    Bool(bool),
+    /// 2-D coordinate parameter. Serializes as
+    /// `{"x": <number>, "y": <number>}`; both components must be
+    /// finite.
+    Point {
+        /// Horizontal coordinate.
+        x: f64,
+        /// Vertical coordinate.
+        y: f64,
+    },
+}
+
+impl CommandParam {
+    /// The canonical wire JSON for this value — `None` when it cannot
+    /// be represented (a non-finite `Number` or `Point` component has
+    /// no JSON form; emitting `null` or dropping the key would
+    /// corrupt the payload silently).
+    #[must_use]
+    pub fn to_value(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Integer(i) => Some(serde_json::Value::from(*i)),
+            Self::Number(n) => serde_json::Number::from_f64(*n).map(serde_json::Value::Number),
+            Self::Text(s) | Self::Enum(s) => Some(serde_json::Value::String(s.clone())),
+            Self::Bool(b) => Some(serde_json::Value::Bool(*b)),
+            Self::Point { x, y } => {
+                if x.is_finite() && y.is_finite() {
+                    Some(serde_json::json!({ "x": x, "y": y }))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Decodes canonical params JSON back into a [`CommandParam`].
+    /// Accepts exactly the shapes [`to_value`](Self::to_value) emits —
+    /// `None` for nulls, arrays, objects that are not points, and point
+    /// objects with non-finite components. Strings decode to
+    /// [`CommandParam::Text`] (an enum name is wire-identical to
+    /// text); integers beyond the `i64` range decode to
+    /// [`CommandParam::Number`].
+    #[must_use]
+    pub fn from_value(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Some(Self::Integer(i))
+                } else {
+                    n.as_f64().filter(|f| f.is_finite()).map(Self::Number)
+                }
+            }
+            serde_json::Value::String(s) => Some(Self::Text(s.clone())),
+            serde_json::Value::Bool(b) => Some(Self::Bool(*b)),
+            serde_json::Value::Object(map) if map.len() == 2 => {
+                let x = map.get("x")?.as_f64()?;
+                let y = map.get("y")?.as_f64()?;
+                (x.is_finite() && y.is_finite()).then_some(Self::Point { x, y })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Named user-entered parameters for one [`CommandIntent::Action`]
+/// (Issue #944) — a `BTreeMap` of [`CommandParam`]s, so the wire
+/// payload is a JSON object with deterministic, sorted key order.
+///
+/// This is the typed profile of `Action.params`: mint paths for
+/// runtime-entered values build `CommandParams`, while spec-declared
+/// params ([`crate::view::ButtonSpec::params`]) stay consumer-defined
+/// arbitrary JSON outside this profile. Which `target`/`action` may
+/// carry params is consumer-side admission — this type transports.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CommandParams(pub BTreeMap<String, CommandParam>);
+
+impl CommandParams {
+    /// An empty parameter set — serializes as `"params": {}`, which is
+    /// distinct from `params` being absent.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds or replaces the parameter `name`, returning the replaced
+    /// value when one was present.
+    pub fn insert(&mut self, name: impl Into<String>, param: CommandParam) -> Option<CommandParam> {
+        self.0.insert(name.into(), param)
+    }
+
+    /// The canonical wire JSON — `{"<name>": <param>, ...}`. `None`
+    /// when any parameter lacks a representation (see
+    /// [`CommandParam::to_value`]); a partially serialized payload is
+    /// never produced.
+    #[must_use]
+    pub fn to_value(&self) -> Option<serde_json::Value> {
+        let mut obj = serde_json::Map::with_capacity(self.0.len());
+        for (name, param) in &self.0 {
+            obj.insert(name.clone(), param.to_value()?);
+        }
+        Some(serde_json::Value::Object(obj))
+    }
+
+    /// Decodes canonical params JSON — an object whose values are all
+    /// canonical [`CommandParam`] shapes. `None` for non-objects and
+    /// for any non-canonical member; a partial decode is never
+    /// produced.
+    #[must_use]
+    pub fn from_value(value: &serde_json::Value) -> Option<Self> {
+        let serde_json::Value::Object(map) = value else {
+            return None;
+        };
+        let mut params = BTreeMap::new();
+        for (name, v) in map {
+            params.insert(name.clone(), CommandParam::from_value(v)?);
+        }
+        Some(Self(params))
     }
 }
 

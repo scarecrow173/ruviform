@@ -20,10 +20,10 @@ use std::ops::Range;
 use serde::{Deserialize, Serialize};
 
 use crate::behavior::{
-    AvailabilityFlags, CommandBinding, CommandId, CommandIntent, CommandPhase, CommandReceipt,
-    ControlId, ControlInput, DetachPolicy, InteractionControlOptions, InteractionDispatcher,
-    InteractionEvent, LogicalTarget, ReceiptStatus, Revision, StateProjection, ValueDescriptor,
-    ValuePorts, intent_from_gesture, validate_descriptor,
+    AvailabilityFlags, CommandBinding, CommandId, CommandIntent, CommandParams, CommandPhase,
+    CommandReceipt, ControlId, ControlInput, DetachPolicy, InteractionControlOptions,
+    InteractionDispatcher, InteractionEvent, LogicalTarget, ReceiptStatus, Revision,
+    StateProjection, ValueDescriptor, ValuePorts, intent_from_gesture, validate_descriptor,
 };
 use crate::dock::ViewInstanceId;
 use crate::ipc::Event;
@@ -2140,6 +2140,47 @@ impl ViewHost {
         let owner = self.owner_key_for(key);
         self.emit_intent(&owner, intent);
         Ok(())
+    }
+
+    /// Mints one discrete `Action` intent carrying user-entered
+    /// `params` on `target`/`action` for the mounted component `key` —
+    /// the runtime counterpart of a spec-declared `Button` press
+    /// (Issue #944). `params` is serialized through the
+    /// [`CommandParams`] typed profile. Whether the consumer admits
+    /// params for `target` is consumer-side policy — the host
+    /// transports, it does not admit.
+    ///
+    /// The intent's `control_id` is the component key; receipts route
+    /// through `key`'s command binding like any other `Action`.
+    /// Returns the minted [`CommandId`] for correlation.
+    ///
+    /// # Errors
+    /// [`ViewError::StaleGeneration`] for a dead epoch;
+    /// [`ViewError::UnknownComponent`] for an unmounted key;
+    /// [`ViewError::InvalidInput`] when `params` contains a value with
+    /// no wire representation (a non-finite number). Rejected inputs
+    /// emit nothing.
+    pub fn dispatch_action(
+        &mut self,
+        generation: u64,
+        key: &ComponentKey,
+        target: LogicalTarget,
+        action: &str,
+        params: Option<CommandParams>,
+    ) -> Result<CommandId, ViewError> {
+        self.check_gen(generation)?;
+        self.mounted
+            .get(key)
+            .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
+        let params = params
+            .map(|p| {
+                p.to_value()
+                    .ok_or_else(|| invalid_input(key, "params contain a non-finite number"))
+            })
+            .transpose()?;
+        let intent = self.action_intent(key, target, action, params);
+        let owner = self.owner_key_for(key);
+        Ok(self.emit_intent(&owner, intent))
     }
 
     /// Runtime availability override for one control (e.g. a view-level
