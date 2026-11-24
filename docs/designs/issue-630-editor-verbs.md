@@ -657,3 +657,79 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   `evidence/rf631/plugin-dock-real-scenario.jsonl` 32 case 全 pass、
   CLAP `evidence/rf630/plugin-dock-real-clap.jsonl` 14 case 全 pass
   （`real-clap-editor-{input,focus,popup}` を含む）。
+
+## 実装記録（export 側 L1 dispatch 配線 — wire tag 29/30）
+
+slice 4 実装記録が「後続 slice/別タスク」と宣言した残件 —— wire tag
+29/30 の `ruviform-plugin-export` 側 L1 dispatch 配線。分割案の
+slice 番号体系外の補完 slice で、slice 6（実 GUI 受入）とは別工程。
+
+- `Runner::dispatch`（`ruviform-plugin-export/src/lib.rs`）の GUI
+  family arm に `WireCommand::SetGuiFocusTarget { .. }` /
+  `WireCommand::SetGuiPopup { .. }` を追加し `dispatch_gui` へ流す。
+  定義済み順序（handle check → `Docked` 拒否 → no-surface
+  `InvalidValue` → marshal）は変更不要 —— 新 verb は `OpenGui` で
+  ないため no-surface 検査をそのまま通る。`#[cfg(not(windows))]`
+  stub も変更不要（family arm に載れば handle 解決後の defined
+  `Unsupported` が自動適用される）。family の「wire-v6」記述は
+  wire-v8 verb の追加を反映する形に揃えた（`lib.rs` 各所・
+  `gui.rs` module doc・runner bin doc）。
+- `run_verb`（`ruviform-plugin-export/src/gui.rs`）に 2 arm を追加。
+  `SetGuiFocus`/`SendGuiKey` と同形 —— `!surfaces.contains_key(&
+  instance)` → `Err(InvalidValue)` の surface 存在検査を先に行い、
+  `crate::guarded` 経由で `ErasedPlugin` hook を呼ぶ。
+  `SetGuiFocusTarget { target }` → `plugin.set_gui_focus_target
+  (target)`、`SetGuiPopup { kind, open }` → `plugin.set_gui_popup
+  (kind, open != 0)`（wire の `open` は strict `{0,1}` `u8`）。
+  `GuiRequest::Verb` は command を verbatim で運ぶため marshal
+  経路は無変更。`SendPluginPtr` の SAFETY 契約・unsafe inventory
+  も不変。
+- `GuiFocusTarget::HostWindow` の export 側意味論は Coordinator
+  決裁で **verbatim forward** に確定: runner は全 target を
+  `plugin.set_gui_focus_target` へそのまま渡し、runner 側で
+  `HostWindow` だけを特別扱いしない。根拠は二つ。一つ目、
+  container HWND は `open_gui` 時の runner-minted `ParentLease`
+  payload として既に plugin 側へ渡っており、L0 adapter（slice
+  3/4）が `HostWindow` を adapter 側で消費する確定設計
+  （`SetFocus(container)` + plugin への focus 喪失通知）を L1
+  でもそのまま成立させられる。二つ目、`EditorElement` が定義
+  する「delivery は focus intent であり OS-focus claim では
+  ない」契約と同じ意味論に family 全体を揃えられる —— runner
+  側で実 `SetFocus` を足す案（L0 adapter 先例）は
+  `windows-sys` feature 追加（lease 外の `Cargo.toml` 変更）か
+  bare `#[link]` extern が必要になり、headless L1 配線の
+  着地点に対して不釣り合いな新規 OS 依存だった。実 OS focus
+  効果の検証は実 GUI lane（slice 6）の責務。
+- l1-runner の `GuiPlugin` mock（`src/bin/ruviform-plugin-l1-
+  runner.rs`）に `set_gui_focus_target`/`set_gui_popup` を実装:
+  `view.is_none()` → `Err(Unsupported)`、surface open 中は全
+  target・全 kind で `Ok`（`set_gui_focus`/`send_gui_key` の
+  既存語彙どおり）。mock が pin するのは marshal/reply
+  round-trip と reply 語彙であり、target 別の意味差ではない。
+- pin 反転（Coordinator 承認済み）: `editor_session_l1.rs` の
+  wire-v8 verb pin を entry dispatch catch-all の defined
+  `Unsupported` から実 `Ok`/round-trip へ反転。session ops →
+  実 child → mock hook の往復を `GuiFocusTarget::{Editor,
+  EditorElement{7},HostWindow}` と `GuiPopupKind::{ChildWindow}
+  open=true`/`{Dialog} open=false` で pin し、post-close の
+  `InvalidValue` ループにも 2 verb を追加して no-surface 語彙が
+  family 全体で一貫することを維持した。
+- `l1_runner_e2e.rs` に tag 29/30 の行を追加: surface-open 中の
+  `Ok(WireReply::Ok)` round-trip（既存 verb と同一の
+  command-loop 形に集約）、no-surface `Err(InvalidValue)`
+  リスト、非 Windows `Err(Unsupported)` リストの 3 箇所。
+- 失敗語彙は既存 family の踏襲のみ: handle 未登録
+  `InvalidHandle`、no-surface `InvalidValue`、hook 拒否透過
+  （trait default `Unsupported` 含む）、hook panic →
+  `PluginFailed`、非 Windows `Unsupported`、decode 不能
+  `Malformed`。新しい失敗語彙・state 遷移の新設なし。
+- synthetic-verb-delivery 語彙を維持 —— verb は合成コマンド
+  配送であり OS イベント注入ではない。`send_gui_key` 意味論は
+  不変（shortcut seam のまま）。本 slice の証拠語彙も
+  `synthetic-verb-delivery` に統一し `real-os-*` 語彙は付け
+  ない。
+- 非対象（本 slice 範囲外）: slice 6 の実 GUI 受入、AC7 の
+  consumer oracle 実走 legs（external owner）、capability bit
+  新設・`WIRE_VERSION` bump・`EditorCapabilities` claim 規則の
+  変更（`Opened.capabilities` は `0x82` のまま —— tag 29/30 は
+  `GUI_FLOATING` family に原子所属）。

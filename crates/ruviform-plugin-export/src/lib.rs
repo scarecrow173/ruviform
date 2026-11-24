@@ -460,16 +460,20 @@ impl Runner {
                 out_depth,
             } => self.create_instance(instance, &plugin_id, &shm_key, in_depth, out_depth),
             WireCommand::DestroyInstance => self.destroy_instance(instance),
-            // The wire-v6 GUI verb family is runner-level: the entry's
-            // dispatch never sees them because the UI thread handle
-            // and the marshal seam live here (an entry cannot reach
-            // runner state). The handle check stays first.
+            // The GUI verb family is runner-level — wire v6's
+            // surface verbs plus wire v8's `SetGuiFocusTarget`/
+            // `SetGuiPopup` (Issue #630): the entry's dispatch never
+            // sees them because the UI thread handle and the marshal
+            // seam live here (an entry cannot reach runner state).
+            // The handle check stays first.
             gui_command @ (WireCommand::OpenGui { .. }
             | WireCommand::CloseGui
             | WireCommand::SetGuiSize { .. }
             | WireCommand::SetGuiVisibility { .. }
             | WireCommand::SetGuiFocus { .. }
-            | WireCommand::SendGuiKey { .. }) => self.dispatch_gui(instance, gui_command),
+            | WireCommand::SendGuiKey { .. }
+            | WireCommand::SetGuiFocusTarget { .. }
+            | WireCommand::SetGuiPopup { .. }) => self.dispatch_gui(instance, gui_command),
             instance_command => match self.instances.get_mut(&instance) {
                 Some(entry) => entry.dispatch(instance_command),
                 None => Err(HostError::InvalidHandle),
@@ -477,7 +481,8 @@ impl Runner {
         }
     }
 
-    /// The GUI leg of [`Runner::dispatch`] (wire v6, Windows): handle
+    /// The GUI leg of [`Runner::dispatch`] (Windows — the wire-v6 UI
+    /// thread mechanism, now carrying the wire-v8 verbs too): handle
     /// resolve precedes everything (the shared dispatch order), then
     /// the defined rejections that need no UI mechanism — `Docked`
     /// mode (the cross-process `WS_CHILD`/`SetParent` topology Issue

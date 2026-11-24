@@ -1,13 +1,16 @@
 //! The runner's child-owned floating-GUI mechanism (wire v6 — the
-//! Issue #872 design, slice 2 / Issue #883): a lazily spawned UI
-//! thread owning the Win32 message pump and the container toplevel
-//! each instance's editor attaches into, plus the marshal seam that
-//! hands GUI verbs from the command thread to that UI thread.
+//! Issue #872 design, slice 2 / Issue #883; wire v8's
+//! `SetGuiFocusTarget`/`SetGuiPopup` of Issue #630 ride the same
+//! marshal seam): a lazily spawned UI thread owning the Win32
+//! message pump and the container toplevel each instance's editor
+//! attaches into, plus the marshal seam that hands GUI verbs from
+//! the command thread to that UI thread.
 //!
 //! ## Topology
 //!
 //! Every GUI verb (`OpenGui`/`CloseGui`/`SetGuiSize`/
-//! `SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey`) is instance-scoped —
+//! `SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey`/
+//! `SetGuiFocusTarget`/`SetGuiPopup`) is instance-scoped —
 //! the envelope `instance` alone names the surface (≤1 surface per
 //! instance, so no `GuiHandle` rides a command payload). The command
 //! thread resolves the handle and the surface bookkeeping
@@ -392,6 +395,28 @@ fn run_verb(
                 return Err(HostError::InvalidValue);
             }
             crate::guarded(plugin, |plugin| plugin.send_gui_key(event)).and_then(|inner| inner)?;
+            Ok(WireReply::Ok)
+        }
+        WireCommand::SetGuiFocusTarget { target } => {
+            if !surfaces.contains_key(&instance) {
+                return Err(HostError::InvalidValue);
+            }
+            // Verbatim forward — `HostWindow` included: the
+            // container HWND already reached the plugin as
+            // `open_gui`'s runner-minted `ParentLease` payload, so
+            // the hook carries the same delivery-is-a-focus-intent
+            // contract `EditorElement` documents, never an OS-focus
+            // claim the runner would have to fake (Issue #630).
+            crate::guarded(plugin, |plugin| plugin.set_gui_focus_target(target))
+                .and_then(|inner| inner)?;
+            Ok(WireReply::Ok)
+        }
+        WireCommand::SetGuiPopup { kind, open } => {
+            if !surfaces.contains_key(&instance) {
+                return Err(HostError::InvalidValue);
+            }
+            crate::guarded(plugin, |plugin| plugin.set_gui_popup(kind, open != 0))
+                .and_then(|inner| inner)?;
             Ok(WireReply::Ok)
         }
         // Unreachable — the command thread only marshals the GUI

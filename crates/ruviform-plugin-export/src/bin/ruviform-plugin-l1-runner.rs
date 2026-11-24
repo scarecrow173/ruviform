@@ -29,11 +29,13 @@
 //!   `staging_out` each block (a legal under-write must not leak the
 //!   previous block's samples into the out-slot).
 //! - `GuiPlugin` (`dev.ruviform.mock.gui`) — window-independent GUI
-//!   fixture (wire v6): `open_gui` returns a minted `GuiHandle` token
-//!   (no HWND involved — the marshal/reply round-trip is what the
-//!   E2E pins), the `close_gui`/`set_gui_*`/`send_gui_key` hooks
-//!   answer `Ok` while a surface is logically open — the same
-//!   `view.is_some()` vocabulary the VST3 adapter carries — and
+//!   fixture (wire v6's surface verbs plus wire v8's
+//!   `SetGuiFocusTarget`/`SetGuiPopup`, Issue #630): `open_gui`
+//!   returns a minted `GuiHandle` token (no HWND involved — the
+//!   marshal/reply round-trip is what the E2E pins), the
+//!   `close_gui`/`set_gui_*`/`send_gui_key` hooks answer `Ok` while
+//!   a surface is logically open — the same `view.is_some()`
+//!   vocabulary the VST3 adapter carries — and
 //!   `RUVIFORM_GUI_WEDGE` parks `open_gui` forever, the wedged-hook
 //!   convergence fixture (the marshal reply never arrives, so the
 //!   child's command loop stalls the way a wedged plugin GUI does).
@@ -45,10 +47,10 @@ use std::process::ExitCode;
 
 use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, Event, EventKind, EventList, GuiHandle, GuiKeyEvent, GuiSize,
-    HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
-    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    TransportInfo, erase,
+    BufferView, BufferViewMut, Event, EventKind, EventList, GuiFocusTarget, GuiHandle, GuiKeyEvent,
+    GuiPopupKind, GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin,
+    PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, TransportInfo, erase,
 };
 
 fn main() -> ExitCode {
@@ -507,6 +509,20 @@ impl Plugin for GuiPlugin {
     }
 
     fn send_gui_key(&mut self, _event: GuiKeyEvent) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn set_gui_focus_target(&mut self, _target: GuiFocusTarget) -> Result<(), HostError> {
+        if self.view.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        Ok(())
+    }
+
+    fn set_gui_popup(&mut self, _kind: GuiPopupKind, _open: bool) -> Result<(), HostError> {
         if self.view.is_none() {
             return Err(HostError::Unsupported);
         }
