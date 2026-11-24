@@ -101,10 +101,44 @@ AC 評価（attempt 1 時点・部分）:
 - AC3: **成立** — build surface・失敗要因・job 内導入に必要なもの（windows-2025: WDK 本体。windows-11-arm: VS18 対応 DriverKit build task。winget 導入経路は windows-2025 のみ存在）を stage 記録として取得。
 - AC4: 材料となる記録を本節に追記。
 
+### attempt 2-6 — 反復修正（各 run は修正 PR merge 直後に dispatch）
+
+attempt 1 で検出した workflow 欠陥を修正しながら実走を重ねた。各 attempt の修正内容と判明事項:
+
+| attempt | run | 修正 PR | 結果と判明事項 |
+| --- | --- | --- | --- |
+| 2 | 45472406140 | #967 | step `exit 0`/`if: always()` 修正で job green・全 stage 記録取得。cert-create/store-register は両 leg で ok（自己署名→Root+TrustedPublisher 登録は成立）。driver-build 継続失敗: windows-2025 の winget install が `Microsoft.WindowsWDK` の id 誤り（versioned id が必要）で `No package found` |
+| 3 | 45472903820 | #968 | winget id を `Microsoft.WindowsWDK.10.0.26100` に修正 → windows-2025 で WDK install 成功（174s・kmHeaders 0→1・**winget による job 内 WDK 導入経路が実測で成立**）。新たな失敗: VS2026/MSBuild 18 は `Microsoft.DriverKit.Build.Tasks.18.0.dll` を要求するが image 同梱は 17.0 のみ → 既存 dll の rename workaround を試行したが copy 元 glob が `...PackageVerifier.17.0.dll` を先に拾い MSB4062 継続 |
+| 4 | 45473752181 | #969 | copy 元を `Tasks.<n>.0.dll` 本体に限定 → `ValidateNTTargetVersion` 通過。次の MSB4062 は targets 698 行の `DPVerifierTask`（`...PackageVerifier.18.0.dll` も要求） |
+| 5 | 45474564601 | #970 | copy を `Microsoft.DriverKit.Build.Tasks*.<n>.0.dll` → `.<maj>.0.dll` の family 全体に一般化 → **両 leg で driver build 成功**（x64/ARM64 `RvfTestSignedNull.sys` 生成）。次の失敗: sign stage で signtool の arch 選択ミス（x64 ホストが arm64 signtool を先頭 hit で選択）→ `ResourceUnavailable` |
+| 6 | 45475270436 | #971 | signtool を `\x64\`/`\arm64\` Kits bin dir で arch-aware 選択 + try/catch → **driver-build/sign/sign-verify が両 leg で ok**。次の失敗: pnputil-add-driver「third-party INF does not contain digital signature information」— `.sys` 署名のみでは不十分で `.cat` catalog が必須。Inf2Cat は存在するが exit=-1・無出力 |
+
+### attempt 7 — run 45476350137（2026-11-24・PR #973 merge 後）
+
+両 leg の artifact を `evidence/rf961/` に記録（`install-probe-<os>-attempt7.json`・`stage-*-<os>-attempt7.txt`・`probe-state-<os>-attempt7.json`）。
+
+| leg | 到達 | 実測値 |
+| --- | --- | --- |
+| `windows-2025` | catalog-create で step 停止 | driver-build ok（winget WDK）・cert/store/sign/sign-verify 全 ok。Inf2Cat は動作したが **INF の `DriverVer=11/25/2026` が未来日付で signability 拒否**（`22.9.7: DriverVer set to a date in the future`）→ makecat fallback も arch 非対応 binary（ResourceUnavailable）で script 停止・stage 記録未生成。後続 stage は `if: always()` で継続し pnputil は `.cat` 不在で error |
+| `windows-11-arm` | **install チェーンほぼ完走** | catalog-create ok（Inf2Cat `/os:10_0_ARM64` で `.cat` 生成）→ cert/store/sign（.sys+.cat 両方）/sign-verify 全 ok → **pnputil-add-driver ok（`published=oem7.inf` — test-signed package が driver store に受理された）** → enum-verify ok（inf_in_store=True）→ devnode-create error（`SetupDiCreateDeviceInfo failed`）→ cleanup ok |
+
+本 PR での修正（attempt 8 向け）:
+
+1. **INF `DriverVer` を `01/01/2025` に修正** — postdated DriverVer は Inf2Cat の signability 検査で拒否される（attempt 7 の windows-2025 で実測）。
+2. **`SP_DEVINFO_DATA` レイアウト修正** — `DevInst` を `IntPtr` から `uint` へ。実際の `SP_DEVINFO_DATA.DevInst` は DWORD で、IntPtr 宣言は x64/ARM64 で構造体を 40B（正しくは 32B）にしていた → `SetupDiCreateDeviceInfo` の失敗要因として最有力。併せて `Check` の例外に Win32 error code・native message を含めるよう改善（次回失敗時に原因切り分け可能）。
+3. **makecat/Inf2Cat の native 起動を try/catch + arch-aware 選択** — makecat は signtool と同じく host arch と異なる binary を `$hits[0]` で拾うと ResourceUnavailable で step が死ぬ（attempt 7 の windows-2025 で実測・stage 記録すら残らなかった）。
+
+AC 評価（attempt 7 時点・部分）:
+
+- AC1（test-signed driver の install 可否）: **windows-11-arm で実測成立** — test-signed package が driver store に staging・install 受理された（`pnputil /add-driver /install` → `oem7.inf`）。windows-2025 は `.cat` 未生成で未到達（attempt 8 で再測定）。
+- AC2（失敗 stage 特定）: windows-2025 = catalog-create（DriverVer postdated）、windows-11-arm = devnode-create（SetupDiCreateDeviceInfo）と stage 単位で特定済み。
+- AC3（job 内導入に必要なもの）: windows-2025 = winget WDK install で build 成立を実測。windows-11-arm = DriverKit task dll rename workaround で build 成立を実測。
+- AC4: 本節の記録。
+
 ## 4. 状態
 
 - workflow 新設: `.github/workflows/virtual-driver-install-probe.yml`（PR #965 で merge、attempt 1 で検出した欠陥を修正済み — §3.5）。
 - driver package 新設: `drivers/testsigned-null/`（ソースのみ — build 済みバイナリは commit しない）。
 - 補助スクリプト新設: `tools/testsigned-driver/`（`probe-stage.ps1`・`TestDevice.ps1`・`README.md`）。
 - 既存 workflow・required gate・ruleset・`mise.toml`・`crates/**` への変更: **なし**。
-- runner 実走: **attempt 1 実施済み**（run 45471371020 — §3.5）。attempt 2（修正版 workflow での再実走）を Coordinator が dispatch し、結果を本節・Issue #961 に記録する。
+- runner 実走: **attempt 1-7 実施済み**（§3.5）。windows-11-arm は install まで完走（devnode-create のみ残）、windows-2025 は catalog-create が frontier。attempt 8（本 PR の修正版）を Coordinator が dispatch する。

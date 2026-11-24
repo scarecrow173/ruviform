@@ -1,0 +1,38 @@
+target platform: ARM64
+msbuild: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe
+toolset(ARM64): C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\ARM64\PlatformToolsets\WindowsKernelModeDriver10.0
+km headers: 2; km libs: 2
+  driverkit task dll: C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.17.0.dll
+  driverkit task dll: C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll
+  msbuild version: 18.12.2.51402 (major=18)
+  task dll copy: Microsoft.DriverKit.Build.Tasks.17.0.dll -> Microsoft.DriverKit.Build.Tasks.18.0.dll
+  task dll copy: Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll -> Microsoft.DriverKit.Build.Tasks.PackageVerifier.18.0.dll
+
+== msbuild RvfTestSignedNull (ARM64) ==
+
+  Building 'RvfTestSignedNull' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping ARM64\Release\RvfTestSignedNull.inf
+  Stamping [Version] section with DriverVer=11/24/2026,12.2.23.794
+C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\WindowsDriver.common.targets(698,5): error : INF verification exception: Unable to load DLL 'x86\InfVerif.dll': The specified module could not be found. (Exception from HRESULT: 0x8007007E) [C:\a\ruviform\ruviform\drivers\testsigned-null\RvfTestSignedNull.vcxproj]
+  RvfTestSignedNull.c
+  Generating code
+  Finished generating code
+  RvfTestSignedNull.vcxproj -> C:\a\ruviform\ruviform\drivers\testsigned-null\ARM64\Release\RvfTestSignedNull.sys
+  Driver is 'Universal'.
+  ........................
+  Signability test complete.
+
+  Errors:
+  None
+
+  Warnings:
+  None
+
+  Catalog generation complete.
+  C:\a\ruviform\ruviform\drivers\testsigned-null\ARM64\Release\RvfTestSignedNull\rvftestsignednull.cat
+  Set catalog attribute.
+  WdkVersion: 10.0.26100.0
+  Set catalog attribute.
+  WdkAssemblyVersion: 10.0.26100.6584
+  msbuild exit=0
+  built: C:\a\ruviform\ruviform\drivers\testsigned-null\ARM64\Release\RvfTestSignedNull.sys

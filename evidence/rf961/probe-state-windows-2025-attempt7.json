@@ -1,0 +1,10 @@
+{
+  "msbuild": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\MSBuild\\Current\\Bin\\MSBuild.exe",
+  "vs_install": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+  "km_headers": 1,
+  "km_libs": 0,
+  "sys_path": "D:\\a\\ruviform\\ruviform\\drivers\\testsigned-null\\x64\\Release\\RvfTestSignedNull.sys",
+  "cert_thumbprint": "75274434FF4F1F02558E3B1473B84B832FC3E4F7",
+  "cert_cer_path": "D:\\a\\ruviform\\ruviform\\probe-cert.cer",
+  "inf_staged": false
+}

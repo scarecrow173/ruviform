@@ -1,0 +1,15 @@
+  instance_id: none — devnode 削除不要
+  --- pnputil /delete-driver oem7.inf /uninstall /force ---
+Microsoft PnP Utility
+
+Ignoring /force when used with /uninstall to delete driver package.
+Driver package uninstalled.
+Driver package deleted successfully.
+  pnputil /delete-driver exit=0
+  removed Cert:\LocalMachine\Root\972F18EB05AC0731F555D6B6F6B2AAAAC943DAA9
+  removed Cert:\LocalMachine\TrustedPublisher\972F18EB05AC0731F555D6B6F6B2AAAAC943DAA9
+  removed Cert:\LocalMachine\My\972F18EB05AC0731F555D6B6F6B2AAAAC943DAA9
+
+  --- final state ---
+  RvfTestSignedNull.inf in store: False
+  cleanup done

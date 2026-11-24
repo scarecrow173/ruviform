@@ -1,0 +1,94 @@
+  --- pnputil /enum-drivers ---
+Microsoft PnP Utility
+
+Published Name:     oem7.inf
+Original Name:      rvftestsignednull.inf
+Provider Name:      ruviform
+Class Name:         System
+Class GUID:         {4d36e97d-e325-11ce-bfc1-08002be10318}
+Driver Version:     11/25/2026 1.0.0.0
+Signer Name:        RvfTestSignedNull Probe (rf961)
+Attributes:         Legacy
+WHCP Version:       Unknown
+
+Published Name:     oem1.inf
+Original Name:      stornvme_asap.inf
+Provider Name:      Microsoft
+Class Name:         SCSIAdapter
+Class GUID:         {4d36e97b-e325-11ce-bfc1-08002be10318}
+Driver Version:     09/15/2025 6.70.2.29
+Signer Name:        Microsoft Windows
+Attributes:         Legacy
+WHCP Version:       Unknown
+
+Published Name:     oem2.inf
+Original Name:      manavf.inf
+Provider Name:      Microsoft
+Class Name:         Net
+Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+Driver Version:     08/05/2026 2.0.18.52
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+Attributes:         Legacy
+                    Attested
+WHCP Version:       Unknown
+
+Published Name:     oem3.inf
+Original Name:      mana_bus_vf.inf
+Provider Name:      Microsoft
+Class Name:         MultiFunction
+Class GUID:         {4d36e971-e325-11ce-bfc1-08002be10318}
+Driver Version:     08/05/2026 2.0.18.52
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+Attributes:         Legacy
+                    Attested
+WHCP Version:       Unknown
+
+Published Name:     oem4.inf
+Original Name:      mana_ib_vf.inf
+Provider Name:      Microsoft
+Class Name:         RDMA
+Class GUID:         {0379f7db-5219-4898-b486-5a905fa04d60}
+Driver Version:     08/05/2026 2.0.18.52
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+Attributes:         Legacy
+                    Attested
+WHCP Version:       Unknown
+
+Published Name:     oem0.inf
+Original Name:      mlx5.inf
+Provider Name:      Mellanox Technologies Ltd.
+Class Name:         Net
+Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+Driver Version:     02/21/2022 2.72.24933.0
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+Attributes:         Legacy
+                    Attested
+WHCP Version:       Unknown
+
+Published Name:     oem5.inf
+Original Name:      prnms009.inf
+Provider Name:      Microsoft
+Class Name:         Printer
+Class GUID:         {4d36e979-e325-11ce-bfc1-08002be10318}
+Class Version:      4.0
+Driver Version:     06/21/2006 10.0.26100.4484
+Signer Name:        Microsoft Windows
+Attributes:         Legacy
+WHCP Version:       Unknown
+
+Published Name:     oem6.inf
+Original Name:      voiceclarityep_audio_component.inf
+Provider Name:      Microsoft Corporation
+Class Name:         AudioProcessingObject
+Class GUID:         {5989fce8-9cd0-467d-8a6a-5419e31529d4}
+Driver Version:     06/16/2026 1.0.4.7057
+Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+Attributes:         Universal
+WHCP Version:       Unknown
+
+  enum-drivers exit=0
+  RvfTestSignedNull.inf in driver store: True
+  published name (entry match): oem7.inf
+
+  --- Get-PnpDevice (rvf match — devnode 作成前は 0 件期待) ---
+  matching PnpDevice: 0

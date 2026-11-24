@@ -53,7 +53,7 @@ public static class RvfTestDevice
     {
         public int cbSize;
         public Guid ClassGuid;
-        public IntPtr DevInst;
+        public uint DevInst;
         public IntPtr Reserved;
     }
 
@@ -107,7 +107,9 @@ public static class RvfTestDevice
     static void Check(bool ok, string api)
     {
         if (!ok) {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), api + " failed");
+            int err = Marshal.GetLastWin32Error();
+            throw new Win32Exception(err,
+                api + " failed: " + err + " " + new Win32Exception(err).Message);
         }
     }
 

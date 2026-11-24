@@ -1,0 +1,72 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:01:46Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "ok",
+    "detail": "arch=x64; sys=D:\\a\\ruviform\\ruviform\\drivers\\testsigned-null\\x64\\Release\\RvfTestSignedNull.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:05:14Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=75274434FF4F1F02558E3B1473B84B832FC3E4F7",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:05:16Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=75274434FF4F1F02558E3B1473B84B832FC3E4F7; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:05:17Z"
+  },
+  {
+    "stage": "sign",
+    "status": "ok",
+    "detail": "signtool=C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe; targets=RvfTestSignedNull.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:05:18Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "ok",
+    "detail": "targets=RvfTestSignedNull.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:05:18Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "error",
+    "detail": "published=",
+    "exit_code": -536870353,
+    "recorded_utc": "2026-11-24T20:05:19Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "error",
+    "detail": "inf_in_store=False; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:05:20Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "blocked",
+    "detail": "INF が driver store に staging されていない",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:05:20Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:05:21Z"
+  }
+]

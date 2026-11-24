@@ -343,15 +343,25 @@ jobs:
               # attempt-6 教訓: Inf2Cat が exit=-1・無出力で失敗した。無引数実行の
               # usage 出力・exit を診断として先に記録し、os flag 形式（`10_0_X64`
               # / `10_X64` / `10_0_ARM64` / `10_A64`）を候補 retry で切り分ける。
-              & $inf2cat[0] 2>&1 | Select-Object -First 25 | Out-Probe $log
-              "  inf2cat(no-args) exit=$LASTEXITCODE" | Out-Probe $log
+              try {
+                & $inf2cat[0] 2>&1 | Select-Object -First 25 | Out-Probe $log
+                "  inf2cat(no-args) exit=$LASTEXITCODE" | Out-Probe $log
+              } catch {
+                "  inf2cat(no-args) invoke error: $($_.Exception.Message)" | Out-Probe $log
+              }
               $osFlags = if ($os -eq 'windows-11-arm') { @('10_0_ARM64', '10_A64', '10_0_X64') } else { @('10_0_X64', '10_X64') }
               foreach ($osFlag in $osFlags) {
                 "  --- Inf2Cat /os:$osFlag ---" | Out-Probe $log
-                Push-Location probe-pkg
-                & $inf2cat[0] /driver:. /os:$osFlag /verbose 2>&1 | Out-Probe $log
-                $icExit = $LASTEXITCODE
-                Pop-Location
+                try {
+                  Push-Location probe-pkg
+                  & $inf2cat[0] /driver:. /os:$osFlag /verbose 2>&1 | Out-Probe $log
+                  $icExit = $LASTEXITCODE
+                  Pop-Location
+                } catch {
+                  Pop-Location -ErrorAction SilentlyContinue
+                  $icExit = -99
+                  "  Inf2Cat invoke error: $($_.Exception.Message)" | Out-Probe $log
+                }
                 "  Inf2Cat exit=$icExit os=$osFlag" | Out-Probe $log
                 if ($icExit -eq 0) {
                   $cat = Get-ChildItem probe-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -363,17 +373,29 @@ jobs:
             }
             if (-not $catPath) {
               "  Inf2Cat 失敗/不在 — makecat fallback を試行" | Out-Probe $log
-              $makecat = @(Find-Tool 'makecat.exe' -AllKitsHits)
-              if ($makecat.Count) {
+              $mcHits = @(Find-Tool 'makecat.exe' -AllKitsHits)
+              if ($mcHits.Count) {
+                # attempt-7 教訓: signtool と同じく host arch と異なる makecat.exe
+                # を選ぶと起動自体が ResourceUnavailable で落ちる。arch dir で
+                # 選別し、native 起動失敗を try/catch で stage error に留める。
+                $archDir = if ($os -eq 'windows-11-arm') { 'arm64' } else { 'x64' }
+                $makecat = @($mcHits | Where-Object { $_ -match "\\$archDir\\" } | Select-Object -First 1)[0]
+                if (-not $makecat) { $makecat = $mcHits[0] }
+                "  makecat selected: $makecat" | Out-Probe $log
                 $cdf = "probe-pkg\package.cdf"
                 "[CatalogHeader]`nName=RvfTestSignedNull.cat`nResultDir=$PWD\probe-pkg`nPublicVersion=0x00000001`nEncodingType=0x00010001`nCATATTR1=0x10010001:OSAttr:2:6.0`n[CatalogFiles]`n<HASH>RvfTestSignedNull.inf=RvfTestSignedNull.inf`n<HASH>RvfTestSignedNull.sys=RvfTestSignedNull.sys" | Set-Content $cdf -Encoding ascii
-                Push-Location probe-pkg
-                & $makecat[0] -v package.cdf 2>&1 | Out-Probe $log
-                $mcExit = $LASTEXITCODE
-                Pop-Location
-                "  makecat exit=$mcExit" | Out-Probe $log
-                $cat = Get-ChildItem probe-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($cat) { $catPath = $cat.FullName }
+                try {
+                  Push-Location probe-pkg
+                  & $makecat -v package.cdf 2>&1 | Out-Probe $log
+                  $mcExit = $LASTEXITCODE
+                  Pop-Location
+                  "  makecat exit=$mcExit" | Out-Probe $log
+                  $cat = Get-ChildItem probe-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($cat) { $catPath = $cat.FullName }
+                } catch {
+                  Pop-Location -ErrorAction SilentlyContinue
+                  "  makecat invoke error: $($_.Exception.Message)" | Out-Probe $log
+                }
               } else { "  makecat: absent" | Out-Probe $log }
             }
 

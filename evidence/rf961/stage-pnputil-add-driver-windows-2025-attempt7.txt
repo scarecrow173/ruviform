@@ -1,0 +1,10 @@
+  --- pnputil /add-driver D:\a\ruviform\ruviform\probe-pkg\RvfTestSignedNull.inf /install ---
+Microsoft PnP Utility
+
+Adding driver package:  RvfTestSignedNull.inf
+Failed to add driver package: The third-party INF does not contain digital signature information.
+
+Total driver packages:  1
+Added driver packages:  0
+  pnputil exit=-536870353
+  published name: not parsed — add-driver 出力・enum log 参照
