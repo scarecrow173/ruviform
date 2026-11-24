@@ -478,3 +478,51 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   target を verbatim で運ぶ。child 側（`ruviform-plugin-export`）は entry
   dispatch の catch-all が defined `Unsupported` を返す —— slice 3/4 が
   fixture seam を載せるまでの正しい着地点。
+
+## 実装記録（slice 3 — VST3 adapter + fixture seam）
+
+- private seam は推奨案を採用: `IRvfEditorOps`（IID =
+  `"RVFEDITOROPS0001"` の ruviform-namespaced 16-byte TUID、SDK
+  IID と構造的に衝突しない）。vtbl は `FUnknownVtbl` prefix +
+  `apply_focus(element: u32, focused: TBool)` + `popup(kind: u32,
+  open: TBool)` の 2 verb。adapter は open 済み `IPlugView` を
+  `queryInterface` し、seam 不在は defined `Unsupported`、seam 呼出の
+  非 `kResultOk` は `PluginFailed` に写す（`kNoInterface` と verb 拒否を
+  分離）。
+- 契約は duplicated-by-contract: fixture cdylib は adapter crate に依存
+  できないため `crates/ruviform-plugin-vst3/src/editor_ops.rs` と
+  `crates/ruviform-plugin-test-vst3/src/editor_ops.rs` に同一 layout を
+  複写し、相互参照コメントで byte-identical 維持を義務化（fixture 側は
+  `Construct`/`make_vtbl` を常時、adapter 側は `#[cfg(test)]` で実装）。
+- verb 写像: `Editor` → `onFocus(1)`（`set_gui_focus(true)` と同一行先）、
+  `EditorElement{n}` → seam `apply_focus(n, 1)` —— element は plugin 内部
+  解釈の delivery 意味論（OS focus claim ではない）、`HostWindow` →
+  attach 時保存の container HWND へ実 `SetFocus` + `onFocus(0)` 通知。
+  `HostWindow` は Windows のみ —— adapter crate は `windows-sys` を持たず、
+  `user32` `SetFocus`/`GetFocus` の bare `#[link]` extern（`GetFocus`
+  oracle で検証。`SetFocus` 戻り値は成功時も null を返し得るため証跡に
+  ならない）を採り、off-Windows は defined `Unsupported`。
+- `GuiPopupKind` の kind code は wire layout（`ChildWindow`=0・
+  `Dialog`=1）と同一値。`Dialog` は既存 `VK_P` toggle の `WS_POPUP`
+  surface を共有し `po:{seq}`/`pc:{seq}`、`ChildWindow` は新規の
+  editor child 配下 `WS_CHILD` surface で `co:{seq}`/`cc:{seq}` を刻む
+  —— いずれも explicit-state・冪等（現状態と同じ要求は `kResultOk` で
+  token 不記録）で、未知 kind は `kInvalidArgument`（adapter 側では
+  `#[non_exhaustive]` 未知 variant は `InvalidValue` に分離済み）。
+- fixture の `Editor` target は推奨案どおり実 `SetFocus(child)` まで上げる
+  —— `GetFocus` oracle が実 OS focus を観測する。`Dialog` kind は
+  modeless top-level のみで modal pump は含めない（open questions の推奨
+  案どおり確定）。
+- 観測 token は全て editor child HWND title の event log
+  （`rvf-test-editor-attach-{n}|{ev},{ev},…`）へ記録 —— fixture に他の
+  観測出力がないため `GetWindowTextW` 経路を共有する。
+- 検証: adapter は `ComWrapper` 偽装 view（seam 有/無/拒否の 3 種）で
+  verb 写像・`Unsupported`/`PluginFailed` 写像を headless に証明、
+  fixture は seam QI/token/teardown の unit test を持つ。Windows real-HWND
+  lane は `#[ignore]` 2 本 —— `editor_view.rs` の
+  `seam_verbs_drive_real_windows`（実 child/popup surface + `GetFocus`
+  oracle）と `tests/host_path.rs` の
+  `editor_verbs_drive_real_windows_through_bridge`（production bridge
+  `open_gui` → 全 verb → title token + `EnumChildWindows`/`EnumWindows`/
+  `GetFocus` oracle の end-to-end）—— ローカル Windows session で双方
+  pass 済み。
