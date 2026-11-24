@@ -101,10 +101,11 @@ mod video_plugin;
 pub mod wire;
 
 pub use boundary::{
-    DirtyNotice, DirtyNoticeQueue, FailureCause, GuiFocusTarget, GuiHandle, GuiKeyDirection,
-    GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiRequest, GuiRequestRefusal, GuiRequestVerdict,
-    GuiSize, HostError, MAX_DIRTY_EDITS, ParentLease, ParentSlotLease, PluginEditorSessionId,
-    PluginHandle,
+    ClearAspects, DirtyNotice, DirtyNoticeQueue, FailureCause, GuiFocusTarget, GuiHandle,
+    GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiRequest, GuiRequestRefusal,
+    GuiRequestVerdict, GuiSize, HostError, MAX_DIRTY_EDITS, MAX_PARAM_NOTICES, ParamNotice,
+    ParamNoticeQueue, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    PresetLocation, RescanAspects,
 };
 pub use bus::{BusDescriptor, BusDirection, BusRole};
 pub use descriptor::{PluginDescriptor, PluginDescriptorView};

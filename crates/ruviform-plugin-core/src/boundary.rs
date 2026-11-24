@@ -560,6 +560,17 @@ pub enum DirtyNotice {
         /// The plugin-reported normalized value.
         value: ParamValue,
     },
+    /// `ParamEdited` payloads the queue dropped at its capacity bound
+    /// since the previous drain — wire v9 (Issue #912), the
+    /// consumer-facing form of [`DirtyNoticeQueue::dropped_edits`].
+    /// Synthesized by [`DirtyNoticeQueue::drain`] ahead of the
+    /// surviving backlog (the dropped edits preceded it — drop-oldest
+    /// is the bound's contract); plugins and adapters never enqueue
+    /// this variant directly.
+    DroppedEdits {
+        /// How many edits were dropped since the last drain.
+        count: u32,
+    },
 }
 
 /// The canonical bounded pending store for [`DirtyNotice`]s — the
@@ -594,6 +605,10 @@ pub struct DirtyNoticeQueue {
     /// `ParamEdited` payloads dropped at the [`MAX_DIRTY_EDITS`]
     /// bound — cumulative back-pressure counter.
     dropped_edits: usize,
+    /// Drops since the last [`Self::drain`] — drained as one
+    /// [`DirtyNotice::DroppedEdits`] ahead of the surviving backlog,
+    /// then reset.
+    pending_dropped_edits: usize,
 }
 
 impl DirtyNoticeQueue {
@@ -608,7 +623,9 @@ impl DirtyNoticeQueue {
     /// Enqueues one notice per the defined coalescing contract (see
     /// the type docs): flag variants update the latch;
     /// `ParamEdited` appends to the bounded backlog (dropping the
-    /// oldest past [`MAX_DIRTY_EDITS`]) and latches dirty.
+    /// oldest past [`MAX_DIRTY_EDITS`]) and latches dirty; a
+    /// directly-enqueued `DroppedEdits` folds into the pending drop
+    /// count (the queue normally synthesizes it at drain time).
     ///
     /// **RT contract:** non-RT only — bounded `VecDeque` push.
     pub fn enqueue(&mut self, notice: DirtyNotice) {
@@ -619,19 +636,31 @@ impl DirtyNoticeQueue {
                 if self.edits.len() >= MAX_DIRTY_EDITS {
                     self.edits.pop_front();
                     self.dropped_edits += 1;
+                    self.pending_dropped_edits += 1;
                 }
                 self.edits.push_back((param_id, value));
                 self.flag = Some(true);
             }
+            DirtyNotice::DroppedEdits { count } => {
+                self.pending_dropped_edits += usize::try_from(count).unwrap_or(usize::MAX);
+            }
         }
     }
 
-    /// Moves the pending notices into `out` — the edit backlog first
-    /// (oldest first), then the latched flag edge when set. A second
-    /// drain without an intervening `enqueue` yields nothing.
+    /// Moves the pending notices into `out` — a
+    /// [`DirtyNotice::DroppedEdits`] first when drops happened since
+    /// the last drain (the dropped edits preceded the surviving
+    /// backlog), then the edit backlog (oldest first), then the
+    /// latched flag edge when set. A second drain without an
+    /// intervening `enqueue` yields nothing.
     ///
     /// **RT contract:** non-RT only — the `out` append may allocate.
     pub fn drain(&mut self, out: &mut Vec<DirtyNotice>) {
+        if self.pending_dropped_edits > 0 {
+            let count = u32::try_from(self.pending_dropped_edits).unwrap_or(u32::MAX);
+            out.push(DirtyNotice::DroppedEdits { count });
+            self.pending_dropped_edits = 0;
+        }
         out.extend(
             self.edits
                 .drain(..)
@@ -655,12 +684,386 @@ impl DirtyNoticeQueue {
         self.dropped_edits
     }
 
-    /// Whether nothing is pending — no latched flag and no backlog.
+    /// Whether nothing is pending — no latched flag, no backlog and
+    /// no unreported drops.
     ///
     /// **RT contract:** RT-suitable — pure read.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.flag.is_none() && self.edits.is_empty()
+        self.flag.is_none() && self.edits.is_empty() && self.pending_dropped_edits == 0
+    }
+}
+
+/// Bounded capacity of one [`ParamNoticeQueue`]'s backlog (Issue
+/// #912). Unlike [`DirtyNoticeQueue`]'s flag latch, a param notice
+/// is an *occurrence* — automation recording needs the ordered
+/// stream — so nothing coalesces and the whole backlog shares one
+/// bound. A full backlog drops the *oldest* notice: the newest
+/// report is the freshest parameter state (the drop is counted in
+/// [`ParamNoticeQueue::dropped_notices`] and surfaces on the drain
+/// as [`ParamNotice::Dropped`]).
+pub const MAX_PARAM_NOTICES: usize = 256;
+
+/// The aspect bitset of [`ParamNotice::RescanRequested`] — the
+/// neutral union of CLAP `clap_param_rescan_flags`
+/// (`VALUES`/`INFO`/`TEXT`/`ALL`) and VST3 `RestartFlags`
+/// (`kParamValuesChanged`, `kParamTitlesChanged`, `kReloadComponent`,
+/// `kIoChanged`, `kLatencyChanged`, `kMidiCCAssignmentChanged`,
+/// `kKeyswitchChanged`), mapped onto shared meanings.
+///
+/// Source bits with no neutral mapping collapse into [`Self::OTHER`]
+/// — an honest lossy terminal: the surface carries *that* something
+/// else was requested, not which unknown bit (the adapter still
+/// refuses fulfillment of anything it cannot serve; see the Issue
+/// #912 design record).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct RescanAspects(u32);
+
+impl RescanAspects {
+    /// Parameter values changed — CLAP `CLAP_PARAM_RESCAN_VALUES`,
+    /// VST3 `kParamValuesChanged`.
+    pub const VALUES: Self = Self(1 << 0);
+    /// Parameter metadata changed (name, module, titles) — CLAP
+    /// `CLAP_PARAM_RESCAN_INFO`, VST3 `kParamTitlesChanged`.
+    pub const INFO: Self = Self(1 << 1);
+    /// The value↔text conversion changed — CLAP
+    /// `CLAP_PARAM_RESCAN_TEXT`.
+    pub const TEXT: Self = Self(1 << 2);
+    /// Everything the host knows is invalidated — CLAP
+    /// `CLAP_PARAM_RESCAN_ALL`.
+    pub const ALL: Self = Self(1 << 3);
+    /// The plugin asks for a component reload — VST3
+    /// `kReloadComponent`.
+    pub const RELOAD: Self = Self(1 << 4);
+    /// The plugin's bus/IO configuration changed — VST3
+    /// `kIoChanged`.
+    pub const IO: Self = Self(1 << 5);
+    /// The plugin's latency changed — VST3 `kLatencyChanged`.
+    pub const LATENCY: Self = Self(1 << 6);
+    /// The plugin's MIDI-CC mapping changed — VST3
+    /// `kMidiCCAssignmentChanged`.
+    pub const MIDI_CC: Self = Self(1 << 7);
+    /// The plugin's keyswitch mapping changed — VST3
+    /// `kKeyswitchChanged`.
+    pub const KEYSWITCH: Self = Self(1 << 8);
+    /// Presence flag for source bits with no neutral mapping — the
+    /// honest lossy terminal (see the type docs).
+    pub const OTHER: Self = Self(1 << 31);
+
+    /// An aspect set from raw neutral bits — bits outside the named
+    /// vocabulary are retained verbatim (the wire layer carries them;
+    /// consumers test with [`Self::contains`]).
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn from_bits_retain(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw neutral bitset.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// Whether every aspect in `flag` is present.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn contains(self, flag: Self) -> bool {
+        self.0 & flag.0 == flag.0
+    }
+
+    /// Whether no aspect is set.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+/// The aspect bitset of [`ParamNotice::ClearReferences`] — the
+/// neutral form of CLAP `clap_param_clear_flags`: which host-side
+/// references to a parameter the plugin asks the host to drop.
+/// Unmapped source bits collapse into [`Self::OTHER`] like
+/// [`RescanAspects`].
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ClearAspects(u32);
+
+impl ClearAspects {
+    /// Clear the host's recorded automation for the parameter —
+    /// CLAP `CLAP_PARAM_CLEAR_AUTOMATIONS`.
+    pub const AUTOMATION: Self = Self(1 << 0);
+    /// Clear the host's modulation state for the parameter —
+    /// CLAP `CLAP_PARAM_CLEAR_MODULATIONS`.
+    pub const MODULATION: Self = Self(1 << 1);
+    /// Presence flag for source bits with no neutral mapping.
+    pub const OTHER: Self = Self(1 << 31);
+
+    /// An aspect set from raw neutral bits.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn from_bits_retain(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    /// The raw neutral bitset.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// Whether every aspect in `flag` is present.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn contains(self, flag: Self) -> bool {
+        self.0 & flag.0 == flag.0
+    }
+
+    /// Whether no aspect is set.
+    ///
+    /// **RT contract:** RT-suitable — `const`, pure.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+/// Where a loaded preset lives — the neutral form of CLAP
+/// `clap_preset_discovery_location` (`CLAP_PRESET_DISCOVERY_LOCATION_*`).
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new location kinds may be added without breaking
+/// downstream `match` arms.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PresetLocation {
+    /// The preset ships inside the plugin's own entry file —
+    /// `CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN`.
+    Plugin,
+    /// A filesystem file or directory —
+    /// `CLAP_PRESET_DISCOVERY_LOCATION_FILE`. The path is truncated
+    /// to `WIRE_MAX_STRING_BYTES` at the adapter boundary (the wire
+    /// decode bound); a truncated path still identifies the file.
+    File {
+        /// The preset file or directory path.
+        path: String,
+    },
+}
+
+/// One plugin→host parameter-domain notification — the neutral
+/// vocabulary every format's parameter-observation signal maps onto
+/// (VST3 `IComponentHandler` `performEdit`/`beginEdit`/`endEdit`/
+/// `restartComponent`, CLAP `clap_host_params`
+/// `rescan`/`clear`/`request_flush`, CLAP `clap_host_preset_load`
+/// `loaded`/`on_error`, CLAP `PARAM_GESTURE_*` output events).
+///
+/// Carried by the pull drain
+/// [`Plugin::drain_param_notices`](crate::Plugin::drain_param_notices)
+/// (wire v9, Issue #912). Like [`DirtyNotice`], never a
+/// `HostCommand` and never an [`crate::Event`]: these notifications
+/// fire on the main-thread/lifecycle side with no meaningful frame
+/// offset, while the `Event` stream stays the sample-accurate
+/// process-path vocabulary — CLAP `PARAM_VALUE` output events keep
+/// riding `EventKind::ParamValue`; nothing is duplicated onto both
+/// surfaces.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** non-RT only — the preset variants own `String`s.
+/// An RT-side producer (CLAP output-event translation) may enqueue
+/// the `Copy`-shaped variants into a reserved-capacity `Vec`, never
+/// into the shared queue behind a lock.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ParamNotice {
+    /// A plugin-originated parameter value report — VST3
+    /// `performEdit(id, value_normalized)`: the value the plugin
+    /// wants the host to observe (its own UI edit, applied internal
+    /// state). Non-finite values never reach the neutral surface —
+    /// the adapter skips them (the dirty surface's `StateDirty`
+    /// degrade still covers "something changed").
+    ValueChanged {
+        /// The edited parameter.
+        param_id: ParamId,
+        /// The plugin-reported normalized value.
+        value: ParamValue,
+    },
+    /// A gesture begin — the plugin started a parameter touch
+    /// (VST3 `beginEdit`, CLAP `PARAM_GESTURE_BEGIN`). Automation
+    /// recorders bracket a recorded run with these edges.
+    GestureBegin {
+        /// The touched parameter.
+        param_id: ParamId,
+        /// The sample offset inside the producing block when the
+        /// notice arrived through the process output stream (CLAP);
+        /// `None` for main-thread arrivals (VST3) — "no offset" is
+        /// never collapsed onto `0`.
+        frame_offset: Option<u32>,
+    },
+    /// A gesture end — VST3 `endEdit`, CLAP `PARAM_GESTURE_END`.
+    GestureEnd {
+        /// The released parameter.
+        param_id: ParamId,
+        /// The sample offset inside the producing block (CLAP);
+        /// `None` for main-thread arrivals (VST3).
+        frame_offset: Option<u32>,
+    },
+    /// The plugin asks the host to re-read or reload something —
+    /// CLAP `clap_host_params.rescan(flags)`, VST3
+    /// `restartComponent(flags)` (every call is delivered, including
+    /// composite flag sets; delivery is not fulfillment — the
+    /// adapter still refuses what it cannot serve, so the notice is
+    /// the honest record of the request).
+    RescanRequested {
+        /// What the plugin asks to be re-read or reloaded.
+        aspects: RescanAspects,
+    },
+    /// The plugin asks the host to drop its references to a
+    /// parameter — CLAP `clap_host_params.clear(param_id, flags)`
+    /// (recorded automation/modulation the plugin wants gone).
+    ClearReferences {
+        /// The parameter whose references should be cleared.
+        param_id: ParamId,
+        /// Which references to clear.
+        aspects: ClearAspects,
+    },
+    /// The plugin asks the host to run a parameter flush — CLAP
+    /// `clap_host_params.request_flush` ([thread-safe], any thread).
+    /// The bridge owns no flush verb, so the request is delivered as
+    /// a notification only — a consumer may answer it by draining
+    /// the report surfaces.
+    FlushRequested,
+    /// A preset finished loading — CLAP
+    /// `clap_host_preset_load.loaded`. Parameter values may have
+    /// changed wholesale; consumers re-read the value surface (the
+    /// companion `RescanRequested` the plugin issues covers the
+    /// re-read intent).
+    PresetLoaded {
+        /// Where the preset was loaded from.
+        location: PresetLocation,
+        /// The plugin's preset key within the location, when it
+        /// reported one.
+        load_key: Option<String>,
+    },
+    /// A preset load failed — CLAP `clap_host_preset_load.on_error`.
+    PresetLoadFailed {
+        /// Where the failed preset was loaded from.
+        location: PresetLocation,
+        /// The preset key, when reported.
+        load_key: Option<String>,
+        /// The OS error code the plugin reported (`0` when it had
+        /// none).
+        os_error: i32,
+        /// The plugin's failure message, when it gave one
+        /// (adapter-truncated to the wire string bound).
+        message: Option<String>,
+    },
+    /// Notices the queue dropped at [`MAX_PARAM_NOTICES`] since the
+    /// previous drain — synthesized by [`ParamNoticeQueue::drain`]
+    /// ahead of the surviving backlog (the dropped notices preceded
+    /// it). Plugins and adapters never enqueue this variant
+    /// directly; a directly-enqueued one folds into the pending
+    /// count.
+    Dropped {
+        /// How many notices were dropped since the last drain.
+        count: u32,
+    },
+}
+
+/// The canonical bounded pending store for [`ParamNotice`]s — the
+/// param-domain counterpart of [`DirtyNoticeQueue`].
+///
+/// The contract is a plain FIFO bounded by [`MAX_PARAM_NOTICES`]:
+/// no coalescing, because every notice is an occurrence a consumer
+/// records (gesture edges and value reports lose their meaning when
+/// collapsed). A full backlog drops the oldest notice and counts it;
+/// the count surfaces on the next [`Self::drain`] as one
+/// [`ParamNotice::Dropped`] ahead of the survivors.
+///
+/// **RT contract:** non-RT only — the `out` append may allocate and
+/// notice payloads may own `String`s. RT-side producers use a
+/// reserved-capacity `Vec` (see the enum docs).
+#[derive(Debug, Default)]
+pub struct ParamNoticeQueue {
+    /// FIFO backlog, oldest first.
+    notices: VecDeque<ParamNotice>,
+    /// Notices dropped at the [`MAX_PARAM_NOTICES`] bound —
+    /// cumulative back-pressure counter.
+    dropped_notices: usize,
+    /// Drops since the last [`Self::drain`] — drained as one
+    /// [`ParamNotice::Dropped`] ahead of the surviving backlog, then
+    /// reset.
+    pending_dropped: usize,
+}
+
+impl ParamNoticeQueue {
+    /// An empty queue.
+    ///
+    /// **RT contract:** non-RT only — allocates no storage yet.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Appends one notice to the bounded backlog, dropping the
+    /// oldest past [`MAX_PARAM_NOTICES`]. A directly-enqueued
+    /// `Dropped` folds into the pending drop count.
+    ///
+    /// **RT contract:** non-RT only — bounded `VecDeque` push.
+    pub fn enqueue(&mut self, notice: ParamNotice) {
+        if let ParamNotice::Dropped { count } = notice {
+            self.pending_dropped += usize::try_from(count).unwrap_or(usize::MAX);
+            return;
+        }
+        if self.notices.len() >= MAX_PARAM_NOTICES {
+            self.notices.pop_front();
+            self.dropped_notices += 1;
+            self.pending_dropped += 1;
+        }
+        self.notices.push_back(notice);
+    }
+
+    /// Moves the pending notices into `out` — a
+    /// [`ParamNotice::Dropped`] first when drops happened since the
+    /// last drain, then the backlog oldest-first. A second drain
+    /// without an intervening `enqueue` yields nothing.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    pub fn drain(&mut self, out: &mut Vec<ParamNotice>) {
+        if self.pending_dropped > 0 {
+            let count = u32::try_from(self.pending_dropped).unwrap_or(u32::MAX);
+            out.push(ParamNotice::Dropped { count });
+            self.pending_dropped = 0;
+        }
+        out.extend(self.notices.drain(..));
+    }
+
+    /// Notices dropped at the capacity bound so far — the
+    /// back-pressure counter consumers surface for observability.
+    ///
+    /// **RT contract:** RT-suitable — pure read.
+    #[must_use]
+    pub fn dropped_notices(&self) -> usize {
+        self.dropped_notices
+    }
+
+    /// Whether nothing is pending — no backlog and no unreported
+    /// drops.
+    ///
+    /// **RT contract:** RT-suitable — pure read.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.notices.is_empty() && self.pending_dropped == 0
     }
 }
 
@@ -947,7 +1350,9 @@ mod tests {
     }
 
     /// Past `MAX_DIRTY_EDITS` the oldest edit drops — the newest is
-    /// the freshest parameter state — and the drop is counted.
+    /// the freshest parameter state — and the drop is counted and
+    /// surfaced as one `DroppedEdits` ahead of the surviving
+    /// backlog (wire v9, Issue #912).
     #[test]
     fn edit_overflow_drops_oldest_and_counts() {
         let mut queue = DirtyNoticeQueue::new();
@@ -961,15 +1366,136 @@ mod tests {
         assert_eq!(queue.dropped_edits(), 2);
         let mut out = Vec::new();
         queue.drain(&mut out);
-        assert_eq!(out.len(), MAX_DIRTY_EDITS + 1); // edits + flag
-        // Ids 0 and 1 dropped; the backlog starts at id 2.
+        // DroppedEdits + surviving edits + flag; a second drain is
+        // empty because the drop report resets.
+        assert_eq!(out.len(), MAX_DIRTY_EDITS + 2);
+        assert_eq!(out[0], DirtyNotice::DroppedEdits { count: 2 });
         assert_eq!(
-            out[0],
+            out[1],
             DirtyNotice::ParamEdited {
                 param_id: ParamId(2),
                 value,
             }
         );
-        assert_eq!(out[MAX_DIRTY_EDITS], DirtyNotice::StateDirty);
+        assert_eq!(out[MAX_DIRTY_EDITS + 1], DirtyNotice::StateDirty);
+        out.clear();
+        queue.drain(&mut out);
+        assert_eq!(out, []);
+    }
+
+    /// A directly-enqueued `DroppedEdits` folds into the pending
+    /// count and drains as one merged report.
+    #[test]
+    fn enqueued_dropped_edits_folds_into_pending() {
+        let mut queue = DirtyNoticeQueue::new();
+        queue.enqueue(DirtyNotice::DroppedEdits { count: 3 });
+        assert!(!queue.is_empty());
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out, [DirtyNotice::DroppedEdits { count: 3 }]);
+        assert!(queue.is_empty());
+    }
+
+    /// The param-notice FIFO preserves occurrence order — no
+    /// coalescing, unlike the dirty flag latch.
+    #[test]
+    fn param_notices_drain_in_occurrence_order() {
+        let mut queue = ParamNoticeQueue::new();
+        queue.enqueue(ParamNotice::GestureBegin {
+            param_id: ParamId(1),
+            frame_offset: None,
+        });
+        queue.enqueue(ParamNotice::ValueChanged {
+            param_id: ParamId(1),
+            value: ParamValue::new(0.5).unwrap(),
+        });
+        queue.enqueue(ParamNotice::GestureEnd {
+            param_id: ParamId(1),
+            frame_offset: Some(12),
+        });
+        queue.enqueue(ParamNotice::RescanRequested {
+            aspects: RescanAspects::VALUES,
+        });
+        assert!(!queue.is_empty());
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(
+            out,
+            [
+                ParamNotice::GestureBegin {
+                    param_id: ParamId(1),
+                    frame_offset: None,
+                },
+                ParamNotice::ValueChanged {
+                    param_id: ParamId(1),
+                    value: ParamValue::new(0.5).unwrap(),
+                },
+                ParamNotice::GestureEnd {
+                    param_id: ParamId(1),
+                    frame_offset: Some(12),
+                },
+                ParamNotice::RescanRequested {
+                    aspects: RescanAspects::VALUES,
+                },
+            ]
+        );
+        assert!(queue.is_empty());
+    }
+
+    /// Past `MAX_PARAM_NOTICES` the oldest notice drops and the
+    /// count surfaces as one `Dropped` ahead of the survivors.
+    #[test]
+    fn param_notice_overflow_drops_oldest_and_counts() {
+        let mut queue = ParamNoticeQueue::new();
+        for id in 0..(MAX_PARAM_NOTICES + 2) {
+            queue.enqueue(ParamNotice::ValueChanged {
+                param_id: ParamId(u32::try_from(id).unwrap()),
+                value: ParamValue::new(0.5).unwrap(),
+            });
+        }
+        assert_eq!(queue.dropped_notices(), 2);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out.len(), MAX_PARAM_NOTICES + 1); // Dropped + survivors
+        assert_eq!(out[0], ParamNotice::Dropped { count: 2 });
+        assert_eq!(
+            out[1],
+            ParamNotice::ValueChanged {
+                param_id: ParamId(2),
+                value: ParamValue::new(0.5).unwrap(),
+            }
+        );
+        out.clear();
+        queue.drain(&mut out);
+        assert_eq!(out, []);
+    }
+
+    /// A directly-enqueued `Dropped` folds into the pending count —
+    /// it never lands in the backlog itself.
+    #[test]
+    fn enqueued_dropped_folds_into_pending() {
+        let mut queue = ParamNoticeQueue::new();
+        queue.enqueue(ParamNotice::Dropped { count: 5 });
+        assert!(!queue.is_empty());
+        assert_eq!(queue.dropped_notices(), 0);
+        let mut out = Vec::new();
+        queue.drain(&mut out);
+        assert_eq!(out, [ParamNotice::Dropped { count: 5 }]);
+        assert!(queue.is_empty());
+    }
+
+    /// Aspect bitsets retain unknown bits and report the named ones.
+    #[test]
+    fn aspect_bitsets_retain_and_test() {
+        let aspects = RescanAspects::from_bits_retain(
+            RescanAspects::VALUES.bits() | RescanAspects::LATENCY.bits() | (1 << 20),
+        );
+        assert!(aspects.contains(RescanAspects::VALUES));
+        assert!(aspects.contains(RescanAspects::LATENCY));
+        assert!(!aspects.contains(RescanAspects::INFO));
+        assert!(!aspects.is_empty());
+        assert_eq!(aspects.bits() & (1 << 20), 1 << 20);
+        assert!(ClearAspects::default().is_empty());
+        assert!(ClearAspects::AUTOMATION.contains(ClearAspects::AUTOMATION));
     }
 }

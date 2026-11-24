@@ -99,11 +99,12 @@ use ruviform_video_core::{
 };
 
 use crate::{
-    DirtyNotice, Event, EventKind, EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection,
-    GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiSize, HostError, LifecycleError, LifecycleEvent,
-    LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned,
-    PlainParamValue, PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult,
-    ProcessStatus, TransportInfo, VideoProcessConfig,
+    ClearAspects, DirtyNotice, Event, EventKind, EventList, GuiFocusTarget, GuiHandle,
+    GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiSize, HostError, LifecycleError,
+    LifecycleEvent, LifecycleState, ParamEvent, ParamFlags, ParamId, ParamNotice, ParamValue,
+    ParentLease, PlainParamInfoOwned, PlainParamValue, PluginDescriptor, PluginHandle,
+    PrepareError, PresetLocation, ProcessConfig, ProcessResult, ProcessStatus, RescanAspects,
+    TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
@@ -136,7 +137,13 @@ use crate::{
 /// [`Command::SetGuiFocusTarget`] (tag 29) and
 /// [`Command::SetGuiPopup`] (tag 30) are additive on top of the v7
 /// tags, which are unchanged.
-pub const WIRE_VERSION: u16 = 8;
+/// `9` is the Issue #912 param-notification revision —
+/// [`Command::DrainParamNotices`] (tag 31) and
+/// [`Reply::ParamNotices`] (tag 10) are additive on top of the v8
+/// tags, which are unchanged; the v9 [`DirtyNotice`] codec also
+/// assigns tag 3 to `DroppedEdits` — additive inside a payload that
+/// is itself versioned by this bump.
+pub const WIRE_VERSION: u16 = 9;
 
 /// `Hello.capabilities` bit 0 — the child advertises it implements
 /// the GUI floating verb family ([`Command::OpenGui`],
@@ -169,6 +176,12 @@ pub const WIRE_MAX_EVENTS: u32 = 1_024;
 /// [`WIRE_MAX_EVENTS`]; a larger backlog is chunked child-side across
 /// successive drains.
 pub const WIRE_MAX_DIRTY_NOTICES: u32 = 1_024;
+
+/// Maximum number of [`ParamNotice`]s in one
+/// [`Reply::ParamNotices`] payload (wire v9, Issue #912) — same
+/// bounded-reply contract as [`WIRE_MAX_DIRTY_NOTICES`]; a larger
+/// backlog is chunked child-side across successive drains.
+pub const WIRE_MAX_PARAM_NOTICES: u32 = 1_024;
 
 /// Maximum `payload_len` a frame may declare — larger declarations
 /// are [`WireError::LimitExceeded`] and never allocate.
@@ -966,6 +979,18 @@ pub enum Command {
         /// value is [`WireError::Malformed`] on decode.
         open: u8,
     },
+    /// `Plugin::drain_param_notices` — wire tag 31, the wire-v9
+    /// (Issue #912) param-notification pull verb →
+    /// [`Reply::ParamNotices`]. Pulls the [`ParamNotice`]s the plugin
+    /// queued since the previous drain — the same since-last-drain
+    /// pull semantics as [`Command::DrainDirtyNotices`], over the
+    /// occurrence-ordered parameter vocabulary instead of the
+    /// coalesced flag-style one. Instance-scoped and
+    /// lifecycle-ungated like the other drains (the pending queue is
+    /// plugin state). One reply carries at most
+    /// [`WIRE_MAX_PARAM_NOTICES`] notices; a larger backlog is
+    /// chunked child-side across successive drains.
+    DrainParamNotices,
 }
 
 /// The reply payload of a successful wire [`Command`].
@@ -973,7 +998,9 @@ pub enum Command {
 /// The enum is `#[non_exhaustive]` per the unified public-enum API
 /// policy — new replies arrive only with a [`WIRE_VERSION`] bump.
 /// Tags 4-7 are the wire-v3 (Issue #118) video replies; tag 8 is the
-/// wire-v4 (Issue #253) [`Reply::Reports`]. It is `PartialEq` but
+/// wire-v4 (Issue #253) [`Reply::Reports`], tag 9 the wire-v7
+/// (Issue #891) [`Reply::DirtyNotices`], tag 10 the wire-v9
+/// (Issue #912) [`Reply::ParamNotices`]. It is `PartialEq` but
 /// not `Eq`: [`PlainParamValue`] contains an `f64`.
 ///
 /// **RT contract:** non-RT only.
@@ -1049,6 +1076,17 @@ pub enum Reply {
     DirtyNotices {
         /// Drained notices, in drain order.
         notices: Vec<DirtyNotice>,
+    },
+    /// `DrainParamNotices` result — wire tag 10, the wire-v9
+    /// (Issue #912) param-notification reply. The [`ParamNotice`]s
+    /// the plugin produced since the previous drain, in the queue's
+    /// drain order (a synthesized `Dropped` first when the backlog
+    /// overflowed, then occurrences oldest-first). At most
+    /// [`WIRE_MAX_PARAM_NOTICES`] notices per reply; an empty list
+    /// is the defined "nothing pending" answer.
+    ParamNotices {
+        /// Drained notices, in drain order.
+        notices: Vec<ParamNotice>,
     },
 }
 
@@ -1845,6 +1883,7 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             push_u8(out, encode_gui_popup_kind(*kind));
             push_u8(out, *open);
         }
+        Command::DrainParamNotices => push_u8(out, 31),
     }
     Ok(())
 }
@@ -1955,6 +1994,7 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             kind: decode_gui_popup_kind(reader)?,
             open: decode_u8_flag(reader)?,
         }),
+        31 => Ok(Command::DrainParamNotices),
         _ => Err(WireError::Malformed),
     }
 }
@@ -2030,6 +2070,13 @@ fn encode_reply(reply: &Reply, out: &mut Vec<u8>) -> Result<(), WireError> {
                 encode_dirty_notice(notice, out);
             }
         }
+        Reply::ParamNotices { notices } => {
+            push_u8(out, 10);
+            push_u32(out, len_u32(notices.len()));
+            for notice in notices {
+                encode_param_notice(notice, out);
+            }
+        }
     }
     Ok(())
 }
@@ -2098,6 +2145,16 @@ fn decode_reply(reader: &mut Reader<'_>) -> Result<Reply, WireError> {
                 notices.push(decode_dirty_notice(reader)?);
             }
             Ok(Reply::DirtyNotices { notices })
+        }
+        10 => {
+            // `u32` count + each `ParamNotice` in order — same
+            // bound and chunking contract as tag 9.
+            let count = reader.read_count(WIRE_MAX_PARAM_NOTICES)?;
+            let mut notices = Vec::with_capacity(count as usize);
+            for _ in 0..count {
+                notices.push(decode_param_notice(reader)?);
+            }
+            Ok(Reply::ParamNotices { notices })
         }
         _ => Err(WireError::Malformed),
     }
@@ -2904,7 +2961,9 @@ pub fn decode_event_list(reader: &mut Reader<'_>) -> Result<(u32, Vec<Event>), W
 
 /// Appends one [`DirtyNotice`] — `u8` tag (`0` [`DirtyNotice::StateDirty`],
 /// `1` [`DirtyNotice::StateClean`], `2` [`DirtyNotice::ParamEdited`] +
-/// `u32` param id + `f64` normalized value). Wire v7 (Issue #891).
+/// `u32` param id + `f64` normalized value, `3`
+/// [`DirtyNotice::DroppedEdits`] + `u32` count). Wire v7 (Issue
+/// #891); tag 3 is the wire-v9 (Issue #912) addition.
 pub fn encode_dirty_notice(notice: &DirtyNotice, out: &mut Vec<u8>) {
     match notice {
         DirtyNotice::StateDirty => push_u8(out, 0),
@@ -2913,6 +2972,10 @@ pub fn encode_dirty_notice(notice: &DirtyNotice, out: &mut Vec<u8>) {
             push_u8(out, 2);
             push_u32(out, param_id.0);
             push_f64(out, value.get());
+        }
+        DirtyNotice::DroppedEdits { count } => {
+            push_u8(out, 3);
+            push_u32(out, *count);
         }
     }
 }
@@ -2930,6 +2993,198 @@ pub fn decode_dirty_notice(reader: &mut Reader<'_>) -> Result<DirtyNotice, WireE
         2 => Ok(DirtyNotice::ParamEdited {
             param_id: ParamId(reader.read_u32()?),
             value: ParamValue::new(reader.read_f64()?).map_err(|_| WireError::Malformed)?,
+        }),
+        3 => Ok(DirtyNotice::DroppedEdits {
+            count: reader.read_u32()?,
+        }),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Appends one [`ParamNotice`] — `u8` tag + the variant's payload
+/// (wire v9, Issue #912):
+///
+/// | tag | variant | payload |
+/// | --- | --- | --- |
+/// | 0 | `ValueChanged` | `u32` param id + `f64` value |
+/// | 1 | `GestureBegin` | `u32` param id + strict `{0,1}` `has_offset` + `u32` when `1` |
+/// | 2 | `GestureEnd` | same as `GestureBegin` |
+/// | 3 | `RescanRequested` | `u32` aspect bits |
+/// | 4 | `ClearReferences` | `u32` param id + `u32` aspect bits |
+/// | 5 | `FlushRequested` | — |
+/// | 6 | `PresetLoaded` | `u8` location kind (`0` plugin / `1` file + string) + optional `load_key` string |
+/// | 7 | `PresetLoadFailed` | location + key + `i32` os error + optional message string |
+/// | 8 | `Dropped` | `u32` count |
+pub fn encode_param_notice(notice: &ParamNotice, out: &mut Vec<u8>) {
+    match notice {
+        ParamNotice::ValueChanged { param_id, value } => {
+            push_u8(out, 0);
+            push_u32(out, param_id.0);
+            push_f64(out, value.get());
+        }
+        ParamNotice::GestureBegin {
+            param_id,
+            frame_offset,
+        }
+        | ParamNotice::GestureEnd {
+            param_id,
+            frame_offset,
+        } => {
+            push_u8(
+                out,
+                if matches!(notice, ParamNotice::GestureBegin { .. }) {
+                    1
+                } else {
+                    2
+                },
+            );
+            push_u32(out, param_id.0);
+            encode_opt_u32(*frame_offset, out);
+        }
+        ParamNotice::RescanRequested { aspects } => {
+            push_u8(out, 3);
+            push_u32(out, aspects.bits());
+        }
+        ParamNotice::ClearReferences { param_id, aspects } => {
+            push_u8(out, 4);
+            push_u32(out, param_id.0);
+            push_u32(out, aspects.bits());
+        }
+        ParamNotice::FlushRequested => push_u8(out, 5),
+        ParamNotice::PresetLoaded { location, load_key } => {
+            push_u8(out, 6);
+            encode_preset_location(location, out);
+            encode_opt_str(load_key.as_deref(), out);
+        }
+        ParamNotice::PresetLoadFailed {
+            location,
+            load_key,
+            os_error,
+            message,
+        } => {
+            push_u8(out, 7);
+            encode_preset_location(location, out);
+            encode_opt_str(load_key.as_deref(), out);
+            push_i32(out, *os_error);
+            encode_opt_str(message.as_deref(), out);
+        }
+        ParamNotice::Dropped { count } => {
+            push_u8(out, 8);
+            push_u32(out, *count);
+        }
+    }
+}
+
+/// Appends an `Option<u32>` as strict `{0,1}` `u8` + the `u32` when
+/// `Some` — the optional-field shape the param-notice codec uses.
+fn encode_opt_u32(value: Option<u32>, out: &mut Vec<u8>) {
+    match value {
+        None => push_u8(out, 0),
+        Some(value) => {
+            push_u8(out, 1);
+            push_u32(out, value);
+        }
+    }
+}
+
+/// Appends an optional string as strict `{0,1}` `u8` + the
+/// length-prefixed bytes when `Some`.
+fn encode_opt_str(value: Option<&str>, out: &mut Vec<u8>) {
+    match value {
+        None => push_u8(out, 0),
+        Some(value) => {
+            push_u8(out, 1);
+            push_str(out, value);
+        }
+    }
+}
+
+/// Appends a [`PresetLocation`] — `u8` kind (`0` [`PresetLocation::Plugin`],
+/// `1` [`PresetLocation::File`] + string path).
+fn encode_preset_location(location: &PresetLocation, out: &mut Vec<u8>) {
+    match location {
+        PresetLocation::Plugin => push_u8(out, 0),
+        PresetLocation::File { path } => {
+            push_u8(out, 1);
+            push_str(out, path);
+        }
+    }
+}
+
+/// Reads one [`ParamNotice`].
+///
+/// # Errors
+///
+/// [`WireError`] — truncated, an unassigned tag, a `ValueChanged`
+/// value `ParamValue::new` rejects (non-finite), a flag byte outside
+/// strict `{0,1}`, an unassigned location kind, or a string over
+/// [`WIRE_MAX_STRING_BYTES`].
+pub fn decode_param_notice(reader: &mut Reader<'_>) -> Result<ParamNotice, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(ParamNotice::ValueChanged {
+            param_id: ParamId(reader.read_u32()?),
+            value: ParamValue::new(reader.read_f64()?).map_err(|_| WireError::Malformed)?,
+        }),
+        1 => Ok(ParamNotice::GestureBegin {
+            param_id: ParamId(reader.read_u32()?),
+            frame_offset: decode_opt_u32(reader)?,
+        }),
+        2 => Ok(ParamNotice::GestureEnd {
+            param_id: ParamId(reader.read_u32()?),
+            frame_offset: decode_opt_u32(reader)?,
+        }),
+        3 => Ok(ParamNotice::RescanRequested {
+            aspects: RescanAspects::from_bits_retain(reader.read_u32()?),
+        }),
+        4 => Ok(ParamNotice::ClearReferences {
+            param_id: ParamId(reader.read_u32()?),
+            aspects: ClearAspects::from_bits_retain(reader.read_u32()?),
+        }),
+        5 => Ok(ParamNotice::FlushRequested),
+        6 => Ok(ParamNotice::PresetLoaded {
+            location: decode_preset_location(reader)?,
+            load_key: decode_opt_string(reader)?,
+        }),
+        7 => Ok(ParamNotice::PresetLoadFailed {
+            location: decode_preset_location(reader)?,
+            load_key: decode_opt_string(reader)?,
+            os_error: reader.read_i32()?,
+            message: decode_opt_string(reader)?,
+        }),
+        8 => Ok(ParamNotice::Dropped {
+            count: reader.read_u32()?,
+        }),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Reads an `Option<u32>` — the strict `{0,1}` flag + `u32` shape
+/// [`encode_opt_u32`] writes; any other flag byte is
+/// [`WireError::Malformed`].
+fn decode_opt_u32(reader: &mut Reader<'_>) -> Result<Option<u32>, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(reader.read_u32()?)),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Reads an optional bounded string — the [`encode_opt_str`] shape.
+fn decode_opt_string(reader: &mut Reader<'_>) -> Result<Option<String>, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(None),
+        1 => Ok(Some(reader.read_string()?)),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// Reads a [`PresetLocation`] — an unassigned kind byte is
+/// [`WireError::Malformed`].
+fn decode_preset_location(reader: &mut Reader<'_>) -> Result<PresetLocation, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(PresetLocation::Plugin),
+        1 => Ok(PresetLocation::File {
+            path: reader.read_string()?,
         }),
         _ => Err(WireError::Malformed),
     }
@@ -3927,6 +4182,9 @@ mod tests {
             // Wire v7 (Issue #891) — the dirty-notification pull
             // verb, instance-scoped like the report drain.
             (Command::DrainDirtyNotices, 0),
+            // Wire v9 (Issue #912) — the param-notification pull
+            // verb, same scope contract.
+            (Command::DrainParamNotices, 0),
             // Wire v6 (Issue #872/#882) — the GUI floating verbs,
             // instance-scoped like every non-`Scan` verb.
             (
@@ -4056,6 +4314,36 @@ mod tests {
                 ],
             },
             Reply::DirtyNotices {
+                notices: Vec::new(),
+            },
+            // Wire v9 (Issue #912) — the param-notification reply,
+            // a representative slice of the variant table plus the
+            // defined empty answer.
+            Reply::ParamNotices {
+                notices: vec![
+                    ParamNotice::Dropped { count: 1 },
+                    ParamNotice::GestureBegin {
+                        param_id: ParamId(0),
+                        frame_offset: None,
+                    },
+                    ParamNotice::ValueChanged {
+                        param_id: ParamId(0),
+                        value: ParamValue::new(0.5).unwrap(),
+                    },
+                    ParamNotice::GestureEnd {
+                        param_id: ParamId(0),
+                        frame_offset: Some(48),
+                    },
+                    ParamNotice::RescanRequested {
+                        aspects: RescanAspects::VALUES,
+                    },
+                    ParamNotice::PresetLoaded {
+                        location: PresetLocation::Plugin,
+                        load_key: Some("init".to_owned()),
+                    },
+                ],
+            },
+            Reply::ParamNotices {
                 notices: Vec::new(),
             },
         ];
@@ -5163,8 +5451,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v8() {
-        assert_eq!(WIRE_VERSION, 8);
+    fn wire_version_is_v9() {
+        assert_eq!(WIRE_VERSION, 9);
     }
 
     #[test]
@@ -5253,14 +5541,15 @@ mod tests {
                 "ParamInfo presence tag {tag} must be rejected",
             );
         }
-        // Reply tags > 9 are outside the vocabulary (tag 8 is the
+        // Reply tags > 10 are outside the vocabulary (tag 8 is the
         // wire-v4 `Reports` payload, tag 9 the wire-v7
-        // `DirtyNotices` payload — both covered above).
+        // `DirtyNotices` payload, tag 10 the wire-v9 `ParamNotices`
+        // payload — all covered above).
         let mut payload = Vec::new();
         push_u64(&mut payload, 1);
         push_u32(&mut payload, 0);
         push_u8(&mut payload, REPLY_OK);
-        push_u8(&mut payload, 10);
+        push_u8(&mut payload, 11);
         assert_eq!(
             decode(&raw_frame(KIND_REPLY, &payload)),
             Err(WireError::Malformed)
@@ -6201,6 +6490,10 @@ mod tests {
                 param_id: ParamId(u32::MAX),
                 value: ParamValue::new(1.0).unwrap(),
             },
+            // Wire v9 (Issue #912) — the queue-synthesized drop
+            // report.
+            DirtyNotice::DroppedEdits { count: 0 },
+            DirtyNotice::DroppedEdits { count: u32::MAX },
         ] {
             assert_eq!(
                 field_roundtrip(&notice, encode_dirty_notice, decode_dirty_notice),
@@ -6208,7 +6501,7 @@ mod tests {
             );
         }
         // Unassigned tags are Malformed.
-        for byte in [3_u8, 0x7F, 0xFF] {
+        for byte in [4_u8, 0x7F, 0xFF] {
             let payload = [byte];
             let mut reader = Reader::new(&payload);
             assert_eq!(
@@ -6245,6 +6538,123 @@ mod tests {
     fn dirty_notices_reply_decode_is_bounded() {
         let mut payload = vec![9_u8];
         push_u32(&mut payload, WIRE_MAX_DIRTY_NOTICES + 1);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_reply(&mut reader), Err(WireError::LimitExceeded));
+    }
+
+    // --- wire v9: param notifications (Issue #912) -----------------
+
+    #[test]
+    fn param_notice_codec() {
+        // Wire v9 (Issue #912): every `ParamNotice` variant
+        // round-trips field-wise.
+        for notice in [
+            ParamNotice::ValueChanged {
+                param_id: ParamId(0),
+                value: ParamValue::new(0.5).unwrap(),
+            },
+            ParamNotice::ValueChanged {
+                param_id: ParamId(u32::MAX),
+                value: ParamValue::new(1.0).unwrap(),
+            },
+            ParamNotice::GestureBegin {
+                param_id: ParamId(2),
+                frame_offset: None,
+            },
+            ParamNotice::GestureBegin {
+                param_id: ParamId(2),
+                frame_offset: Some(0),
+            },
+            ParamNotice::GestureEnd {
+                param_id: ParamId(3),
+                frame_offset: Some(u32::MAX),
+            },
+            ParamNotice::RescanRequested {
+                aspects: RescanAspects::VALUES,
+            },
+            ParamNotice::RescanRequested {
+                aspects: RescanAspects::from_bits_retain(u32::MAX),
+            },
+            ParamNotice::ClearReferences {
+                param_id: ParamId(9),
+                aspects: ClearAspects::AUTOMATION,
+            },
+            ParamNotice::FlushRequested,
+            ParamNotice::PresetLoaded {
+                location: PresetLocation::Plugin,
+                load_key: None,
+            },
+            ParamNotice::PresetLoaded {
+                location: PresetLocation::File {
+                    path: "factory/lead.clap-preset".to_owned(),
+                },
+                load_key: Some("lead-01".to_owned()),
+            },
+            ParamNotice::PresetLoadFailed {
+                location: PresetLocation::File {
+                    path: "missing.clap-preset".to_owned(),
+                },
+                load_key: Some("missing-01".to_owned()),
+                os_error: -2,
+                message: Some("not found".to_owned()),
+            },
+            ParamNotice::Dropped { count: 7 },
+        ] {
+            assert_eq!(
+                field_roundtrip(&notice, encode_param_notice, decode_param_notice),
+                notice
+            );
+        }
+        // Unassigned tags are Malformed.
+        for byte in [9_u8, 0x7F, 0xFF] {
+            let payload = [byte];
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_param_notice(&mut reader),
+                Err(WireError::Malformed),
+                "notice tag {byte} must be rejected",
+            );
+        }
+        // A non-finite `ValueChanged` value is Malformed — the
+        // `ParamValue` domain rule rides the wire.
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut payload = vec![0_u8];
+            push_u32(&mut payload, 7);
+            push_f64(&mut payload, bad);
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_param_notice(&mut reader),
+                Err(WireError::Malformed),
+                "non-finite value {bad} must be rejected",
+            );
+        }
+        // A flag byte outside strict `{0,1}` (the `frame_offset`
+        // present flag) is Malformed.
+        let mut payload = vec![1_u8];
+        push_u32(&mut payload, 2);
+        push_u8(&mut payload, 2);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_param_notice(&mut reader), Err(WireError::Malformed));
+        // An unassigned preset-location kind byte is Malformed.
+        let payload = [6_u8, 9_u8];
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_param_notice(&mut reader), Err(WireError::Malformed));
+        // A notice shorter than its declared shape is Truncated,
+        // not Malformed.
+        let mut payload = vec![0_u8];
+        push_u32(&mut payload, 7);
+        let mut reader = Reader::new(&payload);
+        assert_eq!(decode_param_notice(&mut reader), Err(WireError::Truncated));
+    }
+
+    /// Wire v9 (Issue #912): `Reply::ParamNotices` decode is bounded
+    /// like `Reply::DirtyNotices` — a count past
+    /// `WIRE_MAX_PARAM_NOTICES` is `LimitExceeded` and allocates
+    /// nothing.
+    #[test]
+    fn param_notices_reply_decode_is_bounded() {
+        let mut payload = vec![10_u8];
+        push_u32(&mut payload, WIRE_MAX_PARAM_NOTICES + 1);
         let mut reader = Reader::new(&payload);
         assert_eq!(decode_reply(&mut reader), Err(WireError::LimitExceeded));
     }
