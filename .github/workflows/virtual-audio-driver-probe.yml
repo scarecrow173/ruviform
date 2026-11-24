@@ -811,30 +811,58 @@ jobs:
           $probeStatus = Get-StageStatus $json 'endpoint-probe'
           "  prerequisite endpoint-probe: $probeStatus" | Out-Probe $log
 
-          # capture open の E_ACCESSDENIED 対策（attempt-10/11 実測）—
+          # capture open の E_ACCESSDENIED 対策（attempt-10/11/12 実測）—
           # capture endpoint へのアクセスは mic device capability の
-          # consent gate に掛かり、headless runner の既定は拒否側。
-          # endpoint Category の LINE_CONNECTOR 化では同 gate は解除
-          # されない（attempt-11 で実測）ため、machine/user 両層の
-          # DeviceAccess consent を Allow に provision する。ephemeral
-          # runner 上の job 内限定調整で、cert store 登録と同じ環境
-          # provisioning の一部。before/after を判定材料として記録する。
+          # consent gate に掛かる。endpoint Category の LINE_CONNECTOR 化
+          # でも解除されず（attempt-11）、DeviceAccess\Global の Allow 化
+          # だけでも解除されなかった（attempt-12 — consent 評価は別系統
+          # または audiosrv が起動時に cache する）。残る層を全て
+          # provision する: DeviceAccess\Global・CapabilityAccessManager
+          # \ConsentStore・AppPrivacy policy を Allow にした上で
+          # AudioEndpointBuilder/Audiosrv を再起動し consent 再評価を
+          # 強制する。ephemeral runner 上の job 内限定調整で、cert store
+          # 登録と同じ環境 provisioning の一部。before/after + service
+          # 状態を判定材料として記録する。
           $micCap = '{E5323777-F976-4f5b-9B55-B94699C46E44}'
           $consentNote = @()
-          foreach ($hive in 'HKLM:', 'HKCU:') {
-            $key = "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"
+          $consentTargets = @(
+            @{ hive = 'HKLM:'; key = "SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"; name = 'Value'; val = 'Allow'; tag = 'hklm-devacc' },
+            @{ hive = 'HKCU:'; key = "SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"; name = 'Value'; val = 'Allow'; tag = 'hkcu-devacc' },
+            @{ hive = 'HKLM:'; key = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'; name = 'Value'; val = 'Allow'; tag = 'hklm-cam' },
+            @{ hive = 'HKCU:'; key = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'; name = 'Value'; val = 'Allow'; tag = 'hkcu-cam' },
+            @{ hive = 'HKLM:'; key = 'SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessMicrophone'; val = 1; tag = 'policy' }
+          )
+          foreach ($t in $consentTargets) {
+            $key = "$($t.hive)$($t.key)"
             try {
-              $before = (Get-ItemProperty -Path $key -Name Value -ErrorAction SilentlyContinue).Value
+              $before = (Get-ItemProperty -Path $key -Name $t.name -ErrorAction SilentlyContinue).($t.name)
               if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
-              Set-ItemProperty -Path $key -Name Value -Value 'Allow'
-              $after = (Get-ItemProperty -Path $key -Name Value).Value
-              "  mic-consent $key : '$before' -> '$after'" | Out-Probe $log
-              $consentNote += "$hive=$after"
+              Set-ItemProperty -Path $key -Name $t.name -Value $t.val
+              $after = (Get-ItemProperty -Path $key -Name $t.name).($t.name)
+              "  mic-consent [$($t.tag)] $key\$($t.name) : '$before' -> '$after'" | Out-Probe $log
+              $consentNote += "$($t.tag)=$after"
             } catch {
-              "  mic-consent $key error: $($_.Exception.Message)" | Out-Probe $log
-              $consentNote += "$hive=error"
+              "  mic-consent [$($t.tag)] $key error: $($_.Exception.Message)" | Out-Probe $log
+              $consentNote += "$($t.tag)=error"
             }
           }
+
+          # consent 変更は audio service が起動時に読む — restart で再評価
+          # を強制する。AudioEndpointBuilder 停止で Audiosrv も連鎖停止
+          # するため、builder→audiosrv の順に restart する。
+          foreach ($svc in 'AudioEndpointBuilder', 'Audiosrv') {
+            try {
+              $s0 = (Get-Service $svc -ErrorAction SilentlyContinue).Status
+              Restart-Service $svc -Force -ErrorAction Stop
+              $s1 = (Get-Service $svc).Status
+              "  svc $svc : $s0 -> $s1" | Out-Probe $log
+              $consentNote += "$svc=$s1"
+            } catch {
+              "  svc $svc restart error: $($_.Exception.Message)" | Out-Probe $log
+              $consentNote += "$svc=error"
+            }
+          }
+          Start-Sleep -Seconds 2
 
           $out = @(& mise run test-audio-virtual-endpoint 2>&1)
           $testExit = $LASTEXITCODE
