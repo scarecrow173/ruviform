@@ -1,0 +1,65 @@
+  signtool selected: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  --- signtool verify /pa D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys ---
+
+
+Verifying: D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): 71EB19395DF1AB5C38FE1A51834A1140F0D42BEC93AA5FBA8FC4AD62B88A1340
+
+Signing Certificate Chain:
+    Issued to: RvfVirtualAudio Probe (rf977)
+
+    Issued by: RvfVirtualAudio Probe (rf977)
+
+    Expires:   Thu Nov 26 22:44:22 2026
+
+    SHA1 hash: 77FA05F2088C960BF8045C0EE9C229130116272F
+
+
+File is not timestamped.
+
+
+Successfully verified: D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+
+
+Number of files successfully Verified: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  verify exit=0 file=RvfVirtualAudio.sys
+  --- signtool verify /pa D:\a\ruviform\ruviform\vaudio-pkg\rvfvirtualaudio.cat ---
+
+
+Verifying: D:\a\ruviform\ruviform\vaudio-pkg\rvfvirtualaudio.cat
+
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): 8D606BAEB928C029AA8F1E3534C95F42BDB6198D397403B2A6DEA86029535AAE
+
+Signing Certificate Chain:
+    Issued to: RvfVirtualAudio Probe (rf977)
+
+    Issued by: RvfVirtualAudio Probe (rf977)
+
+    Expires:   Thu Nov 26 22:44:22 2026
+
+    SHA1 hash: 77FA05F2088C960BF8045C0EE9C229130116272F
+
+
+File is not timestamped.
+
+
+Successfully verified: D:\a\ruviform\ruviform\vaudio-pkg\rvfvirtualaudio.cat
+
+
+Number of files successfully Verified: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  verify exit=0 file=rvfvirtualaudio.cat
