@@ -227,3 +227,20 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 3. `tone oracle: 440 Hz share 0.000` — capture データに刺激の 440Hz が含まれない
 
 **根本原因確定**: capture データの `observed_rms=0.3535`（≈0.5/√2）・440Hz share 0 — SysVAD の capture stream は **`ToneGenerator` で合成サイン波を生成する**（`minwavertstream.cpp` `WriteBytes`→`GenerateSine`）。**upstream SysVAD は render→capture の loopback を持たない** — speaker/mic は独立 endpoint で仮想 cable の経路が存在しない。pair 名による検出（AC2）は成立したが、真の round-trip（AC3）には **driver 内 kernel loopback の実装が必要** — render stream の DMA buffer を capture stream が読む経路（Stereo→Mono downmix・render 未稼働時 silence）を adapter 共有経由で新設する。これは小修正ではなく実装 slice — Worker へ委譲。
+
+### attempt 14 — run 45511337020（branch `feat/977-vaudio-loopback`・SHA `765f5866`・attempt14-* 同梱）— loopback 実装・driver-build 失敗
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | `msbuild=present; winget=present` |
+| driver-build | **error** | `msbuild exit=1` |
+| catalog〜devnode | blocked | sys 未生成の連鎖 |
+| endpoint-probe | ok（vacuous） | `devnode=blocked; pair_count=0` |
+| stream-roundtrip | ok（**vacuous pass — 判定材料外**） | `test_exit=0; verdict=no-verdict-line` — endpoint 不在で test が early return（`finished in 0.00s`）。**round-trip の評価としては NotRun 相当** |
+| cleanup | ok | |
+
+**実装内容**: `CAdapterCommon` に `RVF_LOOPBACK_RENDER_SOURCE` registry を新設し、render stream が DMA buffer/format/run 状態/play cursor を publish、capture `WriteBytes` を `ToneGenerator.GenerateSine`→`RvfLoopbackCaptureWrite` へ置換（新規 `RvfLoopback.cpp/.h` — DISPATCH_LEVEL 対応の整数演算のみ変換: PCM16/24/32・f32・downmix・最近傍 rate map）。併せて `SetState(STOP)` で DMA 時刻基準・carry-forward を reset、`SetState(RUN)` の stamp を position lock 下へ移動（timestamp regressions 対応）。
+
+**失敗分析**: worker ホストは WDK 非搭載で compile 不可のため、静的確認で捕捉できなかった警告を runner の `/WX` が拾った — `RvfLoopback.cpp:323` で `IsEqualGUIDAligned`（int 返却）を `BOOLEAN` へ代入し `C4242` → `C2220` error。修正: 三項で `? TRUE : FALSE` 化。compile error は本箇所のみ（他翻訳単位は通過）。
+
+**次修正**: 上記 C4242 修正のみ — loopback 機構自体は未実走のため attempt-15 で driver-build→round-trip 全経路を再測定。

@@ -206,6 +206,11 @@ WMS 経路の残件（client component 導入可否 — 未実測）:
 - **scope**: SysVAD 派生 PortCls/waveRT miniport driver のソースツリー新設（仮想 speaker/mic pair、INF、WDK build 手順）、`Ruviform Cable *` 命名の endpoint 構成、`virtual-driver-install-probe.yml` で実測済みの自己署名→install→devnode 手順の流用。
 - **範囲見積もり**: 新規 driver ソースツリー（`drivers/` に実績あり — `drivers/testsigned-null/` が雛形として使える）+ WDK build 手順 + `mise.toml`（build/provision lane 追加見込み）+ `docs/designs/`。
 - **確定条件**: `windows-2025` runner で test-signed install → endpoint 列挙・`endpoint_probe` が pair candidate を検出・`tests/virtual_endpoint.rs` が round-trip する。
+- **loopback 構造（2026-11-24 stage-2 実装 — rf#977 attempt-14 系の実測対象）**: upstream SysVAD には endpoint 間の PCM 経路が存在せず、capture stream は `ToneGenerator` の合成サインを DMA buffer へ書くだけだった（attempt-13 で `observed_rms=0.3535`・440Hz share 0.000 と実測 — `Ruviform Cable Input` への render データは破棄されていた）。そこで `drivers/rvf-virtual-audio/` に VB-CABLE 同型の kernel loopback を実装した:
+  - `CAdapterCommon`（両 wave miniport に共有される adapter 単位オブジェクト）に `RVF_LOOPBACK_RENDER_SOURCE` registry を保持し、render stream が `AllocateAudioBuffer` で DMA buffer 参照・format を登録（`FreeAudioBuffer` 先頭で unmap 前に解除 — UAF 防止）、`SetState` で RUN 状態を、`UpdatePosition` で linear play cursor を publish する。
+  - capture stream の `WriteBytes`（`UpdatePosition` 駆動・`m_PositionSpinLock` 下・≦DISPATCH_LEVEL）を `ToneGenerator.GenerateSine` から `RvfLoopbackCaptureWrite` へ置き換え、render buffer の play cursor 以降を整数演算のみで変換しながら capture DMA buffer へ書く（PCM16/24/32・f32・stereo→mono downmix・最近傍 rate map — kernel DPC では浮動小数点不可のため）。render 未登録・未 RUN・format 非互換では silence（virtual cable の自然な挙動 — `ToneGenerator.cpp/.h` 自体は vendored 資産として残置）。
+  - 併せて `SetState(KSSTATE_STOP)` で DMA 時刻基準と carry-forward をリセット（upstream は残渣を残す — restart で position 計算へ混入する経路を塞ぐ）し、`SetState(KSSTATE_RUN)` の時刻 stamp を位置 lock 下へ移動した（attempt-13 `output timestamp regressions: 2` の driver 側対応）。
+  - 変更記録の正本は `drivers/rvf-virtual-audio/PROVENANCE.md`（`≠`/`new` 表記）。lock 順序は stream `m_PositionSpinLock` → adapter `m_LoopbackLock` の一方向のみで、逆方向を取る経路は無い。
 
 ### Slice C — MIDI provisioning（WMS 到達不能が実測で確定 — 独自 driver 経路に確定）
 

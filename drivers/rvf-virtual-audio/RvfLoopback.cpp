@@ -320,7 +320,8 @@ RvfLoopbackFormatFromWfx
         const WAVEFORMATEXTENSIBLE *wfExt =
             CONTAINING_RECORD(Wfx, WAVEFORMATEXTENSIBLE, Format);
         Format->IsFloat =
-            IsEqualGUIDAligned(wfExt->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+            IsEqualGUIDAligned(wfExt->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+                ? TRUE : FALSE;
     }
     else if (Wfx->wFormatTag != WAVE_FORMAT_PCM &&
              Wfx->wFormatTag != WAVE_FORMAT_EXTENSIBLE)
