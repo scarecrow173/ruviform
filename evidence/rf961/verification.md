@@ -135,10 +135,28 @@ AC 評価（attempt 7 時点・部分）:
 - AC3（job 内導入に必要なもの）: windows-2025 = winget WDK install で build 成立を実測。windows-11-arm = DriverKit task dll rename workaround で build 成立を実測。
 - AC4: 本節の記録。
 
+### attempt 8 — run 45478442189（2026-11-24・PR #974 merge 後）
+
+両 leg の artifact を `evidence/rf961/` に記録（`install-probe-<os>-attempt8.json`・`stage-*-<os>-attempt8.txt`・`probe-state-<os>-attempt8.json`）。
+
+| leg | devnode-create | 実測値 |
+| --- | --- | --- |
+| `windows-2025` | **ok — 全経路完走** | catalog-create ok（Inf2Cat `/os:10_0_X64` で `.cat` 生成 — DriverVer 修正が的中）→ pnputil `oem12.inf` → devnode `ROOT\SYSTEM\0001` 作成・`status=OK; problem_code=0` → **`Win32_SystemDriver State=Running` — test-signed kernel driver が GitHub-hosted x64 runner でロード・実行中**。自己署名 → install → devnode → kernel load の全経路が成立 |
+| `windows-11-arm` | error — load 時のみ署名拒否 | install 経路は全通過（catalog/sign/pnputil `oem7.inf`/devnode 作成・`.sys` が `system32\drivers` に配置）だが、devnode `status=Error; problem_code=52`（CM_PROB_UNSIGNED_DRIVER）・`Win32_SystemDriver State=Stopped`。**ARM64 kernel が load 時の署名検証で拒否 — testsigning=Yes が ARM64 kernel driver load に効いていない可能性**。拒否根拠（CI policy・status code）の切り分けが残件 |
+
+本 PR での修正（attempt 9 向け）: devnode-create で `problem_code != 0` の場合に Code Integrity Operational event log・`setupapi.dev.log`（RvfTestSigned 関連行）・`bcdedit {current}`・`Confirm-SecureBootUEFI` を診断採取し、ARM64 kernel の拒否根拠を特定する。
+
+AC 評価（attempt 8 時点・部分）:
+
+- AC1: **windows-2025 で完全成立** — test-signed driver が install・devnode 作成・kernel load・Running まで実測完走。windows-11-arm は install/devnode まで成立・kernel load が problem 52 で拒否（要因は attempt 9 の診断で特定）。
+- AC2: 全 stage が measured — windows-11-arm の残失敗は kernel driver load（problem 52）と stage・観測値で特定済み。
+- AC3: windows-2025 = winget WDK install・windows-11-arm = task dll rename workaround ともに実測で経路確立。
+- AC4: 本節の記録。
+
 ## 4. 状態
 
 - workflow 新設: `.github/workflows/virtual-driver-install-probe.yml`（PR #965 で merge、attempt 1 で検出した欠陥を修正済み — §3.5）。
 - driver package 新設: `drivers/testsigned-null/`（ソースのみ — build 済みバイナリは commit しない）。
 - 補助スクリプト新設: `tools/testsigned-driver/`（`probe-stage.ps1`・`TestDevice.ps1`・`README.md`）。
 - 既存 workflow・required gate・ruleset・`mise.toml`・`crates/**` への変更: **なし**。
-- runner 実走: **attempt 1-7 実施済み**（§3.5）。windows-11-arm は install まで完走（devnode-create のみ残）、windows-2025 は catalog-create が frontier。attempt 8（本 PR の修正版）を Coordinator が dispatch する。
+- runner 実走: **attempt 1-8 実施済み**（§3.5）。windows-2025 は **kernel driver Running まで全経路完走**、windows-11-arm は kernel load が problem 52 で拒否（CI 拒否根拠の特定が残件）。attempt 9（診断追加版）を Coordinator が dispatch する。

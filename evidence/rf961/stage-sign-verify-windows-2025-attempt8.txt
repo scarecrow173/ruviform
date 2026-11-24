@@ -1,0 +1,65 @@
+  signtool selected: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  --- signtool verify /pa D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys ---
+
+
+Verifying: D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys
+
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): ED57492F9EE52988F3D0FCF634D857922FD6227433034BF4DA80F2A4979EF534
+
+Signing Certificate Chain:
+    Issued to: RvfTestSignedNull Probe (rf961)
+
+    Issued by: RvfTestSignedNull Probe (rf961)
+
+    Expires:   Thu Nov 26 20:17:20 2026
+
+    SHA1 hash: 619984065E113AD5717726132D6A60E1707F04FB
+
+
+File is not timestamped.
+
+
+Successfully verified: D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys
+
+
+Number of files successfully Verified: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  verify exit=0 file=RvfTestSignedNull.sys
+  --- signtool verify /pa D:\a\ruviform\ruviform\probe-pkg\rvftestsignednull.cat ---
+
+
+Verifying: D:\a\ruviform\ruviform\probe-pkg\rvftestsignednull.cat
+
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): AF7686B6950A0B4083435C83EA4FEE909283F4DA4C4D6F1602A3251384C5B612
+
+Signing Certificate Chain:
+    Issued to: RvfTestSignedNull Probe (rf961)
+
+    Issued by: RvfTestSignedNull Probe (rf961)
+
+    Expires:   Thu Nov 26 20:17:20 2026
+
+    SHA1 hash: 619984065E113AD5717726132D6A60E1707F04FB
+
+
+File is not timestamped.
+
+
+Successfully verified: D:\a\ruviform\ruviform\probe-pkg\rvftestsignednull.cat
+
+
+Number of files successfully Verified: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  verify exit=0 file=rvftestsignednull.cat

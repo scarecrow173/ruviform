@@ -1,0 +1,17 @@
+  --- remove devnode ROOT\SYSTEM\0001 ---
+  removed=True
+  devnode removed=True
+  --- pnputil /delete-driver oem12.inf /uninstall /force ---
+Microsoft PnP Utility
+
+Ignoring /force when used with /uninstall to delete driver package.
+Driver package uninstalled.
+Driver package deleted successfully.
+  pnputil /delete-driver exit=0
+  removed Cert:\LocalMachine\Root\619984065E113AD5717726132D6A60E1707F04FB
+  removed Cert:\LocalMachine\TrustedPublisher\619984065E113AD5717726132D6A60E1707F04FB
+  removed Cert:\LocalMachine\My\619984065E113AD5717726132D6A60E1707F04FB
+
+  --- final state ---
+  RvfTestSignedNull.inf in store: False
+  cleanup done

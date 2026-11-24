@@ -1,0 +1,16 @@
+  --- TestDevice.ps1 -Action create ---
+  instance_id=ROOT\SYSTEM\0001
+  bind_ok=True
+  reboot_required=False
+  bound_inf=C:\a\ruviform\ruviform\probe-pkg\RvfTestSignedNull.inf
+  instance_id=ROOT\SYSTEM\0001
+
+  --- Get-PnpDevice ---
+  Status=Error Class=System
+  FriendlyName=ruviform test-signed null device
+  Service=RvfTestSignedNull
+  DEVPKEY_Device_ProblemCode = 52
+  DEVPKEY_Device_DevNodeStatus = 25175041
+  DEVPKEY_Device_DriverVersion = 1.0.0.0
+  DEVPKEY_Device_DriverDate = 12/31/2024 16:00:00
+  Win32_SystemDriver: State=Stopped Status=OK PathName=C:\Windows\system32\drivers\RvfTestSignedNull.sys

@@ -1,0 +1,109 @@
+runner: GitHub Actions 1000007966 os=Windows arch=X64
+ref: refs/heads/main sha: ad486fac78bead329a1758bbba77680c4ca91dd9
+run: https://github.com/scarecrow173/ruviform/actions/runs/45478442189 attempt=1
+host: runnervmbpeip user: runnervmbpeip\runneradmin timestamp-utc: 2026-11-24T20:13:20Z
+
+== os build ==
+
+Caption        : Microsoft Windows Server 2025 Datacenter
+Version        : 10.0.26100
+BuildNumber    : 26100
+OSArchitecture : 64-bit
+
+
+
+Microsoft Windows [Version 10.0.26100.33828]
+
+== secure boot / test-signing state (re-confirm) ==
+  Confirm-SecureBootUEFI: False
+  UEFISecureBootEnabled (registry): 0
+  --- bcdedit /enum ---
+
+  Windows Boot Manager
+  --------------------
+  identifier              {bootmgr}
+  device                  partition=\Device\HarddiskVolume2
+  path                    \EFI\Microsoft\Boot\bootmgfw.efi
+  description             Windows Boot Manager
+  locale                  en-US
+  inherit                 {globalsettings}
+  bootshutdowndisabled    Yes
+  default                 {current}
+  resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  displayorder            {current}
+  toolsdisplayorder       {memdiag}
+  timeout                 30
+
+  Windows Boot Loader
+  -------------------
+  identifier              {current}
+  device                  partition=C:
+  path                    \Windows\system32\winload.efi
+  description             Windows Server
+  locale                  en-US
+  inherit                 {bootloadersettings}
+  recoverysequence        {6019ac8d-debe-11f1-aef6-3833c5d5ecc5}
+  displaymessageoverride  Recovery
+  recoveryenabled         No
+  testsigning             Yes
+  isolatedcontext         Yes
+  allowedinmemorysettings 0x15000075
+  osdevice                partition=C:
+  systemroot              \Windows
+  resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  nx                      OptOut
+  bootstatuspolicy        IgnoreAllFailures
+  hypervisorlaunchtype    Auto
+  hypervisorschedulertype Root
+  ems                     Yes
+  bcdedit exit=0
+
+== tools on PATH ==
+  pnputil: C:\Windows\system32\pnputil.exe
+  signtool: not on PATH
+  devcon: not on PATH
+  infverif: not on PATH
+  Inf2Cat: not on PATH
+  makecat: not on PATH
+  certutil: C:\Windows\system32\certutil.exe
+  vswhere: C:\ProgramData\Chocolatey\bin\vswhere.exe
+  msbuild: not on PATH
+  cl: not on PATH
+  link: C:\Program Files\Git\usr\bin\link.exe
+  winget: C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps\winget.exe
+  dotnet: C:\Program Files\dotnet\dotnet.exe
+
+== Windows Kits bin hits ==
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\signtool.exe
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe
+  Inf2Cat.exe: absent
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\makecat.exe
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makecat.exe
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\makecat.exe
+  devcon.exe: absent
+  infverif.exe: absent
+  certutil.exe -> C:\Windows\system32\certutil.exe
+
+== WDK surface (Include/Lib/build versions) ==
+  Include: 10.0.26100.0
+  Lib: 10.0.26100.0
+  bin: 10.0.14393.0, 10.0.15063.0, 10.0.16299.0, 10.0.17134.0, 10.0.26100.0, x64, x86
+  build: absent
+  header wdm.h: absent
+  header wdf.h: absent
+  header ntddk.h: absent
+  km libs: absent
+
+== visual studio / msbuild / driver toolset ==
+  vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+  vs install: C:\Program Files\Microsoft Visual Studio\18\Enterprise
+  msbuild: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe
+  toolset: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\ARM64\PlatformToolsets\WindowsKernelModeDriver10.0
+  toolset: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\Win32\PlatformToolsets\WindowsKernelModeDriver10.0
+  toolset: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\x64\PlatformToolsets\WindowsKernelModeDriver10.0
+
+== certificate tooling ==
+  New-SelfSignedCertificate: present (module=PKI)
+  Import-Certificate: present (module=PKI)
+  Export-Certificate: present (module=PKI)

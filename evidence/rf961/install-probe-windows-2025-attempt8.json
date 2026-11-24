@@ -1,0 +1,79 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:13:28Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "ok",
+    "detail": "arch=x64; sys=D:\\a\\ruviform\\ruviform\\drivers\\testsigned-null\\x64\\Release\\RvfTestSignedNull.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:17:18Z"
+  },
+  {
+    "stage": "catalog-create",
+    "status": "ok",
+    "detail": "cat=D:\\a\\ruviform\\ruviform\\probe-pkg\\rvftestsignednull.cat",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:19Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=619984065E113AD5717726132D6A60E1707F04FB",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:20Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=619984065E113AD5717726132D6A60E1707F04FB; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:21Z"
+  },
+  {
+    "stage": "sign",
+    "status": "ok",
+    "detail": "signtool=C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe; targets=RvfTestSignedNull.sys,rvftestsignednull.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:17:22Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "ok",
+    "detail": "targets=RvfTestSignedNull.sys,rvftestsignednull.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:17:23Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "ok",
+    "detail": "published=oem12.inf",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-24T20:17:24Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "ok",
+    "detail": "inf_in_store=True; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:25Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "ok",
+    "detail": "instance_id=ROOT\\SYSTEM\\0001; status=OK; problem_code=0; service=RvfTestSignedNull",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:34Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-24T20:17:36Z"
+  }
+]
