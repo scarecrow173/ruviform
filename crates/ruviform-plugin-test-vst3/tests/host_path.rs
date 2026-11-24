@@ -18,8 +18,9 @@ use std::path::PathBuf;
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, HostError, HostInput, HostOutput, ParamEvent,
-    ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    ErasedPlugin, Event, EventKind, EventList, GuiFocusTarget, GuiPopupKind, HostError, HostInput,
+    HostOutput, ParamEvent, ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig,
+    ProcessContext, ProcessResult,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 
@@ -567,6 +568,243 @@ fn gain_and_fault_have_no_editor_view() {
             panic!("test_gain/test_fault ship no editor — open_gui must fail");
         };
         assert_eq!(err, HostError::Unsupported);
+    }
+}
+
+/// The seam-backed editor verbs (`set_gui_focus_target` /
+/// `set_gui_popup`, Issue #630 slice 3) reach `Vst3Plugin` through
+/// the production bridge: with no GUI open every arm answers the
+/// defined `Unsupported` — on `test_editor` (a GUI class whose view
+/// is simply not open) and on `test_gain` (a class with no view at
+/// all) alike.
+#[test]
+fn editor_verbs_without_open_gui_are_unsupported() {
+    for mut plugin in [prepared_editor_plugin(), prepared_plugin()] {
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::Editor),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 3 }),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::ChildWindow, false),
+            Err(HostError::Unsupported)
+        );
+    }
+}
+
+/// A declined `open_gui` rolls the view back (`PluginFailed` on
+/// Windows where `IsWindow` rejects the opaque lease, `Unsupported`
+/// off-Windows where the platform type is absent) — either way no
+/// view is stored, so the editor verbs keep answering `Unsupported`
+/// afterwards rather than reaching a stale `IPlugView`.
+#[test]
+fn editor_verbs_after_declined_open_stay_unsupported() {
+    let mut plugin = prepared_editor_plugin();
+    let _ = plugin.open_gui(ParentLease::new(0, 0));
+    assert_eq!(
+        plugin.set_gui_focus_target(GuiFocusTarget::Editor),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 3 }),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+        Err(HostError::Unsupported)
+    );
+}
+
+/// Window-text of `hwnd` as a `String` — empty when `hwnd` is dead
+/// or carries no title (`GetWindowText*` decline foreign or stale
+/// handles rather than faulting the caller).
+#[cfg(target_os = "windows")]
+#[expect(unsafe_code)]
+fn window_text(hwnd: windows_sys::Win32::Foundation::HWND) -> String {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextLengthW, GetWindowTextW};
+
+    // SAFETY: `GetWindowText*` accept any HWND value; `buf` is a
+    // valid writable buffer for the reported length.
+    unsafe {
+        let len = GetWindowTextLengthW(hwnd);
+        let mut buf = vec![0u16; usize::try_from(len).unwrap_or(0) + 1];
+        let read = GetWindowTextW(
+            hwnd,
+            buf.as_mut_ptr(),
+            i32::try_from(buf.len()).unwrap_or(i32::MAX),
+        );
+        String::from_utf16_lossy(&buf[..usize::try_from(read).unwrap_or(0)])
+    }
+}
+
+/// `EnumChildWindows` callback — records into `lparam` the first
+/// HWND whose title starts with the `rvf-test-editor-child-` token.
+#[cfg(target_os = "windows")]
+#[expect(unsafe_code)]
+unsafe extern "system" fn find_child_surface(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> i32 {
+    if window_text(hwnd).starts_with("rvf-test-editor-child-") {
+        // SAFETY: `lparam` is the caller's `&mut HWND` for the
+        // callback's duration.
+        unsafe { *(lparam as *mut windows_sys::Win32::Foundation::HWND) = hwnd };
+        return 0;
+    }
+    1
+}
+
+/// `EnumWindows` callback — same shape for the top-level
+/// `rvf-test-editor-popup-` dialog surface.
+#[cfg(target_os = "windows")]
+#[expect(unsafe_code)]
+unsafe extern "system" fn find_popup_surface(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> i32 {
+    if window_text(hwnd).starts_with("rvf-test-editor-popup-") {
+        // SAFETY: `lparam` is the caller's `&mut HWND` for the
+        // callback's duration.
+        unsafe { *(lparam as *mut windows_sys::Win32::Foundation::HWND) = hwnd };
+        return 0;
+    }
+    1
+}
+
+/// Windows-only real-HWND lane: `open_gui` on a real container HWND,
+/// then every editor verb through the production bridge — no test
+/// fake anywhere in the path. Oracles: the fixture stamps verb
+/// tokens into the editor child HWND's title
+/// (`rvf-test-editor-attach-{n}|{ev},{ev},…`), `GetFocus` witnesses
+/// the real focus moves (`Editor` → editor child, `HostWindow` →
+/// container), `EnumChildWindows` finds the `WS_CHILD` popup
+/// surface under the editor child and `EnumWindows` the `WS_POPUP`
+/// dialog surface by title.
+#[cfg(target_os = "windows")]
+#[ignore = "requires a Windows window station — real HWND verification lane"]
+#[expect(unsafe_code)]
+#[test]
+fn editor_verbs_drive_real_windows_through_bridge() {
+    use std::ptr;
+
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetFocus;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, EnumChildWindows, EnumWindows, GW_CHILD, GetWindow,
+        IsWindow, WS_OVERLAPPED,
+    };
+
+    let class: Vec<u16> = "STATIC".encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: valid class name, nulls where Win32 permits; the
+    // returned HWND is this thread's — every subsequent call drives
+    // it on the same thread.
+    let parent = unsafe {
+        CreateWindowExW(
+            0,
+            class.as_ptr(),
+            ptr::null(),
+            WS_OVERLAPPED,
+            0,
+            0,
+            320,
+            240,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            GetModuleHandleW(ptr::null()),
+            ptr::null(),
+        )
+    };
+    assert!(!parent.is_null(), "cannot create a container HWND");
+
+    let mut plugin = prepared_editor_plugin();
+    plugin
+        .open_gui(ParentLease::new(0, parent as u64))
+        .expect("open_gui on a real parent HWND");
+
+    // SAFETY: `parent` is a live HWND this thread owns; the editor
+    // child lives under it.
+    unsafe {
+        let editor_child: HWND = GetWindow(parent, GW_CHILD);
+        assert!(
+            !editor_child.is_null(),
+            "attached must create the editor child"
+        );
+
+        // `Editor` — `onFocus(1)`: the fixture SetFocus's the child.
+        plugin
+            .set_gui_focus_target(GuiFocusTarget::Editor)
+            .expect("focus target Editor");
+        assert_eq!(GetFocus(), editor_child, "f:1 must move real focus");
+
+        // `EditorElement` — the seam's `apply_focus` delivery token.
+        plugin
+            .set_gui_focus_target(GuiFocusTarget::EditorElement { element: 7 })
+            .expect("focus target EditorElement");
+
+        // `ChildWindow` — a real `WS_CHILD` surface under the
+        // editor child.
+        plugin
+            .set_gui_popup(GuiPopupKind::ChildWindow, true)
+            .expect("popup ChildWindow open");
+        let mut child_surface: HWND = ptr::null_mut();
+        let _ = EnumChildWindows(
+            editor_child,
+            Some(find_child_surface),
+            &raw mut child_surface as LPARAM,
+        );
+        assert!(
+            !child_surface.is_null(),
+            "EnumChildWindows must find rvf-test-editor-child-1"
+        );
+
+        // `Dialog` — the real `WS_POPUP` surface (top-level — found
+        // by its unique title through `EnumWindows`).
+        plugin
+            .set_gui_popup(GuiPopupKind::Dialog, true)
+            .expect("popup Dialog open");
+        let mut popup_surface: HWND = ptr::null_mut();
+        let _ = EnumWindows(Some(find_popup_surface), &raw mut popup_surface as LPARAM);
+        assert!(
+            !popup_surface.is_null(),
+            "EnumWindows must find rvf-test-editor-popup-1"
+        );
+
+        // `HostWindow` — real SetFocus back to the container, and the
+        // plugin gets its `onFocus(false)` notification (`f:0`).
+        plugin
+            .set_gui_focus_target(GuiFocusTarget::HostWindow)
+            .expect("focus target HostWindow");
+        assert_eq!(GetFocus(), parent, "focus must return to the container");
+
+        // The whole verb chain rides the title-token channel.
+        let title = window_text(editor_child);
+        for token in ["f:1", "fe:7:1", "co:1", "po:1", "f:0"] {
+            assert!(title.contains(token), "missing {token} in {title}");
+        }
+
+        // Close both surfaces, then `close_gui` tears everything down.
+        plugin
+            .set_gui_popup(GuiPopupKind::ChildWindow, false)
+            .expect("popup ChildWindow close");
+        plugin
+            .set_gui_popup(GuiPopupKind::Dialog, false)
+            .expect("popup Dialog close");
+        plugin.close_gui().expect("close_gui");
+        assert_eq!(IsWindow(editor_child), 0, "removed must destroy the child");
+
+        let _ = DestroyWindow(parent);
     }
 }
 
