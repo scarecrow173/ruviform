@@ -1448,3 +1448,20 @@ run = "cd poc/script-coexist && cargo test --locked --all-targets"
 [tasks.poc-script-coexist-run]
 description = "Run the RF-SCRIPT-01 coexist PoC demo binary (single-binary Luau+Rhai registry selection, alternating eval, same-digest proof, fail-closed demo)"
 run = "cd poc/script-coexist && cargo run --locked --bin script-coexist-poc"
+
+# Issue #953: Linux 検証 docker イメージ経由の lane 実行。
+# manual/opt-in lane であり CI required gate ではない。ローカル開発環境が
+# Windows/macOS でも Linux ネイティブの toolchain・build/link/test を
+# push 前に実走確認できる。使い方と既存 CI との役割分担は
+# evidence/rf953/ を参照。イメージ定義: docker/linux-verify/。
+[tasks.verify-docker-build]
+description = "Build the ruviform Linux verification docker image (Issue #953; manual/opt-in — not a CI-required gate; tag: ruviform-linux-verify, context: docker/linux-verify)"
+run = "docker build -f docker/linux-verify/Dockerfile -t ruviform-linux-verify docker/linux-verify"
+
+[tasks.verify-docker]
+description = "Run a mise verification lane inside the Linux docker image: mise run verify-docker <task> [args] (Issue #953; manual/opt-in — not a CI-required gate; worktree is synced read-only into a named volume so target/ and .git stay container-local; e.g. `mise run verify-docker fmt-check`, `mise run verify-docker test ruviform-io-file`)"
+depends = ["verify-docker-build"]
+raw_args = true
+# 実体は docker/linux-verify/verify-docker.sh（mise が Windows で複数行
+# script を一時ファイル化する際の改行コード差異を回避し、単体実行も可能にする）
+run = "bash docker/linux-verify/verify-docker.sh"
