@@ -4,7 +4,7 @@ type: "discovery"
 status: "resolved"
 title: "Issue #630 L1 `SpawnFailed{Timeout}` env flake — #846/#849 統合後の残存調査と signature-miss 穴の閉塞"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -16,6 +16,7 @@ relations:
     - "crates/ruviform-plugin-test-clap/tests/l1_fault_test_plugin_e2e.rs"
     - "docs/discovery/issue-841-spawn-deadline-flake.md"
     - "evidence/rf630/spawn-timeout-verification.md"
+    - "evidence/rf630/spawn-timeout-signature-sweep.md"
     - "evidence/rf841/verification.md"
     - "evidence/rf849/verification.md"
     - "evidence/rf631/verification.md"
@@ -27,11 +28,27 @@ relations:
         path: "evidence/rf630/spawn-timeout-verification.md"
       - type: "dir"
         path: "evidence/rf630/spawn-timeout-logs/"
+      - type: "file"
+        path: "evidence/rf630/spawn-timeout-signature-sweep.md"
     modified:
       - type: "file"
         path: "crates/ruviform-plugin-test-vst3/tests/l1_fault_test_plugin_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-clap/tests/l1_fault_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_supervisor_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/l1_video_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/plugin_graph_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/editor_session.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/editor_session_l1.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-host/tests/gui_request.rs"
     deleted: []
     renamed: []
     moved: []
@@ -124,9 +141,18 @@ bound 超過 panic した。canonical lane の 6 連続 run では
 
 ## 残件
 
-- 他の lease 外 test file（`l1_real_test_plugin_e2e` 等）の
+- `ruviform-plugin-test-vst3`/`test-clap` の非 fault test file
+  （`l1_real_test_plugin_e2e`・`l1_stateful_test_plugin_e2e` 等）の
   instantiate 経路は `SpawnFailed` で即 panic する — 同 signature
-  の穴は残り、別 slice の対象となる。
+  の穴は残り、別 slice の対象となる。`ruviform-plugin-host/tests/`
+  と `ruviform-plugin-export/tests/` は後続 slice
+  （`evidence/rf630/spawn-timeout-signature-sweep.md`）で全件
+  sweep 済み: 7 file の un-retried `Instantiate`/spawn/mint
+  surface に同一 bounded retry を適用し、`plugin-export` 側は
+  spawn-path 呼出なしを確認。
+- `l1_scale_probe.rs` の `#[ignore]`-gated 手動計測 probe は
+  sweep 対象外と判定した（契約 test の flake 対策の範囲外）—
+  spawn/mint `.unwrap()` は残る。
 - `l1_proxy_e2e` の timeout-convergence flake（rf#631 記録）は
   別 class であり本 slice では触れない。
 - `SpawnPhase::Handshake` の doc が `Scan`/`CreateInstance` を mint

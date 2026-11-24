@@ -13,22 +13,24 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::io::Write;
 use std::rc::Rc;
 use std::time::Duration;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers,
-    GuiSize, HostInput, HostOutput, LifecycleState, ParamInfo, ParentLease, PluginDescriptor,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    BufferView, BufferViewMut, EventList, FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent,
+    GuiModifiers, GuiSize, HostInput, HostOutput, LifecycleState, ParamInfo, ParentLease,
+    PluginDescriptor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
+    TransportInfo,
 };
 use ruviform_plugin_host::{
-    AttachMode, EditorCapabilities, EditorOpError, EditorSessionError, EditorSessionEvent,
-    EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError, HostReply,
-    InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, OpenOutcome, OutOfProcessSpec,
-    ParentSlotLease, Plugin, PluginEditorSessionId, PluginEditorSessions, PluginFactory,
-    PluginHandle, PluginHost, SessionClock, SessionDeadlinePolicy, SessionFailCause, Support,
-    erase,
+    AttachMode, DiagnosticQuery, EditorCapabilities, EditorOpError, EditorSessionError,
+    EditorSessionEvent, EditorSessionOps, EditorSessionState, EditorSize, HostCommand, HostError,
+    HostReply, InProcessEditorOps, InProcessHost, L1EditorOps, LeaseRedeemer, OpenOutcome,
+    OutOfProcessSpec, ParentSlotLease, Plugin, PluginEditorSessionId, PluginEditorSessions,
+    PluginFactory, PluginHandle, PluginHost, SessionClock, SessionDeadlinePolicy, SessionFailCause,
+    SpawnPhase, Support, erase,
 };
 
 // ---- shared fixtures -------------------------------------------------
@@ -1352,6 +1354,88 @@ const L1_WORKER_DESCRIPTOR: PluginDescriptor = PluginDescriptor {
     features: &[],
 };
 
+/// Bound on `Instantiate` retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 C1 signature the #933
+/// `l1_fault_test_plugin_e2e` lanes pin: the failure is an
+/// environment deadline event (a stalled `spawn_timeout`-bounded
+/// wait), not a contract verdict — `SpawnFailed` is pre-mint only,
+/// so a fresh attempt is the defined recovery. The bound keeps a
+/// persistent stall an honest failure instead of an absorbed flake.
+const SPAWN_TIMEOUT_RETRIES: u32 = 3;
+
+/// `Instantiate` on the L1 route with a bounded retry on the
+/// pre-mint `SpawnFailed{cause: Timeout}` signature — `cause ==
+/// Timeout` AND the retained record is `Found` with `phase` in the
+/// `spawn_timeout`-bounded waits' freeze set AND `record.cause ==
+/// Some(Timeout)` — `{PreSpawn, Spawn, DrainInit, Handshake, Live}`,
+/// every variant the enum currently declares. `Live` is eligible —
+/// and only inside this signature — because `SpawnFailed` is
+/// definitionally pre-mint while the phase tracks *child* lifecycle
+/// and goes `Live` the instant `Hello` passes, so the
+/// `Scan`/`CreateInstance` waits freeze `Live` records on both a
+/// fresh child and a pooled re-mint. A non-`Timeout` cause or an
+/// `Evicted`/`NotFound` query result is signature-missed and fails
+/// at once — never retried. Bound exhaustion is an honest failure —
+/// the flake is never absorbed silently.
+fn instantiate_l1(host: &mut PluginHost) -> PluginHandle {
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        match host.execute(HostCommand::Instantiate {
+            plugin_id: L1_WORKER_DESCRIPTOR.id.to_owned(),
+        }) {
+            Ok(HostReply::Instantiated { handle }) => return handle,
+            Ok(other) => panic!("unexpected reply: {other:?}"),
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => {
+                let query = host.diagnostics_query(diagnostics_id);
+                let (phase, record_cause) = match &query {
+                    DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+                    _ => (None, None),
+                };
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "instantiate SpawnFailed trace: plugin={} \
+                     attempt={attempt} cause={cause:?} \
+                     diagnostics_id={diagnostics_id} phase={phase:?} \
+                     record_cause={record_cause:?}",
+                    L1_WORKER_DESCRIPTOR.id
+                );
+                let signature = cause == FailureCause::Timeout
+                    && matches!(
+                        &query,
+                        DiagnosticQuery::Found(record)
+                            if matches!(
+                                record.phase,
+                                SpawnPhase::PreSpawn
+                                    | SpawnPhase::Spawn
+                                    | SpawnPhase::DrainInit
+                                    | SpawnPhase::Handshake
+                                    | SpawnPhase::Live
+                            ) && record.cause == Some(FailureCause::Timeout)
+                    );
+                assert!(
+                    signature,
+                    "instantiate failed: SpawnFailed{{cause:{cause:?}, \
+                     diagnostics_id:{diagnostics_id}}} is outside the \
+                     pre-mint timeout signature (phase={phase:?} \
+                     record_cause={record_cause:?}) — not retried"
+                );
+                assert!(
+                    attempt < SPAWN_TIMEOUT_RETRIES,
+                    "instantiate failed: the pre-mint \
+                     SpawnFailed{{cause:Timeout}} signature persisted \
+                     through the {SPAWN_TIMEOUT_RETRIES}-retry bound \
+                     (phase={phase:?}) — an honest environment \
+                     failure, not an absorbed flake"
+                );
+            }
+            Err(error) => panic!("instantiate failed: {error:?}"),
+        }
+    }
+    unreachable!("the loop exits only through `return` or `panic!`")
+}
+
 /// A `PluginHost` with one `OutOfProcess` instance minted on the
 /// `l1-test-worker` child — the real spawn path, so the negotiated
 /// mask is the child's genuine `0` advertisement.
@@ -1362,15 +1446,8 @@ fn l1_host() -> (PluginHost, PluginHandle) {
         std::ffi::OsString::from(env!("CARGO_BIN_EXE_l1-test-worker")),
     ))
     .unwrap();
-    match host
-        .execute(HostCommand::Instantiate {
-            plugin_id: L1_WORKER_DESCRIPTOR.id.to_owned(),
-        })
-        .unwrap()
-    {
-        HostReply::Instantiated { handle } => (host, handle),
-        other => panic!("unexpected reply: {other:?}"),
-    }
+    let handle = instantiate_l1(&mut host);
+    (host, handle)
 }
 
 /// An unadvertised child (`Hello.capabilities: 0`) gets the defined

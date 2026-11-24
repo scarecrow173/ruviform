@@ -18,6 +18,7 @@
 mod l1;
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread;
@@ -35,8 +36,8 @@ use ruviform_plugin_core::{
     ProcessStatus, TransportInfo,
 };
 
-use l1::diag::DiagRegistry;
-use l1::{ChildExit, FailedNotice, L1Child, L1Instance, SpawnSpec};
+use l1::diag::{DiagRegistry, DiagnosticQuery, SpawnPhase};
+use l1::{ChildExit, FailedNotice, InstanceParts, L1Child, L1Instance, SpawnSpec};
 
 /// `assert_no_alloc` arms a thread-local forbid flag through the
 /// global allocator — required exactly once per test binary (the
@@ -81,6 +82,214 @@ fn fast_timeout_spec(args: &[&str]) -> SpawnSpec {
 
 fn config() -> ProcessConfig {
     ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, 512).unwrap()
+}
+
+/// Bound on spawn-path retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 C1 signature the #933
+/// `l1_fault_test_plugin_e2e` lanes pin on their `instantiate()`
+/// helpers, applied here at the `pub(crate)` spawn surface: the
+/// failure is an environment deadline event (a stalled
+/// `spawn_timeout`-bounded wait), not a contract verdict —
+/// `SpawnFailed` is pre-mint only, so a fresh attempt is the
+/// defined recovery — the same "pre-contract environment retry"
+/// shape as `ARM_RESEND_CALLS` (rf#766). The bound keeps a
+/// persistent stall an honest failure instead of an absorbed flake.
+const SPAWN_TIMEOUT_RETRIES: u32 = 3;
+
+/// The signature the retry helpers admit — the #933 triple plus the
+/// phase gate: `cause == Timeout` AND the retained record is `Found`
+/// with `phase` in the `spawn_timeout`-bounded waits' freeze set AND
+/// `record.cause == Some(Timeout)` — `{PreSpawn, Spawn, DrainInit,
+/// Handshake, Live}`, every variant the enum currently declares.
+/// `Live` is eligible — and only inside this signature — because
+/// `SpawnFailed` is definitionally pre-mint while the phase tracks
+/// *child* lifecycle and goes `Live` the instant `Hello` passes, so
+/// the `Scan`/`CreateInstance` waits freeze `Live` records on both a
+/// fresh child and a pooled re-mint. A non-`Timeout` cause or an
+/// `Evicted`/`NotFound` query result is signature-missed and fails
+/// at once — never retried. Returns the record's `(phase, cause)`
+/// for the caller's trace and assert text, plus whether the
+/// signature held.
+fn spawn_timeout_signature(
+    diag: &DiagRegistry,
+    cause: FailureCause,
+    diagnostics_id: u64,
+) -> (Option<SpawnPhase>, Option<FailureCause>, bool) {
+    let query = diag.query(diagnostics_id);
+    let (phase, record_cause) = match &query {
+        DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+        _ => (None, None),
+    };
+    let signature = cause == FailureCause::Timeout
+        && matches!(
+            &query,
+            DiagnosticQuery::Found(record)
+                if matches!(
+                    record.phase,
+                    SpawnPhase::PreSpawn
+                        | SpawnPhase::Spawn
+                        | SpawnPhase::DrainInit
+                        | SpawnPhase::Handshake
+                        | SpawnPhase::Live
+                ) && record.cause == Some(FailureCause::Timeout)
+        );
+    (phase, record_cause, signature)
+}
+
+/// The shared `SpawnFailed` arm of the bounded-retry spawn helpers —
+/// `surface` names the call for the trace (`spawn`, `spawn_scanned`,
+/// `create_instance`). Every attempt is traced to the real stderr —
+/// bypassing the harness's per-test capture so the trace lands in
+/// lane logs even when a later attempt recovers — carrying the
+/// attempt index plus the record's `diagnostics_id`/`phase`/`cause`.
+/// A signature-miss asserts at once — never retried — and bound
+/// exhaustion is an honest failure, never an absorbed flake.
+fn check_spawn_failed(
+    surface: &str,
+    diag: &DiagRegistry,
+    cause: FailureCause,
+    diagnostics_id: u64,
+    attempt: u32,
+) {
+    let (phase, record_cause, signature) = spawn_timeout_signature(diag, cause, diagnostics_id);
+    let _ = writeln!(
+        std::io::stderr(),
+        "{surface} SpawnFailed trace: attempt={attempt} cause={cause:?} \
+         diagnostics_id={diagnostics_id} phase={phase:?} \
+         record_cause={record_cause:?}"
+    );
+    assert!(
+        signature,
+        "{surface} failed: SpawnFailed{{cause:{cause:?}, \
+         diagnostics_id:{diagnostics_id}}} is outside the pre-mint \
+         timeout signature (phase={phase:?} \
+         record_cause={record_cause:?}) — not retried"
+    );
+    assert!(
+        attempt < SPAWN_TIMEOUT_RETRIES,
+        "{surface} failed: the pre-mint SpawnFailed{{cause:Timeout}} \
+         signature persisted through the {SPAWN_TIMEOUT_RETRIES}-retry \
+         bound (phase={phase:?}) — an honest environment failure, not \
+         an absorbed flake"
+    );
+}
+
+/// `L1Instance::spawn` with the bounded retry — the dedicated
+/// route's whole spawn+mint window (spawn hand-off, `Hello`, `Scan`,
+/// `CreateInstance`) is `spawn_timeout`-bounded. Each attempt owns a
+/// fresh registry, so the failed attempt's record stays reachable
+/// for the signature check before the next spawn pays out.
+fn spawn_instance(spec: &SpawnSpec) -> L1Instance {
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        let diag = DiagRegistry::new();
+        match L1Instance::spawn(spec, &diag, None) {
+            Ok(instance) => return instance,
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => check_spawn_failed("spawn", &diag, cause, diagnostics_id, attempt),
+            Err(error) => panic!("spawn failed: {error:?}"),
+        }
+    }
+    unreachable!("the loop exits only through `return` or `panic!`")
+}
+
+/// A `SpawnFailed` raised by a single-shot `create_instance` —
+/// carried up to [`child_attempt`] because a timed-out `Create`
+/// reply converges the child `Failed` (`request_timed` →
+/// `converge_child`): every further `create_instance` on the same
+/// child replays the frozen convergence record instantly, so the
+/// retry unit is the whole spawn+mint sequence on a fresh child,
+/// not the mint call.
+struct MintSpawned {
+    /// The registry the failed mint recorded into — stays alive so
+    /// the signature check can query the retained record.
+    diag: DiagRegistry,
+    /// The error's classified `cause`.
+    cause: FailureCause,
+    /// The error's `diagnostics_id` — the record to query.
+    diagnostics_id: u64,
+}
+
+/// `L1Child::create_instance` as a single-shot — `Ok` pays out,
+/// `SpawnFailed` becomes [`MintSpawned`] for [`child_attempt`] to
+/// signature-check and replay, and every other error panics (the
+/// defined `InstanceLimit` rejection is asserted at expected-value
+/// call sites, which do not use this helper).
+fn try_mint(child: &Arc<L1Child>, spec: &SpawnSpec) -> Result<InstanceParts, Box<MintSpawned>> {
+    let depth = spec.instance_depth().unwrap();
+    let diag = DiagRegistry::new();
+    match child.create_instance(spec, depth, &diag, None) {
+        Ok(parts) => Ok(parts),
+        Err(HostError::SpawnFailed {
+            cause,
+            diagnostics_id,
+        }) => Err(Box::new(MintSpawned {
+            diag,
+            cause,
+            diagnostics_id,
+        })),
+        Err(error) => panic!("create_instance failed: {error:?}"),
+    }
+}
+
+/// One spawn+mint attempt against the pub(crate) surface with the
+/// bounded `SpawnFailed{Timeout}` retry — the #933 `instantiate()`
+/// loop's structure at the layer where the caller owns the child.
+/// Each attempt spawns a fresh child (a signature-failed spawn
+/// already killed and reaped its process) and runs `body` — the
+/// mints the attempt must land — on it; a `MintSpawned` means the
+/// mint's `Create` wait timed out and converged that child
+/// `Failed`, so the signature check runs against the mint's own
+/// registry and the next attempt replays the whole sequence on a
+/// new child after `teardown`. Spawn failures consume the same
+/// attempt index, so one `SPAWN_TIMEOUT_RETRIES` bound covers the
+/// whole sequence — a persistent stall is an honest failure, never
+/// an absorbed flake.
+fn child_attempt<T>(
+    spawn_spec: &SpawnSpec,
+    body: impl Fn(&Arc<L1Child>, &SpawnSpec) -> Result<T, Box<MintSpawned>>,
+) -> (Arc<L1Child>, T) {
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        let diag = DiagRegistry::new();
+        let child = match L1Child::spawn_scanned(&spawn_spec.view(), &diag) {
+            Ok(child) => child,
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => {
+                check_spawn_failed("spawn_scanned", &diag, cause, diagnostics_id, attempt);
+                continue;
+            }
+            Err(error) => panic!("spawn_scanned failed: {error:?}"),
+        };
+        match body(&child, spawn_spec) {
+            Ok(t) => return (child, t),
+            Err(spawned) => {
+                check_spawn_failed(
+                    "create_instance",
+                    &spawned.diag,
+                    spawned.cause,
+                    spawned.diagnostics_id,
+                    attempt,
+                );
+                child.teardown();
+            }
+        }
+    }
+    unreachable!("the loop exits only through `return` or `panic!`")
+}
+
+/// `L1Child::create_instance` ×2 as a [`child_attempt`] body — two
+/// siblings on the shared child, `SpawnFailed` propagating so the
+/// attempt can replay both on a fresh child.
+fn try_bundled_pair(
+    child: &Arc<L1Child>,
+    spawn_spec: &SpawnSpec,
+) -> Result<(L1Instance, L1Instance), Box<MintSpawned>> {
+    let a = L1Instance::from_parts(Arc::clone(child), try_mint(child, spawn_spec)?);
+    let b = L1Instance::from_parts(Arc::clone(child), try_mint(child, spawn_spec)?);
+    Ok((a, b))
 }
 
 /// Polls `try_recv_notification` until the `Failed` notification
@@ -151,7 +360,7 @@ fn pipeline_barrier(instance: &mut L1Instance) {
 /// child-side and returns identical reply/error semantics.
 #[test]
 fn command_parity_lifecycle_and_state() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     assert_eq!(instance.lifecycle_state(), LifecycleState::Created);
 
     assert_eq!(
@@ -227,7 +436,7 @@ fn command_parity_lifecycle_and_state() {
 /// `Err(HostError::Lifecycle(_))` — identical semantics to L0.
 #[test]
 fn illegal_transitions_match_l0_semantics() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
 
     // Activate before Initialize.
     assert!(matches!(
@@ -267,8 +476,7 @@ fn illegal_transitions_match_l0_semantics() {
 /// rejected.
 #[test]
 fn crash_transitions_failed_and_notifies() {
-    let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&["--crash-after-msgs=4"]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     // The pending command is woken `Ipc` by the convergence.
@@ -315,12 +523,7 @@ fn crash_transitions_failed_and_notifies() {
 /// `Failed`, not clean teardown.
 #[test]
 fn voluntary_exit_zero_is_failure() {
-    let mut instance = L1Instance::spawn(
-        &spec(&["--crash-after-msgs=3", "--crash-exit-code=0"]),
-        &DiagRegistry::new(),
-        None,
-    )
-    .unwrap();
+    let mut instance = spawn_instance(&spec(&["--crash-after-msgs=3", "--crash-exit-code=0"]));
 
     // Message 3 (`Initialize` — after `Scan` and `CreateInstance`)
     // kills the worker mid-command.
@@ -343,7 +546,7 @@ fn voluntary_exit_zero_is_failure() {
 /// convergence as a spontaneous crash.
 #[test]
 fn kill_transitions_failed_and_notifies() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.kill();
@@ -367,12 +570,7 @@ fn kill_transitions_failed_and_notifies() {
 /// rejection table: timeout ⇒ `Ipc` + `Failed`).
 #[test]
 fn hang_converges_on_command_timeout() {
-    let mut instance = L1Instance::spawn(
-        &fast_timeout_spec(&["--hang-after-msgs=2"]),
-        &DiagRegistry::new(),
-        None,
-    )
-    .unwrap();
+    let mut instance = spawn_instance(&fast_timeout_spec(&["--hang-after-msgs=2"]));
 
     // `Scan` and `CreateInstance` (the handshake) were messages 1–2 —
     // `Initialize` is never answered.
@@ -462,7 +660,7 @@ fn spawn_failure_is_spawn_failed() {
 /// keeps serving commands.
 #[test]
 fn gui_defined_rejection() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     // One mechanism bit covers the family atomically — every verb
@@ -510,7 +708,7 @@ fn gui_defined_rejection() {
 /// `Prepare(UnsupportedConfig)`, mirror unchanged.
 #[test]
 fn activate_over_wire_limit_rejected() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     let over = ProcessConfig::new(
@@ -532,7 +730,7 @@ fn activate_over_wire_limit_rejected() {
 /// no `Failed`, no notification, idempotent `Destroy`.
 #[test]
 fn destroy_is_clean_teardown() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     instance.destroy();
@@ -546,7 +744,7 @@ fn destroy_is_clean_teardown() {
 /// fallback teardown path (owner gone → driver `Disconnected` arm).
 #[test]
 fn drop_reaps_live_child() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
     drop(instance);
     // Reaching here at all is the assertion — Drop must not hang.
@@ -561,12 +759,7 @@ fn drop_reaps_live_child() {
 /// driver unwind — and destroy/drop afterwards stay bounded.
 #[test]
 fn wedged_child_write_converges_and_teardown_is_bounded() {
-    let mut instance = L1Instance::spawn(
-        &fast_timeout_spec(&["--stop-reading-after-msgs=3"]),
-        &DiagRegistry::new(),
-        None,
-    )
-    .unwrap();
+    let mut instance = spawn_instance(&fast_timeout_spec(&["--stop-reading-after-msgs=3"]));
     instance.execute(wire::Command::Initialize).unwrap();
 
     // ~256 KiB — comfortably past every supported platform's pipe
@@ -597,12 +790,7 @@ fn wedged_child_write_converges_and_teardown_is_bounded() {
 /// than join it.
 #[test]
 fn destroy_detaches_reader_when_heir_holds_stdout() {
-    let mut instance = L1Instance::spawn(
-        &spec(&["--leave-heir-after-msgs=3"]),
-        &DiagRegistry::new(),
-        None,
-    )
-    .unwrap();
+    let mut instance = spawn_instance(&spec(&["--leave-heir-after-msgs=3"]));
 
     // `Scan`/`CreateInstance` are messages 1-2 — this 3rd message
     // can only be sent after `spawn` returned (mint committed), so
@@ -731,7 +919,7 @@ fn shm_unique_keys_fit_the_macos_name_limit() {
 /// A spawned instance driven to `Processing` — Initialize → Activate
 /// (512-frame cap) → `StartProcessing`.
 fn processing_instance(args: &[&str]) -> L1Instance {
-    let mut instance = L1Instance::spawn(&spec(args), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(args));
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -961,8 +1149,7 @@ fn drain_output_reports_chunks_over_wire_max_events() {
 /// `Err(Failed)` — the same classification every other verb gets.
 #[test]
 fn drain_output_reports_failed_instance_is_failed() {
-    let mut instance =
-        L1Instance::spawn(&spec(&["--crash-after-msgs=4"]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&["--crash-after-msgs=4"]));
     instance.execute(wire::Command::Initialize).unwrap();
     // Message 4 is `Activate` — the child dies mid-command, the
     // pending waiter wakes `Ipc` and the child converges `Failed`.
@@ -982,7 +1169,7 @@ fn drain_output_reports_failed_instance_is_failed() {
 /// L0 returns — before any buffer is touched.
 #[test]
 fn process_requires_processing_state() {
-    let mut instance = L1Instance::spawn(&spec(&[]), &DiagRegistry::new(), None).unwrap();
+    let mut instance = spawn_instance(&spec(&[]));
     instance.execute(wire::Command::Initialize).unwrap();
     instance
         .execute(wire::Command::Activate { config: config() })
@@ -1122,24 +1309,6 @@ fn process_hung_child_passes_through_without_blocking() {
 // composite-level rows live in `composite_e2e` below).
 // ------------------------------------------------------------------
 
-/// Two facades on one `L1Child`, minted the pooled route's way.
-fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1Instance) {
-    let depth = spawn_spec.instance_depth().unwrap();
-    let a = L1Instance::from_parts(
-        Arc::clone(child),
-        child
-            .create_instance(spawn_spec, depth, &DiagRegistry::new(), None)
-            .unwrap(),
-    );
-    let b = L1Instance::from_parts(
-        Arc::clone(child),
-        child
-            .create_instance(spawn_spec, depth, &DiagRegistry::new(), None)
-            .unwrap(),
-    );
-    (a, b)
-}
-
 /// The core bundle contract (issue-117 bundle-e2e rules): one child
 /// process hosts two instances — distinct wire handles
 /// (lowest-free mint), independent lifecycle machines (the mirror
@@ -1153,8 +1322,7 @@ fn bundled_pair(child: &Arc<L1Child>, spawn_spec: &SpawnSpec) -> (L1Instance, L1
 #[test]
 fn bundled_child_hosts_independent_instances() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    let (child, (mut a, mut b)) = child_attempt(&spawn_spec, try_bundled_pair);
     // One child, two wire handles — the lowest-free mint.
     assert_eq!(a.test_wire_instance(), 0);
     assert_eq!(b.test_wire_instance(), 1);
@@ -1275,61 +1443,53 @@ fn bundled_child_hosts_independent_instances() {
 #[test]
 fn bundled_failed_instance_destroy_recovers_handle() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    child_attempt(&spawn_spec, |child, spawn_spec| {
+        let (mut a, mut b) = try_bundled_pair(child, spawn_spec)?;
 
-    // Fail `a` alone — the attributable instance-scope violation
-    // (`exit{None, None}`: the child is alive, there is no exit
-    // status to report; the stamp's cause is `Protocol`).
-    child.test_converge_instance(0);
-    assert_eq!(a.lifecycle_state(), LifecycleState::Failed);
-    assert_eq!(
-        a.try_recv_notification(),
-        Some(FailedNotice {
-            exit: ChildExit {
-                code: None,
-                signal: None
-            },
-            cause: FailureCause::Protocol,
-        })
-    );
-    assert!(a.try_recv_notification().is_none());
-    assert_eq!(b.lifecycle_state(), LifecycleState::Created);
-    assert!(!child.is_terminal());
-    assert_eq!(child.live_count(), 2);
+        // Fail `a` alone — the attributable instance-scope violation
+        // (`exit{None, None}`: the child is alive, there is no exit
+        // status to report; the stamp's cause is `Protocol`).
+        child.test_converge_instance(0);
+        assert_eq!(a.lifecycle_state(), LifecycleState::Failed);
+        assert_eq!(
+            a.try_recv_notification(),
+            Some(FailedNotice {
+                exit: ChildExit {
+                    code: None,
+                    signal: None
+                },
+                cause: FailureCause::Protocol,
+            })
+        );
+        assert!(a.try_recv_notification().is_none());
+        assert_eq!(b.lifecycle_state(), LifecycleState::Created);
+        assert!(!child.is_terminal());
+        assert_eq!(child.live_count(), 2);
 
-    // The sibling is untouched — the child still serves its
-    // commands (per-instance granularity, not child-scope).
-    b.execute(wire::Command::Initialize).unwrap();
-    assert_eq!(b.lifecycle_state(), LifecycleState::Initialized);
+        // The sibling is untouched — the child still serves its
+        // commands (per-instance granularity, not child-scope).
+        b.execute(wire::Command::Initialize).unwrap();
+        assert_eq!(b.lifecycle_state(), LifecycleState::Initialized);
 
-    // `Destroy` on the failed instance still goes on the wire —
-    // the runner's registry slot is really reclaimed.
-    a.destroy();
-    assert_eq!(a.lifecycle_state(), LifecycleState::Destroyed);
-    assert_eq!(child.live_count(), 1);
-    assert!(!child.is_terminal());
+        // `Destroy` on the failed instance still goes on the wire —
+        // the runner's registry slot is really reclaimed.
+        a.destroy();
+        assert_eq!(a.lifecycle_state(), LifecycleState::Destroyed);
+        assert_eq!(child.live_count(), 1);
+        assert!(!child.is_terminal());
 
-    // The reclaimed handle is the lowest-free mint: the next
-    // `create_instance` re-uses wire handle 0 — and the runner
-    // accepting it proves the previous slot left its registry.
-    let mut c = L1Instance::from_parts(
-        Arc::clone(&child),
-        child
-            .create_instance(
-                &spawn_spec,
-                spawn_spec.instance_depth().unwrap(),
-                &DiagRegistry::new(),
-                None,
-            )
-            .unwrap(),
-    );
-    assert_eq!(c.test_wire_instance(), 0);
-    assert_eq!(child.live_count(), 2);
-    c.execute(wire::Command::Initialize).unwrap();
+        // The reclaimed handle is the lowest-free mint: the next
+        // `create_instance` re-uses wire handle 0 — and the runner
+        // accepting it proves the previous slot left its registry.
+        let mut c = L1Instance::from_parts(Arc::clone(child), try_mint(child, spawn_spec)?);
+        assert_eq!(c.test_wire_instance(), 0);
+        assert_eq!(child.live_count(), 2);
+        c.execute(wire::Command::Initialize).unwrap();
 
-    b.destroy();
-    c.destroy();
+        b.destroy();
+        c.destroy();
+        Ok(())
+    });
 }
 
 /// Shutdown-on-empty at the `pub(crate)` layer: a mid-bundle
@@ -1341,8 +1501,7 @@ fn bundled_failed_instance_destroy_recovers_handle() {
 #[test]
 fn bundled_last_facade_teardown_keeps_siblings_alive() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    let (child, (mut a, mut b)) = child_attempt(&spawn_spec, try_bundled_pair);
     a.execute(wire::Command::Initialize).unwrap();
     b.execute(wire::Command::Initialize).unwrap();
     let weak = Arc::downgrade(&child);
@@ -1388,8 +1547,7 @@ fn bundled_last_facade_teardown_keeps_siblings_alive() {
 #[test]
 fn bundled_mid_destroy_death_keeps_notification() {
     let spawn_spec = spec(&["--crash-after-msgs=4"]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    let (child, (mut a, mut b)) = child_attempt(&spawn_spec, try_bundled_pair);
 
     // `DestroyInstance` is the crashing message — the request
     // fails `Err(Ipc)` but `destroy` proceeds to removal.
@@ -1420,15 +1578,13 @@ fn bundled_mid_destroy_death_keeps_notification() {
 fn bundled_create_past_capacity_is_instance_limit() {
     let spawn_spec = spec(&[]);
     let depth = spawn_spec.instance_depth().unwrap();
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let mut parts = Vec::new();
-    for _ in 0..wire::WIRE_MAX_INSTANCES {
-        parts.push(
-            child
-                .create_instance(&spawn_spec, depth, &DiagRegistry::new(), None)
-                .unwrap(),
-        );
-    }
+    let (child, parts) = child_attempt(&spawn_spec, |child, spawn_spec| {
+        let mut parts = Vec::new();
+        for _ in 0..wire::WIRE_MAX_INSTANCES {
+            parts.push(try_mint(child, spawn_spec)?);
+        }
+        Ok(parts)
+    });
     assert_eq!(child.live_count(), wire::WIRE_MAX_INSTANCES as usize);
     assert!(!child.pool_eligible());
     assert!(!child.is_terminal());
@@ -1692,8 +1848,7 @@ fn rt_l1_result_leg_try_ops() {
 #[test]
 fn rt_l1_bundled_process_no_alloc() {
     let spawn_spec = spec(&[]);
-    let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-    let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+    let (_child, (mut a, mut b)) = child_attempt(&spawn_spec, try_bundled_pair);
     for instance in [&mut a, &mut b] {
         instance.execute(wire::Command::Initialize).unwrap();
         instance
@@ -2114,6 +2269,7 @@ fn rejected_block_replies_resolve_pass_through() {
 
 mod composite_e2e {
     use std::ffi::OsString;
+    use std::io::Write;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::thread;
@@ -2133,8 +2289,8 @@ mod composite_e2e {
     use ruviform_rt::RtContext;
 
     use super::{
-        NOTIFY_TIMEOUT, WORKER_DESCRIPTOR, bundled_pair, config, l1::L1Child,
-        l1::diag::DiagRegistry, sample_eq, spec,
+        NOTIFY_TIMEOUT, SPAWN_TIMEOUT_RETRIES, WORKER_DESCRIPTOR, child_attempt, config, sample_eq,
+        spec, try_bundled_pair,
     };
 
     /// The L0-side fixture: a gain plugin with an adjustable
@@ -2329,16 +2485,82 @@ mod composite_e2e {
         host
     }
 
+    /// `Instantiate` with a bounded retry on the pre-mint
+    /// `SpawnFailed{cause: Timeout}` signature — the #933
+    /// `l1_fault_test_plugin_e2e` lanes' structure on the composite
+    /// route: `cause == Timeout` AND the retained record is `Found`
+    /// with `phase` in the `spawn_timeout`-bounded waits' freeze set
+    /// AND `record.cause == Some(Timeout)` — `{PreSpawn, Spawn,
+    /// DrainInit, Handshake, Live}`, every variant the enum currently
+    /// declares. `Live` is eligible — and only inside this signature
+    /// — because `SpawnFailed` is definitionally pre-mint while the
+    /// phase tracks *child* lifecycle and goes `Live` the instant
+    /// `Hello` passes, so the `Scan`/`CreateInstance` waits freeze
+    /// `Live` records on both a fresh child and a pooled re-mint. A
+    /// non-`Timeout` cause or an `Evicted`/`NotFound` query result is
+    /// signature-missed and fails at once — never retried. Every
+    /// attempt is traced to the real stderr — bypassing the
+    /// harness's per-test capture so the trace lands in lane logs
+    /// even when a later attempt recovers — carrying the attempt
+    /// index plus the record's `diagnostics_id`/`phase`/`cause`.
+    /// Bound exhaustion is an honest failure — the flake is never
+    /// absorbed silently.
     fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
-        match host
-            .execute(HostCommand::Instantiate {
+        for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+            match host.execute(HostCommand::Instantiate {
                 plugin_id: plugin_id.to_owned(),
-            })
-            .unwrap()
-        {
-            HostReply::Instantiated { handle } => handle,
-            other => panic!("unexpected reply: {other:?}"),
+            }) {
+                Ok(HostReply::Instantiated { handle }) => return handle,
+                Ok(other) => panic!("unexpected reply: {other:?}"),
+                Err(HostError::SpawnFailed {
+                    cause,
+                    diagnostics_id,
+                }) => {
+                    let query = host.diagnostics_query(diagnostics_id);
+                    let (phase, record_cause) = match &query {
+                        DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+                        _ => (None, None),
+                    };
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "instantiate SpawnFailed trace: plugin={plugin_id} \
+                         attempt={attempt} cause={cause:?} \
+                         diagnostics_id={diagnostics_id} phase={phase:?} \
+                         record_cause={record_cause:?}"
+                    );
+                    let signature = cause == FailureCause::Timeout
+                        && matches!(
+                            &query,
+                            DiagnosticQuery::Found(record)
+                                if matches!(
+                                    record.phase,
+                                    SpawnPhase::PreSpawn
+                                        | SpawnPhase::Spawn
+                                        | SpawnPhase::DrainInit
+                                        | SpawnPhase::Handshake
+                                        | SpawnPhase::Live
+                                ) && record.cause == Some(FailureCause::Timeout)
+                        );
+                    assert!(
+                        signature,
+                        "instantiate failed: SpawnFailed{{cause:{cause:?}, \
+                         diagnostics_id:{diagnostics_id}}} is outside the \
+                         pre-mint timeout signature (phase={phase:?} \
+                         record_cause={record_cause:?}) — not retried"
+                    );
+                    assert!(
+                        attempt < SPAWN_TIMEOUT_RETRIES,
+                        "instantiate failed: the pre-mint \
+                         SpawnFailed{{cause:Timeout}} signature persisted \
+                         through the {SPAWN_TIMEOUT_RETRIES}-retry bound \
+                         (phase={phase:?}) — an honest environment \
+                         failure, not an absorbed flake"
+                    );
+                }
+                Err(error) => panic!("instantiate failed: {error:?}"),
+            }
         }
+        unreachable!("the loop exits only through `return` or `panic!`")
     }
 
     /// GUI on either route is the defined `Unsupported` rejection —
@@ -3406,11 +3628,10 @@ mod composite_e2e {
         assert!(host.try_recv_notification().is_none());
 
         // Nothing leaked into later spawns: a clean child still
-        // mints a co-resident pair and serves (the `bundled_pair`
+        // mints a co-resident pair and serves (the `try_bundled_pair`
         // idiom).
         let spawn_spec = spec(&[]);
-        let child = L1Child::spawn_scanned(&spawn_spec.view(), &DiagRegistry::new()).unwrap();
-        let (mut a, mut b) = bundled_pair(&child, &spawn_spec);
+        let (_child, (mut a, mut b)) = child_attempt(&spawn_spec, try_bundled_pair);
         a.execute(wire::Command::Initialize).unwrap();
         assert_eq!(b.lifecycle_state(), LifecycleState::Created);
         a.destroy();
