@@ -1,0 +1,34 @@
+  pkg: RvfTestSignedNull.inf 1834B
+  pkg: RvfTestSignedNull.sys 5632B
+  inf2cat hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\Inf2Cat.exe
+Version 1.0.0.0
+Runs driver signability tests and creates the catalog(s).
+
+INF2CAT /driver:path /os:operatingSystem1[,os2]...
+        [/nocat] [/verbose]
+        [/drm[:file1[,file2]...]]
+        [/pe[:file1[,file2]...]]
+        [/pageHashes[:file1][,file2]...]]
+
+  /driver (/drv)    Indicates the path to the driver package follows.
+
+  path              Specifies the path to the driver package.
+
+  /os               Indicates the operating system(s) targeted by the driver
+                    package follows. The targeted operating system(s) is a
+                    comma separated list of the following values:
+
+  operatingSystem1  2000
+
+                    XP_X86           Server2003_X86
+                    XP_X64           Server2003_X64
+                                     Server2003_IA64
+
+                    Vista_X86        Server2008_X86
+                    Vista_X64        Server2008_X64
+  inf2cat(no-args) exit=
+  --- Inf2Cat /os:10_0_X64 ---
+  Inf2Cat exit=-1 os=10_0_X64
+  --- Inf2Cat /os:10_X64 ---
+  Inf2Cat exit=-2 os=10_X64
+  Inf2Cat 失敗/不在 — makecat fallback を試行

@@ -1,0 +1,2 @@
+  --- TestDevice.ps1 -Action create ---
+  devnode-create error: Exception calling "Create" with "4" argument(s): "SetupDiCreateDeviceInfo failed"

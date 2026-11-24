@@ -1,0 +1,601 @@
+target platform: x64
+msbuild: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe
+toolset(x64): C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\x64\PlatformToolsets\WindowsKernelModeDriver10.0
+km headers: 0; km libs: 0
+  DriverKit build task dll: absent
+
+== job 内 WDK 導入可否評価（winget / Microsoft.WindowsWDK） ==
+  winget: C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps\winget.exe
+  --- winget search ---
+
+     -
+
+
+    ███████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1024 KB / 3.88 MB
+    ███████████████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2.00 MB / 3.88 MB
+    ███████████████████████▒▒▒▒▒▒▒  3.00 MB / 3.88 MB
+    ██████████████████████████████  3.88 MB / 3.88 MB
+
+
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2%
+    ███████████████████▒▒▒▒▒▒▒▒▒▒▒  66%
+    ██████████████████████▒▒▒▒▒▒▒▒  74%
+    ██████████████████████▒▒▒▒▒▒▒▒  76%
+    █████████████████████████▒▒▒▒▒  84%
+    ███████████████████████████▒▒▒  93%
+    ███████████████████████████▒▒▒  93%
+    ██████████████████████████████  100%
+
+  The `msstore` source requires that you view the following agreements before using.
+  Terms of Transaction: https://aka.ms/microsoft-store-terms-of-transaction
+  The source requires the current machine's 2-letter geographic region to be sent to the backend service to function properly (ex. "US").
+
+  Name                                         Id                              Version         Source
+  ----------------------------------------------------------------------------------------------------
+  Windows Driver Kit                           Microsoft.WindowsWDK.10.0.19041 10.1.19041.685  winget
+  Windows Driver Kit - Windows 10.1.22000.1    Microsoft.WindowsWDK.10.0.22000 10.1.22000.1    winget
+  Windows Driver Kit - Windows 10.0.22621.2428 Microsoft.WindowsWDK.10.0.22621 10.1.22621.2428 winget
+  Windows Driver Kit - Windows 10.0.26100.6584 Microsoft.WindowsWDK.10.0.26100 10.1.26100.6584 winget
+  Windows Driver Kit - Windows 10.0.28000.2526 Microsoft.WindowsWDK.10.0.28000 10.1.28000.2526 winget
+  winget search exit=0
+
+     -
+
+
+     -
+     \
+
+  Found Windows Driver Kit - Windows 10.0.26100.6584 [Microsoft.WindowsWDK.10.0.26100] Version 10.1.26100.6584
+  This application is licensed to you by its owner.
+  Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+  Downloading https://download.microsoft.com/download/41fb59c2-1723-45f9-a270-96b73ad58233/KIT_BUNDLE_WDK_MEDIACREATION/wdksetup.exe
+
+     -
+
+
+    ██████████████████████████████  1.34 MB / 1.34 MB
+  Successfully verified installer hash
+  Starting package install...
+
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+
+  Successfully installed
+  winget install exit=0 elapsed_s=130
+  note: EWDK ISO mount 経路は image 容量・download 帯域の面で job 内非現実的のため評価対象外とした
+  toolset after install attempt: present
+  km headers after install attempt: 1
+  task dll (post-install): C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.17.0.dll
+  task dll (post-install): C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll
+  msbuild version: 18.12.2.51402 (major=18)
+  task dll copy: Microsoft.DriverKit.Build.Tasks.17.0.dll -> Microsoft.DriverKit.Build.Tasks.18.0.dll
+  task dll copy: Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll -> Microsoft.DriverKit.Build.Tasks.PackageVerifier.18.0.dll
+
+== msbuild RvfTestSignedNull (x64) ==
+
+  Building 'RvfTestSignedNull' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping x64\Release\RvfTestSignedNull.inf
+  Stamping [Version] section with DriverVer=11/24/2026,20.5.0.556
+C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\WindowsDriver.common.targets(698,5): error : INF verification exception: Unable to load DLL 'x86\InfVerif.dll': The specified module could not be found. (Exception from HRESULT: 0x8007007E) [D:\a\ruviform\ruviform\drivers\testsigned-null\RvfTestSignedNull.vcxproj]
+  RvfTestSignedNull.c
+  RvfTestSignedNull.vcxproj -> D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys
+  Driver is 'Universal'.
+  ........................
+  Signability test complete.
+
+  Errors:
+  None
+
+  Warnings:
+  None
+
+  Catalog generation complete.
+  D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull\rvftestsignednull.cat
+  Set catalog attribute.
+  WdkVersion: 10.0.26100.0
+  Set catalog attribute.
+  WdkAssemblyVersion: 10.0.26100.6584
+  msbuild exit=0
+  built: D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys
