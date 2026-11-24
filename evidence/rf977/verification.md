@@ -95,3 +95,18 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 
 1. `LNK2019 operator new(size_t, POOL_TYPE, ULONG)` — upstream `EndpointsCommon.vcxproj` は `_NEW_DELETE_OPERATORS_` を定義し `NewDelete.cpp` が 3 引数 placement new を実装する。本 vcxproj で未定義のため宣言（PortCls header 側）だけ残り link 失敗。`_USE_WAVERT_` も合わせて ClCompile define へ追加（upstream と同じく sideband 系のみ除外）。
 2. `INF verification exception: Unable to load DLL 'x86\InfVerif.dll'` — WDK は `InfVerif.dll` を `bin\amd64`/`arm64` のみ同梱。vswhere の `MSBuild\**\Bin\MSBuild.exe` find が 32bit `MSBuild\Current\Bin` を先に返すため x86 名で load を試みて失敗。**attempt-3 修正**: msbuild 選択を `Bin\amd64\` 優先に変更（env-build-surface / driver-build の 2 箇所）。
+
+### attempt 3 — run 45493612214（merge SHA `6b0a0caf`・attempt3-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | msbuild=present（依然 32bit `Current\Bin`） |
+| driver-build | **error** | `msbuild exit=1` — compile/link 成功・残 2 欠陥（下記） |
+| catalog-create 以降 | blocked | sys 未生成で fail-closed（endpoint-probe は absence 記録 ok） |
+
+**失敗分析**:
+
+1. `x86\InfVerif.dll` 再発 — amd64 優先フィルタが機能しなかった。vswhere の `-find 'MSBuild\**\Bin\MSBuild.exe'` は `Bin\amd64\MSBuild.exe` にマッチしない（パターンが `Bin\MSBuild.exe` 終端を要求）ため amd64 候補が一度も列挙されず常に 32bit fallback。**attempt-4 修正**: 32bit hit の `Bin\MSBuild.exe` → `Bin\amd64\MSBuild.exe` 派生 + Test-Path 確認。
+2. `SIGNTASK: No file digest algorithm specified` — vcxproj に署名設定がなく WDK が build 内署名を試行（`/fd` 無し signtool 呼出で失敗）。署名は本 workflow の sign stage（job 生成証明書）が担う設計のため **`<SignMode>Off</SignMode>`** を両 config に追加。
+
+**進捗**: `_USE_WAVERT_`/`_NEW_DELETE_OPERATORS_` 追加で compile+link は完走（LNK2019 解消）。
