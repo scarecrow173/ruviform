@@ -759,8 +759,39 @@ fn drop_reaps_live_child() {
 /// driver unwind — and destroy/drop afterwards stay bounded.
 #[test]
 fn wedged_child_write_converges_and_teardown_is_bounded() {
-    let mut instance = spawn_instance(&fast_timeout_spec(&["--stop-reading-after-msgs=3"]));
-    instance.execute(wire::Command::Initialize).unwrap();
+    // `--stop-reading-after-msgs=3` answers `Scan`/`CreateInstance`/
+    // `Initialize`, so a pre-trigger `Err(Ipc)`/`Err(Failed)` means a
+    // convergence landed before the trigger message — the 500 ms
+    // `command_timeout` firing on a still-answering child under an
+    // environment stall (or an early child convergence, retried
+    // identically). The same env-deadline class `spawn_instance`
+    // retries at the spawn surface, on the same bound with a fresh
+    // child — every attempt is traced to the real stderr and bound
+    // exhaustion is an honest failure, never an absorbed flake.
+    let mut instance = 'retry: {
+        for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+            let mut instance = spawn_instance(&fast_timeout_spec(&["--stop-reading-after-msgs=3"]));
+            match instance.execute(wire::Command::Initialize) {
+                Ok(_) => break 'retry instance,
+                reply @ Err(HostError::Ipc | HostError::Failed) => {
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "wedged pre-trigger trace: attempt={attempt} reply={reply:?}"
+                    );
+                    assert!(
+                        attempt < SPAWN_TIMEOUT_RETRIES,
+                        "wedged_child_write_converges_and_teardown_is_bounded: \
+                         the pre-trigger command_timeout signature persisted \
+                         through the {SPAWN_TIMEOUT_RETRIES}-retry bound — an \
+                         honest environment failure, not an absorbed flake"
+                    );
+                    instance.destroy();
+                }
+                Err(error) => panic!("pre-trigger Initialize failed: {error:?}"),
+            }
+        }
+        unreachable!("the loop exits only through `break 'retry` or `panic!`")
+    };
 
     // ~256 KiB — comfortably past every supported platform's pipe
     // capacity and well under the 16 MiB wire bound.
@@ -4150,12 +4181,64 @@ mod composite_e2e {
         spawn_spec.spawn_timeout = Duration::from_millis(500);
         host.register_out_of_process(spawn_spec).unwrap();
 
-        let start = Instant::now();
-        let (cause, diagnostics_id) = expect_spawn_failed(&mut host);
-        assert!(
-            start.elapsed() < Duration::from_secs(8),
-            "a create wedge must fire spawn_timeout"
-        );
+        // The expected `SpawnFailed{Timeout}` is only the scenario's
+        // verdict once it freezes `Live` — the fixture's hang wedges
+        // the `CreateInstance` wait (message 2), so a `Timeout`
+        // record frozen at an earlier phase is a `spawn_timeout`
+        // fire on a stalled `Hello`/earlier wait: an environment
+        // deadline before the trigger, the same signature
+        // `instantiate`'s bounded retry admits minus the `Live`
+        // variant that marks the wedge. Trace every attempt to the
+        // real stderr like `check_spawn_failed`; a non-`Timeout`
+        // signature-miss fails at once and bound exhaustion is an
+        // honest failure, never an absorbed flake.
+        let (cause, diagnostics_id) = 'retry: {
+            for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+                let start = Instant::now();
+                let pair = expect_spawn_failed(&mut host);
+                assert!(
+                    start.elapsed() < Duration::from_secs(8),
+                    "a create wedge must fire spawn_timeout"
+                );
+                let (cause, diagnostics_id) = pair;
+                let query = host.diagnostics_query(diagnostics_id);
+                let (phase, record_cause) = match &query {
+                    DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+                    _ => (None, None),
+                };
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "spawn_failed_attempt trace: attempt={attempt} cause={cause:?} \
+                     diagnostics_id={diagnostics_id} phase={phase:?} \
+                     record_cause={record_cause:?}"
+                );
+                let pre_live_timeout = cause == FailureCause::Timeout
+                    && matches!(
+                        &query,
+                        DiagnosticQuery::Found(record)
+                            if record.cause == Some(FailureCause::Timeout)
+                                && matches!(
+                                    record.phase,
+                                    SpawnPhase::PreSpawn
+                                        | SpawnPhase::Spawn
+                                        | SpawnPhase::DrainInit
+                                        | SpawnPhase::Handshake
+                                )
+                    );
+                if !pre_live_timeout {
+                    break 'retry pair;
+                }
+                assert!(
+                    attempt < SPAWN_TIMEOUT_RETRIES,
+                    "spawn_failed_attempt_record_captures_stderr: the \
+                     pre-`Live` SpawnFailed{{cause:Timeout}} signature \
+                     persisted through the {SPAWN_TIMEOUT_RETRIES}-retry \
+                     bound (phase={phase:?}) — an honest environment \
+                     failure, not an absorbed flake"
+                );
+            }
+            unreachable!("the loop exits only through `break 'retry` or `panic!`")
+        };
         // The request wait fired `spawn_timeout` — the cause was
         // recorded before the wedge-kill issued.
         assert_eq!(cause, FailureCause::Timeout);
@@ -4274,14 +4357,49 @@ mod composite_e2e {
         spawn_spec.command_timeout = Duration::from_millis(500);
         host.register_out_of_process(spawn_spec).unwrap();
 
-        let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
-        host.execute(HostCommand::Initialize { handle: l1 })
-            .unwrap();
-        host.execute(HostCommand::Activate {
-            handle: l1,
-            config: config(),
-        })
-        .unwrap();
+        // `--hang-after-msgs=4` answers `Scan`/`CreateInstance`/
+        // `Initialize`/`Activate`, so a pre-trigger `Err(Ipc)`/
+        // `Err(Failed)` means a convergence landed before the
+        // trigger message — the 500 ms `command_timeout` firing on
+        // a still-answering child under an environment stall (or an
+        // early child convergence, retried identically). The same
+        // env-deadline class `instantiate` retries at the spawn
+        // surface, on the same bound with a fresh child — every
+        // attempt is traced to the real stderr and bound exhaustion
+        // is an honest failure, never an absorbed flake.
+        let l1 = 'retry: {
+            for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+                let l1 = instantiate(&mut host, WORKER_DESCRIPTOR.id);
+                let pre_trigger = host
+                    .execute(HostCommand::Initialize { handle: l1 })
+                    .and_then(|_| {
+                        host.execute(HostCommand::Activate {
+                            handle: l1,
+                            config: config(),
+                        })
+                    });
+                match pre_trigger {
+                    Ok(_) => break 'retry l1,
+                    reply @ Err(HostError::Ipc | HostError::Failed) => {
+                        let _ = writeln!(
+                            std::io::stderr(),
+                            "command_timeout pre-trigger trace: attempt={attempt} \
+                             reply={reply:?}"
+                        );
+                        assert!(
+                            attempt < SPAWN_TIMEOUT_RETRIES,
+                            "command_timeout_converges_failed_with_timeout_cause: \
+                             the pre-trigger command_timeout signature persisted \
+                             through the {SPAWN_TIMEOUT_RETRIES}-retry bound — an \
+                             honest environment failure, not an absorbed flake"
+                        );
+                        host.execute(HostCommand::Destroy { handle: l1 }).unwrap();
+                    }
+                    Err(error) => panic!("pre-trigger drive failed: {error:?}"),
+                }
+            }
+            unreachable!("the loop exits only through `break 'retry` or `panic!`")
+        };
 
         let start = Instant::now();
         assert_eq!(

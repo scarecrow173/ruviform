@@ -88,8 +88,10 @@ pub enum SpawnPhase {
     Spawn,
     /// stderr pipe hand-off and drain-thread startup.
     DrainInit,
-    /// `Hello`/version, `Scan` and `CreateInstance`/
-    /// `CreateVideoInstance` negotiation — the mint window.
+    /// `Hello`/version exchange only — a matched `Hello` flips
+    /// the phase to `Live` at once, so the still-pre-mint `Scan`
+    /// and `CreateInstance`/`CreateVideoInstance` reply waits run
+    /// under `Live` (and freeze `Live` records on timeout).
     Handshake,
     /// Handle minted — the attempt succeeded; the record continues
     /// for the child's life until convergence.
