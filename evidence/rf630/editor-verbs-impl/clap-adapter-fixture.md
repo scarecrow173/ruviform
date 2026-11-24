@@ -222,7 +222,7 @@ working tree の dll に対して行った）:
 | `mise run lint ruviform-plugin-test-clap` | 0 | Pass |
 | `mise run test ruviform-plugin-clap` | 0 | Pass（lib + doctest、failed 0） |
 | `mise run test ruviform-plugin-test-clap` | 0 | Pass（lib 90 + host_path 26 + doctest、failed 0） |
-| `mise run test ruviform-plugin-test-clap --test host_path -- -- --ignored editor_verb_surface_over_real_child_hwnd` | 0 | **Pass — real-HWND lane 実走**（interactive window station が存在する環境で全 verb を実 HWND 観測） |
+| `mise exec -- cargo test --locked -p ruviform-plugin-test-clap --test host_path -- --ignored editor_verb_surface_over_real_child_hwnd --nocapture` | 0 | **Pass — real-HWND lane 実走**（interactive window station が存在する環境で全 verb を実 HWND 観測） |
 | `mise exec -- prek run --all-files` | 0 | Pass（全 hook） |
 | `node ci/plugin-abi-validator/run.mjs --clap-validator … --vst3-validator … --evidence-dir evidence/rf630/editor-verbs-impl/abi-validator` | 非 0 | 実走 —— VST3 leg Passed、CLAP leg は test_editor Unsupported（fault-arm law・非回帰）+ preset-discovery 環境 timeout（上記） |
 
