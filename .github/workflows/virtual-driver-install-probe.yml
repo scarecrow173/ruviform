@@ -472,15 +472,25 @@ jobs:
             if (-not $hits.Count) {
               Add-StageRecord -JsonPath $json -Stage sign -Status absent -Detail 'signtool が PATH/Kits bin に不在'
             } else {
-              $signtool = $hits[0]
+              # attempt-5 教訓: Find-Tool の先頭 hit は arch 非対応 binary になり得る
+              # （windows-2025 で arm64\signtool.exe → ResourceUnavailable）。
+              # ホスト arch の Kits bin dir に一致する hit を優先選択する。
+              $archDir = if ($os -eq 'windows-11-arm') { 'arm64' } else { 'x64' }
+              $signtool = @($hits | Where-Object { $_ -match "\\$archDir\\" } | Select-Object -First 1)[0]
+              if (-not $signtool) { $signtool = $hits[0]; "  arch($archDir) 一致 hit なし — first hit に fallback" | Out-Probe $log }
               "  signtool selected: $signtool" | Out-Probe $log
               $exitSum = 0
               foreach ($f in $targets) {
                 "  --- signtool sign $f ---" | Out-Probe $log
                 # /sm: 証明書は Cert:\LocalMachine\My に生成するため machine
                 # store を検索対象に指定する（/sha1 の既定は CurrentUser\My）。
-                & $signtool sign /fd sha256 /sha1 $thumb /sm /v $f 2>&1 | Out-Probe $log
-                $e = $LASTEXITCODE
+                try {
+                  & $signtool sign /fd sha256 /sha1 $thumb /sm /v $f 2>&1 | Out-Probe $log
+                  $e = $LASTEXITCODE
+                } catch {
+                  "  sign invoke error: $($_.Exception.Message)" | Out-Probe $log
+                  $e = 1
+                }
                 "  sign exit=$e file=$(Split-Path $f -Leaf)" | Out-Probe $log
                 $exitSum += $e
               }
@@ -508,12 +518,21 @@ jobs:
             $sysPath = Get-ProbeState $state 'sys_path'
             $catPath = Get-ProbeState $state 'cat_path'
             $targets = @($sysPath, $catPath) | Where-Object { $_ -and (Test-Path $_) }
-            $signtool = @(Find-Tool 'signtool.exe' -AllKitsHits)[0]
+            $archDir = if ($os -eq 'windows-11-arm') { 'arm64' } else { 'x64' }
+            $vHits = @(Find-Tool 'signtool.exe' -AllKitsHits)
+            $signtool = @($vHits | Where-Object { $_ -match "\\$archDir\\" } | Select-Object -First 1)[0]
+            if (-not $signtool) { $signtool = $vHits[0] }
+            "  signtool selected: $signtool" | Out-Probe $log
             $exitSum = 0
             foreach ($f in $targets) {
               "  --- signtool verify /pa $f ---" | Out-Probe $log
-              & $signtool verify /pa /v $f 2>&1 | Out-Probe $log
-              $e = $LASTEXITCODE
+              try {
+                & $signtool verify /pa /v $f 2>&1 | Out-Probe $log
+                $e = $LASTEXITCODE
+              } catch {
+                "  verify invoke error: $($_.Exception.Message)" | Out-Probe $log
+                $e = 1
+              }
               "  verify exit=$e file=$(Split-Path $f -Leaf)" | Out-Probe $log
               $exitSum += $e
             }
