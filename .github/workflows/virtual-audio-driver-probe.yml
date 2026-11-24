@@ -189,8 +189,13 @@ jobs:
             $mb = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>&1
             $mb | ForEach-Object { "  msbuild: $_" | Out-Probe $log }
             # amd64 host の MSBuild を優先 — 32bit MSBuild は x86\InfVerif.dll を要求するが
-            # WDK は amd64/arm64 のみ同梱し "INF verification exception" になる（attempt-2 実測）
-            $msbuild = @($mb | Where-Object { $_ -match 'Bin\\amd64\\MSBuild\.exe$' -and (Test-Path $_) }) | Select-Object -First 1
+            # WDK は amd64/arm64 のみ同梱し "INF verification exception" になる（attempt-2 実測）。
+            # vswhere の find pattern は `Bin\amd64\MSBuild.exe` を返さないため 32bit 側の hit から派生する
+            $msbuild = $null
+            foreach ($m in $mb) {
+              $amd64 = $m -replace 'Bin\\MSBuild\.exe$', 'Bin\amd64\MSBuild.exe'
+              if ($amd64 -ne $m -and (Test-Path $amd64)) { $msbuild = $amd64; break }
+            }
             if (-not $msbuild) { $msbuild = @($mb | Where-Object { $_ -and (Test-Path $_) }) | Select-Object -First 1 }
           } else { "  vswhere: absent" | Out-Probe $log }
           $toolset = @()
@@ -237,8 +242,11 @@ jobs:
           $vsInstall = Get-ProbeState $state 'vs_install'
           if (-not $msbuild -and (Test-Path $vswhere)) {
             $mb = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>&1
-            # env-build-surface と同じく amd64 優先（InfVerif.dll は amd64 のみ同梱）
-            $msbuild = @($mb | Where-Object { $_ -match 'Bin\\amd64\\MSBuild\.exe$' -and (Test-Path $_) }) | Select-Object -First 1
+            # env-build-surface と同じく amd64 優先（InfVerif.dll は amd64 のみ同梱）— 32bit hit から派生
+            foreach ($m in $mb) {
+              $amd64 = $m -replace 'Bin\\MSBuild\.exe$', 'Bin\amd64\MSBuild.exe'
+              if ($amd64 -ne $m -and (Test-Path $amd64)) { $msbuild = $amd64; break }
+            }
             if (-not $msbuild) { $msbuild = @($mb | Where-Object { $_ -and (Test-Path $_) }) | Select-Object -First 1 }
           }
           if (-not $msbuild) {

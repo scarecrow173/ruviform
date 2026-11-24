@@ -31,6 +31,10 @@
     <KmdfVersionNumber>1.33</KmdfVersionNumber>
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
+    <!-- build 内署名は行わない — .sys/.cat への署名は workflow の sign stage が
+         job 生成の自己署名証明書で実施する（attempt-3 実測: SignMode 未指定で
+         SIGNTASK が /fd 無し signtool を呼び失敗した） -->
+    <SignMode>Off</SignMode>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetVersion>Windows10</TargetVersion>
@@ -40,6 +44,7 @@
     <KmdfVersionNumber>1.33</KmdfVersionNumber>
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
+    <SignMode>Off</SignMode>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
