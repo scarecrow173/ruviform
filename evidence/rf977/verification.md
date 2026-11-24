@@ -147,3 +147,18 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | 以降 | blocked | fail-closed |
 
 **失敗分析**: `RunInf2Cat` はこの target のゲートではない（WindowsDriver.common.targets:1438 の Inf2Cat は別条件）。根本原因は **`FilesToPackage` 欠落** — upstream `TabletAudioSample.vcxproj` は `<FilesToPackage Include="$(TargetPath)"/>` で driver 出力を package dir（`x64\Release\RvfVirtualAudio\`）へ copy させている。本 vcxproj で欠落したため sys が package dir に無く、INF CopyFiles を signability test が解決できなかった。**attempt-8 修正**: `FilesToPackage` を追加し、in-build Inf2Cat を正常動作させる（`/p:RunInf2Cat=false` 撤去 — catalog-create stage 側でも `vaudio-pkg\` staging で実施する設計は維持）。
+
+### attempt 8 — run 45499994447（merge SHA `5ff55207`・attempt8-* 同梱）— **install chain 完走**
+
+| stage | status | detail |
+| --- | --- | --- |
+| driver-build | **ok** | `x64\Release\RvfVirtualAudio.sys` 生成（`FilesToPackage` で Inf2Cat signability 通過） |
+| catalog-create | ok | `rvfvirtualaudio.cat` 生成 |
+| cert/store | ok | 自己署名 → Root+TrustedPublisher |
+| sign/sign-verify | ok | sys+cat 署名・検証 |
+| pnputil-add-driver | **ok** | `published=oem12.inf` — test-signed audio driver が driver store に受理 |
+| enum-verify | ok | `inf_in_store=True` |
+| devnode-create | **ok** | `ROOT\MEDIA\0000; status=OK; problem_code=0; service=RvfVirtualAudio`・`Win32_SystemDriver State=Running` |
+| endpoint-probe | ok | render `Speakers (Ruviform Virtual Audio Device)` + capture `Ruviform Cable Output` 両方 active・format/period 取得済。pair=0 |
+
+**残件**: render endpoint 名が custom GUID ではなく "Speakers" — **Windows が KSNODETYPE_SPEAKER 系 Category の endpoint friendly name を仕様としてハードコード**（pin-name カスタム不可・OSR/MS Q&A 実例・upstream も Name=NULL）。capture 側は同一機構で custom name が表示される非対称。**attempt-9 修正**: LINEOUT_DEST pin の `Category` を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` に変更（VB-Cable/AudioMirror 系と同じ仮想 cable 構成 — line-connector では MediaCategories pin-name が有効）。

@@ -1,0 +1,7 @@
+  prerequisite devnode-create: ok
+  probe_exit=0
+  endpoints_enumerated=2
+  virtual_candidates=1
+  pair_count=0
+  pairs=
+  probe script exit=0 pair_count=0 endpoints=2
