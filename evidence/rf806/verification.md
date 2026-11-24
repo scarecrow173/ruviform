@@ -433,3 +433,114 @@ wire 上の意味的同一性を検証する。
 - Kani 検証コードは全て `#[cfg(kani)]` 下 — `cargo test`/lint/
   通常 lane の compiled surface に影響しない（`check-cfg` は
   workspace で `cfg(kani)` を既に known 宣言）。
+
+## residual slice — Kani lane 再実行（aggregate verdict 回収 + `open_muxer_rejects_invalid_value` 再設計試行）
+
+- Date: 2026-11-24
+- OS: Windows (x86_64) — proptest/通常 lane。Kani lane は WSL2 Ubuntu
+  （`cargo kani` 検出 → `/mnt/g` パス写像 → WSL ネイティブ target dir）。
+  実行中に WSL VM が OOM 連鎖で `Wsl/Service/E_UNEXPECTED` 死亡したため
+  `wsl --shutdown` → fresh boot で復帰（~31 GiB free + 8 GiB swap）。
+- Toolchain: rustc 1.99.1 (58cf8f9c3 2026-10-13) / cargo 1.99.1（Windows）;
+  rustc 1.99.0 (b940084d7 2026-09-28) / Kani Rust Verifier 0.68.0 /
+  CBMC 6.11.0（WSL2）
+- Repo SHA: `06a5a9e0c0ca244bb2b10569a950ef3293ef584f`（`origin/main`
+  HEAD。各 JSONL の `repo_sha` は実行時 HEAD を記録）
+- ローカル検証 = 変更範囲の検証。統合検証は merge 後の対象 SHA に
+  対する必須 CI 結果が証拠（本記録はそれを代替しない）。
+
+### 検証対象（residual）
+
+- slice 4 で verdict 未発行だった残件の回収:
+  aggregate invocation 1（wire/archive `-j4` — 前回 WSL service 死亡で
+  per-harness verdict なし）と `open_muxer_rejects_invalid_value`
+  （Err-direction SAT が ~31.7 GiB envelope に張り付き `not_run`）。
+- `open_muxer_rejects_invalid_value` についてはタスク条件付きの
+  bounded 再設計を試行 — gate 直上 `validate_stream` 単体の証明を
+  `src/muxer.rs` の `#[cfg(kani)] mod proofs` に追加（`#[kani::stub]`
+  は unstable `stubbing` feature が必須で lane が flag を渡せないため
+  不採用）。concrete 入力でも ~31.9 GiB に張り付き FAILED（CBMC
+  OOM）のため **`src/muxer.rs` は完全 revert（diff ゼロ）** し、
+  tests 側 `open_muxer_rejects_invalid_value` harness は lane から
+  除去した（永久に verdict を返さない証明を残すと全実行が `fail`
+  になる）。契約カバレッジは不変 — `wire_new_gate_is_exact_*` が
+  同一 spec を boundary matrix で証明済み、`open_muxer` の `?`
+  伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky`。
+- 生産コードの意味論差分ゼロ（`git diff` src/ ゼロ）。
+
+### Actions → resulting state（residual）
+
+| # | Action (command) | Resulting state |
+| --- | --- | --- |
+| 1 | `mise run test-formal` | 73/73 properties pass・exit 0。記録: `residual/test-formal-final.txt` |
+| 2 | `mise run test-formal-kani` | aggregate `{"verdict":"fail"}` exit 1 — **環境起因**（反例なし）: invocation 1（`-j4` wire/archive）は 4 harness 起動後に cbmc 2 本が ~12.6 GiB まで膨張し kernel OOM kill → cargo kani が per-harness verdict を発行せず終了（wire 4 harness は queue 未到達）。invocation 2（`-j4` structured）は 3/3 SUCCESSFUL。invocation 3（`-j1` io-wav）は compile 完了直後に WSL service が `E_UNEXPECTED` 死亡・無出力。記録: `residual/test-formal-kani.txt` |
+| 3 | `wsl --shutdown` → io-wav `-j1` 単独再実行（再設計 harness 入り） | `validate_stream_rejects_byte_rate_overflow`（新設計・concrete 入力）が ~31.9 GiB で CBMC OOM FAILED、他 9/10 SUCCESSFUL。支配コストは `open_muxer` post-gate CFG ではなく `validate_stream` 自身の error-arm SSA（`Error::with_source` + `format!`/`io::Error` 構築 ×6 site）であることが確定。`src/muxer.rs` 全 revert。記録: `residual/kani-io-wav-j1.txt` |
+| 4 | io-wav `-j1` 最終 tree で再実行 | **9/9 SUCCESSFUL・0 failures**。記録: `residual/kani-io-wav-j1-final.txt` |
+| 5 | invocation 1 を `-j1` に分割再実行（`cargo kani --tests -j1 -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` + `-j1 -p ruviform-ui -p ruviform-ui-test` の 2 系統並列 — 各 cbmc 単独・envelope 共有は ~12 GiB まで） | 補助証拠（canonical = mise）。**8/8 harness が verdict 未発行**（per-harness 表参照）— solver-bound grind 系（~7.3/~5.9/~5.4/~3.9/~3.7 GiB 安定 RSS で 42-90 CPU-min）と envelope-bound 膨張系（~22 GiB まで膨張して kill）の 2 類型に分かれる。kill は全て operator 手動（envelope 死守 + VM 保護 — `-j4` OOM で service が死んだ経路を回避）。cbmc 側は kill を「out of memory」FAILED として記録し driver は queue を継続。反例・契約違反の検出はゼロ。記録: `residual/kani-inv1-j1.txt`・`residual/kani-wire-j1.txt` |
+| 6 | `mise run fmt-check` / `check ruviform-io-wav` / `lint ruviform-io-wav` / `test ruviform-io-wav` | 全 pass（clippy `-D warnings` clean・`--all-targets`） |
+| 7 | `mise exec -- prek run --all-files` | 全 hook pass（auto-fix 不要） |
+
+### Lane / verification results（residual）
+
+| Command | OS | Exit | Verdict | 備考 |
+| --- | --- | --- | --- | --- |
+| `mise run test-formal` | Windows x64 | 0 | pass | 73/73 properties（formal_wav 9 含む最終 tree） |
+| `mise run test-formal-kani` | WSL2 Ubuntu x64 | 1 | fail | aggregate — **環境起因**: inv1 `-j4` で cbmc 2 本 ~12.6 GiB → kernel OOM kill → per-harness verdict 未発行。inv2 3/3 SUCCESSFUL（`csv_max_records_gate` 0/5794 15.9s・`csv_max_field_bytes_gate` 0/5812 16.0s・`input::bounded_read_budget_gate` 0/532 55.4s）。inv3 compile 後 WSL service `E_UNEXPECTED` 死亡 |
+| `cargo kani --tests -j1 -p ruviform-io-wav`（再設計試行・auxiliary） | WSL2 Ubuntu x64 | 1 | fail（env） | `validate_stream_rejects_byte_rate_overflow` が concrete 入力でも ~31.9 GiB → CBMC OOM。他 9/10 SUCCESSFUL。支配コスト確定: `validate_stream` error-arm SSA |
+| `cargo kani --tests -j1 -p ruviform-io-wav`（最終 tree・auxiliary） | WSL2 Ubuntu x64 | 0 | pass | 9/9 SUCCESSFUL: `write_sample_documented_policy` 0/482・`fmt_and_header_layout` 0/890・`wire_new_gate_is_exact_{large,mid,small}_align` 0/368+0/362+0/362・`wire_new_non_wire_is_unsupported` 0/251・`format_tag_membership_is_wire_formats` 0/88・`open_muxer_spec_contract_{extensible,pcm}` 0/4536+0/4530 |
+| `cargo kani --tests -j1 -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive`（auxiliary・inv1 分割） | WSL2 Ubuntu x64 | 1 | fail（env） | 0/8 verified — 全 harness solver/envelope-bound（per-harness 表）。`-j4` OOM の代替として全 envelope を割当 |
+| `cargo kani --tests -j1 -p ruviform-ui -p ruviform-ui-test`（auxiliary・wire 並列） | WSL2 Ubuntu x64 | 1 | fail（env） | 0/5 verified — 同上。並列 2 系統で tail を短縮（各 cbmc 単独・envelope 共有は ~12 GiB まで）。duplicate harness の verdict は先に確定した側の記録を採用 |
+
+#### per-harness verdicts（residual — 補助証拠）
+
+| Harness | Invocation | Result | 備考 |
+| --- | --- | --- | --- |
+| `proofs::zip_index_gates` | inv1 `-j1` | not_run（solver-bound） | ~87 CPU-min・RSS ~7.3 GiB 安定 grind — SAT solve 相で verdict 未到達（operator kill → `FAILED`/OOM 行発行）。slice 2 の 900s/1800s timeout を ~3 倍超えても不変 |
+| `proofs::tar_declared_size_gate` | inv1 `-j1` | not_run（env-bound） | ~19 CPU-min で ~21.8 GiB まで膨張 — envelope 死守のため kill |
+| `proofs::tar_typeflag_classification` | inv1 `-j1` | not_run（env-bound） | ~15 CPU-min で ~21.8 GiB まで膨張 — 同上 |
+| `proofs::write_read_roundtrip` | wire `-j1` | not_run（solver-bound） | ~90 CPU-min・~5.4 GiB 安定 grind — slice 1 の >35 CPU-min 記録を大きく超えても verdict 未到達 |
+| `proofs::read_frame_contract` | wire `-j1` | not_run（solver-bound） | ~44 CPU-min・~5.9 GiB grind — budget 上限で kill（inv1 側 duplicate も同様に終了） |
+| `proofs::parse_intent_error_contract` | inv1 `-j1` | not_run（solver-bound） | ~45 CPU-min・~3.7 GiB grind — budget 上限で kill |
+| `proofs::valid_op_soundness` | inv1 `-j1` | not_run（env-bound） | ~27 CPU-min で ~22 GiB まで膨張 — envelope 死守のため kill |
+| `proofs::event_to_json_wellformed` | wire `-j1` | not_run（solver-bound） | ~42 CPU-min・~3.9 GiB 安定 grind — budget 上限で kill |
+| io-wav 9 harness（一覧は上表） | inv3 `-j1` | 9/9 SUCCESSFUL | 最終 tree・failures 0 |
+| `validate_stream_rejects_byte_rate_overflow`（再設計・revert 済） | inv3 `-j1` | not_run（env-blocked） | concrete 入力で ~31.9 GiB → CBMC OOM — `validate_stream` error-arm SSA が支配コストと確定 |
+
+### Bounds and assumptions（Kani・residual）
+
+- 再設計試行 `validate_stream_rejects_byte_rate_overflow`: concrete
+  spec（7.1 F32・rate = `u32::MAX/32+1` — tests 側旧 harness と同一）
+  に対し `validate_stream` が `Err(InvalidValue)` を返すことのみを
+  証明する最小形（symbolic 変数ゼロ・`unwind(4)`）。それでも
+  ~31.9 GiB に張り付いたため、Err-direction の支配コストは
+  `open_muxer` の post-gate CFG（slice 4 の推定）ではなく
+  `validate_stream` 自身の error-arm SSA だと確定した — `Error::
+  with_source` + `format!`/`io::Error` 構築が 6 site あり、dead
+  branch であっても CBMC は全 CFG を SSA に encode する。
+- 契約カバレッジは退役前と不変: `wire_new_gate_is_exact_*` が同一
+  spec を含む boundary matrix で `InvalidValue` を exhaustive に
+  証明（本 run でも 3/3 SUCCESSFUL を確認）。`open_muxer` の `?`
+  伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky`
+  が任意 spec で担保。
+- `open_muxer_rejects_invalid_value` harness の除去は検証成功条件の
+  緩和ではない — 一度も verdict を発行できない証明を lane に残すと
+  aggregate が常時 `fail` になり、実害のある検証（9/9 verified）が
+  埋もれる。契約自体の証明分担は上行の union 補完どおり。
+
+### Honest notes（residual）
+
+- aggregate `fail` verdict は **全て環境起因** — kernel OOM kill
+  （`-j4` 時の cbmc 2 本 ~12.6 GiB 同時膨張）と WSL service
+  `E_UNEXPECTED`（inv3 compile 直後）。CBMC が返した反例は
+  本 slice でもゼロ。
+- invocation 1 の 8 harness は slice 1-4 を通じて一度も verdict を
+  発行していない（slice 1: 35+ CPU-min cutoff、slice 2: 900-1800s
+  timeout、slice 4: `-j4` OOM、本 slice: `-j1` 単独でも ~87 min
+  solver-bound）。契約自体は proptest 側で担保済み（bound 表参照）
+  — Kani 側 verdict 未発行は環境/solver-bound の `not_run` と
+  正直に記録し `pass` 扱いしない（fail-closed）。
+- `-j1` 並列 2 系統は per-harness 補助証拠取得のための実行形で、
+  lane 定義（`mise.toml`）は不変 — canonical verdict は aggregate
+  run のもの。
+- `wsl --shutdown` による復帰は OOM で wedged した VM の標準的
+  回復手順（VM 内プロセスは既に全滅していた状態での reset）。

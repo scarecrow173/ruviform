@@ -1,0 +1,108 @@
+[test-formal] $ cargo test --locked -p ruviform-ui --test formal_ipc
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running tests\formal_ipc.rs (target\debug\deps\formal_ipc-08f3724c15050d50.exe)
+
+running 7 tests
+test valid_op_accepts_generated ... ok
+test event_to_json_versioned_envelope ... ok
+test broken_op_rejected_everywhere ... ok
+test intent_serialize_parse_roundtrip ... ok
+test parse_intent_oversize_is_too_large ... ok
+test parse_intent_arbitrary_error_set ... ok
+test valid_op_total_and_sound ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+     Running tests\formal_transport.rs (target\debug\deps\formal_transport-6478439710191291.exe)
+
+running 4 tests
+test too_large_drains_and_stays_aligned ... ok
+test read_frame_arbitrary_stream ... ok
+test write_frame_over_cap_refused ... ok
+test write_read_roundtrip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running tests\formal_archive.rs (target\debug\deps\formal_archive-cd280d9b616441e5.exe)
+
+running 18 tests
+test zip_entry_size_limit_gate ... ok
+test zip_index_limit_gates ... ok
+test zip_path_limit_gate ... ok
+test tar_declared_size_gate ... ok
+test zip_total_measured_gate ... ok
+test tar_metadata_gate ... ok
+test tar_total_measured_gate ... ok
+test tar_max_entries_gate ... ok
+test tar_link_limit_gate ... ok
+test tar_name_limit_gate ... ok
+test zip_metadata_limit_gate ... ok
+test tar_pending_recovery ... ok
+test tar_pax_gnu_extensions ... ok
+test tar_arbitrary_stream_error_set ... ok
+test tar_finish_receipt_invariants ... ok
+test zip_arbitrary_stream_error_set ... ok
+test tar_writer_roundtrip ... ok
+test zip_writer_roundtrip ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running tests\formal_structured.rs (target\debug\deps\formal_structured-0ca5be34aa7fd37e.exe)
+
+running 35 tests
+test csv_props::csv_typed_failure_keeps_cursor_aligned ... ok
+test csv_props::csv_dialect_unsupported ... ok
+test json_props::json_trailing_data_gate ... ok
+test json_props::json_max_bytes_gate ... ok
+test json_props::json_roundtrip ... ok
+test csv_props::csv_bom_policy ... ok
+test toml_props::toml_max_bytes_gate ... ok
+test csv_props::csv_max_record_bytes_gate ... ok
+test csv_props::csv_max_records_gate ... ok
+test csv_props::csv_ragged_is_data_model_unless_flexible ... ok
+test csv_props::csv_max_fields_gate ... ok
+test csv_props::csv_max_bytes_gate ... ok
+test csv_props::csv_max_field_bytes_gate ... ok
+test xml_props::xml_depth_gate ... ok
+test xml_props::xml_event_bytes_gate ... ok
+test toml_props::toml_trailing_is_syntax ... ok
+test json_props::json_arbitrary_stream_error_set ... ok
+test xml_props::xml_attribute_gate ... ok
+test csv_props::csv_streaming_roundtrip ... ok
+test toml_props::toml_roundtrip ... ok
+test xml_props::xml_stream_alignment ... ok
+test xml_props::xml_event_count_gate ... ok
+test csv_props::csv_field_str_encoding ... ok
+test xml_props::xml_secure_defaults ... ok
+test xml_props::xml_max_bytes_gate ... ok
+test yaml_props::yaml_max_bytes_gate ... ok
+test yaml_props::yaml_depth_gate ... ok
+test xml_props::xml_arbitrary_stream_error_set ... ok
+test toml_props::toml_arbitrary_stream_error_set ... ok
+test yaml_props::yaml_second_document_is_trailing_data ... ok
+test csv_props::csv_typed_roundtrip ... ok
+test yaml_props::yaml_alias_gate ... ok
+test csv_props::csv_arbitrary_stream_error_set ... ok
+test yaml_props::yaml_roundtrip ... ok
+test yaml_props::yaml_arbitrary_stream_error_set ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests\formal_wav.rs (target\debug\deps\formal_wav-d4da866a3f60c09a.exe)
+
+running 9 tests
+test declaration_mutations_keep_stable_error_kinds ... ok
+test wire_gate_is_exact_membership_plus_byte_rate ... ok
+test open_muxer_writes_complete_header ... ok
+test muxer_rejections_are_invalid_data_and_not_sticky ... ok
+test encoder_rejections_are_invalid_data_and_not_sticky ... ok
+test muxer_finalize_receipt_backpatch_one_shot ... ok
+test encoder_packet_stream_is_the_frame_stream ... ok
+test sample_conversion_matches_documented_policy ... ok
+test wav_roundtrip_decodes_through_symphonia ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s

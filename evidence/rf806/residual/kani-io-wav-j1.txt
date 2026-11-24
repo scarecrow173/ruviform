@@ -1,0 +1,455 @@
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (1)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.37s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finishedwarning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+ `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+warning: unused variable: `other`
+   --> crates/ruviform-io-wav/tests/formal_wav.rs:768:17
+    |
+768 | ...   other => unrea...mat"),
+    |       ^^^^^    -----...----- you might have meant to use string interpolation in this string literal
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: if this is intentional, prefix it with an underscore
+    |
+768 |                 _other => unreachable!("{other:?} is not a wire format"),
+    |                 +
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: unused variable: `index`
+   --> crates/ruviform-io-wav/tests/roundtrip.rs:153:14
+    |
+153 |           for (index, (...
+    |                ^^^^^
+...
+158 | /             assert!(
+159 | |                 (expe...
+160 | |                 "chan...
+161 | |             );
+    | |_____________- you might have meant to use string interpolation in this string literal
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: if this is intentional, prefix it with an underscore
+    |
+153 |         for (_index, (&expected, &actual)) in source[channel]
+    |              +
+
+warning: unused variable: `index`
+   --> crates/ruviform-io-wav/tests/roundtrip.rs:225:10
+    |
+225 |       for (index, (...
+    |            ^^^^^
+226 | /         assert!(
+227 | |             (want...
+228 | |             "samp...
+229 | |         );
+    | |_________- you might have meant to use string interpolation in this string literal
+    |
+help: if this is intentional, prefix it with an underscore
+    |
+225 |     for (_index, (&want, &got)) in expected.iter().zip(planes[0].iter()).enumerate() {
+    |          +
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.30s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+Checking harness convert::proofs::write_sample_documented_policy...
+
+VERIFICATION RESULT:
+ ** 0 of 482 failed (7 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 3.08709s
+
+Checking harness muxer::proofs::validate_stream_rejects_byte_rate_overflow...
+
+CBMC failed
+VERIFICATION:- FAILED
+CBMC appears to have run out of memory. You may want to rerun your proof in an environment with additional memory or use stubbing to reduce the size of the code the verifier reasons about.
+
+Checking harness wav::proofs::fmt_and_header_layout...
+
+VERIFICATION RESULT:
+ ** 0 of 890 failed (7 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 35.653797s
+
+Checking harness wav::proofs::wire_new_gate_is_exact_large_align...
+
+VERIFICATION RESULT:
+ ** 0 of 368 failed (2 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 3.4112144s
+
+Checking harness wav::proofs::wire_new_gate_is_exact_mid_align...
+
+VERIFICATION RESULT:
+ ** 0 of 362 failed (2 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 3.1949484s
+
+Checking harness wav::proofs::wire_new_gate_is_exact_small_align...
+
+VERIFICATION RESULT:
+ ** 0 of 362 failed (2 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 3.8469005s
+
+Checking harness wav::proofs::wire_new_non_wire_is_unsupported...
+
+VERIFICATION RESULT:
+ ** 0 of 251 failed (5 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 1.0398173s
+
+Checking harness wav::proofs::format_tag_membership_is_wire_formats...
+
+VERIFICATION RESULT:
+ ** 0 of 88 failed (1 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 0.39267322s
+
+Checking harness proofs::open_muxer_spec_contract_extensible...
+
+VERIFICATION RESULT:
+ ** 0 of 4536 failed (321 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 28.956663s
+
+Checking harness proofs::open_muxer_spec_contract_pcm...
+
+VERIFICATION RESULT:
+ ** 0 of 4530 failed (321 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 15.100992s
+
+Manual Harness Summary:
+Verification failed for - muxer::proofs::validate_stream_rejects_byte_rate_overflow
+Complete - 9 successfully verified harnesses, 1 failures, 10 total.

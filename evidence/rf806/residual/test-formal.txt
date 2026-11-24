@@ -1,0 +1,206 @@
+[test-formal] $ cargo test --locked -p ruviform-ui --test formal_ipc
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling rustversion v1.0.23
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling rtrb v0.4.1
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling windows-sys v0.61.2
+   Compiling num-traits v0.2.19
+   Compiling itoa v1.0.19
+   Compiling memchr v2.8.3
+   Compiling tempfile v3.27.0
+   Compiling audio_thread_priority v0.38.0
+   Compiling rusty-fork v0.3.1
+   Compiling proptest v1.12.0
+   Compiling syn v3.0.10
+   Compiling arc-swap v1.9.5
+   Compiling ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-rt)
+   Compiling serde_derive v1.0.229
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-exec)
+   Compiling ruviform-ui v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-ui)
+mbx[progress]: 15s elapsed; 36 hits, 0 misses, 1 bypassed, 0 not looked up; ~21.93s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.10s
+     Running tests\formal_ipc.rs (target\debug\deps\formal_ipc-08f3724c15050d50.exe)
+
+running 7 tests
+test valid_op_accepts_generated ... ok
+test event_to_json_versioned_envelope ... ok
+test broken_op_rejected_everywhere ... ok
+test intent_serialize_parse_roundtrip ... ok
+test valid_op_total_and_sound ... ok
+test parse_intent_oversize_is_too_large ... ok
+test parse_intent_arbitrary_error_set ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+mbx[cache]: 36 hits, 3 misses, 1 bypassed; 0 B downloaded, 0 B uploaded, 79.2 MiB stored locally
+mbx[savings]: 6.8 TiB logical of target/ belonged to checkouts that no longer exist. neither does it.
+   Compiling unicode-ident v1.0.27
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.5
+   Compiling adler2 v2.0.1
+   Compiling camino v1.2.6
+   Compiling thiserror v2.0.21
+   Compiling base64 v0.22.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling semver v1.0.28
+   Compiling flate2 v1.1.11
+   Compiling ruviform-ui-theme v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-ui-theme)
+   Compiling syn v3.0.10
+   Compiling png v0.18.1
+   Compiling syn v2.0.119
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde v1.0.229
+   Compiling cargo-platform v0.1.9
+   Compiling ruviform-ui v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-ui)
+   Compiling cargo_metadata v0.19.2
+   Compiling ruviform-ui-test v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-ui-test)
+mbx[progress]: 15s elapsed; 44 hits, 1 misses, 0 bypassed, 0 not looked up; ~41.99s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.01s
+     Running tests\formal_transport.rs (target\debug\deps\formal_transport-6478439710191291.exe)
+
+running 4 tests
+test too_large_drains_and_stays_aligned ... ok
+test read_frame_arbitrary_stream ... ok
+test write_frame_over_cap_refused ... ok
+test write_read_roundtrip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+mbx[cache]: 44 hits, 6 misses; 0 B downloaded, 0 B uploaded, 231.7 MiB stored locally
+mbx[savings]: 461.0 GiB of target/ is an elaborate illusion. the disk is in on it.
+   Compiling simd-adler32 v0.3.10
+   Compiling tinyvec v1.13.3
+   Compiling proptest v1.12.0
+   Compiling miniz_oxide v0.9.1
+   Compiling unicode-normalization v0.1.26
+   Compiling flate2 v1.1.11
+   Compiling ruviform-io-compression v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-io-compression)
+   Compiling ruviform-io-archive v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-io-archive)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+     Running tests\formal_archive.rs (target\debug\deps\formal_archive-cd280d9b616441e5.exe)
+
+running 18 tests
+test zip_entry_size_limit_gate ... ok
+test zip_path_limit_gate ... ok
+test zip_index_limit_gates ... ok
+test tar_declared_size_gate ... ok
+test tar_max_entries_gate ... ok
+test tar_metadata_gate ... ok
+test zip_total_measured_gate ... ok
+test tar_link_limit_gate ... ok
+test tar_total_measured_gate ... ok
+test tar_name_limit_gate ... ok
+test zip_metadata_limit_gate ... ok
+test tar_pending_recovery ... ok
+test tar_arbitrary_stream_error_set ... ok
+test tar_pax_gnu_extensions ... ok
+test zip_arbitrary_stream_error_set ... ok
+test tar_writer_roundtrip ... ok
+test tar_finish_receipt_invariants ... ok
+test zip_writer_roundtrip ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+mbx[cache]: 9 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 232978 compilations, each compiled once and served warm ever since
+   Compiling serde_core v1.0.229
+   Compiling memchr v2.8.3
+   Compiling scopeguard v1.2.0
+   Compiling multiversion_no_op v1.0.0
+   Compiling simdutf8 v0.1.5
+   Compiling num-traits v0.2.19
+   Compiling arraydeque v0.5.1
+   Compiling unicode-width v0.2.3
+   Compiling anstyle v1.0.14
+   Compiling winnow v1.0.5
+   Compiling encoding_rs v0.8.44
+   Compiling nohash-hasher v0.2.0
+   Compiling base64 v0.23.1
+   Compiling toml_writer v1.2.0+spec-1.1.0
+   Compiling ryu v1.0.23
+   Compiling csv-core v0.1.13
+   Compiling quick-xml v0.42.0
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling annotate-snippets v0.12.17
+   Compiling granit-parser v2.1.0
+   Compiling toml_datetime v1.1.3+spec-1.1.0
+   Compiling serde_spanned v1.1.3
+   Compiling serde v1.0.229
+   Compiling csv v1.4.0
+   Compiling serde_json v1.0.154
+   Compiling encoding_rs_io v0.1.8
+   Compiling proptest v1.12.0
+   Compiling toml v1.1.8+spec-1.1.0
+   Compiling serde-saphyr v2.0.0
+   Compiling ruviform-io-structured v0.1.0 (G:\orca\workspaces\ruviform\rf806-kani-residual\crates\ruviform-io-structured)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.44s
+     Running tests\formal_structured.rs (target\debug\deps\formal_structured-0ca5be34aa7fd37e.exe)
+
+running 35 tests
+test csv_props::csv_typed_failure_keeps_cursor_aligned ... ok
+test csv_props::csv_dialect_unsupported ... ok
+test json_props::json_trailing_data_gate ... ok
+test json_props::json_max_bytes_gate ... ok
+test json_props::json_roundtrip ... ok
+test toml_props::toml_max_bytes_gate ... ok
+test csv_props::csv_bom_policy ... ok
+test csv_props::csv_max_records_gate ... ok
+test csv_props::csv_max_record_bytes_gate ... ok
+test csv_props::csv_max_field_bytes_gate ... ok
+test csv_props::csv_max_fields_gate ... ok
+test toml_props::toml_trailing_is_syntax ... ok
+test csv_props::csv_ragged_is_data_model_unless_flexible ... ok
+test csv_props::csv_field_str_encoding ... ok
+test csv_props::csv_streaming_roundtrip ... ok
+test toml_props::toml_arbitrary_stream_error_set ... ok
+test json_props::json_arbitrary_stream_error_set ... ok
+test xml_props::xml_event_count_gate ... ok
+test xml_props::xml_attribute_gate ... ok
+test csv_props::csv_max_bytes_gate ... ok
+test xml_props::xml_max_bytes_gate ... ok
+test xml_props::xml_depth_gate ... ok
+test xml_props::xml_event_bytes_gate ... ok
+test xml_props::xml_secure_defaults ... ok
+test toml_props::toml_roundtrip ... ok
+test xml_props::xml_stream_alignment ... ok
+test yaml_props::yaml_max_bytes_gate ... ok
+test yaml_props::yaml_depth_gate ... ok
+test yaml_props::yaml_second_document_is_trailing_data ... ok
+test xml_props::xml_arbitrary_stream_error_set ... ok
+test csv_props::csv_typed_roundtrip ... ok
+test csv_props::csv_arbitrary_stream_error_set ... ok
+test yaml_props::yaml_alias_gate ... ok
+test yaml_props::yaml_roundtrip ... ok
+test yaml_props::yaml_arbitrary_stream_error_set ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+mbx[cache]: 35 hits, 2 misses; 0 B downloaded, 0 B uploaded, 63.7 MiB stored locally
+mbx[savings]: swept up 11.3 TiB logical so far. the broom is content-addressed.
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.44s
+     Running tests\formal_wav.rs (target\debug\deps\formal_wav-d4da866a3f60c09a.exe)
+
+running 9 tests
+test declaration_mutations_keep_stable_error_kinds ... ok
+test wire_gate_is_exact_membership_plus_byte_rate ... ok
+test open_muxer_writes_complete_header ... ok
+test encoder_rejections_are_invalid_data_and_not_sticky ... ok
+test muxer_rejections_are_invalid_data_and_not_sticky ... ok
+test muxer_finalize_receipt_backpatch_one_shot ... ok
+test encoder_packet_stream_is_the_frame_stream ... ok
+test sample_conversion_matches_documented_policy ... ok
+test wav_roundtrip_decodes_through_symphonia ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
