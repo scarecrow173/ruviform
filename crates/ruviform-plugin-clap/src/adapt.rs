@@ -53,6 +53,8 @@ use ruviform_media_core::{
     MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
     MidiKind, MidiProgram, MidiValue, MusicalTimeInfo, NoteKey, PPQN, TimeBase, TransportStatus,
 };
+#[cfg(any(test, feature = "host"))]
+use ruviform_plugin_core::ParamNotice;
 use ruviform_plugin_core::{
     Event, EventKind, EventList, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
     ParamId, ParamInfo, ProcessConfig, ProcessResult, ProcessStatus, TransportInfo,
@@ -817,9 +819,10 @@ pub(crate) fn translate_events<'a>(
 /// Defined skips (`None`): a `ParamValue` for an unknown id, a
 /// `CLAP_INVALID_ID`, or a non-finite value; a note event with wild
 /// channel/key targeting or a non-finite velocity; every other core
-/// event type (note-end/choke/expression, param-mod/gesture,
-/// transport, sysex) and non-core event spaces — none carries an
-/// honest canonical payload.
+/// event type (note-end/choke/expression, param-mod, transport,
+/// sysex) and non-core event spaces — none carries an honest
+/// canonical payload. Gesture edges are not reports: they route to
+/// [`translate_output_notice`] (Issue #912).
 ///
 /// **RT contract:** RT-suitable — pure, allocation-free.
 #[cfg(any(test, feature = "host"))]
@@ -840,6 +843,45 @@ pub(crate) fn translate_output_event(
             translate_note_event(unknown, event.pckn(), event.velocity(), false)
         }
         Some(CoreEventSpace::Midi(_) | CoreEventSpace::Midi2(_)) => translate_midi_event(unknown),
+        _ => None,
+    }
+}
+
+/// Translates a plugin-written CLAP gesture output event into a
+/// [`ParamNotice`] — the process-path producer of the param notice
+/// surface (Issue #912): `ParamGestureBegin`/`ParamGestureEnd` →
+/// `GestureBegin`/`GestureEnd`, the frame stamp carried verbatim as
+/// `Some(frame_offset)` (the [`translate_output_event`]
+/// faithful-stamp law).
+///
+/// Defined skips (`None`): a gesture for an unknown id or a
+/// `CLAP_INVALID_ID`, and every non-gesture event — `ParamValue`
+/// stays on the [`Event`] report surface (never duplicated here) and
+/// `ParamMod` carries no consumer payload.
+///
+/// **RT contract:** RT-suitable — pure, allocation-free (the gesture
+/// variants own no heap data).
+#[cfg(any(test, feature = "host"))]
+pub(crate) fn translate_output_notice(
+    unknown: &UnknownEvent,
+    params: &[ParamInfo],
+) -> Option<ParamNotice> {
+    let known = |raw: u32| {
+        params
+            .iter()
+            .find(|info| info.id.0 == raw)
+            .map(|info| info.id)
+    };
+    let frame_offset = Some(unknown.header().time());
+    match unknown.as_core_event()? {
+        CoreEventSpace::ParamGestureBegin(event) => Some(ParamNotice::GestureBegin {
+            param_id: known(event.param_id()?.get())?,
+            frame_offset,
+        }),
+        CoreEventSpace::ParamGestureEnd(event) => Some(ParamNotice::GestureEnd {
+            param_id: known(event.param_id()?.get())?,
+            frame_offset,
+        }),
         _ => None,
     }
 }
@@ -1130,7 +1172,7 @@ mod tests {
     use clack_common::events::Event as _;
     use clack_common::events::event_types::{
         MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent, ParamGestureBeginEvent,
-        ParamModEvent, ParamValueEvent,
+        ParamGestureEndEvent, ParamModEvent, ParamValueEvent,
     };
     use clack_common::events::io::EventBuffer;
     use clack_common::events::{EventFlags, EventHeader, Pckn};
@@ -1967,6 +2009,60 @@ mod tests {
                 "unsupported core kinds are defined skips"
             );
         }
+    }
+
+    /// Wire v9 (Issue #912): `ParamGestureBegin`/`End` output events
+    /// map to `GestureBegin`/`GestureEnd` notices with the verbatim
+    /// frame stamp; unknown ids, param-mod and every non-gesture
+    /// event stay defined skips (`ParamValue` keeps riding `Event`).
+    #[test]
+    fn translate_output_notice_maps_gesture_edges() {
+        for (time, expected) in [
+            (
+                7_u32,
+                ParamNotice::GestureBegin {
+                    param_id: GAIN_PARAM.id,
+                    frame_offset: Some(7),
+                },
+            ),
+            (
+                9,
+                ParamNotice::GestureEnd {
+                    param_id: GAIN_PARAM.id,
+                    frame_offset: Some(9),
+                },
+            ),
+        ] {
+            let begin = ParamGestureBeginEvent::new(time, gain_clap_id());
+            let end = ParamGestureEndEvent::new(time, gain_clap_id());
+            let event = if matches!(expected, ParamNotice::GestureBegin { .. }) {
+                begin.as_unknown().to_owned()
+            } else {
+                end.as_unknown().to_owned()
+            };
+            assert_eq!(
+                translate_output_notice(event, &[GAIN_PARAM]),
+                Some(expected)
+            );
+        }
+        // Unknown param id / `CLAP_INVALID_ID` — defined skip.
+        let unknown_id = ParamGestureBeginEvent::new(0, ClapId::new(999));
+        assert_eq!(
+            translate_output_notice(unknown_id.as_unknown(), &[GAIN_PARAM]),
+            None
+        );
+        // Param-mod and `ParamValue` carry no notice payload — the
+        // value stream stays on the `Event` surface.
+        let modulation = ParamModEvent::new(0, gain_clap_id(), Pckn::match_all(), 0.5);
+        assert_eq!(
+            translate_output_notice(modulation.as_unknown(), &[GAIN_PARAM]),
+            None
+        );
+        let value = ParamValueEvent::new(0, gain_clap_id(), Pckn::match_all(), 0.5);
+        assert_eq!(
+            translate_output_notice(value.as_unknown(), &[GAIN_PARAM]),
+            None
+        );
     }
 
     // -- Transport -----------------------------------------------------------
