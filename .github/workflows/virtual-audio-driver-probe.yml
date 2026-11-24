@@ -6,7 +6,8 @@ name: virtual-audio-driver-probe
 # 目的: repo 内ソースのみの SysVAD 派生 driver package
 # （drivers/rvf-virtual-audio/）を runner 上で build → test-sign →
 # driver store staging → root-enumerated MEDIA devnode 結合 → MMDevice
-# endpoint 列挙 → endpoint_probe pair 候補検出 → cleanup まで stage 分解で
+# endpoint 列挙 → endpoint_probe pair 候補検出 → virtual_endpoint
+# streaming round-trip → cleanup まで stage 分解で
 # 実測し、どの stage まで成立するかを判定材料として記録する。判定は
 # evidence の解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
 #
@@ -787,6 +788,39 @@ jobs:
 
           $detail = "devnode=$devnodeStatus; probe_exit=$probeExit; $(($kv | Where-Object { $_ -match '=' }) -join '; ')"
           Add-StageRecord -JsonPath $json -Stage endpoint-probe -Status $(if ($probeExit -eq 0) { 'ok' } else { 'error' }) -Detail $detail -ExitCode $probeExit
+          exit 0
+
+      # stream-roundtrip: tests/virtual_endpoint.rs の実走（AC3）— pair
+      # candidate の render 側に 440Hz sine + marker burst を出力し、
+      # capture 側で marker spacing・level ratio・tonal concentration を
+      # 検証する真の audio round-trip。endpoint 列挙・pair 検出は test
+      # 自身が行うため endpoint-probe の結果に依存せず常に試行する。
+      # verdict 行（Pass/NotRun/Fail）を detail に記録 — NotRun は
+      # 未 provisioned の正直な観測値で失敗扱いしない（fail-closed
+      # contract と同型）。Fail のみ error 記録。
+      - name: Stage stream-roundtrip
+        if: always()
+        shell: pwsh
+        run: |
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $log = "stage-stream-roundtrip-$os.txt"
+          New-Item -ItemType File -Force $log | Out-Null
+
+          $probeStatus = Get-StageStatus $json 'endpoint-probe'
+          "  prerequisite endpoint-probe: $probeStatus" | Out-Probe $log
+
+          $out = @(& mise run test-audio-virtual-endpoint 2>&1)
+          $testExit = $LASTEXITCODE
+          $out | ForEach-Object { "  $_" | Out-Probe $log }
+          $verdictLine = $out | Where-Object { $_ -match 'verdict:' } | Select-Object -Last 1
+          $verdict = if ($verdictLine) { ($verdictLine -replace '.*verdict:\s*', '').Trim() } else { 'no-verdict-line' }
+          "  test exit=$testExit verdict=$verdict" | Out-Probe $log
+
+          $status = 'ok'
+          if ($verdict -match '^Fail') { $status = 'error' }
+          Add-StageRecord -JsonPath $json -Stage stream-roundtrip -Status $status -Detail "test_exit=$testExit; verdict=$verdict" -ExitCode $testExit
           exit 0
 
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
