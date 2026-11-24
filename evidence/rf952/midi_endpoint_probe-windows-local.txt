@@ -1,0 +1,34 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running `mbx-launch 'target\debug\examples\midi_endpoint_probe.exe'`
+midi_endpoint_probe — Issue #629 virtual-endpoint capability probe (WinMM)
+manual diagnostic; the output is survey evidence, not a test verdict
+
+== environment ==
+  os=windows arch=x86_64 family=windows
+  os_version: Microsoft Windows [Version 10.0.26300.9974]
+
+== WinMM port enumeration ==
+  [output] Microsoft GS Wavetable Synth index=0 mid=0x0001 pid=0x001b driver_ver=256
+      support=0x00000001 tech=7 voices=32 notes=32 ch_mask=0xffff
+      note: interface_id: NotRun — midiOutMessage DRV_QUERYDEVICEINTERFACE crashed on this host's driver; input-path query only
+
+== production port view (ruviform_midi_device) ==
+  production input ports: 0
+  production output ports: 1
+    - Microsoft GS Wavetable Synth  id=winmm-out:0:Microsoft GS Wavetable Synth  origin=Unknown  ump=false timestamps=false domain=None
+
+== Windows MIDI Services availability ==
+  New-MidiLoopback: absent
+  midisrv: Running
+
+== verdict ==
+  winmm input ports: 0, output ports: 1
+  loopback-style candidates (bidirectional name match, unconfirmed): 0
+  driver signature check: NotRun — driver/package signature query needs SetupAPI surfaces outside the declared `windows-sys` features (discovery doc gap)
+  provisioning: NOT_PROVISIONED
+  capability notes:
+    winmm in/out capability enumeration: observed
+    input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)
+    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — the `midiOut*` send path exists since the second slice; remaining gap is a provisioned loopback pair (verifier: tests/loopback.rs)
+    virtual hotplug / device-loss / permission-denial: NotRun — same reason
+  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); the round-trip verifier is fail-closed `NotRun` without a provisioned pair

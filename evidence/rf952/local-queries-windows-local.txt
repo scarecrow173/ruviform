@@ -1,0 +1,40 @@
+== whoami ==
+akiyoshi
+== net session (elevation check) ==
+net : システム エラー 5 が発生しました。
+発生場所 行:1 文字:90
++ ... utput "== net session (elevation check) =="; net session 2>&1 | Selec ...
++                                                  ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (システム エラー 5 が発生しました。:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+== services ==
+
+Name                  Status StartType
+----                  ------ ---------
+AudioEndpointBuilder Running Automatic
+AudioSrv             Running Automatic
+midisrv              Running    Manual
+
+
+== New-MidiLoopback cmdlet ==
+absent
+== midisrv.exe version ==
+10.0.26100.9949
+== OS version ==
+
+
+Microsoft Windows [Version 10.0.26300.9974]
+Major Minor Build Revision
+----- ----- ----- --------
+10    0     26300 0
+
+
+
+== bcdedit /enum {current} (read-only query, non-elevated) ==
+指定されたコマンド ラインは有効ではありません。
+"bcdedit /?" を実行してコマンド ラインを確認してください。
+== pnputil /enum-drivers (non-elevated) ==
+PNPUTIL [/add-driver <...> | /delete-driver <...> |
+         /export-driver <...> | /enum-drivers [<...>] |
+         /enum-devices [<...>] | /enum-devicetree [<...>] |
