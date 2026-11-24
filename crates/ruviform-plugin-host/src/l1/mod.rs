@@ -3280,6 +3280,35 @@ impl L1Instance {
         }
     }
 
+    /// Drains the child's plugin→host param-notification backlog over
+    /// the wire (wire v9, Issue #912): issues `DrainParamNotices`
+    /// until a reply carries fewer than `WIRE_MAX_PARAM_NOTICES`
+    /// notices, appending them to `out` in drain order. Same chunked
+    /// pull-loop shape and lifecycle-ungated contract as
+    /// [`Self::drain_output_reports`].
+    ///
+    /// **RT contract:** non-RT only — each verb waits at most
+    /// `command_timeout`; the `out` append may allocate.
+    pub(crate) fn drain_param_notices(
+        &mut self,
+        out: &mut Vec<ruviform_plugin_core::ParamNotice>,
+    ) -> Result<(), HostError> {
+        loop {
+            match self.execute(wire::Command::DrainParamNotices)? {
+                wire::Reply::ParamNotices { mut notices } => {
+                    let chunk_full = notices.len() >= wire::WIRE_MAX_PARAM_NOTICES as usize;
+                    out.append(&mut notices);
+                    if !chunk_full {
+                        return Ok(());
+                    }
+                }
+                // Any other payload is a protocol anomaly — the
+                // child answered a verb it was not sent.
+                _ => return Err(HostError::Ipc),
+            }
+        }
+    }
+
     /// `Destroy`'s control-plane meaning: wire v2's teardown is
     /// `DestroyInstance` (reclaims the child's registry slot) then —
     /// when this facade is the child's last referrer — `Shutdown`,

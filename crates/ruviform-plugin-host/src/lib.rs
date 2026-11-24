@@ -149,8 +149,10 @@
 //! report consumer surface — pull-based and **non-RT only** (the
 //! caller-owned `Vec` append may allocate and the L0 `Shared` arm
 //! takes the `core` mutex); nothing drains implicitly on the RT
-//! path. [`PluginEndpoint::process`] is the endpoint's
-//! RT leg — `Send`, `try_lock`-only and allocation-free on the
+//! path. The notification pulls ([`PluginHost::drain_dirty_notices`]
+//! / [`PluginHost::drain_param_notices`] and their [`InProcessHost`]
+//! twins) share that contract. [`PluginEndpoint::process`] is the
+//! endpoint's RT leg — `Send`, `try_lock`-only and allocation-free on the
 //! block path (the `rt_`-prefixed tests pin that), and
 //! [`PluginEndpoint::process_audio`] is its graph-facing sibling
 //! — the single-bus `pull`-shaped shell over `process` under
