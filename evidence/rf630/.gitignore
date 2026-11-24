@@ -1,0 +1,4 @@
+# Run artifacts stay local — committed files are the verification
+# record (evidence/rf763・rf768・rf841・rf846・rf849 先例).
+# `*.log` (canonical-run per-run logs) は repo ルート .gitignore が除外済み。
+spawn-timeout-logs/
