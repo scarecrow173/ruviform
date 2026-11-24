@@ -1,0 +1,22 @@
+OK   Version signature
+OK   Class=System
+OK   ClassGuid present
+OK   CatalogFile directive
+OK   PnpLockdown=1
+OK   NTamd64 decoration
+OK   NTarm64 decoration
+OK   hwid ROOT\RvfTestSigned
+OK   DDInstall .NT section
+OK   Services section
+OK   AddService kernel driver
+OK   ServiceBinary %12%
+OK   CopyFiles target .sys
+OK   SourceDisksFiles
+OK   String %DeviceDesc% defined
+OK   String %DiskName% defined
+OK   String %MfgName% defined
+OK   String %ProviderName% defined
+OK   workflow hwid matches INF
+OK   vcxproj INF item
+OK   vcxproj C item
+INF-CHECK-RESULT: ALL OK

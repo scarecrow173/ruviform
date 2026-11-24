@@ -1,0 +1,11 @@
+# drivers/ の build 生成物は commit しない（Issue #961 — ソースのみ保持）。
+# WDK/MSBuild の中間・出力、署名済み binary、証明書は全てローカル/runner の
+# 一時生成物として扱う。
+bin/
+obj/
+*.sys
+*.cat
+*.cer
+*.pdb
+*.inf_*
+*.log

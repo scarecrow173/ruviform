@@ -1,0 +1,27 @@
+OK   tools/testsigned-driver/probe-stage.ps1
+OK   tools/testsigned-driver/TestDevice.ps1
+extracted run blocks: 12
+OK   block 1
+OK   block 2
+OK   block 3
+OK   block 4
+OK   block 5
+OK   block 6
+OK   block 7
+OK   block 8
+OK   block 9
+OK   block 10
+OK   block 11
+OK   block 12
+RESULT: ALL OK
+OK   C# Add-Type compile ([RvfTestDevice] exists: True)
+OK   Out-Probe appended 2 lines
+OK   New-Item -Force truncates log
+OK   Add-StageRecord x2 array
+OK   Get-StageStatus=absent
+OK   Get-StageStatus missing=null
+OK   ProbeState roundtrip
+OK   ProbeState missing=null
+OK   Find-Tool pnputil -> C:\WINDOWS\system32\pnputil.exe
+OK   Find-Tool absent returns empty
+DONE
