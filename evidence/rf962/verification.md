@@ -25,6 +25,9 @@ host OS: Windows 11 x64（`DESKTOP-NH00KUI` — WMS 非搭載 host。
 - `evidence/rf962/midi_wms_api_probe-windows-local.txt` — local host
   実走の raw 出力
 - `evidence/rf962/actions.jsonl` — 検証アクションと設計判断の記録
+- `evidence/rf962/*-windows-11-arm.txt` / `*-windows-2025.txt` —
+  runner 実走 artifact（run 45475291648、branch ref dispatch —
+  attempt-1、計 8 ファイル × 2 leg）
 
 ## probe 設計
 
@@ -122,13 +125,76 @@ contract を新 step では明示的に実装した（job 失敗条件は機構�
 - `verdict`: `notrun` — `furthest_stage: activation`。非搭載 host での
   `pass` 偽装は無し（absence-is-data の実証）。
 
+## runner 実走記録（run 45475291648 — branch ref dispatch）
+
+既存 workflow への変更のため `gh workflow run
+virtual-endpoint-probe.yml --ref feat/962-midi-wms-api-probe` で本
+branch の workflow 定義を dispatch（#955/#961 の「merge 後実走」は
+新規 workflow が default branch に存在しない制約に由来 — 本 PR は
+既存ファイルの変更なので merge 前実走が可能）。attempt-1、両 leg
+`success`。
+
+### windows-11-arm leg（`midi_wms_api_probe-windows-11-arm.txt`）
+
+- **aarch64-pc-windows-msvc native compile: Pass** — `Compiling
+  ruviform-midi-device` / `Finished` / probe 実行まで完走（`env-arch:
+  aarch64`）。
+- `presence`: `Windows.Devices.Midi2.dll` absent・winmd 0 件・
+  `ActivatableClassId` **0 件** — rf952 が WinSxS で確認した in-box
+  `microsoft-windows-devices-midi2` package が service-side file のみ
+  （transports・`MidiSrv.exe`）で client component を含まないことが、
+  WinRT registration 面からも実測で確定。
+- `ro_initialize`: `pass`（MTA）。
+- `activation`: 4 runtime class **全て `REGDB_E_CLASSNOTREG`
+  （`0x80040154`）** — `MidiDiagnostics`/`MidiSession`/
+  `MidiLoopbackManager`/`MidiBasicLoopbackManager` の statics は
+  いずれも activation factory 未登録。legacy class name 2 件も同
+  HRESULT（negative control どおり）。
+- `service_ping`/`session`/`bloop_create`: `skipped`
+  （`*_statics_unavailable`）。
+- `verdict`: `notrun` — `furthest_stage: activation`、
+  `bloop_created: false`。
+
+### windows-2025 leg（`midi_wms_api_probe-windows-2025.txt`）
+
+- `presence`〜`activation` まで arm leg と同一 profile（client
+  component absent・全 class `0x80040154`）→ `verdict: notrun`。
+  Server SKU に WMS 自体が無いという前提と一致する対照計測。
+
+### 後続 step（両 leg）
+
+- `midi_endpoint_probe-after-wms-api-*`: `NOT_PROVISIONED` — API 未到達
+  のため BLOOP は作成されず、WinMM 上に同名 in/out pair は出現しない
+  （API 経路が閉じていることの WinMM 側裏付け）。
+- `loopback-verifier-*`: `cargo test --test loopback -- --ignored` を
+  実走。`loopback_round_trip` は両 leg で `verdict: NotRun —
+  NOT_PROVISIONED`（fail-closed 維持）。`real_device_silent_output_smoke`
+  は両 leg で **`verdict: Fail — 'GS Wavetable' output port failed to
+  open: Backend("winmm midiOutOpen failed")`** — hosted runner 上の GS
+  Wavetable は列挙されるが open 不能であることが実測された（本 slice
+  の測定対象外だが fail-closed verifier が実測を記録した点は contract
+  どおり）。`exit=101` を記録後に step 継続 — 両 job `success` で
+  `$LASTEXITCODE` neutralize が意図どおり機能。
+
+### 計測の結論（Slice C stage 1 の主問に対する実測値）
+
+`Windows.Devices.Midi2` client API は **両 leg で activation factory
+未登録 — compiled-API 経路の provisioning（BLOOP 作成を含む）は
+hosted runner 上で到達不能**。rf952 が確認した in-box WMS は
+service-side（`midisrv` + transport DLL）のみで、client component
+（WinRT 型登録 + `midi` console + PS module）は image 非搭載。サポート
+経路で BLOOP を provisioning するには client component の別途導入
+（Microsoft の App SDK/console 配布物）か driver 経路（Slice B）が
+必要という位置づけが実測で確定した。
+
 ## NotRun / 対象外
 
 | 項目 | 状態 | 理由 |
 | --- | --- | --- |
-| `windows-11-arm` / `windows-2025` runner 実走 | **NotRun** | `workflow_dispatch` 専用 lane — merge 後の手動実走待ち。`windows-2025` は no-WMS 対照 leg、到達段階・BLOOP 作成可否・transient 残存・verifier verdict は実走 artifact で確定する |
-| aarch64-pc-windows-msvc native compile | **NotRun** | local host は x86_64 — arm leg の cargo build 自体が compile 確認（workflow 設計どおり） |
-| `service_ping` / `session` / BLOOP 作成の実到達 | **NotRun** | WMS 搭載環境が必要 — windows-11-arm leg の計測待ち（local では activation で stop） |
+| runner 実走（両 leg） | **Pass — 実走済み** | run 45475291648（branch ref dispatch、attempt-1、両 job success）。artifact は本 dir の `*-windows-11-arm.txt` / `*-windows-2025.txt` |
+| aarch64-pc-windows-msvc native compile | **Pass** | arm leg で example が compile/run 完走（`midi_wms_api_probe-windows-11-arm.txt` の cargo 出力） |
+| `service_ping` / `session` / BLOOP 作成の到達 | **計測済み = 到達不能** | activation で全 class `REGDB_E_CLASSNOTREG` — 到達不能そのものが本 stage の計測結果。client component 導入後の再計測は slice 後続の判断事項 |
+| transient BLOOP の残存観測・verifier round-trip | **計測済み = 不可** | BLOOP 未作成のため re-probe `NOT_PROVISIONED`・verifier `NotRun` — いずれも fail-closed の honest verdict |
 | LOOP A/B pair 作成 | 対象外（statics 観測のみ） | `tests/loopback.rs` name-match verifier の false `Fail` 回避 — BLOOP 限定の設計 |
 | WMS service config JSON | 対象外 | Microsoft 非サポート面 — 読み書きとも行わない |
 | `virtual-os-endpoint` claim | 対象外 | provisioning 経路の到達可否の計測が slice の範囲 — midisrv は service であり OS endpoint としては扱わない |
