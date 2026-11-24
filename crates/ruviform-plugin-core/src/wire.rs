@@ -56,11 +56,11 @@
 //! incompatible protocol changes only, not tied to `SemVer` or crate
 //! versions — and a bump means host and runner ship the same
 //! revision together. `Hello.capabilities` carries the assigned
-//! capability bits — under `WIRE_VERSION` `6` bit 0
-//! ([`WIRE_CAPABILITY_GUI_FLOATING`]) is the only one defined, and
-//! decode rejects any other bit as [`WireError::Malformed`]; enabling
-//! a capability is itself designed as a protocol change. The full
-//! policy is recorded in
+//! capability bits — bit 0 ([`WIRE_CAPABILITY_GUI_FLOATING`],
+//! assigned at `WIRE_VERSION` `6`) remains the only one defined,
+//! and decode rejects any other bit as [`WireError::Malformed`];
+//! enabling a capability is itself designed as a protocol change.
+//! The full policy is recorded in
 //! `docs/designs/plugin-l1-out-of-process.md`.
 //!
 //! ## Bounded reads and defined rejections
@@ -99,11 +99,11 @@ use ruviform_video_core::{
 };
 
 use crate::{
-    DirtyNotice, Event, EventKind, EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent,
-    GuiModifiers, GuiSize, HostError, LifecycleError, LifecycleEvent, LifecycleState, ParamEvent,
-    ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned, PlainParamValue,
-    PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult, ProcessStatus,
-    TransportInfo, VideoProcessConfig,
+    DirtyNotice, Event, EventKind, EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection,
+    GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiSize, HostError, LifecycleError, LifecycleEvent,
+    LifecycleState, ParamEvent, ParamFlags, ParamId, ParamValue, ParentLease, PlainParamInfoOwned,
+    PlainParamValue, PluginDescriptor, PluginHandle, PrepareError, ProcessConfig, ProcessResult,
+    ProcessStatus, TransportInfo, VideoProcessConfig,
 };
 
 /// The protocol version carried by [`Message::Hello`]. A proxy and a
@@ -132,19 +132,26 @@ use crate::{
 /// `7` is the Issue #891 dirty-notification revision —
 /// [`Command::DrainDirtyNotices`] (tag 28) and [`Reply::DirtyNotices`]
 /// (tag 9) are additive on top of the v6 tags, which are unchanged.
-pub const WIRE_VERSION: u16 = 7;
+/// `8` is the Issue #630 editor-verb revision —
+/// [`Command::SetGuiFocusTarget`] (tag 29) and
+/// [`Command::SetGuiPopup`] (tag 30) are additive on top of the v7
+/// tags, which are unchanged.
+pub const WIRE_VERSION: u16 = 8;
 
 /// `Hello.capabilities` bit 0 — the child advertises it implements
 /// the GUI floating verb family ([`Command::OpenGui`],
 /// [`Command::CloseGui`], [`Command::SetGuiSize`],
-/// [`Command::SetGuiVisibility`], [`Command::SetGuiFocus`] and
-/// [`Command::SendGuiKey`]). One bit covers the family atomically —
-/// a mechanism fact, not a per-verb grant: verb-level refusals stay
-/// in the reply vocabulary (`Err(HostError::Unsupported)` and
-/// [`Reply::Opened`]'s `capabilities`). The advertisement is
-/// child→parent only — `Hello` is the child's one first frame and
-/// `WIRE_VERSION` `6` defines no parent→child path. An unassigned
-/// capabilities bit is [`WireError::Malformed`] on decode.
+/// [`Command::SetGuiVisibility`], [`Command::SetGuiFocus`],
+/// [`Command::SendGuiKey`], [`Command::SetGuiFocusTarget`] and
+/// [`Command::SetGuiPopup`]). One bit covers the family atomically —
+/// a mechanism fact, not a per-verb grant: the wire-v8 additions
+/// (tags 29/30) join the same family with no new bit, and
+/// verb-level refusals stay in the reply vocabulary
+/// (`Err(HostError::Unsupported)` and [`Reply::Opened`]'s
+/// `capabilities`). The advertisement is child→parent only —
+/// `Hello` is the child's one first frame and `WIRE_VERSION` `6`
+/// defines no parent→child path. An unassigned capabilities bit is
+/// [`WireError::Malformed`] on decode.
 pub const WIRE_CAPABILITY_GUI_FLOATING: u32 = 0x1;
 
 /// Maximum frames per processing block carried on the wire
@@ -637,12 +644,11 @@ pub enum Message {
     Hello {
         /// Protocol version — [`WIRE_VERSION`] on a live handshake.
         version: u16,
-        /// Capability bitmask for protocol extensions. Under
-        /// [`WIRE_VERSION`] `6` bit 0
-        /// ([`WIRE_CAPABILITY_GUI_FLOATING`]) is the only assigned
-        /// bit — decode rejects any other bit as
-        /// [`WireError::Malformed`], like any other nonzero reserved
-        /// field.
+        /// Capability bitmask for protocol extensions. Bit 0
+        /// ([`WIRE_CAPABILITY_GUI_FLOATING`], assigned at
+        /// [`WIRE_VERSION`] `6`) remains the only assigned bit —
+        /// decode rejects any other bit as [`WireError::Malformed`],
+        /// like any other nonzero reserved field.
         capabilities: u32,
     },
     /// Parent → child: one serialized command, correlated by `seq`.
@@ -709,7 +715,11 @@ pub enum Message {
 /// plugin→host [`Event`] reports over the control plane. Tags 24-27
 /// are the wire-v6 (Issue #872/#882) GUI floating verbs —
 /// [`Command::SetGuiSize`], [`Command::SetGuiVisibility`],
-/// [`Command::SetGuiFocus`] and [`Command::SendGuiKey`]. Every GUI
+/// [`Command::SetGuiFocus`] and [`Command::SendGuiKey`]. Tags 29/30
+/// are the wire-v8 (Issue #630) editor verbs —
+/// [`Command::SetGuiFocusTarget`] and [`Command::SetGuiPopup`] — the
+/// same floating family under the one negotiated
+/// [`WIRE_CAPABILITY_GUI_FLOATING`] bit. Every GUI
 /// verb is instance-scoped: the envelope `instance` alone names the
 /// surface (≤1 surface per instance), so no [`GuiHandle`] rides a
 /// command payload — it stays [`Reply::Opened`]'s proof vocabulary.
@@ -930,6 +940,32 @@ pub enum Command {
     /// at most [`WIRE_MAX_DIRTY_NOTICES`] notices; a larger backlog
     /// is chunked child-side across successive drains.
     DrainDirtyNotices,
+    /// `Plugin::set_gui_focus_target` — wire tag 29, the wire-v8
+    /// (Issue #630) editor verb → [`Reply::Ok`]. The parameterized
+    /// form of [`Command::SetGuiFocus`]: the bool verb's `focused =
+    /// 1` is `GuiFocusTarget::Editor`. A plugin without a
+    /// focus-target surface answers the defined
+    /// `Err(HostError::Unsupported)`.
+    SetGuiFocusTarget {
+        /// Where the focus intent lands — `u8` discriminant on the
+        /// wire (`0`/`1`/`2` + `u32` element on `1`); an unassigned
+        /// discriminant byte is [`WireError::Malformed`] on decode.
+        target: GuiFocusTarget,
+    },
+    /// `Plugin::set_gui_popup` — wire tag 30, the wire-v8 (Issue
+    /// #630) editor verb → [`Reply::Ok`]. Opens (`open = 1`) or
+    /// closes (`open = 0`) a plugin-owned popup surface of `kind`
+    /// while the editor stays attached; a plugin that owns none
+    /// answers the defined `Err(HostError::Unsupported)`.
+    SetGuiPopup {
+        /// Which popup family — `u8` discriminant on the wire
+        /// (`0`/`1`); an unassigned byte is [`WireError::Malformed`]
+        /// on decode.
+        kind: GuiPopupKind,
+        /// Strict `{0,1}` byte — `0` closes, `1` opens; any other
+        /// value is [`WireError::Malformed`] on decode.
+        open: u8,
+    },
 }
 
 /// The reply payload of a successful wire [`Command`].
@@ -1800,6 +1836,15 @@ fn encode_command(command: &Command, out: &mut Vec<u8>) -> Result<(), WireError>
             encode_gui_key_event(event, out);
         }
         Command::DrainDirtyNotices => push_u8(out, 28),
+        Command::SetGuiFocusTarget { target } => {
+            push_u8(out, 29);
+            encode_gui_focus_target(target, out);
+        }
+        Command::SetGuiPopup { kind, open } => {
+            push_u8(out, 30);
+            push_u8(out, encode_gui_popup_kind(*kind));
+            push_u8(out, *open);
+        }
     }
     Ok(())
 }
@@ -1903,6 +1948,13 @@ fn decode_command(verb: u8, reader: &mut Reader<'_>) -> Result<Command, WireErro
             event: decode_gui_key_event(reader)?,
         }),
         28 => Ok(Command::DrainDirtyNotices),
+        29 => Ok(Command::SetGuiFocusTarget {
+            target: decode_gui_focus_target(reader)?,
+        }),
+        30 => Ok(Command::SetGuiPopup {
+            kind: decode_gui_popup_kind(reader)?,
+            open: decode_u8_flag(reader)?,
+        }),
         _ => Err(WireError::Malformed),
     }
 }
@@ -2235,6 +2287,67 @@ pub fn decode_gui_key_event(reader: &mut Reader<'_>) -> Result<GuiKeyEvent, Wire
         key_code,
         modifiers,
     })
+}
+
+/// The [`GuiFocusTarget`] discriminant byte.
+fn encode_gui_focus_discriminant(target: GuiFocusTarget) -> u8 {
+    match target {
+        GuiFocusTarget::Editor => 0,
+        GuiFocusTarget::EditorElement { .. } => 1,
+        GuiFocusTarget::HostWindow => 2,
+    }
+}
+
+/// Appends a [`GuiFocusTarget`] (`u8` discriminant, plus a `u32`
+/// element id on `EditorElement` — wire v8, Issue #630).
+pub fn encode_gui_focus_target(target: &GuiFocusTarget, out: &mut Vec<u8>) {
+    push_u8(out, encode_gui_focus_discriminant(*target));
+    if let GuiFocusTarget::EditorElement { element } = target {
+        push_u32(out, *element);
+    }
+}
+
+/// Reads a [`GuiFocusTarget`] — an unassigned discriminant byte is
+/// [`WireError::Malformed`] (the `GuiKeyDirection`/`OpenGuiMode`
+/// typed-field rule). `EditorElement`'s `element` is an opaque
+/// plugin-space id: every `u32` is a valid value and decodes
+/// verbatim.
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_gui_focus_target(reader: &mut Reader<'_>) -> Result<GuiFocusTarget, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(GuiFocusTarget::Editor),
+        1 => Ok(GuiFocusTarget::EditorElement {
+            element: reader.read_u32()?,
+        }),
+        2 => Ok(GuiFocusTarget::HostWindow),
+        _ => Err(WireError::Malformed),
+    }
+}
+
+/// The [`GuiPopupKind`] discriminant byte.
+fn encode_gui_popup_kind(kind: GuiPopupKind) -> u8 {
+    match kind {
+        GuiPopupKind::ChildWindow => 0,
+        GuiPopupKind::Dialog => 1,
+    }
+}
+
+/// Reads a [`GuiPopupKind`] — `0`/`1` are the assigned vocabulary;
+/// any other byte is the typed-field rejection, same as
+/// `OpenGuiMode`/`GuiKeyDirection` (wire v8, Issue #630).
+///
+/// # Errors
+///
+/// [`WireError`] — truncated or malformed input.
+pub fn decode_gui_popup_kind(reader: &mut Reader<'_>) -> Result<GuiPopupKind, WireError> {
+    match reader.read_u8()? {
+        0 => Ok(GuiPopupKind::ChildWindow),
+        1 => Ok(GuiPopupKind::Dialog),
+        _ => Err(WireError::Malformed),
+    }
 }
 
 /// Appends a [`PluginHandle`] (`u32` slot, `u16` generation).
@@ -3848,6 +3961,40 @@ mod tests {
         }
     }
 
+    /// Wire v8 (Issue #630): every `GuiFocusTarget` variant and
+    /// every `GuiPopupKind` × `open` combination round-trips —
+    /// the editor verbs keep the same instance-scoped envelope.
+    #[test]
+    fn command_roundtrip_covers_the_v8_editor_verbs() {
+        for target in [
+            GuiFocusTarget::Editor,
+            GuiFocusTarget::EditorElement {
+                element: 0xDEAD_BEEF,
+            },
+            GuiFocusTarget::HostWindow,
+        ] {
+            let message = Message::Command {
+                seq: 7,
+                instance: 0,
+                cmd: Command::SetGuiFocusTarget { target },
+            };
+            assert_eq!(roundtrip(&message), message);
+        }
+        for (kind, open) in [
+            (GuiPopupKind::ChildWindow, 0_u8),
+            (GuiPopupKind::ChildWindow, 1),
+            (GuiPopupKind::Dialog, 0),
+            (GuiPopupKind::Dialog, 1),
+        ] {
+            let message = Message::Command {
+                seq: 7,
+                instance: 0,
+                cmd: Command::SetGuiPopup { kind, open },
+            };
+            assert_eq!(roundtrip(&message), message);
+        }
+    }
+
     #[test]
     fn reply_roundtrip_covers_every_payload() {
         let replies = [
@@ -4048,10 +4195,11 @@ mod tests {
             )),
             Err(WireError::Malformed)
         );
-        // The wire-v6 GUI floating verbs (tags 24-27) are
-        // instance-scoped too — `WIRE_INSTANCE_NONE` is the same
-        // scope violation, decided before the payload is read.
-        for tag in [24_u8, 25, 26, 27] {
+        // The wire-v6 GUI floating verbs (tags 24-27) and the
+        // wire-v8 editor verbs (tags 29/30) are instance-scoped too —
+        // `WIRE_INSTANCE_NONE` is the same scope violation, decided
+        // before the payload is read.
+        for tag in [24_u8, 25, 26, 27, 29, 30] {
             assert_eq!(
                 decode(&raw_frame(
                     KIND_COMMAND,
@@ -5015,8 +5163,8 @@ mod tests {
     }
 
     #[test]
-    fn wire_version_is_v7() {
-        assert_eq!(WIRE_VERSION, 7);
+    fn wire_version_is_v8() {
+        assert_eq!(WIRE_VERSION, 8);
     }
 
     #[test]
@@ -6099,5 +6247,126 @@ mod tests {
         push_u32(&mut payload, WIRE_MAX_DIRTY_NOTICES + 1);
         let mut reader = Reader::new(&payload);
         assert_eq!(decode_reply(&mut reader), Err(WireError::LimitExceeded));
+    }
+
+    // --- wire v8: editor verbs (Issue #630) ------------------------------
+
+    #[test]
+    fn gui_focus_target_codec() {
+        // Every `GuiFocusTarget` variant round-trips field-wise —
+        // `EditorElement`'s `u32` is opaque and decodes verbatim.
+        for target in [
+            GuiFocusTarget::Editor,
+            GuiFocusTarget::EditorElement { element: 0 },
+            GuiFocusTarget::EditorElement { element: u32::MAX },
+            GuiFocusTarget::HostWindow,
+        ] {
+            assert_eq!(
+                field_roundtrip(&target, encode_gui_focus_target, decode_gui_focus_target),
+                target
+            );
+        }
+        // An unassigned discriminant byte is the typed-field
+        // rejection — same rule as `GuiKeyDirection`/`OpenGuiMode`.
+        for byte in [3_u8, 0x7F, 0xFF] {
+            let payload = [byte];
+            let mut reader = Reader::new(&payload);
+            assert_eq!(
+                decode_gui_focus_target(&mut reader),
+                Err(WireError::Malformed),
+                "focus target byte {byte} must be rejected",
+            );
+        }
+        // `EditorElement` declared but its `u32` cut short is
+        // Truncated, not Malformed.
+        let payload = [1_u8, 0xAA];
+        let mut reader = Reader::new(&payload);
+        assert_eq!(
+            decode_gui_focus_target(&mut reader),
+            Err(WireError::Truncated)
+        );
+    }
+
+    /// One tag-30 `SetGuiPopup` command frame with `kind`/`open`
+    /// encoded by hand — the vocabulary tests need bytes `encode`
+    /// cannot produce.
+    fn set_gui_popup_frame(kind: u8, open: u8) -> Vec<u8> {
+        let mut payload = command_payload(1, 0, 30);
+        push_u8(&mut payload, kind);
+        push_u8(&mut payload, open);
+        raw_frame(KIND_COMMAND, &payload)
+    }
+
+    #[test]
+    fn gui_popup_kind_and_open_flag_vocabulary() {
+        // `kind` leads the tag-30 payload: `0`/`1` are the assigned
+        // vocabulary; only unassigned bytes fail at the codec.
+        for (byte, expected) in [(0_u8, GuiPopupKind::ChildWindow), (1, GuiPopupKind::Dialog)] {
+            let Ok(Message::Command { cmd, .. }) = decode(&set_gui_popup_frame(byte, 1)) else {
+                panic!("assigned kind byte {byte} must decode");
+            };
+            let Command::SetGuiPopup { kind, open } = cmd else {
+                panic!("verb tag 30 must decode to SetGuiPopup");
+            };
+            assert_eq!(kind, expected);
+            assert_eq!(open, 1);
+        }
+        for byte in [2_u8, 0x7F, 0xFF] {
+            assert_eq!(
+                decode(&set_gui_popup_frame(byte, 0)),
+                Err(WireError::Malformed),
+                "unassigned kind byte {byte} must be rejected",
+            );
+        }
+        // `open` is the strict `{0,1}` flag — same rule as
+        // `SetGuiVisibility`/`SetGuiFocus`.
+        for byte in [2_u8, 0x7F, 0xFF] {
+            assert_eq!(
+                decode(&set_gui_popup_frame(0, byte)),
+                Err(WireError::Malformed),
+                "open flag {byte} must be rejected",
+            );
+        }
+    }
+
+    /// One tag-29 `SetGuiFocusTarget` command frame with the target
+    /// payload encoded by hand.
+    fn set_gui_focus_target_frame(discriminant: u8, element: Option<u32>) -> Vec<u8> {
+        let mut payload = command_payload(1, 0, 29);
+        push_u8(&mut payload, discriminant);
+        if let Some(element) = element {
+            push_u32(&mut payload, element);
+        }
+        raw_frame(KIND_COMMAND, &payload)
+    }
+
+    #[test]
+    fn set_gui_focus_target_frame_vocabulary() {
+        for (discriminant, element, expected) in [
+            (0_u8, None, GuiFocusTarget::Editor),
+            (
+                1,
+                Some(0xABCD),
+                GuiFocusTarget::EditorElement { element: 0xABCD },
+            ),
+            (2, None, GuiFocusTarget::HostWindow),
+        ] {
+            let Ok(Message::Command { cmd, .. }) =
+                decode(&set_gui_focus_target_frame(discriminant, element))
+            else {
+                panic!("assigned discriminant {discriminant} must decode");
+            };
+            let Command::SetGuiFocusTarget { target } = cmd else {
+                panic!("verb tag 29 must decode to SetGuiFocusTarget");
+            };
+            assert_eq!(target, expected);
+        }
+        for byte in [3_u8, 0x7F, 0xFF] {
+            assert_eq!(
+                decode(&set_gui_focus_target_frame(byte, None)),
+                Err(WireError::Malformed),
+                "unassigned discriminant {byte} must be rejected",
+            );
+        }
     }
 }

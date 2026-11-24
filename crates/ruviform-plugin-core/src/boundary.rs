@@ -255,6 +255,66 @@ pub struct GuiKeyEvent {
     pub modifiers: GuiModifiers,
 }
 
+/// Where [`Plugin::set_gui_focus_target`](crate::Plugin::set_gui_focus_target)
+/// directs keyboard focus (wire v8, Issue #630).
+///
+/// `EditorElement`'s `element` id is opaque to the host — the plugin
+/// interprets it, the same "adapter/plugin space" contract
+/// [`ParentLease::payload`] and [`GuiKeyEvent::key_code`] carry; the
+/// delivery is a focus *intent* the plugin records, not an OS-focus
+/// claim. `HostWindow` names the host-side container the session
+/// opened under — focus returns to the host rather than the plugin.
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GuiFocusTarget {
+    /// The plugin editor surface itself — the same destination as
+    /// `set_gui_focus(true)`.
+    Editor,
+    /// An element inside the plugin — an opaque id the plugin
+    /// interprets. This is delivery semantics, not an OS-focus claim.
+    EditorElement {
+        /// The plugin-interpreted element id.
+        element: u32,
+    },
+    /// The host-side top-level window (the session's container) —
+    /// focus returns to the host rather than the plugin.
+    HostWindow,
+}
+
+/// Which plugin-owned popup [`Plugin::set_gui_popup`](crate::Plugin::set_gui_popup)
+/// opens or closes (wire v8, Issue #630).
+///
+/// Both kinds are plugin-owned auxiliary surfaces that open and close
+/// while the editor stays attached — not the open/reparent lifecycle
+/// verbs. `ChildWindow` lives under the editor's child surface
+/// (`WS_CHILD` descendants, observable through `EnumChildWindows`);
+/// `Dialog` is a plugin-owned top-level surface (the `WS_POPUP`
+/// family an owner-relationship top-level inventory observes).
+///
+/// The enum is `#[non_exhaustive]` per the unified public-enum API
+/// policy — new variants may be added without breaking downstream
+/// `match` arms.
+///
+/// **RT contract:** RT-suitable — `Copy` value type.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GuiPopupKind {
+    /// A plugin-owned auxiliary window nested under the editor
+    /// surface — a `WS_CHILD` descendant of the editor child HWND
+    /// (observable through `EnumChildWindows`).
+    ChildWindow,
+    /// A plugin-owned top-level window — the `WS_POPUP` family
+    /// owned by the editor's root ancestor (observable through a
+    /// top-level inventory).
+    Dialog,
+}
+
 /// Opaque reference to one open plugin editor session.
 ///
 /// The `{slot, generation}` pair mirrors [`PluginHandle`]'s stale

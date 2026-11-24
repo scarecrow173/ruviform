@@ -16,9 +16,9 @@ use std::sync::{Arc, Mutex, TryLockError};
 
 use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
-    BusDescriptor, DirtyNotice, Event, EventList, GuiKeyEvent, GuiRequest, GuiRequestSink, GuiSize,
-    Lifecycle, LifecycleError, LifecycleEvent, LifecycleState, PrepareError, ProcessConfig,
-    ProcessContext, ProcessResult, TransportInfo,
+    BusDescriptor, DirtyNotice, Event, EventList, GuiFocusTarget, GuiKeyEvent, GuiPopupKind,
+    GuiRequest, GuiRequestSink, GuiSize, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
+    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -290,6 +290,12 @@ impl InProcessHost {
             HostCommand::SetGuiParent { handle, parent } => self.set_gui_parent(handle, parent),
             HostCommand::SetGuiFocus { handle, focused } => self.set_gui_focus(handle, focused),
             HostCommand::SendGuiKey { handle, event } => self.send_gui_key(handle, event),
+            HostCommand::SetGuiFocusTarget { handle, target } => {
+                self.set_gui_focus_target(handle, target)
+            }
+            HostCommand::SetGuiPopup { handle, kind, open } => {
+                self.set_gui_popup(handle, kind, open)
+            }
         }
     }
 
@@ -1333,6 +1339,49 @@ impl InProcessHost {
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
                     core.plugin.send_gui_key(event).map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_focus_target(
+        &mut self,
+        handle: PluginHandle,
+        target: GuiFocusTarget,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_focus_target(target)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin
+                        .set_gui_focus_target(target)
+                        .map(|()| HostReply::Ok)
+                })
+            }
+        }
+    }
+
+    fn set_gui_popup(
+        &mut self,
+        handle: PluginHandle,
+        kind: GuiPopupKind,
+        open: bool,
+    ) -> Result<HostReply, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.set_gui_popup(kind, open)?;
+                Ok(HostReply::Ok)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin
+                        .set_gui_popup(kind, open)
+                        .map(|()| HostReply::Ok)
                 })
             }
         }
