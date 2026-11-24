@@ -26,6 +26,7 @@
 //!   `ruviform-plugin-l1-runner`).
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -363,19 +364,135 @@ fn expect_ok(result: Result<VideoHostReply, HostError>) {
     }
 }
 
+/// Bound on `Instantiate` retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 C1 signature the #933
+/// `l1_fault_test_plugin_e2e` lanes pin: the failure is an
+/// environment deadline event (a stalled `spawn_timeout`-bounded
+/// wait), not a contract verdict — `SpawnFailed` is pre-mint only,
+/// so a fresh attempt is the defined recovery. The bound keeps a
+/// persistent stall an honest failure instead of an absorbed flake.
+const SPAWN_TIMEOUT_RETRIES: u32 = 3;
+
+/// The signature the retry admits — the #933 triple plus the phase
+/// gate: `cause == Timeout` AND the retained record is `Found` with
+/// `phase` in the `spawn_timeout`-bounded waits' freeze set AND
+/// `record.cause == Some(Timeout)` — `{PreSpawn, Spawn, DrainInit,
+/// Handshake, Live}`, every variant the enum currently declares.
+/// `Live` is eligible — and only inside this signature — because
+/// `SpawnFailed` is definitionally pre-mint while the phase tracks
+/// *child* lifecycle and goes `Live` the instant `Hello` passes, so
+/// the `Scan`/`CreateInstance` waits freeze `Live` records on both a
+/// fresh child and a pooled re-mint. A non-`Timeout` cause or an
+/// `Evicted`/`NotFound` query result is signature-missed — never
+/// retried. The trace lands on the real stderr (bypassing the
+/// harness's per-test capture) so it stays in lane logs even when a
+/// later attempt recovers.
+fn check_spawn_failed(
+    host: &PluginHost,
+    surface: &str,
+    plugin_id: &str,
+    cause: FailureCause,
+    diagnostics_id: u64,
+    attempt: u32,
+) {
+    let query = host.diagnostics_query(diagnostics_id);
+    let (phase, record_cause) = match &query {
+        DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+        _ => (None, None),
+    };
+    let _ = writeln!(
+        std::io::stderr(),
+        "{surface} SpawnFailed trace: plugin={plugin_id} \
+         attempt={attempt} cause={cause:?} \
+         diagnostics_id={diagnostics_id} phase={phase:?} \
+         record_cause={record_cause:?}"
+    );
+    let signature = cause == FailureCause::Timeout
+        && matches!(
+            &query,
+            DiagnosticQuery::Found(record)
+                if matches!(
+                    record.phase,
+                    SpawnPhase::PreSpawn
+                        | SpawnPhase::Spawn
+                        | SpawnPhase::DrainInit
+                        | SpawnPhase::Handshake
+                        | SpawnPhase::Live
+                ) && record.cause == Some(FailureCause::Timeout)
+        );
+    assert!(
+        signature,
+        "{surface} failed: SpawnFailed{{cause:{cause:?}, \
+         diagnostics_id:{diagnostics_id}}} is outside the pre-mint \
+         timeout signature (phase={phase:?} \
+         record_cause={record_cause:?}) — not retried"
+    );
+    assert!(
+        attempt < SPAWN_TIMEOUT_RETRIES,
+        "{surface} failed: the pre-mint SpawnFailed{{cause:Timeout}} \
+         signature persisted through the {SPAWN_TIMEOUT_RETRIES}-retry \
+         bound (phase={phase:?}) — an honest environment failure, not \
+         an absorbed flake"
+    );
+}
+
+/// `VideoHostCommand::Instantiate` with the bounded retry — the
+/// video route's spawn+mint window shares the audio route's
+/// `spawn_timeout` bound.
 fn instantiate(host: &mut PluginHost, plugin_id: &str, config: VideoProcessConfig) -> PluginHandle {
-    match vex(
-        host,
-        VideoHostCommand::Instantiate {
-            plugin_id: plugin_id.to_owned(),
-            config,
-        },
-    )
-    .unwrap()
-    {
-        VideoHostReply::Instantiated { handle } => handle,
-        other => panic!("unexpected reply: {other:?}"),
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        match vex(
+            host,
+            VideoHostCommand::Instantiate {
+                plugin_id: plugin_id.to_owned(),
+                config,
+            },
+        ) {
+            Ok(VideoHostReply::Instantiated { handle }) => return handle,
+            Ok(other) => panic!("unexpected reply: {other:?}"),
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => check_spawn_failed(
+                host,
+                "instantiate",
+                plugin_id,
+                cause,
+                diagnostics_id,
+                attempt,
+            ),
+            Err(error) => panic!("instantiate failed: {error:?}"),
+        }
     }
+    unreachable!("the loop exits only through `return` or `panic!`")
+}
+
+/// `HostCommand::Instantiate` on the audio route with the same
+/// bounded retry — the cross-kind suite mints an L1 audio contrast
+/// on the same host (the audio reply vocabulary differs from the
+/// video facade's).
+fn instantiate_audio(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        match host.execute(HostCommand::Instantiate {
+            plugin_id: plugin_id.to_owned(),
+        }) {
+            Ok(HostReply::Instantiated { handle }) => return handle,
+            Ok(other) => panic!("unexpected reply: {other:?}"),
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => check_spawn_failed(
+                host,
+                "instantiate_audio",
+                plugin_id,
+                cause,
+                diagnostics_id,
+                attempt,
+            ),
+            Err(error) => panic!("instantiate_audio failed: {error:?}"),
+        }
+    }
+    unreachable!("the loop exits only through `return` or `panic!`")
 }
 
 /// `Initialize → Activate → StartProcessing` — the drive to
@@ -1936,15 +2053,7 @@ fn minted_failure_registers_handle_correlated_record() {
 fn audio_counters_absent_on_the_video_route() {
     let mut host = mixed_host(&[]);
     let video_handle = instantiate(&mut host, WORKER_DESCRIPTOR.id, config());
-    let audio_handle = match host
-        .execute(HostCommand::Instantiate {
-            plugin_id: AUDIO_WORKER_DESCRIPTOR.id.to_owned(),
-        })
-        .unwrap()
-    {
-        HostReply::Instantiated { handle } => handle,
-        other => panic!("unexpected reply: {other:?}"),
-    };
+    let audio_handle = instantiate_audio(&mut host, AUDIO_WORKER_DESCRIPTOR.id);
 
     // Contrast oracle: the L1 audio slot carries a fresh counter
     // pair — zero until the first block runs.
