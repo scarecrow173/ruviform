@@ -24,5 +24,22 @@ windows-sys = { version = "0.61", features = [
     "Win32_Media_Multimedia",
 ] }
 
+[target.'cfg(windows)'.dev-dependencies]
+# Issue #962 Slice C: `examples/midi_wms_api_probe.rs` が raw WinRT で
+# `Windows.Devices.Midi2` client API へ到達するための WinRT activation API
+# （`Win32_System_WinRT`: `RoInitialize`/`RoGetActivationFactory`/
+# `RoActivateInstance`/`HSTRING` 系。`Foundation`: `IClosable`）。example
+# 専用に閉じ、crate 本体の依存・公開 API は変更しない。`windows` 0.62 は
+# ruviform-audio-device（cpal 0.18 系）が lock 内に既に持つため feature
+# union のみで新規 package は増えない。
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Win32_System_Registry",
+    "Win32_System_WinRT",
+] }
+# `#[windows::core::interface]` 等の macro 展開が `windows_core::` パスを
+# 参照するため、core crate を直接依存にする（audio-device と同じ方針）。
+windows-core = "0.62"
+
 [lints]
 workspace = true

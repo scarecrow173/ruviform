@@ -1,0 +1,129 @@
+== virtual-endpoint-probe / environment ==
+runner: GitHub Actions 1000007961 os=Windows arch=ARM64
+ref: refs/heads/feat/962-midi-wms-api-probe sha: a014a67a2f3796985e9ef83777c37f8257107d8a
+run: https://github.com/scarecrow173/ruviform/actions/runs/45475291648 attempt=1
+host: runnervmjtlf1 user: runnervmjtlf1\runneradmin timestamp-utc: 2026-11-24T19:56:55Z
+
+== os build ==
+
+Caption        : Microsoft Windows 11 Enterprise
+Version        : 10.0.26200
+BuildNumber    : 26200
+OSArchitecture : ARM 64-bit Processor
+
+
+
+Microsoft Windows [Version 10.0.26200.9974]
+
+== rust toolchain (compile context for the aarch64 check) ==
+rustc 1.99.0 (b940084d7 2026-09-28)
+binary: rustc
+commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+commit-date: 2026-09-28
+host: aarch64-pc-windows-msvc
+release: 1.99.0
+LLVM version: 23.1.1
+rustc exit=0
+cargo 1.99.0 (5f94df478 2026-08-27)
+release: 1.99.0
+commit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e
+commit-date: 2026-08-27
+host: aarch64-pc-windows-msvc
+libgit2: 1.9.6 (sys:0.21.0 vendored)
+libcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:Schannel)
+os: Windows 10.0.26200 (Windows 11 Enterprise) [64-bit]
+cargo exit=0
+
+== services ==
+  AudioSrv: Status=Running StartType=Automatic
+  AudioEndpointBuilder: Status=Running StartType=Automatic
+  midisrv: Status=Stopped StartType=Manual
+
+== midisrv transport surface ==
+  expected BLOOP transport id: {10088473-9478-4E62-850B-3D2315E135B8} (evidence/rf952/web-sources-signing-runner-wms.md)
+
+Name      : midisrv
+State     : Stopped
+StartMode : Manual
+PathName  : C:\Windows\system32\midisrv.exe
+ProcessId : 0
+
+
+  loaded modules matching midi/loop/transport (incl. BLOOP if loaded):
+    (none)
+
+== midi console utility ==
+  midi console: absent
+
+== midi powershell module ==
+  New-MidiLoopback: absent
+  New-MidiBasicLoopback: absent
+  Remove-MidiLoopback: absent
+  Get-MidiEndpointList: absent
+  no midi-related module listed
+
+== midi-related packages and system files ==
+  appx(current-user): no midi-related package
+  appx(all-users): no midi-related package
+  System32: Midi2.BS2UMPTransform.dll
+  System32: Midi2.DiagnosticsTransport.dll
+  System32: Midi2.KSAggregateTransport.dll
+  System32: Midi2.KSTransport.dll
+  System32: Midi2.LoopbackMidiTransport.dll
+  System32: Midi2.MidiSrvTransport.dll
+  System32: Midi2.SchedulerTransform.dll
+  System32: Midi2.UMP2BSTransform.dll
+  System32: Midi2.UmpProtocolDownscalerTransform.dll
+  System32: Midi2.VirtualMidiTransport.dll
+  System32: midimap.dll
+  System32: MidiSrv.exe
+  System32: Windows.Devices.Midi.dll
+  wdmaud2.drv (WinMM compat layer): present
+
+== secure boot / test-signing state ==
+  Confirm-SecureBootUEFI: False
+  UEFISecureBootEnabled (registry): 0
+  --- bcdedit /enum ---
+
+  Windows Boot Manager
+  --------------------
+  identifier              {bootmgr}
+  device                  partition=\Device\HarddiskVolume3
+  path                    \EFI\Microsoft\Boot\bootmgfw.efi
+  description             Windows Boot Manager
+  locale                  en-US
+  inherit                 {globalsettings}
+  default                 {current}
+  resumeobject            {f14e4e9d-dc40-11f1-92fb-7ced8de0f73f}
+  displayorder            {current}
+  timeout                 30
+
+  Windows Boot Loader
+  -------------------
+  identifier              {current}
+  device                  partition=C:
+  path                    \Windows\system32\winload.efi
+  description             Windows 11
+  locale                  en-US
+  inherit                 {bootloadersettings}
+  recoverysequence        {f14e4ea1-dc40-11f1-92fb-7ced8de0f73f}
+  recoveryenabled         No
+  testsigning             Yes
+  isolatedcontext         Yes
+  allowedinmemorysettings 0x15000075
+  osdevice                partition=C:
+  systemroot              \Windows
+  resumeobject            {f14e4e9d-dc40-11f1-92fb-7ced8de0f73f}
+  nx                      OptIn
+  bootmenupolicy          Standard
+  bootstatuspolicy        IgnoreAllFailures
+  hypervisorlaunchtype    Auto
+  hypervisorschedulertype Root
+  ems                     Yes
+  bcdedit exit=0
+
+== driver build tools (slice B/D input) ==
+  devcon: absent
+  pnputil: C:\Windows\system32\pnputil.exe
+  signtool: not on PATH, found at C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\arm\signtool.exe
+  infverif: absent

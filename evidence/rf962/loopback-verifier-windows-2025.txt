@@ -1,0 +1,28 @@
+== loopback verifier (test-midi-virtual-endpoint) — windows-2025 ==
+[test-midi-virtual-endpoint] $ cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1
+   Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.65s
+     Running tests\loopback.rs (target\debug\deps\loopback-aca75d615475415d.exe)
+
+running 2 tests
+test loopback_round_trip ... ok
+test real_device_silent_output_smoke ... FAILED
+
+failures:
+
+---- real_device_silent_output_smoke stdout ----
+port: id=winmm-out:0:Microsoft GS Wavetable Synth name="Microsoft GS Wavetable Synth" origin=Unknown
+
+thread 'real_device_silent_output_smoke' (2460) panicked at crates\ruviform-midi-device\tests\loopback.rs:339:9:
+verdict: Fail — 'GS Wavetable' output port failed to open: Backend("winmm midiOutOpen failed")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    real_device_silent_output_smoke
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+error: test failed, to rerun pass `-p ruviform-midi-device --test loopback`
+[test-midi-virtual-endpoint] ERROR task failed
+exit=101

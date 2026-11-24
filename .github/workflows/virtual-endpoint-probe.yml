@@ -7,6 +7,12 @@ name: virtual-endpoint-probe
 # attestation 署名）の確定材料を実測値として集める。判定は evidence の
 # 解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
 #
+# Issue #962 Slice C stage 1 で追加: `midi_wms_api_probe` example が
+# Windows.Devices.Midi2 を raw WinRT ABI で段階到達測定（presence →
+# RoInitialize → activation → service ping → session → transient BLOOP
+# 作成試行）し、その後 WinMM 再観測と loopback verifier で endpoint の
+# 残存/往復可否を計測する。
+#
 # leg 構成:
 #   windows-2025    x64 Server 2025 — 対照 leg。midisrv/WMS は Server SKU
 #                   上に存在しないはずであり、不在を実測として記録する。
@@ -286,6 +292,50 @@ jobs:
           mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe 2>&1 | Tee-Object -FilePath $out -Append
           "exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
 
+      # Issue #962 Slice C stage 1: compiled `Windows.Devices.Midi2` API
+      # 到達 probe。PS type resolution が不在でも raw WinRT ABI で段階
+      # 到達を測定し、transient BLOOP の作成を試行する。probe 自体は
+      # absence-is-data 設計（到達不可も計測値・exit 0）。build/実行の
+      # exit code は記録後に 0 へ戻す — pwsh は末尾の $LASTEXITCODE を
+      # step の成否に伝播するため、計測値が step を赤くしないよう
+      # 明示的に neutralize する（機構の破損のみが job 失敗条件）。
+      - name: Run midi_wms_api_probe (compiled WinRT reachability + BLOOP attempt)
+        shell: pwsh
+        run: |
+          $out = 'midi_wms_api_probe-${{ matrix.os }}.txt'
+          "== midi_wms_api_probe — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise exec -- cargo run -p ruviform-midi-device --example midi_wms_api_probe 2>&1 | Tee-Object -FilePath $out -Append
+          $code = $LASTEXITCODE
+          "exit=$code" | Tee-Object -FilePath $out -Append
+          $global:LASTEXITCODE = 0
+
+      # compiled probe が作成した transient BLOOP が WinMM から観測
+      # できるかの再測定。endpoint が process 終了後も残るか自体が
+      # 計測対象 — 残存・消滅のどちらも evidence。
+      - name: Re-run midi_endpoint_probe after compiled API probe
+        shell: pwsh
+        run: |
+          $out = 'midi_endpoint_probe-after-wms-api-${{ matrix.os }}.txt'
+          "== midi_endpoint_probe (after midi_wms_api_probe) — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe 2>&1 | Tee-Object -FilePath $out -Append
+          $code = $LASTEXITCODE
+          "exit=$code" | Tee-Object -FilePath $out -Append
+          $global:LASTEXITCODE = 0
+
+      # BLOOP が残存していれば loopback verifier が同名 in/out pair を
+      # round-trip 検証し、不在なら verdict: NotRun（fail-closed）。
+      # Pass/Fail/NotRun のどれも判定材料であり、verifier の exit code は
+      # 記録して継続 — job 失敗条件は機構の破損のみ。
+      - name: Run loopback round-trip verifier (observation only)
+        shell: pwsh
+        run: |
+          $out = 'loopback-verifier-${{ matrix.os }}.txt'
+          "== loopback verifier (test-midi-virtual-endpoint) — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise run test-midi-virtual-endpoint 2>&1 | Tee-Object -FilePath $out -Append
+          $code = $LASTEXITCODE
+          "exit=$code" | Tee-Object -FilePath $out -Append
+          $global:LASTEXITCODE = 0
+
       - name: Upload probe evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -296,6 +346,9 @@ jobs:
             endpoint_probe-${{ matrix.os }}.txt
             midi_endpoint_probe-${{ matrix.os }}.txt
             midi_endpoint_probe-after-loopback-${{ matrix.os }}.txt
+            midi_endpoint_probe-after-wms-api-${{ matrix.os }}.txt
+            midi_wms_api_probe-${{ matrix.os }}.txt
             loopback-attempt-${{ matrix.os }}.txt
+            loopback-verifier-${{ matrix.os }}.txt
           if-no-files-found: warn
           retention-days: 30
