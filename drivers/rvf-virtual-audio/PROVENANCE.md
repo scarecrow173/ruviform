@@ -47,7 +47,8 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 | upstream | こちら | 差分 |
 | --- | --- | --- |
 | `AudioModule0/1/2.h`, `AudioModuleHelper.cpp/.h` | 同名 | ＝ |
-| `MiniportAudioEngineNode.cpp`, `MiniportStreamAudioEngineNode.cpp` | 同名 | ＝ |
+| `MiniportAudioEngineNode.cpp` | 同名 | ≠ sideband 呼出を `SYSVAD_BTH_BYPASS`/`SYSVAD_USB_SIDEBAND` guard 化 |
+| `MiniportStreamAudioEngineNode.cpp` | 同名 | ＝ |
 | `NewDelete.cpp/.h` | 同名 | ＝ |
 | `mintopo.cpp/.h` | 同名 | ＝ |
 | `minwavert.cpp/.h`, `minwavertstream.cpp/.h` | 同名 | ＝ |
@@ -73,6 +74,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 - `minipairs.h`: 登録 endpoint を `SpeakerMiniports` + `MicInMiniports` のみに削減（render: `TopologySpeaker`/`WaveSpeaker`、capture: `TopologyMicIn`/`WaveMicIn`）。
 - `EndpointsCommon/speakertoptable.h`: `KSPIN_TOPO_LINEOUT_DEST` bridge pin の `Name` に独自 GUID `RVF_CABLE_INPUT_NAME = {131373ee-e400-4a68-ab5e-9ded0544f2b4}` を設定。INF `MediaCategories` で "Ruviform Cable Input" に結び付く。
 - `micintoptable.h`: `MICIN_CUSTOM_NAME` を独自 GUID `RVF_CABLE_OUTPUT_NAME = {46eab9d5-1e22-45f8-a744-1cf7561dc20a}` に置換。INF `MediaCategories` で "Ruviform Cable Output" に結び付く。
+- `EndpointsCommon/MiniportAudioEngineNode.cpp`（2026-11-24 attempt-1 実測修正）: upstream は `EndpointsCommon` を `SYSVAD_BTH_BYPASS;SYSVAD_USB_SIDEBAND` 定義の StaticLibrary として build するため本ファイル内の sideband 呼出（`IsSidebandDevice()`/`m_pSidebandDevice`）が未ガードのまま compile する。本ツリーは macro 未定義で単一 vcxproj build するため、他 upstream ファイル（`mintopo.cpp` 等）と同じ `#if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)` guard を `if (...) {...} else` 8 箇所に適用 — sideband 無効時は else 側（非 sideband path）のみ compile される upstream 互換構造。
 
 ## endpoint 名の根拠
 
