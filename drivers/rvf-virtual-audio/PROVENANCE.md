@@ -66,7 +66,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 ### 新規ファイル
 
 - `RvfVirtualAudio.inf` — `ComponentizedAudioSample.inx` 構成を単一 INF へ簡約（hwid `ROOT\RvfVirtualAudio`、x64 のみ、speaker/micin の 4 interface pair + KMDF service + MediaCategories 登録）。
-- `RvfVirtualAudio.vcxproj` — 単一 KMDF driver project（`KmdfVersionNumber=1.33`、INF `KmdfLibraryVersion=1.33` と対）。
+- `RvfVirtualAudio.vcxproj` — 単一 KMDF driver project（`KmdfVersionNumber=1.33`、INF `KmdfLibraryVersion=1.33` と対）。ClCompile define は upstream `EndpointsCommon.vcxproj`（StaticLibrary）から `_USE_WAVERT_;_NEW_DELETE_OPERATORS_` を引き継ぐ（2026-11-24 attempt-2 実測修正: `_NEW_DELETE_OPERATORS_` 無しでは `NewDelete.h` 側の宣言は PortCls header に残り 3 引数 `operator new` が LNK2019 になる。`SYSVAD_BTH_BYPASS`/`SYSVAD_USB_SIDEBAND` は sideband 実装ファイルを vendor しないため意図的に未定義 — 呼出側は `#if defined(...)` guard で compile 対象外）。
 - `RvfVirtualAudio.rc` — `TabletAudioSample.rc` 派生の version resource。
 
 ## 変更内容（≠ ファイル）

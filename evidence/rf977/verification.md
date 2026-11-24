@@ -82,3 +82,16 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 **失敗分析**: `MiniportAudioEngineNode.cpp` — upstream は `EndpointsCommon` を `SYSVAD_BTH_BYPASS;SYSVAD_USB_SIDEBAND` 定義の StaticLibrary として build するため本ファイルの sideband 呼出（`IsSidebandDevice()`/`m_pSidebandDevice`・8 箇所）が未ガードのまま compile する。本ツリーは macro 未定義の単一 vcxproj build のため宣言側（`minwavert.h`・guard 済み）と食い違い `C3861`/`C2065`。
 
 **attempt-2 修正**: `MiniportAudioEngineNode.cpp` の `if (...) {...} else` 8 箇所へ他 upstream ファイルと同型の `#if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)` guard を適用（sideband 無効時は非 sideband path のみ compile — upstream 互換）。PROVENANCE.md を `＝`→`≠` に訂正。
+
+### attempt 2 — run 45492389771（merge SHA `1d365aea`・attempt2-*.txt 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | msbuild=present（**32bit** `MSBuild\Current\Bin` を選択）; toolset=3; kmHeaders=0→winget 導入 |
+| driver-build | **error** | `msbuild exit=1` — sideband C3861/C2065 は解消・16 ファイル全て compile |
+| 以降 | blocked | 契約どおり fail-closed |
+
+**失敗分析（2 件の独立欠陥）**:
+
+1. `LNK2019 operator new(size_t, POOL_TYPE, ULONG)` — upstream `EndpointsCommon.vcxproj` は `_NEW_DELETE_OPERATORS_` を定義し `NewDelete.cpp` が 3 引数 placement new を実装する。本 vcxproj で未定義のため宣言（PortCls header 側）だけ残り link 失敗。`_USE_WAVERT_` も合わせて ClCompile define へ追加（upstream と同じく sideband 系のみ除外）。
+2. `INF verification exception: Unable to load DLL 'x86\InfVerif.dll'` — WDK は `InfVerif.dll` を `bin\amd64`/`arm64` のみ同梱。vswhere の `MSBuild\**\Bin\MSBuild.exe` find が 32bit `MSBuild\Current\Bin` を先に返すため x86 名で load を試みて失敗。**attempt-3 修正**: msbuild 選択を `Bin\amd64\` 優先に変更（env-build-surface / driver-build の 2 箇所）。
