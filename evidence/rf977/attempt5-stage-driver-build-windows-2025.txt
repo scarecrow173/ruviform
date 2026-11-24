@@ -1,0 +1,663 @@
+target platform: x64
+msbuild: C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\amd64\MSBuild.exe
+toolset(x64): C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180\Platforms\x64\PlatformToolsets\WindowsKernelModeDriver10.0
+km headers: 0; km libs: 0
+  DriverKit build task dll: absent
+
+== job 内 WDK 導入（winget / Microsoft.WindowsWDK.10.0.26100） ==
+  winget: C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps\winget.exe
+
+     -
+
+
+    ███████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1024 KB / 3.88 MB
+    ███████████████▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2.00 MB / 3.88 MB
+    ███████████████████████▒▒▒▒▒▒▒  3.00 MB / 3.88 MB
+    ██████████████████████████████  3.88 MB / 3.88 MB
+
+
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  0%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  1%
+    ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  2%
+    ███████████████████▒▒▒▒▒▒▒▒▒▒▒  66%
+    ██████████████████████▒▒▒▒▒▒▒▒  74%
+    ██████████████████████▒▒▒▒▒▒▒▒  76%
+    █████████████████████████▒▒▒▒▒  84%
+    ███████████████████████████▒▒▒  93%
+    ███████████████████████████▒▒▒  93%
+    ██████████████████████████████  100%
+
+  The `msstore` source requires that you view the following agreements before using.
+  Terms of Transaction: https://aka.ms/microsoft-store-terms-of-transaction
+  The source requires the current machine's 2-letter geographic region to be sent to the backend service to function properly (ex. "US").
+
+
+     -
+
+  Found Windows Driver Kit - Windows 10.0.26100.6584 [Microsoft.WindowsWDK.10.0.26100] Version 10.1.26100.6584
+  This application is licensed to you by its owner.
+  Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+  Downloading https://download.microsoft.com/download/41fb59c2-1723-45f9-a270-96b73ad58233/KIT_BUNDLE_WDK_MEDIACREATION/wdksetup.exe
+
+     -
+     \
+     |
+
+
+    ██████████████████████████████  1.34 MB / 1.34 MB
+  Successfully verified installer hash
+  Starting package install...
+
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+     /
+     -
+     \
+     |
+
+  Successfully installed
+  winget install exit=0 elapsed_s=148
+  toolset after install attempt: present
+  km headers after install attempt: 1
+  task dll (post-install): C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.17.0.dll
+  task dll (post-install): C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\bin\Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll
+  msbuild version: 18.12.2.51402 (major=18)
+  task dll copy: Microsoft.DriverKit.Build.Tasks.17.0.dll -> Microsoft.DriverKit.Build.Tasks.18.0.dll
+  task dll copy: Microsoft.DriverKit.Build.Tasks.PackageVerifier.17.0.dll -> Microsoft.DriverKit.Build.Tasks.PackageVerifier.18.0.dll
+
+== msbuild RvfVirtualAudio (x64) ==
+
+  Building 'RvfVirtualAudio' with toolset 'WindowsKernelModeDriver10.0' and the 'Universal' target platform.
+  Stamping x64\Release\RvfVirtualAudio.inf
+  Stamping [Version] section with DriverVer=11/24/2026,22.1.7.979
+  adapter.cpp
+  basetopo.cpp
+  common.cpp
+  hw.cpp
+  kshelper.cpp
+  savedata.cpp
+  ToneGenerator.cpp
+  micintopo.cpp
+  AudioModuleHelper.cpp
+  MiniportAudioEngineNode.cpp
+  MiniportStreamAudioEngineNode.cpp
+  NewDelete.cpp
+  mintopo.cpp
+  minwavert.cpp
+  minwavertstream.cpp
+  speakertopo.cpp
+  Generating Code...
+  RvfVirtualAudio.vcxproj -> D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+  Driver is 'Universal'.
+  .......................
+  Signability test failed.
+
+  Errors:
+  22.9.1: rvfvirtualaudio.sys in [rvfvirtualaudio_device.copylist] of RvfVirtualAudio\rvfvirtualaudio.inf is missing or cannot be decompressed from source media.  Please verify all path values specified in SourceDisksNames, SouceDisksFiles, and CopyFiles sections resolve to the actual location of the file, and are expressed in terms relative to the location of the inf.
+
+  Warnings:
+  None
+C:\Program Files (x86)\Windows Kits\10\build\10.0.26100.0\WindowsDriver.common.targets(1438,5): error MSB6006: "inf2cat.exe" exited with code -2. [D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\RvfVirtualAudio.vcxproj]
+  msbuild exit=1
