@@ -1,11 +1,8 @@
 # Issue #912 — plugin→host param 値報告の全面配線 設計記録
 
-status: implemented (local)
+status: implemented
 issue: ruviform#912 (param 値報告経路の配線)
 precedent: Issue #891 `docs/designs/issue-891-dirty-notification.md`（本記録は D1/D2/D4 の写像を継承する）
-
-> 本ファイルは `docs/designs/` が他 dispatch の lease 内にあるため `evidence/rf912/` に置く。
-> 統合時に Coordinator が docs/designs へ移し、index を整備する。
 
 ## 0. スコープ確定（現状訂正を前提に）
 
