@@ -12,7 +12,7 @@
 
 use crate::boundary::{
     DirtyNotice, GuiFocusTarget, GuiHandle, GuiKeyEvent, GuiPopupKind, GuiRequest,
-    GuiRequestVerdict, GuiSize, HostError, ParentLease,
+    GuiRequestVerdict, GuiSize, HostError, ParamNotice, ParentLease,
 };
 use crate::{
     BufferView, BufferViewMut, BusDescriptor, Event, EventList, ParamInfo, PluginDescriptor,
@@ -376,6 +376,28 @@ pub trait Plugin: PluginProcessor {
     ///
     /// **RT contract:** non-RT only — the `out` append may allocate.
     fn drain_dirty_notices(&mut self, _out: &mut Vec<DirtyNotice>) {}
+
+    /// Drains the plugin's pending plugin→host parameter-domain
+    /// notifications (Issue #912) — the pull counterpart of the
+    /// formats' parameter-observation signals (VST3
+    /// `IComponentHandler` `performEdit`/`beginEdit`/`endEdit`/
+    /// `restartComponent`, CLAP `clap_host_params`
+    /// `rescan`/`clear`/`request_flush` and
+    /// `clap_host_preset_load` `loaded`/`on_error`, CLAP
+    /// `PARAM_GESTURE_*` output events), which the adapter captures
+    /// into an instance-local bounded queue and this drain empties.
+    ///
+    /// Same since-last-drain, producer-ordered semantics as
+    /// [`Self::drain_dirty_notices`], over the occurrence-ordered
+    /// [`ParamNotice`] vocabulary rather than the coalescing
+    /// flag-style [`DirtyNotice`] one — automation recording and
+    /// live host-UI value reflection need the ordered stream.
+    ///
+    /// The default drains nothing: a plugin without a param
+    /// notification surface produces none.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate.
+    fn drain_param_notices(&mut self, _out: &mut Vec<ParamNotice>) {}
 }
 
 /// One registered plugin type: descriptor plus instance construction.
@@ -504,6 +526,12 @@ pub trait ErasedPlugin {
     fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
         let _ = out;
     }
+    /// [`Plugin::drain_param_notices`].
+    ///
+    /// **RT contract:** non-RT only.
+    fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+        let _ = out;
+    }
     /// [`PluginProcessor::drain_output_reports`].
     ///
     /// **RT contract:** non-RT only.
@@ -593,6 +621,9 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     }
     fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
         self.0.drain_dirty_notices(out);
+    }
+    fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+        self.0.drain_param_notices(out);
     }
     fn drain_output_reports(&mut self, out: &mut Vec<Event>) {
         self.0.drain_output_reports(out);

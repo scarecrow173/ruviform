@@ -126,8 +126,8 @@ use ruviform_plugin_core::wire::{self, Command as WireCommand, Message, Reply as
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, DirtyNotice, ErasedPlugin, ErasedVideoPlugin, Event, EventList,
     HostError, HostInput, HostOutput, Lifecycle, LifecycleEvent, LifecycleState, ParamId,
-    PlainParamValue, PluginFactory, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    VideoPluginFactory, VideoProcessConfig,
+    ParamNotice, PlainParamValue, PluginFactory, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, VideoPluginFactory, VideoProcessConfig,
 };
 use ruviform_video_core::VideoFrame;
 
@@ -432,6 +432,10 @@ struct InstanceEntry {
     /// (wire v7, Issue #891) — same chunked-backlog contract as
     /// `report_backlog` over the flag-style vocabulary.
     dirty_backlog: Vec<DirtyNotice>,
+    /// Queued [`ParamNotice`]s awaiting a `DrainParamNotices` reply
+    /// (wire v9, Issue #912) — same chunked-backlog contract as
+    /// `report_backlog` over the occurrence-ordered vocabulary.
+    param_backlog: Vec<ParamNotice>,
     /// Surface bookkeeping (wire v6) — `Some` while an `Opened` reply
     /// minted a live GUI surface for this instance, `None` before and
     /// after the surface's fold. `#[cfg(windows)]`: off Windows the
@@ -598,6 +602,7 @@ impl Runner {
                 staging_out: Vec::new(),
                 report_backlog: Vec::new(),
                 dirty_backlog: Vec::new(),
+                param_backlog: Vec::new(),
                 #[cfg(windows)]
                 gui_handle: None,
             },
@@ -745,6 +750,7 @@ impl InstanceEntry {
             }
             WireCommand::DrainOutputReports => self.drain_output_reports(),
             WireCommand::DrainDirtyNotices => self.drain_dirty_notices(),
+            WireCommand::DrainParamNotices => self.drain_param_notices(),
             // `#[non_exhaustive]` — the wire-v3 video verbs are the
             // cross-kind defined rejection on an audio entry, as is
             // any verb a later WIRE_VERSION adds. The wire-v6 GUI
@@ -787,6 +793,23 @@ impl InstanceEntry {
             .min(wire::WIRE_MAX_DIRTY_NOTICES as usize);
         let notices: Vec<DirtyNotice> = self.dirty_backlog.drain(..take).collect();
         Ok(WireReply::DirtyNotices { notices })
+    }
+
+    /// `DrainParamNotices` (wire v9, Issue #912): pull the plugin's
+    /// since-last-drain param notifications into the entry backlog,
+    /// then answer the oldest `WIRE_MAX_PARAM_NOTICES` — the same
+    /// chunked, lifecycle-ungated contract as
+    /// [`Self::drain_output_reports`].
+    fn drain_param_notices(&mut self) -> Result<WireReply, HostError> {
+        guarded(&mut *self.instance, |plugin| {
+            plugin.drain_param_notices(&mut self.param_backlog);
+        })?;
+        let take = self
+            .param_backlog
+            .len()
+            .min(wire::WIRE_MAX_PARAM_NOTICES as usize);
+        let notices: Vec<ParamNotice> = self.param_backlog.drain(..take).collect();
+        Ok(WireReply::ParamNotices { notices })
     }
 
     /// `Created → Initialized`: validate first (`InitFailed` is only

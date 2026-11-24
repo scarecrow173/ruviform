@@ -42,6 +42,10 @@ host = [
     # `state` — `PluginState` host calls (`save_state`/`restore_state`,
     # Issue #630 adapter-state-bridge slice). Same additive gate.
     "clack-extensions/state",
+    # `preset-discovery` — the `HostPresetLoad` host extension
+    # (`loaded`/`on_error` → `ParamNotice`, Issue #912). Same
+    # additive gate.
+    "clack-extensions/preset-discovery",
 ]
 
 [dependencies]

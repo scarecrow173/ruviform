@@ -49,7 +49,7 @@ use ruviform_observability::source::ObservationRegistrar;
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
     DirtyNotice, Event, EventList, FailureCause, LifecycleEvent, LifecycleState, ParamId,
-    PlainParamValue, PluginDescriptor, PrepareError, ProcessResult, TransportInfo,
+    ParamNotice, PlainParamValue, PluginDescriptor, PrepareError, ProcessResult, TransportInfo,
     VideoProcessConfig,
 };
 
@@ -1085,6 +1085,48 @@ impl PluginHost {
             }
             Slot::OutOfProcess(instance) => {
                 instance.drain_dirty_notices(out)?;
+                Ok(ReportDrain::Drained)
+            }
+            Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
+        }
+    }
+
+    /// The consumer-facing plugin→host param-notification pull
+    /// (wire v9, Issue #912): L0 slots drain through
+    /// [`InProcessHost`]'s direct call; L1 audio slots pull over the
+    /// wire (`DrainParamNotices` → `Reply::ParamNotices`, chunked
+    /// inside `L1Instance`); `OutOfProcessVideo` slots answer
+    /// [`ReportDrain::Unavailable`] — the video family has no
+    /// param-notification surface at all, so "no notices" is never
+    /// confused with a drained-empty queue.
+    ///
+    /// Same since-last-drain, pull-only contract as
+    /// [`Self::drain_dirty_notices`]: nothing reaches `out` without
+    /// this call, and a returned [`ReportDrain::Drained`] with an
+    /// unchanged `out` is the defined "nothing pending" answer.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate,
+    /// the L0 `Shared` arm takes the instance's `core` mutex, and the
+    /// L1 arm waits at most `command_timeout` per wire verb. Never
+    /// call from inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when an L0 `Shared` instance or an L1
+    /// audio instance has already converged.
+    pub fn drain_param_notices(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<ParamNotice>,
+    ) -> Result<ReportDrain, HostError> {
+        match self.slot_mut(handle)? {
+            Slot::InProcess(inner) => {
+                let inner = *inner;
+                self.l0.drain_param_notices(inner, out)
+            }
+            Slot::OutOfProcess(instance) => {
+                instance.drain_param_notices(out)?;
                 Ok(ReportDrain::Drained)
             }
             Slot::OutOfProcessVideo(_) => Ok(ReportDrain::Unavailable),
@@ -2547,15 +2589,17 @@ mod tests {
         }
     }
 
-    /// An L0 plugin carrying a pending [`DirtyNotice`] queue — the
-    /// dirty-drain routing oracle (Issue #891). The factory seeds it
-    /// so `drain_dirty_notices` has observable traffic; the
-    /// since-last-drain semantics then leave the repeat drain empty.
-    struct DirtyGain {
+    /// An L0 plugin carrying pending [`DirtyNotice`] and
+    /// [`ParamNotice`] queues — the dirty-drain (Issue #891) and
+    /// param-drain (Issue #912) routing oracle. The factory seeds both
+    /// so each drain has observable traffic; the since-last-drain
+    /// semantics then leave the repeat drain empty.
+    struct NoticeGain {
         notices: Vec<DirtyNotice>,
+        param_notices: Vec<ParamNotice>,
     }
 
-    impl PluginProcessor for DirtyGain {
+    impl PluginProcessor for NoticeGain {
         fn prepare(
             &mut self,
             _config: &ProcessConfig,
@@ -2580,7 +2624,7 @@ mod tests {
         }
     }
 
-    impl Plugin for DirtyGain {
+    impl Plugin for NoticeGain {
         fn descriptor(&self) -> PluginDescriptor {
             DESCRIPTOR
         }
@@ -2590,22 +2634,27 @@ mod tests {
         fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
             out.append(&mut self.notices);
         }
+        fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+            out.append(&mut self.param_notices);
+        }
     }
 
-    struct DirtyGainFactory;
+    struct NoticeGainFactory;
 
-    impl PluginFactory for DirtyGainFactory {
+    impl PluginFactory for NoticeGainFactory {
         fn descriptor(&self) -> PluginDescriptor {
             DESCRIPTOR
         }
         fn create(&self) -> Box<dyn ErasedPlugin> {
-            erase(DirtyGain {
+            erase(NoticeGain {
                 notices: dirty_pair(),
+                param_notices: param_gesture(),
             })
         }
         fn create_sendable(&self) -> Option<Box<dyn ErasedPlugin + Send>> {
-            Some(erase_sendable(DirtyGain {
+            Some(erase_sendable(NoticeGain {
                 notices: dirty_pair(),
+                param_notices: param_gesture(),
             }))
         }
     }
@@ -2619,6 +2668,25 @@ mod tests {
                 value: ParamValue::new(0.25).unwrap(),
             },
             DirtyNotice::StateDirty,
+        ]
+    }
+
+    /// The fixture's drained param payload — one edit gesture in
+    /// occurrence order (the queue never coalesces).
+    fn param_gesture() -> Vec<ParamNotice> {
+        vec![
+            ParamNotice::GestureBegin {
+                param_id: ParamId(7),
+                frame_offset: None,
+            },
+            ParamNotice::ValueChanged {
+                param_id: ParamId(7),
+                value: ParamValue::new(0.25).unwrap(),
+            },
+            ParamNotice::GestureEnd {
+                param_id: ParamId(7),
+                frame_offset: None,
+            },
         ]
     }
 
@@ -2748,7 +2816,7 @@ mod tests {
     fn drain_dirty_notices_routes_by_slot_kind() {
         // L0 — the pending queue reaches the caller through the
         // `Shared` slot's `shared_verb`.
-        let (mut host, handle) = l0_instance(Box::new(DirtyGainFactory), true);
+        let (mut host, handle) = l0_instance(Box::new(NoticeGainFactory), true);
         let mut out = Vec::new();
         assert_eq!(
             host.drain_dirty_notices(handle, &mut out),
@@ -2786,6 +2854,63 @@ mod tests {
         // Stale handle — never minted.
         assert_eq!(
             host.drain_dirty_notices(PluginHandle::new(77, 0), &mut out),
+            Err(HostError::InvalidHandle)
+        );
+    }
+
+    /// Issue #912: the composite param drain routes by slot kind —
+    /// L0 delegates to `InProcessHost::drain_param_notices` (notices
+    /// reach the caller in occurrence order, apart from the dirty
+    /// queue), the L1 audio arm issues the wire-v9
+    /// `DrainParamNotices` verb (the childless fixture answers the
+    /// defined transport failure `Ipc`), the L1 video slot keeps the
+    /// honest `Unavailable`, and stale handles take `InvalidHandle`.
+    #[test]
+    fn drain_param_notices_routes_by_slot_kind() {
+        // L0 — the pending queue reaches the caller through the
+        // `Shared` slot's `shared_verb`.
+        let (mut host, handle) = l0_instance(Box::new(NoticeGainFactory), true);
+        let mut out = Vec::new();
+        assert_eq!(
+            host.drain_param_notices(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, param_gesture());
+        // Repeat drain — `Drained` with nothing appended.
+        assert_eq!(
+            host.drain_param_notices(handle, &mut out),
+            Ok(ReportDrain::Drained)
+        );
+        assert_eq!(out, param_gesture());
+        // The dirty queue is a separate surface — still intact.
+        let mut dirty = Vec::new();
+        host.drain_dirty_notices(handle, &mut dirty).unwrap();
+        assert_eq!(dirty, dirty_pair());
+
+        // L1 audio — the wire-v9 verb is issued; the childless
+        // fixture's request fails the defined transport `Ipc`
+        // (routing proven: no `Unavailable`, no fabricated drain).
+        let (mut host, handle) = l1_instance(LifecycleState::Processing, Some(512));
+        let mut out = vec![ParamNotice::FlushRequested];
+        let sentinel = out.clone();
+        assert_eq!(
+            host.drain_param_notices(handle, &mut out),
+            Err(HostError::Ipc)
+        );
+        assert_eq!(out, sentinel);
+
+        // L1 video — `Unavailable`, `out` untouched.
+        let mut host = PluginHost::new();
+        let handle = mint_video(&mut host, LifecycleState::Processing);
+        assert_eq!(
+            host.drain_param_notices(handle, &mut out),
+            Ok(ReportDrain::Unavailable)
+        );
+        assert_eq!(out, sentinel);
+
+        // Stale handle — never minted.
+        assert_eq!(
+            host.drain_param_notices(PluginHandle::new(77, 0), &mut out),
             Err(HostError::InvalidHandle)
         );
     }

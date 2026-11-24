@@ -18,7 +18,7 @@ use ruviform_plugin_core::wire::{WIRE_MAX_CHANNELS, WIRE_MAX_FRAMES};
 use ruviform_plugin_core::{
     BusDescriptor, DirtyNotice, Event, EventList, GuiFocusTarget, GuiKeyEvent, GuiPopupKind,
     GuiRequest, GuiRequestSink, GuiSize, Lifecycle, LifecycleError, LifecycleEvent, LifecycleState,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
+    ParamNotice, PrepareError, ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
 use crate::endpoint::{EndpointBounds, EndpointInner, L0Endpoint, PluginEndpoint};
@@ -1189,6 +1189,45 @@ impl InProcessHost {
         }
     }
 
+    /// Drains the instance's pending plugin→host param notifications
+    /// (wire v9, Issue #912) — the pull surface the neutral
+    /// [`ParamNotice`] vocabulary drains through on L0.
+    ///
+    /// Same delivery shape as [`Self::drain_dirty_notices`]: a
+    /// pull-based read appending to `out`; nothing drains implicitly.
+    /// `Plain` slots call the plugin directly; `Shared` slots run the
+    /// pinned lock protocol. Lifecycle-ungated like the report drain
+    /// — the pending queue is plugin state.
+    ///
+    /// **RT contract:** non-RT only — the `out` append may allocate
+    /// and the `Shared` arm takes the `core` mutex. Never call from
+    /// inside `process`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::InvalidHandle`] for a stale/unknown handle and
+    /// [`HostError::Failed`] when a `Shared` instance has already
+    /// converged.
+    pub fn drain_param_notices(
+        &mut self,
+        handle: PluginHandle,
+        out: &mut Vec<ParamNotice>,
+    ) -> Result<ReportDrain, HostError> {
+        let instance = self.instance_mut(handle)?;
+        match &mut instance.slot {
+            InstanceSlot::Plain { plugin, .. } => {
+                plugin.drain_param_notices(out);
+                Ok(ReportDrain::Drained)
+            }
+            InstanceSlot::Shared(slot) => {
+                Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
+                    core.plugin.drain_param_notices(out);
+                    Ok(ReportDrain::Drained)
+                })
+            }
+        }
+    }
+
     fn restore_state(
         &mut self,
         handle: PluginHandle,
@@ -1708,10 +1747,13 @@ mod tests {
     /// `outputParameterChanges`/`outputEvents` mirror implements.
     /// `ReportGainFactory`'s `sendable` flag picks the `Shared` or
     /// `Plain` slot so both drain arms run identical producer code.
+    /// `param_notices` is seeded with [`param_edit`] so the param
+    /// drain has observable traffic on both arms too.
     struct ReportGain {
         gain: f32,
         blocks: u32,
         pending: Vec<Event>,
+        param_notices: Vec<ParamNotice>,
         panic_in_process: bool,
     }
 
@@ -1770,6 +1812,20 @@ mod tests {
         fn params(&self) -> &[ParamInfo] {
             &[]
         }
+        fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+            out.append(&mut self.param_notices);
+        }
+    }
+
+    /// The report fixture's seeded param payload, in occurrence order.
+    fn param_edit() -> Vec<ParamNotice> {
+        vec![
+            ParamNotice::ValueChanged {
+                param_id: ParamId(3),
+                value: ParamValue::new(0.5).unwrap(),
+            },
+            ParamNotice::FlushRequested,
+        ]
     }
 
     /// The report fixture's factory — `sendable` picks the slot
@@ -1789,6 +1845,7 @@ mod tests {
                 gain: 2.0,
                 blocks: 0,
                 pending: Vec::with_capacity(REPORT_CAPACITY),
+                param_notices: param_edit(),
                 panic_in_process: self.panic_in_process,
             })
         }
@@ -1798,6 +1855,7 @@ mod tests {
                     gain: 2.0,
                     blocks: 0,
                     pending: Vec::with_capacity(REPORT_CAPACITY),
+                    param_notices: param_edit(),
                     panic_in_process: self.panic_in_process,
                 })
             })
@@ -2897,6 +2955,33 @@ mod tests {
         );
         let expected: Vec<Event> = (0..3u32).flat_map(report_pair).collect();
         assert_eq!(out, expected);
+    }
+
+    /// Issue #912: both slot arms hand the plugin's pending param
+    /// notices to the caller in occurrence order, lifecycle-ungated
+    /// (drained straight from `Created`); pre-existing `out` contents
+    /// survive and a repeat drain appends nothing yet still reports
+    /// `Drained`.
+    #[test]
+    fn drain_param_notices_plain_and_shared_slots() {
+        for sendable in [false, true] {
+            let mut host = report_host(sendable);
+            let handle = instantiate(&mut host, REPORT_DESCRIPTOR.id);
+            let sentinel = ParamNotice::Dropped { count: 9 };
+            let mut out = vec![sentinel.clone()];
+            assert_eq!(
+                host.drain_param_notices(handle, &mut out),
+                Ok(ReportDrain::Drained)
+            );
+            let mut expected = vec![sentinel];
+            expected.extend(param_edit());
+            assert_eq!(out, expected, "sendable = {sendable}");
+            assert_eq!(
+                host.drain_param_notices(handle, &mut out),
+                Ok(ReportDrain::Drained)
+            );
+            assert_eq!(out, expected, "sendable = {sendable}");
+        }
     }
 
     /// Issue #253 slice (b), error surface: stale/unknown handles

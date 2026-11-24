@@ -56,17 +56,28 @@
 //!   `resizeView` is a defined refusal (`kResultFalse`).
 //! - `BridgeComponentHandler` — `IComponentHandler` +
 //!   `IComponentHandler2`, injected via `setComponentHandler`: the
-//!   plugin→host dirty-notification surface (Issue #891).
-//!   `performEdit` → `DirtyNotice::ParamEdited`,
-//!   `setDirty(bool)` → `StateDirty`/`StateClean` and
-//!   `restartComponent(kParamValuesChanged)` → `StateDirty` all
-//!   enqueue into the instance-local [`DirtyNoticeQueue`] that
-//!   `drain_dirty_notices` empties on the host's pull cadence.
-//!   `beginEdit`/`endEdit` still answer `kResultOk` (a refused edit
-//!   could wedge the plugin's UI thread); `restartComponent` with
-//!   any other flag bit, `requestOpenEditor` and the group-edit pair
-//!   answer `kNotImplemented` — `kResultOk` there would promise a
-//!   resend or surface the bridge never performs.
+//!   plugin→host notification surface, fanned out over two
+//!   instance-local queues the host empties on its pull cadence.
+//!   Dirty surface (Issue #891): `performEdit` →
+//!   `DirtyNotice::ParamEdited`, `setDirty(bool)` →
+//!   `StateDirty`/`StateClean` and
+//!   `restartComponent(kParamValuesChanged)` → `StateDirty` enqueue
+//!   into the [`DirtyNoticeQueue`] `drain_dirty_notices` empties.
+//!   Param-report surface (Issue #912, wire v9): the same
+//!   `performEdit` also enqueues `ParamNotice::ValueChanged` (a
+//!   non-finite value skips it — the dirty side's `StateDirty`
+//!   degrade already reports the divergence), `beginEdit`/`endEdit`
+//!   → `GestureBegin`/`GestureEnd` (`frame_offset: None` — a
+//!   main-thread call carries no block offset) and *every*
+//!   `restartComponent` → `RescanRequested` with the flags mapped
+//!   onto [`RescanAspects`], all into the [`ParamNoticeQueue`]
+//!   `drain_param_notices` empties. Delivery is not fulfillment:
+//!   `restartComponent` answers `kResultOk` only for exactly
+//!   `kParamValuesChanged`; any other flag set, `requestOpenEditor`
+//!   and the group-edit pair answer `kNotImplemented` — `kResultOk`
+//!   there would promise a reload, resend or surface the bridge
+//!   never performs. `beginEdit`/`endEdit` still answer `kResultOk`
+//!   (a refused edit could wedge the plugin's UI thread).
 //! - `BridgeParamQueue` / `BridgeParameterChanges` —
 //!   `IParamValueQueue`/`IParameterChanges` supplied as
 //!   `ProcessData.inputParameterChanges`. One queue per *declared*
@@ -157,11 +168,25 @@
 //!   are never called — the bridge drives the plugin's *default-active*
 //!   bus layout only; a plugin requiring non-default bus state is
 //!   outside the v1 boundary.
-//! - `ProcessData.outputParameterChanges`/`outputEvents` are always
-//!   null — plugin-emitted parameter changes and plugin→host events
-//!   are unsupported in v1. `inputEvents` carries the translated
-//!   canonical MIDI stream (Issue #253); its defined skips are
-//!   counted in `Vst3Plugin::midi_stats`.
+//! - `ProcessData.outputParameterChanges`/`outputEvents` carry the
+//!   plugin→host process direction (Issue #253): `prepare` builds a
+//!   writable mirror of the declared-param queue set
+//!   (`addParameterData` serves declared ids only and answers null
+//!   for any other) and a preallocated output `IEventList`. After a
+//!   `kResultOk` `process`, `collect_output_reports` turns queue
+//!   points into `EventKind::ParamValue` reports and event-list
+//!   entries (through `midi::incoming_event`) into `EventKind::Midi`
+//!   reports, frame-sorted inside the `pending_reports` capacity
+//!   reserved at `prepare` (`MAX_EVENTS_PER_BLOCK`); reports
+//!   accumulate across blocks until `drain_output_reports` empties
+//!   them. Non-finite values, out-of-block offsets, untranslatable
+//!   entries and a full buffer are defined skips counted in
+//!   `report_stats`; a declined `process` collects nothing. These
+//!   sample-accurate reports stay on the `Event` surface — the
+//!   handler's main-thread notices ride `drain_param_notices`
+//!   instead. `inputEvents` carries the translated canonical MIDI
+//!   stream (Issue #253); its defined skips are counted in
+//!   `Vst3Plugin::midi_stats`.
 //! - Plugin-reported enumeration counts (`countClasses`,
 //!   `getParameterCount`, `BusInfo.channelCount`) are clamped to
 //!   `MAX_SCAN_*` caps before they
@@ -193,9 +218,9 @@ use ruviform_plugin_core::{
     BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
     EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind,
     GuiRequest, GuiRequestSink, GuiRequestVerdict, GuiSize, HostError, ParamEvent, ParamFlags,
-    ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor,
-    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
-    erase,
+    ParamId, ParamInfo, ParamNotice, ParamNoticeQueue, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    ProcessStatus, RescanAspects, TransportInfo, erase,
 };
 use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
 use vst3::Steinberg::KeyModifier_::{kAlternateKey, kCommandKey, kControlKey, kShiftKey};
@@ -806,39 +831,61 @@ impl IPlugFrameTrait for BridgePlugFrame {
 }
 
 /// `IComponentHandler` + `IComponentHandler2` — the plugin→host
-/// dirty-notification surface (Issue #891). `performEdit`,
-/// `setDirty` and `restartComponent(kParamValuesChanged)` capture
-/// into the instance-local [`DirtyNoticeQueue`] the owning
-/// `Vst3Plugin` drains through `drain_dirty_notices` — the
-/// acknowledge-and-drop boundary of the v1 stub is gone: every
-/// dirty-relevant call now lands on the neutral pull surface.
+/// notification surface. Every call lands on a neutral pull surface
+/// the owning `Vst3Plugin` drains: the dirty domain (Issue #891 —
+/// `performEdit`, `setDirty` and
+/// `restartComponent(kParamValuesChanged)` into the
+/// [`DirtyNoticeQueue`] behind `drain_dirty_notices`) and the
+/// param-report domain (Issue #912 — `performEdit`,
+/// `beginEdit`/`endEdit` and every `restartComponent` into the
+/// [`ParamNoticeQueue`] behind `drain_param_notices`). A call that
+/// belongs to both domains enqueues on both — re-save judgement and
+/// param observation are separate consumers, never deduplicated
+/// against each other.
 ///
-/// `beginEdit`/`endEdit` still answer `kResultOk` — gesture edges
-/// carry no payload the neutral vocabulary models (a refused edge
-/// could wedge a plugin that gates its UI on the ack), and
-/// `performEdit` inside the gesture already delivers the meaningful
-/// content.
+/// The answers stay honest independently of delivery:
+/// `beginEdit`/`endEdit` answer `kResultOk` (a refused edge could
+/// wedge a plugin that gates its UI on the ack), and
+/// `restartComponent` refuses what the bridge cannot perform even
+/// though the request itself is delivered.
 struct BridgeComponentHandler {
     /// The instance's pending dirty-notification queue — shared with
     /// the owning `Vst3Plugin` (`Rc`/`RefCell`: every VST3 handler
     /// call runs on the single runner command thread the whole
     /// bridge lives on).
-    notices: Rc<RefCell<DirtyNoticeQueue>>,
+    dirty_notices: Rc<RefCell<DirtyNoticeQueue>>,
+    /// The instance's pending param-report queue — shared with the
+    /// owning `Vst3Plugin` under the same single-thread contract.
+    param_notices: Rc<RefCell<ParamNoticeQueue>>,
 }
 
 impl BridgeComponentHandler {
-    /// A handler enqueueing into `notices` — the owning plugin
-    /// passes its `dirty_notices` cell.
-    fn new(notices: Rc<RefCell<DirtyNoticeQueue>>) -> Self {
-        Self { notices }
+    /// A handler enqueueing into the owning plugin's
+    /// `dirty_notices`/`param_notices` cells.
+    fn new(
+        dirty_notices: Rc<RefCell<DirtyNoticeQueue>>,
+        param_notices: Rc<RefCell<ParamNoticeQueue>>,
+    ) -> Self {
+        Self {
+            dirty_notices,
+            param_notices,
+        }
     }
 
     /// Best-effort enqueue — a `borrow_mut` conflict means a
     /// re-entrant call while the queue is mid-drain on this same
     /// thread, which the VST3 contract does not produce; the defined
     /// drop keeps the answer honest rather than deadlocking.
-    fn enqueue(&self, notice: DirtyNotice) {
-        if let Ok(mut queue) = self.notices.try_borrow_mut() {
+    fn enqueue_dirty(&self, notice: DirtyNotice) {
+        if let Ok(mut queue) = self.dirty_notices.try_borrow_mut() {
+            queue.enqueue(notice);
+        }
+    }
+
+    /// Best-effort enqueue on the param-report queue — the same
+    /// re-entrancy rule as [`Self::enqueue_dirty`].
+    fn enqueue_param(&self, notice: ParamNotice) {
+        if let Ok(mut queue) = self.param_notices.try_borrow_mut() {
             queue.enqueue(notice);
         }
     }
@@ -849,53 +896,113 @@ impl Class for BridgeComponentHandler {
 }
 
 impl IComponentHandlerTrait for BridgeComponentHandler {
+    /// `beginEdit(id)` → [`ParamNotice::GestureBegin`] with
+    /// `frame_offset: None` — the call arrives on the main thread,
+    /// outside any block, so there is no sample offset to report.
     #[expect(unsafe_code)]
-    unsafe fn beginEdit(&self, _id: ParamID) -> tresult {
+    unsafe fn beginEdit(&self, id: ParamID) -> tresult {
+        self.enqueue_param(ParamNotice::GestureBegin {
+            param_id: ParamId(id),
+            frame_offset: None,
+        });
         kResultOk
     }
 
-    /// `performEdit(id, value_normalized)` → `ParamEdited` — the
-    /// plugin reports a parameter edit outside host-driven writes.
-    /// `ParamValue::new` (plugin-core — the vst3 `ParamValue` alias
-    /// above is the `f64` typedef) clamps finite input into `[0,1]`;
-    /// a non-finite report cannot carry a value, so it degrades to
-    /// the bare [`DirtyNotice::StateDirty`] flag — still an honest
-    /// "state diverged", never a silent drop.
+    /// `performEdit(id, value_normalized)` → `ParamEdited` on the
+    /// dirty queue and [`ParamNotice::ValueChanged`] on the
+    /// param-report queue — the plugin reports a parameter edit
+    /// outside host-driven writes. `ParamValue::new` (plugin-core —
+    /// the vst3 `ParamValue` alias above is the `f64` typedef)
+    /// clamps finite input into `[0,1]`; a non-finite report cannot
+    /// carry a value, so it reports none and degrades to the bare
+    /// [`DirtyNotice::StateDirty`] flag — still an honest "state
+    /// diverged", never a silent drop.
     #[expect(unsafe_code)]
     unsafe fn performEdit(&self, id: ParamID, value_normalized: ParamValue) -> tresult {
-        let notice = ruviform_plugin_core::ParamValue::new(value_normalized).map_or(
-            DirtyNotice::StateDirty,
-            |value| DirtyNotice::ParamEdited {
-                param_id: ParamId(id),
-                value,
-            },
-        );
-        self.enqueue(notice);
+        let param_id = ParamId(id);
+        if let Ok(value) = ruviform_plugin_core::ParamValue::new(value_normalized) {
+            self.enqueue_dirty(DirtyNotice::ParamEdited { param_id, value });
+            self.enqueue_param(ParamNotice::ValueChanged { param_id, value });
+        } else {
+            self.enqueue_dirty(DirtyNotice::StateDirty);
+        }
         kResultOk
     }
 
+    /// `endEdit(id)` → [`ParamNotice::GestureEnd`] with
+    /// `frame_offset: None`, for the same main-thread reason as
+    /// `beginEdit`.
     #[expect(unsafe_code)]
-    unsafe fn endEdit(&self, _id: ParamID) -> tresult {
+    unsafe fn endEdit(&self, id: ParamID) -> tresult {
+        self.enqueue_param(ParamNotice::GestureEnd {
+            param_id: ParamId(id),
+            frame_offset: None,
+        });
         kResultOk
     }
 
-    /// `kParamValuesChanged` is the one restart bit the bridge
-    /// honestly serves: parameter values changed → the state diverged
-    /// → latch [`DirtyNotice::StateDirty`] and answer `kResultOk`.
-    /// Any other flag (`kReloadComponent`, `kIoChanged`, latency,
-    /// titles, …) requests a resend the bridge never performs —
+    /// Every call delivers [`ParamNotice::RescanRequested`] with the
+    /// flags mapped through [`rescan_aspects`] — the consumer learns
+    /// what the plugin asked for even when the bridge cannot do it.
+    /// The answer is separate and stays honest: `kParamValuesChanged`
+    /// is the one restart bit the bridge serves — parameter values
+    /// changed → the state diverged → latch
+    /// [`DirtyNotice::StateDirty`] and answer `kResultOk`. Any other
+    /// flag (`kReloadComponent`, `kIoChanged`, latency, titles, …)
+    /// requests a reload or resend the bridge never performs —
     /// `kNotImplemented` stays the honest refusal (`kResultOk` there
     /// would promise a resend that never lands).
     #[expect(unsafe_code)]
     unsafe fn restartComponent(&self, flags: i32) -> tresult {
+        self.enqueue_param(ParamNotice::RescanRequested {
+            aspects: rescan_aspects(flags),
+        });
         if flags & !RestartFlags_::kParamValuesChanged != 0 {
             return kNotImplemented;
         }
         if flags & RestartFlags_::kParamValuesChanged != 0 {
-            self.enqueue(DirtyNotice::StateDirty);
+            self.enqueue_dirty(DirtyNotice::StateDirty);
         }
         kResultOk
     }
+}
+
+/// The VST3 `RestartFlags` bits with a neutral [`RescanAspects`]
+/// image. The remaining defined bits (`kIoTitlesChanged`,
+/// `kNoteExpressionChanged`, `kParamIDMappingChanged`,
+/// `kPrefetchableSupportChanged`, `kRoutingInfoChanged`) and any
+/// unknown bit have none — [`rescan_aspects`] folds them into
+/// [`RescanAspects::OTHER`].
+const RESTART_ASPECTS: [(i32, RescanAspects); 7] = [
+    (RestartFlags_::kParamValuesChanged, RescanAspects::VALUES),
+    (RestartFlags_::kParamTitlesChanged, RescanAspects::INFO),
+    (RestartFlags_::kReloadComponent, RescanAspects::RELOAD),
+    (RestartFlags_::kIoChanged, RescanAspects::IO),
+    (RestartFlags_::kLatencyChanged, RescanAspects::LATENCY),
+    (
+        RestartFlags_::kMidiCCAssignmentChanged,
+        RescanAspects::MIDI_CC,
+    ),
+    (RestartFlags_::kKeyswitchChanged, RescanAspects::KEYSWITCH),
+];
+
+/// Maps a `restartComponent` flag set onto [`RescanAspects`] through
+/// [`RESTART_ASPECTS`]; any set bit outside the table raises
+/// [`RescanAspects::OTHER`] — the lossy terminal keeps *that*
+/// something else was requested, not which bit.
+fn rescan_aspects(flags: i32) -> RescanAspects {
+    let mut bits = 0;
+    let mut unmapped = flags;
+    for (flag, aspect) in RESTART_ASPECTS {
+        if flags & flag != 0 {
+            bits |= aspect.bits();
+            unmapped &= !flag;
+        }
+    }
+    if unmapped != 0 {
+        bits |= RescanAspects::OTHER.bits();
+    }
+    RescanAspects::from_bits_retain(bits)
 }
 
 impl IComponentHandler2Trait for BridgeComponentHandler {
@@ -906,7 +1013,7 @@ impl IComponentHandler2Trait for BridgeComponentHandler {
     /// delivers the final state).
     #[expect(unsafe_code)]
     unsafe fn setDirty(&self, state: TBool) -> tresult {
-        self.enqueue(if state != 0 {
+        self.enqueue_dirty(if state != 0 {
             DirtyNotice::StateDirty
         } else {
             DirtyNotice::StateClean
@@ -2005,6 +2112,11 @@ struct Vst3Plugin {
     /// plugin's calls (Issue #891). `drain_dirty_notices` moves the
     /// notices out.
     dirty_notices: Rc<RefCell<DirtyNoticeQueue>>,
+    /// Pending plugin→host param reports — shared with the same
+    /// handler, whose `performEdit`/`beginEdit`/`endEdit`/
+    /// `restartComponent` enqueue from the plugin's calls (Issue
+    /// #912). `drain_param_notices` moves the notices out.
+    param_notices: Rc<RefCell<ParamNoticeQueue>>,
     /// Cumulative MIDI translation counters — the observable side of
     /// the defined-skip policy (`crate::midi` module docs).
     midi_stats: MidiBridgeStats,
@@ -2064,6 +2176,7 @@ impl Vst3Plugin {
             report_event_scratch: Vec::new(),
             report_stats: MidiBridgeStats::new(),
             dirty_notices: Rc::new(RefCell::new(DirtyNoticeQueue::new())),
+            param_notices: Rc::new(RefCell::new(ParamNoticeQueue::new())),
             midi_stats: MidiBridgeStats::new(),
             library,
         }
@@ -3094,8 +3207,10 @@ impl Plugin for Vst3Plugin {
                 let _ = component.terminate();
                 return Err(HostError::PluginFailed);
             }
-            let handler =
-                ComWrapper::new(BridgeComponentHandler::new(Rc::clone(&self.dirty_notices)));
+            let handler = ComWrapper::new(BridgeComponentHandler::new(
+                Rc::clone(&self.dirty_notices),
+                Rc::clone(&self.param_notices),
+            ));
             let Some(handler_ptr) = handler.to_com_ptr::<IComponentHandler>() else {
                 if !single_component {
                     let _ = controller.terminate();
@@ -3630,6 +3745,17 @@ impl Plugin for Vst3Plugin {
     /// so the drain yields nothing rather than panicking.
     fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
         if let Ok(mut queue) = self.dirty_notices.try_borrow_mut() {
+            queue.drain(out);
+        }
+    }
+
+    /// `drain_param_notices` — moves the shared queue's pending
+    /// plugin→host param reports into `out` (Issue #912) under the
+    /// same rule as `drain_dirty_notices`: a `borrow_mut` conflict
+    /// leaves the notices queued for the next pull and yields
+    /// nothing.
+    fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+        if let Ok(mut queue) = self.param_notices.try_borrow_mut() {
             queue.drain(out);
         }
     }
@@ -5497,7 +5623,10 @@ mod tests {
     #[expect(unsafe_code)]
     fn component_handler_dirty_surfaces_enqueue_notices() {
         let notices = Rc::new(RefCell::new(DirtyNoticeQueue::new()));
-        let wrapper = ComWrapper::new(BridgeComponentHandler::new(Rc::clone(&notices)));
+        let wrapper = ComWrapper::new(BridgeComponentHandler::new(
+            Rc::clone(&notices),
+            Rc::new(RefCell::new(ParamNoticeQueue::new())),
+        ));
         let handler = wrapper.to_com_ptr::<IComponentHandler>().unwrap();
         let handler2 = handler.cast::<IComponentHandler2>().unwrap();
 
@@ -5514,7 +5643,8 @@ mod tests {
             unsafe { handler.restartComponent(RestartFlags_::kParamValuesChanged) },
             kResultOk
         );
-        // Gesture edges stay acknowledged no-ops.
+        // Gesture edges are acknowledged and leave the dirty queue
+        // untouched (they are param-report notices).
         assert_eq!(unsafe { handler.beginEdit(7) }, kResultOk);
         assert_eq!(unsafe { handler.endEdit(7) }, kResultOk);
         // Every other restart bit is the honest refusal.
@@ -5564,5 +5694,124 @@ mod tests {
         let mut out = Vec::new();
         notices.borrow_mut().drain(&mut out);
         assert_eq!(out, []);
+    }
+
+    /// The param-report surface (Issue #912) fans out from the same
+    /// handler calls as the dirty surface: `performEdit` →
+    /// `ValueChanged` beside `ParamEdited` (a non-finite value
+    /// reports none and still dirties), `beginEdit`/`endEdit` →
+    /// main-thread gesture edges (`frame_offset: None`), and every
+    /// `restartComponent` → `RescanRequested` with the mapped
+    /// aspects while the answer keeps its honest boundary.
+    #[test]
+    #[expect(unsafe_code)]
+    fn component_handler_param_surfaces_enqueue_notices() {
+        use vst3::Steinberg::Vst::RestartFlags_::{
+            kIoChanged, kKeyswitchChanged, kLatencyChanged, kMidiCCAssignmentChanged,
+            kParamTitlesChanged, kParamValuesChanged, kReloadComponent, kRoutingInfoChanged,
+        };
+
+        let dirty = Rc::new(RefCell::new(DirtyNoticeQueue::new()));
+        let params = Rc::new(RefCell::new(ParamNoticeQueue::new()));
+        let wrapper = ComWrapper::new(BridgeComponentHandler::new(
+            Rc::clone(&dirty),
+            Rc::clone(&params),
+        ));
+        let handler = wrapper.to_com_ptr::<IComponentHandler>().unwrap();
+        let drain_dirty = || {
+            let mut out = Vec::new();
+            dirty.borrow_mut().drain(&mut out);
+            out
+        };
+        let drain_params = || {
+            let mut out = Vec::new();
+            params.borrow_mut().drain(&mut out);
+            out
+        };
+        let rescan = |set: &[RescanAspects]| ParamNotice::RescanRequested {
+            aspects: RescanAspects::from_bits_retain(
+                set.iter().fold(0, |bits, aspect| bits | aspect.bits()),
+            ),
+        };
+        let value = ParamValue::new(0.625).unwrap();
+
+        // One `performEdit` lands on both surfaces.
+        // SAFETY: `handler` is live for every call below.
+        assert_eq!(unsafe { handler.performEdit(7, 0.625) }, kResultOk);
+        assert_eq!(
+            drain_params(),
+            vec![ParamNotice::ValueChanged {
+                param_id: ParamId(7),
+                value,
+            }]
+        );
+        assert_eq!(
+            drain_dirty(),
+            vec![
+                DirtyNotice::ParamEdited {
+                    param_id: ParamId(7),
+                    value,
+                },
+                DirtyNotice::StateDirty,
+            ]
+        );
+
+        // A gesture around a non-finite edit: both edges arrive with
+        // no offset; the NaN reports no value but still dirties.
+        assert_eq!(unsafe { handler.beginEdit(7) }, kResultOk);
+        assert_eq!(unsafe { handler.performEdit(7, f64::NAN) }, kResultOk);
+        assert_eq!(unsafe { handler.endEdit(7) }, kResultOk);
+        assert_eq!(
+            drain_params(),
+            vec![
+                ParamNotice::GestureBegin {
+                    param_id: ParamId(7),
+                    frame_offset: None,
+                },
+                ParamNotice::GestureEnd {
+                    param_id: ParamId(7),
+                    frame_offset: None,
+                },
+            ]
+        );
+        assert_eq!(drain_dirty(), vec![DirtyNotice::StateDirty]);
+
+        // Refused restarts are still delivered with their aspects
+        // mapped — a defined bit with no neutral image and an
+        // unknown bit both fold into `OTHER` — and none dirties.
+        let refused = [
+            (kReloadComponent, rescan(&[RescanAspects::RELOAD])),
+            (
+                kParamValuesChanged | kLatencyChanged,
+                rescan(&[RescanAspects::VALUES, RescanAspects::LATENCY]),
+            ),
+            (
+                kParamTitlesChanged | kIoChanged | kMidiCCAssignmentChanged | kKeyswitchChanged,
+                rescan(&[
+                    RescanAspects::INFO,
+                    RescanAspects::IO,
+                    RescanAspects::MIDI_CC,
+                    RescanAspects::KEYSWITCH,
+                ]),
+            ),
+            (kRoutingInfoChanged, rescan(&[RescanAspects::OTHER])),
+            (
+                kParamValuesChanged | (1 << 20),
+                rescan(&[RescanAspects::VALUES, RescanAspects::OTHER]),
+            ),
+        ];
+        for (flags, _) in &refused {
+            assert_eq!(unsafe { handler.restartComponent(*flags) }, kNotImplemented);
+        }
+        assert_eq!(drain_params(), refused.map(|(_, notice)| notice));
+        assert_eq!(drain_dirty(), []);
+
+        // Exactly `kParamValuesChanged` — delivered, served, dirtied.
+        assert_eq!(
+            unsafe { handler.restartComponent(kParamValuesChanged) },
+            kResultOk
+        );
+        assert_eq!(drain_params(), vec![rescan(&[RescanAspects::VALUES])]);
+        assert_eq!(drain_dirty(), vec![DirtyNotice::StateDirty]);
     }
 }

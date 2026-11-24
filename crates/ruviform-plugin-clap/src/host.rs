@@ -78,7 +78,12 @@
 //!   value, unknown param, unsupported kind/space) and buffer
 //!   overflows are defined skips counted in `report_stats`; frame
 //!   stamps translate faithfully — a `u32::MAX` stamp stays
-//!   observable evidence rather than a silent drop.
+//!   observable evidence rather than a silent drop. Gesture events
+//!   are not reports: [`translate_output_notice`] maps them to
+//!   [`ParamNotice`] gesture edges in the reserved
+//!   `pending_param_notices` (Issue #912), drained by
+//!   [`Plugin::drain_param_notices`] — capacity refusals surface as
+//!   [`ParamNotice::Dropped`].
 //! - **`steady_time`/`transport`** — `steady_time` stays `None` (no
 //!   monotonic counter is tracked); a caller-supplied
 //!   [`TransportInfo`] maps to `clap_event_transport` — playing
@@ -88,8 +93,10 @@
 //!
 //! ## Thread-check policy
 //!
-//! `BridgeHandlers::declare_extensions` registers **no** host
-//! extensions — in particular not `HostThreadCheck`. The runner drives
+//! `BridgeHandlers::declare_extensions` registers only the
+//! plugin→host notification channels (`HostGui`, `HostState`,
+//! `HostParams`, `HostPresetLoad`) — in particular not
+//! `HostThreadCheck`. The runner drives
 //! `process` from a single command thread that is not an RT audio
 //! thread, so answering `is_audio_thread = true` would be a false
 //! capability claim; the fixture plugin resolves `thread-check` at
@@ -114,6 +121,14 @@
 //!   neutral [`DirtyNotice`] into the instance-local bounded
 //!   [`DirtyNoticeQueue`] that `drain_dirty_notices` empties on the
 //!   host's pull cadence — never a process-path `Event` report.
+//! - `HostParams` (`rescan`/`clear`/`request_flush`) and
+//!   `HostPresetLoad` (`loaded`/`on_error`) are registered
+//!   (Issue #912): each call enqueues a neutral [`ParamNotice`] into
+//!   the instance-local bounded [`ParamNoticeQueue`] that
+//!   `drain_param_notices` empties. Delivery is not fulfillment —
+//!   the bridge rescans/clears/flushes nothing itself. Preset
+//!   strings are truncated to [`WIRE_MAX_STRING_BYTES`] at a char
+//!   boundary.
 //! - `open_gui`/`close_gui` drive the plugin's `clap.ext.gui`
 //!   extension through the `PluginGui` host calls (design
 //!   `docs/designs/issue-389-clap-l0-editor-attach.md`): Windows
@@ -174,7 +189,12 @@ use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, HostGui, HostGuiImpl, PluginGui, Window,
 };
-use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, PluginParams};
+use clack_extensions::params::{
+    HostParams, HostParamsImplMainThread, HostParamsImplShared, ParamClearFlags, ParamInfoBuffer,
+    ParamInfoFlags, ParamRescanFlags, PluginParams,
+};
+use clack_extensions::preset_discovery::preset_data::Location;
+use clack_extensions::preset_discovery::{HostPresetLoad, HostPresetLoadImpl};
 use clack_extensions::state::{HostState, HostStateImpl, PluginState};
 use clack_host::entry::{PluginEntry, PluginEntryError};
 use clack_host::host::{
@@ -191,16 +211,17 @@ use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use clack_plugin::extensions::prelude::clap_plugin;
 
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
-use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
+use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STRING_BYTES};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
-    EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiPopupKind, GuiRequest,
-    GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
-    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    ProcessStatus, TransportInfo, erase,
+    BufferView, BufferViewMut, ClearAspects, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event,
+    EventKind, EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiPopupKind,
+    GuiRequest, GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParamNotice, ParamNoticeQueue,
+    ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
+    PresetLocation, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, RescanAspects,
+    TransportInfo, erase,
 };
 
-use crate::adapt::translate_output_event;
+use crate::adapt::{translate_output_event, translate_output_notice};
 
 /// Upper bound of param events forwarded per block — the same scale as
 /// the plugin-side adapter's `MAX_EVENTS_PER_BLOCK`. Excess events are
@@ -351,6 +372,15 @@ type GuiRequestQueue = Arc<Mutex<VecDeque<GuiRequest>>>;
 /// host's pull cadence (Issue #891).
 type DirtyNoticeQueueShared = Arc<Mutex<DirtyNoticeQueue>>;
 
+/// Shared pending param-notification queue — the plugin's
+/// `clap_host_params` (`rescan`/`clear` `[main-thread]`,
+/// `request_flush` `[thread-safe]`) and `clap_host_preset_load`
+/// (`loaded`/`on_error` `[main-thread]`) verbs enqueue here;
+/// `ClapPlugin::drain_param_notices` empties it on the host's pull
+/// cadence (Issue #912). Never touched on the `process` path — RT
+/// gesture notices ride `ClapPlugin::pending_param_notices`.
+type ParamNoticeQueueShared = Arc<Mutex<ParamNoticeQueue>>;
+
 /// The bridge's `[thread-safe]` host handler — acknowledges the
 /// plugin's restart/process/callback requests without acting on them
 /// (the runner drives everything from its single command thread) and
@@ -364,6 +394,10 @@ struct BridgeShared {
     /// the owning `ClapPlugin`; a throwaway instance owns a dead-end
     /// queue the same way.
     dirty_notices: DirtyNoticeQueueShared,
+    /// The instance's pending param-notification queue — shared with
+    /// the owning `ClapPlugin`; dead-ended the same way for a
+    /// throwaway instance.
+    param_notices: ParamNoticeQueueShared,
 }
 
 impl BridgeShared {
@@ -373,6 +407,16 @@ impl BridgeShared {
         Self {
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
             dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::new(Mutex::new(ParamNoticeQueue::new())),
+        }
+    }
+
+    /// Enqueues one param notice into the bounded queue — a poisoned
+    /// lock takes the defined drop (the `mark_dirty` precedent: never
+    /// a fabricated ack of delivery).
+    fn enqueue_param_notice(&self, notice: ParamNotice) {
+        if let Ok(mut queue) = self.param_notices.lock() {
+            queue.enqueue(notice);
         }
     }
 
@@ -415,6 +459,91 @@ fn drain_gui_request_queue(queue: &GuiRequestQueue, out: &mut Vec<GuiRequest>) {
 fn drain_dirty_notice_queue(queue: &DirtyNoticeQueueShared, out: &mut Vec<DirtyNotice>) {
     if let Ok(mut queue) = queue.lock() {
         queue.drain(out);
+    }
+}
+
+/// The shared half of `ClapPlugin::drain_param_notices` — moves the
+/// queue's pending main-thread/lifecycle param notices into `out`
+/// (Issue #912). A poisoned lock yields nothing: same honest-silence
+/// rule as [`drain_gui_request_queue`].
+fn drain_param_notice_queue(queue: &ParamNoticeQueueShared, out: &mut Vec<ParamNotice>) {
+    if let Ok(mut queue) = queue.lock() {
+        queue.drain(out);
+    }
+}
+
+/// CLAP `clap_param_rescan_flags` → [`RescanAspects`] bit pairs.
+const RESCAN_ASPECT_MAP: [(u32, u32); 4] = [
+    (
+        ParamRescanFlags::VALUES.bits(),
+        RescanAspects::VALUES.bits(),
+    ),
+    (ParamRescanFlags::INFO.bits(), RescanAspects::INFO.bits()),
+    (ParamRescanFlags::TEXT.bits(), RescanAspects::TEXT.bits()),
+    (ParamRescanFlags::ALL.bits(), RescanAspects::ALL.bits()),
+];
+
+/// CLAP `clap_param_clear_flags` → [`ClearAspects`] bit pairs —
+/// `CLAP_PARAM_CLEAR_ALL` names both references.
+const CLEAR_ASPECT_MAP: [(u32, u32); 3] = [
+    (
+        ParamClearFlags::ALL.bits(),
+        ClearAspects::AUTOMATION.bits() | ClearAspects::MODULATION.bits(),
+    ),
+    (
+        ParamClearFlags::AUTOMATIONS.bits(),
+        ClearAspects::AUTOMATION.bits(),
+    ),
+    (
+        ParamClearFlags::MODULATIONS.bits(),
+        ClearAspects::MODULATION.bits(),
+    ),
+];
+
+/// Maps a CLAP flag word onto neutral aspect bits through `map` — a
+/// source bit no entry names collapses into `other`, the honest lossy
+/// terminal (clack 0.2.0 truncates unknown bits before the host
+/// callback, so `other` only fires for a retained-bits flag value).
+fn map_aspect_bits(source: u32, map: &[(u32, u32)], other: u32) -> u32 {
+    let mut mapped = 0;
+    let mut unmapped = source;
+    for &(clap, neutral) in map {
+        if source & clap != 0 {
+            mapped |= neutral;
+        }
+        unmapped &= !clap;
+    }
+    if unmapped == 0 {
+        mapped
+    } else {
+        mapped | other
+    }
+}
+
+/// A plugin-supplied C string as an owned notice payload — lossy
+/// UTF-8 (the `intern_cstr` rule), truncated at a char boundary to
+/// [`WIRE_MAX_STRING_BYTES`]. The wire encode does not bound strings,
+/// so an over-long payload would make the peer reject the whole
+/// frame; the delivered prefix is the honest loss.
+fn bounded_notice_string(text: &CStr) -> String {
+    let text = text.to_string_lossy();
+    let mut end = text
+        .len()
+        .min(usize::try_from(WIRE_MAX_STRING_BYTES).unwrap_or(usize::MAX));
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_owned()
+}
+
+/// `clap_preset_discovery_location` → [`PresetLocation`], the path
+/// bounded by [`bounded_notice_string`].
+fn preset_location(location: Location<'_>) -> PresetLocation {
+    match location {
+        Location::Plugin => PresetLocation::Plugin,
+        Location::File { path } => PresetLocation::File {
+            path: bounded_notice_string(path),
+        },
     }
 }
 
@@ -466,6 +595,15 @@ impl HostGuiImpl for BridgeShared {
     }
 }
 
+impl HostParamsImplShared for BridgeShared {
+    /// `request_flush` — the bridge owns no flush verb, so the
+    /// request is delivered as [`ParamNotice::FlushRequested`] only;
+    /// a consumer answers it by draining the report surfaces.
+    fn request_flush(&self) {
+        self.enqueue_param_notice(ParamNotice::FlushRequested);
+    }
+}
+
 /// The bridge's `[audio-thread]` host handler — a `Send` marker; the
 /// fixture's `process` path queries nothing host-side beyond the
 /// (unregistered) `thread-check` extension.
@@ -474,8 +612,10 @@ struct BridgeAudioProcessor;
 impl clack_host::host::AudioProcessorHandler<'_> for BridgeAudioProcessor {}
 
 /// The bridge's `[main-thread]` host handler — carries the
-/// `clap_host_state` `mark_dirty` surface (Issue #891) back to the
-/// instance-local queue the owning `ClapPlugin` drains.
+/// `clap_host_state` `mark_dirty` surface (Issue #891) and the
+/// `clap_host_params`/`clap_host_preset_load` notification surface
+/// (Issue #912) back to the instance-local queues the owning
+/// `ClapPlugin` drains.
 struct BridgeMainThread<'a> {
     /// The instance's `[thread-safe]` shared handler — borrows the
     /// same `BridgeShared` the instance constructs it with.
@@ -497,6 +637,62 @@ impl HostStateImpl for BridgeMainThread<'_> {
     }
 }
 
+impl HostParamsImplMainThread for BridgeMainThread<'_> {
+    /// `rescan` → [`ParamNotice::RescanRequested`] — delivery, not
+    /// fulfillment: the consumer re-reads through the report
+    /// surfaces.
+    fn rescan(&self, flags: ParamRescanFlags) {
+        let aspects = map_aspect_bits(
+            flags.bits(),
+            &RESCAN_ASPECT_MAP,
+            RescanAspects::OTHER.bits(),
+        );
+        self.shared
+            .enqueue_param_notice(ParamNotice::RescanRequested {
+                aspects: RescanAspects::from_bits_retain(aspects),
+            });
+    }
+
+    /// `clear` → [`ParamNotice::ClearReferences`]. `ClapId` cannot
+    /// hold `CLAP_INVALID_ID` — clack rejects it before this call.
+    fn clear(&self, param_id: ClapId, flags: ParamClearFlags) {
+        let aspects = map_aspect_bits(flags.bits(), &CLEAR_ASPECT_MAP, ClearAspects::OTHER.bits());
+        self.shared
+            .enqueue_param_notice(ParamNotice::ClearReferences {
+                param_id: ParamId(param_id.get()),
+                aspects: ClearAspects::from_bits_retain(aspects),
+            });
+    }
+}
+
+impl HostPresetLoadImpl for BridgeMainThread<'_> {
+    /// `on_error` → [`ParamNotice::PresetLoadFailed`] — strings are
+    /// bounded by [`bounded_notice_string`].
+    fn on_error(
+        &self,
+        location: Location,
+        load_key: Option<&CStr>,
+        os_error: i32,
+        message: Option<&CStr>,
+    ) {
+        self.shared
+            .enqueue_param_notice(ParamNotice::PresetLoadFailed {
+                location: preset_location(location),
+                load_key: load_key.map(bounded_notice_string),
+                os_error,
+                message: message.map(bounded_notice_string),
+            });
+    }
+
+    /// `loaded` → [`ParamNotice::PresetLoaded`].
+    fn loaded(&self, location: Location, load_key: Option<&CStr>) {
+        self.shared.enqueue_param_notice(ParamNotice::PresetLoaded {
+            location: preset_location(location),
+            load_key: load_key.map(bounded_notice_string),
+        });
+    }
+}
+
 /// Handler-type bundle tying
 /// `BridgeShared`/`BridgeMainThread`/`BridgeAudioProcessor` together
 /// for [`PluginInstance`].
@@ -513,12 +709,17 @@ impl HostHandlers for BridgeHandlers {
         // session's drain→arbitration loop. `HostState` — the
         // plugin→host dirty-notification channel (Issue #891);
         // `BridgeMainThread`'s `HostStateImpl` latches `mark_dirty`
-        // into the instance's pull-drained queue. Still not
+        // into the instance's pull-drained queue. `HostParams` +
+        // `HostPresetLoad` — the plugin→host param notification
+        // channel (Issue #912); `rescan`/`clear`/`request_flush`/
+        // `loaded`/`on_error` enqueue `ParamNotice`s. Still not
         // `HostThreadCheck` — see the module-level thread-check
         // policy: absence of the extension is the honest answer, and
         // the fixture's `None` fallback keeps behavior unchanged.
         builder.register::<HostGui>();
         builder.register::<HostState>();
+        builder.register::<HostParams>();
+        builder.register::<HostPresetLoad>();
     }
 }
 
@@ -846,6 +1047,16 @@ struct ClapPlugin {
     pending_reports: Vec<Event>,
     /// Report-path skip/refusal counters — see [`ReportStats`].
     report_stats: ReportStats,
+    /// Param notices produced on the `process` path (gesture output
+    /// events, Issue #912) — accumulated across blocks until
+    /// `drain_param_notices` moves them out. Reserved at `prepare`
+    /// like `pending_reports`; never the shared queue, whose lock the
+    /// RT path must not take.
+    pending_param_notices: Vec<ParamNotice>,
+    /// Gesture notices refused at `pending_param_notices`' capacity
+    /// since the last drain — surfaced as one [`ParamNotice::Dropped`]
+    /// ahead of the RT stream, then reset.
+    pending_param_notices_dropped: usize,
     /// The plugin's `clap.ext.gui` extension handle — `Some` only
     /// while a GUI created by `open_gui` is alive. GUI teardown
     /// (`hide` best-effort + `destroy`) runs in `close_gui` and at
@@ -866,6 +1077,11 @@ struct ClapPlugin {
     /// `HostStateImpl::mark_dirty` latches the flag (Issue #891).
     /// `drain_dirty_notices` moves the notices out.
     dirty_notices: DirtyNoticeQueueShared,
+    /// Pending main-thread/lifecycle param notices — shared with the
+    /// instance's `BridgeShared`, whose `clap_host_params`/
+    /// `clap_host_preset_load` impls enqueue (Issue #912).
+    /// `drain_param_notices` moves the notices out.
+    param_notices: ParamNoticeQueueShared,
     /// Instance-local mint counter for [`GuiHandle`] tokens — the
     /// same `gui_seq` convention the VST3 adapter uses.
     gui_seq: u32,
@@ -899,10 +1115,13 @@ impl ClapPlugin {
             output_events: BoundedOutputBuffer::with_capacity(0),
             pending_reports: Vec::new(),
             report_stats: ReportStats::new(),
+            pending_param_notices: Vec::new(),
+            pending_param_notices_dropped: 0,
             gui: None,
             gui_parent: None,
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
             dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::new(Mutex::new(ParamNoticeQueue::new())),
             gui_seq: 0,
         }
     }
@@ -1053,17 +1272,25 @@ impl ClapPlugin {
     /// never an allocation. Reports accumulate across blocks until
     /// drained — the bounded `pending_reports` capacity is the
     /// back-pressure bound the neutral contract declares (the VST3
-    /// bridge's `collect_output_reports` shape).
+    /// bridge's `collect_output_reports` shape). Gesture edges are
+    /// not reports: [`translate_output_notice`] routes them into
+    /// `pending_param_notices` under the same capacity law, a refusal
+    /// counted in `pending_param_notices_dropped` (Issue #912).
     ///
     /// **RT contract:** RT-suitable — bounded scan, no allocation.
     fn collect_output_reports(&mut self) {
         self.report_stats.refused += self.output_events.take_refused();
         for unknown in self.output_events.iter() {
-            match translate_output_event(unknown, self.params) {
-                Some(event) => {
-                    push_report(&mut self.pending_reports, &mut self.report_stats, event);
+            if let Some(event) = translate_output_event(unknown, self.params) {
+                push_report(&mut self.pending_reports, &mut self.report_stats, event);
+            } else if let Some(notice) = translate_output_notice(unknown, self.params) {
+                if self.pending_param_notices.len() < self.pending_param_notices.capacity() {
+                    self.pending_param_notices.push(notice);
+                } else {
+                    self.pending_param_notices_dropped += 1;
                 }
-                None => self.report_stats.skipped += 1,
+            } else {
+                self.report_stats.skipped += 1;
             }
         }
         // Canonical consumers expect frame-ordered reports; the sort
@@ -1586,6 +1813,8 @@ impl PluginProcessor for ClapPlugin {
         // `MidiBridgeStats` law).
         self.pending_reports.clear();
         self.pending_reports.reserve(MAX_EVENTS_PER_BLOCK);
+        self.pending_param_notices.clear();
+        self.pending_param_notices.reserve(MAX_EVENTS_PER_BLOCK);
         Ok(())
     }
 
@@ -1730,10 +1959,12 @@ impl Plugin for ClapPlugin {
         }
         let gui_requests = Arc::clone(&self.gui_requests);
         let dirty_notices = Arc::clone(&self.dirty_notices);
+        let param_notices = Arc::clone(&self.param_notices);
         let instance = PluginInstance::<BridgeHandlers>::new(
             move |()| BridgeShared {
                 gui_requests,
                 dirty_notices,
+                param_notices,
             },
             |shared| BridgeMainThread { shared },
             &self.entry,
@@ -2144,6 +2375,24 @@ impl Plugin for ClapPlugin {
     /// surface does not need a `ClapPlugin`.
     fn drain_dirty_notices(&mut self, out: &mut Vec<DirtyNotice>) {
         drain_dirty_notice_queue(&self.dirty_notices, out);
+    }
+
+    /// `drain_param_notices` — merges the two producers (Issue #912):
+    /// the RT-produced gesture stream first (a
+    /// [`ParamNotice::Dropped`] ahead of it when the RT buffer
+    /// refused notices since the last drain), then the shared
+    /// main-thread/lifecycle queue via [`drain_param_notice_queue`].
+    /// Order within each source is occurrence order; order across
+    /// the two sources is approximate by nature — neither carries a
+    /// sequence the other could be merged against.
+    fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
+        if self.pending_param_notices_dropped > 0 {
+            let count = u32::try_from(self.pending_param_notices_dropped).unwrap_or(u32::MAX);
+            out.push(ParamNotice::Dropped { count });
+            self.pending_param_notices_dropped = 0;
+        }
+        out.append(&mut self.pending_param_notices);
+        drain_param_notice_queue(&self.param_notices, out);
     }
 }
 
@@ -2772,6 +3021,7 @@ mod tests {
         let shared = BridgeShared {
             gui_requests: Arc::clone(&queue),
             dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::new(Mutex::new(ParamNoticeQueue::new())),
         };
 
         assert!(
@@ -2821,6 +3071,7 @@ mod tests {
         let shared = BridgeShared {
             gui_requests: Arc::clone(&queue),
             dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::new(Mutex::new(ParamNoticeQueue::new())),
         };
 
         let size = ClapGuiSize {
@@ -2853,6 +3104,7 @@ mod tests {
         let shared = BridgeShared {
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
             dirty_notices: Arc::clone(&queue),
+            param_notices: Arc::new(Mutex::new(ParamNoticeQueue::new())),
         };
         let main_thread = BridgeMainThread { shared: &shared };
 
@@ -2867,5 +3119,111 @@ mod tests {
         let mut again = Vec::new();
         drain_dirty_notice_queue(&queue, &mut again);
         assert_eq!(again, []);
+    }
+
+    /// `HostParams`/`HostPresetLoad` verbs enqueue neutral
+    /// [`ParamNotice`]s in call order (Issue #912) —
+    /// `drain_param_notice_queue` emits the occurrence stream
+    /// verbatim and a second pull yields nothing.
+    #[test]
+    fn host_params_and_preset_load_enqueue_then_drain() {
+        let queue: ParamNoticeQueueShared = Arc::new(Mutex::new(ParamNoticeQueue::new()));
+        let shared = BridgeShared {
+            gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::clone(&queue),
+        };
+        let main_thread = BridgeMainThread { shared: &shared };
+
+        main_thread.rescan(ParamRescanFlags::VALUES);
+        main_thread.clear(
+            ClapId::new(7),
+            ParamClearFlags::AUTOMATIONS | ParamClearFlags::MODULATIONS,
+        );
+        shared.request_flush();
+        main_thread.loaded(Location::Plugin, Some(c"init"));
+        main_thread.on_error(
+            Location::File { path: c"/tmp/x" },
+            Some(c"missing"),
+            -2,
+            Some(c"not found"),
+        );
+
+        let mut out = Vec::new();
+        drain_param_notice_queue(&queue, &mut out);
+        assert_eq!(
+            out,
+            vec![
+                ParamNotice::RescanRequested {
+                    aspects: RescanAspects::VALUES,
+                },
+                ParamNotice::ClearReferences {
+                    param_id: ParamId(7),
+                    aspects: ClearAspects::from_bits_retain(
+                        ClearAspects::AUTOMATION.bits() | ClearAspects::MODULATION.bits(),
+                    ),
+                },
+                ParamNotice::FlushRequested,
+                ParamNotice::PresetLoaded {
+                    location: PresetLocation::Plugin,
+                    load_key: Some("init".to_owned()),
+                },
+                ParamNotice::PresetLoadFailed {
+                    location: PresetLocation::File {
+                        path: "/tmp/x".to_owned(),
+                    },
+                    load_key: Some("missing".to_owned()),
+                    os_error: -2,
+                    message: Some("not found".to_owned()),
+                },
+            ]
+        );
+        let mut again = Vec::new();
+        drain_param_notice_queue(&queue, &mut again);
+        assert_eq!(again, []);
+    }
+
+    /// The flag maps keep unmapped source bits honest — a
+    /// `ParamRescanFlags`/`ParamClearFlags` value outside the named
+    /// vocabulary still reaches the notice as `OTHER`, and composite
+    /// values map every named bit.
+    #[test]
+    fn host_params_flag_maps_cover_named_and_unknown_bits() {
+        let queue: ParamNoticeQueueShared = Arc::new(Mutex::new(ParamNoticeQueue::new()));
+        let shared = BridgeShared {
+            gui_requests: Arc::new(Mutex::new(VecDeque::new())),
+            dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
+            param_notices: Arc::clone(&queue),
+        };
+        let main_thread = BridgeMainThread { shared: &shared };
+
+        main_thread.rescan(ParamRescanFlags::VALUES | ParamRescanFlags::TEXT);
+        main_thread.clear(ClapId::new(3), ParamClearFlags::ALL);
+        // clack truncates unknown bits on the FFI path, but the map
+        // itself keeps them honest — a retained unknown bit folds
+        // into `OTHER`.
+        main_thread.rescan(ParamRescanFlags::from_bits_retain(1 << 20));
+
+        let mut out = Vec::new();
+        drain_param_notice_queue(&queue, &mut out);
+        assert_eq!(
+            out,
+            vec![
+                ParamNotice::RescanRequested {
+                    aspects: RescanAspects::from_bits_retain(
+                        RescanAspects::VALUES.bits() | RescanAspects::TEXT.bits(),
+                    ),
+                },
+                ParamNotice::ClearReferences {
+                    param_id: ParamId(3),
+                    aspects: ClearAspects::from_bits_retain(
+                        ClearAspects::AUTOMATION.bits() | ClearAspects::MODULATION.bits(),
+                    ),
+                },
+                ParamNotice::RescanRequested {
+                    aspects: RescanAspects::OTHER,
+                },
+            ]
+        );
     }
 }
