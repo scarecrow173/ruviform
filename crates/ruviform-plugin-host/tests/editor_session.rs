@@ -19,10 +19,10 @@ use std::time::Duration;
 
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent,
-    GuiModifiers, GuiSize, HostInput, HostOutput, LifecycleState, ParamInfo, ParentLease,
-    PluginDescriptor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
-    TransportInfo,
+    BufferView, BufferViewMut, EventList, FailureCause, GuiFocusTarget, GuiHandle, GuiKeyDirection,
+    GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiSize, HostInput, HostOutput, LifecycleState,
+    ParamInfo, ParentLease, PluginDescriptor, PrepareError, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, TransportInfo,
 };
 use ruviform_plugin_host::{
     AttachMode, DiagnosticQuery, EditorCapabilities, EditorOpError, EditorSessionError,
@@ -656,6 +656,10 @@ enum GuiVerb {
     Focus(bool),
     /// `send_gui_key` — the key event the plugin received.
     Key(GuiKeyEvent),
+    /// `set_gui_focus_target` — the focus target (Issue #630).
+    FocusTarget(GuiFocusTarget),
+    /// `set_gui_popup` — the popup kind and open flag (Issue #630).
+    Popup(GuiPopupKind, bool),
 }
 
 /// A plain `a`-key event — the fixture event the L0 key/focus tests
@@ -773,6 +777,26 @@ impl Plugin for GuiPlugin {
         }
         if let Some(verbs) = &self.verbs {
             verbs.borrow_mut().push(GuiVerb::Key(event));
+        }
+        Ok(())
+    }
+
+    fn set_gui_focus_target(&mut self, target: GuiFocusTarget) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::FocusTarget(target));
+        }
+        Ok(())
+    }
+
+    fn set_gui_popup(&mut self, kind: GuiPopupKind, open: bool) -> Result<(), HostError> {
+        if !self.verbs_supported {
+            return Err(HostError::Unsupported);
+        }
+        if let Some(verbs) = &self.verbs {
+            verbs.borrow_mut().push(GuiVerb::Popup(kind, open));
         }
         Ok(())
     }
@@ -1229,6 +1253,62 @@ fn l0_send_key_reaches_plugin_through_sendguikey() {
 }
 
 #[test]
+fn l0_editor_verbs_reach_the_plugin_through_the_v8_commands() {
+    // The wire-v8 verb chain (Issue #630): session.set_focus_target →
+    // InProcessEditorOps → HostCommand::SetGuiFocusTarget →
+    // plugin.set_gui_focus_target, and session.set_popup →
+    // HostCommand::SetGuiPopup → plugin.set_gui_popup — the plugin
+    // sees the boundary vocabulary verbatim.
+    let verbs = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host_with_plugin_verbs(true, Some(verbs.clone()));
+    let instance = instantiate(&mut host);
+    let mut sessions = PluginEditorSessions::new();
+    let id = sessions.begin_session(instance).unwrap();
+    let session = sessions.session_mut(id).unwrap();
+    {
+        let mut ops = InProcessEditorOps::with_redeemer(&mut host, instance, token_redeemer());
+        // Non-attached calls are the same `InvalidState` the rest of
+        // the GUI family answers — nothing reaches the plugin.
+        assert_eq!(
+            session.set_focus_target(&mut ops, GuiFocusTarget::Editor),
+            Err(EditorSessionError::InvalidState)
+        );
+        assert_eq!(
+            session.set_popup(&mut ops, GuiPopupKind::Dialog, true),
+            Err(EditorSessionError::InvalidState)
+        );
+        session
+            .open(&mut ops, &lease(), SIZE, AttachMode::Docked)
+            .expect("open");
+        session
+            .set_focus_target(&mut ops, GuiFocusTarget::EditorElement { element: 42 })
+            .expect("focus element");
+        session
+            .set_focus_target(&mut ops, GuiFocusTarget::HostWindow)
+            .expect("focus host window");
+        session
+            .set_popup(&mut ops, GuiPopupKind::ChildWindow, true)
+            .expect("popup open");
+        session
+            .set_popup(&mut ops, GuiPopupKind::ChildWindow, false)
+            .expect("popup close");
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+    }
+    assert_eq!(
+        verbs.borrow().as_slice(),
+        &[
+            GuiVerb::FocusTarget(GuiFocusTarget::EditorElement { element: 42 }),
+            GuiVerb::FocusTarget(GuiFocusTarget::HostWindow),
+            GuiVerb::Popup(GuiPopupKind::ChildWindow, true),
+            GuiVerb::Popup(GuiPopupKind::ChildWindow, false),
+        ]
+    );
+}
+
+#[test]
 fn l0_focus_and_key_verbs_require_an_attached_editor() {
     // Neither verb may reach the plugin before an attach — the
     // session rejects them as InvalidState and the verb log stays
@@ -1334,6 +1414,20 @@ fn l0_plugin_verb_refusal_maps_to_unsupported_non_fatally() {
         ));
         assert_eq!(
             session.send_key(&mut ops, key_a(GuiKeyDirection::Down)),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert!(matches!(
+            session.state(),
+            EditorSessionState::Attached { .. }
+        ));
+        // The wire-v8 editor verbs refuse the same way — non-fatal,
+        // no state change.
+        assert_eq!(
+            session.set_focus_target(&mut ops, GuiFocusTarget::Editor),
+            Err(EditorSessionError::Ops(EditorOpError::Unsupported))
+        );
+        assert_eq!(
+            session.set_popup(&mut ops, GuiPopupKind::Dialog, true),
             Err(EditorSessionError::Ops(EditorOpError::Unsupported))
         );
         assert!(matches!(
@@ -1500,6 +1594,16 @@ fn l1_editor_ops_refuses_every_op_on_an_unadvertised_child() {
     );
     assert_eq!(
         ops.send_key(session_id, key_a(GuiKeyDirection::Down)),
+        Err(EditorOpError::Unsupported)
+    );
+    // The wire-v8 editor verbs sit under the same `GUI_FLOATING`
+    // bit — the gate refuses them identically.
+    assert_eq!(
+        ops.set_focus_target(session_id, GuiFocusTarget::Editor),
+        Err(EditorOpError::Unsupported)
+    );
+    assert_eq!(
+        ops.set_popup(session_id, GuiPopupKind::ChildWindow, true),
         Err(EditorOpError::Unsupported)
     );
     // The negotiated check precedes the redeem — no refused `open`

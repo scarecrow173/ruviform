@@ -20,8 +20,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use ruviform_plugin_core::{
-    FailureCause, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiRequest, HostError,
-    PluginDescriptor,
+    FailureCause, GuiFocusTarget, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind,
+    GuiRequest, HostError, PluginDescriptor,
 };
 use ruviform_plugin_host::{
     AttachMode, DiagnosticQuery, EditorOpError, EditorSessionOps, EditorSize, HostCommand,
@@ -244,6 +244,16 @@ fn l1_editor_ops_holds_the_gate_where_the_mechanism_is_absent() {
             ops.send_key(session, key()),
             Err(EditorOpError::Unsupported)
         );
+        // The wire-v8 editor verbs ride the same `GUI_FLOATING`
+        // bit — the gate refuses them before the wire too.
+        assert_eq!(
+            ops.set_focus_target(session, GuiFocusTarget::Editor),
+            Err(EditorOpError::Unsupported)
+        );
+        assert_eq!(
+            ops.set_popup(session, GuiPopupKind::Dialog, true),
+            Err(EditorOpError::Unsupported)
+        );
     }
     // The gate refused before the wire — the child still answers.
     assert_eq!(
@@ -308,6 +318,25 @@ mod windows {
         ops.set_visibility(session, true).unwrap();
         ops.set_focus(session, true).unwrap();
         ops.send_key(session, key()).unwrap();
+
+        // The wire-v8 editor verbs pass the negotiated gate and
+        // reach the child — the mock runner has no fixture seam for
+        // them yet (slices 3/4 own it), so the entry dispatch
+        // catch-all answers the defined `Unsupported` rather than
+        // faking success. The verbs are transported; acceptance is
+        // what later slices add.
+        assert_eq!(
+            ops.set_focus_target(session, GuiFocusTarget::Editor),
+            Err(EditorOpError::Unsupported)
+        );
+        assert_eq!(
+            ops.set_focus_target(session, GuiFocusTarget::HostWindow),
+            Err(EditorOpError::Unsupported)
+        );
+        assert_eq!(
+            ops.set_popup(session, GuiPopupKind::ChildWindow, true),
+            Err(EditorOpError::Unsupported)
+        );
         ops.close(session).unwrap();
 
         // The runner-side surface vocabulary reaches the session

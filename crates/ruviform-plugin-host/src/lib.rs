@@ -189,8 +189,9 @@ mod supervisor;
 mod video;
 
 pub use command::{
-    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand, HostError,
-    HostReply, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    FailureCause, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers,
+    GuiPopupKind, HostCommand, HostError, HostReply, ParentLease, ParentSlotLease,
+    PluginEditorSessionId, PluginHandle,
 };
 pub use composite::{
     AudioCounterSnapshot, ChildExit, HostNotification, OutOfProcessIsolation, OutOfProcessSpec,

@@ -20,8 +20,9 @@
 use ruviform_plugin_core::{PluginDescriptor, ProcessConfig};
 
 pub use ruviform_plugin_core::{
-    FailureCause, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiSize, HostError,
-    ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    FailureCause, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers,
+    GuiPopupKind, GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
+    PluginHandle,
 };
 
 /// A non-RT host operation expressed as serializable plain data.
@@ -159,6 +160,31 @@ pub enum HostCommand {
         handle: PluginHandle,
         /// The key event to deliver.
         event: GuiKeyEvent,
+    },
+    /// Direct keyboard focus to a [`GuiFocusTarget`] — the plugin
+    /// editor surface itself, a plugin-internal element, or the
+    /// host-side top-level window (Issue #630).
+    ///
+    /// L1-reachable since wire v8 (`SetGuiFocusTarget`, tag 29) —
+    /// same negotiated gate as [`HostCommand::SetGuiSize`].
+    SetGuiFocusTarget {
+        /// Target instance.
+        handle: PluginHandle,
+        /// The focus target.
+        target: GuiFocusTarget,
+    },
+    /// Open (`open = true`) or close a plugin-owned popup of `kind`
+    /// (Issue #630).
+    ///
+    /// L1-reachable since wire v8 (`SetGuiPopup`, tag 30) — same
+    /// negotiated gate as [`HostCommand::SetGuiSize`].
+    SetGuiPopup {
+        /// Target instance.
+        handle: PluginHandle,
+        /// The popup kind.
+        kind: GuiPopupKind,
+        /// `true` opens the popup, `false` closes it.
+        open: bool,
     },
 }
 

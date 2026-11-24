@@ -3899,10 +3899,12 @@ fn err_committed_state(cmd: &wire::Command) -> Option<LifecycleState> {
     }
 }
 
-/// The wire-v6 GUI verb family — one negotiated mechanism bit
+/// The GUI verb family — one negotiated mechanism bit
 /// (`WIRE_CAPABILITY_GUI_FLOATING` in the child's `Hello`) covers
 /// all of them atomically: `OpenGui`/`CloseGui`/`SetGuiSize`/
-/// `SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey` (tags 8/9/24-27).
+/// `SetGuiVisibility`/`SetGuiFocus`/`SendGuiKey` (wire v6, tags
+/// 8/9/24-27) plus `SetGuiFocusTarget`/`SetGuiPopup` (wire v8,
+/// tags 29/30, Issue #630 — the family grew without a new bit).
 /// `SetGuiParent` has no wire verb — docked reparenting stays
 /// L0-only (Issue #115).
 fn gui_family(cmd: &wire::Command) -> bool {
@@ -3914,6 +3916,8 @@ fn gui_family(cmd: &wire::Command) -> bool {
             | wire::Command::SetGuiVisibility { .. }
             | wire::Command::SetGuiFocus { .. }
             | wire::Command::SendGuiKey { .. }
+            | wire::Command::SetGuiFocusTarget { .. }
+            | wire::Command::SetGuiPopup { .. }
     )
 }
 
@@ -7205,6 +7209,13 @@ mod tests {
             wire::Command::SetGuiVisibility { visible: 1 },
             wire::Command::SetGuiFocus { focused: 1 },
             wire::Command::SendGuiKey { event: gui_key() },
+            wire::Command::SetGuiFocusTarget {
+                target: ruviform_plugin_core::GuiFocusTarget::Editor,
+            },
+            wire::Command::SetGuiPopup {
+                kind: ruviform_plugin_core::GuiPopupKind::ChildWindow,
+                open: 1,
+            },
         ] {
             assert_eq!(instance.execute(command), Err(HostError::Unsupported));
         }
@@ -7245,6 +7256,13 @@ mod tests {
             wire::Command::SetGuiVisibility { visible: 0 },
             wire::Command::SetGuiFocus { focused: 0 },
             wire::Command::SendGuiKey { event: gui_key() },
+            wire::Command::SetGuiFocusTarget {
+                target: ruviform_plugin_core::GuiFocusTarget::HostWindow,
+            },
+            wire::Command::SetGuiPopup {
+                kind: ruviform_plugin_core::GuiPopupKind::Dialog,
+                open: 0,
+            },
         ] {
             assert_eq!(instance.execute(command), Err(HostError::Ipc));
         }

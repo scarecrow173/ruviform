@@ -1874,7 +1874,9 @@ fn command_handle(command: &HostCommand) -> PluginHandle {
         | HostCommand::SetGuiVisibility { handle, .. }
         | HostCommand::SetGuiParent { handle, .. }
         | HostCommand::SetGuiFocus { handle, .. }
-        | HostCommand::SendGuiKey { handle, .. } => handle,
+        | HostCommand::SendGuiKey { handle, .. }
+        | HostCommand::SetGuiFocusTarget { handle, .. }
+        | HostCommand::SetGuiPopup { handle, .. } => handle,
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate never reach dispatch")
         }
@@ -1907,6 +1909,12 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
         HostCommand::SetGuiParent { parent, .. } => HostCommand::SetGuiParent { handle, parent },
         HostCommand::SetGuiFocus { focused, .. } => HostCommand::SetGuiFocus { handle, focused },
         HostCommand::SendGuiKey { event, .. } => HostCommand::SendGuiKey { handle, event },
+        HostCommand::SetGuiFocusTarget { target, .. } => {
+            HostCommand::SetGuiFocusTarget { handle, target }
+        }
+        HostCommand::SetGuiPopup { kind, open, .. } => {
+            HostCommand::SetGuiPopup { handle, kind, open }
+        }
         HostCommand::Scan | HostCommand::Instantiate { .. } => {
             unreachable!("Scan/Instantiate carry no handle")
         }
@@ -1918,7 +1926,8 @@ fn retarget(command: HostCommand, handle: PluginHandle) -> HostCommand {
 /// encoding — Issue #115 owns the docked/reparent verb scope — so
 /// an `OutOfProcess` slot answers the defined `Unsupported`
 /// instead of reaching `to_wire` (which would panic on it). The
-/// rest of the family rides wire v6 through the L1 negotiated
+/// rest of the family rides the wire (v6 floating verbs; the v8
+/// editor verbs of Issue #630) through the L1 negotiated
 /// `GUI_FLOATING` gate.
 fn l0_only_gui_verb(command: &HostCommand) -> bool {
     matches!(command, HostCommand::SetGuiParent { .. })
@@ -1954,6 +1963,13 @@ fn to_wire(command: HostCommand) -> wire::Command {
             focused: u8::from(focused),
         },
         HostCommand::SendGuiKey { event, .. } => wire::Command::SendGuiKey { event },
+        HostCommand::SetGuiFocusTarget { target, .. } => {
+            wire::Command::SetGuiFocusTarget { target }
+        }
+        HostCommand::SetGuiPopup { kind, open, .. } => wire::Command::SetGuiPopup {
+            kind,
+            open: u8::from(open),
+        },
         HostCommand::Scan
         | HostCommand::Instantiate { .. }
         | HostCommand::Destroy { .. }
@@ -3884,8 +3900,17 @@ mod tests {
                     modifiers: ruviform_plugin_core::GuiModifiers::NONE,
                 },
             },
+            HostCommand::SetGuiFocusTarget {
+                handle,
+                target: ruviform_plugin_core::GuiFocusTarget::Editor,
+            },
+            HostCommand::SetGuiPopup {
+                handle,
+                kind: ruviform_plugin_core::GuiPopupKind::Dialog,
+                open: true,
+            },
         ] {
-            assert!(!l0_only_gui_verb(&command), "{command:?} is wire v6");
+            assert!(!l0_only_gui_verb(&command), "{command:?} is L1-reachable");
         }
         assert!(l0_only_gui_verb(&HostCommand::SetGuiParent {
             handle,
@@ -3947,6 +3972,29 @@ mod tests {
         assert_eq!(
             to_wire(HostCommand::SendGuiKey { handle, event }),
             wire::Command::SendGuiKey { event }
+        );
+        // Wire v8 (Issue #630): the editor verbs carry their
+        // boundary vocabulary verbatim — `open` is the strict
+        // `{0,1}` flag like `visible`/`focused`.
+        assert_eq!(
+            to_wire(HostCommand::SetGuiFocusTarget {
+                handle,
+                target: ruviform_plugin_core::GuiFocusTarget::EditorElement { element: 7 }
+            }),
+            wire::Command::SetGuiFocusTarget {
+                target: ruviform_plugin_core::GuiFocusTarget::EditorElement { element: 7 }
+            }
+        );
+        assert_eq!(
+            to_wire(HostCommand::SetGuiPopup {
+                handle,
+                kind: ruviform_plugin_core::GuiPopupKind::ChildWindow,
+                open: false
+            }),
+            wire::Command::SetGuiPopup {
+                kind: ruviform_plugin_core::GuiPopupKind::ChildWindow,
+                open: 0
+            }
         );
     }
 

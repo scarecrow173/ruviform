@@ -36,8 +36,9 @@ use std::time::{Duration, Instant};
 
 use ruviform_plugin_core::wire;
 use ruviform_plugin_core::{
-    GuiKeyEvent, GuiRequest, GuiRequestRefusal, GuiRequestSink, GuiRequestVerdict, GuiSize,
-    HostError, ParentLease, ParentSlotLease, PluginEditorSessionId, PluginHandle,
+    GuiFocusTarget, GuiKeyEvent, GuiPopupKind, GuiRequest, GuiRequestRefusal, GuiRequestSink,
+    GuiRequestVerdict, GuiSize, HostError, ParentLease, ParentSlotLease, PluginEditorSessionId,
+    PluginHandle,
 };
 
 use crate::command::{HostCommand, HostReply};
@@ -111,6 +112,14 @@ impl Support {
 /// An operation against a [`Support::Unsupported`] flag returns
 /// [`EditorOpError::Unsupported`] — an explicit refusal, never a fake
 /// success.
+///
+/// A flag is claimed only on evidence: a mechanism fact proven at
+/// open (the L1 negotiated gate; the child's `Opened.capabilities`
+/// report) or a verb's observed acceptance — per-plugin support can
+/// be proven neither before open nor before the verb runs. The
+/// wire-v8 editor verbs ([`GuiFocusTarget`]/[`GuiPopupKind`],
+/// Issue #630) claim nothing new: `popup`/`input`/`focus` keep their
+/// existing meanings and stay unclaimed until open/verb evidence.
 ///
 /// **RT contract:** non-RT only — UI-thread only.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -598,6 +607,51 @@ pub trait EditorSessionOps {
         session: PluginEditorSessionId,
         event: GuiKeyEvent,
     ) -> Result<(), EditorOpError>;
+
+    /// Directs keyboard focus to `target` — the editor surface
+    /// itself, a plugin-internal element, or the host-side
+    /// top-level window (Issue #630). [`GuiFocusTarget::Editor`]
+    /// is the `set_focus(true)` reach; `HostWindow` hands focus
+    /// back to the session's container — the ops layer only
+    /// carries the target verbatim; realising it is the
+    /// adapter/runner's job.
+    ///
+    /// The default answers `Err(EditorOpError::Unsupported)`: an
+    /// adapter without the verb refuses by definition rather than
+    /// faking a focus move — the same additive shape
+    /// `drain_gui_requests` uses.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] — `Unsupported` when the adapter
+    /// or plugin has no focus-target surface (a defined
+    /// rejection, not a crash).
+    fn set_focus_target(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _target: GuiFocusTarget,
+    ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
+
+    /// Opens (`open = true`) or closes a plugin-owned popup of
+    /// `kind` (Issue #630).
+    ///
+    /// The default answers `Err(EditorOpError::Unsupported)`:
+    /// an adapter without the verb refuses by definition — no
+    /// popup is reported open that was never realised.
+    ///
+    /// # Errors
+    /// Returns [`EditorOpError`] — `Unsupported` when the adapter
+    /// or plugin owns no popup surface of `kind` (a defined
+    /// rejection, not a crash).
+    fn set_popup(
+        &mut self,
+        _session: PluginEditorSessionId,
+        _kind: GuiPopupKind,
+        _open: bool,
+    ) -> Result<(), EditorOpError> {
+        Err(EditorOpError::Unsupported)
+    }
 
     /// Drains the instance's queued plugin→host GUI requests into
     /// `out` — the pull side of the request channel (Issue #873) for
@@ -1354,6 +1408,58 @@ impl PluginEditorSession {
             .map_err(EditorSessionError::Ops)
     }
 
+    /// Directs keyboard focus to `target` — non-fatal like
+    /// `set_focus`, no state transition (Issue #630).
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless attached/hidden;
+    /// [`EditorSessionError::Ops`] on a refusal (e.g.
+    /// [`EditorOpError::Unsupported`] from an adapter without the
+    /// verb).
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn set_focus_target<O: EditorSessionOps>(
+        &mut self,
+        ops: &mut O,
+        target: GuiFocusTarget,
+    ) -> Result<(), EditorSessionError> {
+        if !matches!(
+            self.state,
+            EditorSessionState::Attached { .. } | EditorSessionState::Hidden { .. }
+        ) {
+            return Err(EditorSessionError::InvalidState);
+        }
+        ops.set_focus_target(self.id, target)
+            .map_err(EditorSessionError::Ops)
+    }
+
+    /// Opens (`open = true`) or closes a plugin-owned popup of
+    /// `kind` — non-fatal like `set_focus`, no state transition
+    /// (Issue #630).
+    ///
+    /// # Errors
+    /// [`EditorSessionError::InvalidState`] unless attached/hidden;
+    /// [`EditorSessionError::Ops`] on a refusal (e.g.
+    /// [`EditorOpError::Unsupported`] from an adapter without the
+    /// verb).
+    ///
+    /// **RT contract:** non-RT only — UI-thread only.
+    pub fn set_popup<O: EditorSessionOps>(
+        &mut self,
+        ops: &mut O,
+        kind: GuiPopupKind,
+        open: bool,
+    ) -> Result<(), EditorSessionError> {
+        if !matches!(
+            self.state,
+            EditorSessionState::Attached { .. } | EditorSessionState::Hidden { .. }
+        ) {
+            return Err(EditorSessionError::InvalidState);
+        }
+        ops.set_popup(self.id, kind, open)
+            .map_err(EditorSessionError::Ops)
+    }
+
     /// Re-parents the editor under a new `lease` (dock move / float /
     /// re-dock).
     ///
@@ -2043,6 +2149,44 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
         }
     }
 
+    fn set_focus_target(
+        &mut self,
+        _session: PluginEditorSessionId,
+        target: GuiFocusTarget,
+    ) -> Result<(), EditorOpError> {
+        match self
+            .host
+            .execute(HostCommand::SetGuiFocusTarget {
+                handle: self.instance,
+                target,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
+
+    fn set_popup(
+        &mut self,
+        _session: PluginEditorSessionId,
+        kind: GuiPopupKind,
+        open: bool,
+    ) -> Result<(), EditorOpError> {
+        match self
+            .host
+            .execute(HostCommand::SetGuiPopup {
+                handle: self.instance,
+                kind,
+                open,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
+
     fn drain_gui_requests(
         &mut self,
         _session: PluginEditorSessionId,
@@ -2067,21 +2211,23 @@ impl EditorSessionOps for InProcessEditorOps<'_> {
     }
 }
 
-/// L1 editor-session ops: drives the out-of-process (wire v6) GUI
-/// path for one instance through the composite [`PluginHost`].
+/// L1 editor-session ops: drives the out-of-process GUI path for
+/// one instance through the composite [`PluginHost`].
 ///
 /// The child's `Hello` carries the negotiated `GUI_FLOATING` bit —
-/// one mechanism bit covering the whole floating verb family. Every
-/// op that produces wire traffic passes the `L1Instance::execute`
-/// gate: an unadvertised child answers the defined
-/// `Err(EditorOpError::Unsupported)` before a frame is written.
-/// [`PluginHost::negotiated_gui_capabilities`] exposes the same mask
-/// to `capabilities`/`open` so a doomed `open` never spends a lease.
+/// one mechanism bit covering the whole GUI verb family (the v6
+/// floating verbs plus the v8 editor verbs of Issue #630 — no new
+/// bit was assigned). Every op that produces wire traffic passes
+/// the `L1Instance::execute` gate: an unadvertised child answers
+/// the defined `Err(EditorOpError::Unsupported)` before a frame is
+/// written. [`PluginHost::negotiated_gui_capabilities`] exposes
+/// the same mask to `capabilities`/`open` so a doomed `open` never
+/// spends a lease.
 ///
 /// Defined refusals that stay refused by design: `Docked` attach and
-/// `reattach` (Issue #115 owns the docked/reparent scope — wire v6
+/// `reattach` (Issue #115 owns the docked/reparent scope — the wire
 /// ships no `SetGuiParent` verb), and the plugin→host request channel
-/// (`drain_gui_requests`/`adjudicate_gui_request` — wire v6 has no
+/// (`drain_gui_requests`/`adjudicate_gui_request` — the wire has no
 /// request verbs, Issue #873's channel is L0-local). The ops never
 /// silently degrades to L0.
 ///
@@ -2313,12 +2459,53 @@ impl EditorSessionOps for L1EditorOps<'_> {
         }
     }
 
+    fn set_focus_target(
+        &mut self,
+        _session: PluginEditorSessionId,
+        target: GuiFocusTarget,
+    ) -> Result<(), EditorOpError> {
+        // Wire v8 carries the target verbatim —
+        // `GuiFocusTarget::HostWindow` is realised child-side, not
+        // in this ops (the same gate covers it as the v6 family).
+        match self
+            .host
+            .execute(HostCommand::SetGuiFocusTarget {
+                handle: self.instance,
+                target,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
+
+    fn set_popup(
+        &mut self,
+        _session: PluginEditorSessionId,
+        kind: GuiPopupKind,
+        open: bool,
+    ) -> Result<(), EditorOpError> {
+        match self
+            .host
+            .execute(HostCommand::SetGuiPopup {
+                handle: self.instance,
+                kind,
+                open,
+            })
+            .map_err(map_host_error)?
+        {
+            HostReply::Ok => Ok(()),
+            _ => Err(EditorOpError::Plugin),
+        }
+    }
+
     fn drain_gui_requests(
         &mut self,
         _session: PluginEditorSessionId,
         _out: &mut Vec<GuiRequest>,
     ) -> Result<(), EditorOpError> {
-        // Wire v6 has no request-channel verb — the plugin→host
+        // The wire has no request-channel verb — the plugin→host
         // channel stays L0-local (Issue #873), so L1 keeps the
         // defined refusal rather than faking an empty drain.
         Err(EditorOpError::Unsupported)
