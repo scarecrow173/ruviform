@@ -24,6 +24,7 @@ host OS: Windows 11 x64（`DESKTOP-NH00KUI` — WMS 非搭載 host。
   3 artifact を追加
 - `evidence/rf962/midi_wms_api_probe-windows-local.txt` — local host
   実走の raw 出力
+- `evidence/rf962/actions.jsonl` — 検証アクションと設計判断の記録
 
 ## probe 設計
 
