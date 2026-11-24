@@ -1,0 +1,36 @@
+  prerequisite endpoint-probe: ok
+  [35m[test-audio-virtual-endpoint][0m [1m$ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1[0m
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 1.25s
+       Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+
+  running 1 test
+  test render_capture_round_trip ... FAILED
+
+  failures:
+
+  ---- render_capture_round_trip stdout ----
+  virtual_endpoint: WASAPI render→capture streaming verifier
+    capture 3s per pair, watchdog 60s
+    host: WASAPI
+    pair candidates: 1
+  pair[0]: render="Ruviform Cable Input (Ruviform Virtual Audio Device)" capture="Ruviform Cable Output (Ruviform Virtual Audio Device)" (candidate, unconfirmed)
+    render: "Ruviform Cable Input (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.0.00000000}.{e62f349b-7c0f-4e3f-a555-f77dd5b916f7}") | capture: "Ruviform Cable Output (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.1.00000000}.{eeccc8ed-21c4-4782-8c78-d3d93a32d7bd}")
+    negotiated in=AudioFormat { sample_rate: SampleRate(48000), layout: Mono, sample_format: F32 } out=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 }
+    pair[0] failed:
+      - input open failed: permission_denied
+
+  thread 'render_capture_round_trip' (3584) panicked at crates\ruviform-audio-device\tests\virtual_endpoint.rs:349:5:
+  verdict: Fail — no pair candidate completed the round-trip:
+  pair[0]: input open failed: permission_denied
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+  failures:
+      render_capture_round_trip
+
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+  error: test failed, to rerun pass `-p ruviform-audio-device --test virtual_endpoint`
+  [35m[test-audio-virtual-endpoint][0m [31mERROR[0m task failed
+  test exit=101 verdict=Fail — no pair candidate completed the round-trip:

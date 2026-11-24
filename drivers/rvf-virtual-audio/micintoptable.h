@@ -83,7 +83,7 @@ PCPIN_DESCRIPTOR MicInTopoMiniportPins[] =
       MicInTopoPinDataRangePointersBridge,              // DataRanges
       KSPIN_DATAFLOW_IN,                                // DataFlow
       KSPIN_COMMUNICATION_NONE,                         // Communication
-      &KSNODETYPE_MICROPHONE,                           // Category
+      &KSNODETYPE_LINE_CONNECTOR,                       // Category
       &RVF_CABLE_OUTPUT_NAME,                           // Name
       0                                                 // Reserved
     }

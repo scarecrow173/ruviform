@@ -179,3 +179,15 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | cleanup | ok | |
 
 **結果**: LINE_CONNECTOR 化により render endpoint に MediaCategories 登録の custom name（`Ruviform Cable Input` = `RVF_CABLE_INPUT_NAME` GUID 経由）が表示され、render↔capture の仮想 cable pair が `VIRTUAL_NAME_HINTS`（cable input/output + ruviform cable stem）で検出された。build→sign→install→devnode→**endpoint pair 検出**の全経路が GitHub-hosted `windows-2025` で成立 — rf#977 の受入条件に相当する実測が完結。
+
+### attempt 10 — run 45503086872（merge SHA `cefb7642`・attempt10-* 同梱）— stream-roundtrip 初測定
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | attempt-9 と同一経路・`pair_count=1` 再現 |
+| stream-roundtrip | **error** | `test_exit=101; verdict: Fail` — `cargo test --features real-device --test virtual_endpoint` 実走 |
+| cleanup | ok | |
+
+**測定内容**: `mise run test-audio-virtual-endpoint` で `tests/virtual_endpoint.rs` の `render_capture_round_trip` を job 内実行（compile 含め ~30s — cargo cache で deps 解決済み）。
+
+**失敗分析**: pair candidate 検出・render open・format 交渉（in=48k Mono F32 / out=48k Stereo F32）まで全て成立し、capture `IAudioClient::Initialize` のみ **`E_ACCESSDENIED` → `permission_denied`**。capture bridge pin の `Category=KSNODETYPE_MICROPHONE` が Windows mic privacy consent の対象となり、headless runner（Server 2025・interactive consent 不可）で capture open が拒否された。**attempt-11 修正**: `micintoptable.h` の capture bridge pin `Category` を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` へ（render 側と対称。line-in は mic privacy gate 対象外かつ仮想 cable の形態として正しい — VB-CABLE 同型）。

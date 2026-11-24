@@ -1,0 +1,17 @@
+  --- remove devnode ROOT\MEDIA\0000 ---
+  removed=True
+  devnode removed=True
+  --- pnputil /delete-driver oem12.inf /uninstall /force ---
+Microsoft PnP Utility
+
+Ignoring /force when used with /uninstall to delete driver package.
+Driver package uninstalled.
+Driver package deleted successfully.
+  pnputil /delete-driver exit=0
+  removed Cert:\LocalMachine\Root\77FA05F2088C960BF8045C0EE9C229130116272F
+  removed Cert:\LocalMachine\TrustedPublisher\77FA05F2088C960BF8045C0EE9C229130116272F
+  removed Cert:\LocalMachine\My\77FA05F2088C960BF8045C0EE9C229130116272F
+
+  --- final state ---
+  RvfVirtualAudio.inf in store: False
+  cleanup done

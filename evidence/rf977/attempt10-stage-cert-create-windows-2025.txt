@@ -1,0 +1,3 @@
+  subject: CN=RvfVirtualAudio Probe (rf977)
+  thumbprint: 77FA05F2088C960BF8045C0EE9C229130116272F
+  cer: D:\a\ruviform\ruviform\vaudio-cert.cer
