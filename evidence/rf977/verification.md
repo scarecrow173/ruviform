@@ -201,3 +201,29 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | cleanup | ok | |
 
 **失敗分析**: `KSNODETYPE_LINE_CONNECTOR` 化でも capture open は `E_ACCESSDENIED` — **mic device capability の consent gate は endpoint Category 非依存**（全 capture endpoint が対象）であることが確定。gate の解除は driver 側では不可能で、runner 環境の provisioning（`DeviceAccess\Global\{E5323777-...}\Value=Allow`・HKLM+HKCU 両層）が必要。**attempt-12 修正**: stream-roundtrip stage 内で consent を Allow に provision し before/after を記録（ephemeral runner 限定・cert store 登録と同じ環境調整の一部）。driver 側の LINE_CONNECTOR は semantic 正当性のみを根拠として維持（PROVENANCE 訂正済み）。
+
+### attempt 12 — run 45505257940（merge SHA `cc1e3ec2`・attempt12-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — consent=`HKLM:=Allow,HKCU:=Allow` 生效も `permission_denied` 再現 |
+| cleanup | ok | |
+
+**失敗分析**: `DeviceAccess\Global` の Allow 化だけでは不十分 — consent 評価は別系統（`CapabilityAccessManager\ConsentStore`・`AppPrivacy` policy）か audiosrv が起動時に cache する。**attempt-13 修正**: 残り全 consent 層（CAM ConsentStore HKLM+HKCU・AppPrivacy policy）+ `AudioEndpointBuilder`/`Audiosrv` restart で再評価を強制。
+
+### attempt 13 — run 45506203119（merge SHA `c5dc4c05`・attempt13-* 同梱）— **capture open 成立・streaming 実走**
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — ただし **両 stream open・callback 実走に到達**（consent 5 層 Allow + svc restart で `permission_denied` 解消） |
+| cleanup | ok | |
+
+**実走観測**: `callbacks: in=328 out=332 | frames: in=157440 out=158976`・`same_clock_domain=true`・`non_finite=0`・`peak_bits=0x3efffc00`（≈0.5 振幅）。consent provisioning（DeviceAccess+CAM ConsentStore HKLM/HKCU・AppPrivacy policy・audio svc restart）で capture open は完全解決。**残 Fail 3 件**は oracle 層:
+
+1. `output timestamp regressions: 2` — render stream 先頭の position 報告異常（軽微）
+2. `marker oracle: only 0 markers` — 刺激の marker burst が capture 側に観測されない
+3. `tone oracle: 440 Hz share 0.000` — capture データに刺激の 440Hz が含まれない
+
+**根本原因確定**: capture データの `observed_rms=0.3535`（≈0.5/√2）・440Hz share 0 — SysVAD の capture stream は **`ToneGenerator` で合成サイン波を生成する**（`minwavertstream.cpp` `WriteBytes`→`GenerateSine`）。**upstream SysVAD は render→capture の loopback を持たない** — speaker/mic は独立 endpoint で仮想 cable の経路が存在しない。pair 名による検出（AC2）は成立したが、真の round-trip（AC3）には **driver 内 kernel loopback の実装が必要** — render stream の DMA buffer を capture stream が読む経路（Stereo→Mono downmix・render 未稼働時 silence）を adapter 共有経由で新設する。これは小修正ではなく実装 slice — Worker へ委譲。
