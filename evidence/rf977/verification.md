@@ -65,3 +65,20 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 - `local-inf-check.txt`: INF 構造 22 項目 OK（Version/Class=MEDIA/hwid/`KmdfService`+`KmdfLibraryVersion=1.33`/interfaces/HW AddReg/MediaCategories 両 GUID→名の token chain）+ `%Strings%` 未解決参照 0 + `minipairs.h` endpoint 名 4/4 一致 + pin-name GUID が toptable/INF 両側で一致。
 - vendoring 検証: `drivers/rvf-virtual-audio/` の 37 ファイルが upstream pin `d49bb7d72f3651952b2b6e4ad28d14fe2247eb69` と `diff -bB --strip-trailing-cr` で意味差分 0（行末空白・EOL のみ repo hygiene hook で正規化）、意図変更は `minipairs.h`/`micintoptable.h`/`EndpointsCommon/speakertoptable.h` の 3 ファイルのみ（PROVENANCE.md の記述どおり）。
 - 実行していないもの: `InfVerif`（worker 環境にツール不在）、kernel build（WDK 不在）、署名・store 書き込み・`pnputil` install・devnode 作成・`endpoint_probe` 実走 — 全て runner lane で判定。
+
+## 4. runner 実走記録（Coordinator 実施）
+
+### attempt 1 — run 45490145973（merge SHA `633bbc87`）
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | msbuild=present; toolset=3; kmHeaders=0→winget 導入; signtoolKits=3; winget=present |
+| driver-build | **error** | `msbuild exit=1` |
+| catalog-create / sign / sign-verify / pnputil | blocked | 前段 error のため未試行（契約どおり fail-closed） |
+| cert-create / store-register | ok | thumbprint=EE0D58B9…・Root+TrustedPublisher |
+| enum-verify / devnode / endpoint-probe / cleanup | error/ok | driver 不在のまま記録・cleanup ok |
+| job | success | absence-is-data で全 step exit 0（rf961 と同契約） |
+
+**失敗分析**: `MiniportAudioEngineNode.cpp` — upstream は `EndpointsCommon` を `SYSVAD_BTH_BYPASS;SYSVAD_USB_SIDEBAND` 定義の StaticLibrary として build するため本ファイルの sideband 呼出（`IsSidebandDevice()`/`m_pSidebandDevice`・8 箇所）が未ガードのまま compile する。本ツリーは macro 未定義の単一 vcxproj build のため宣言側（`minwavert.h`・guard 済み）と食い違い `C3861`/`C2065`。
+
+**attempt-2 修正**: `MiniportAudioEngineNode.cpp` の `if (...) {...} else` 8 箇所へ他 upstream ファイルと同型の `#if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)` guard を適用（sideband 無効時は非 sideband path のみ compile — upstream 互換）。PROVENANCE.md を `＝`→`≠` に訂正。
