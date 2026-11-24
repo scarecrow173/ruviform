@@ -121,3 +121,4 @@ Directory: `docs/discovery`
 | DISC-rf873pluginGuiRequest | Issue #873 plugin→host GUI 要求チャンネル — 現状棚卸し | final | [issue-873-plugin-gui-request.md](./issue-873-plugin-gui-request.md) |
 | DISC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 調査記録 | resolved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
 | DISC-Rf895DrpSbtCse7nQ2xKw4Y9 | Issue #895 dropped_submits の条件別分離 — carrier 選定と集約 counter 扱いの調査 | resolved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |
+| DISC-952vEPdR1v3rSurVeyX01 | Issue #952 仮想 Audio/MIDI endpoint driver 方式調査 — signing/runner/WMS 一次根拠 | draft | [issue-952-virtual-endpoint-driver-survey.md](./issue-952-virtual-endpoint-driver-survey.md) |
