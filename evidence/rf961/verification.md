@@ -153,10 +153,29 @@ AC 評価（attempt 8 時点・部分）:
 - AC3: windows-2025 = winget WDK install・windows-11-arm = task dll rename workaround ともに実測で経路確立。
 - AC4: 本節の記録。
 
+### attempt 9 — run 45479639538（2026-11-24・PR #975 merge 後・診断採取版）
+
+両 leg の artifact を `evidence/rf961/` に記録（`*-attempt9.*`）。windows-2025 は attempt-8 と同じく全経路 ok（devnode `problem_code=0`・driver Running）。windows-11-arm は install/devnode まで同じく成立・problem 52 で拒否 — 追加した診断で**拒否根拠を特定**:
+
+- CI Operational event `id=3004`: `RvfTestSignedNull.sys` の image integrity 検証失敗（hash がシステムで見つからない = 署名が kernel 信頼チェーンに載らない）
+- `bcdedit {current}`: `testsigning=Yes`・`hypervisorlaunchtype=Auto` — **VBS（Virtualization Based Security）稼働中**
+- CI policy 稼働一覧: `Microsoft Windows Driver Policy`・`Microsoft Windows Virtualization Based Security Policy`・`Endpoint Security Policy` が active（event 3099）
+- `Confirm-SecureBootUEFI=False` — Secure Boot 自体は OFF
+- `id=3085 Code Integrity will disable WHQL driver enforcement` — 緩和モードだが test-signed kernel load は拒否される
+
+**結論**: ARM64 の `windows-11-arm` image では VBS policy 稼働下の Code Integrity が test-signing 緩和を honor せず、test-signed kernel driver の load が不可。解除には `hypervisorlaunchtype=Off`+reboot が要り ephemeral job 内では変更不可 — **ARM64 での test-signed driver load は GitHub-hosted runner では不成立**と確定。同一 package が x64（windows-2025・VBS 非稼働）では Running まで完走するため leg 間の差異は CI policy に帰因する。
+
+最終 AC 評価（attempt 9 完了時点）:
+
+- AC1（install 可否・stage 付き実測）: **成立** — windows-2025 = install→devnode→kernel load→Running 全通過（`oem12.inf`）。windows-11-arm = install 受理（`oem7.inf`）・devnode 作成まで成立・kernel load が CI policy で拒否（problem 52・root cause 特定済み）。
+- AC2（PnP 列挙・uninstall 記録/失敗 stage 特定）: **成立** — windows-2025 は `ROOT\SYSTEM\0001` 列挙・cleanup stage で uninstall/devnode 削除まで記録。windows-11-arm の失敗 stage は kernel driver load（CI event 3004・VBS policy）まで特定。
+- AC3（build 環境実測・job 内導入列挙）: **成立** — windows-2025: WDK 未導入→winget `Microsoft.WindowsWDK.10.0.26100`（実測 174s）・signtool x64 Kits・winget present。windows-11-arm: WDK headers/libs/Inf2Cat 同梱・DriverKit task dll は 17.0→18.0 rename workaround・winget absent・devcon 両 leg 非搭載（P/Invoke 代替実測済み）。
+- AC4（evidence 記録・方式確定材料）: **成立** — 本ファイルの実走記録 + `docs/designs/issue-952-virtual-endpoint-driver.md` の方式確定を実測で更新済み（attestation 前提 → x64 は自己署名 test-signing で成立・ARM64 のみ attestation 要）。
+
 ## 4. 状態
 
 - workflow 新設: `.github/workflows/virtual-driver-install-probe.yml`（PR #965 で merge、attempt 1 で検出した欠陥を修正済み — §3.5）。
 - driver package 新設: `drivers/testsigned-null/`（ソースのみ — build 済みバイナリは commit しない）。
 - 補助スクリプト新設: `tools/testsigned-driver/`（`probe-stage.ps1`・`TestDevice.ps1`・`README.md`）。
 - 既存 workflow・required gate・ruleset・`mise.toml`・`crates/**` への変更: **なし**。
-- runner 実走: **attempt 1-8 実施済み**（§3.5）。windows-2025 は **kernel driver Running まで全経路完走**、windows-11-arm は kernel load が problem 52 で拒否（CI 拒否根拠の特定が残件）。attempt 9（診断追加版）を Coordinator が dispatch する。
+- runner 実走: **attempt 1-9 実施済み・計測完結**（§3.5）。windows-2025 = test-signed driver の install→devnode→kernel load→Running 全経路実測成立。windows-11-arm = install/devnode まで成立・kernel load は VBS CI policy で拒否（実測確定・job 内不可）。AC1-4 全て充足 — `docs/designs/issue-952-virtual-endpoint-driver.md` の方式確定も実測で更新済み。

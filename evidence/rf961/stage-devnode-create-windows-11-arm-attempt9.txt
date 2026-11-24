@@ -1,0 +1,108 @@
+  --- TestDevice.ps1 -Action create ---
+  instance_id=ROOT\SYSTEM\0001
+  bind_ok=True
+  reboot_required=False
+  bound_inf=C:\a\ruviform\ruviform\probe-pkg\RvfTestSignedNull.inf
+  instance_id=ROOT\SYSTEM\0001
+
+  --- Get-PnpDevice ---
+  Status=Error Class=System
+  FriendlyName=ruviform test-signed null device
+  Service=RvfTestSignedNull
+  DEVPKEY_Device_ProblemCode = 52
+  DEVPKEY_Device_DevNodeStatus = 25175041
+  DEVPKEY_Device_DriverVersion = 1.0.0.0
+  DEVPKEY_Device_DriverDate = 12/31/2024 16:00:00
+  Win32_SystemDriver: State=Stopped Status=OK PathName=C:\Windows\system32\drivers\RvfTestSignedNull.sys
+
+  --- problem_code=52 diagnostics ---
+  [bcdedit {current}]
+
+Windows Boot Loader
+-------------------
+identifier              {current}
+device                  partition=C:
+path                    \Windows\system32\winload.efi
+description             Windows 11
+locale                  en-US
+inherit                 {bootloadersettings}
+recoverysequence        {f14e4ea1-dc40-11f1-92fb-7ced8de0f73f}
+recoveryenabled         No
+testsigning             Yes
+isolatedcontext         Yes
+allowedinmemorysettings 0x15000075
+osdevice                partition=C:
+systemroot              \Windows
+resumeobject            {f14e4e9d-dc40-11f1-92fb-7ced8de0f73f}
+nx                      OptIn
+bootmenupolicy          Standard
+bootstatuspolicy        IgnoreAllFailures
+hypervisorlaunchtype    Auto
+hypervisorschedulertype Root
+ems                     Yes
+  Confirm-SecureBootUEFI=False
+  [CodeIntegrity Operational — last 15]
+    12:21:13 id=3089 Signature information for another event. Match using the Correlation Id.
+    12:21:13 id=3004 Windows is unable to verify the image integrity of the file \Device\HarddiskVolume4\Windows\System32\drivers\RvfTestSignedNull.sys because file hash could not be found on the system. A recent hardware or software change might have installed a file that is signed incorrectly or damaged, or that might be malicious software from an unknown source.
+    12:13:35 id=3116 Signature information for Code Integrity policy ID {d2bda982-ccf6-4344-ac5b-0b44427b6816}.
+    12:13:35 id=3099 Refreshed and activated Code Integrity policy {d2bda982-ccf6-4344-ac5b-0b44427b6816} Microsoft Windows Driver Policy. id 10.0.29545.0. Status 0x0
+    12:13:35 id=3116 Signature information for Code Integrity policy ID {a072029f-588b-4b5e-b7f9-05aad67df687}.
+    12:13:35 id=3099 Refreshed and activated Code Integrity policy {a072029f-588b-4b5e-b7f9-05aad67df687} Microsoft Windows Virtualization Based Security Policy. id 10.0.29663.0. Status 0x0
+    12:13:35 id=3116 Signature information for Code Integrity policy ID {784c4414-79f4-4c32-a6a5-f0fb42a51d0d}.
+    12:13:35 id=3099 Refreshed and activated Code Integrity policy {784c4414-79f4-4c32-a6a5-f0fb42a51d0d} Microsoft Windows Cross Certificates for Code Integrity Exceptions Audit Policy. id 10.29611.0.0. Status 0x0
+    12:13:35 id=3116 Signature information for Code Integrity policy ID {60fd87f8-4593-44a0-91b0-2e0da022f248}.
+    12:13:35 id=3099 Refreshed and activated Code Integrity policy {60fd87f8-4593-44a0-91b0-2e0da022f248} Microsoft Windows Endpoint Security Policy. id 10.0.29526.0. Status 0x0
+    12:13:35 id=3085 Code Integrity will disable WHQL driver enforcement for this boot session.  Settings 0x0.
+    18:15:00 id=3116 Signature information for Code Integrity policy ID {d2bda982-ccf6-4344-ac5b-0b44427b6816}.
+    18:15:00 id=3099 Refreshed and activated Code Integrity policy {d2bda982-ccf6-4344-ac5b-0b44427b6816} Microsoft Windows Driver Policy. id 10.0.29545.0. Status 0x0
+    18:15:00 id=3116 Signature information for Code Integrity policy ID {a072029f-588b-4b5e-b7f9-05aad67df687}.
+    18:15:00 id=3099 Refreshed and activated Code Integrity policy {a072029f-588b-4b5e-b7f9-05aad67df687} Microsoft Windows Virtualization Based Security Policy. id 10.0.29663.0. Status 0x0
+  [setupapi.dev.log — RvfTestSigned entries]
+     sto:                     {Configure Driver Package: C:\Windows\System32\DriverStore\FileRepository\rvftestsignednull.inf_arm64_a8c27f6203c70374\rvftestsignednull.inf} 12:21:13.019
+     sto:                          Source Filter  = root\rvftestsigned
+     inf:                          Config Options = IsolationCompat
+     inf:                          Class GUID     = {4d36e97d-e325-11ce-bfc1-08002be10318}
+     sto:                          Source Filter  = root\rvftestsigned
+     inf:                          Config Options = IsolationCompat
+     inf:                          Class GUID     = {4d36e97d-e325-11ce-bfc1-08002be10318}
+     inf:                          Class Options  = Configurable BootCritical
+     inf:                               Section Name = RvfTestSignedNull_Device.NT
+     inf:                               {Add Service: RvfTestSignedNull}
+     inf:                                    Flags         = 0x2
+     inf:                                    Start Type    = 3
+     inf:                               {Add Service: RvfTestSignedNull}
+     inf:                                    Flags         = 0x2
+     inf:                                    Start Type    = 3
+     inf:                                    Service Type  = 1
+     inf:                                    Image Path    = \SystemRoot\System32\drivers\RvfTestSignedNull.sys
+     inf:                                    Created new service 'RvfTestSignedNull'.
+     inf:                               {Add Service: exit(0x00000000)}
+     inf:                               Hardware Id  = ROOT\RvfTestSigned
+     inf:                                    Created new service 'RvfTestSignedNull'.
+     inf:                               {Add Service: exit(0x00000000)}
+     inf:                               Hardware Id  = ROOT\RvfTestSigned
+     inf:                               {Configure Driver Configuration: RvfTestSignedNull_Device.NT}
+     inf:                               Hardware Id  = ROOT\RvfTestSigned
+     inf:                               {Configure Driver Configuration: RvfTestSignedNull_Device.NT}
+     inf:                                    Service Name  = RvfTestSignedNull
+     inf:                                    Config Flags  = 0x00000000
+     inf:                               {Configure Driver Configuration: RvfTestSignedNull_Device.NT}
+     inf:                                    Service Name  = RvfTestSignedNull
+     inf:                                    Config Flags  = 0x00000000
+     inf:                               {Configure Driver Configuration: exit(0x00000000)}
+     inf:                                    Service Name  = RvfTestSignedNull
+     inf:                                    Config Flags  = 0x00000000
+     inf:                               {Configure Driver Configuration: exit(0x00000000)}
+     inf:                          {Configure Driver: exit(0x00000000)}
+     flq:                               Hardlinking 'C:\Windows\System32\DriverStore\FileRepository\rvftestsignednull.inf_arm64_a8c27f6203c70374\RvfTestSignedNull.sys' to 'C:\Windows\System32\drivers\RvfTestSignedNull.sys'.
+     flq:                          {FILE_QUEUE_COMMIT - exit(0x00000000)} 12:21:13.029
+     sto:                          Driver configuration complete.
+     dvi:                          Existing files modified, may need to restart related services.
+     dvi:                          Configuration: oem7.inf:root\rvftestsigned,RvfTestSignedNull_Device
+     dvi:                     Install Device: Configuring device completed. 12:21:13.035
+     dvi:                     Device Status: 0x01802001
+     dvi:                     {Restarting Devices} 12:21:13.035
+!    dvi:                          Device 'ROOT\SYSTEM\0001' not started: Device has problem: 0x34 (CM_PROB_UNSIGNED_DRIVER), problem status: 0xc0000428.
+     dvi:                     {Restarting Devices exit} 12:21:13.064
+     dvi:                {Configure Device - exit(0x00000000)} 12:21:13.064
+     dvi:           {Core Device Install - exit(0x00000000)} 12:21:13.064
