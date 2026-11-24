@@ -97,9 +97,13 @@ K1 決裁どおり `clap.ext.gui` と同じ mechanism（拡張 id で query し�
   `ChildWindow` は新設 `win32::child` で editor child 配下の `WS_CHILD` を
   開閉。両者とも title は `rvf-test-editor-popup-{seq}`、class
   `RuviformClapTestEditor` を共有。popup 面は単一 slot —— close は kind を
-  問わず収束、repeated edge は `false` で拒否。非 Windows では win32 shim
-  が `None` を返し token 記録のみ残る（論理面と HWND 面の分離 —— VST3
-  先例どおり）。
+  問わず収束、repeated edge は `false` で拒否。token 記録は
+  HWND-independent —— unattached editor や HWND 生成失敗でも
+  `po:`/`pc:` は残る（論理面と HWND 面の分離 —— VST3 `popup_open`
+  先例）。非 Windows では `create` 自体が `is_api_supported` で拒否
+  されるため verb は全て `!created` の `false` に収束し、seam は実質
+  Windows-only（実装確認で判明 —— 「非 Windows でも token 記録」の
+  設計想定は CLAP 側では成立しない）。
 - `Cargo.toml`: `windows-sys` features に `Win32_UI_Input_KeyboardAndMouse`
   を追加（`SetFocus`/`GetFocus` 用 —— fixture 自身の cdylib build に必要。
   `--all-targets` では dev-dep の `ruviform-plugin-clap` 経由の feature

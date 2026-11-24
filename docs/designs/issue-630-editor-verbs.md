@@ -528,9 +528,13 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   `WS_POPUP`、`ChildWindow` で editor child 配下の実 `WS_CHILD` を生成
   （両者とも `rvf-test-editor-popup-{seq}` title・class
   `RuviformClapTestEditor`）。popup 面は単一 slot —— close は kind を問わず
-  収束し、repeated edge は `false` で拒否。非 Windows では win32 shim が
-  `None` を返し、token 記録のみが残る（論理面と HWND 面の分離 —— VST3
-  先例）。
+  収束し、repeated edge は `false` で拒否。token 記録は HWND-independent
+  （unattached editor・生成失敗でも `po:`/`pc:` が残る —— VST3
+  `popup_open` 先例）。非 Windows では `create` 自体が拒否されるため
+  verb は `!created` に収束し、seam は実質 Windows-only（前文の
+  「`po:`/`pc:` は非 Windows でも記録」想定は CLAP 側では成立しない
+  ことを実装で確認 —— fixture の `create` が `is_api_supported` で
+  decline するため）。
 - 着地点: 新 verb が到達するのは L0 in-process 経路のみ。L1（wire tag
   29/30）は `ruviform-plugin-export` の entry dispatch catch-all で
   defined `Unsupported` に落ちる（export は本 slice の lease 外 —— tag

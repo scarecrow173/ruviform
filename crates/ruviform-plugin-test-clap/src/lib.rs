@@ -241,7 +241,8 @@ impl PluginFactoryImpl for TestSuiteFactory {
 // The CLAP standard entry point: `#[no_mangle] pub static clap_entry`.
 // The macro emits its own `#[allow(unsafe_code)]` for the generated
 // static. The only `unsafe` this crate writes is confined to
-// `editor.rs`'s `#[cfg(target_os = "windows")]` `win32` module —
-// `#[expect(unsafe_code)]` + SAFETY comments per call site (the
-// VST3 `test_editor` precedent).
+// `editor.rs` — the `#[cfg(target_os = "windows")]` `win32` module's
+// Win32 calls and the `ruviform.editor-ops` vtable's `unsafe impl`/
+// `extern "C"` routers — `#[expect(unsafe_code)]` + SAFETY comments
+// per site (the VST3 `test_editor` precedent).
 clack_export_entry!(TestSuiteEntry);

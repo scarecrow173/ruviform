@@ -216,8 +216,9 @@ struct GuiState {
     verb_popup: Option<usize>,
     /// The logical popup open state — `true` after an open verb,
     /// `false` after a close verb or `destroy`, whether or not
-    /// `verb_popup` holds a real HWND. Off Windows the flag still
-    /// toggles so `po:`/`pc:` is recorded on every OS (the VST3
+    /// `verb_popup` holds a real HWND. The flag is HWND-independent:
+    /// an unattached editor (or a failed creation) still logs
+    /// `po:`/`pc:` even when `verb_popup` stays `None` (the VST3
     /// `popup_open` precedent — logical and HWND faces separate).
     verb_popup_open: bool,
     /// Popup generation — stamped into the popup HWND's title
@@ -263,9 +264,14 @@ impl GuiState {
     /// Records one verb token and restamps the child HWND's window
     /// text — the fixture's delivery-evidence channel (synthetic
     /// verb delivery; no OS input queue or focus routing claim).
+    /// The stamp applies only to the embedded child: in floating
+    /// mode `hwnd` is the plugin-owned popup, whose window text
+    /// belongs to the host-suggested title, not the event log.
     fn record(&mut self, token: String) {
         self.events.push(token);
-        if let Some(hwnd) = self.hwnd {
+        if !self.floating
+            && let Some(hwnd) = self.hwnd
+        {
             win32::set_title(hwnd, &self.window_title());
         }
     }
@@ -746,7 +752,7 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         // child's title (`rvf-test-editor-attach-{n}`) and the verb
         // event log resets with it — a recreated surface reads as a
         // fresh generation, never inheriting the last one's tokens
-        // (the VST3 `attached` precedent).
+        // (the per-generation reset the title grammar implies).
         state.attach_seq = state.attach_seq.wrapping_add(1);
         state.events.clear();
         let title = state.window_title();
@@ -793,7 +799,9 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
             return;
         };
         state.title = Some(title.to_string());
-        if let Some(hwnd) = state.hwnd {
+        if state.floating
+            && let Some(hwnd) = state.hwnd
+        {
             win32::set_title(hwnd, title);
         }
     }
@@ -1133,9 +1141,10 @@ impl RuviformEditorOpsImpl for TestEditorMainThread<'_> {
     /// `WS_CHILD` under the editor child (the `EnumChildWindows`
     /// observation point); both carry the generation title
     /// `rvf-test-editor-popup-{seq}`. `po:{seq}`/`pc:{seq}` is
-    /// recorded whether or not the HWND exists — logical and HWND
-    /// faces stay separate so the non-Windows shim keeps token
-    /// honesty. The verb popup surface is a single slot: close
+    /// recorded whether or not an HWND exists — logical and HWND
+    /// faces stay separate so the token log stays honest even when
+    /// the surface could not be created (the VST3 `popup_open`
+    /// precedent). The verb popup surface is a single slot: close
     /// converges it regardless of `kind`. Defined rejections:
     /// strict-flag violation, a re-entrant borrow, no created GUI,
     /// an unassigned `kind`, or a repeated edge (open on an open
@@ -1169,6 +1178,14 @@ impl RuviformEditorOpsImpl for TestEditorMainThread<'_> {
                 let owner = state.hwnd.and_then(win32::root_ancestor);
                 win32::popup(owner, &title, VERB_POPUP_SIZE)
             };
+            // `win32::popup` creates hidden (the floating `show`
+            // path owns its visibility flip); the verb surface is
+            // shown directly — the `WS_CHILD` leg is `WS_VISIBLE`
+            // at creation, so both kinds end up visible (the VST3
+            // `WS_POPUP | WS_VISIBLE` precedent).
+            if let Some(hwnd) = state.verb_popup {
+                win32::set_visible(hwnd, true);
+            }
             state.verb_popup_open = true;
             state.record(format!("po:{seq}"));
         } else {
