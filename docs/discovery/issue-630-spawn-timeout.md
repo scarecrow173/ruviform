@@ -18,6 +18,7 @@ relations:
     - "evidence/rf630/spawn-timeout-verification.md"
     - "evidence/rf630/spawn-timeout-signature-sweep.md"
     - "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
+    - "evidence/rf630/spawn-timeout-adapter-sweep.md"
     - "evidence/rf841/verification.md"
     - "evidence/rf849/verification.md"
     - "evidence/rf631/verification.md"
@@ -33,6 +34,8 @@ relations:
         path: "evidence/rf630/spawn-timeout-signature-sweep.md"
       - type: "file"
         path: "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
+      - type: "file"
+        path: "evidence/rf630/spawn-timeout-adapter-sweep.md"
     modified:
       - type: "file"
         path: "crates/ruviform-plugin-test-vst3/tests/l1_fault_test_plugin_e2e.rs"
@@ -48,6 +51,10 @@ relations:
         path: "crates/ruviform-plugin-test-clap/tests/l1_real_test_plugin_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-clap/tests/l1_stateful_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-vst3/tests/l1_real_adapter_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-clap/tests/l1_real_adapter_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
       - type: "file"
@@ -216,4 +223,64 @@ bound 超過 panic した。canonical lane の 6 連続 run では
 - 新たな残件: `ruviform-plugin-vst3`/`ruviform-plugin-clap`
   adapter crate の `tests/l1_real_adapter_e2e.rs` 等は同型穴を
   持ち得るが本 slice の lease 外 — 後続 slice の対象候補として
-  記録する。
+  記録する。**（続報: 後述の adapter sweep slice で両 file とも
+  判定・閉塞済み — signature 穴の残はゼロ）**。
+
+## 続報 — adapter crate tests/ の sweep（本 slice で閉塞・signature 穴の残ゼロ）
+
+前項の残件が本 slice の対象だった。
+`crates/ruviform-plugin-vst3/tests/` と
+`crates/ruviform-plugin-clap/tests/` を grep と目視で全件
+sweep した（worktree HEAD `e145a2d7` の `git ls-files` 実測で
+両 crate とも `l1_real_adapter_e2e.rs` 1 file のみ — 計 2
+file）。signature-miss 判定基準に照らした結果は次のとおり
+（詳細は `evidence/rf630/spawn-timeout-adapter-sweep.md`）。
+
+- 穴あり — 2 file: 両 ABI の `l1_real_adapter_e2e.rs` の
+  `instantiate` helper が un-retried surface だった。vst3 側は
+  `HostCommand::Instantiate` の `.unwrap()` と
+  `panic!("unexpected reply")`、clap 側は `SpawnFailed` arm で
+  diagnostics を印字して `panic!` する形で、`spawn_timeout`
+  bound の環境 stall が test fail へ直結していた。#933 と同一の
+  signature（`cause == Timeout`・record `Found`・`phase ∈
+  {PreSpawn, Spawn, DrainInit, Handshake, Live}`・
+  `record.cause == Some(Timeout)` の検査、bound
+  `SPAWN_TIMEOUT_RETRIES = 3`、signature-miss 即 fail、bound
+  超過は panic で honest fail、attempt ごとの stderr trace）で
+  閉塞した。clap 側は Issue #207 の diagnostics 全量印字を
+  terminal failure 時に温存した。両 file とも composite route
+  の helper loop が retry unit — public `PluginHost` API 経由
+  のみで pub(crate) bundled spawn surface を持たないため
+  `child_attempt` は不要。
+- 穴なし・対象外: 期待値経路
+  `real_adapter_l1_missing_runner_is_spawn_failed`（両 ABI —
+  `SpawnFailed{cause: Spawn}` を契約値として pin、retry 非搭載
+  を維持）、parent-side `HostCommand::Scan`（descriptor
+  replay であり spawn surface ではない）、post-mint
+  `command_timeout` 経路（`drive_to_processing`・state/gui
+  verbs・`Destroy`・`kill_child`・notification wait・
+  `process`）。
+- lease 外の網羅性確認: `crates/*/tests/` 横断 grep で
+  `HostCommand::Instantiate`/`register_out_of_process`/
+  `SpawnFailed` を洗った結果、spawn surface を持つのは
+  #933/#935/#936 と本 slice で対応済みの crate のみだった。
+  `ruviform-audio-plugin-bridge/tests/`（4 file）は
+  `Instantiate` を呼ぶが `register_factory`（L0 in-process
+  route）経由であり `SpawnFailed` variant を返しえない —
+  spawn-path 呼出なしとして「穴なし」を記録する（lease 外・
+  無変更）。
+- 検証: induce 補助（`CreateInstance` reply wait の
+  zero-timeout 一時 patch、検証後 revert 済み）で両 file に
+  ついて once 相当の回復 pass と always 相当の bound 超過
+  panic を両側実測。canonical lane `mise run
+  test-l1-real-plugin` は全 leg `ok`（adapter leg 3+3 を含
+  む）。
+
+これで `crates/*/tests/` 配下の signature 穴の残はゼロ —
+`SpawnFailed{Timeout}` を返しうる全 spawn/mint surface に同一
+の bounded retry が載った。残る既知の残件はいずれも本
+signature とは別 class であり（`l1_scale_probe` の手動計測
+probe・`l1_proxy_e2e` の timeout-convergence flake・
+`SpawnPhase::Handshake` doc と実装の乖離・clap editor verb
+3・external legs）、本 reliability slice 群の閉塞対象としては
+ここで締める。
