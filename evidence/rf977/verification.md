@@ -162,3 +162,20 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | endpoint-probe | ok | render `Speakers (Ruviform Virtual Audio Device)` + capture `Ruviform Cable Output` 両方 active・format/period 取得済。pair=0 |
 
 **残件**: render endpoint 名が custom GUID ではなく "Speakers" — **Windows が KSNODETYPE_SPEAKER 系 Category の endpoint friendly name を仕様としてハードコード**（pin-name カスタム不可・OSR/MS Q&A 実例・upstream も Name=NULL）。capture 側は同一機構で custom name が表示される非対称。**attempt-9 修正**: LINEOUT_DEST pin の `Category` を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` に変更（VB-Cable/AudioMirror 系と同じ仮想 cable 構成 — line-connector では MediaCategories pin-name が有効）。
+
+### attempt 9 — run 45501429195（merge SHA `ed00ccf5`・attempt9-* 同梱）— **全 AC 相当達成**
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | `msbuild=present; winget=present`（キャッシュで WDK surface 再利用） |
+| driver-build | ok | `x64\Release\RvfVirtualAudio.sys` 生成 |
+| catalog-create | ok | `rvfvirtualaudio.cat` 生成 |
+| cert/store | ok | 自己署名 → Root+TrustedPublisher |
+| sign/sign-verify | ok | sys+cat 署名・検証 |
+| pnputil-add-driver | ok | `published=oem12.inf` |
+| enum-verify | ok | `inf_in_store=True` |
+| devnode-create | ok | `ROOT\MEDIA\0000; status=OK; problem_code=0; service=RvfVirtualAudio` |
+| endpoint-probe | **ok** | **`pair_count=1` — `Ruviform Cable Input (Ruviform Virtual Audio Device)` ↔ `Ruviform Cable Output (Ruviform Virtual Audio Device)`**・`endpoints_enumerated=2; virtual_candidates=2` |
+| cleanup | ok | |
+
+**結果**: LINE_CONNECTOR 化により render endpoint に MediaCategories 登録の custom name（`Ruviform Cable Input` = `RVF_CABLE_INPUT_NAME` GUID 経由）が表示され、render↔capture の仮想 cable pair が `VIRTUAL_NAME_HINTS`（cable input/output + ruviform cable stem）で検出された。build→sign→install→devnode→**endpoint pair 検出**の全経路が GitHub-hosted `windows-2025` で成立 — rf#977 の受入条件に相当する実測が完結。
