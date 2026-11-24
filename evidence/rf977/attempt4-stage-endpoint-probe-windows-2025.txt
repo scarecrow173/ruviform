@@ -1,0 +1,7 @@
+  prerequisite devnode-create: blocked
+  probe_exit=0
+  endpoints_enumerated=0
+  virtual_candidates=0
+  pair_count=0
+  pairs=
+  probe script exit=0 pair_count=0 endpoints=0

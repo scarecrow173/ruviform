@@ -110,3 +110,13 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 2. `SIGNTASK: No file digest algorithm specified` — vcxproj に署名設定がなく WDK が build 内署名を試行（`/fd` 無し signtool 呼出で失敗）。署名は本 workflow の sign stage（job 生成証明書）が担う設計のため **`<SignMode>Off</SignMode>`** を両 config に追加。
 
 **進捗**: `_USE_WAVERT_`/`_NEW_DELETE_OPERATORS_` 追加で compile+link は完走（LNK2019 解消）。
+
+### attempt 4 — run 45495043095（merge SHA `9a269ab7`・attempt4-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| env-build-surface | ok | msbuild=present |
+| driver-build | **error** | `msbuild exit=1` — amd64 MSBuild 選択は生效（`Bin\amd64\MSBuild.exe` で InfVerif が実行され実検証へ到達） |
+| 以降 | blocked | fail-closed |
+
+**失敗分析**: `INF error 1199` — DIRID 13 (CopyFiles) は OS 10.0.16299 導入構文のため、その DDInstall を参照する Models section に TargetOSVersion decoration が必要。`SignMode Off` で build 内署名エラーは解消。**attempt-5 修正**: `[RvfVA.NTamd64]` → `[RvfVA.NTamd64.10.0...16299]`（本 driver は windows-2025 runner 専用で下位 OS 対象外）。

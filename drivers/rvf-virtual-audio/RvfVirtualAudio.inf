@@ -27,10 +27,12 @@ RvfVirtualAudio.sys = 1,,
 RvfVirtualAudio_Device.CopyList = 13 ; DIRID_DRIVERSTORE
 
 [Manufacturer]
-%MfgName% = RvfVA,NTamd64
+; DIRID 13 (CopyFiles) は 10.0.16299 以降の構文 — TargetOSVersion
+; decoration を付けて下位 OS への install を制限する（InfVerif error 1199）。
+%MfgName% = RvfVA,NTamd64.10.0...16299
 
 ; x64 windows-2025 runner 専用（test-signing install 対象は amd64 のみ）。
-[RvfVA.NTamd64]
+[RvfVA.NTamd64.10.0...16299]
 %RvfVirtualAudio.DeviceDesc% = RvfVirtualAudio_Device, ROOT\RvfVirtualAudio
 
 ;==========================================================================
