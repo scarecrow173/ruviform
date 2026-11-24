@@ -68,6 +68,18 @@ clack-host = { version = "=0.2.0", optional = true }
 # plugin-side cdylib unchanged.
 ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 
+# `GuiFocusTarget::HostWindow` の adapter 側実現 — `SetFocus`/`GetFocus`/
+# `IsWindow` on the session-redeemed container HWND (Issue #630).
+# Same `windows-sys` version the test fixture crate
+# (`ruviform-plugin-test-clap`) pins; off Windows the leg is cfg'd out
+# and the verb answers `Unsupported`.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 # `clack-host` (feature `clack-plugin`) synthesizes the plugin-side
 # `Audio` object a host would hand to `process`, so tests drive the real

@@ -478,3 +478,67 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   target を verbatim で運ぶ。child 側（`ruviform-plugin-export`）は entry
   dispatch の catch-all が defined `Unsupported` を返す —— slice 3/4 が
   fixture seam を載せるまでの正しい着地点。
+
+## 実装記録（slice 4 — CLAP adapter + fixture）
+
+- 拡張 id は `ruviform.editor-ops` で確定（ruviform-namespaced の private
+  seam — K1 決裁どおり `clap.ext.gui` と同じ `get_extension` → vtable
+  mechanism）。vtable は `#[repr(C)]` の 3 フィールド固定で、両 crate が
+  同じレイアウトを個別に定義する（fixture は adapter に依存しないため型を
+  共有できない —— `#[repr(C)]` 面そのものが唯一の ABI 契約であり、拡張
+  id・フィールド順・各 discriminant byte は両側の doc comment に明記済み）:
+  - `deliver_key(plugin, direction: u8, key: u32, key_code: u32,
+    modifiers: u32) -> bool` — `direction` は `GuiKeyDirection` の wire
+    discriminant（`Down`=0/`Up`=1）、`key` は UTF-16 code unit、`key_code`
+    は Win32 virtual-key 値（`i16` bit pattern の zero-extend）、
+    `modifiers` は `GuiModifiers` bitmask。いずれも 16bit 値を `u32` slot
+    に載せる。
+  - `apply_focus(plugin, focused: u8, target: u8, element: u32) -> bool` —
+    `focused` は strict `{0,1}`、`target` は `GuiFocusTarget` の wire
+    discriminant（`Editor`=0/`EditorElement`=1/`HostWindow`=2 ——
+    `HostWindow` は adapter が消費し plugin には届かない）、`element` は
+    `EditorElement` の opaque `u32`（非 element target では 0）。
+  - `popup(plugin, kind: u8, open: u8) -> bool` — `kind` は `GuiPopupKind`
+    の wire discriminant（`ChildWindow`=0/`Dialog`=1）、`open` は strict
+    `{0,1}`。
+  - `false` は defined rejection で、adapter は `HostError::PluginFailed`
+    に写像。seam 未実装・GUI 未 open は adapter 側 `Unsupported`、
+    supplementary-plane `key`・未知 direction/target/kind は adapter 側
+    `InvalidValue`（boundary.rs の BMP 契約どおり）。
+- adapter（`ruviform-plugin-clap/src/host.rs`）: `ClapPlugin` に
+  `gui_parent: Option<ParentLease>` を追加（`open_gui`/`set_gui_parent`
+  で記録、`close_gui` で消去 —— VST3 adapter の `self.gui_parent` 先例）。
+  `GuiFocusTarget::HostWindow` は Windows 限定で adapter が
+  `SetFocus(container HWND)` を実行したうえで plugin に
+  `apply_focus(false, Editor)` を通知する（非 Windows は `Unsupported`）。
+  `windows-sys 0.61` を `cfg(windows)` 依存として追加（fixture crate と同
+  version）。thread contract は `open_gui` と同じ（parent HWND の pump を
+  持つ thread —— `PluginMainThreadHandle` 経由）。
+- fixture（`ruviform-plugin-test-clap/src/editor.rs`）:
+  `declare_extensions` に `RuviformEditorOps` を register。`GuiState` に
+  `events`/`verb_popup`/`verb_popup_open`/`verb_popup_seq`/`attach_seq` を
+  追加し、受信 verb を VST3 同文法の token
+  （`f:{0|1}`/`fe:{element}:{0|1}`/`kd:`/`ku:{key:04x}:{key_code:04x}:{mods:
+  04x}`/`po:{seq}`/`pc:{seq}`）として child HWND の window text に刻印する
+  （`rvf-test-editor-attach-{n}|{ev},{ev},…` —— `GetWindowTextW` が観測
+  channel）。`apply_focus(Editor, 1)` は実 `SetFocus(child)` まで上げる
+  （`GetFocus()==child` の実 OS oracle;`HostWindow`/`false` への戻しまでを
+  一連とする旨は実装・doc に反映済み）。`popup` は `Dialog` で editor
+  child の root ancestor（`GetAncestor(GA_ROOT)`）を owner とする実
+  `WS_POPUP`、`ChildWindow` で editor child 配下の実 `WS_CHILD` を生成
+  （両者とも `rvf-test-editor-popup-{seq}` title・class
+  `RuviformClapTestEditor`）。popup 面は単一 slot —— close は kind を問わず
+  収束し、repeated edge は `false` で拒否。非 Windows では win32 shim が
+  `None` を返し、token 記録のみが残る（論理面と HWND 面の分離 —— VST3
+  先例）。
+- 着地点: 新 verb が到達するのは L0 in-process 経路のみ。L1（wire tag
+  29/30）は `ruviform-plugin-export` の entry dispatch catch-all で
+  defined `Unsupported` に落ちる（export は本 slice の lease 外 —— tag
+  29/30 の export 側 dispatch 配線は後続 slice/別タスク）。tag 26/27
+  （`send_gui_key`/`set_gui_focus`）は export 側 `dispatch_gui` 配線済みで
+  L1 到達自体は可能。
+- synthetic-verb-delivery 語彙を実装・doc・test doc に一貫適用 —— verb
+  chain が `GuiKeyEvent` 値を plugin vtable へ配送し、fixture が event-log
+  token で受領を記録する。OS input queue・focus routing・message pump を
+  通る配送は検証対象外。証拠語彙は `clap-editor-input:synthetic-verb-
+  delivery`。

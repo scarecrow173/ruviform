@@ -63,6 +63,22 @@
 //!   and `show` creates a real `WS_POPUP` window owned by the
 //!   transient parent on first call — `set_parent` on a floating
 //!   GUI is the defined rejection in the opposite direction.
+//! - `ruviform.editor-ops` is the private extension seam (Issue
+//!   #630 K1) the host adapter's `send_gui_key`/`set_gui_focus`/
+//!   `set_gui_focus_target`/`set_gui_popup` deliver through —
+//!   `clap.ext.gui` carries no key/focus/popup verbs, so a
+//!   ruviform-namespaced `#[repr(C)]` vtable (`deliver_key`,
+//!   `apply_focus`, `popup`) is registered next to `PluginGui`.
+//!   Delivery is recorded as event-log tokens in the child HWND's
+//!   window text (`rvf-test-editor-attach-{n}|{ev},{ev},…` — the
+//!   VST3 `window_title` grammar verbatim: `f:`/`fe:`/`kd:`/`ku:`/
+//!   `po:`/`pc:`), synthetic verb delivery only: no OS input queue
+//!   or focus routing is exercised. `apply_focus(Editor, 1)` also
+//!   runs a real `SetFocus` on the child so the host can read
+//!   `GetFocus() == child`; the `Dialog`-kind popup is a real
+//!   `WS_POPUP` owned by the child's root ancestor and the
+//!   `ChildWindow`-kind a real `WS_CHILD` under it, both titled
+//!   `rvf-test-editor-popup-{seq}`.
 //!
 //! ## Windows child window
 //!
@@ -111,6 +127,10 @@ use clack_extensions::params::{
     PluginMainThreadParams, PluginParams,
 };
 use clack_plugin::extensions::PluginExtensions;
+use clack_plugin::extensions::prelude::{
+    Extension, ExtensionImplementation, PluginExtensionSide, PluginWrapper, RawExtension,
+    RawExtensionImplementation, clap_plugin,
+};
 use clack_plugin::host::{HostAudioProcessorHandle, HostMainThreadHandle, HostSharedHandle};
 use clack_plugin::plugin::{
     Plugin, PluginAudioProcessor, PluginDescriptor, PluginError, PluginMainThread, PluginShared,
@@ -174,6 +194,37 @@ struct GuiState {
     /// The current editor size — `get_size` reports it, `set_size`
     /// replaces it (and resizes the child HWND when attached).
     size: GuiSize,
+    /// Attach generation — stamped into the child HWND's window text
+    /// (`rvf-test-editor-attach-{n}`) so an observer can prove a
+    /// `destroy` + `create`/`set_parent` cycle really recreated the
+    /// surface (the VST3 fixture's `attach_seq` oracle).
+    attach_seq: u32,
+    /// The recorded `ruviform.editor-ops` verb tokens —
+    /// `f:{state}`, `fe:{element}:{state}`,
+    /// `kd:{key:04x}:{key_code:04x}:{modifiers:04x}`, `ku:{…}`,
+    /// `po:{seq}`/`pc:{seq}` — appended to the child HWND's window
+    /// text so an observer can prove the verbs reached the plugin
+    /// through the same `GetWindowTextW` channel the attach
+    /// generation uses (synthetic verb delivery — no OS input queue
+    /// or focus routing is claimed). Cleared per attach generation.
+    events: Vec<String>,
+    /// The `ruviform.editor-ops` popup HWND (`ChildWindow` or
+    /// `Dialog` kind) — HWND-handle only: `Some` only when this
+    /// build produced a window, never `Some` off Windows or after a
+    /// creation failure. The open/close oracle is
+    /// `verb_popup_open`, not this field.
+    verb_popup: Option<usize>,
+    /// The logical popup open state — `true` after an open verb,
+    /// `false` after a close verb or `destroy`, whether or not
+    /// `verb_popup` holds a real HWND. Off Windows the flag still
+    /// toggles so `po:`/`pc:` is recorded on every OS (the VST3
+    /// `popup_open` precedent — logical and HWND faces separate).
+    verb_popup_open: bool,
+    /// Popup generation — stamped into the popup HWND's title
+    /// (`rvf-test-editor-popup-{n}`) and the `po:`/`pc:` tokens so
+    /// an observer can prove a close/open cycle really recreated
+    /// the surface.
+    verb_popup_seq: u32,
 }
 
 impl Default for GuiState {
@@ -185,6 +236,37 @@ impl Default for GuiState {
             transient: None,
             title: None,
             size: DEFAULT_GUI_SIZE,
+            attach_seq: 0,
+            events: Vec::new(),
+            verb_popup: None,
+            verb_popup_open: false,
+            verb_popup_seq: 0,
+        }
+    }
+}
+
+impl GuiState {
+    /// The child HWND's window text: the attach generation tag plus
+    /// the recorded verb log — `rvf-test-editor-attach-{n}
+    /// [|{ev},{ev},…]` (the VST3 `window_title` grammar verbatim —
+    /// identical token text so observers share one parser across
+    /// ABIs).
+    fn window_title(&self) -> String {
+        let mut title = format!("rvf-test-editor-attach-{}", self.attach_seq);
+        if !self.events.is_empty() {
+            title.push('|');
+            title.push_str(&self.events.join(","));
+        }
+        title
+    }
+
+    /// Records one verb token and restamps the child HWND's window
+    /// text — the fixture's delivery-evidence channel (synthetic
+    /// verb delivery; no OS input queue or focus routing claim).
+    fn record(&mut self, token: String) {
+        self.events.push(token);
+        if let Some(hwnd) = self.hwnd {
+            win32::set_title(hwnd, &self.window_title());
         }
     }
 }
@@ -357,7 +439,8 @@ impl Plugin for TestEditorClapPlugin {
         builder
             .register::<PluginAudioPorts>()
             .register::<PluginParams>()
-            .register::<PluginGui>();
+            .register::<PluginGui>()
+            .register::<RuviformEditorOps>();
     }
 }
 
@@ -572,6 +655,10 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         if let Some(hwnd) = state.hwnd.take() {
             win32::destroy(hwnd);
         }
+        if let Some(popup) = state.verb_popup.take() {
+            win32::destroy(popup);
+        }
+        state.verb_popup_open = false;
         state.created = false;
         state.floating = false;
         state.transient = None;
@@ -655,7 +742,15 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
         if state.hwnd.is_some() {
             return Err(PluginError::Message("gui already embedded"));
         }
-        let child = win32::attach(parent).ok_or(PluginError::Message(
+        // A fresh attach generation: the sequence number stamps the
+        // child's title (`rvf-test-editor-attach-{n}`) and the verb
+        // event log resets with it — a recreated surface reads as a
+        // fresh generation, never inheriting the last one's tokens
+        // (the VST3 `attached` precedent).
+        state.attach_seq = state.attach_seq.wrapping_add(1);
+        state.events.clear();
+        let title = state.window_title();
+        let child = win32::attach(parent, &title).ok_or(PluginError::Message(
             "set_parent: child window creation failed",
         ))?;
         state.hwnd = Some(child);
@@ -748,6 +843,347 @@ impl PluginGuiImpl for TestEditorMainThread<'_> {
 }
 
 // ---------------------------------------------------------------------------
+// Private editor-ops extension (`ruviform.editor-ops`, plugin side)
+// ---------------------------------------------------------------------------
+
+/// `GuiKeyDirection::Down`'s `ruviform.editor-ops` discriminant —
+/// the wire-v8 value both sides agree on.
+const EDITOR_OPS_KEY_DOWN: u8 = 0;
+/// `GuiKeyDirection::Up`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_KEY_UP: u8 = 1;
+/// `GuiFocusTarget::Editor`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_TARGET_EDITOR: u8 = 0;
+/// `GuiFocusTarget::EditorElement`'s `ruviform.editor-ops`
+/// discriminant.
+const EDITOR_OPS_TARGET_ELEMENT: u8 = 1;
+/// `GuiPopupKind::ChildWindow`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_POPUP_CHILD: u8 = 0;
+/// `GuiPopupKind::Dialog`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_POPUP_DIALOG: u8 = 1;
+
+/// The verb-driven popup's size — the same 200×100 the VST3
+/// fixture's dialog HWND gets, so the top-level inventory oracle
+/// reads the same geometry across ABIs.
+const VERB_POPUP_SIZE: GuiSize = GuiSize {
+    width: 200,
+    height: 100,
+};
+
+/// The `#[repr(C)]` vtable the fixture hands `plugin.get_extension`
+/// for the private `ruviform.editor-ops` id — the fixture-private
+/// seam (Issue #630 K1) through which the host adapter's
+/// `send_gui_key`/`set_gui_focus`/`set_gui_focus_target`/
+/// `set_gui_popup` reach this plugin, `clap.ext.gui` carrying no
+/// key/focus/popup verbs of its own.
+///
+/// **ABI contract — mirrored verbatim by the adapter**
+/// (`ruviform-plugin-clap` `host.rs`; the two crates cannot share
+/// the type, so this layout plus the discriminant consts above is
+/// the contract):
+///
+/// - extension id: `ruviform.editor-ops`
+/// - field order: `deliver_key`, `apply_focus`, `popup`
+/// - `deliver_key(plugin, direction, key, key_code, modifiers) ->
+///   bool` — `direction` is `GuiKeyDirection`'s discriminant
+///   (`Down` = 0, `Up` = 1); `key` the UTF-16 code unit; `key_code`
+///   the Win32 virtual-key value; `modifiers` the `GuiModifiers`
+///   bitmask — all 16-bit values in `u32` slots.
+/// - `apply_focus(plugin, focused, target, element) -> bool` —
+///   `focused` is strict `{0,1}`; `target` is `GuiFocusTarget`'s
+///   discriminant (`Editor` = 0, `EditorElement` = 1; `HostWindow`
+///   = 2 never reaches the plugin — the adapter consumes it);
+///   `element` the opaque id, `0` for non-element targets.
+/// - `popup(plugin, kind, open) -> bool` — `kind` is
+///   `GuiPopupKind`'s discriminant (`ChildWindow` = 0, `Dialog` = 1);
+///   `open` is strict `{0,1}`.
+/// - every member returns `false` on a defined rejection
+///   (unassigned byte, out-of-range value, no created GUI) — the
+///   adapter maps `false` to `HostError::PluginFailed`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ClapPluginRuviformEditorOps {
+    deliver_key: Option<
+        unsafe extern "C" fn(
+            plugin: *const clap_plugin,
+            direction: u8,
+            key: u32,
+            key_code: u32,
+            modifiers: u32,
+        ) -> bool,
+    >,
+    apply_focus: Option<
+        unsafe extern "C" fn(
+            plugin: *const clap_plugin,
+            focused: u8,
+            target: u8,
+            element: u32,
+        ) -> bool,
+    >,
+    popup: Option<unsafe extern "C" fn(plugin: *const clap_plugin, kind: u8, open: u8) -> bool>,
+}
+
+/// The extension type `declare_extensions` registers — the
+/// [`ExtensionImplementation`] below supplies the vtable. The
+/// plugin side never wraps an incoming pointer (the host does), so
+/// this is a unit type whose `from_raw` is never reached.
+#[derive(Copy, Clone)]
+struct RuviformEditorOps;
+
+// SAFETY: `IDENTIFIERS` names the private seam whose vtable layout
+// `ClapPluginRuviformEditorOps` pins down. `from_raw` is a no-op
+// stub — the plugin side only ever *produces* the extension
+// pointer (`ExtensionImplementation`), never consumes one.
+#[expect(unsafe_code)]
+unsafe impl Extension for RuviformEditorOps {
+    const IDENTIFIERS: &[&CStr] = &[c"ruviform.editor-ops"];
+    type ExtensionSide = PluginExtensionSide;
+
+    unsafe fn from_raw(_raw: RawExtension<Self::ExtensionSide>) -> Self {
+        Self
+    }
+}
+
+/// The plugin-side `ruviform.editor-ops` surface — the three verbs
+/// the seam delivers to the main-thread object. Every method
+/// answers `false` on a defined rejection (re-entrant state, no
+/// created GUI, unassigned byte, out-of-range value, a repeated
+/// edge); the adapter maps `false` to `HostError::PluginFailed`.
+trait RuviformEditorOpsImpl {
+    /// One key event — `direction` is the `GuiKeyDirection`
+    /// discriminant, `key` the UTF-16 code unit, `key_code` the
+    /// Win32 virtual-key value, `modifiers` the `GuiModifiers`
+    /// bitmask.
+    fn deliver_key(&self, direction: u8, key: u32, key_code: u32, modifiers: u32) -> bool;
+    /// One focus verb — `focused` strict `{0,1}`, `target` the
+    /// `GuiFocusTarget` discriminant, `element` the opaque id.
+    fn apply_focus(&self, focused: u8, target: u8, element: u32) -> bool;
+    /// One popup verb — `kind` the `GuiPopupKind` discriminant,
+    /// `open` strict `{0,1}`.
+    fn popup(&self, kind: u8, open: u8) -> bool;
+}
+
+/// The `deliver_key` vtable entry — routes the ABI call to the
+/// plugin's main-thread object. `PluginWrapper::handle` answers
+/// `None` on a null plugin or a wrapper error → `false`, the
+/// seam's defined rejection.
+///
+/// # Safety
+/// `plugin` must be a live `clap_plugin` of this plugin type — the
+/// `get_extension` → vtable contract guarantees it, and `handle`
+/// re-validates the wrapper before touching it.
+#[expect(unsafe_code)]
+unsafe extern "C" fn editor_ops_deliver_key<P: Plugin>(
+    plugin: *const clap_plugin,
+    direction: u8,
+    key: u32,
+    key_code: u32,
+    modifiers: u32,
+) -> bool
+where
+    for<'a> P::MainThread<'a>: RuviformEditorOpsImpl,
+{
+    // SAFETY: upheld by the caller contract — `handle` only touches
+    // the wrapper when `plugin` names a live instance of `P`, and
+    // `main_thread` is only reached on the plugin's main thread
+    // (the host calls GUI verbs on the parent HWND's pump thread).
+    unsafe {
+        PluginWrapper::<P>::handle(plugin, |p| {
+            Ok(p.main_thread()
+                .deliver_key(direction, key, key_code, modifiers))
+        })
+        .unwrap_or(false)
+    }
+}
+
+/// The `apply_focus` vtable entry — same routing contract as
+/// [`editor_ops_deliver_key`].
+///
+/// # Safety
+/// Same contract as [`editor_ops_deliver_key`].
+#[expect(unsafe_code)]
+unsafe extern "C" fn editor_ops_apply_focus<P: Plugin>(
+    plugin: *const clap_plugin,
+    focused: u8,
+    target: u8,
+    element: u32,
+) -> bool
+where
+    for<'a> P::MainThread<'a>: RuviformEditorOpsImpl,
+{
+    // SAFETY: same contract as `editor_ops_deliver_key`.
+    unsafe {
+        PluginWrapper::<P>::handle(plugin, |p| {
+            Ok(p.main_thread().apply_focus(focused, target, element))
+        })
+        .unwrap_or(false)
+    }
+}
+
+/// The `popup` vtable entry — same routing contract as
+/// [`editor_ops_deliver_key`].
+///
+/// # Safety
+/// Same contract as [`editor_ops_deliver_key`].
+#[expect(unsafe_code)]
+unsafe extern "C" fn editor_ops_popup<P: Plugin>(
+    plugin: *const clap_plugin,
+    kind: u8,
+    open: u8,
+) -> bool
+where
+    for<'a> P::MainThread<'a>: RuviformEditorOpsImpl,
+{
+    // SAFETY: same contract as `editor_ops_deliver_key`.
+    unsafe {
+        PluginWrapper::<P>::handle(plugin, |p| Ok(p.main_thread().popup(kind, open)))
+            .unwrap_or(false)
+    }
+}
+
+// SAFETY: `IMPLEMENTATION` points at the `#[repr(C)]` static
+// `ClapPluginRuviformEditorOps` vtable — the documented
+// `ruviform.editor-ops` ABI contract; the three slots are
+// instantiated for `P` under the same bound `register::<
+// RuviformEditorOps>` requires.
+#[expect(unsafe_code)]
+unsafe impl<P: Plugin> ExtensionImplementation<P> for RuviformEditorOps
+where
+    for<'a> P::MainThread<'a>: RuviformEditorOpsImpl,
+{
+    const IMPLEMENTATION: RawExtensionImplementation =
+        RawExtensionImplementation::new(&ClapPluginRuviformEditorOps {
+            deliver_key: Some(editor_ops_deliver_key::<P>),
+            apply_focus: Some(editor_ops_apply_focus::<P>),
+            popup: Some(editor_ops_popup::<P>),
+        });
+}
+
+impl RuviformEditorOpsImpl for TestEditorMainThread<'_> {
+    /// `deliver_key` — records `kd:`/`ku:` into the event log and
+    /// restamps the child title (synthetic verb delivery — no OS
+    /// input queue is exercised). Defined rejections: a re-entrant
+    /// state borrow, no created GUI, an unassigned `direction`, or
+    /// a field wider than the 16-bit contract slots.
+    fn deliver_key(&self, direction: u8, key: u32, key_code: u32, modifiers: u32) -> bool {
+        let Ok(mut state) = self.gui.try_borrow_mut() else {
+            return false;
+        };
+        if !state.created {
+            return false;
+        }
+        let prefix = match direction {
+            EDITOR_OPS_KEY_DOWN => "kd",
+            EDITOR_OPS_KEY_UP => "ku",
+            _ => return false,
+        };
+        if key > u32::from(u16::MAX)
+            || key_code > u32::from(u16::MAX)
+            || modifiers > u32::from(u16::MAX)
+        {
+            return false;
+        }
+        state.record(format!("{prefix}:{key:04x}:{key_code:04x}:{modifiers:04x}"));
+        true
+    }
+
+    /// `apply_focus` — records `f:{0|1}` for `Editor` and
+    /// `fe:{element}:{0|1}` for `EditorElement` (synthetic delivery;
+    /// `EditorElement` records intent only). On Windows an
+    /// `Editor`-target `focused=1` also runs a real `SetFocus` on
+    /// the child HWND — the host-side `GetFocus() == child` oracle
+    /// (callers return focus through `HostWindow`/`false` in the
+    /// same case, so the pair stays one sequence). Defined
+    /// rejections: strict-flag violation, a re-entrant borrow, no
+    /// created GUI, `element != 0` on a non-element target, or an
+    /// unassigned `target` (`HostWindow` never reaches the plugin —
+    /// the adapter consumes it).
+    fn apply_focus(&self, focused: u8, target: u8, element: u32) -> bool {
+        if focused > 1 {
+            return false;
+        }
+        let Ok(mut state) = self.gui.try_borrow_mut() else {
+            return false;
+        };
+        if !state.created {
+            return false;
+        }
+        match target {
+            EDITOR_OPS_TARGET_EDITOR => {
+                if element != 0 {
+                    return false;
+                }
+                state.record(format!("f:{focused}"));
+                if focused == 1
+                    && let Some(hwnd) = state.hwnd
+                {
+                    win32::set_focus(hwnd);
+                }
+            }
+            EDITOR_OPS_TARGET_ELEMENT => {
+                state.record(format!("fe:{element}:{focused}"));
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// `popup` — `Dialog` opens a real `WS_POPUP` owned by the
+    /// editor child's root ancestor (`GetAncestor(GA_ROOT)` — the
+    /// top-level inventory oracle's anchor), `ChildWindow` opens a
+    /// `WS_CHILD` under the editor child (the `EnumChildWindows`
+    /// observation point); both carry the generation title
+    /// `rvf-test-editor-popup-{seq}`. `po:{seq}`/`pc:{seq}` is
+    /// recorded whether or not the HWND exists — logical and HWND
+    /// faces stay separate so the non-Windows shim keeps token
+    /// honesty. The verb popup surface is a single slot: close
+    /// converges it regardless of `kind`. Defined rejections:
+    /// strict-flag violation, a re-entrant borrow, no created GUI,
+    /// an unassigned `kind`, or a repeated edge (open on an open
+    /// slot, close on a closed one).
+    fn popup(&self, kind: u8, open: u8) -> bool {
+        if open > 1 {
+            return false;
+        }
+        if kind != EDITOR_OPS_POPUP_CHILD && kind != EDITOR_OPS_POPUP_DIALOG {
+            return false;
+        }
+        let open = open == 1;
+        let Ok(mut state) = self.gui.try_borrow_mut() else {
+            return false;
+        };
+        if !state.created {
+            return false;
+        }
+        if open == state.verb_popup_open {
+            return false;
+        }
+        if open {
+            state.verb_popup_seq = state.verb_popup_seq.wrapping_add(1);
+            let seq = state.verb_popup_seq;
+            let title = format!("rvf-test-editor-popup-{seq}");
+            state.verb_popup = if kind == EDITOR_OPS_POPUP_CHILD {
+                state
+                    .hwnd
+                    .and_then(|hwnd| win32::child(hwnd, &title, VERB_POPUP_SIZE))
+            } else {
+                let owner = state.hwnd.and_then(win32::root_ancestor);
+                win32::popup(owner, &title, VERB_POPUP_SIZE)
+            };
+            state.verb_popup_open = true;
+            state.record(format!("po:{seq}"));
+        } else {
+            if let Some(hwnd) = state.verb_popup.take() {
+                win32::destroy(hwnd);
+            }
+            state.verb_popup_open = false;
+            let seq = state.verb_popup_seq;
+            state.record(format!("pc:{seq}"));
+        }
+        true
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Windows child-window management — the only Win32 surface in this
 // crate. Mirrors the VST3 `editor_view.rs` `win32` module: once-per-
 // module class registration with `DefWindowProcW` (the class
@@ -773,11 +1209,12 @@ mod win32 {
         GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
         GetModuleHandleExW,
     };
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW,
-        GetClientRect, IsWindow, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOMOVE, SWP_NOZORDER,
-        SetWindowPos, SetWindowTextW, ShowWindow, WNDCLASSW, WS_CHILD, WS_CLIPSIBLINGS, WS_POPUP,
-        WS_VISIBLE,
+        CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GA_ROOT,
+        GetAncestor, GetClassInfoW, GetClientRect, IsWindow, RegisterClassW, SW_HIDE, SW_SHOW,
+        SWP_NOMOVE, SWP_NOZORDER, SetWindowPos, SetWindowTextW, ShowWindow, WNDCLASSW, WS_CHILD,
+        WS_CLIPSIBLINGS, WS_POPUP, WS_VISIBLE,
     };
 
     /// Solid-fill color — blue, distinct from the VST3 fixture's
@@ -883,13 +1320,15 @@ mod win32 {
     /// the calling thread (the `open_gui` thread-affinity contract);
     /// null, dead, or non-window handles — including opaque lease
     /// payloads that merely *look like* a handle — are rejected
-    /// before any Win32 mutation.
+    /// before any Win32 mutation. `title` becomes the window text —
+    /// the attach-generation tag + verb event log an observer reads
+    /// back through `GetWindowTextW` (the VST3 `attach` precedent).
     ///
     /// # Returns
     /// `Some` child HWND handle (`usize`) on success, `None` on any
     /// defined rejection — the caller maps `None` to a
     /// `PluginError`.
-    pub(super) fn attach(parent: *mut c_void) -> Option<usize> {
+    pub(super) fn attach(parent: *mut c_void, title: &str) -> Option<usize> {
         // SAFETY: `IsWindow` is a pure handle-validity query — safe on
         // any pointer value including null.
         if parent.is_null() || unsafe { IsWindow(parent) } == 0 {
@@ -899,16 +1338,17 @@ mod win32 {
             return None;
         }
         let class = class_name();
-        // SAFETY: `parent` passed the `IsWindow` gate; the class is
-        // registered; the returned HWND is owned by this gui state
-        // until `destroy`.
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `parent` passed the `IsWindow` gate; the class and
+        // title outlive the synchronous call; the returned HWND is
+        // owned by this gui state until `destroy`.
         let child = unsafe {
             let mut rc = RECT::default();
             GetClientRect(parent, &raw mut rc);
             CreateWindowExW(
                 0,
                 class.as_ptr(),
-                ptr::null(),
+                title_w.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
                 0,
                 0,
@@ -1026,6 +1466,83 @@ mod win32 {
             SetWindowTextW(hwnd as HWND, title_w.as_ptr());
         }
     }
+
+    /// Moves keyboard focus to `hwnd` — the real `SetFocus` leg of
+    /// the `apply_focus` verb, giving host-side checks a
+    /// `GetFocus() == child` oracle. Best-effort: a dead handle or
+    /// an OS refusal (e.g. a hidden ancestor chain) is a harmless
+    /// NULL return, not a delivery failure.
+    pub(super) fn set_focus(hwnd: usize) {
+        // SAFETY: `hwnd` is a window this module created (or a dead
+        // handle, where `SetFocus` is a defined no-op error) — and
+        // the caller runs on the parent HWND's pump thread where the
+        // call is legal.
+        unsafe {
+            SetFocus(hwnd as HWND);
+        }
+    }
+
+    /// The root ancestor of `hwnd` — `GetAncestor(GA_ROOT)`: the
+    /// top-level window a `Dialog`-kind popup is owned by (the same
+    /// anchor the VST3 popup resolves). `None` on a dead or
+    /// non-window handle.
+    pub(super) fn root_ancestor(hwnd: usize) -> Option<usize> {
+        // SAFETY: `IsWindow`/`GetAncestor` are pure handle queries —
+        // safe on any value.
+        let ancestor = unsafe {
+            if IsWindow(hwnd as HWND) == 0 {
+                return None;
+            }
+            GetAncestor(hwnd as HWND, GA_ROOT)
+        };
+        if ancestor.is_null() {
+            None
+        } else {
+            Some(ancestor as usize)
+        }
+    }
+
+    /// Creates the `ChildWindow`-kind popup — a `WS_CHILD |
+    /// WS_VISIBLE | WS_CLIPSIBLINGS` HWND nested under the editor
+    /// child `parent`, titled `rvf-test-editor-popup-{seq}` (the
+    /// `EnumChildWindows` observation point). Returns `None` on any
+    /// defined failure — the caller still logs the verb.
+    pub(super) fn child(parent: usize, title: &str, size: GuiSize) -> Option<usize> {
+        // SAFETY: `IsWindow` is a pure handle-validity query — safe
+        // on any value.
+        if unsafe { IsWindow(parent as HWND) } == 0 {
+            return None;
+        }
+        if !ensure_registered() {
+            return None;
+        }
+        let class = class_name();
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `parent` passed the `IsWindow` gate; class and
+        // title outlive the synchronous call; the returned HWND is
+        // owned by this gui state until `destroy`.
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title_w.as_ptr(),
+                WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                0,
+                0,
+                i32::try_from(size.width).unwrap_or(200),
+                i32::try_from(size.height).unwrap_or(100),
+                parent as HWND,
+                ptr::null_mut(),
+                MODULE_H.load(Ordering::Relaxed) as HINSTANCE,
+                ptr::null(),
+            )
+        };
+        if window.is_null() {
+            None
+        } else {
+            Some(window as usize)
+        }
+    }
 }
 
 /// Non-Windows shim — no HWND surface exists off Windows, so
@@ -1037,7 +1554,7 @@ mod win32 {
 
     use super::GuiSize;
 
-    pub(super) fn attach(_parent: *mut c_void) -> Option<usize> {
+    pub(super) fn attach(_parent: *mut c_void, _title: &str) -> Option<usize> {
         None
     }
 
@@ -1056,6 +1573,16 @@ mod win32 {
     }
 
     pub(super) fn set_title(_hwnd: usize, _title: &str) {}
+
+    pub(super) fn set_focus(_hwnd: usize) {}
+
+    pub(super) fn root_ancestor(_hwnd: usize) -> Option<usize> {
+        None
+    }
+
+    pub(super) fn child(_parent: usize, _title: &str, _size: GuiSize) -> Option<usize> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1867,5 +2394,121 @@ mod tests {
             assert_eq!(IsWindow(child), 0, "destroy must destroy the child");
             let _ = DestroyWindow(parent);
         }
+    }
+
+    // -- `ruviform.editor-ops` (Issue #630 private seam) ------------------
+
+    /// `ruviform.editor-ops` defined rejections — every verb refuses
+    /// before `create` (no GUI surface), and the strict flag /
+    /// discriminant grammar is enforced: unassigned
+    /// direction/target/kind bytes, `focused`/`open` outside
+    /// `{0,1}`, `element != 0` on a non-element target, a repeated
+    /// popup edge, and key fields wider than the 16-bit slots.
+    #[test]
+    fn editor_ops_verbs_reject_undefined_inputs() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
+        // No created GUI — every verb is the defined `false`
+        // rejection on every OS.
+        assert!(!main.deliver_key(EDITOR_OPS_KEY_DOWN, 0x61, 0x41, 0));
+        assert!(!main.apply_focus(1, EDITOR_OPS_TARGET_EDITOR, 0));
+        assert!(!main.popup(EDITOR_OPS_POPUP_DIALOG, 1));
+        if !cfg!(windows) {
+            // `create` declines off Windows — the verbs stay refused.
+            return;
+        }
+        assert!(main.create(EMBEDDED_WIN32).is_ok());
+        // Unassigned discriminant bytes.
+        assert!(!main.deliver_key(9, 0x61, 0x41, 0));
+        assert!(!main.apply_focus(1, 9, 0));
+        assert!(!main.popup(9, 1));
+        // Strict {0,1} flags.
+        assert!(!main.apply_focus(2, EDITOR_OPS_TARGET_EDITOR, 0));
+        assert!(!main.popup(EDITOR_OPS_POPUP_DIALOG, 2));
+        // `element` is `EditorElement`-only payload.
+        assert!(!main.apply_focus(1, EDITOR_OPS_TARGET_EDITOR, 5));
+        // Out-of-range key fields (> u16 contract slots).
+        assert!(!main.deliver_key(EDITOR_OPS_KEY_DOWN, 0x1_0000, 0x41, 0));
+        assert!(!main.deliver_key(EDITOR_OPS_KEY_DOWN, 0x61, 0x1_0000, 0));
+        assert!(!main.deliver_key(EDITOR_OPS_KEY_DOWN, 0x61, 0x41, 0x1_0000));
+        // A repeated popup edge is a defined rejection.
+        assert!(main.popup(EDITOR_OPS_POPUP_DIALOG, 1));
+        assert!(!main.popup(EDITOR_OPS_POPUP_DIALOG, 1));
+        main.destroy();
+    }
+
+    /// The `ruviform.editor-ops` verbs record the shared token
+    /// grammar into the event log — `f:`/`fe:`/`kd:`/`ku:`/`po:`/
+    /// `pc:` — and `window_title` stamps them behind the
+    /// attach-generation tag, the `GetWindowTextW` channel an
+    /// observer reads (synthetic verb delivery).
+    #[test]
+    fn editor_ops_verbs_record_event_log_tokens() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
+        if !cfg!(windows) {
+            // `create` declines off Windows — the `!created`
+            // rejection above is the coverage there.
+            return;
+        }
+        assert!(main.create(EMBEDDED_WIN32).is_ok());
+        assert!(main.apply_focus(1, EDITOR_OPS_TARGET_EDITOR, 0));
+        assert!(main.apply_focus(1, EDITOR_OPS_TARGET_ELEMENT, 7));
+        assert!(main.deliver_key(EDITOR_OPS_KEY_DOWN, 0x61, 0x41, 0x1));
+        assert!(main.deliver_key(EDITOR_OPS_KEY_UP, 0x61, 0x41, 0));
+        assert!(main.apply_focus(0, EDITOR_OPS_TARGET_EDITOR, 0));
+        assert!(main.popup(EDITOR_OPS_POPUP_DIALOG, 1));
+        assert!(main.popup(EDITOR_OPS_POPUP_DIALOG, 0));
+        // `ChildWindow` under an unattached editor: no HWND exists,
+        // but the logical open + tokens still land (the HWND-
+        // independent oracle).
+        assert!(main.popup(EDITOR_OPS_POPUP_CHILD, 1));
+        assert!(main.popup(EDITOR_OPS_POPUP_CHILD, 0));
+        {
+            let state = main.gui.borrow();
+            assert_eq!(
+                state.events.as_slice(),
+                [
+                    "f:1",
+                    "fe:7:1",
+                    "kd:0061:0041:0001",
+                    "ku:0061:0041:0000",
+                    "f:0",
+                    "po:1",
+                    "pc:1",
+                    "po:2",
+                    "pc:2",
+                ],
+                "verb deliveries record the shared token grammar"
+            );
+            assert_eq!(
+                state.window_title(),
+                "rvf-test-editor-attach-0|f:1,fe:7:1,kd:0061:0041:0001,\
+                 ku:0061:0041:0000,f:0,po:1,pc:1,po:2,pc:2"
+            );
+        }
+        main.destroy();
+    }
+
+    /// `destroy` frees the verb popup HWND and resets the logical
+    /// open state — the same teardown the child HWND gets.
+    #[test]
+    fn destroy_tears_down_the_verb_popup() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
+        if !cfg!(windows) {
+            return;
+        }
+        assert!(main.create(EMBEDDED_WIN32).is_ok());
+        assert!(main.popup(EDITOR_OPS_POPUP_DIALOG, 1));
+        let popup = {
+            let state = main.gui.borrow();
+            state.verb_popup.expect("dialog popup hwnd on windows")
+        };
+        assert!(win32::is_window(popup), "open leaves a live popup HWND");
+        main.destroy();
+        let state = main.gui.borrow();
+        assert!(state.verb_popup.is_none() && !state.verb_popup_open);
+        assert!(!win32::is_window(popup), "destroy frees the popup HWND");
     }
 }

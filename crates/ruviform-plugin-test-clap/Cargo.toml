@@ -83,15 +83,18 @@ ruviform-plugin-export = { path = "../ruviform-plugin-export", optional = true }
 # real `WS_CHILD` HWND on Windows — the same Win32 surface a plugin
 # binary would create under `open_gui` (Issue #630 AC-4 fixture
 # half, the CLAP counterpart of the VST3 `test_editor` precedent).
-# Feature set mirrors `ruviform-plugin-test-vst3`'s edge exactly;
-# off Windows the `win32` module is cfg'd out and this edge is
-# inert. `unsafe` stays confined to that module behind
-# `#[expect(unsafe_code)]` + SAFETY comments.
+# Feature set mirrors `ruviform-plugin-test-vst3`'s edge plus
+# `Win32_UI_Input_KeyboardAndMouse` — `SetFocus`/`GetFocus` for the
+# `ruviform.editor-ops` `apply_focus` leg (Issue #630); off Windows
+# the `win32` module is cfg'd out and this edge is inert. `unsafe`
+# stays confined to that module behind `#[expect(unsafe_code)]` +
+# SAFETY comments.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
 
