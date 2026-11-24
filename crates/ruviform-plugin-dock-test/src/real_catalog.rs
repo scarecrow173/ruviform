@@ -350,12 +350,12 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
 ///   `open_gui` never reaches floating — these cases run the verbs
 ///   through the real lease and record the defined `Unsupported`
 ///   landing honestly (Coordinator decision 1);
-/// - crash/hang: the CLAP `test_editor` is parameterless (no
-///   in-band Fault arm) and `PluginHost` routes are keyed by
-///   `plugin_id` with per-route Bundled pools, so a co-resident
-///   `test_fault` kill arm cannot exist — the cases record
-///   `Unsupported` with that structural ground (Coordinator
-///   decision 2, option (c)).
+/// - crash/hang: the CLAP `test_editor` carries the shared `Fault`
+///   param (Issue #630 — the VST3 #885 mirror), so the dedicated L1
+///   child arms `abort`/`hang` in-band exactly like the VST3 rows —
+///   `OutOfProcessPluginHost` gates them the same way (the
+///   capability-gated `Unsupported` when the session probe cannot
+///   prove the route stays the honest pre-flight verdict).
 ///
 /// Session lifecycle (`terminate`/`degraded`/`recovery`/`timeout`)
 /// uses the same format-agnostic session drives and oracles as the
@@ -427,11 +427,17 @@ pub const REAL_CLAP_CATALOG: &[RealCatalogRow] = &[
     RealCatalogRow {
         case: "real-clap-session-crash",
         scenario: CLAP_SCENARIO,
-        required: &[ScenarioCapability::NativePluginDock],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::OutOfProcessPluginHost,
+        ],
     },
     RealCatalogRow {
         case: "real-clap-session-hang",
         scenario: CLAP_SCENARIO,
-        required: &[ScenarioCapability::NativePluginDock],
+        required: &[
+            ScenarioCapability::NativePluginDock,
+            ScenarioCapability::OutOfProcessPluginHost,
+        ],
     },
 ];

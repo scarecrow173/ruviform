@@ -116,7 +116,7 @@ const RT_ALLOC_CAPACITY: usize = 4096;
 /// is `200.0`, far outside the legal sample domain. `process()` then
 /// writes `f32::from(buf[0])` *read from the buffer* into
 /// `output[0][0]`, so the marker proves the heap round-trip ran.
-const RT_ALLOC_FILL: u8 = 0xC8;
+pub(crate) const RT_ALLOC_FILL: u8 = 0xC8;
 
 /// The armed fault mode — the unit band of the plain `Fault` value.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -144,8 +144,8 @@ pub(crate) enum FaultMode {
 
 /// The `bad_time` mode's CLAP leg — a `ParamValue` output event
 /// stamped at `u32::MAX`, beyond any legal block bound: the
-/// ABI-level bad timestamp.
-fn bad_time_output_event() -> ParamValueEvent {
+/// ABI-level bad timestamp. Shared with `test_editor` (same law).
+pub(crate) fn bad_time_output_event() -> ParamValueEvent {
     ParamValueEvent::new(
         u32::MAX,
         ClapId::new(FAULT_PARAM.id.0),
@@ -156,7 +156,8 @@ fn bad_time_output_event() -> ParamValueEvent {
 
 /// The `invalid` mode's CLAP leg — a `ParamValue` output event
 /// carrying a non-finite value: an ABI-level malformed payload.
-fn invalid_output_event() -> ParamValueEvent {
+/// Shared with `test_editor` (same law).
+pub(crate) fn invalid_output_event() -> ParamValueEvent {
     ParamValueEvent::new(
         0,
         ClapId::new(FAULT_PARAM.id.0),

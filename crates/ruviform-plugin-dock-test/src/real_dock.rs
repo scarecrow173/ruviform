@@ -690,10 +690,7 @@ pub fn run_all_with_format(
         // mask advertises `GUI_FLOATING`. `None` leaves the
         // capability unclaimed and the crash/hang rows at the
         // defined `Unsupported` pre-flight verdict — a host
-        // that cannot prove the route never claims it. For CLAP
-        // the probe always returns `None` (per-plugin_id routing
-        // makes a co-resident fault arm impossible — see
-        // [`real_catalog::REAL_CLAP_CATALOG`]).
+        // that cannot prove the route never claims it.
         let oos_route = probe_out_of_process_route(plugin.as_ref().ok(), format);
         if oos_route.is_some() {
             gui.claim_capability(ScenarioCapability::OutOfProcessPluginHost);
@@ -1252,16 +1249,6 @@ fn probe_out_of_process_route(
     format: PluginFormat,
 ) -> Option<OosRoute> {
     if !cfg!(windows) {
-        return None;
-    }
-    if format == PluginFormat::Clap {
-        // Decision 2(c): the CLAP `test_editor` is parameterless —
-        // no in-band fault arm — and `PluginHost` routes are keyed
-        // by `plugin_id` with per-route Bundled pools, so no
-        // co-resident `test_fault` kill arm can exist through the
-        // existing API. The capability is never claimed for CLAP;
-        // the `real-clap-session-crash`/`-hang` bodies record the
-        // structural ground themselves.
         return None;
     }
     let (library, _) = plugin?;
@@ -17600,50 +17587,64 @@ fn real_clap_session_timeout_case(
     )
 }
 
-/// The Issue #886 crash/hang verdict for the CLAP leg — decision
-/// 2(c). The CLAP `test_editor` is parameterless (no shared `Fault`
-/// param to arm in-band) and `PluginHost` routes are keyed by
-/// `plugin_id` with per-route `Bundled` pools, so a co-resident
-/// `test_fault` kill arm cannot exist through the existing API.
-/// The honest verdict is `Unsupported` with the structural ground —
-/// never a `Pass` the fixture cannot produce, never a `NotRun`
-/// that pretends an environment gap.
-fn clap_oos_unsupported_body(oracle: &'static str) -> ScenarioOutcome {
-    let mut outcome = ScenarioOutcome::new(ScenarioVerdict::Unsupported);
-    outcome.detail = Some(format!(
-        "{oracle}: the CLAP leg cannot arm a fault — test_editor is \
-         parameterless (no in-band Fault arm) and PluginHost routes are \
-         keyed by plugin_id with per-route Bundled pools, so a co-resident \
-         test_fault instance cannot exist through the existing API \
-         (Coordinator decision 2, option (c)); the L1 {oracle} oracle is \
-         defined but not exercisable for CLAP"
-    ));
-    outcome
-        .evidence
-        .push(format!("clap-session-{oracle}:no-co-resident-arm-route"));
-    outcome
-}
-
-/// `real-clap-session-crash` — decision 2(c): `Unsupported` with
-/// the structural ground recorded.
+/// `real-clap-session-crash` (Issue #630, mirroring the VST3
+/// `real-session-crash` body): the CLAP `test_editor` runs inside a
+/// dedicated L1 child the probe resolved; the floating attach
+/// embeds the child's editor under the leased dock window, the armed
+/// `Fault` `abort` kills the child mid-process, the lane's host
+/// session converges `Failed`/`Terminated{HostLost}` → `Closed`, and
+/// the lane proves it survived. The verdict is `Pass`/`Fail` — the
+/// capability-gated `Unsupported` stays the pre-flight verdict when
+/// the probe never proved the route.
 fn real_clap_session_crash_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
 ) -> ScenarioReport {
-    clap_case(ctx, spec, move |_, _, _, _, _| {
-        clap_oos_unsupported_body("crash")
-    })
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let route = ctx.oos;
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(oos_session_body(
+            gui,
+            window,
+            plugin,
+            plugin_error,
+            route,
+            OosFaultKind::Crash,
+        ))
+    });
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
-/// `real-clap-session-hang` — decision 2(c): `Unsupported` with
-/// the structural ground recorded.
+/// `real-clap-session-hang` (Issue #630, mirroring the VST3
+/// `real-session-hang` body): the same dedicated L1 route and
+/// floating attach as `real-clap-session-crash`, but the armed
+/// `Fault` `hang` wedges the child's `process()` — the watchdog
+/// kills it, the session converges `Failed{Timeout}` →
+/// `Terminated{HostLost}` → `Closed`, and the lane survives. The
+/// verdict is `Pass`/`Fail` — the capability-gated `Unsupported`
+/// stays the pre-flight verdict when the probe never proved the
+/// route.
 fn real_clap_session_hang_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
 ) -> ScenarioReport {
-    clap_case(ctx, spec, move |_, _, _, _, _| {
-        clap_oos_unsupported_body("hang")
-    })
+    let plugin = ctx.plugin;
+    let plugin_error = ctx.plugin_error;
+    let route = ctx.oos;
+    let window = ctx.window;
+    let report = run_scenario(&mut *ctx.gui, spec, |gui| {
+        Ok(oos_session_body(
+            gui,
+            window,
+            plugin,
+            plugin_error,
+            route,
+            OosFaultKind::Hang,
+        ))
+    });
+    finalize_case(report, ctx, EnvironmentKind::RealWindow, None, Map::new())
 }
 
 /// The CLAP real-window catalog — the executable counterpart of
@@ -17741,15 +17742,15 @@ fn real_clap_entries<'a>() -> [ScenarioEntry<RealDockContext<'a>>; 14] {
         ScenarioEntry {
             case: "real-clap-session-crash",
             scenario: CLAP_SCENARIO,
-            required: &[C::NativePluginDock],
-            spec_extras: editor_attach_extras,
+            required: &[C::NativePluginDock, C::OutOfProcessPluginHost],
+            spec_extras: real_window_extras,
             run: real_clap_session_crash_case,
         },
         ScenarioEntry {
             case: "real-clap-session-hang",
             scenario: CLAP_SCENARIO,
-            required: &[C::NativePluginDock],
-            spec_extras: editor_attach_extras,
+            required: &[C::NativePluginDock, C::OutOfProcessPluginHost],
+            spec_extras: real_window_extras,
             run: real_clap_session_hang_case,
         },
     ]

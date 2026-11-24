@@ -1,17 +1,25 @@
-//! The `test_editor` CLAP plugin: a parameterless pass-through
-//! processor plus the plugin side of `clap.ext.gui` — the CLAP half
-//! of Issue #630 AC-4 ("Native Editor が実 child HWND を生成できる"),
+//! The `test_editor` CLAP plugin: the suite's `clap.ext.gui` editor
+//! fixture carrying the shared `Fault` parameter — the CLAP half of
+//! Issue #630 AC-4 ("Native Editor が実 child HWND を生成できる"),
 //! mirroring the VST3 `test_editor` fixture
-//! (`ruviform-plugin-test-vst3`'s `editor.rs`/`editor_view.rs`).
+//! (`ruviform-plugin-test-vst3`'s `editor.rs`/`editor_view.rs`,
+//! whose `test_editor` gained the same `Fault` arm in Issue #885).
 //!
 //! ## DSP/param law
 //!
-//! Identical in law to `test_fault`'s unarmed mode: stereo in/out,
-//! `out == in` bitwise, **no parameters** — the `params` extension is
-//! not declared at all, so foreign `ParamValue` events are dropped at
-//! the `block::translate_events` boundary and can never affect the
-//! output. The processor is a unit struct: there is no armed state to
-//! persist.
+//! `test_editor` declares the [`FAULT_PARAM`] descriptor (`ParamId`
+//! `0`, plain `[0.0, 8.0]`, stepped — eight modes) through the
+//! `params` extension, so in-band `ParamValue` events pass
+//! `block::translate_param_event` and arm the fault inside the
+//! arming block's `process()`. Unarmed (`none`) the class is pure
+//! pass-through (`out == in` bitwise). The fault law itself is
+//! [`crate::fault`]'s single source of truth, consumed here through
+//! [`TestEditorProcessor`]'s delegation to [`TestFaultProcessor`] —
+//! the same reuse the VST3 `TestEditorProcessor(TestFaultProcessor)`
+//! applies. `abort`/`exit`/`hang` kill or wedge the *host process*:
+//! they exist for the L1 out-of-process child the
+//! `real-clap-session-crash`/`real-clap-session-hang` lane spawns,
+//! never in-process.
 //!
 //! ## GUI contract (what the production host's `open_gui` requires)
 //!
@@ -84,17 +92,23 @@
 //! bridge runs `hide` + `destroy` before `plugin.destroy`, so the
 //! child HWND never outlives its instance under the contract.
 
+use core::fmt::Write as _;
 use std::cell::RefCell;
-use std::marker::PhantomData;
+use std::ffi::CStr;
 
+use clack_common::events::io::{InputEvents, OutputEvents};
 use clack_common::plugin::features;
-use clack_common::utils::ClapId;
+use clack_common::utils::{ClapId, Cookie};
 use clack_extensions::audio_ports::{
     AudioPortFlags, AudioPortInfo, AudioPortInfoWriter, AudioPortType, PluginAudioPorts,
     PluginAudioPortsImpl,
 };
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, PluginGuiImpl, Window,
+};
+use clack_extensions::params::{
+    ParamDisplayWriter, ParamInfoFlags, ParamInfoWriter, PluginAudioProcessorParams,
+    PluginMainThreadParams, PluginParams,
 };
 use clack_plugin::extensions::PluginExtensions;
 use clack_plugin::host::{HostAudioProcessorHandle, HostMainThreadHandle, HostSharedHandle};
@@ -106,12 +120,15 @@ use clack_plugin::process::{
 };
 
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, EventList, LifecycleEvent, PluginProcessor, PrepareError,
+    BufferView, BufferViewMut, EventKind, EventList, LifecycleEvent, PluginProcessor, PrepareError,
     ProcessConfig, ProcessContext, ProcessResult, TransportInfo,
 };
 
-use crate::block::{self, AtomicLifecycle, BlockScratch, BlockViews};
-use crate::fault::pass_through;
+use crate::block::{self, AtomicLifecycle, BlockScratch, BlockViews, ParamMirror};
+use crate::fault::{
+    FAULT_PARAM, FaultMode, TestFaultProcessor, bad_time_output_event, decode_fault,
+    invalid_output_event,
+};
 
 // ---------------------------------------------------------------------------
 // GUI constants + state
@@ -176,55 +193,72 @@ impl Default for GuiState {
 // Processor (neutral contract — no clack types)
 // ---------------------------------------------------------------------------
 
-/// The `test_editor` processor — pure pass-through, parameterless.
-/// A unit struct: there is no armed/gain state to hold.
-///
-/// **RT contract:** RT-suitable — `Copy` marker.
-#[derive(Copy, Clone, Debug, Default)]
-pub(crate) struct TestEditorProcessor;
+/// The `test_editor` processor — the [`TestFaultProcessor`] law
+/// (pass-through DSP + armed-fault dispatch) behind the editor
+/// fixture's own type, the same delegation the VST3
+/// `TestEditorProcessor(TestFaultProcessor)` applies (Issue #885).
+pub(crate) struct TestEditorProcessor(TestFaultProcessor);
 
-impl PluginProcessor for TestEditorProcessor {
-    /// Activation hook — nothing to configure for a stateless
-    /// pass-through.
+impl TestEditorProcessor {
+    /// A fresh processor at the parameter default (`armed = 0.0` —
+    /// fully inert).
     ///
-    /// **RT contract:** non-RT only — may allocate; this
-    /// implementation does not need to.
-    fn prepare(
-        &mut self,
-        _config: &ProcessConfig,
-        _context: &mut ProcessContext,
-    ) -> Result<(), PrepareError> {
-        Ok(())
+    /// **RT contract:** RT-suitable — pure.
+    #[must_use]
+    pub(crate) const fn new() -> Self {
+        Self(TestFaultProcessor::new())
     }
 
-    /// One block of bitwise pass-through. `events` is ignored — the
-    /// fixture declares no parameter surface, so every event kind is
-    /// inert here (the `|_| None` translator upstream already drops
-    /// them all; this is the second, independent guarantee).
+    /// The current armed plain value — the mirror's sync-out source.
     ///
-    /// **RT contract:** RT-suitable — bounded copy, no allocation.
+    /// **RT contract:** RT-suitable — pure.
+    #[must_use]
+    pub(crate) fn armed_plain(&self) -> f64 {
+        self.0.armed_plain()
+    }
+
+    /// Sets the armed plain value — the mirror's sync-in target
+    /// (activation reset, `reset`, main/audio-thread `flush`).
+    ///
+    /// **RT contract:** RT-suitable — pure.
+    pub(crate) fn set_armed_plain(&mut self, plain: f64) {
+        self.0.set_armed_plain(plain);
+    }
+}
+
+impl PluginProcessor for TestEditorProcessor {
+    /// Activation hook — resets the armed value to the parameter
+    /// default (the delegated [`TestFaultProcessor::prepare`] law).
+    /// Non-RT (may allocate; this implementation does not need to).
+    fn prepare(
+        &mut self,
+        config: &ProcessConfig,
+        context: &mut ProcessContext,
+    ) -> Result<(), PrepareError> {
+        self.0.prepare(config, context)
+    }
+
+    /// Runs one block through the delegated [`TestFaultProcessor`]
+    /// law: pass-through copy, then the armed-value update from the
+    /// block's `Fault` events, then the mode dispatch.
+    ///
+    /// **RT contract:** the `none` path is RT-suitable — bounded
+    /// `O(frames × channels + events)` work; no allocation, locking,
+    /// waiting or I/O. The armed paths intentionally violate RT
+    /// rules (that is the fault under test).
     fn process<I, O>(
         &mut self,
         inputs: &[I],
         outputs: &mut [O],
-        _events: EventList<'_>,
-        _transport: Option<TransportInfo>,
-        _context: &mut ProcessContext,
+        events: EventList<'_>,
+        transport: Option<TransportInfo>,
+        context: &mut ProcessContext,
     ) -> ProcessResult
     where
         I: BufferView,
         O: BufferViewMut,
     {
-        let frames = inputs
-            .first()
-            .map_or(0, BufferView::frames)
-            .min(outputs.first().map_or(0, BufferView::frames));
-        pass_through(inputs, outputs, frames);
-        if inputs.is_empty() || outputs.is_empty() {
-            ProcessResult::SLEEP
-        } else {
-            ProcessResult::CONTINUE
-        }
+        self.0.process(inputs, outputs, events, transport, context)
     }
 }
 
@@ -233,11 +267,13 @@ impl PluginProcessor for TestEditorProcessor {
 // ---------------------------------------------------------------------------
 
 /// Plugin-wide, thread-safe state (`[thread-safe]` in the CLAP model):
-/// the shared lifecycle machine. No parameter mirror — the fixture
-/// has no parameters.
+/// the shared lifecycle machine and the fault parameter mirror.
 pub(crate) struct TestEditorShared {
     /// The neutral lifecycle state machine, shared across threads.
     lifecycle: AtomicLifecycle,
+    /// The fault parameter's current plain (armed) value, mirrored
+    /// for the main-thread `params` extension.
+    fault_mirror: ParamMirror,
 }
 
 impl PluginShared<'_> for TestEditorShared {}
@@ -255,6 +291,7 @@ impl TestEditorShared {
     fn initialize() -> Result<Self, PluginError> {
         let shared = Self {
             lifecycle: AtomicLifecycle::new(),
+            fault_mirror: ParamMirror::new(FAULT_PARAM.default_value),
         };
         shared
             .lifecycle
@@ -276,14 +313,12 @@ impl Drop for TestEditorShared {
 }
 
 /// The plugin's main-thread object (`[main-thread]`): audio-port
-/// metadata and the `clap.ext.gui` state live here.
-///
-/// Unlike the sibling fixtures this object reads no `Shared` state —
-/// the gui verbs are self-contained in [`GuiState`] — so the shared
-/// borrow is carried as a lifetime marker only.
+/// metadata, the `params` extension surface, and the `clap.ext.gui`
+/// state live here — the gui verbs are self-contained in
+/// [`GuiState`], the params verbs read the shared fault mirror.
 pub(crate) struct TestEditorMainThread<'a> {
     gui: RefCell<GuiState>,
-    _shared: PhantomData<&'a TestEditorShared>,
+    shared: &'a TestEditorShared,
 }
 
 impl<'a> PluginMainThread<'a, TestEditorShared> for TestEditorMainThread<'a> {}
@@ -319,11 +354,9 @@ impl Plugin for TestEditorClapPlugin {
         builder: &mut PluginExtensions<Self>,
         _shared: Option<&TestEditorShared>,
     ) {
-        // `PluginGui` is the only non-audio extension — no `params`,
-        // no `state`: the fixture's parameter surface is honestly
-        // absent rather than declared-empty.
         builder
             .register::<PluginAudioPorts>()
+            .register::<PluginParams>()
             .register::<PluginGui>();
     }
 }
@@ -348,11 +381,11 @@ impl clack_plugin::entry::DefaultPluginFactory for TestEditorClapPlugin {
 
     fn new_main_thread<'a>(
         _host: HostMainThreadHandle<'a>,
-        _shared: &'a TestEditorShared,
+        shared: &'a TestEditorShared,
     ) -> Result<TestEditorMainThread<'a>, PluginError> {
         Ok(TestEditorMainThread {
             gui: RefCell::new(GuiState::default()),
-            _shared: PhantomData,
+            shared,
         })
     }
 }
@@ -385,6 +418,100 @@ impl PluginAudioPortsImpl for TestEditorMainThread<'_> {
             port_type: Some(AudioPortType::STEREO),
             in_place_pair: Some(ClapId::new(0)),
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Params extension
+// ---------------------------------------------------------------------------
+
+impl PluginMainThreadParams for TestEditorMainThread<'_> {
+    fn count(&self) -> u32 {
+        1
+    }
+
+    fn get_info(&self, param_index: u32, info: &mut ParamInfoWriter) {
+        if param_index != 0 {
+            return;
+        }
+        info.set(&clack_extensions::params::ParamInfo {
+            id: ClapId::new(FAULT_PARAM.id.0),
+            flags: ParamInfoFlags::IS_AUTOMATABLE
+                | ParamInfoFlags::IS_STEPPED
+                | ParamInfoFlags::REQUIRES_PROCESS,
+            cookie: Cookie::empty(),
+            name: FAULT_PARAM.name.as_bytes(),
+            module: b"",
+            min_value: FAULT_PARAM.min_value,
+            max_value: FAULT_PARAM.max_value,
+            default_value: FAULT_PARAM.default_value,
+        });
+    }
+
+    fn get_value(&self, param_id: ClapId) -> Option<f64> {
+        (param_id.get() == FAULT_PARAM.id.0).then(|| self.shared.fault_mirror.load())
+    }
+
+    fn value_to_text(
+        &self,
+        param_id: ClapId,
+        value: f64,
+        writer: &mut ParamDisplayWriter,
+    ) -> core::fmt::Result {
+        if param_id.get() != FAULT_PARAM.id.0 {
+            return Err(core::fmt::Error);
+        }
+        write!(writer, "{value:.2}")
+    }
+
+    fn text_to_value(&self, param_id: ClapId, text: &CStr) -> Option<f64> {
+        if param_id.get() != FAULT_PARAM.id.0 {
+            return None;
+        }
+        let text = text.to_str().ok()?.trim();
+        let value: f64 = text.parse().ok()?;
+        value
+            .is_finite()
+            .then(|| value.clamp(FAULT_PARAM.min_value, FAULT_PARAM.max_value))
+    }
+
+    fn flush(&self, input_parameter_changes: &InputEvents, _output: &mut OutputEvents) {
+        // Main-thread flush: fold every ParamValue for our param into
+        // the mirror; offsets carry no meaning outside a process
+        // block. The scan is bounded like the process path's.
+        for unknown in input_parameter_changes
+            .iter()
+            .take(block::MAX_EVENTS_PER_BLOCK)
+        {
+            if let Some(event) = block::translate_param_event(unknown, &FAULT_PARAM)
+                && let EventKind::ParamValue(param_event) = event.kind()
+            {
+                self.shared
+                    .fault_mirror
+                    .store(FAULT_PARAM.denormalize(param_event.value));
+            }
+        }
+    }
+}
+
+impl PluginAudioProcessorParams for TestEditorAudioProcessor<'_> {
+    fn flush(&mut self, input_parameter_changes: &InputEvents, _output: &mut OutputEvents) {
+        // Audio-thread flush: mirror the change and resync the live
+        // processor — CLAP does not guarantee offsets here.
+        for unknown in input_parameter_changes
+            .iter()
+            .take(block::MAX_EVENTS_PER_BLOCK)
+        {
+            if let Some(event) = block::translate_param_event(unknown, &FAULT_PARAM)
+                && let EventKind::ParamValue(param_event) = event.kind()
+            {
+                self.shared
+                    .fault_mirror
+                    .store(FAULT_PARAM.denormalize(param_event.value));
+            }
+        }
+        self.processor
+            .set_armed_plain(self.shared.fault_mirror.load());
     }
 }
 
@@ -958,7 +1085,7 @@ impl<'a> TestEditorAudioProcessor<'a> {
         };
         let config = block::to_process_config(audio_config)
             .map_err(|_| fail("unsupported audio configuration"))?;
-        let mut processor = TestEditorProcessor;
+        let mut processor = TestEditorProcessor::new();
         let mut context = ProcessContext::new();
         processor
             .prepare(&config, &mut context)
@@ -967,6 +1094,9 @@ impl<'a> TestEditorAudioProcessor<'a> {
             .lifecycle
             .transition(LifecycleEvent::Activate)
             .map_err(|_| PluginError::Message("activate outside Initialized state"))?;
+        // Activation resets the armed value to the default (the
+        // fixture's deterministic per-activation law).
+        shared.fault_mirror.store(FAULT_PARAM.default_value);
         Ok(Self {
             shared,
             processor,
@@ -1017,16 +1147,35 @@ impl<'a> PluginAudioProcessor<'a, TestEditorShared, TestEditorMainThread<'a>>
         let mut output_list: [&mut [f32]; block::MAX_CHANNELS] = [&mut [], &mut []];
         let (input_view, output_view) = block::planar_views(&mut views, &mut output_list)?;
 
-        // Every event kind is inert — the fixture declares no
-        // parameter surface. The translator drops all events while
-        // keeping the defined >MAX_EVENTS_PER_BLOCK rejection.
+        // Mirror sync-in, then sample-accurate event application, then
+        // sync-out — keeps `params.value` honest on the main thread.
+        self.processor
+            .set_armed_plain(self.shared.fault_mirror.load());
         let event_list =
-            block::translate_events(events.input, &mut self.scratch, frames_count, |_| None)?;
+            block::translate_events(events.input, &mut self.scratch, frames_count, |unknown| {
+                block::translate_param_event(unknown, &FAULT_PARAM)
+            })?;
         let inputs = [input_view];
         let mut outputs = [output_view];
         let result =
             self.processor
                 .process(&inputs, &mut outputs, event_list, None, &mut self.context);
+        self.shared.fault_mirror.store(self.processor.armed_plain());
+        // The CLAP-only fault legs: `bad_time` emits a `ParamValue`
+        // stamped beyond any legal block bound, `invalid` one
+        // carrying NaN — real ABI-level malformed events a spec host
+        // observes on its output list. The ruviform host drains them
+        // into canonical reports (Issue #842); the push stays
+        // best-effort and its failure is ignored.
+        match decode_fault(self.processor.armed_plain()).0 {
+            FaultMode::BadTime => {
+                let _ = events.output.try_push(bad_time_output_event());
+            }
+            FaultMode::Invalid => {
+                let _ = events.output.try_push(invalid_output_event());
+            }
+            _ => {}
+        }
         block::map_process_status(result)
     }
 
@@ -1035,7 +1184,11 @@ impl<'a> PluginAudioProcessor<'a, TestEditorShared, TestEditorMainThread<'a>>
     }
 
     fn reset(&mut self) {
-        // Stateless pass-through — nothing to resync.
+        // CLAP `reset` clears processing state but not parameter
+        // values — the armed value *is* the parameter value, so reset
+        // resyncs from the authoritative mirror.
+        self.processor
+            .set_armed_plain(self.shared.fault_mirror.load());
     }
 
     fn start_processing(&mut self) -> Result<(), PluginError> {
@@ -1058,16 +1211,28 @@ impl<'a> PluginAudioProcessor<'a, TestEditorShared, TestEditorMainThread<'a>>
 mod tests {
     use std::ptr;
 
+    use clack_common::events::Pckn;
+    use clack_common::events::event_types::ParamValueEvent;
+    use clack_common::events::io::EventBuffer;
+    use clack_common::events::spaces::CoreEventSpace;
+    use clack_host::process::audio_buffers::{
+        AudioPortBuffer, AudioPortBufferType, AudioPorts, InputAudioBuffers, InputChannel,
+        OutputAudioBuffers,
+    };
+
     use super::*;
     use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut};
-    use ruviform_plugin_core::ProcessStatus;
+    use ruviform_plugin_core::{Event, ParamEvent, ParamId, ParamValue, ProcessStatus};
 
-    /// A fresh main-thread object — the gui state is self-contained,
-    /// so the `PhantomData` shared marker needs no live `Shared`.
-    fn main_thread() -> TestEditorMainThread<'static> {
+    use crate::fault::RT_ALLOC_FILL;
+
+    /// A fresh main-thread object bound to `shared` — the params
+    /// surface reads the shared fault mirror; the gui state is
+    /// self-contained.
+    fn main_thread(shared: &TestEditorShared) -> TestEditorMainThread<'_> {
         TestEditorMainThread {
             gui: RefCell::new(GuiState::default()),
-            _shared: PhantomData,
+            shared,
         }
     }
 
@@ -1076,7 +1241,8 @@ mod tests {
     /// other API type and non-Windows builds are honest `false`.
     #[test]
     fn api_support_is_win32_embedded_on_windows_only() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         assert_eq!(
             main.is_api_supported(EMBEDDED_WIN32),
             cfg!(windows),
@@ -1120,7 +1286,8 @@ mod tests {
     /// `set_transient` always rejects (floating is unsupported).
     #[test]
     fn size_and_transient_verbs_are_honest() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         assert_eq!(main.get_size(), Some(DEFAULT_GUI_SIZE));
         assert!(main.can_resize());
         assert_eq!(main.get_resize_hints(), None);
@@ -1160,7 +1327,8 @@ mod tests {
     /// `set_parent`/`show` rollback.
     #[test]
     fn create_and_destroy_are_idempotent_edges() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         // A non-win32 configuration is a defined rejection.
         let cocoa = GuiConfiguration {
             api_type: GuiApiType::COCOA,
@@ -1190,7 +1358,8 @@ mod tests {
     /// stays a defined rejection.
     #[test]
     fn floating_popup_surface_is_honest() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         let floating = GuiConfiguration {
             api_type: GuiApiType::WIN32,
             is_floating: true,
@@ -1237,7 +1406,8 @@ mod tests {
     /// `set_parent` before `create` is a protocol violation.
     #[test]
     fn set_parent_rejects_invalid_parents_honestly() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         let cocoa = Window::from_generic_ptr(GuiApiType(c"cocoa"), ptr::null_mut());
         assert!(
             main.set_parent(cocoa).is_err(),
@@ -1272,7 +1442,8 @@ mod tests {
     /// a fabricated success.
     #[test]
     fn show_and_hide_require_an_attached_parent() {
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         assert!(main.show().is_err());
         assert!(main.hide().is_err());
     }
@@ -1282,7 +1453,7 @@ mod tests {
     /// report `Sleep`.
     #[test]
     fn processor_is_bitwise_pass_through() {
-        let mut processor = TestEditorProcessor;
+        let mut processor = TestEditorProcessor::new();
         let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
         let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
         let frames = u32::try_from(input[0].len()).unwrap();
@@ -1302,6 +1473,333 @@ mod tests {
         let list = EventList::new(&[], frames).unwrap();
         let result = processor.process(&empty_in, &mut empty_out, list, None, &mut context);
         assert_eq!(result.status, ProcessStatus::Sleep);
+    }
+
+    // -- Fault arm (the `test_fault` law delegated through the editor) ----
+
+    fn fault_event(normalized: f64) -> Event {
+        Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: FAULT_PARAM.id,
+                value: ParamValue::new(normalized).unwrap(),
+            }),
+        )
+    }
+
+    /// Runs one block through the neutral contract — only `none`/
+    /// `error`/`rt_alloc`/`bad_time`/`invalid` modes are exercised
+    /// here: `abort`/`exit`/`hang` would kill or wedge the test
+    /// binary itself.
+    fn run_block(
+        processor: &mut TestEditorProcessor,
+        input: &[Vec<f32>],
+        output: &mut [Vec<f32>],
+        events: &[Event],
+    ) -> ProcessResult {
+        let frames = u32::try_from(input.first().map_or(0, Vec::len)).unwrap_or(u32::MAX);
+        let in_views: Vec<_> = input.iter().map(|c| &c[..]).collect();
+        let inputs = [PlanarBufferView::new(&in_views).unwrap()];
+        let mut out_views: Vec<_> = output.iter_mut().map(|c| &mut c[..]).collect();
+        let mut outputs = [PlanarBufferViewMut::new(&mut out_views).unwrap()];
+        let list = EventList::new(events, frames).unwrap();
+        let mut context = ProcessContext::new();
+        processor.process(&inputs, &mut outputs, list, None, &mut context)
+    }
+
+    /// The `error` mode returns `ProcessStatus::Error` — a defined
+    /// rejection the host observes as a failed result, not a crash.
+    #[test]
+    fn error_mode_returns_process_error() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        // plain 4.0 → normalized 0.5 → `error`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.5)]);
+        assert_eq!(result.status, ProcessStatus::Error);
+    }
+
+    /// `rt_alloc` allocates inside `process()` and writes the heap
+    /// byte (`200.0` = `f32::from(0xC8)` — `RT_ALLOC_FILL`) into
+    /// `output[0][0]` — the sample proves the allocation round-trip
+    /// ran. The rest of the block stays pass-through.
+    #[test]
+    fn alloc_fault_marks_armed_block() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        // plain 5.0 → normalized 0.625 → `rt_alloc`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.625)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(output[0][0], f32::from(RT_ALLOC_FILL));
+        assert_eq!(output[0][1..], input[0][1..]);
+        assert_eq!(output[1], input[1]);
+    }
+
+    /// `bad_time` returns `Continue` with `TAIL_INFINITE` — the
+    /// zero-tail fixture's timing lie surfaces on the neutral
+    /// `tail_frames` a host reads back.
+    #[test]
+    fn bad_time_mode_claims_infinite_tail() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        // plain 6.0 → normalized 0.75 → `bad_time`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.75)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(result.tail_frames, ProcessResult::TAIL_INFINITE);
+    }
+
+    /// `invalid` fills every output sample with NaN — the invalid
+    /// audio state the host oracle detects on the delivered samples.
+    #[test]
+    fn invalid_mode_fills_nan_outputs() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        // plain 7.0 → normalized 0.875 → `invalid`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.875)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert!(output[0].iter().all(|s| s.is_nan()));
+        assert!(output[1].iter().all(|s| s.is_nan()));
+    }
+
+    /// The armed modes persist until disarmed: after `invalid`, a
+    /// `none` event restores pure pass-through — the fault mode's
+    /// recovery half.
+    #[test]
+    fn disarm_restores_pass_through() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        // plain 7.0 → normalized 0.875 → `invalid`.
+        run_block(&mut processor, &input, &mut output, &[fault_event(0.875)]);
+        // plain 0.0 → normalized 0.0 → `none`.
+        let result = run_block(&mut processor, &input, &mut output, &[fault_event(0.0)]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(output[0], input[0]);
+    }
+
+    /// RT proof: the unarmed/`none` path never allocates — the armed
+    /// `rt_alloc` path is the deliberate violation; the inert law is
+    /// untouched. Views and the event list are built outside the
+    /// `assert_no_alloc` window so only `process()` itself is
+    /// measured (the `rt_` name selects this for `mise run test-rt`).
+    #[test]
+    fn rt_unarmed_block_is_alloc_free() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8], vec![-0.5; 8]];
+        let mut output = [vec![0.0_f32; 8], vec![0.0; 8]];
+        let in_views: Vec<_> = input.iter().map(|c| &c[..]).collect();
+        let inputs = [PlanarBufferView::new(&in_views).unwrap()];
+        let mut out_views: Vec<_> = output.iter_mut().map(|c| &mut c[..]).collect();
+        let mut outputs = [PlanarBufferViewMut::new(&mut out_views).unwrap()];
+        let events = [fault_event(0.0)];
+        let list = EventList::new(&events, 8).unwrap();
+        let mut context = ProcessContext::new();
+        assert_no_alloc::assert_no_alloc(|| {
+            processor.process(&inputs, &mut outputs, list, None, &mut context)
+        });
+    }
+
+    /// Foreign parameter ids never arm the fault.
+    #[test]
+    fn foreign_param_events_do_not_arm() {
+        let mut processor = TestEditorProcessor::new();
+        let input = [vec![0.25_f32; 8]];
+        let mut output = [vec![0.0_f32; 8]];
+        let foreign = Event::new(
+            0,
+            EventKind::ParamValue(ParamEvent {
+                param_id: ParamId(9),
+                value: ParamValue::new(1.0).unwrap(),
+            }),
+        );
+        let result = run_block(&mut processor, &input, &mut output, &[foreign]);
+        assert_eq!(result.status, ProcessStatus::Continue);
+        assert_eq!(output[0], input[0]);
+    }
+
+    // -- ABI-level output events (the CLAP-only legs) --------------------
+
+    /// The stereo port fixture a host builds for one `clap_process`
+    /// call — `clack_host`'s safe buffer builders over owned `Vec`s,
+    /// the same shape as `fault.rs`'s `StereoFixture`.
+    struct StereoFixture {
+        inputs: [Vec<f32>; block::MAX_CHANNELS],
+        outputs: [Vec<f32>; block::MAX_CHANNELS],
+        input_ports: AudioPorts,
+        output_ports: AudioPorts,
+    }
+
+    impl StereoFixture {
+        fn new(frames: usize) -> Self {
+            Self {
+                inputs: [vec![0.5; frames], vec![-0.25; frames]],
+                outputs: [vec![0.0; frames], vec![0.0; frames]],
+                input_ports: AudioPorts::with_capacity(block::MAX_CHANNELS, 1),
+                output_ports: AudioPorts::with_capacity(block::MAX_CHANNELS, 1),
+            }
+        }
+
+        fn guards(&mut self) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
+            let Self {
+                inputs,
+                outputs,
+                input_ports,
+                output_ports,
+            } = self;
+            let input_buffers = input_ports.with_input_buffers([AudioPortBuffer {
+                latency: 0,
+                channels: AudioPortBufferType::f32_input_only(
+                    inputs.iter_mut().map(InputChannel::variable),
+                ),
+            }]);
+            let output_buffers = output_ports.with_output_buffers([AudioPortBuffer {
+                latency: 0,
+                channels: AudioPortBufferType::f32_output_only(
+                    outputs.iter_mut().map(Vec::as_mut_slice),
+                ),
+            }]);
+            (input_buffers, output_buffers)
+        }
+    }
+
+    /// An initialized shared plus an activated audio processor —
+    /// the legal path every ABI-level test starts from.
+    fn activated(shared: &TestEditorShared) -> TestEditorAudioProcessor<'_> {
+        let config = PluginAudioConfiguration {
+            sample_rate: 48_000.0,
+            min_frames_count: 1,
+            max_frames_count: 64,
+        };
+        TestEditorAudioProcessor::activate_inner(shared, &config).unwrap()
+    }
+
+    /// One `process` call through the ABI-level
+    /// [`TestEditorAudioProcessor`] — the shape a host builds for
+    /// `clap_process` (`Process`/`Events` plumbing plus the event
+    /// buffers).
+    fn process_abi(
+        ap: &mut TestEditorAudioProcessor<'_>,
+        fixture: &mut StereoFixture,
+        input_buffer: &EventBuffer,
+        output_buffer: &mut EventBuffer,
+    ) -> ClapProcessStatus {
+        let (input_buffers, mut output_buffers) = fixture.guards();
+        let audio = output_buffers.as_plugin_audio_with_inputs(&input_buffers);
+        let input_events = input_buffer.as_input();
+        let mut output_events = output_buffer.as_output();
+        ap.process(
+            Process {
+                transport: None,
+                steady_time: None,
+            },
+            audio,
+            Events {
+                input: &input_events,
+                output: &mut output_events,
+            },
+        )
+        .unwrap()
+    }
+
+    /// The `ParamValue` events the plugin emitted into the output
+    /// buffer — `(time, value)` pairs.
+    fn emitted_param_values(output_buffer: &EventBuffer) -> Vec<(u32, f64)> {
+        output_buffer
+            .as_input()
+            .iter()
+            .filter_map(|unknown| match unknown.as_core_event() {
+                Some(CoreEventSpace::ParamValue(event)) => {
+                    Some((unknown.header().time(), event.value()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `bad_time` through the real ABI: a plain-`6.0` `ParamValue`
+    /// input event arms the mode, `process` reports
+    /// `CLAP_PROCESS_TAIL`, and the output event list carries a
+    /// `ParamValue` stamped `u32::MAX` — the ABI-level bad timestamp
+    /// a spec host observes.
+    #[test]
+    fn bad_time_mode_emits_tail_and_bad_time_event() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let mut ap = activated(&shared);
+        ap.start_processing().unwrap();
+
+        let mut fixture = StereoFixture::new(64);
+        let mut input_buffer = EventBuffer::new();
+        input_buffer.push(&ParamValueEvent::new(
+            0,
+            ClapId::new(FAULT_PARAM.id.0),
+            Pckn::match_all(),
+            6.0,
+        ));
+        let mut output_buffer = EventBuffer::new();
+        let status = process_abi(&mut ap, &mut fixture, &input_buffer, &mut output_buffer);
+        assert_eq!(status, ClapProcessStatus::Tail);
+        let emitted = emitted_param_values(&output_buffer);
+        assert!(
+            emitted.iter().any(|&(time, _)| time == u32::MAX),
+            "bad_time must emit a u32::MAX-stamped event, got {emitted:?}"
+        );
+    }
+
+    /// `invalid` through the real ABI: the output audio is all NaN
+    /// and the output event list carries a `ParamValue` event whose
+    /// value is non-finite — the ABI-level malformed payload.
+    #[test]
+    fn invalid_mode_emits_nan_and_invalid_event() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let mut ap = activated(&shared);
+        ap.start_processing().unwrap();
+
+        let mut fixture = StereoFixture::new(64);
+        let mut input_buffer = EventBuffer::new();
+        input_buffer.push(&ParamValueEvent::new(
+            0,
+            ClapId::new(FAULT_PARAM.id.0),
+            Pckn::match_all(),
+            7.0,
+        ));
+        let mut output_buffer = EventBuffer::new();
+        let status = process_abi(&mut ap, &mut fixture, &input_buffer, &mut output_buffer);
+        assert_eq!(status, ClapProcessStatus::Continue);
+        assert!(fixture.outputs[0].iter().all(|s| s.is_nan()));
+        assert!(fixture.outputs[1].iter().all(|s| s.is_nan()));
+        let emitted = emitted_param_values(&output_buffer);
+        assert!(
+            emitted.iter().any(|&(_, value)| value.is_nan()),
+            "invalid must emit a NaN-valued event, got {emitted:?}"
+        );
+    }
+
+    /// `rt_alloc` through the real ABI: the heap marker lands in the
+    /// delivered output buffer — `outputs[0][0] == 200.0` while the
+    /// rest of the block stays pass-through.
+    #[test]
+    fn alloc_fault_marks_armed_abi_output() {
+        let shared = TestEditorShared::initialize().unwrap();
+        let mut ap = activated(&shared);
+        ap.start_processing().unwrap();
+
+        let mut fixture = StereoFixture::new(64);
+        let mut input_buffer = EventBuffer::new();
+        input_buffer.push(&ParamValueEvent::new(
+            0,
+            ClapId::new(FAULT_PARAM.id.0),
+            Pckn::match_all(),
+            5.0,
+        ));
+        let mut output_buffer = EventBuffer::new();
+        let status = process_abi(&mut ap, &mut fixture, &input_buffer, &mut output_buffer);
+        assert_eq!(status, ClapProcessStatus::Continue);
+        assert_eq!(fixture.outputs[0][0], f32::from(RT_ALLOC_FILL));
+        assert_eq!(fixture.outputs[0][1..], fixture.inputs[0][1..]);
+        assert_eq!(fixture.outputs[1], fixture.inputs[1]);
     }
 
     /// Windows-only: `create` → `set_parent` against a real parent
@@ -1344,7 +1842,8 @@ mod tests {
         };
         assert!(!parent.is_null(), "cannot create a parent HWND");
 
-        let main = main_thread();
+        let shared = TestEditorShared::initialize().unwrap();
+        let main = main_thread(&shared);
         assert!(main.create(EMBEDDED_WIN32).is_ok());
         // SAFETY: `parent` is a live HWND owned by this thread for
         // the duration of the test.

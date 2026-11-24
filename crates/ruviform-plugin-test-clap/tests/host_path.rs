@@ -750,28 +750,34 @@ fn instrument_note_lifecycle_releases_to_silence() {
     }
 }
 
-/// `test_editor`'s parameter surface through the production path:
-/// the plugin declares no `clap.ext.params` extension, so the host
-/// reports an empty parameter table — an honest absence, not a
-/// fabricated empty-but-declared surface.
+/// `test_editor`'s parameter surface through the production path
+/// (Issue #630, mirroring VST3 #885): the class declares the shared
+/// stepped `Fault` parameter through `clap.ext.params` — plain range
+/// `[0.0, 8.0]`, default `0.0` (`none`) — the same descriptor
+/// `test_fault` reports.
 #[test]
-fn editor_reports_no_params() {
+fn editor_reports_fault_param_in_plain_domain() {
     let library = load_library();
     let factories = library.factories();
     assert_eq!(factories.len(), 6);
     let plugin = factories[4].create();
-    assert!(
-        plugin.params().is_empty(),
-        "test_editor declares no parameters"
-    );
+    let params = plugin.params();
+    assert_eq!(params.len(), 1, "test_editor exposes exactly one parameter");
+    let fault = params[0];
+    assert_eq!(fault.id.0, 0);
+    assert_eq!(fault.name, "Fault");
+    assert_eq!(fault.min_value, 0.0);
+    assert_eq!(fault.max_value, 8.0);
+    assert_eq!(fault.default_value, 0.0);
 }
 
-/// `test_editor` DSP law through the production host bridge: pure
-/// pass-through — `out == in` bitwise — and a `ParamValue` event for
-/// a parameter the fixture does not declare is dropped at the
-/// event-translation boundary and cannot perturb the output.
+/// `test_editor` audio through the production host bridge: unarmed
+/// the class is pure pass-through — `out == in` bitwise — and a
+/// `ParamValue` event on a foreign parameter id (anything but the
+/// `Fault` id `0`) is dropped at the event-translation boundary,
+/// arming nothing and changing nothing.
 #[test]
-fn editor_is_parameterless_pass_through() {
+fn editor_processes_audio_as_pass_through() {
     let mut plugin = prepared_editor_plugin();
 
     let (result, [left, right]) = drive_block(&mut *plugin, &[]);
@@ -782,15 +788,58 @@ fn editor_is_parameterless_pass_through() {
     assert_eq!(left, vec![0.5_f32; FRAMES]);
     assert_eq!(right, vec![-0.25_f32; FRAMES]);
 
-    // A foreign ParamValue event (no such parameter exists) is inert.
+    // A foreign ParamValue event (param id 1 — the editor declares
+    // only id 0) is inert.
     let foreign = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(1),
+            value: ParamValue::new(0.5).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &foreign);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+    assert_eq!(right, vec![-0.25_f32; FRAMES]);
+}
+
+/// `test_editor` `error` mode through the production host bridge
+/// (Issue #630, mirroring VST3 #885): normalized `0.5` → plain `4.0`
+/// — the `Fault` event passes `block::translate_param_event`, arms
+/// inside the block's `process()`, and the plugin reports
+/// `ProcessStatus::Error` — a defined rejection, not a crash. The
+/// instance stays alive: a follow-up `none` event (normalized `0.0`)
+/// restores pass-through.
+#[test]
+fn editor_fault_error_mode_is_defined_rejection() {
+    let mut plugin = prepared_editor_plugin();
+
+    let error_events = [Event::new(
         0,
         EventKind::ParamValue(ParamEvent {
             param_id: ParamId(0),
             value: ParamValue::new(0.5).unwrap(),
         }),
     )];
-    let (result, [left, right]) = drive_block(&mut *plugin, &foreign);
+    let (result, _out) = drive_block(&mut *plugin, &error_events);
+    assert_eq!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Error,
+        "armed error mode must surface as a defined process error"
+    );
+
+    // Disarm: normalized 0.0 → plain 0.0 → mode `none`.
+    let none_events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.0).unwrap(),
+        }),
+    )];
+    let (result, [left, right]) = drive_block(&mut *plugin, &none_events);
     assert!(matches!(
         result.status,
         ruviform_plugin_core::ProcessStatus::Continue

@@ -48,12 +48,13 @@
 //!   MIDI CC and `Process::transport` snapshots drive deterministic
 //!   PCM — the real-ABI counterpart of the VST3 `test_instrument`
 //!   fixture.
-//! - `test_editor` — a parameterless pass-through plus the plugin
-//!   side of `clap.ext.gui`: on Windows `set_parent` creates a real
-//!   `WS_CHILD` HWND under the host-supplied parent and
-//!   `show`/`hide`/`destroy` manage it; opaque parent payloads are
-//!   rejected by an `IsWindow` gate. The CLAP counterpart of the
-//!   VST3 `test_editor` fixture.
+//! - `test_editor` — the suite's `clap.ext.gui` editor fixture
+//!   carrying the shared `Fault` parameter (the `test_fault` DSP law
+//!   delegated through the editor class, mirroring VST3 #885): on
+//!   Windows `set_parent` creates a real `WS_CHILD` HWND under the
+//!   host-supplied parent and `show`/`hide`/`destroy` manage it;
+//!   opaque parent payloads are rejected by an `IsWindow` gate. The
+//!   CLAP counterpart of the VST3 `test_editor` fixture.
 //!
 //! All `clack`/`clap-sys` binding types stay private — the crate
 //! exports no public Rust API; hosts reach the plugins purely through
