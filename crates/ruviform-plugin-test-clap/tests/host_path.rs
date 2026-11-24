@@ -20,9 +20,9 @@ use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
 use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, GuiSize, HostError, HostInput, HostOutput,
-    ParamEvent, ParamId, ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext,
-    ProcessResult,
+    ErasedPlugin, Event, EventKind, EventList, GuiFocusTarget, GuiKeyDirection, GuiKeyEvent,
+    GuiModifiers, GuiPopupKind, GuiSize, HostError, HostInput, HostOutput, ParamEvent, ParamId,
+    ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
 };
 
 const FRAMES: usize = 64;
@@ -968,6 +968,95 @@ fn non_editor_classes_decline_gui_verbs() {
     }
 }
 
+/// The Issue #630 editor verbs — `send_gui_key`, `set_gui_focus`,
+/// `set_gui_focus_target`, `set_gui_popup` — converge to the
+/// defined `Err(Unsupported)` without an open GUI through the
+/// production bridge (`host.rs`'s `editor_ops` gate), on every OS
+/// (non-Windows `open_gui` itself declines, so this gate is the
+/// only reachable refusal there). The refusal leaves the instance
+/// healthy: audio still flows afterwards.
+#[test]
+fn editor_verb_surface_declines_without_open_gui() {
+    let mut plugin = prepared_editor_plugin();
+    let key_a = GuiKeyEvent {
+        direction: GuiKeyDirection::Down,
+        key: 'a',
+        key_code: 0x41,
+        modifiers: GuiModifiers::NONE,
+    };
+    assert_eq!(plugin.send_gui_key(key_a), Err(HostError::Unsupported));
+    let key_up = GuiKeyEvent {
+        direction: GuiKeyDirection::Up,
+        ..key_a
+    };
+    assert_eq!(plugin.send_gui_key(key_up), Err(HostError::Unsupported));
+    assert_eq!(plugin.set_gui_focus(true), Err(HostError::Unsupported));
+    assert_eq!(plugin.set_gui_focus(false), Err(HostError::Unsupported));
+    assert_eq!(
+        plugin.set_gui_focus_target(GuiFocusTarget::Editor),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 7 }),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_popup(GuiPopupKind::ChildWindow, true),
+        Err(HostError::Unsupported)
+    );
+    assert_eq!(
+        plugin.set_gui_popup(GuiPopupKind::Dialog, false),
+        Err(HostError::Unsupported)
+    );
+
+    let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+}
+
+/// `test_gain`/`test_fault`/`test_stateful`/`test_instrument` ship
+/// no `ruviform.editor-ops` extension — the Issue #630 verbs
+/// converge to the same defined `Err(Unsupported)` the GUI gate
+/// already reports for these classes (they cannot open a GUI, so
+/// the verbs never reach the extension query anyway).
+#[test]
+fn non_editor_classes_decline_editor_verbs() {
+    let key_a = GuiKeyEvent {
+        direction: GuiKeyDirection::Down,
+        key: 'a',
+        key_code: 0x41,
+        modifiers: GuiModifiers::NONE,
+    };
+    for mut plugin in [
+        prepared_plugin(),
+        prepared_fault_plugin(),
+        prepared_stateful_plugin(),
+        prepared_instrument_plugin(),
+    ] {
+        assert_eq!(plugin.send_gui_key(key_a), Err(HostError::Unsupported));
+        assert_eq!(plugin.set_gui_focus(true), Err(HostError::Unsupported));
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::Editor),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+            Err(HostError::Unsupported)
+        );
+    }
+}
+
 /// Windows-only real-HWND coverage of the `ruviform#754` CLAP editor
 /// verb chain through the production host bridge — the CLAP
 /// counterpart of the VST3 real lane. A hidden top-level parent is
@@ -1088,6 +1177,193 @@ fn editor_gui_verbs_over_real_child_hwnd() {
     }
 
     // The instance stays healthy after the GUI session ended.
+    let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
+    assert!(matches!(
+        result.status,
+        ruviform_plugin_core::ProcessStatus::Continue
+    ));
+    assert_eq!(left, vec![0.5_f32; FRAMES]);
+}
+
+/// Windows-only real-HWND coverage of the Issue #630 editor verbs
+/// through the production host bridge + the private
+/// `ruviform.editor-ops` seam: `open_gui` attaches the real
+/// `WS_CHILD`, then every verb is observed through Win32 — the
+/// child title's event-log tokens (`GetWindowTextW`) for
+/// `kd:`/`ku:`/`f:`/`fe:`/`po:`/`pc:`, `FindWindowExW` for the
+/// `rvf-test-editor-popup-{seq}` surfaces (top-level inventory for
+/// `Dialog`, `EnumChildWindows`-equivalent for `ChildWindow`), and
+/// `GetFocus()` for the `HostWindow` leg. A supplementary-plane
+/// `key` answers `InvalidValue` host-side. This is **synthetic
+/// verb delivery** coverage — the values reach the plugin's vtable
+/// and land in the event log; no OS input queue or focus routing
+/// is exercised. `#[ignore]` keeps it out of the default lane — it
+/// needs an interactive window station; run with
+/// `cargo test -p ruviform-plugin-test-clap --test host_path --
+/// --ignored`.
+#[cfg(target_os = "windows")]
+#[ignore = "requires an interactive Windows window station — real-HWND lane"]
+#[expect(unsafe_code, clippy::too_many_lines)]
+#[test]
+fn editor_verb_surface_over_real_child_hwnd() {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetFocus;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, FindWindowExW, GW_CHILD, GW_OWNER, GWL_STYLE, GetWindow,
+        GetWindowLongW, GetWindowTextW, IsWindow, WS_CHILD, WS_OVERLAPPED, WS_POPUP,
+    };
+
+    let class: Vec<u16> = "STATIC".encode_utf16().chain(std::iter::once(0)).collect();
+    let editor_class: Vec<u16> = "RuviformClapTestEditor"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let parent = unsafe {
+        CreateWindowExW(
+            0,
+            class.as_ptr(),
+            std::ptr::null(),
+            WS_OVERLAPPED,
+            0,
+            0,
+            320,
+            240,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            GetModuleHandleW(std::ptr::null()),
+            std::ptr::null(),
+        )
+    };
+    assert!(!parent.is_null(), "cannot create a parent HWND");
+
+    let read_title = |hwnd: HWND| -> String {
+        let mut buf = [0u16; 256];
+        let len = unsafe {
+            GetWindowTextW(
+                hwnd,
+                buf.as_mut_ptr(),
+                i32::try_from(buf.len()).unwrap_or(i32::MAX),
+            )
+        };
+        String::from_utf16_lossy(&buf[..usize::try_from(len).unwrap_or_default()])
+    };
+
+    let mut plugin = prepared_editor_plugin();
+    plugin
+        .open_gui(ParentLease::new(0, parent as usize as u64))
+        .expect("open_gui attaches the real child HWND");
+
+    unsafe {
+        let child: HWND = GetWindow(parent, GW_CHILD);
+        assert!(!child.is_null(), "open_gui must create a child HWND");
+
+        // `send_gui_key` down+up 'a' — synthetic verb delivery: the
+        // plugin's event log records `kd:`/`ku:` (Win32 VK space
+        // `key_code`), never an OS input queue.
+        let key_a = GuiKeyEvent {
+            direction: GuiKeyDirection::Down,
+            key: 'a',
+            key_code: 0x41,
+            modifiers: GuiModifiers::NONE,
+        };
+        plugin.send_gui_key(key_a).expect("deliver_key accepts");
+        plugin
+            .send_gui_key(GuiKeyEvent {
+                direction: GuiKeyDirection::Up,
+                ..key_a
+            })
+            .expect("deliver_key accepts");
+        // A supplementary-plane `key` cannot be one UTF-16 code
+        // unit — `InvalidValue`, not truncation.
+        let emoji = GuiKeyEvent {
+            direction: GuiKeyDirection::Down,
+            key: '\u{1F600}',
+            key_code: 0,
+            modifiers: GuiModifiers::NONE,
+        };
+        assert_eq!(plugin.send_gui_key(emoji), Err(HostError::InvalidValue));
+
+        // `set_gui_focus`/`set_gui_focus_target` — `f:`/`fe:` tokens
+        // (synthetic delivery; `EditorElement` records intent only).
+        plugin.set_gui_focus(true).expect("apply_focus accepts");
+        plugin
+            .set_gui_focus_target(GuiFocusTarget::EditorElement { element: 7 })
+            .expect("apply_focus accepts");
+        // `HostWindow` — the adapter's `SetFocus(container)` leg
+        // plus the plugin's `f:0` notification.
+        plugin
+            .set_gui_focus_target(GuiFocusTarget::HostWindow)
+            .expect("host-window focus accepts");
+        assert_eq!(GetFocus(), parent, "focus returns to the container");
+
+        // `set_gui_popup(Dialog, open)` — a real `WS_POPUP` titled
+        // `rvf-test-editor-popup-{seq}` owned by the editor child's
+        // root ancestor (the top-level inventory oracle).
+        plugin
+            .set_gui_popup(GuiPopupKind::Dialog, true)
+            .expect("popup accepts");
+        let popup_title: Vec<u16> = "rvf-test-editor-popup-1"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let popup = FindWindowExW(
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            editor_class.as_ptr(),
+            popup_title.as_ptr(),
+        );
+        assert!(!popup.is_null(), "Dialog popup must be a live HWND");
+        assert_eq!(
+            GetWindow(popup, GW_OWNER),
+            parent,
+            "Dialog popup owned by the editor's root ancestor"
+        );
+        let popup_style = GetWindowLongW(popup, GWL_STYLE).cast_unsigned();
+        assert_ne!(popup_style & WS_POPUP, 0, "popup carries WS_POPUP");
+        assert_eq!(popup_style & WS_CHILD, 0, "popup is not a child");
+        plugin
+            .set_gui_popup(GuiPopupKind::Dialog, false)
+            .expect("popup close accepts");
+        assert_eq!(IsWindow(popup), 0, "close destroys the popup");
+
+        // `set_gui_popup(ChildWindow)` — a `WS_CHILD` under the
+        // editor child (the EnumChildWindows observation point).
+        plugin
+            .set_gui_popup(GuiPopupKind::ChildWindow, true)
+            .expect("child popup accepts");
+        let popup_title2: Vec<u16> = "rvf-test-editor-popup-2"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let popup_child = FindWindowExW(
+            child,
+            std::ptr::null_mut(),
+            editor_class.as_ptr(),
+            popup_title2.as_ptr(),
+        );
+        assert!(
+            !popup_child.is_null(),
+            "ChildWindow popup must exist under the editor child"
+        );
+        plugin
+            .set_gui_popup(GuiPopupKind::ChildWindow, false)
+            .expect("child popup close accepts");
+
+        // The child title carries the recorded event log — the
+        // `GetWindowTextW` evidence channel (attach-1 generation).
+        let title = read_title(child);
+        assert_eq!(
+            title,
+            "rvf-test-editor-attach-1|kd:0061:0041:0000,ku:0061:0041:0000,\
+             f:1,fe:7:1,f:0,po:1,pc:1,po:2,pc:2",
+            "event log records every delivered verb"
+        );
+
+        plugin.close_gui().expect("close_gui succeeds");
+        let _ = DestroyWindow(parent);
+    }
+
     let (result, [left, _right]) = drive_block(&mut *plugin, &[]);
     assert!(matches!(
         result.status,

@@ -1,0 +1,789 @@
+{
+  "results": [
+    {
+      "test": {
+        "plugin-library": {
+          "test": "query-nonexistent-factory",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2854000
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "create-id-with-trailing-garbage",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4091300
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-rtld-now",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "skipped",
+        "details": "This test is only relevant to Unix-like platforms"
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 700
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "scan-time",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": "The plugin can be scanned in 2 milliseconds."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2671300
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-crawl",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 56303000
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-descriptor-consistency",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4142200
+      }
+    },
+    {
+      "test": {
+        "plugin-library": {
+          "test": "preset-discovery-load",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll"
+        }
+      },
+      "status": {
+        "code": "crashed",
+        "details": "Timed out after 45 seconds"
+      },
+      "duration": {
+        "secs": 45,
+        "nanos": 71896600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "descriptor-consistency",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2646100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-categories",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2840900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "features-duplicates",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "success",
+        "details": null
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3332500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-out-of-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3073200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-basic-in-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2823800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-out-of-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2721100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-double-in-place",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4053500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-audio-denormals",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2858800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-constant-mask",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4284800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-sleep-process-status",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2809600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-out-of-place-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3708900
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-inconsistent",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3833100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-note-wildcard",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2846200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-sample-rates",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3175500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-varying-block-sizes",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3392700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-random-block-sizes",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3660100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "process-reset-reactivate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3471800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-activation",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3048500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-audio-ports-config",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3332100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "layout-configurable-audio-ports",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3514600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-events",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3370400
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-no-cookies",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3274500
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-set-wrong-namespace",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3689800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3813700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-bounds",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2836700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-sample-accurate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2572000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-fuzz-modulation",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 3212600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-conversions",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2831700
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "param-default-values",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2747100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-empty",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2733000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-invalid-random",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 2943800
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-basic",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4374000
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-binary",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4110600
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "state-reproducibility-buffered",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4807100
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-null",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4035300
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4490200
+      }
+    },
+    {
+      "test": {
+        "plugin-instance": {
+          "test": "transport-fuzz-sample-accurate",
+          "path": "G:\\orca\\workspaces\\ruviform\\rf630-verbs-clap\\target\\debug\\ruviform_plugin_test_clap.dll",
+          "plugin_id": "org.ruviform-test.clap-test-spawn-fail"
+        }
+      },
+      "status": {
+        "code": "failed",
+        "details": "Could not create the plugin instance\n'clap_plugin_factory::create_plugin(\"org.ruviform-test.clap-test-spawn-fail\")' returned a null pointer."
+      },
+      "duration": {
+        "secs": 0,
+        "nanos": 4078100
+      }
+    }
+  ]
+}
+
+[2m   27[0m[2mms[0m [32m INFO[0m Test query-nonexistent-factory completed [2;3mclap_validator::validator[0m
+[2m   34[0m[2mms[0m [32m INFO[0m Test create-id-with-trailing-garbage completed [2;3mclap_validator::validator[0m
+[2m   52[0m[2mms[0m [32m INFO[0m Test scan-time completed [2;3mclap_validator::validator[0m
+[2m   72[0m[2mms[0m [32m INFO[0m Test preset-discovery-descriptor-consistency completed [2;3mclap_validator::validator[0m
+[2m   87[0m[2mms[0m [1;31mERROR[0m Test descriptor-consistency failed [2;3mclap_validator::validator[0m
+[2m   95[0m[2mms[0m [32m INFO[0m Test features-categories completed [2;3mclap_validator::validator[0m
+[2m  103[0m[2mms[0m [32m INFO[0m Test features-duplicates completed [2;3mclap_validator::validator[0m
+[2m  112[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-out-of-place failed [2;3mclap_validator::validator[0m
+[2m  119[0m[2mms[0m [1;31mERROR[0m Test process-audio-basic-in-place failed [2;3mclap_validator::validator[0m
+[2m  127[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-out-of-place failed [2;3mclap_validator::validator[0m
+[2m  135[0m[2mms[0m [1;31mERROR[0m Test process-audio-denormals failed [2;3mclap_validator::validator[0m
+[2m  145[0m[2mms[0m [1;31mERROR[0m Test process-audio-double-in-place failed [2;3mclap_validator::validator[0m
+[2m  153[0m[2mms[0m [1;31mERROR[0m Test process-sleep-constant-mask failed [2;3mclap_validator::validator[0m
+[2m  164[0m[2mms[0m [1;31mERROR[0m Test process-sleep-process-status failed [2;3mclap_validator::validator[0m
+[2m  171[0m[2mms[0m [1;31mERROR[0m Test process-note-out-of-place-basic failed [2;3mclap_validator::validator[0m
+[2m  182[0m[2mms[0m [1;31mERROR[0m Test process-note-inconsistent failed [2;3mclap_validator::validator[0m
+[2m  189[0m[2mms[0m [1;31mERROR[0m Test process-note-wildcard failed [2;3mclap_validator::validator[0m
+[2m  200[0m[2mms[0m [1;31mERROR[0m Test process-varying-sample-rates failed [2;3mclap_validator::validator[0m
+[2m  208[0m[2mms[0m [1;31mERROR[0m Test process-varying-block-sizes failed [2;3mclap_validator::validator[0m
+[2m  219[0m[2mms[0m [1;31mERROR[0m Test process-random-block-sizes failed [2;3mclap_validator::validator[0m
+[2m  229[0m[2mms[0m [1;31mERROR[0m Test process-reset-reactivate failed [2;3mclap_validator::validator[0m
+[2m  238[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-activation failed [2;3mclap_validator::validator[0m
+[2m  247[0m[2mms[0m [1;31mERROR[0m Test layout-audio-ports-config failed [2;3mclap_validator::validator[0m
+[2m  254[0m[2mms[0m [1;31mERROR[0m Test layout-configurable-audio-ports failed [2;3mclap_validator::validator[0m
+[2m  264[0m[2mms[0m [1;31mERROR[0m Test param-set-events failed [2;3mclap_validator::validator[0m
+[2m  272[0m[2mms[0m [1;31mERROR[0m Test param-set-no-cookies failed [2;3mclap_validator::validator[0m
+[2m  283[0m[2mms[0m [1;31mERROR[0m Test param-set-wrong-namespace failed [2;3mclap_validator::validator[0m
+[2m  294[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-basic failed [2;3mclap_validator::validator[0m
+[2m  301[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-bounds failed [2;3mclap_validator::validator[0m
+[2m  307[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
+[2m  316[0m[2mms[0m [1;31mERROR[0m Test param-fuzz-modulation failed [2;3mclap_validator::validator[0m
+[2m  326[0m[2mms[0m [1;31mERROR[0m Test param-conversions failed [2;3mclap_validator::validator[0m
+[2m  331[0m[2mms[0m [1;31mERROR[0m Test param-default-values failed [2;3mclap_validator::validator[0m
+[2m  360[0m[2mms[0m [1;31mERROR[0m Test state-invalid-empty failed [2;3mclap_validator::validator[0m
+[2m  369[0m[2mms[0m [1;31mERROR[0m Test state-invalid-random failed [2;3mclap_validator::validator[0m
+[2m  383[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-basic failed [2;3mclap_validator::validator[0m
+[2m  392[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-binary failed [2;3mclap_validator::validator[0m
+[2m  404[0m[2mms[0m [1;31mERROR[0m Test state-reproducibility-buffered failed [2;3mclap_validator::validator[0m
+[2m  412[0m[2mms[0m [1;31mERROR[0m Test transport-null failed [2;3mclap_validator::validator[0m
+[2m  432[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz failed [2;3mclap_validator::validator[0m
+[2m  442[0m[2mms[0m [1;31mERROR[0m Test transport-fuzz-sample-accurate failed [2;3mclap_validator::validator[0m
+[2m45055[0m[2mms[0m [1;31mERROR[0m Test preset-discovery-crawl crashed: Timed out after 45 seconds [2;3mclap_validator::validator[0m
+[2m45071[0m[2mms[0m [1;31mERROR[0m Test preset-discovery-load crashed: Timed out after 45 seconds [2;3mclap_validator::validator[0m

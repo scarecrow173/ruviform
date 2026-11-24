@@ -122,6 +122,21 @@
 //!   lifecycle misuse (pre-`init` open, double open) answers
 //!   `PluginFailed`; hook declines answer `PluginFailed` after a
 //!   symmetric `destroy` rollback.
+//! - `send_gui_key`/`set_gui_focus`/`set_gui_focus_target`/
+//!   `set_gui_popup` deliver through the private
+//!   `ruviform.editor-ops` extension (Issue #630 K1 —
+//!   `clap.ext.gui` carries no key/focus/popup verbs, so a
+//!   ruviform-namespaced seam is queried per verb via
+//!   `get_extension`): a plugin without the seam answers the honest
+//!   `Unsupported`, the same as a closed GUI; a declined vtable
+//!   call answers `PluginFailed`; an unrepresentable value
+//!   (supplementary-plane `key`, unknown direction/target/kind)
+//!   answers `InvalidValue` host-side. `GuiFocusTarget::HostWindow`
+//!   is the adapter-side leg — `SetFocus` on the session-redeemed
+//!   container HWND (`gui_parent`), Windows only, then the
+//!   plugin's `apply_focus(false, Editor)` notification. All of it
+//!   is synthetic verb delivery: values reach the plugin's vtable,
+//!   never an OS input queue or focus routing.
 //! - `create_sendable` keeps its `None` default — `PluginInstance` is
 //!   `!Send`/`!Sync` (`PhantomData<*const ()>`), so no `Send` instance
 //!   can be honestly produced.
@@ -152,6 +167,7 @@ use clack_common::events::event_types::{
 };
 use clack_common::events::io::{EventBuffer, OutputEventBuffer, OutputEvents, TryPushError};
 use clack_common::events::{EventFlags, EventHeader, Match, Pckn, UnknownEvent};
+use clack_common::extensions::{Extension, PluginExtensionSide, RawExtension};
 use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::{ClapId, FixedPoint};
 use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
@@ -172,14 +188,16 @@ use clack_host::process::audio_buffers::{
     AudioPortBuffer, AudioPortBufferType, AudioPorts, InputChannel,
 };
 use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
+use clack_plugin::extensions::prelude::clap_plugin;
 
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::WIRE_MAX_FRAMES;
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
-    EventList, GuiHandle, GuiRequest, GuiSize, HostError, ParamFlags, ParamId, ParamInfo,
-    ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
-    ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo, erase,
+    EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiPopupKind, GuiRequest,
+    GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
+    ProcessStatus, TransportInfo, erase,
 };
 
 use crate::adapt::translate_output_event;
@@ -833,6 +851,12 @@ struct ClapPlugin {
     /// (`hide` best-effort + `destroy`) runs in `close_gui` and at
     /// the head of `Drop`, before the instance descent (design D3).
     gui: Option<PluginGui>,
+    /// The session-redeemed container parent this GUI is attached
+    /// under — `Some` while `gui` is `Some` (written by `open_gui`/
+    /// `set_gui_parent`, cleared by `close_gui`). `GuiFocusTarget::
+    /// HostWindow` directs `SetFocus` at its `payload()` HWND — the
+    /// same `self.gui_parent` convention the VST3 adapter keeps.
+    gui_parent: Option<ParentLease>,
     /// Pending plugin→host GUI requests — shared with the instance's
     /// `BridgeShared`, whose `HostGuiImpl` enqueues from arbitrary
     /// threads (Issue #873). `drain_gui_requests` moves them out.
@@ -876,6 +900,7 @@ impl ClapPlugin {
             pending_reports: Vec::new(),
             report_stats: ReportStats::new(),
             gui: None,
+            gui_parent: None,
             gui_requests: Arc::new(Mutex::new(VecDeque::new())),
             dirty_notices: Arc::new(Mutex::new(DirtyNoticeQueue::new())),
             gui_seq: 0,
@@ -897,6 +922,124 @@ impl ClapPlugin {
         let handle = instance.plugin_handle();
         let _ = gui.hide(&handle);
         gui.destroy(&handle);
+    }
+
+    /// The plugin's `ruviform.editor-ops` extension handle plus its
+    /// main-thread handle — the private seam the GUI key/focus/popup
+    /// verbs deliver through (Issue #630 K1; [`RuviformEditorOps`]
+    /// documents the ABI contract). Both defined declines land on
+    /// `Err(Unsupported)`: no open GUI (the verbs only ever act on
+    /// the live surface — the same gate `set_gui_size` applies) and a
+    /// plugin that ships no `ruviform.editor-ops` extension — the
+    /// never-claimed honesty the adapter keeps.
+    fn editor_ops(&mut self) -> Result<(PluginMainThreadHandle<'_>, RuviformEditorOps), HostError> {
+        let (Some(_), Some(instance)) = (self.gui.as_ref(), self.instance.as_mut()) else {
+            return Err(HostError::Unsupported);
+        };
+        let handle = instance.plugin_handle();
+        let ops = handle
+            .get_extension::<RuviformEditorOps>()
+            .ok_or(HostError::Unsupported)?;
+        Ok((handle, ops))
+    }
+
+    /// `apply_focus` delivery — the focus half of the private seam,
+    /// shared by `set_gui_focus`, the `Editor`/`EditorElement` arms
+    /// of `set_gui_focus_target`, and `HostWindow`'s focus-loss
+    /// notification. `focused` is strict `{0,1}`; `target`/`element`
+    /// are the discriminant + payload the vtable documents.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] on the [`Self::editor_ops`] gate or
+    /// a vtable slot the plugin left null; [`HostError::PluginFailed`]
+    /// when the plugin declines.
+    #[expect(unsafe_code)]
+    fn apply_editor_focus(
+        &mut self,
+        focused: u8,
+        target: u8,
+        element: u32,
+    ) -> Result<(), HostError> {
+        let (handle, ops) = self.editor_ops()?;
+        let Some(apply_focus) = handle.use_extension(&ops.0).apply_focus else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: `handle` is the live plugin instance the extension
+        // pointer came from; the signature is the documented
+        // `ruviform.editor-ops` ABI contract.
+        if unsafe { apply_focus(handle.as_raw(), focused, target, element) } {
+            Ok(())
+        } else {
+            Err(HostError::PluginFailed)
+        }
+    }
+
+    /// `GuiFocusTarget::HostWindow` — the adapter-owned leg of the
+    /// target verb: `SetFocus` on the session-redeemed container HWND
+    /// (best-effort — the OS may refuse focus to a hidden container,
+    /// and the lane's `GetFocus()` oracle is what observes the move),
+    /// then the plugin's `apply_focus(false, Editor)` notification so
+    /// its `f:0` delivery record stays honest.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] on the [`Self::editor_ops`] gate
+    /// (no open GUI, or no `ruviform.editor-ops` for the
+    /// notification); [`HostError::PluginFailed`] on a dead container
+    /// or a declined notification.
+    #[cfg(target_os = "windows")]
+    #[expect(unsafe_code)]
+    fn focus_host_window(&mut self) -> Result<(), HostError> {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        // The GUI-open gate and the container read must precede
+        // `editor_ops` — its handle borrow lasts the whole call.
+        if self.gui.is_none() {
+            return Err(HostError::Unsupported);
+        }
+        let Some(parent) = self.gui_parent else {
+            // An open GUI always records its container — a missing
+            // lease here is a broken invariant, not a capability
+            // answer.
+            return Err(HostError::PluginFailed);
+        };
+        let (handle, ops) = self.editor_ops()?;
+        let hwnd = parent.payload() as *mut c_void;
+        // SAFETY: `IsWindow` is a pure handle-validity query, safe on
+        // any value.
+        if unsafe { IsWindow(hwnd) } == 0 {
+            return Err(HostError::PluginFailed);
+        }
+        // SAFETY: `hwnd` is the session-redeemed container the caller
+        // keeps alive for the GUI's lifetime (the `set_parent`
+        // contract), and this verb runs on that HWND's pump thread —
+        // `open_gui`'s thread contract. `SetFocus` is best-effort:
+        // its refusal (e.g. a hidden container) stays the lane's
+        // `GetFocus()` observation, not a delivery failure.
+        unsafe {
+            SetFocus(hwnd);
+        }
+        let Some(apply_focus) = handle.use_extension(&ops.0).apply_focus else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: same contract as `apply_editor_focus`.
+        if unsafe { apply_focus(handle.as_raw(), 0, EDITOR_OPS_TARGET_EDITOR, 0) } {
+            Ok(())
+        } else {
+            Err(HostError::PluginFailed)
+        }
+    }
+
+    /// Non-Windows — no HWND container exists, so the `HostWindow`
+    /// leg is the ops-level `Unsupported` the design assigns it.
+    ///
+    /// # Errors
+    ///
+    /// Always [`HostError::Unsupported`].
+    #[cfg(not(target_os = "windows"))]
+    fn focus_host_window(&mut self) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
     }
 
     /// Translates the plugin's buffered output events into canonical
@@ -1762,6 +1905,7 @@ impl Plugin for ClapPlugin {
         }
         self.gui_seq = self.gui_seq.wrapping_add(1);
         self.gui = Some(gui);
+        self.gui_parent = Some(parent);
         Ok(GuiHandle::new(self.gui_seq))
     }
 
@@ -1775,6 +1919,7 @@ impl Plugin for ClapPlugin {
         let Some(gui) = self.gui.take() else {
             return Err(HostError::Unsupported);
         };
+        self.gui_parent = None;
         self.teardown_gui(gui);
         Ok(())
     }
@@ -1851,7 +1996,137 @@ impl Plugin for ClapPlugin {
         // contract `open_gui`'s `set_parent` runs under.
         let window = unsafe { Window::from_win32_hwnd(parent.payload() as *mut c_void) };
         // SAFETY: `window` wraps the live redeemed HWND above.
-        unsafe { gui.set_parent(&handle, window) }.map_err(|_| HostError::PluginFailed)
+        unsafe { gui.set_parent(&handle, window) }.map_err(|_| HostError::PluginFailed)?;
+        self.gui_parent = Some(parent);
+        Ok(())
+    }
+
+    /// `set_gui_focus` → `ruviform.editor-ops` `apply_focus` — the
+    /// `GuiFocusTarget::Editor` shorthand delivered through the
+    /// private seam (Issue #630 K1). Synthetic verb delivery: the
+    /// flag reaches the plugin's vtable, never OS focus routing.
+    ///
+    /// **Thread contract:** same as `open_gui` — the thread owning
+    /// the parent HWND's message pump.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open or the plugin
+    /// ships no `ruviform.editor-ops`; [`HostError::PluginFailed`]
+    /// when the plugin declines.
+    fn set_gui_focus(&mut self, focused: bool) -> Result<(), HostError> {
+        self.apply_editor_focus(u8::from(focused), EDITOR_OPS_TARGET_EDITOR, 0)
+    }
+
+    /// `send_gui_key` → `ruviform.editor-ops` `deliver_key` — the
+    /// boundary `GuiKeyEvent` maps onto the seam's slots: `key` is
+    /// the UTF-16 code unit, `key_code` the Win32 virtual-key bit
+    /// pattern, `modifiers` the `GuiModifiers` bitmask (Issue #630
+    /// K1). Synthetic verb delivery: the values reach the plugin's
+    /// vtable — no OS input queue or focus routing is exercised.
+    ///
+    /// **Thread contract:** same as `open_gui`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open or the plugin
+    /// ships no `ruviform.editor-ops`; [`HostError::InvalidValue`]
+    /// for a supplementary-plane `key` (one UTF-16 code unit is the
+    /// contract — the same BMP check the VST3 adapter applies) or an
+    /// unknown `direction`; [`HostError::PluginFailed`] when the
+    /// plugin declines.
+    #[expect(unsafe_code)]
+    fn send_gui_key(&mut self, event: GuiKeyEvent) -> Result<(), HostError> {
+        let (handle, ops) = self.editor_ops()?;
+        let key = u16::try_from(u32::from(event.key)).map_err(|_| HostError::InvalidValue)?;
+        let direction: u8 = match event.direction {
+            GuiKeyDirection::Down => EDITOR_OPS_KEY_DOWN,
+            GuiKeyDirection::Up => EDITOR_OPS_KEY_UP,
+            // `GuiKeyDirection` is `#[non_exhaustive]` — an unknown
+            // direction has no defined seam discriminant.
+            _ => return Err(HostError::InvalidValue),
+        };
+        let Some(deliver_key) = handle.use_extension(&ops.0).deliver_key else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: `handle` is the live plugin instance the extension
+        // pointer came from; the signature is the documented
+        // `ruviform.editor-ops` ABI contract.
+        let accepted = unsafe {
+            deliver_key(
+                handle.as_raw(),
+                direction,
+                u32::from(key),
+                u32::from(event.key_code.cast_unsigned()),
+                u32::from(event.modifiers.bits),
+            )
+        };
+        if accepted {
+            Ok(())
+        } else {
+            Err(HostError::PluginFailed)
+        }
+    }
+
+    /// `set_gui_focus_target` → `ruviform.editor-ops` `apply_focus`
+    /// (Issue #630 F2): `Editor` is `apply_focus(true, Editor)` (the
+    /// `set_gui_focus(true)` destination), `EditorElement` carries
+    /// the opaque element id (synthetic delivery — no OS-focus
+    /// claim), and `HostWindow` is the adapter-side leg (`SetFocus`
+    /// on the container HWND + the plugin's `f:0` notification).
+    ///
+    /// **Thread contract:** same as `open_gui`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open, the plugin
+    /// ships no `ruviform.editor-ops`, or (`HostWindow`) the build
+    /// has no HWND container; [`HostError::InvalidValue`] on an
+    /// unknown target (`GuiFocusTarget` is `#[non_exhaustive]`);
+    /// [`HostError::PluginFailed`] when the plugin declines.
+    fn set_gui_focus_target(&mut self, target: GuiFocusTarget) -> Result<(), HostError> {
+        match target {
+            GuiFocusTarget::Editor => self.apply_editor_focus(1, EDITOR_OPS_TARGET_EDITOR, 0),
+            GuiFocusTarget::EditorElement { element } => {
+                self.apply_editor_focus(1, EDITOR_OPS_TARGET_ELEMENT, element)
+            }
+            GuiFocusTarget::HostWindow => self.focus_host_window(),
+            _ => Err(HostError::InvalidValue),
+        }
+    }
+
+    /// `set_gui_popup` → `ruviform.editor-ops` `popup` — the plugin
+    /// owns the popup surface (`ChildWindow` under its editor child,
+    /// `Dialog` a plugin-owned top level); the verb only delivers
+    /// the kind + open edge (Issue #630 P1).
+    ///
+    /// **Thread contract:** same as `open_gui`.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no GUI is open or the plugin
+    /// ships no `ruviform.editor-ops`; [`HostError::InvalidValue`]
+    /// on an unknown `GuiPopupKind` (`#[non_exhaustive]`);
+    /// [`HostError::PluginFailed`] when the plugin declines.
+    #[expect(unsafe_code)]
+    fn set_gui_popup(&mut self, kind: GuiPopupKind, open: bool) -> Result<(), HostError> {
+        let (handle, ops) = self.editor_ops()?;
+        let kind: u8 = match kind {
+            GuiPopupKind::ChildWindow => EDITOR_OPS_POPUP_CHILD,
+            GuiPopupKind::Dialog => EDITOR_OPS_POPUP_DIALOG,
+            _ => return Err(HostError::InvalidValue),
+        };
+        let Some(popup) = handle.use_extension(&ops.0).popup else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: `handle` is the live plugin instance the extension
+        // pointer came from; the signature is the documented
+        // `ruviform.editor-ops` ABI contract.
+        if unsafe { popup(handle.as_raw(), kind, u8::from(open)) } {
+            Ok(())
+        } else {
+            Err(HostError::PluginFailed)
+        }
     }
 
     /// `drain_gui_requests` — moves the shared queue's pending
@@ -1887,6 +2162,104 @@ const EDITOR_GUI_API: Option<GuiApiType<'static>> = Some(GuiApiType::WIN32);
 /// Non-Windows attach is not implemented — see the Windows arm.
 #[cfg(not(target_os = "windows"))]
 const EDITOR_GUI_API: Option<GuiApiType<'static>> = None;
+
+// ---------------------------------------------------------------------------
+// Private editor-ops extension (`ruviform.editor-ops`, host side)
+// ---------------------------------------------------------------------------
+
+/// `GuiKeyDirection::Down`'s `ruviform.editor-ops` discriminant —
+/// the wire-v8 value both sides agree on.
+const EDITOR_OPS_KEY_DOWN: u8 = 0;
+/// `GuiKeyDirection::Up`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_KEY_UP: u8 = 1;
+/// `GuiFocusTarget::Editor`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_TARGET_EDITOR: u8 = 0;
+/// `GuiFocusTarget::EditorElement`'s `ruviform.editor-ops`
+/// discriminant.
+const EDITOR_OPS_TARGET_ELEMENT: u8 = 1;
+/// `GuiPopupKind::ChildWindow`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_POPUP_CHILD: u8 = 0;
+/// `GuiPopupKind::Dialog`'s `ruviform.editor-ops` discriminant.
+const EDITOR_OPS_POPUP_DIALOG: u8 = 1;
+
+/// The `#[repr(C)]` vtable of the private `ruviform.editor-ops`
+/// plugin extension — the fixture-private seam (Issue #630 K1)
+/// through which the host-side GUI verbs `send_gui_key`/
+/// `set_gui_focus`/`set_gui_focus_target`/`set_gui_popup` reach the
+/// plugin, `clap.ext.gui` carrying no key/focus/popup verbs of its
+/// own. This is **synthetic verb delivery**: the values land in the
+/// plugin's vtable, never an OS input queue or focus routing.
+///
+/// **ABI contract — mirrored verbatim by the fixture**
+/// (`ruviform-plugin-test-clap` `editor.rs`; the two crates cannot
+/// share the type, so this layout plus the discriminant consts
+/// above is the contract):
+///
+/// - extension id: `ruviform.editor-ops`
+/// - field order: `deliver_key`, `apply_focus`, `popup`
+/// - `deliver_key(plugin, direction, key, key_code, modifiers) ->
+///   bool` — `direction` is `GuiKeyDirection`'s discriminant
+///   (`Down` = 0, `Up` = 1); `key` the UTF-16 code unit; `key_code`
+///   the Win32 virtual-key value (the `i16` bit pattern
+///   zero-extended); `modifiers` the `GuiModifiers` bitmask — all
+///   16-bit values in `u32` slots.
+/// - `apply_focus(plugin, focused, target, element) -> bool` —
+///   `focused` is strict `{0,1}`; `target` is `GuiFocusTarget`'s
+///   discriminant (`Editor` = 0, `EditorElement` = 1; `HostWindow`
+///   = 2 never reaches the plugin — the adapter consumes it);
+///   `element` the opaque id, `0` for non-element targets.
+/// - `popup(plugin, kind, open) -> bool` — `kind` is
+///   `GuiPopupKind`'s discriminant (`ChildWindow` = 0, `Dialog` = 1);
+///   `open` is strict `{0,1}`.
+/// - every member returns `false` on a defined rejection
+///   (unassigned byte, out-of-range value, no created GUI) — the
+///   adapter maps `false` to `HostError::PluginFailed`.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ClapPluginRuviformEditorOps {
+    deliver_key: Option<
+        unsafe extern "C" fn(
+            plugin: *const clap_plugin,
+            direction: u8,
+            key: u32,
+            key_code: u32,
+            modifiers: u32,
+        ) -> bool,
+    >,
+    apply_focus: Option<
+        unsafe extern "C" fn(
+            plugin: *const clap_plugin,
+            focused: u8,
+            target: u8,
+            element: u32,
+        ) -> bool,
+    >,
+    popup: Option<unsafe extern "C" fn(plugin: *const clap_plugin, kind: u8, open: u8) -> bool>,
+}
+
+/// The host-side handle to the plugin's `ruviform.editor-ops`
+/// extension — wraps the [`RawExtension`] `plugin.get_extension`
+/// returns; [`ClapPluginRuviformEditorOps`] documents the ABI
+/// contract this points at.
+#[derive(Copy, Clone)]
+struct RuviformEditorOps(RawExtension<PluginExtensionSide, ClapPluginRuviformEditorOps>);
+
+// SAFETY: `IDENTIFIERS` names the private seam whose vtable layout
+// `ClapPluginRuviformEditorOps` pins down; `from_raw` only re-wraps
+// the raw pointer the host fetched under that id — the
+// `RawExtension::cast` contract's `T` is exactly that vtable type.
+#[expect(unsafe_code)]
+unsafe impl Extension for RuviformEditorOps {
+    const IDENTIFIERS: &[&CStr] = &[c"ruviform.editor-ops"];
+    type ExtensionSide = PluginExtensionSide;
+
+    unsafe fn from_raw(raw: RawExtension<Self::ExtensionSide>) -> Self {
+        // SAFETY: the caller guarantees the raw extension answers to
+        // `ruviform.editor-ops`, whose pointee is
+        // `ClapPluginRuviformEditorOps` by the documented contract.
+        Self(unsafe { raw.cast() })
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Fixture resolution helper (shared with the Task-3 runner / Task-4 E2E)
