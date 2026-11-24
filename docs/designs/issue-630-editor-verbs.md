@@ -455,3 +455,26 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
 - CLAP floating surface（`set_transient`/`suggest_title`/`show`）を verb 表面に
   載せるか —— 推奨は載せず、private seam で plugin 所有 popup を直接駆動
   する（floating surface は fixture 内部の helper 供給元として残す）。
+
+## 実装記録（slice 1+2）
+
+- `GuiFocusTarget`/`GuiPopupKind` は `boundary.rs` に `#[non_exhaustive]` +
+  `Copy` 値型で実装済み。`Plugin`/`ErasedPlugin` の `set_gui_focus_target`/
+  `set_gui_popup` は default `Err(HostError::Unsupported)` の additive 形。
+- wire-v8 確定 layout: tag 29 `SetGuiFocusTarget{target}` = `u8` discriminant
+  （`Editor`=0・`EditorElement`=1+`u32` element・`HostWindow`=2）、tag 30
+  `SetGuiPopup{kind,open}` = `u8` kind（`ChildWindow`=0・`Dialog`=1）+ strict
+  `{0,1}` flag。未割当 byte は `WireError::Malformed`。`element` は opaque
+  `u32` として全値を verbatim 通す。`WIRE_VERSION` は 8 に bump 済み。
+- capability bit の open question は保守的に解消: tag 29/30 は
+  `WIRE_CAPABILITY_GUI_FLOATING`（bit 0）の family に atomically に属し、新
+  bit は割らない（`gui_family` に tag 29/30 を追加済み）。`EditorCapabilities`
+  の claim 規則は「受理の実績 or open で証明できた mechanism fact のみ」 —
+  本 slice では `popup`/`input`/`focus` の新規 claim を行わない。
+- `HostCommand::{SetGuiFocusTarget,SetGuiPopup}`・`EditorSessionOps` の
+  default `Err(EditorOpError::Unsupported)` method・`PluginEditorSession` の
+  non-fatal verb・`InProcessEditorOps`/`L1EditorOps` forward は実装済み。
+  `GuiFocusTarget::HostWindow` の実現は adapter/runner 側責務で、ops 層は
+  target を verbatim で運ぶ。child 側（`ruviform-plugin-export`）は entry
+  dispatch の catch-all が defined `Unsupported` を返す —— slice 3/4 が
+  fixture seam を載せるまでの正しい着地点。
