@@ -1,0 +1,11 @@
+  --- pnputil /add-driver D:\a\ruviform\ruviform\probe-pkg\RvfTestSignedNull.inf /install ---
+Microsoft PnP Utility
+
+Adding driver package:  RvfTestSignedNull.inf
+Driver package added successfully.
+Published Name:         oem12.inf
+
+Total driver packages:  1
+Added driver packages:  1
+  pnputil exit=0
+  published: oem12.inf

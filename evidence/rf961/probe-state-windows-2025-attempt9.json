@@ -1,0 +1,14 @@
+{
+  "msbuild": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\MSBuild\\Current\\Bin\\MSBuild.exe",
+  "vs_install": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+  "km_headers": 1,
+  "km_libs": 0,
+  "sys_path": "D:\\a\\ruviform\\ruviform\\drivers\\testsigned-null\\x64\\Release\\RvfTestSignedNull.sys",
+  "cat_path": "D:\\a\\ruviform\\ruviform\\probe-pkg\\rvftestsignednull.cat",
+  "pkg_dir": "D:\\a\\ruviform\\ruviform\\probe-pkg",
+  "cert_thumbprint": "8AE28499F046515F69057ACCE1354AE066AE6D92",
+  "cert_cer_path": "D:\\a\\ruviform\\ruviform\\probe-cert.cer",
+  "inf_published": "oem12.inf",
+  "inf_staged": true,
+  "instance_id": "ROOT\\SYSTEM\\0001"
+}

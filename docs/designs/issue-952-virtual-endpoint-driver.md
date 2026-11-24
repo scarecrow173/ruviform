@@ -117,63 +117,62 @@ rf#629 survey の確定済み制約は: VB-CABLE install は **OS 再起動必�
 
 - **権限**: GitHub-hosted Windows runner は administrators 実行 + UAC disabled — driver install・`bcdedit`・`pnputil`/`devcon`・service 操作の権限要件は満たす。
 - **再起動不可**: runner VM は ephemeral（job ごと新規・終了後破棄）。job 内 OS reboot は Runner.Listener の session を kill し job を失敗させる — reboot 後の job 継続手段は存在しない。
-- **署名規則**: Windows 10 1607 以降・Secure Boot ON の fresh install では Dev Portal（Hardware Dev Center）署名なしの新規 kernel driver は load されない。`bcdedit /set testsigning on` は再起動で初めて有効（Secure Boot 有効時は flag 設定自体も拒否）→ **test-signing → 再起動必須 → ephemeral runner で再起動不可** の連鎖が実際に成立する。
-- **image**: `windows-2022` = Server 2022（10.0.20348）、`windows-2025`/`windows-latest` = Server 2025（10.0.26100）。**`windows-11-arm`/`windows-11-vs2026-arm` = Windows 11 Enterprise 25H2（10.0.26200, arm64）** — WMS の in-box 条件（Win11 desktop 25H2+）を満たす唯一の hosted image。Windows 両 image に WDK component（10.0.26100.16）同梱 — driver build・`devcon`/`signtool`/`infverif` は job 内で利用可能。
+- **署名規則**: Windows 10 1607 以降・Secure Boot ON の fresh install では Dev Portal（Hardware Dev Center）署名なしの新規 kernel driver は load されない。`bcdedit /set testsigning on` は再起動で初めて有効（Secure Boot 有効時は flag 設定自体も拒否）。**【2026-11-24 実測で一部覆った — 下記】** runner image は **`testsigning=Yes`・Secure Boot OFF が出荷状態**（rf#955 probe 実測）のため、x64 では flag 設定・reboot なしに test-signed driver が load できる。ただし **`windows-11-arm`（ARM64）では testsigning=Yes でも kernel が load を拒否**（rf#961 attempt-9 で CI event 3004 + VBS policy 稼働を実測 — VBS 配下の Code Integrity は test-signing 緩和を honor しない。`hypervisorlaunchtype=Off`+reboot が必要で job 内不可）。
+- **image**: `windows-2022` = Server 2022（10.0.20348）、`windows-2025`/`windows-latest` = Server 2025（10.0.26100）。**`windows-11-arm`/`windows-11-vs2026-arm` = Windows 11 Enterprise 25H2（10.0.26200, arm64）** — WMS の in-box 条件（Win11 desktop 25H2+）を満たす唯一の hosted image。**【2026-11-24 実測訂正】** WDK は `windows-11-arm` に headers/libs/Inf2Cat 同梱（DriverKit task dll は 17.0 のみ — MSBuild 18 対応に rename workaround が必要・実測で成立）だが **`windows-2025` は WDK 未導入**（km headers/libs なし — `winget install Microsoft.WindowsWDK.10.0.26100` の job 内導入経路が存在し実測で成立）。`devcon` は両 leg とも非搭載（setupapi/newdev P/Invoke で代替可・実測済み）。
 - **署名済み driver の install は reboot 不要**: runner-images maintainer が署名済み仮想 audio driver（Scream）の job 内 install を推奨した実績、VB-CABLE を job 内 install する公開 workflow 実績あり。
 - **Server SKU**: AudioSrv は存在するが（Server 2025 では既定 Running）audio device 0 件で endpoint は 0 件 — 別プロジェクトの CI 検証 ADR が「hosted runners expose no physical or virtual audio endpoint」を実測として記録。WMS は Server には存在しない。
 
-### Audio — **条件付き成立**（Dev Portal 署名経路のみ）
+### Audio — **x64 は test-signing で成立（実測済み）/ arm64 は要外部調達**
 
 | 経路 | 判定 | 理由 |
 | --- | --- | --- |
 | user-mode 仮想 endpoint | **不成立** | 公式経路が存在しない（runner 制約以前に方式自体が不在） |
-| 独自 driver + test-signing | **不成立** | testsigning → 再起動必須 → ephemeral runner で再起動不可 |
-| **独自 driver + Dev Portal 署名（attestation/WHQL）** | **条件付き成立** | admin・WDK 同梱・署名 API 自動化（Hardware REST API/SDCM）・署名済み driver の reboot 不要 install が全て揃う。条件は後述の外部 gate |
+| 独自 driver + test-signing on `windows-2025`（x64） | **成立（2026-11-24 実測）** | image が `testsigning=Yes`+Secure Boot OFF 出荷のため reboot 不要。rf#961 attempt-8 で自己署名 cert → Root/TrustedPublisher 登録 → `.sys`+`.cat` 署名 → pnputil install → devnode → **kernel driver Running** まで全経路を実測（evidence/rf961/）。WDK は winget で job 内導入（実測 174s） |
+| 独自 driver + test-signing on `windows-11-arm`（ARM64） | **不成立（2026-11-24 実測）** | install・devnode までは成立するが kernel が load を拒否（problem 52 = CM_PROB_UNSIGNED_DRIVER・CI event 3004）。VBS policy 稼働下では testsigning が効かず、解除は `hypervisorlaunchtype=Off`+reboot が要り job 内不可 |
+| 独自 driver + Dev Portal 署名（attestation/WHQL） | **条件付き成立** | admin・署名 API 自動化（Hardware REST API/SDCM）・署名済み driver の reboot 不要 install が揃う。**ARM64 coverage が必要な場合の唯一経路** — 条件は後述の外部 gate |
 
-条件（全て満たす必要あり）:
+条件（attestation 経路を採る場合に全て満たす — **x64 のみなら不要**）:
 
 1. **EV code signing 証明書の調達**（有償・実在審査・ハードウェアトークン — repo 外の外部調達）。
 2. **Hardware Dev Program アカウント**（Partner Center + Microsoft Entra ID アプリケーション + Manager ロール）。
 3. **attestation submission の CI 自動化**（Hardware REST API または SDCM — 自動化実績あり）。
 4. **Server SKU での install 実測確認**（attestation 署名は「Windows 10 Desktop and later」対象 — Server での virtio 系実績はあるが自前 driver での実測が要る → 実測 slice）。
-5. ruviform 独自 driver の実装・保守（SysVAD 派生 PortCls miniport + INF + WDK build — 実装 slice）。
+5. ruviform 独自 driver の実装・保守（SysVAD 派生 PortCls miniport + INF + WDK build — 実装 slice）。test-signing 経路で先に進める場合も同一資産。
 
-### MIDI — **条件付き成立**（2 経路）
+### MIDI — **独自 driver（x64 test-signing）が唯一の実測成立経路**
 
 | 経路 | 判定 | 理由 |
 | --- | --- | --- |
 | WMS loopback on `windows-2022`/`windows-2025`（x64 Server） | **不成立** | WMS は Win11 desktop 25H2+ 限定。Server SKU は対象外で、`midisrv` 自体が存在しない |
-| **WMS loopback on `windows-11-arm`（arm64 Win11 25H2）** | **条件付き成立** | in-box service で **driver 不要** — 外部調達ゼロで GitHub-hosted に乗る可能性が最も高い経路。条件は後述 |
-| 独自 driver + test-signing | **不成立** | Audio と同一の連鎖 |
-| 独自 driver + Dev Portal 署名 | **条件付き成立** | Audio と同一の外部 gate（x64 lane を維持したい場合の経路） |
+| WMS loopback on `windows-11-arm`（arm64 Win11 25H2） | **不成立（2026-11-24 実測で確定）** | `midisrv`+Midi2 transport DLL は in-box で存在するが **provisioning 経路が全て到達不能**（rf#962 実測）: compiled `Windows.Devices.Midi2` API は activation factory 未登録（全 class `REGDB_E_CLASSNOTREG`）・`midi` console・PS module は image 非搭載。client component の job 内導入（Microsoft 配布物）が別途必要かは未検証の残件 |
+| 独自 driver + test-signing on `windows-2025`（x64） | **成立（2026-11-24 実測）** | Audio 行と同一 — install→devnode→kernel load 完走を実測 |
+| 独自 driver + Dev Portal 署名 | **条件付き成立** | Audio と同一の外部 gate（ARM64 lane が要る場合のみ） |
 
-WMS 経路の条件（いずれも runner 実測待ち — 実測 slice で確定）:
+WMS 経路の残件（client component 導入可否 — 未実測）:
 
-1. `windows-11-arm` image で `midisrv` が有効か（phased rollout・既定状態）。
-2. **BLOOP transport が in-box か**（2025-11 時点の releases 記録では preview transports 配布側に記載 — GA 後の同梱状況は image 実測要。preview transport なら tools package の job 内 install 経路を確立）。
-3. **作成経路が headless で動くか**: `midi` console utility・PowerShell module（`New-MidiLoopback`/`New-MidiBasicLoopback`）・`Windows.Devices.Midi2` API のいずれか。config JSON 直書きは Microsoft が明示的に非サポートとしており採用不可。transient endpoint は service restart で消えるため ephemeral job 向き。
-4. **verifier 意味論との整合**: LOOP A/B pair は各 endpoint が同名 in/out port を持つが送信は相手側に届くため、`loopback.rs` の name-match candidate が "A" を掴むと round-trip せず `verdict: Fail` 化する危険がある。**BLOOP（loopMIDI 同型の単一 endpoint）を provisioning 対象とするか、verifier の pair 意味論を A/B 対応に更新する**かの選択が要る（crates 変更 — 実装 slice 見積もり）。
-5. **`aarch64-pc-windows-msvc` での workspace build** — 対象クレート・dev-dep 含む compile が arm64 で通るか。
+1. `Windows.Devices.Midi2` client API・`midi` console の配布形態（App SDK/tools package）が job 内 install 可能か。可能なら service-side `midisrv` は既に存在するため BLOOP provisioning が復活し得る。
+2. **verifier 意味論との整合**（provisioning 経路が復活した場合の課題として継続）: LOOP A/B pair は `loopback.rs` の name-match candidate と実配線が食い違い `Fail` 化する危険 — BLOOP 限定か verifier 更新の選択。
 
 ## 方式選択とその根拠
 
-### 採用案
+### 採用案（2026-11-24 実測で確定 — rf#955/rf#961/rf#962 実走）
 
-**Audio — SysVAD 派生 PortCls/waveRT 独自 kernel driver + Dev Portal attestation 署名**を第一候補とする。
+**Audio/MIDI 共通 — SysVAD 派生独自 kernel driver + 自己署名 test-signing on `windows-2025`（x64）**を第一候補とする。
 
-根拠: user-mode 経路の不存在を一次情報で確定した以上、仮想 audio endpoint は kernel driver が唯一経路であり、署名済み driver のみが reboot なしで ephemeral runner に install できる。attestation は HLK 不要で submission が REST API/SDCM で自動化可能 — 「build → 署名 submission → download → install → lane 実走」を同一 job 内で完結させうる設計が成立する。SysVAD（MS-PL）は派生・再配布が合法で、仮想 speaker/mic pair の実績ある骨格をそのまま使える。独自 driver は rf#629 capability matrix で COTS が ❌/⚠️ だった device-loss・xrun・permission denial の故障注入を driver 層で実現できる — 外部 driver では再現不能だった Case を回収する副次的利点がある。
+根拠: rf#961 attempt-8 で test-signed kernel driver が GitHub-hosted x64 runner で install・devnode・kernel load・Running まで全経路を実測完走（evidence/rf961/）。image が `testsigning=Yes` 出荷のため EV 証明書・Partner Center は不要 — **外部調達ゼロで Audio/MIDI ともに x64 hosted runner へ乗る**。独自 driver は rf#629 capability matrix の ❌/⚠️ 故障注入を driver 層で実現できる副次的利点も不変。ARM64 lane が必要になった場合のみ attestation 署名が要る（その際は Slice D の外部 gate）。
 
-**MIDI — Windows MIDI Services loopback on `windows-11-arm` を第一候補とする**。
+**MIDI — WMS 経路は実測で到達不能と確定したため独自 driver に統合**。
 
-根拠: `windows-11-arm` は Win11 25H2 client で WMS in-box — **driver 実装すら不要**で、「ruviform 資産」として必要なのは provisioning 自動化（endpoint 作成手順）と verifier 接続点だけになる。transient loopback は job 内で作成・消去が完結し cleanup も軽い。x64 lane を維持したい場合の代替として独自 MIDI kernel driver（attestation 署名）を併記する — Audio driver を実装するなら同 package に MIDI miniport を同梱する統合案も取れる。
+根拠: rf#962 で `Windows.Devices.Midi2` client API が activation factory 未登録（両 leg `REGDB_E_CLASSNOTREG`）・console/PS module 非搭載を実測。service-side `midisrv` は存在するが supported な provisioning 経路が hosted runner に存在しない。client component の job 内導入可否は未検証の残件だが、独自 MIDI miniport driver（test-signing・x64）は既に全経路が実測で成立しており、そちらを主経路とする。
 
-**外部調達の構図**: Audio の GitHub-hosted 成立には EV 証明書 + Partner Center という外部調達が不可避（rf#762 の runner 調達を証明書調達に置き換える形）。**外部調達を一切避ける路線では**: Audio は self-hosted runner（rf#762 継続）+ test-signing（永続化可能 — 専用機なら reboot 後の状態が残る）が現実解、MIDI は `windows-11-arm` + WMS で外部調達ゼロの可能性が高い（実測待ち）。この2つの分岐を Deferred Design Concerns のユーザー判断論点として記録する。
+**外部調達の構図（更新）**: **x64 lane では外部調達ゼロ** — 自己署名証明書は job 内で `New-SelfSignedCertificate` 生成・`Root`+`TrustedPublisher` 登録で足りる（ユーザー判断済み: テスト用途のため自己署名で可）。残る外部調達候補は: (a) ARM64 lane が要る場合の EV+Partner Center attestation、(b) WMS 復活に必要な client component 配布物（未検証）、(c) self-hosted runner（rf#762 — GUI-L2 等の別目的では残余価値あり）。
 
 ### 不採用案
 
-- **test-signing + GitHub-hosted**: 再起動不可制約に確定的に衝突 — 実現不能として棄却。
+- **test-signing on `windows-11-arm`（ARM64）**: VBS policy 稼働下で kernel load が拒否されることを実測（rf#961 attempt-9・CI event 3004）。解除には reboot が要り job 内不可 — ARM64 lane は attestation が唯一経路。
 - **user-mode audio（全経路）**: 方式自体が存在しない。
 - **WMS on x64 Server image**: SKU 制約で service 自体が不在。
+- **WMS provisioning via supported API on `windows-11-arm`**: compiled `Windows.Devices.Midi2` API は activation factory 未登録・console/PS module 非搭載（rf#962 実測）— client component 導入なしでは到達不能。
 - **config JSON 直書き provisioning**: Microsoft が明示的に非サポート — 採用すると保守破綻の温床になる。
 - **WMS LOOP A/B pair を既存 verifier にそのまま渡す**: name-match 意味論と実配線が食い違い `Fail` 化する危険 — BLOOP 選択か verifier 更新で回避。
 
@@ -202,23 +201,23 @@ WMS 経路の条件（いずれも runner 実測待ち — 実測 slice で確�
 - **範囲見積もり**: `.github/**` 新規 workflow + evidence 採取。`crates/**` 変更なし。probe は Windows 実機で既に動作確認済み（本 slice の補助実測どおり）。
 - **確定条件**: WMS 経路が `windows-11-arm` で provisioning→WinMM 可視化まで成立するかを判定し、MIDI 採用方式（WMS vs 独自 driver）を確定する。
 
-### Slice B — 独自 audio driver 実装（attestation 経路前提）
+### Slice B — 独自 audio driver 実装（x64 test-signing 経路 — attestation 前提を解除）
 
-- **scope**: SysVAD 派生 PortCls/waveRT miniport driver のソースツリー新設（仮想 speaker/mic pair、INF、WDK build 手順）、test-signing での専用機/ローカル動作確認、`Ruviform Cable *` 命名の endpoint 構成。
-- **範囲見積もり**: 新規 driver ソースツリー（`crates/**` 外 — `drivers/` 等の配置は実装 slice で判断）+ WDK build 手順 + `mise.toml`（build/provision lane 追加見込み）+ `docs/designs/`。
-- **確定条件**: test-signing 環境で endpoint 列挙・`endpoint_probe` が pair candidate を検出・`tests/virtual_endpoint.rs` が round-trip する。
+- **scope**: SysVAD 派生 PortCls/waveRT miniport driver のソースツリー新設（仮想 speaker/mic pair、INF、WDK build 手順）、`Ruviform Cable *` 命名の endpoint 構成、`virtual-driver-install-probe.yml` で実測済みの自己署名→install→devnode 手順の流用。
+- **範囲見積もり**: 新規 driver ソースツリー（`drivers/` に実績あり — `drivers/testsigned-null/` が雛形として使える）+ WDK build 手順 + `mise.toml`（build/provision lane 追加見込み）+ `docs/designs/`。
+- **確定条件**: `windows-2025` runner で test-signed install → endpoint 列挙・`endpoint_probe` が pair candidate を検出・`tests/virtual_endpoint.rs` が round-trip する。
 
-### Slice C — MIDI provisioning（Slice A の結果で分岐）
+### Slice C — MIDI provisioning（WMS 到達不能が実測で確定 — 独自 driver 経路に確定）
 
-- **WMS 経路採用時**: provisioning script（`midi` console 経由または `Windows.Devices.Midi2` API 薄 wrapper）+ BLOOP 前提の pair 意味論確認（必要なら verifier の candidate フィルタ調整 — `crates/ruviform-midi-device`/`ruviform-audio-test`/`ruviform-plugin-test-vst3`）+ `windows-11-arm` での lane 実走。
-- **独自 driver 経路時**: MIDI miniport 実装（Slice B の driver package への同梱も選択肢）+ 同じく verifier 接続点確認。
-- **範囲見積もり**: provisioning 資産（scripts/examples 等）+ `crates/**`（verifier 意味論調整が要る場合）+ `mise.toml` lane 追加。
+- **scope**: MIDI miniport driver 実装（Slice B の driver package への同梱が自然 — 同一署名・install 経路を再利用）+ `loopback.rs` が検出する in/out 同名 port の構成 + `windows-2025` x64 での lane 実走。
+- **範囲見積もり**: driver 実装（`drivers/` 配下）+ `crates/**`（verifier 接続点の確認・必要なら調整）+ `mise.toml` lane 追加。
+- **残件**: WMS client component の job 内導入可否（Microsoft 配布物）— 成立すれば arm/WMS 経路が復活し得る別途調査項目（優先度は独自 driver 経路が既に実測成立しているため低い）。
 
-### Slice D — 署名 pipeline（attestation 経路採用時）
+### Slice D — 署名 pipeline（ARM64 coverage が必要になった場合のみ）
 
-- **scope**: EV 証明書 + Partner Center + Hardware API/SDCM による attestation submission の CI 自動化、署名済み driver package の取得・install 手順・revocation/rotation 方針。
-- **範囲見積もり**: `.github/**`（署名 job・secrets 管理）+ scripts + `docs/`。**外部 gate: EV 証明書調達と Partner Center 開設は本 slice 着手の前提**（ユーザー判断要）。
-- **確定条件**: Server SKU で attestation-signed driver が pnputil/devcon で install でき、`test-audio-virtual-endpoint` が `verdict: Pass` を返す実走証拠。
+- **scope**: EV 証明書 + Partner Center + Hardware API/SDCM による attestation submission の CI 自動化、署名済み driver package の取得・install 手順・revocation/rotation 方針。**x64 のみなら本 slice は不要**（自己署名で全経路が実測成立済み）。ARM64 は test-signing 不可が実測確定（VBS CI policy）のため、attestation が唯一経路。
+- **範囲見積もり**: `.github/**`（署名 job・secrets 管理）+ scripts + `docs/`。**外部 gate: EV 証明書調達と Partner Center 開設は本 slice 着手の前提**（ユーザー判断要 — 現時点で着手根拠なし）。
+- **確定条件**: `windows-11-arm` で attestation-signed driver が kernel load され devnode `problem_code=0` になる実走証拠。
 
 ### Slice E — lane/workflow 統合
 
@@ -229,22 +228,23 @@ WMS 経路の条件（いずれも runner 実測待ち — 実測 slice で確�
 
 | Risk | 影響 | 対応 |
 | --- | --- | --- |
-| `windows-11-arm` で midisrv/BLOOP が実測で不在 | MIDI の driver 不要経路が消え、独自 driver 経路に一本化 | Slice A の実測を方式確定の前置条件とし、潰れたら独自 driver + attestation（Audio と同一 pipeline を再利用）へ切替 |
-| EV 証明書・Partner Center の調達が通らない | Audio の GitHub-hosted 経路が閉じる | 外部調達ゼロ路線へ — self-hosted runner（rf#762 継続）+ test-signing。MIDI は arm/WMS が残り得る |
-| attestation 署名が Server SKU で install できない | Audio GitHub-hosted 不成立に確定 | virtio 系実績はあるが未確認項目として Slice A/D で実測。潰れたら self-hosted へ |
+| `windows-11-arm` で midisrv/BLOOP が実測で不在 | MIDI の driver 不要経路が消え、独自 driver 経路に一本化 | **実測で確定** — midisrv は存在するが provisioning 経路が不在（rf#962）。独自 driver（x64 test-signing）に一本化済み |
+| GitHub runner image の `testsigning=Yes` が将来の image 更新で締められる | x64 test-signing 経路が塞がる | image の現状観測値であって公約ではない — probe workflow を残して regress 検知できる状態にする。塞がれた場合は attestation（Slice D）か self-hosted へ |
+| ARM64 lane が要求される | test-signing 不可が実測確定（VBS CI policy） | EV+Partner Center attestation（Slice D）が唯一経路 — 現時点では要求なし |
+| attestation 署名が Server SKU で install できない | ARM64/将来の attestation 経路が閉じる | virtio 系実績はあるが未確認項目 — Slice D 着手時に実測 |
 | LOOP A/B pair が verifier を Fail 化 | 誤判定で provisioning を疑い無駄な切り分け | BLOOP を provisioning 対象に固定するか verifier の pair 意味論を A/B 対応に更新（Slice C の範囲） |
 | WDK/PortCls driver の保守コスト | WDK toolchain・INF・署名更新の継続保守 | MS-PL の SysVAD をベースに最小構成から始め、driver 層の制御（hotplug/loss/xrun）を capability matrix の ❌/⚠️ 項目回収に限定して段階追加 |
 | `aarch64-pc-windows-msvc` で対象クレートが compile しない | arm/WMS 経路が使えない | Slice A で compile 確認。潰れたら x64 独自 driver 経路へ |
 
 ## Deferred Design Concerns
 
-- **runner 実測の未実施**: 本 slice は `.github/**` 変更を含まないため runner 上の実測は行っていない。MIDI の WMS 経路・`windows-11-arm` の arm build・midisrv/BLOOP 同梱・Secure Boot 状態は全て Slice A（probe workflow）の実測待ちであり、判定が「条件付き成立」から動く可能性がある。
-- **外部 gate: EV 証明書 + Hardware Dev Program**: Audio の GitHub-hosted 成立はこの調達が前提。調達可否・費用・主体（個人/組織での開設条件）は repo 外判断 — **`ask`/ユーザー判断要**。
-- **「self-hosted 不要ならそちら」への回答の分岐**: MIDI は arm/WMS で self-hosted 不要の可能性が高いが、Audio は GitHub-hosted でも証明書調達が要る。「runner 調達（rf#762）を証明書調達に置き換える」か「外部調達ゼロで self-hosted + test-signing」かはユーザー判断 — 本 doc では両経路を併記し確定を保留する。
-- **rf#762 の扱い**: 独自+attestation で GitHub-hosted が成立しても、test-signing が使える self-hosted は debug 速度・証明書不要・GUI-L2 併用の点で残余価値がある。不要化は #762 owner 判断。
-- **独自 driver の置き場所**: `crates/**` は Rust workspace の領域。driver ソース（C/C++/INF/WDK project）の配置は実装 slice で repo 構成判断 — `drivers/` 新設・別 workspace・別 repo の選択肢。
-- **verifier の LOOP A/B 意味論**: `loopback.rs`/`os_endpoint.rs`/`os_endpoint_midi_e2e.rs` の name-match candidate が WMS A/B pair で Fail 化する危険。BLOOP 限定 vs A/B 対応更新の設計は実装 slice で決定。
-- **BLOOP transport の in-box 状態**: 2025-11 時点では preview transports 配布側に記録 — GA 後（2026-11 現在）の in-box 同梱状況は image 実測が要る。
+- **【解決済み 2026-11-24】runner 実測**: rf#955（環境 probe）・rf#961（install probe・attempt 1-9）・rf#962（WMS API probe）で実走完了。`testsigning=Yes`+SecureBoot OFF（両 leg）・x64 test-signed driver 全経路成立・ARM64 kernel load 不可（VBS CI）・WMS provisioning 到達不能を確定。
+- **【解決済み】「self-hosted 不要ならそちら」への回答**: **x64 lane は self-hosted 不要・外部調達ゼロで成立**（ユーザー判断済み — テスト用途は自己署名で可）。
+- **外部 gate: EV 証明書 + Hardware Dev Program**: ARM64 lane が要る場合のみ必要。x64 では不要（実測済み）。ARM64 lane 要求が発生した時点でユーザー判断へ。
+- **rf#762 の扱い**: x64 GitHub-hosted が成立しても、self-hosted は GUI-L2 併用・debug 速度の点で残余価値がある。不要化は #762 owner 判断。
+- **独自 driver の置き場所**: `drivers/` に実績あり（`drivers/testsigned-null/`）。製品 driver の配置は同じ形で十分。
+- **verifier の LOOP A/B 意味論**: 独自 driver 経路では A/B pair 自体が存在しないため不発 — BLOOP/独自 port で `loopback.rs` 要件を満たす構成にすればよい。WMS 復活時のみ再燃。
+- **BLOOP transport の in-box 状態**: 実測で確定 — transport DLL は in-box だが client provisioning 経路が不在（rf#962）。
 - **capability matrix の ❌/⚠️ 項目**: 自前 driver で device-loss/xrun/permission-denial の故障注入が理論上回収可能 — 実装フェーズで対象 Case を選ぶ（runbook の実測待ち項目と合流）。
 
 ## Verification Notes
