@@ -44,8 +44,8 @@ use std::time::Duration;
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
     DirtyNotice, Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput,
-    LifecycleState, ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig,
-    ProcessResult,
+    LifecycleState, ParamEvent, ParamId, ParamNotice, ParamValue, PluginDescriptor, ProcessConfig,
+    ProcessResult, RescanAspects,
 };
 use ruviform_plugin_host::{
     DiagnosticQuery, HostCommand, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
@@ -747,6 +747,104 @@ fn real_stateful_test_plugin_l1_state_restore_announces_dirty() {
     notices.clear();
     assert_eq!(
         host.drain_dirty_notices(handle, &mut notices).unwrap(),
+        ReportDrain::Drained
+    );
+    assert_eq!(notices, []);
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// The `test_stateful` plugin→host param-notification path (Issue
+/// #912), out-of-process: a `RestoreState` that changes the gain
+/// makes the fixture call `clap_host_params.rescan(VALUES)` — the
+/// bridge's `HostParams` main-thread handler enqueues
+/// `ParamNotice::RescanRequested`, pulled to the consumer through
+/// `PluginHost::drain_param_notices` (`DrainParamNotices` →
+/// `Reply::ParamNotices`, wire v9). The registered
+/// `clap_host_preset_load` surface has no wire verb that reaches it
+/// — its `loaded`/`on_error` coverage stays at the unit level.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_state_restore_requests_param_rescan() {
+    assert_fixture_present();
+
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(EXPECTED, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, EXPECTED.id);
+    drive_to_processing(&mut host, handle);
+
+    // Baseline: the since-last-drain pull surface starts empty.
+    let mut notices = Vec::new();
+    assert_eq!(
+        host.drain_param_notices(handle, &mut notices).unwrap(),
+        ReportDrain::Drained
+    );
+    assert_eq!(notices, []);
+
+    let initial = save_state(&mut host, handle); // plain gain 1.0
+
+    // Mutate to ×0.75 so the restore below is a change edge — the
+    // same delivered-audio gate every state verb rides.
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    assert!(
+        submit_mutation_until_landed(
+            &mut host,
+            handle,
+            EventList::new(&events, FRAMES_U32).unwrap(),
+        ),
+        "the ×0.75 mutation event never landed"
+    );
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.375, -0.1875),
+        "delivered audio never showed the ×0.75 mutation"
+    );
+    let mutated = save_state(&mut host, handle);
+    assert_eq!(blob_gain(&mutated), 0.75);
+
+    // restore(initial): `clap.ext.state` `load` →
+    // `apply_restored_gain(1.0)` — changed from 0.75 → the fixture
+    // calls `rescan(VALUES)` (alongside `mark_dirty`, which lands
+    // on the dirty surface).
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: initial.clone(),
+    })
+    .unwrap();
+
+    notices.clear();
+    assert_eq!(
+        host.drain_param_notices(handle, &mut notices).unwrap(),
+        ReportDrain::Drained
+    );
+    assert_eq!(
+        notices,
+        [ParamNotice::RescanRequested {
+            aspects: RescanAspects::VALUES,
+        }]
+    );
+
+    // Restoring the already-current value is no change edge — the
+    // fixture fires no `rescan` and the drain stays empty.
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: initial,
+    })
+    .unwrap();
+    notices.clear();
+    assert_eq!(
+        host.drain_param_notices(handle, &mut notices).unwrap(),
         ReportDrain::Drained
     );
     assert_eq!(notices, []);

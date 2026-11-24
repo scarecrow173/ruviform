@@ -38,7 +38,7 @@ use std::time::Duration;
 use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
 use ruviform_plugin_core::{
     DirtyNotice, Event, EventKind, EventList, FailureCause, HostError, HostInput, HostOutput,
-    ParamEvent, ParamId, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult,
+    ParamEvent, ParamId, ParamNotice, ParamValue, PluginDescriptor, ProcessConfig, ProcessResult,
 };
 use ruviform_plugin_host::{
     DiagnosticQuery, HostCommand, HostReply, OutOfProcessSpec, PluginHandle, PluginHost,
@@ -891,6 +891,91 @@ fn real_stateful_single_test_plugin_l1_rejects_malformed_state() {
     // surface intact — `SaveState` still returns the valid blob.
     let still = save_state(&mut host, handle);
     assert_eq!(still, valid, "rejected restores must not corrupt state");
+
+    // Clean teardown.
+    host.execute(HostCommand::StopProcessing { handle })
+        .unwrap();
+    host.execute(HostCommand::Deactivate { handle }).unwrap();
+    host.execute(HostCommand::Destroy { handle }).unwrap();
+    assert_eq!(host.lifecycle_state(handle), None);
+}
+
+/// The `test_stateful` plugin→host param-value report path (Issue
+/// #912), out-of-process: the same `performEdit(0, 0.5)` the
+/// fixture controller announces on `RestoreState` fans out to the
+/// `ParamNotice` surface as `ValueChanged`, pulled to the consumer
+/// through `PluginHost::drain_param_notices`
+/// (`DrainParamNotices` → `Reply::ParamNotices`, wire v9). The
+/// dirty surface keeps its `ParamEdited` echo — both faces of the
+/// same VST3 call arrive on their own pull verb.
+#[test]
+#[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+fn real_stateful_test_plugin_l1_state_restore_reports_param_value() {
+    assert_fixture_present();
+
+    let expected = expected_descriptor();
+    let mut host = PluginHost::new();
+    host.register_out_of_process(OutOfProcessSpec::new(expected, runner_program()))
+        .unwrap();
+    let handle = instantiate(&mut host, expected.id);
+    drive_to_processing(&mut host, handle);
+
+    // Baseline: the since-last-drain pull surface starts empty.
+    let mut notices = Vec::new();
+    assert_eq!(
+        host.drain_param_notices(handle, &mut notices).unwrap(),
+        ReportDrain::Drained
+    );
+    assert_eq!(notices, []);
+
+    let initial = save_state(&mut host, handle); // plain gain 1.0
+
+    // Mutate to ×0.75 so the restore below is a change edge — the
+    // same delivered-audio gate every state verb rides.
+    let events = [Event::new(
+        0,
+        EventKind::ParamValue(ParamEvent {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.375).unwrap(),
+        }),
+    )];
+    assert!(
+        submit_mutation_until_landed(
+            &mut host,
+            handle,
+            EventList::new(&events, FRAMES_U32).unwrap(),
+        ),
+        "the ×0.75 mutation event never landed"
+    );
+    assert!(
+        wait_for_gain_output(&mut host, handle, 0.375, -0.1875),
+        "delivered audio never showed the ×0.75 mutation"
+    );
+    let mutated = save_state(&mut host, handle);
+    assert_eq!(component_gain(&mutated), 0.75);
+
+    // restore(initial): the fixture announces `performEdit(0, 0.5)`
+    // — the param-report face delivers it as one `ValueChanged`
+    // (the dirty face keeps its `ParamEdited` + `StateDirty` echo;
+    // gesture edges never fire on this path).
+    host.execute(HostCommand::RestoreState {
+        handle,
+        bytes: initial.clone(),
+    })
+    .unwrap();
+
+    notices.clear();
+    assert_eq!(
+        host.drain_param_notices(handle, &mut notices).unwrap(),
+        ReportDrain::Drained
+    );
+    assert_eq!(
+        notices,
+        [ParamNotice::ValueChanged {
+            param_id: ParamId(0),
+            value: ParamValue::new(0.5).unwrap(),
+        }]
+    );
 
     // Clean teardown.
     host.execute(HostCommand::StopProcessing { handle })
