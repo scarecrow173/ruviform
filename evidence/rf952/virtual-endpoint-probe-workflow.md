@@ -1,6 +1,6 @@
 # evidence/rf952 — virtual-endpoint-probe workflow（Slice A runner 実測）設計と検証記録
 
-Issue #955（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) Slice A）の実装記録。`docs/designs/issue-952-virtual-endpoint-driver.md` §Slice A の scope (a)–(e) を GitHub-hosted runner 上で実測するための `workflow_dispatch` 専用 workflow を `.github/workflows/virtual-endpoint-probe.yml` に新設した。本ファイルは workflow の設計意図・ローカル検証結果・runner 実走の状態を記録する。**runner 実走は本 PR 時点では未実施（NotRun）** — 理由と後続手順は末尾に記す。
+Issue #955（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) Slice A）の実装記録。`docs/designs/issue-952-virtual-endpoint-driver.md` §Slice A の scope (a)–(e) を GitHub-hosted runner 上で実測するための `workflow_dispatch` 専用 workflow を `.github/workflows/virtual-endpoint-probe.yml` に新設した。本ファイルは workflow の設計意図・ローカル検証結果・runner 実走の状態を記録する。**runner 実走は merge 後に実施済み**（run [45453855000](https://github.com/scarecrow173/ruviform/actions/runs/45453855000)・両 leg success — §5）。
 
 ## 1. workflow 設計
 
@@ -62,4 +62,45 @@ Issue #955（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 
 - workflow 新設: `.github/workflows/virtual-endpoint-probe.yml`（本 PR）。
 - 既存 workflow・required gate・ruleset への変更: **なし**。
-- runner 実走: **NotRun — merge 後に Coordinator が `gh workflow run` で両 leg を実行し、artifact を `evidence/rf952/` へ記録する**（§2）。
+- runner 実走: **実施済み** — run 45453855000（`workflow_dispatch`・main `20dc41f7`・両 leg success）。artifact 全文は本ディレクトリの `<probe>-windows-2025.txt` / `<probe>-windows-11-arm.txt` 群に記録（§5）。
+
+## 5. runner 実走結果（run 45453855000・2026-11-24 UTC）
+
+`gh workflow run virtual-endpoint-probe.yml --ref main` で両 leg を dispatch。job 結果は両 leg `success`（probe 機構の破損なし）。artifact 10 ファイルを `gh run download` で取得し本ディレクトリへ記録した。
+
+### 5.1 windows-11-arm（Win11 Enterprise 25H2 build 26200・aarch64）
+
+- `midisrv`: **存在** — `C:\Windows\system32\midisrv.exe`・StartType=Manual・job 中の probe 観測では `Running`（`probe-env`・`midi_endpoint_probe`）。
+- WMS transport 同梱: **あり** — `System32` に `Midi2.LoopbackMidiTransport.dll`（BLOOP 相当）・`Midi2.VirtualMidiTransport.dll`・`Midi2.KSTransport.dll`・`Midi2.MidiSrvTransport.dll` 他 Midi2.\* 一式。`wdmaud2.drv`（WinMM 互換層）も存在。
+- 作成経路: **全て absent** — `midi` console なし、PowerShell module（`New-MidiBasicLoopback`/`New-MidiLoopback`/`Get-MidiEndpointList`）なし、`[Windows.Devices.Midi2.MidiLoopbackManager]`/`MidiService` の WinRT 型解決は .NET PowerShell から not resolvable。loopback 作成は全 route skip → `provisioning: NOT_PROVISIONED`（WinMM 反映も未観測）。**API 経路は到達可能性未確認** — transport DLL は在るが管理 surface が in-box に無い。Slice C は compiled API client（`windows` crate → `Windows.Devices.Midi2`）または console/module の job 内 install が要る。
+- WinMM/WinRT 実測: input 0 / output 1（GS Wavetable のみ・`DRV_QUERYDEVICEINTERFACE` はこの host の driver で crash → 入力側 query のみ）。
+- WASAPI: endpoint 0 件（render/capture 共に存在しない・consent store microphone=Allow）。
+- Secure Boot / test-signing: `Confirm-SecureBootUEFI`=False・`UEFISecureBootEnabled`=0・`bcdedit` testsigning=**Yes**。
+- toolchain: `aarch64-pc-windows-msvc` で `ruviform-audio-device`（endpoint_probe 32s）・`ruviform-midi-device`（midi_endpoint_probe 3s）共にネイティブ compile+実行成功。
+- driver tools: `pnputil` あり・`signtool` あり（Kits `10.0.22621.0\arm` 配下・PATH 外）・`devcon`/`infverif` なし。
+
+### 5.2 windows-2025（Server 2025 build 26100・x64）
+
+- `midisrv`/WMS: **完全に不存在** — サービス未登録、`Midi2.*` DLL なし（`midimap.dll`・`Windows.Devices.Midi.dll` のみ）、`wdmaud2.drv` なし、AppX 0 件。MIDI virtual endpoint の WMS 経路は Server SKU では成立しないことが実測で確定。
+- WinMM: input 0 / output 1（GS Wavetable のみ）。WASAPI: endpoint 0 件。
+- Secure Boot / test-signing: `Confirm-SecureBootUEFI`=False・`UEFISecureBootEnabled`=0・`bcdedit` testsigning=**Yes**。
+- driver tools: `pnputil` あり・`signtool` あり（Kits `10.0.26100.0\arm64` 配下・PATH 外）・`devcon`/`infverif` なし。
+
+### 5.3 Open Questions への判定（`docs/discovery/issue-952-virtual-endpoint-driver-survey.md` §OQ）
+
+| OQ | 判定 | 実測根拠 |
+| --- | --- | --- |
+| 1. `windows-11-arm` で `midisrv` 有効か・console/module/BLOOP 同梱か | **midisrv 存在・Running（Manual）。BLOOP transport DLL 群 in-box。console/PS module は非同梱** | `probe-env-windows-11-arm.txt`・`midi_endpoint_probe-windows-11-arm.txt` |
+| 2. BLOOP が GA image で in-box か・install 自動化 | **transport 自体は in-box**（LoopbackMidiTransport.dll）。作成経路の install 自動化可否は**未実測**（probe は presence のみ確認 — console/module install または API client 経路の要否が残る） | `probe-env-windows-11-arm.txt` |
+| 3. WMS loopback が WinMM にどう見えるか | **未実測 — open**（作成経路 absent で未作成） | `loopback-attempt-*.txt` |
+| 4. LOOP pair の verifier verdict | **未実測 — open**（同上） | 同上 |
+| 5. attestation-signed driver が Server 2025 で install 可か | **未実測 — open**。ただし OQ6 の実測により test-signed driver install の可能性が開いた（attestation 前に検証できる経路になり得る） | `probe-env-windows-2025.txt` |
+| 6. Secure Boot 有効状態 | **False / testsigning=Yes（両 leg）** — 「testsigning 経路は閉塞」という survey 時点の想定を**実測で否定**。test-signed driver の install 試行が GitHub-hosted で可能な環境である | `probe-env-*.txt`（bcdedit `testsigning Yes`・`Confirm-SecureBootUEFI False`） |
+| 7. `aarch64-pc-windows-msvc` で compile 可か | **可** — `windows-11-arm` で両 probe example をネイティブ compile+実行成功（rust 1.99.0 pin 動作） | `probe-env`・`endpoint_probe`・`midi_endpoint_probe` の windows-11-arm 各 txt |
+| 8. EV 証明書調達可否 | **repo 外工程 — open**。ただし OQ6 の実測で test-signing 経路が候補に浮上し、調達優先度は再評価対象 | — |
+
+### 5.4 MIDI 方式確定への材料
+
+- WMS（midisrv + Midi2.* transport）は **`windows-11-arm` で in-box だが管理 surface（console・PS module・.NET からの WinRT 到達）が無い**。loopback provisioning は compiled `Windows.Devices.Midi2` API client か console/module の job 内 install に依存する — Slice C で到達性を実測する必要がある（API reachability は PowerShell 型解決失敗のみ観測で、compiled 経路は未検証）。
+- `windows-2025` では WMS 自体が存在しないため、Server 系 runner での MIDI 仮想 endpoint は独自 driver（OQ6 で test-signing install が候補に浮上）に限られる。
+- audio 側は両 leg で WASAPI endpoint 0 件・仮想 endpoint 未 provisioning — 独自 driver（test-signed install 試行経路）または user-mode 経路の検討が継続。

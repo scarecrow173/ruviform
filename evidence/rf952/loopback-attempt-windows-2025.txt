@@ -1,0 +1,21 @@
+== WMS loopback creation attempt — windows-2025 ==
+
+-- pre-state: midi enumerate endpoints --
+  midi console: absent — console routes skipped
+
+-- route 1: midi console — transient LOOP A/B pair (observation only) --
+  skipped (midi console absent)
+
+-- route 2: PowerShell module — New-MidiBasicLoopback (BLOOP, single endpoint) --
+  skipped (New-MidiBasicLoopback absent)
+
+-- route 3: PowerShell module — New-MidiLoopback (LOOP A/B pair, observation only) --
+  skipped (New-MidiLoopback absent)
+
+-- route 4: Windows.Devices.Midi2 API reachability --
+  Windows.Devices.Midi2.MidiLoopbackManager: not resolvable — Unable to find type [Windows.Devices.Midi2.MidiLoopbackManager,Windows.Devices.Midi2, ContentType=WindowsRuntime].
+  Windows.Devices.Midi2.MidiService: not resolvable — Unable to find type [Windows.Devices.Midi2.MidiService,Windows.Devices.Midi2, ContentType=WindowsRuntime].
+  note: full API provisioning (MidiLoopbackCreationConfig + SendUpdate) is slice C scope; this step records reachability only
+
+-- post-state: midi enumerate endpoints --
+  midi console: absent

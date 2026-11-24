@@ -236,3 +236,11 @@ Issue [#952](https://github.com/scarecrow173/ruviform/issues/952) のスコー�
 - `mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe` → exit 0。WinMM input 0/output 1（GS Wavetable）、loopback candidate 0 件、`midisrv: Running` + `New-MidiLoopback: absent`、`NOT_PROVISIONED`。`evidence/rf952/midi_endpoint_probe-windows-local.txt` に全文保存。
 - サービス・権限 query（`evidence/rf952/local-queries-windows-local.txt`）: `AudioSrv`/`AudioEndpointBuilder` Running(Automatic)、`midisrv` Running(Manual, 10.0.26100.9949)。`net session` は system error 5（非昇格）、`bcdedit /enum`・`pnputil /enum-drivers` も権限不足で拒否 — task spec の破壊的操作禁止に従い query 系のみで終了。
 - Web 一次情報の URL・取得日・要点一覧は `evidence/rf952/web-sources-signing-runner-wms.md` に記録（署名要件・runner 事実・WMS・user-mode audio・SysVAD license・`windows-11-arm` image・loopback 作成経路）。
+
+### 2026-11-24 — GitHub-hosted runner 実測（virtual-endpoint-probe workflow・run 45453855000）
+
+`workflow_dispatch` 両 leg（`windows-2025`・`windows-11-arm`）を実走し、artifact 全文を `evidence/rf952/<probe>-windows-<os>.txt` に記録。実測値・OQ 判定の詳細は `evidence/rf952/virtual-endpoint-probe-workflow.md` §5。要約:
+
+- `windows-11-arm`: `midisrv` 存在・Running、`Midi2.*Transport.dll`（LoopbackMidiTransport 含む）in-box、`wdmaud2.drv` あり — **WMS transport 面は同梱**。一方 `midi` console・PowerShell module・.NET からの `Windows.Devices.Midi2` 型解決は全て到達不能で loopback 未作成（OQ3–4 は open のまま）。`aarch64-pc-windows-msvc` ネイティブ compile 成功（OQ7 解消）。
+- `windows-2025`: `midisrv`/Midi2 DLL 一切なし（Server SKU で WMS 経路は不成立と確定・OQ1 対照 leg）。WASAPI endpoint 0 件。
+- 両 leg: `Confirm-SecureBootUEFI`=False・bcdedit `testsigning Yes` — **OQ6 の「testsigning 経路は閉塞」想定を実測で否定**。GitHub-hosted runner で test-signed driver の install 試行が可能な環境であり、attestation-signed driver / EV 証明書調達（OQ5/OQ8）の前に検証できる経路が開いた。

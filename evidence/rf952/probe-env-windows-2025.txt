@@ -1,0 +1,111 @@
+== virtual-endpoint-probe / environment ==
+runner: GitHub Actions 1000007948 os=Windows arch=X64
+ref: refs/heads/main sha: 20dc41f71c47674b3e51d1eb0921124b94f8bfaf
+run: https://github.com/scarecrow173/ruviform/actions/runs/45453855000 attempt=1
+host: runnervmbpeip user: runnervmbpeip\runneradmin timestamp-utc: 2026-11-24T17:56:00Z
+
+== os build ==
+
+Caption        : Microsoft Windows Server 2025 Datacenter
+Version        : 10.0.26100
+BuildNumber    : 26100
+OSArchitecture : 64-bit
+
+
+
+Microsoft Windows [Version 10.0.26100.33828]
+
+== rust toolchain (compile context for the aarch64 check) ==
+rustc 1.99.0 (b940084d7 2026-09-28)
+binary: rustc
+commit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+commit-date: 2026-09-28
+host: x86_64-pc-windows-msvc
+release: 1.99.0
+LLVM version: 23.1.1
+rustc exit=0
+cargo 1.99.0 (5f94df478 2026-08-27)
+release: 1.99.0
+commit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e
+commit-date: 2026-08-27
+host: x86_64-pc-windows-msvc
+libgit2: 1.9.6 (sys:0.21.0 vendored)
+libcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:Schannel)
+os: Windows 10.0.26100 (Windows 11 ServerDatacenter) [64-bit]
+cargo exit=0
+
+== services ==
+  AudioSrv: Status=Running StartType=Automatic
+  AudioEndpointBuilder: Status=Running StartType=Automatic
+  midisrv: absent
+
+== midisrv transport surface ==
+  expected BLOOP transport id: {10088473-9478-4E62-850B-3D2315E135B8} (evidence/rf952/web-sources-signing-runner-wms.md)
+  midisrv: absent (service not registered)
+
+== midi console utility ==
+  midi console: absent
+
+== midi powershell module ==
+  New-MidiLoopback: absent
+  New-MidiBasicLoopback: absent
+  Remove-MidiLoopback: absent
+  Get-MidiEndpointList: absent
+  no midi-related module listed
+
+== midi-related packages and system files ==
+  appx(current-user): no midi-related package
+  appx(all-users): no midi-related package
+  System32: midimap.dll
+  System32: Windows.Devices.Midi.dll
+  wdmaud2.drv (WinMM compat layer): absent
+
+== secure boot / test-signing state ==
+  Confirm-SecureBootUEFI: False
+  UEFISecureBootEnabled (registry): 0
+  --- bcdedit /enum ---
+
+  Windows Boot Manager
+  --------------------
+  identifier              {bootmgr}
+  device                  partition=\Device\HarddiskVolume2
+  path                    \EFI\Microsoft\Boot\bootmgfw.efi
+  description             Windows Boot Manager
+  locale                  en-US
+  inherit                 {globalsettings}
+  bootshutdowndisabled    Yes
+  default                 {current}
+  resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  displayorder            {current}
+  toolsdisplayorder       {memdiag}
+  timeout                 30
+
+  Windows Boot Loader
+  -------------------
+  identifier              {current}
+  device                  partition=C:
+  path                    \Windows\system32\winload.efi
+  description             Windows Server
+  locale                  en-US
+  inherit                 {bootloadersettings}
+  recoverysequence        {6019ac8d-debe-11f1-aef6-3833c5d5ecc5}
+  displaymessageoverride  Recovery
+  recoveryenabled         No
+  testsigning             Yes
+  isolatedcontext         Yes
+  allowedinmemorysettings 0x15000075
+  osdevice                partition=C:
+  systemroot              \Windows
+  resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  nx                      OptOut
+  bootstatuspolicy        IgnoreAllFailures
+  hypervisorlaunchtype    Auto
+  hypervisorschedulertype Root
+  ems                     Yes
+  bcdedit exit=0
+
+== driver build tools (slice B/D input) ==
+  devcon: absent
+  pnputil: C:\Windows\system32\pnputil.exe
+  signtool: not on PATH, found at C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\signtool.exe
+  infverif: absent
