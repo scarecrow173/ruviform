@@ -1,0 +1,28 @@
+/*++
+
+Copyright (c) Microsoft Corporation All Rights Reserved
+
+Module Name:
+
+    RvfVirtualAudio.rc
+
+Abstract:
+
+    Version resource — SysVAD TabletAudioSample.rc の ruviform 派生。
+
+--*/
+
+#include <windows.h>
+
+#include <ntverp.h>
+
+#define VER_FILETYPE                VFT_DRV
+#define VER_FILESUBTYPE             VFT2_DRV_SOUND
+#define VER_FILEDESCRIPTION_STR     "Ruviform Virtual Audio Driver"
+#define VER_INTERNALNAME_STR        "RvfVirtualAudio.sys"
+#define VER_ORIGINALFILENAME_STR    "RvfVirtualAudio.sys"
+
+#define VER_LEGALCOPYRIGHT_YEARS    "2025"
+#define VER_LEGALCOPYRIGHT_STR	    "Copyright (C) Ruviform " VER_LEGALCOPYRIGHT_YEARS
+
+#include "common.ver"

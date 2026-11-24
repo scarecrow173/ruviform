@@ -1311,6 +1311,38 @@ run = "cargo clippy -p ruviform-audio-device --all-targets --features real-devic
 description = "Run the `#[ignore]`-gated virtual-endpoint streaming verifier (`--features real-device --test virtual_endpoint -- --ignored`) — requires a provisioned virtual audio pair (VB-CABLE/VAC family); unprovisioned hosts report verdict: NotRun (never fabricates a Pass); manual lane, never CI"
 run = "cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1"
 
+# Virtual audio driver build lane (Issue #977 Slice B stage 1): builds
+# `drivers/rvf-virtual-audio/RvfVirtualAudio.vcxproj` (SysVAD-derived KMDF
+# port-class driver) with MSBuild + WDK `WindowsKernelModeDriver10.0` —
+# requires a WDK-equipped Windows host (runner job 内導入と同じく
+# `Microsoft.WindowsWDK.10.0.26100` 系）。msbuild は vswhere で解決する。
+# 未装備 host では NotRun として正直に終了する（driver build 不能は
+# 判定材料であって task 失敗ではない — rf961 lane と同じく fail-open
+# 観測）。provisioning/sign/install は manual workflow
+# `virtual-audio-driver-probe.yml` の領域であり、この lane は build のみ。
+[tasks.build-vaudio-driver]
+description = "Build `drivers/rvf-virtual-audio` (SysVAD-derived KMDF virtual audio driver, Release|x64) via vswhere-resolved MSBuild + WDK — requires WDK-equipped Windows host; exits honestly NotRun when MSBuild/toolset is absent; manual lane, never CI"
+run = '''
+#!/usr/bin/env bash
+set -u
+VSWHERE="C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+msbuild=""
+if [ -x "$VSWHERE" ]; then
+  msbuild=$("$VSWHERE" -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>/dev/null | grep -v '^\s*$' | head -n 1 | tr -d '\r')
+  [ -n "$msbuild" ] && msbuild=$(cygpath -u "$msbuild" 2>/dev/null || printf '%s' "$msbuild")
+fi
+if [ -z "$msbuild" ] || [ ! -f "$msbuild" ]; then
+  msbuild=$(command -v msbuild || true)
+fi
+if [ -z "$msbuild" ]; then
+  echo "build-vaudio-driver: NotRun — MSBuild が見つからない（WDK/VS 未装備 host）。manual workflow virtual-audio-driver-probe.yml が runner 上で job 内導入する経路を使う。"
+  exit 0
+fi
+echo "build-vaudio-driver: msbuild=$msbuild"
+MSYS_NO_PATHCONV=1 "$msbuild" drivers\\rvf-virtual-audio\\RvfVirtualAudio.vcxproj /p:Configuration=Release /p:Platform=x64 /v:m /nologo
+exit $?
+'''
+
 # Real-device MIDI lane (Issue #253): the `#[ignore]`-gated E2E tests
 # in `ruviform-midi-device` (adapter path — enumerate → open → repeated
 # `read` with stamp-domain/provenance + `dropped`/`unsupported`

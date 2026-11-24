@@ -1,0 +1,9 @@
+{"action":"workflow-lint","command":"mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml","exit_code":0,"observed":"指摘なし — workflow_dispatch 専用・matrix [windows-2025] の新規 manual workflow が構文検査を通過"}
+{"action":"contract-test","command":"mise run test-ci-daily","exit_code":0,"observed":"113 tests pass — ci-yml-contract.test.mjs の全 workflow 走査で新規ファイルに banned trigger なし"}
+{"action":"contract-test","command":"mise run test-ci-tracker","exit_code":0,"observed":"108 tests pass — tracker 側の workflow 契約走査も通過"}
+{"action":"hygiene","command":"mise exec -- prek run --all-files","exit_code":0,"observed":"trailing-whitespace/end-of-file/check-yaml/check-toml/mixed-line-ending/BOM/private-key/actionlint 全て Pass"}
+{"action":"format","command":"mise run fmt-check","exit_code":0,"observed":"cargo fmt --all -- --check exit 0（crates 非変更のため無差分）"}
+{"action":"syntax-check","command":"pwsh [Parser]::ParseFile on tools/*.ps1 + ParseInput on 14 workflow run blocks + [xml] load of vcxproj","exit_code":0,"observed":"Invoke-EndpointProbe.ps1 + 再利用 helper 2 本 ParseFile OK、workflow run ブロック 14/14 parse OK、vcxproj XML well-formed — local-syntax-check.txt"}
+{"action":"inf-check","command":"pwsh regex check of RvfVirtualAudio.inf sections + %Strings% resolution + minipairs.h name match + pin-name GUID match","exit_code":0,"observed":"INF 構造 22 項目 OK、%Strings% 未解決参照 0、minipairs.h endpoint 名 4/4 一致、pin-name GUID 両側一致 — local-inf-check.txt"}
+{"action":"vendoring-verify","command":"diff -bB --strip-trailing-cr upstream(d49bb7d7) vs drivers/rvf-virtual-audio/","exit_code":0,"observed":"37 ファイル意味差分 0（行末空白・EOL は hygiene hook で正規化）、意図変更は minipairs.h/micintoptable.h/speakertoptable.h の 3 ファイルのみ — PROVENANCE.md と一致"}
+{"action":"driver-build","command":"msbuild RvfVirtualAudio.vcxproj","exit_code":null,"observed":"NotRun — worker ホストに WDK/MSBuild 未搭載。runner 上で判定（manual workflow）"}
