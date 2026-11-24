@@ -525,4 +525,7 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   `editor_verbs_drive_real_windows_through_bridge`（production bridge
   `open_gui` → 全 verb → title token + `EnumChildWindows`/`EnumWindows`/
   `GetFocus` oracle の end-to-end）—— ローカル Windows session で双方
-  pass 済み。
+  pass 済み。上記の全 test 面は「『実 OS イベントではない』ことの正直な
+  表現」の語彙規約どおり `synthetic-verb-delivery` —— verb は host API →
+  COM seam で合成配送され、OS 入力キュー / focus routing / window message
+  経路の検証ではない（real-HWND oracle は fixture 状態遷移の観測点）。

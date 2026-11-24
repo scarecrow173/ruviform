@@ -90,12 +90,27 @@ slice 1+2 が完結させた transport 面（boundary 語彙 + wire-v8 + session
 | コマンド | exit | 結果 |
 | --- | --- | --- |
 | `mise run fmt` | 0 | Pass |
+| `mise run fmt-check` | 0 | Pass（`cargo fmt --all -- --check`） |
 | `mise run check-l1-real-plugin` | 0 | Pass（4 crate × host/l1-runner feature × all-targets） |
 | `mise run lint-l1-real-plugin` | 0 | Pass（`clippy -D warnings`） |
+| `mise run test ruviform-plugin-vst3` | 0 | Pass（canonical・default feature、lib 44 件、failed 0） |
+| `mise run test ruviform-plugin-vst3 --features host --lib` | 0 | Pass（canonical + host feature、98 件、failed 0 —— seam 写像 test 群を含む） |
 | `mise run test ruviform-plugin-test-vst3` | 0 | Pass（lib 121 + host_path 26、failed 0） |
-| `cargo test -p ruviform-plugin-test-vst3 -- --ignored` | 0 | Pass（real-HWND lane 3 件全て実走 Pass） |
-| `cargo test -p ruviform-plugin-vst3 --features host --lib` | 0 | Pass（98 件、failed 0） |
+| `cargo test -p ruviform-plugin-test-vst3 -- --ignored` | 0 | Pass（real-HWND lane 3 件全て実走 Pass —— `#[ignore]`d lane は mise test 対象外のため直接起動の補助証拠） |
 | `mise run test-l1-real-plugin` | 0 | Pass（cdylib + runner bin build、`--lib --bins` unit、`#[ignore]`d L1 E2E 全 lane） |
+
+## delivery 語彙（synthetic-verb-delivery の名指し）
+
+設計 doc「『実 OS イベントではない』ことの正直な表現」の語彙規約に従い、本
+evidence の全 test 面は `vst3-editor-verbs:synthetic-verb-delivery` とする。
+verb の配送経路は host API → adapter verb dispatch → fixture-private COM seam
+（`apply_focus`/`popup`/`onFocus`）であって、OS 入力キュー・OS focus routing・
+window message 経路は一切検証していない。real-HWND lane の
+`SetFocus`/`GetFocus`/`EnumChildWindows`/`EnumWindows` は verb 到達後の
+fixture 状態遷移を観測する state-machine oracle であり、OS 実入力経路の証拠
+ではない（synthetic verb delivery; no OS input queue or focus routing
+exercised）。`kd:`/`ku:` token を持つ `send_gui_key` 系は本 slice の範囲外で
+未検証。
 
 ## 追加した test 面
 
