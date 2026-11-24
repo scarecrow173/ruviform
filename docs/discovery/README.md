@@ -35,12 +35,14 @@ Directory: `docs/discovery`
 | DISC-034ZCLAPED1sl1ceM3kQ2x | Issue #630 CLAP test_editor slice — exploration notes | completed | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DSC-630presetDiscoveryReeval01 | Issue #630 preset-discovery 外部検証再評価 — upstream fix pin 調査 | final | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | DSC-630presetSpawnFault01 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 調査記録 | final | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
+| DSC-630acInventory01 | Issue #630 umbrella AC disposition census — AC 行 verdict 写像・残件分類の調査記録 | final | [issue-630-ac-inventory.md](./issue-630-ac-inventory.md) |
 | DISC-Kd82mQxVnR4tYw6pLc3sJa | Issue #631 real-command-receipt case | draft | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | DISC-x7Kp2mQwR9vTn4bYc6dF | Issue #631 AC4 evidence-fields 完成 slice | draft | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | DISC-g9Hv3kLm6Qp2rT8wXc5Nb | Issue #631 AC4 'OS and GPU' display-adapter field | draft | [issue-631-gpu-field.md](./issue-631-gpu-field.md) |
 | DISC-Mx41kYpNvT8wQc6rLd9sJh | Issue #631 headless-command-receipt case | draft | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
 | DISC-EQytwTTrhPQ8wwzjh4tGK3 | Issue #631 real-window-close/dpi catalog flip | draft | [issue-631-real-window-catalog-flip.md](./issue-631-real-window-catalog-flip.md) |
 | DISC-034YJ08C2FLjqUQpNN0PcG | Issue #631 RealOsGuiTest window-close/DPI 観測面 | draft | [issue-631-window-surface.md](./issue-631-window-surface.md) |
+| DSC-631acInventory01 | Issue #631 umbrella AC disposition census — AC 行 verdict 写像・残件分類の調査記録 | final | [issue-631-ac-inventory.md](./issue-631-ac-inventory.md) |
 | DSC-720tupleV201 | Issue #720 consumer-verify-tuple contract v1→v2 bump — 現状 pin 箇所の棚卸しと設計論点の調査 | final | [issue-720-consumer-tuple-v2.md](./issue-720-consumer-tuple-v2.md) |
 | DSC-722vst3LifecycleAudit01 | Issue #722 production VST3 adapter lifecycle 監査 — test fixture 同型欠陥の診断 | final | [issue-722-vst3-lifecycle-audit.md](./issue-722-vst3-lifecycle-audit.md) |
 | DSC-726clapValidatorPanic01 | Issue #726 clap-validator 0.4.1 param-fuzz panic — 根因所在と upstream 報告要否の調査 | final | [issue-726-clap-validator-panic.md](./issue-726-clap-validator-panic.md) |

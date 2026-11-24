@@ -225,6 +225,7 @@ Directory: `docs/specs`
 | SPEC-034Z9kQm4xVtW2sLpNbRcA | Issue #630 test_instrument slice — deterministic MIDI/transport synth fixture + L1 real-ABI oracle | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | SPEC-034XC2yDsqDluVXBOAyKnC | Issue #630 Ruviform製VST3/CLAP Test Plugin Suite — first slice: VST3 test_gain plugin | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | SPEC-034Y4czy8Gzr9POTbUQdKh | Issue #630 test_stateful slice — real state blob plugin class + L1 save/mutate/restore/save round-trip E2E | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| SPEC-630acInventory02 | Issue #630 umbrella AC disposition census — AC 行別 disposition と残件分類 | approved | [issue-630-ac-inventory.md](./issue-630-ac-inventory.md) |
 | SPEC-Nb71vRwYkP8sHd4mQt2xLc | Issue #631 real-command-receipt case | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | SPEC-m4Qz8wVn2Xk7pLc9dRt3Yb | Issue #631 AC4 evidence-fields 完成 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | SPEC-r7Tn2mQv9Kw4xLb8cJd5Hs | Issue #631 AC4 'OS and GPU' display-adapter field | approved | [issue-631-gpu-field.md](./issue-631-gpu-field.md) |
@@ -239,6 +240,7 @@ Directory: `docs/specs`
 | SPEC-034YaXUTzcBvabDver3uDY | Issue #631 GPUI Test Lab / Scenario Console GUI v1 + mise lane 簿記 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | SPEC-034YJ09qxi0m5ujyYTjO3u | Issue #631 RealOsGuiTest window-close/DPI 観測面 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | SPEC-01M7WJTWYSWBE3NTHK5GMTCT74 | Issue #631 editor input/focus verbs — EditorSessionOps set_focus/send_key、L0-only HostCommand、fixture event log による real-editor-input/focus Pass 化 | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
+| SPEC-631acInventory02 | Issue #631 umbrella AC disposition census — AC 行別 disposition と残件分類 | approved | [issue-631-ac-inventory.md](./issue-631-ac-inventory.md) |
 | SPEC-034XEUi9KFfbJmIcNkynUU | Issue #646 ruviform-numeric lib test bench profile compile fix | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | SPEC-oY0DT4RkgQbMmPjZfQUKr0 | Issue #650 bench-smoke lane coverage 拡張（numeric / io-e2e）+ dev-env residual 同期 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | SPEC-WUXVb2PmGVTsr91ylmdD5J | Issue #692 s2 Luau analyzer backend — 仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
