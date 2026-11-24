@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents / slice 4: PCM WAV backend）"
 created: "2026-11-20"
-updated: "2026-11-22"
+updated: "2026-11-24"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -216,7 +216,7 @@ boundary matrix として設計した。
 | `wire_new_gate_is_exact_{small,mid,large}_align`（in-src `src/wav.rs`） | concrete matrix: 全 13 種の distinct `block_align`（1..128 を 5+4+4 reps に 3 分割）× boundary rate `u32::MAX/align` の ±1。`#[kani::unwind(8)]` | `u32::MAX/align` から ±2 以上離れた interior rate・symbolic rate 全空間 | interior domain は proptest `wire_gate_is_exact_membership_plus_byte_rate`（boundary ±4 band + uniform rate）が担保 |
 | `fmt_and_header_layout`（in-src `src/wav.rs`） | concrete matrix: 5 spec（16 byte `fmt ` 2 件 Mono S16/Stereo F32・extensible 40 byte 3 件 5.1 S24/7.1 F32/custom mask S32）。`#[kani::unwind(64)]`（builtin `memcmp` の byte unroll — 最大比較は 40 byte `fmt ` body） | symbolic byte 内容・header 以外の write 経路 | 任意 spec での header 構造は proptest `open_muxer_writes_complete_header` が担保・wire byte 実経路は roundtrip property が担保 |
 | `open_muxer_spec_contract_{pcm,extensible}`（tests `#[cfg(kani)]`） | concrete success matrix: 16B form 1 spec（Mono U8）・40B form 3 spec（5.1 S24・7.1 F32・custom mask S32）— 固定 80B 配列の最小 `Write+Seek` sink（`KaniSink`）で `Cursor<Vec<u8>>` splice/growth の SSA 膨張を排除。`#[kani::unwind(96)]` | symbolic `WavOutputSpec`・finalize 後 backpatch・複数 stream | finalize/backpatch・one-shot・receipt 値は proptest `muxer_finalize_receipt_backpatch_one_shot` が担保・16B 非 ext の全 byte layout は `fmt_and_header_layout` が担保 |
-| `open_muxer_rejects_invalid_value`（tests `#[cfg(kani)]`） | concrete: byte-rate overflow 1 spec（7.1 F32・rate = `u32::MAX/32+1`）— `open_muxer` が `ErrorKind::InvalidValue` に写像することを証明する Err-direction harness。`#[kani::unwind(4)]`（到達可能 loop は 1 要素の stream 検証と GCD のみ・header write unroll は dead path） | symbolic spec — および verdict 自体: 参照 WSL2 環境（31 GiB）では untrimmed/trimmed/KaniSink/unwind 96/16/4 の全形で cbmc が envelope に張り付き verdict 未発行（`not_run`・環境起因 — `evidence/rf806` slice 4 節を参照） | `wire_new_gate_is_exact_*` が source gate の `InvalidValue` を exhaustive に証明・`open_muxer` の `?` 伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky` が任意 spec で担保 |
+| ~~`open_muxer_rejects_invalid_value`~~（tests `#[cfg(kani)]` — residual slice で lane から退役） | concrete: byte-rate overflow 1 spec（7.1 F32・rate = `u32::MAX/32+1`）— `open_muxer` が `ErrorKind::InvalidValue` に写像することを証明する Err-direction harness。`#[kani::unwind(4)]`（到達可能 loop は 1 要素の stream 検証と GCD のみ・header write unroll は dead path） | symbolic spec — および verdict 自体: 参照 WSL2 環境（31 GiB）では `open_muxer` 経由が untrimmed/trimmed/KaniSink/unwind 96/16/4 の全形で cbmc ~31.7 GiB に張り付き（slice 4）、residual slice で gate 直上の `validate_stream` 単体に再設計しても concrete 入力で ~31.9 GiB に張り付いた（dominant cost は `open_muxer` の死後段 CFG ではなく `validate_stream` 自身の error-arm SSA — `Error::with_source` + `format!`/`io::Error` 構築）。verdict 未発行の `not_run`（環境起因）が確定したため harness は lane から除去 — 永久に verdict を返さない証明を残すと全実行が fail になる。`evidence/rf806` residual 節を参照 | `wire_new_gate_is_exact_*` が source gate の `InvalidValue` を exhaustive に証明（この正確な spec を boundary matrix で網羅）・`open_muxer` の `?` 伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky` が任意 spec で担保 |
 
 仮定（slice 4 固有）:
 
@@ -246,10 +246,17 @@ boundary matrix として設計した。
   引き上げて解決した記録あり）。
 - `open_muxer` の Err-direction（「必ず `InvalidValue` で reject
   される」= Ok 経路の不可達性証明）は、成功 direction の
-  witness 探索と比べ構造的に重く、`open_muxer` 全 CFG encoding
-  が参照環境の ~31 GiB envelope を超過する。verdict 未発行の
+  witness 探索と比べ構造的に重い。slice 4 では `open_muxer` 全
+  CFG encoding が ~31.7 GiB envelope に張り付き、支配コストは
+  post-gate CFG と推定していたが、residual slice で gate 直上の
+  `validate_stream` 単体への最小再設計でも concrete 入力で
+  ~31.9 GiB に張り付いた — 支配コストは `validate_stream` 自身の
+  error-arm SSA（`Error::with_source` + `format!`/`io::Error`
+  構築 ×6 site）であることが確定した。verdict 未発行の
   harness は `not_run` と fail-closed で記録し、`pass` 扱いしない
-  — union 補完の分担は上表のとおり。
+  — union 補完の分担は上表のとおり（composite harness 自体は
+  lane から退役 — 永久に verdict を返さない証明を残すと全
+  実行が `fail` になるため）。
 
 仮定:
 

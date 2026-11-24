@@ -1,0 +1,2423 @@
+[test-formal-kani] $ verdict() {
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+   Compiling ruviform-io-file v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-file)
+   Compiling ruviform-io-compression v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-compression)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.80s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.02s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.18s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.33s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.21s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.31s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-archive v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-archive)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+   Compiling ruviform-rt v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-rt)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-exec v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-exec)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: trailing semicolon in macro used in expression position
+    --> crates/ruviform-ui/src/dock.rs:2254:46
+     |
+2254 | ...=> asser...ILON),
+     |       ^^^^^...^^^^^
+     |
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+     = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+     = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.72s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 30`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.70s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-ui/tests/formal_ipc.rs:398:17
+    |
+398 | ...   asser...SAGE)
+    |       ^^^^^...^^^^^
+    |
+    = note: macro invocations at the end of a block are treated as expressions
+    = note: to ignore the value produced by the macro, add a semicolon after the invocation of `assert`
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - TerminatorKind::InlineAsm (3)
+             - call to LLVM intrinsic `llvm.x86.xgetbv` (1)
+             - caller_location (1)
+             - foreign function (1)
+             - simd_cast (3)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (9)
+             - atomic_store (6)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.88s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 31`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: unused variable: `id`
+  --> crates/ruviform-ui/tests/ipc_conformance.rs:51:13
+   |
+51 |           let id = case["id"].as_str().unwrap();
+   |               ^^
+...
+60 | /         assert_eq!(
+61 | |             r.is_ok(),
+62 | |             expect["accept"].as_bool().unwrap(),
+63 | |             "{id}: accept mismatch"
+64 | |         );
+   | |_________- you might have meant to use string interpolation in this string literal
+...
+68 |                   asser... id");
+   |                   -----...----- you might have meant to use string interpolation in this string literal
+...
+71 |                   asser... op");
+   |                   -----...----- you might have meant to use string interpolation in this string literal
+...
+74 |                   asser...ams");
+   |                   -----...----- you might have meant to use string interpolation in this string literal
+...
+78 |               asser...ode");
+   |               -----...----- you might have meant to use string interpolation in this string literal
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: if this is intentional, prefix it with an underscore
+   |
+51 |         let _id = case["id"].as_str().unwrap();
+   |             +
+
+warning: unused variable: `id`
+   --> crates/ruviform-ui/tests/ipc_conformance.rs:149:13
+    |
+149 | ...   let id = case["id"].as_str().unwrap();
+    |           ^^
+...
+158 | ...   asser...ion");
+    |       -----...----- you might have meant to use string interpolation in this string literal
+159 | ...   asser...ind");
+    |       -----...----- you might have meant to use string interpolation in this string literal
+...
+168 | ...       asser...ion");
+    |           -----...----- you might have meant to use string interpolation in this string literal
+...
+171 | ...       asser... ok");
+    |           -----...----- you might have meant to use string interpolation in this string literal
+...
+174 | ...       asser...ate");
+    |           -----...----- you might have meant to use string interpolation in this string literal
+...
+177 | ...       asser...ode");
+    |           -----...----- you might have meant to use string interpolation in this string literal
+    |
+help: if this is intentional, prefix it with an underscore
+    |
+149 |         let _id = case["id"].as_str().unwrap();
+    |             +
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.23s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-theme v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-theme)
+   Compiling ruviform-ui v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.74s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.99s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.28s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.30s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-ui-test/tests/formal_transport.rs:183:35
+    |
+183 | ...=> asser... < 4),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-ui-test/tests/formal_transport.rs:194:58
+    |
+194 | ...=> asser...size),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-ui-test/tests/formal_transport.rs:195:56
+    |
+195 | ...=> asser...size),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-ui-test/tests/formal_transport.rs:222:42
+    |
+222 | ...=> asser...body),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.18s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 32`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.26s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.21s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-ui-test v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-ui-test)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.28s
+Thread 1: Checking harness proofs::read_frame_contract...
+Thread 0: Checking harness proofs::tar_typeflag_classification...
+Thread 3: Checking harness proofs::tar_declared_size_gate...
+Thread 2: Checking harness proofs::zip_index_gates...
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-structured v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-structured)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.88s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-structured v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-structured)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.71s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-structured v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-structured)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.99s
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-structured v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-structured)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.65s
+Thread 3: Checking harness input::proofs::bounded_read_budget_gate...
+Thread 2: Checking harness proofs::csv_max_records_gate...
+Thread 1: Checking harness proofs::csv_max_field_bytes_gate...
+Thread 2:
+VERIFICATION RESULT:
+ ** 0 of 5794 failed (418 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 15.946826s
+
+Thread 1:
+VERIFICATION RESULT:
+ ** 0 of 5812 failed (416 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 15.989017s
+
+Thread 3:
+VERIFICATION RESULT:
+ ** 0 of 532 failed (8 unreachable)
+
+VERIFICATION:- SUCCESSFUL
+Verification Time: 55.403534s
+
+Manual Harness Summary:
+Complete - 3 successfully verified harnesses, 0 failures, 3 total.
+Kani Rust Verifier 0.68.0 (cargo plugin)
+CBMC 6.11.0
+   Compiling ruviform-media-core v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-media-core)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-video-core v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-video-core)
+   Compiling ruviform-audio-core v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-audio-core)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-media-io v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-media-io)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-symphonia v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-symphonia)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (1)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.58s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.48s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+warning: unused variable: `other`
+   --> crates/ruviform-io-wav/tests/formal_wav.rs:768:17
+    |
+768 | ...   other => unrea...mat"),
+    |       ^^^^^    -----...----- you might have meant to use string interpolation in this string literal
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: if this is intentional, prefix it with an underscore
+    |
+768 |                 _other => unreachable!("{other:?} is not a wire format"),
+    |                 +
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: Found the following unsupported constructs:
+             - caller_location (1)
+             - foreign function (2)
+
+         Verification will fail if one or more of these constructs is reachable.
+         See https://model-checking.github.io/kani/rust-feature-support.html for more details.
+
+warning: Kani currently does not support concurrency. The following constructs will be treated as sequential operations:
+             - atomic_load (3)
+
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.38s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: trailing semicolon in macro used in expression position
+   --> crates/ruviform-io-wav/src/muxer.rs:396:27
+    |
+396 | ...=> asser...alue),
+    |       ^^^^^...^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>
+    = note: `#[warn(semicolon_in_expressions_from_non_local_macros)]` (part of `#[warn(future_incompatible)]`) on by default
+    = note: this warning originates in the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+   Compiling ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+warning: unused variable: `index`
+   --> crates/ruviform-io-wav/tests/roundtrip.rs:153:14
+    |
+153 |           for (index, (...
+    |                ^^^^^
+...
+158 | /             assert!(
+159 | |                 (expe...
+160 | |                 "chan...
+161 | |             );
+    | |_____________- you might have meant to use string interpolation in this string literal
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: if this is intentional, prefix it with an underscore
+    |
+153 |         for (_index, (&expected, &actual)) in source[channel]
+    |              +
+
+warning: unused variable: `index`
+   --> crates/ruviform-io-wav/tests/roundtrip.rs:225:10
+    |
+225 |       for (index, (...
+    |            ^^^^^
+226 | /         assert!(
+227 | |             (want...
+228 | |             "samp...
+229 | |         );
+    | |_________- you might have meant to use string interpolation in this string literal
+    |
+help: if this is intentional, prefix it with an underscore
+    |
+225 |     for (_index, (&want, &got)) in expected.iter().zip(planes[0].iter()).enumerate() {
+    |          +
+
+warning: use of an unstable feature
+ --> <crate attribute>:1:12
+  |
+1 | ...re(register_tool)]
+  |       ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `--force-warn unstable-features`
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.23s
+warning: the following packages contain code that will be rejected by a future version of Rust: ruviform-io-wav v0.1.0 (/mnt/g/orca/workspaces/ruviform/rf806-kani-residual/crates/ruviform-io-wav)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 33`
+{"lane":"test-formal-kani","verdict":"fail","reason":"WSL2 (Ubuntu) cargo kani verification failed"}
+[test-formal-kani] ERROR task failed

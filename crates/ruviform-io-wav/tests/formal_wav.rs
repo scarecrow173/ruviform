@@ -1163,9 +1163,21 @@ proptest! {
 /// `Wire::new` unroll. Each `open_muxer` unroll still costs ~1-2
 /// GiB of SSA (std `Cursor`/`Write`/`io::Error` machinery plus the
 /// stream-declaration builder), so the matrices below split per
-/// outcome class: the extensible-form success + stream declaration
-/// in `open_muxer_spec_contract_extensible`, and the byte-rate
-/// overflow rejection in `open_muxer_rejects_invalid_value`. The
+/// outcome class: the PCM-form and extensible-form success + stream
+/// declaration in `open_muxer_spec_contract_{pcm,extensible}`.
+/// The byte-rate overflow rejection is proven at the `Wire::new`
+/// gate by `wire_new_gate_is_exact_*` in `src/wav.rs` — its
+/// boundary matrix covers this exact spec (7.1 F32 at
+/// `u32::MAX / 32 + 1`). The composite Err-direction formula
+/// exceeds the reference WSL2 envelope at *every* depth tried:
+/// `open_muxer` pinned at ~31.7 GiB across 6 variants (slice 4),
+/// and a residual-slice redesign that proved `validate_stream`
+/// alone still pinned at ~31.9 GiB — the gate's own error-arm SSA
+/// (`Error::with_source` + `format!`/`io::Error` machinery), not
+/// `open_muxer`'s post-gate CFG, is the dominant cost. The `?`
+/// propagation to the public entry therefore stays
+/// proptest-covered
+/// (`muxer_rejections_are_invalid_data_and_not_sticky`). The
 /// 16-byte `fmt ` success path is proven at the serialization
 /// layer by `fmt_and_header_layout`; its `open_muxer` glue is
 /// identical to the extensible form's and stays proptest-covered
@@ -1234,11 +1246,15 @@ mod proofs {
     /// kind, never a panic. `unwind(96)` covers the builtin
     /// memmove loops inside the sink writes of the 68-byte header.
     ///
-    /// Split into three disjoint proofs — like the `wire_new`
+    /// Split into two disjoint success proofs — like the `wire_new`
     /// gate proofs, the split is solver-RAM, not semantics: each
     /// `open_muxer` unroll encodes its internal diagnostic paths,
     /// and the single 6-spec matrix exhausted the reference WSL2
     /// service (~2.5 GiB RSS before `Wsl/Service/E_UNEXPECTED`).
+    /// The rejection half is covered at the `Wire::new` gate
+    /// (`wire_new_gate_is_exact_*`); the composite `open_muxer`
+    /// Err-direction proof stays out of the lane — it never
+    /// produces a verdict in-envelope (see the module doc).
     fn check_open_muxer(specs: &[WavOutputSpec]) {
         for spec in specs {
             let info = spec.stream_info();
@@ -1310,38 +1326,6 @@ mod proofs {
             layout: ChannelLayout::Mono,
             sample_format: SampleFormat::U8,
         }]);
-    }
-
-    /// `open_muxer` propagates `Wire::new`'s rejection as
-    /// `InvalidValue` — never another kind, never a panic. The
-    /// byte-rate-overflow spec exits before any serialization.
-    /// Unlike `check_open_muxer`, the success branch asserts only
-    /// unreachability — the sink/stream-declaration assertions are
-    /// dead code for this spec and cost SSA size without coverage.
-    /// `unwind(4)` suffices: reachable loops are the 1-element
-    /// stream-validation pass and `TimeBase` normalization; the
-    /// header-write memmove unrolls live on the dead success path
-    /// (an under-provisioned bound there is unreachable, never a
-    /// silent pass — a real shortfall reports loudly).
-    #[kani::proof]
-    #[kani::unwind(4)]
-    fn open_muxer_rejects_invalid_value() {
-        let spec = WavOutputSpec {
-            sample_rate: SampleRate::new(u32::MAX / 32 + 1).expect("nonzero rate"),
-            layout: ChannelLayout::SevenPointOne,
-            sample_format: SampleFormat::F32,
-        };
-        let info = spec.stream_info();
-        match open_muxer(
-            KaniSink {
-                buf: [0; 80],
-                pos: 0,
-            },
-            &[info],
-        ) {
-            Ok(_) => panic!("byte-rate overflow must be rejected"),
-            Err(error) => assert!(error.kind() == ErrorKind::InvalidValue),
-        }
     }
 
     /// Extensible (`WAVEFORMATEXTENSIBLE`) success cases — the
