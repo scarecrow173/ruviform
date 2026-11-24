@@ -156,19 +156,26 @@ const SPAWN_TIMEOUT_RETRIES: u32 = 3;
 /// `SpawnFailed{cause: Timeout}` proven pre-mint by its retained
 /// diagnostics record. The signature check is explicit per Decision
 /// C: the error's `cause` is `Timeout` AND the record is `Found`
-/// with `phase` in {`PreSpawn`, `Spawn`, `DrainInit`, `Handshake`}
-/// and `cause == Some(Timeout)`. A record frozen at `Live` (a
-/// `Scan`/`CreateInstance`-wait timeout — the phase advances to
-/// `Live` before those waits run), a non-`Timeout` cause, or an
-/// `Evicted`/`NotFound` query result is signature-missed and fails
-/// at once — never retried. Every `SpawnFailed` attempt is traced
-/// to the real stderr — bypassing the harness's per-test capture so
-/// the trace lands in lane logs even when a later attempt recovers
-/// the test — carrying the attempt index plus the record's
-/// `diagnostics_id`/`phase`/`cause` (the deadline-phase attribution
-/// the `SpawnFailed` payload alone cannot show — rf#841 Residual).
-/// Bound exhaustion is an honest failure — the flake is never
-/// absorbed silently.
+/// with `cause == Some(Timeout)` AND `phase` is one of the
+/// `spawn_timeout`-bounded waits' freeze phases — `{PreSpawn,
+/// Spawn, DrainInit, Handshake, Live}`, every variant the enum
+/// currently declares. `Live` is eligible here — and only inside
+/// this signature — because `SpawnFailed` is definitionally
+/// pre-mint (the variant exists only on the spawn/create paths, so
+/// a post-mint command timeout can never produce it): the phase
+/// tracks *child* lifecycle and goes `Live` the instant `Hello`
+/// passes, so the `Scan`/`CreateInstance` waits — themselves
+/// `spawn_timeout`-bounded mint-window waits — freeze `Live`
+/// records on both a fresh child and a pooled re-mint. A
+/// non-`Timeout` cause or an `Evicted`/`NotFound` query result is
+/// signature-missed and fails at once — never retried. Every
+/// `SpawnFailed` attempt is traced to the real stderr — bypassing
+/// the harness's per-test capture so the trace lands in lane logs
+/// even when a later attempt recovers the test — carrying the
+/// attempt index plus the record's `diagnostics_id`/`phase`/`cause`
+/// (the deadline-phase attribution the `SpawnFailed` payload alone
+/// cannot show — rf#841 Residual). Bound exhaustion is an honest
+/// failure — the flake is never absorbed silently.
 fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
     for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
         match host.execute(HostCommand::Instantiate {
@@ -202,6 +209,7 @@ fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
                                     | SpawnPhase::Spawn
                                     | SpawnPhase::DrainInit
                                     | SpawnPhase::Handshake
+                                    | SpawnPhase::Live
                             ) && record.cause == Some(FailureCause::Timeout)
                     );
                 assert!(
