@@ -245,6 +245,7 @@ Directory: `docs/test-specs`
 | TSPEC-034Z9qCx7vBnM3rTsWfXyE | Issue #630 test_instrument slice — test specification | approved | [issue-630-test-instrument.md](./issue-630-test-instrument.md) |
 | TSPEC-cmKIBbYPL73xhK3osfi16F | Issue #630 VST3 test_gain first slice のテスト仕様 | approved | [issue-630-test-plugin-suite.md](./issue-630-test-plugin-suite.md) |
 | TSPEC-034Y4fXVmWB9YKK3r9ty7n | Issue #630 test_stateful slice — test specification | approved | [issue-630-test-stateful.md](./issue-630-test-stateful.md) |
+| TSPEC-630acInventory06 | Issue #630 umbrella AC disposition census — AC×証拠 突合 test spec | approved | [issue-630-ac-inventory.md](./issue-630-ac-inventory.md) |
 | TSPEC-Ji15qVcbOD8vLh0tYx6aPg | Issue #631 real-command-receipt case のテスト仕様 | approved | [issue-631-command-receipt.md](./issue-631-command-receipt.md) |
 | TSPEC-f2Kd9wLq4Zx7mNv3bRc5Ty | Issue #631 AC4 evidence-fields 完成のテスト仕様 | approved | [issue-631-evidence-fields.md](./issue-631-evidence-fields.md) |
 | TSPEC-Lp73tXeQgD9wMz5sUv8iNc | Issue #631 headless-command-receipt case のテスト仕様 | approved | [issue-631-headless-command-receipt.md](./issue-631-headless-command-receipt.md) |
@@ -258,6 +259,7 @@ Directory: `docs/test-specs`
 | TSPEC-034YaYvGNtksNB54jY0Umq | Issue #631 GPUI Test Lab / Scenario Console GUI v1 テスト仕様 | approved | [issue-631-test-lab.md](./issue-631-test-lab.md) |
 | TSPEC-034YJ3x3sCrtx2chmCg7dk | Issue #631 RealOsGuiTest window-close/DPI 観測面のテスト仕様 | approved | [issue-631-window-surface.md](./issue-631-window-surface.md) |
 | TSPEC-01M7WJTWYS1655HDBKFJ31SN92 | Issue #631 editor input/focus verbs テスト仕様 — boundary 語彙・L0-only guard・fixture event log・title-suffix oracle の判定 | approved | [issue-631-editor-input.md](./issue-631-editor-input.md) |
+| TSPEC-631acInventory06 | Issue #631 umbrella AC disposition census — AC×証拠 突合 test spec | approved | [issue-631-ac-inventory.md](./issue-631-ac-inventory.md) |
 | TSPEC-034XEUpXxSbzU4hyVtyUFm | Issue #646 ruviform-numeric bench profile compile テスト仕様 | approved | [issue-646-numeric-bench-profile.md](./issue-646-numeric-bench-profile.md) |
 | TSPEC-8ba0217gpp3jck5Mf0Pw1y | Issue #650 bench-smoke lane coverage テスト仕様 | approved | [issue-650-bench-smoke-coverage.md](./issue-650-bench-smoke-coverage.md) |
 | TSPEC-PwucpxWy6XmKiZkGa4xT4U | Issue #692 s2 Luau analyzer backend — テスト仕様 | approved | [issue-692-luau-backend.md](./issue-692-luau-backend.md) |
