@@ -53,6 +53,8 @@
 mod block;
 mod component;
 mod controller;
+#[cfg(feature = "host")]
+mod editor_ops;
 mod factory;
 mod gain;
 #[cfg(feature = "host")]

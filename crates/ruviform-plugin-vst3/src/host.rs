@@ -191,10 +191,11 @@ use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
-    EventList, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiRequest, GuiRequestSink,
-    GuiRequestVerdict, GuiSize, HostError, ParamEvent, ParamFlags, ParamId, ParamInfo, ParentLease,
-    Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError, ProcessConfig,
-    ProcessContext, ProcessResult, ProcessStatus, TransportInfo, erase,
+    EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind,
+    GuiRequest, GuiRequestSink, GuiRequestVerdict, GuiSize, HostError, ParamEvent, ParamFlags,
+    ParamId, ParamInfo, ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor,
+    PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, TransportInfo,
+    erase,
 };
 use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
 use vst3::Steinberg::KeyModifier_::{kAlternateKey, kCommandKey, kControlKey, kShiftKey};
@@ -220,6 +221,9 @@ use vst3::Steinberg::{
 use vst3::{Class, ComPtr, ComRef, ComWrapper, Interface};
 
 use crate::block;
+use crate::editor_ops::{
+    IRvfEditorOps, IRvfEditorOpsTrait, POPUP_KIND_CHILD_WINDOW, POPUP_KIND_DIALOG,
+};
 use crate::midi::{self, BridgeEventList, MidiAssignmentTable, MidiBridgeStats};
 use crate::sdk_enum_i32;
 use crate::strings::copy_wstring;
@@ -2132,6 +2136,47 @@ impl Vst3Plugin {
         drop(self.plug_frame.take());
     }
 
+    /// The `GuiFocusTarget::HostWindow` arm (Windows): keyboard focus
+    /// moves back to the container HWND the session attached the view
+    /// under — the stored `gui_parent` payload — and the plugin is
+    /// told of the loss through `onFocus(false)`, which is what the
+    /// fixture's `f:0` token records. `GetFocus()==container` is the
+    /// oracle that proves the handoff actually happened; the
+    /// `SetFocus` return value cannot witness it (a window that held
+    /// no prior focus returns null on success too). Same UI-thread
+    /// contract as `open_gui` — `SetFocus` only reaches windows the
+    /// calling thread owns.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no parent lease is stored;
+    /// [`HostError::PluginFailed`] when focus did not move to the
+    /// container or the `onFocus` notification declined.
+    #[cfg(target_os = "windows")]
+    #[expect(unsafe_code)]
+    fn focus_host_window(&self, view: &ComPtr<IPlugView>) -> Result<(), HostError> {
+        let Some((parent, _platform)) = self.gui_parent else {
+            return Err(HostError::Unsupported);
+        };
+        let hwnd = parent.payload() as *mut c_void;
+        if !win32::set_focus(hwnd) {
+            return Err(HostError::PluginFailed);
+        }
+        // SAFETY: `view` is a live `IPlugView` on the caller's UI
+        // thread — the `open_gui` contract.
+        if unsafe { view.onFocus(TBool::from(false)) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        Ok(())
+    }
+
+    /// Off-Windows the host-window focus handoff has no implemented
+    /// OS surface — the defined refusal.
+    #[cfg(not(target_os = "windows"))]
+    fn focus_host_window(&self, _view: &ComPtr<IPlugView>) -> Result<(), HostError> {
+        Err(HostError::Unsupported)
+    }
+
     /// Builds the per-`prepare` channel objects `process` drives:
     /// read-only input param queues + `IParameterChanges`, their
     /// writable output mirrors for `outputParameterChanges`, the
@@ -3485,6 +3530,89 @@ impl Plugin for Vst3Plugin {
         Ok(())
     }
 
+    /// `set_gui_focus_target` — the target-parameterized focus verb
+    /// (Issue #630 F2). `Editor` is the same destination
+    /// `set_gui_focus(true)` names (`onFocus(1)`); `EditorElement`
+    /// rides the ruviform-private `IRvfEditorOps` seam — delivery
+    /// semantics only, not an OS-focus claim; `HostWindow` moves OS
+    /// focus back to the session container HWND stored at attach and
+    /// notifies the view via `onFocus(false)` (Windows only — the
+    /// same UI-thread contract `open_gui` runs under).
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open, the private
+    /// seam is absent, `HostWindow` has no stored parent or runs
+    /// off-Windows; [`HostError::PluginFailed`] when a view/seam call
+    /// or the container `SetFocus` declines; [`HostError::InvalidValue`]
+    /// for an unknown `#[non_exhaustive]` target.
+    #[expect(unsafe_code)]
+    fn set_gui_focus_target(&mut self, target: GuiFocusTarget) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        match target {
+            GuiFocusTarget::Editor => {
+                // SAFETY: live `IPlugView` on the caller's UI thread —
+                // the same contract `open_gui` runs under.
+                if unsafe { view.onFocus(TBool::from(true)) } != kResultOk {
+                    return Err(HostError::PluginFailed);
+                }
+                Ok(())
+            }
+            GuiFocusTarget::EditorElement { element } => {
+                let Some(ops) = view.cast::<IRvfEditorOps>() else {
+                    return Err(HostError::Unsupported);
+                };
+                // SAFETY: `ops` is a live seam pointer QI'd from the
+                // open view on the caller's UI thread.
+                if unsafe { ops.apply_focus(element, TBool::from(true)) } != kResultOk {
+                    return Err(HostError::PluginFailed);
+                }
+                Ok(())
+            }
+            GuiFocusTarget::HostWindow => self.focus_host_window(view),
+            // `GuiFocusTarget` is `#[non_exhaustive]` — an unknown
+            // target has no defined VST3 destination.
+            _ => Err(HostError::InvalidValue),
+        }
+    }
+
+    /// `set_gui_popup` — plugin-owned popup drive through the same
+    /// `IRvfEditorOps` seam (Issue #630 P1): `Dialog` reaches the
+    /// fixture's `WS_POPUP` surface, `ChildWindow` its `WS_CHILD`
+    /// auxiliary surface. Explicit-state and idempotent — the fixture
+    /// records transitions only.
+    ///
+    /// # Errors
+    ///
+    /// [`HostError::Unsupported`] when no view is open or the seam is
+    /// absent; [`HostError::PluginFailed`] when the seam call
+    /// declines; [`HostError::InvalidValue`] for an unknown
+    /// `#[non_exhaustive]` kind.
+    #[expect(unsafe_code)]
+    fn set_gui_popup(&mut self, kind: GuiPopupKind, open: bool) -> Result<(), HostError> {
+        let Some(view) = self.view.as_ref() else {
+            return Err(HostError::Unsupported);
+        };
+        let kind_code = match kind {
+            GuiPopupKind::ChildWindow => POPUP_KIND_CHILD_WINDOW,
+            GuiPopupKind::Dialog => POPUP_KIND_DIALOG,
+            // `GuiPopupKind` is `#[non_exhaustive]` — an unknown kind
+            // has no defined seam code point.
+            _ => return Err(HostError::InvalidValue),
+        };
+        let Some(ops) = view.cast::<IRvfEditorOps>() else {
+            return Err(HostError::Unsupported);
+        };
+        // SAFETY: `ops` is a live seam pointer QI'd from the open
+        // view on the caller's UI thread.
+        if unsafe { ops.popup(kind_code, TBool::from(open)) } != kResultOk {
+            return Err(HostError::PluginFailed);
+        }
+        Ok(())
+    }
+
     /// `set_gui_request_sink` — stores the session-installed route
     /// in the shared cell `BridgePlugFrame` reads on `resizeView`
     /// (Issue #873). `try_borrow_mut` is the defined guard against a
@@ -3548,6 +3676,45 @@ const EDITOR_PLATFORM_TYPE: Option<vst3::Steinberg::FIDString> =
 /// Non-Windows attach is not implemented — see the Windows arm.
 #[cfg(not(target_os = "windows"))]
 const EDITOR_PLATFORM_TYPE: Option<vst3::Steinberg::FIDString> = None;
+
+// ---------------------------------------------------------------------------
+// Win32 focus FFI (GuiFocusTarget::HostWindow)
+// ---------------------------------------------------------------------------
+
+/// The two user32 verbs the `HostWindow` focus handoff needs —
+/// declared bare because this crate carries no `windows-sys` edge:
+/// the adapter's entire Win32 surface is this one handoff, so a
+/// two-symbol `#[link]` block is the smallest honest footprint.
+#[cfg(target_os = "windows")]
+#[expect(unsafe_code)]
+mod win32 {
+    use std::ffi::c_void;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        /// `SetFocus(hwnd)` — moves keyboard focus to `hwnd` inside
+        /// the calling thread's input queue.
+        fn SetFocus(hwnd: *mut c_void) -> *mut c_void;
+        /// `GetFocus()` — the calling thread's focused HWND or null.
+        fn GetFocus() -> *mut c_void;
+    }
+
+    /// `SetFocus(hwnd)` verified through the `GetFocus()` oracle —
+    /// `true` only when the calling thread's focus actually landed on
+    /// `hwnd`. The `SetFocus` return is deliberately ignored: it is
+    /// the previously focused HWND *or* null, which success also
+    /// produces when nothing held focus before.
+    pub(super) fn set_focus(hwnd: *mut c_void) -> bool {
+        // SAFETY: `hwnd` is the container HWND the session attached
+        // us under, on the UI thread that owns it — a dead or
+        // foreign-thread handle makes `SetFocus` fail and the oracle
+        // answers `false`, which the caller maps to `PluginFailed`.
+        unsafe {
+            SetFocus(hwnd);
+            GetFocus() == hwnd
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Fixture resolution helper (shared with the Task-3 runner / Task-4 E2E)
@@ -3941,6 +4108,313 @@ mod tests {
         assert_eq!(plugin.close_gui(), Err(HostError::Unsupported));
         // `drop` now runs `close_view` first — a defined no-op here,
         // then the pinned descent (Initialized → terminate).
+    }
+
+    // -------------------------------------------------------------------
+    // `IRvfEditorOps` seam verbs — fabricated views over a real library
+    // -------------------------------------------------------------------
+
+    /// A fabricated `IPlugView` that also answers the private
+    /// `IRvfEditorOps` seam — records each delivery so the verb path
+    /// through `Vst3Plugin` is provable headlessly. `decline` makes
+    /// the seam verbs answer `kResultFalse` → the adapter's
+    /// `PluginFailed` mapping.
+    struct SeamView {
+        events: RefCell<Vec<String>>,
+        decline: Cell<bool>,
+    }
+
+    impl Class for SeamView {
+        type Interfaces = (IPlugView, IRvfEditorOps);
+    }
+
+    macro_rules! view_stubs {
+        () => {
+            #[expect(unsafe_code)]
+            unsafe fn isPlatformTypeSupported(&self, _type: vst3::Steinberg::FIDString) -> tresult {
+                kResultTrue
+            }
+            #[expect(unsafe_code)]
+            unsafe fn attached(
+                &self,
+                _parent: *mut c_void,
+                _type: vst3::Steinberg::FIDString,
+            ) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn removed(&self) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn onWheel(&self, _distance: f32) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn onKeyDown(&self, _key: u16, _key_code: i16, _mods: i16) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn onKeyUp(&self, _key: u16, _key_code: i16, _mods: i16) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn getSize(&self, _size: *mut ViewRect) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn onSize(&self, _new_size: *mut ViewRect) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn setFrame(&self, _frame: *mut IPlugFrame) -> tresult {
+                kResultOk
+            }
+            #[expect(unsafe_code)]
+            unsafe fn canResize(&self) -> tresult {
+                kResultTrue
+            }
+            #[expect(unsafe_code)]
+            unsafe fn checkSizeConstraint(&self, _rect: *mut ViewRect) -> tresult {
+                kResultOk
+            }
+        };
+    }
+
+    impl IPlugViewTrait for SeamView {
+        view_stubs!();
+        #[expect(unsafe_code)]
+        unsafe fn onFocus(&self, state: TBool) -> tresult {
+            self.events.borrow_mut().push(format!("f:{state}"));
+            kResultOk
+        }
+    }
+
+    impl IRvfEditorOpsTrait for SeamView {
+        #[expect(unsafe_code)]
+        unsafe fn apply_focus(&self, element: u32, focused: TBool) -> tresult {
+            if self.decline.get() {
+                return kResultFalse;
+            }
+            self.events
+                .borrow_mut()
+                .push(format!("fe:{element}:{focused}"));
+            kResultOk
+        }
+        #[expect(unsafe_code)]
+        unsafe fn popup(&self, kind: u32, open: TBool) -> tresult {
+            if self.decline.get() {
+                return kResultFalse;
+            }
+            self.events
+                .borrow_mut()
+                .push(format!("popup:{kind}:{open}"));
+            kResultOk
+        }
+    }
+
+    /// A fabricated `IPlugView` WITHOUT the seam — the honest
+    /// no-capability answer the element/popup arms must map to
+    /// `Unsupported`.
+    struct PlainView {
+        events: RefCell<Vec<String>>,
+    }
+
+    impl Class for PlainView {
+        type Interfaces = (IPlugView,);
+    }
+
+    impl IPlugViewTrait for PlainView {
+        view_stubs!();
+        #[expect(unsafe_code)]
+        unsafe fn onFocus(&self, state: TBool) -> tresult {
+            self.events.borrow_mut().push(format!("f:{state}"));
+            kResultOk
+        }
+    }
+
+    /// A `Vst3Plugin` whose `view` is a fabricated `ComWrapper` view —
+    /// bypasses `open_gui` (the workspace fixture's `createView`
+    /// returns null) so the seam verb paths are exercisable
+    /// headlessly. The returned `ComWrapper` keeps the class data
+    /// alive for event inspection.
+    fn plugin_with_view<C: Class>(wrapper: &ComWrapper<C>) -> Vst3Plugin {
+        let library = load_fixture();
+        let factories = library.factories();
+        let factory = &factories[0];
+        let mut plugin = Vst3Plugin::dormant(
+            factory.descriptor,
+            factory.params,
+            factory.cid,
+            Arc::clone(&factory.library),
+        );
+        plugin.view = wrapper.to_com_ptr::<IPlugView>();
+        plugin
+    }
+
+    /// `set_gui_focus_target(Editor)` reaches `onFocus(1)` — the same
+    /// destination `set_gui_focus(true)` names.
+    #[test]
+    fn focus_target_editor_uses_on_focus() {
+        let wrapper = ComWrapper::new(SeamView {
+            events: RefCell::new(Vec::new()),
+            decline: Cell::new(false),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(plugin.set_gui_focus_target(GuiFocusTarget::Editor), Ok(()));
+        assert_eq!(wrapper.events.borrow().as_slice(), ["f:1"]);
+    }
+
+    /// `set_gui_focus_target(EditorElement)` QI'd the seam and
+    /// delivered `apply_focus(element, 1)` — delivery semantics, not
+    /// an OS-focus claim.
+    #[test]
+    fn focus_target_element_delivers_seam() {
+        let wrapper = ComWrapper::new(SeamView {
+            events: RefCell::new(Vec::new()),
+            decline: Cell::new(false),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 7 }),
+            Ok(())
+        );
+        assert_eq!(wrapper.events.borrow().as_slice(), ["fe:7:1"]);
+    }
+
+    /// `set_gui_popup` maps both `GuiPopupKind`s onto the seam's
+    /// `popup(kind, open)` code points.
+    #[test]
+    fn popup_verbs_deliver_seam_kind_codes() {
+        let wrapper = ComWrapper::new(SeamView {
+            events: RefCell::new(Vec::new()),
+            decline: Cell::new(false),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(plugin.set_gui_popup(GuiPopupKind::Dialog, true), Ok(()));
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::ChildWindow, true),
+            Ok(())
+        );
+        assert_eq!(plugin.set_gui_popup(GuiPopupKind::Dialog, false), Ok(()));
+        assert_eq!(
+            wrapper.events.borrow().as_slice(),
+            [
+                format!("popup:{POPUP_KIND_DIALOG}:1"),
+                format!("popup:{POPUP_KIND_CHILD_WINDOW}:1"),
+                format!("popup:{POPUP_KIND_DIALOG}:0"),
+            ]
+        );
+    }
+
+    /// A view without the seam answers the defined `Unsupported` —
+    /// `Editor` still works through plain `onFocus`, so the refusal
+    /// is scoped to the seam verbs exactly.
+    #[test]
+    fn seamless_view_declines_element_and_popups() {
+        let wrapper = ComWrapper::new(PlainView {
+            events: RefCell::new(Vec::new()),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 1 }),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::ChildWindow, true),
+            Err(HostError::Unsupported)
+        );
+        // The non-seam arm is unaffected.
+        assert_eq!(plugin.set_gui_focus_target(GuiFocusTarget::Editor), Ok(()));
+        assert_eq!(wrapper.events.borrow().as_slice(), ["f:1"]);
+    }
+
+    /// A seam verb the plugin declines (`kResultFalse`) maps to
+    /// `PluginFailed` — the plugin's refusal, never a fabricated
+    /// success.
+    #[test]
+    fn declining_seam_is_plugin_failed() {
+        let wrapper = ComWrapper::new(SeamView {
+            events: RefCell::new(Vec::new()),
+            decline: Cell::new(true),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 1 }),
+            Err(HostError::PluginFailed)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+            Err(HostError::PluginFailed)
+        );
+    }
+
+    /// No open view — every new verb answers `Unsupported`, the same
+    /// gate `set_gui_focus`/`send_gui_key` carry.
+    #[test]
+    fn editor_verbs_without_view_are_unsupported() {
+        let library = load_fixture();
+        let factories = library.factories();
+        let factory = &factories[0];
+        let mut plugin = Vst3Plugin::dormant(
+            factory.descriptor,
+            factory.params,
+            factory.cid,
+            Arc::clone(&factory.library),
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::Editor),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::EditorElement { element: 1 }),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+            Err(HostError::Unsupported)
+        );
+        assert_eq!(
+            plugin.set_gui_popup(GuiPopupKind::Dialog, true),
+            Err(HostError::Unsupported)
+        );
+    }
+
+    /// `HostWindow` without a stored parent lease is `Unsupported`
+    /// on every OS; on Windows a dead lease payload fails the
+    /// `GetFocus` oracle → `PluginFailed` (off-Windows the whole arm
+    /// is `Unsupported` before any OS call).
+    #[test]
+    fn host_window_focus_requires_a_stored_parent() {
+        let wrapper = ComWrapper::new(SeamView {
+            events: RefCell::new(Vec::new()),
+            decline: Cell::new(false),
+        });
+        let mut plugin = plugin_with_view(&wrapper);
+        assert_eq!(
+            plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+            Err(HostError::Unsupported)
+        );
+
+        #[cfg(target_os = "windows")]
+        {
+            // A stored lease whose payload is not a live HWND — the
+            // `GetFocus` oracle answers `false` → `PluginFailed`, and
+            // the plugin sees no `onFocus(false)` notification.
+            plugin.gui_parent = Some((
+                ParentLease::new(0, 0xDEAD),
+                vst3::Steinberg::kPlatformTypeHWND,
+            ));
+            assert_eq!(
+                plugin.set_gui_focus_target(GuiFocusTarget::HostWindow),
+                Err(HostError::PluginFailed)
+            );
+            assert!(wrapper.events.borrow().is_empty());
+        }
     }
 
     #[test]
