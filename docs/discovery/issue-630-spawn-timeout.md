@@ -19,6 +19,7 @@ relations:
     - "evidence/rf630/spawn-timeout-signature-sweep.md"
     - "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
     - "evidence/rf630/spawn-timeout-adapter-sweep.md"
+    - "evidence/rf630/spawn-timeout-residual-cleanup.md"
     - "evidence/rf841/verification.md"
     - "evidence/rf849/verification.md"
     - "evidence/rf631/verification.md"
@@ -36,7 +37,11 @@ relations:
         path: "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
       - type: "file"
         path: "evidence/rf630/spawn-timeout-adapter-sweep.md"
+      - type: "file"
+        path: "evidence/rf630/spawn-timeout-residual-cleanup.md"
     modified:
+      - type: "file"
+        path: "crates/ruviform-plugin-host/src/l1/diag.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-vst3/tests/l1_fault_test_plugin_e2e.rs"
       - type: "file"
@@ -284,3 +289,92 @@ probe・`l1_proxy_e2e` の timeout-convergence flake・
 `SpawnPhase::Handshake` doc と実装の乖離・clap editor verb
 3・external legs）、本 reliability slice 群の閉塞対象としては
 ここで締める。
+
+## 続報 — residual cleanup（Handshake doc 乖離整合 + `l1_proxy_e2e` 別 class flake、本 slice で処理）
+
+前項で締めた残件のうち headless 範囲の 2 件（`SpawnPhase::
+Handshake` doc 乖離・`l1_proxy_e2e` timeout-convergence 別
+class flake）を本 slice で一括処理した。詳細は
+`evidence/rf630/spawn-timeout-residual-cleanup.md`。
+
+### Handshake doc 乖離 — doc 側整合で閉塞
+
+照合の正本は phase/cause の区別である。`SpawnPhase::Handshake`
+（phase）は `Hello`/version 交換のみを指し、`L1Child::spawn`
+は `Hello` 成功直後に `set_phase(Live)`（`l1/mod.rs:2223`）する
+ため `Scan`/`CreateInstance`/`CreateVideoInstance` の reply
+wait は `Live` phase で走り `Live` record を残す。一方
+`FailureCause::Handshake`（cause）は `Hello` version 不一致・
+非 `Hello` 先頭 frame・`Scan`/descriptor mismatch・
+`CreateInstance` の Err reply を含む phase 不問の分類であり、
+`Live` phase record に `Handshake` cause が載りうる（例:
+`Scan` mismatch — `l1/mod.rs:2261`）。
+
+- **乖離の本体 — 修正（comment のみ）**: `src/l1/diag.rs` の
+  `SpawnPhase::Handshake` doc comment が "`Hello`/version,
+  `Scan` and `CreateInstance`/`CreateVideoInstance` negotiation"
+  と `Scan`/`CreateInstance` を Handshake phase に含めて記述
+  していたのを、現行実装の phase 意味論（`Hello`/version 交換
+  のみが `Handshake`、post-`Hello` wait は `Live`）に整合させた。
+  コード・enum 構造・他 comment は不変。
+- **lease 内 design doc は乖離なし（実測）**:
+  `issue-625-ci-e2e-handshake-race-design.md` は
+  `ruviform-ui-test` `TestDriver::handshake`（`test.hello`/
+  `Welcome` 交換）の設計で L1 `SpawnPhase` とは別領域、
+  `issue-630-preset-spawn-fault.md` の `Handshake`/`Timeout`
+  言及は `FailureCause` の pin であり、いずれも現行実装と
+  整合する。
+- **lease 外の残存乖離 — 列挙のみ（未修正のまま残件）**:
+  `docs/discovery/issue-841-spawn-deadline-flake.md` の
+  wait×`SpawnPhase` 表（`Scan`/`CreateInstance` wait の freeze
+  phase を `Handshake` と記述 — post-#933 実装では `Live`。行
+  参照・C1 帰属の `Live` 不在も同様に陳腐化）と
+  `docs/test-specs/issue-630-test-fault.md` の #849 時代
+  signature 記述（phase 集合が `Live` を含まない）。
+  `docs/designs/issue-121-l1-diagnostics.md` の `Handshake` 表は
+  `FailureCause` の分類表で現行と整合 — 乖離なしを確認。
+
+### `l1_proxy_e2e` 別 class flake — 診断と小修正
+
+rf#631 記録の 4 test について post-#935 の構造で失敗腕を診断
+した結果、`hang_converges_on_command_timeout` は #935 の
+`spawn_instance` retry で閉塞済み（追加対応不要）、残り 3 件の
+失敗腕は「scenario の trigger 到達前の環境 deadline/収束」で
+あり、本 file 既存の bounded signature retry と同型の小修正で
+閉塞した（contract assertion・timeout 値・sleep は不変）:
+
+- `spawn_failed_attempt_record_captures_stderr`: 期待値経路が
+  retry 非搭載で、`spawn_timeout` が `Live` 到達前の wait で
+  発火すると `record.phase == Live` pin が壊れる腕。`phase <
+  Live` の `Timeout` record を env signature として bounded
+  retry 化（`Live` 受理後の pin は不変）。
+- `wedged_child_write_converges_and_teardown_is_bounded` と
+  `command_timeout_converges_failed_with_timeout_cause`: pre-
+  trigger command（`Initialize`/`Activate`）への 500ms
+  `command_timeout` env 発火が `Err(Ipc)`/`Err(Failed)` で
+  `.unwrap()` panic する腕。同 signature の bounded retry 化。
+
+検証: induce 補助（file 内一時 zero-timeout patch・revert 済み）
+で 3 腕とも signature 認識→4 attempt trace→bound 超過 honest
+panic を実測。real-run では修正前後とも対象 flake の自然再現
+は未観測（canonical lane 連続 run 全 pass・対象 test 単独
+10 iter 全 pass）— 未再現であることを正直に記録する。
+
+### 残件（本 slice 締め時点）
+
+- `l1_scale_probe` の `#[ignore]`-gated 手動計測 probe —
+  reliability sweep の対象外判定を維持。
+- clap editor verb 3（GUI・設計決裁要）・external legs — 対象外。
+- lease 外 doc の陳腐化 phase/signature 記述（上記列挙分）—
+  別 slice の対象候補として残す。
+- `wedged`/`command_timeout` 系の残りうる環境腕: teardown・
+  notification の wall-clock bound 超過（`NOTIFY_TIMEOUT` 8–10s
+  級）は bounded-by-construction の契約 assert であり retry 不可
+  — 発火すれば正直な環境失敗として残る。`spawn_failed_attempt_
+  record_captures_stderr` で drain thread が極端に枯渇した場合の
+  drain deadline/unread flag 腕も同様（freeze は bounded drain
+  の Done を待つため通常経路では成立しない）。
+- `editor_session_l1`/`runner_lane_*` の runner bin 不在 flake は
+  本 class と無関係の既知環境事象（rf#631 既記録）— 別件。
+- docs index（`docs/**/README.md`）未同期 — Coordinator が統合時
+  に整備する。
