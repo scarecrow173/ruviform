@@ -57,6 +57,8 @@ typedef struct _RVF_LOOPBACK_RENDER_SOURCE
     ULONG                   DmaBufferSize;  // buffer size in bytes
     RVF_LOOPBACK_FORMAT     Format;         // negotiated render pin format
     volatile ULONGLONG      PlayBytePos;    // linear bytes played (cursor)
+    ULONGLONG               ReadBytePos;    // capture-side contiguous read cursor
+    BOOLEAN                 ReadPosValid;   // ReadBytePos was anchored
     BOOLEAN                 Running;        // stream is in KSSTATE_RUN
     BOOLEAN                 Registered;     // registration is live
 } RVF_LOOPBACK_RENDER_SOURCE, *PRVF_LOOPBACK_RENDER_SOURCE;
@@ -80,25 +82,27 @@ RvfLoopbackFormatFromWfx
 // RvfLoopbackCopyToCapture
 //
 // Fills Dst (a capture WaveRT buffer span) with audio read from the render
-// source's play cursor. Source and destination frames are resampled by
-// nearest-neighbor index scaling when rates differ, channels are downmixed
-// (average) when the destination has fewer channels and replicated when it
-// has more, and samples are converted between signed PCM (16/24/32) and
-// IEEE float32. Tearing against concurrent app writes is acceptable: the
+// buffer through a contiguous read cursor (ReadBytePos): the cursor is
+// anchored once to the live play position and then advances by exactly the
+// consumed source frames, so consecutive fills never duplicate or drop
+// content. The buffer is circular, so when the capture falls behind the
+// live cursor it reads older (still valid) stimulus audio instead of
+// skipping. Tearing against concurrent app writes is acceptable: the
 // loopback is an observation path, not a bit-exact pipe.
 //
 // When the source is not registered, not running, or the formats are not
 // usable, the destination is filled with silence (virtual-cable behavior).
 //
-// IRQL: <= DISPATCH_LEVEL. Caller serializes access to Source.
+// IRQL: <= DISPATCH_LEVEL. Caller serializes access to Source (the
+// function updates Source->ReadBytePos/ReadPosValid).
 //=============================================================================
 VOID
 RvfLoopbackCopyToCapture
 (
-    _In_                            const RVF_LOOPBACK_RENDER_SOURCE *Source,
-    _Out_writes_bytes_(DstByteCount)    BYTE                          *Dst,
-    _In_                                ULONG                          DstByteCount,
-    _In_                            const RVF_LOOPBACK_FORMAT         *DstFormat
+    _Inout_                         PRVF_LOOPBACK_RENDER_SOURCE   Source,
+    _Out_writes_bytes_(DstByteCount)    BYTE                     *Dst,
+    _In_                                ULONG                     DstByteCount,
+    _In_                            const RVF_LOOPBACK_FORMAT    *DstFormat
 );
 
 #endif  // _SYSVAD_RVFLOOPBACK_H_

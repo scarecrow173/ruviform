@@ -5222,15 +5222,12 @@ CAdapterCommon::RvfLoopbackRenderRunning
 
     if (m_LoopbackRender.Registered && m_LoopbackRender.Owner == Owner)
     {
+        //
+        // The play cursor itself is left untouched: the render stream's
+        // position stays monotonic across stop/start, and the capture
+        // side keeps its own contiguous read cursor.
+        //
         m_LoopbackRender.Running = Running;
-        if (!Running)
-        {
-            //
-            // A stopped/paused render owns no live play position; reset
-            // the cursor so a restarted stream re-anchors cleanly.
-            //
-            m_LoopbackRender.PlayBytePos = 0;
-        }
     }
 
     KeReleaseSpinLock(&m_LoopbackLock, oldIrql);

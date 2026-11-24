@@ -1234,8 +1234,27 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_llPacketCounter = 0;
             m_ullPlayPosition = 0;
             m_ullWritePosition = 0;
-            m_ullLinearPosition = 0;
-            m_ullPresentationPosition = 0;
+            if (m_bCapture)
+            {
+                m_ullLinearPosition = 0;
+                m_ullPresentationPosition = 0;
+            }
+            else
+            {
+                //
+                // Keep the render clock monotonic across stop/start. The
+                // OS correlates the reported device position with QPC for
+                // IAudioClock::GetPosition on shared-mode WaveRT; a
+                // position reset on the render stream is extrapolated to
+                // a timestamp that lands before the pre-stop correlation
+                // and surfaces as a callback timestamp regression on
+                // every stop->start transition. The mod-buffer cursors
+                // (Play/Write) and packet counters still reset — they are
+                // the buffer-protocol contract — but the linear and
+                // presentation clocks only feed position/timestamp
+                // reporting.
+                //
+            }
 
             // Reset OS read/write positions
             m_ulLastOsReadPacket = ULONG_MAX;

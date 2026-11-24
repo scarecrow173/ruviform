@@ -349,10 +349,10 @@ RvfLoopbackFormatFromWfx
 VOID
 RvfLoopbackCopyToCapture
 (
-    _In_                            const RVF_LOOPBACK_RENDER_SOURCE *Source,
-    _Out_writes_bytes_(DstByteCount)    BYTE                          *Dst,
-    _In_                                ULONG                          DstByteCount,
-    _In_                            const RVF_LOOPBACK_FORMAT         *DstFormat
+    _Inout_                         PRVF_LOOPBACK_RENDER_SOURCE   Source,
+    _Out_writes_bytes_(DstByteCount)    BYTE                     *Dst,
+    _In_                                ULONG                     DstByteCount,
+    _In_                            const RVF_LOOPBACK_FORMAT    *DstFormat
 )
 {
     ULONGLONG   srcFrameCursor;
@@ -378,11 +378,27 @@ RvfLoopbackCopyToCapture
     dstFrames         = DstByteCount / DstFormat->BlockAlign;
 
     //
-    // Anchor the read at the render stream's current play cursor. The
-    // buffer is circular and the app keeps it filled ahead of the cursor,
-    // so reading forward yields the audio being played "now".
+    // Contiguous read cursor: advance by exactly the consumed frames so
+    // consecutive fills neither duplicate nor drop content — re-anchoring
+    // on every fill let the two streams' independent position clocks
+    // jitter the boundary and smeared the captured spectrum. Re-anchor
+    // only when the cursor has drifted implausibly far from live (half
+    // the circular buffer): inside that band the read region still holds
+    // recently written stimulus, so continuity beats chasing the cursor.
     //
-    srcFrameCursor = Source->PlayBytePos / Source->Format.BlockAlign;
+    {
+        LONGLONG drift = (LONGLONG)(Source->PlayBytePos - Source->ReadBytePos);
+
+        if (!Source->ReadPosValid ||
+            drift > (LONGLONG)(Source->DmaBufferSize / 2) ||
+            drift < -(LONGLONG)(Source->DmaBufferSize / 2))
+        {
+            Source->ReadBytePos  = Source->PlayBytePos;
+            Source->ReadPosValid = TRUE;
+        }
+    }
+
+    srcFrameCursor = Source->ReadBytePos / Source->Format.BlockAlign;
 
     for (ULONGLONG dstFrame = 0; dstFrame < dstFrames; ++dstFrame)
     {
@@ -433,6 +449,15 @@ RvfLoopbackCopyToCapture
                             value, DstFormat);
         }
     }
+
+    //
+    // Advance the read cursor by the consumed source frames — matching
+    // the per-frame index mapping so the next fill continues seamlessly.
+    //
+    Source->ReadBytePos =
+        (srcFrameCursor +
+         (dstFrames * Source->Format.SamplesPerSec) / DstFormat->SamplesPerSec) *
+        Source->Format.BlockAlign;
 
     //
     // Trailing bytes that do not form a whole destination frame.
