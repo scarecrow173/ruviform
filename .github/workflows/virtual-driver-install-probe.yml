@@ -234,8 +234,11 @@ jobs:
               "  --- winget search ---" | Out-Probe $log
               & winget search --id Microsoft.WindowsWDK --accept-source-agreements 2>&1 | ForEach-Object { "  $_" | Out-Probe $log }
               "  winget search exit=$LASTEXITCODE" | Out-Probe $log
+              # attempt-2 実測: winget の id は versioned であり bare `Microsoft.WindowsWDK` は
+              # "No package found matching input criteria"（exit -1978335212）を返す。
+              # image SDK 10.0.26100 に対応する id を明示して試行する。
               $sw = [Diagnostics.Stopwatch]::StartNew()
-              & winget install --id Microsoft.WindowsWDK --exact --accept-source-agreements --accept-package-agreements --disable-interactivity 2>&1 | ForEach-Object { "  $_" | Out-Probe $log }
+              & winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --accept-source-agreements --accept-package-agreements --disable-interactivity 2>&1 | ForEach-Object { "  $_" | Out-Probe $log }
               $wgExit = $LASTEXITCODE
               $sw.Stop()
               "  winget install exit=$wgExit elapsed_s=$([int]$sw.Elapsed.TotalSeconds)" | Out-Probe $log
@@ -250,6 +253,29 @@ jobs:
               "  km headers after install attempt: $kmHeaderCount" | Out-Probe $log
               Set-ProbeState $state 'km_headers' $kmHeaderCount
             } else { "  winget: absent — job 内導入経路を評価不能" | Out-Probe $log }
+          }
+
+          # DriverKit task dll の MSBuild major version 照合。attempt-2 の
+          # windows-11-arm 実測で、image 同梱 WDK は Build.Tasks.17.0.dll のみだが
+          # VS2026/MSBuild18 は .18.0.dll を要求し MSB4062 で失敗した。
+          # 既存 dll の同名 copy で解決できるかを workaround 測定として記録する。
+          if ($msbuild) {
+            $msbuildVerText = @(& $msbuild -version -nologo 2>&1 | Select-Object -Last 1) -join ''
+            $msbuildVer = $msbuildVerText -as [version]
+            $maj = if ($msbuildVer) { $msbuildVer.Major } else { 0 }
+            "  msbuild version: $msbuildVerText (major=$maj)" | Out-Probe $log
+            if ($maj) {
+              foreach ($binDir in @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build\*\bin" -Directory -ErrorAction SilentlyContinue)) {
+                $needed = Join-Path $binDir.FullName "Microsoft.DriverKit.Build.Tasks.$maj.0.dll"
+                if (Test-Path $needed) { "  task dll $($binDir.FullName)\$($maj).0: present" | Out-Probe $log; continue }
+                $existing = @(Get-ChildItem $binDir.FullName -Filter 'Microsoft.DriverKit.Build.Tasks.*.0.dll' -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+                if ($existing.Count) {
+                  "  task dll $maj.0 absent in $($binDir.FullName) — $($existing[0].Name) を copy する workaround 試行" | Out-Probe $log
+                  try { Copy-Item $existing[0].FullName $needed -ErrorAction Stop; "  copied: $needed" | Out-Probe $log }
+                  catch { "  copy failed: $($_.Exception.Message)" | Out-Probe $log }
+                } else { "  task dll: workaround 解決不能（copy 元 dll なし）" | Out-Probe $log }
+              }
+            }
           }
 
           $built = $false
