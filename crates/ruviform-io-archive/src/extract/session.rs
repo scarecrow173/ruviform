@@ -22,7 +22,10 @@
 //! **RT contract:** non-RT only — filesystem I/O, allocation.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
+use std::hash::Hasher;
 use std::io::{self, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,8 +37,8 @@ use crate::tar::TarArchiveReader;
 use crate::zip::ZipArchiveReader;
 
 use super::fs::{
-    NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir, StagingFile, StagingRoot,
-    platform_extract_ops,
+    NodeIdentity, NodeTypeTag, PlatformExtractOps, StagingDir, StagingFile, StagingRoot, VfsKind,
+    VfsProbe, platform_extract_ops,
 };
 use super::path::SafeRelativePath;
 
@@ -80,8 +83,9 @@ pub struct CleanupReceipt {
     pub attempted: u32,
     /// Nodes successfully removed (or already absent).
     pub removed: u32,
-    /// Nodes retained: identity mismatch (foreign object at a recorded
-    /// name — deliberately not deleted) or an irrecoverable FS error.
+    /// Nodes retained: identity mismatch, an identity match whose
+    /// ownership could not be proven (foreign object at a recorded
+    /// name — deliberately not deleted), or an irrecoverable FS error.
     pub retained: u32,
     /// Path the staging root occupied.
     pub root: PathBuf,
@@ -137,11 +141,13 @@ impl std::error::Error for RecoveryCleanupError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RecoveryTreeState {
-    /// Path exists, is a directory, identity matches the recorded
-    /// staging root.
+    /// Path exists, is a directory, and is proven to be the recorded
+    /// staging root — a handle-matched identity, or a handle-less
+    /// match whose tree holds only recorded names.
     Present,
-    /// Path exists but identity differs (foreign swap) or it is a
-    /// reparse point — never touched by cleanup.
+    /// Path exists but identity differs (foreign swap), a
+    /// handle-less match holds unrecorded names, or it is a reparse
+    /// point — never touched by cleanup.
     Mismatch,
     /// Path no longer exists.
     Absent,
@@ -169,6 +175,9 @@ pub struct ExtractionRecoveryInfo {
 /// renamed inode and lie); `cleanup` re-opens the path no-follow,
 /// re-verifies the recorded identity, and deletes only the objects
 /// the session created — never a foreign tree at the same path.
+/// Without a generation-bearing handle a reopened root's equality is
+/// not proof by itself; both paths then demand the structural check
+/// before trusting it.
 #[derive(Debug)]
 pub struct ExtractionRecoveryHandle {
     root_path: PathBuf,
@@ -193,8 +202,14 @@ impl ExtractionRecoveryHandle {
     #[must_use]
     pub fn inspect(&self) -> ExtractionRecoveryInfo {
         let state = match self.ops.open_staging_root(&self.root_path) {
-            Ok(root) => match root.identity() {
-                Ok(id) if id == self.root_id => RecoveryTreeState::Present,
+            Ok(root) => match root.probe() {
+                Ok(p) if p.identity == self.root_id => {
+                    if reopened_root_proven(&*root, &p, &self.records) {
+                        RecoveryTreeState::Present
+                    } else {
+                        RecoveryTreeState::Mismatch
+                    }
+                }
                 Ok(_) => RecoveryTreeState::Mismatch,
                 Err(_) => RecoveryTreeState::Unknown,
             },
@@ -251,25 +266,8 @@ impl ExtractionRecoveryHandle {
                 });
             }
         };
-        match root.identity() {
-            Ok(id) if id == root_id => {}
-            Ok(_) => {
-                return Err(RecoveryCleanupError {
-                    failure: ExtractionCleanupFailure {
-                        receipt: CleanupReceipt {
-                            attempted: 0,
-                            removed: 0,
-                            retained: u32::try_from(records.len()).unwrap_or(u32::MAX),
-                            root: root_path.clone(),
-                        },
-                        error: ArchiveError::new(
-                            ArchiveErrorKind::InvalidState,
-                            "staging root identity mismatch; refusing to delete a foreign tree",
-                        ),
-                    },
-                    handle: Box::new(make_handle(last_error)),
-                });
-            }
+        let root_ok = match root.probe() {
+            Ok(p) => p.identity == root_id && reopened_root_proven(&*root, &p, &records),
             Err(e) => {
                 return Err(RecoveryCleanupError {
                     failure: ExtractionCleanupFailure {
@@ -279,6 +277,23 @@ impl ExtractionRecoveryHandle {
                     handle: Box::new(make_handle(last_error)),
                 });
             }
+        };
+        if !root_ok {
+            return Err(RecoveryCleanupError {
+                failure: ExtractionCleanupFailure {
+                    receipt: CleanupReceipt {
+                        attempted: 0,
+                        removed: 0,
+                        retained: u32::try_from(records.len()).unwrap_or(u32::MAX),
+                        root: root_path.clone(),
+                    },
+                    error: ArchiveError::new(
+                        ArchiveErrorKind::InvalidState,
+                        "staging root identity mismatch or unprovable weak identity; refusing to delete a foreign tree",
+                    ),
+                },
+                handle: Box::new(make_handle(last_error)),
+            });
         }
         run_cleanup(root, &records, &root_path).map_err(|failure| {
             let last = failure.error.to_string();
@@ -363,7 +378,20 @@ struct NodeRecord {
     /// Real (non-canonical) components relative to the staging root.
     components: Vec<String>,
     kind: NodeKind,
+    /// Identity captured at creation (post-write for files).
     identity: NodeIdentity,
+    /// Content proof for files (`None` for dirs): byte length and
+    /// content hash of what the session wrote.
+    proof: Option<ContentProof>,
+}
+
+/// What the session wrote into a staged file. On a weak-identity
+/// filesystem equality of `(byte_len, hash)` with the object now at
+/// the recorded name is the ownership proof identity cannot give.
+#[derive(Debug, Clone, Copy)]
+struct ContentProof {
+    byte_len: u64,
+    hash: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -776,8 +804,8 @@ impl ExtractionSession {
                 let dir = parent
                     .create_dir(&name)
                     .map_err(|e| map_backend_error(e, format!("creating staged dir `{name}`")))?;
-                let identity = match dir.identity() {
-                    Ok(id) => id,
+                let identity = match dir.probe() {
+                    Ok(p) => p.identity,
                     Err(e) => {
                         // Unrecordable dir — remove best-effort (we
                         // exclusively created the name), then fail.
@@ -789,6 +817,7 @@ impl ExtractionSession {
                     components: real[..=level].to_vec(),
                     kind: NodeKind::Dir,
                     identity,
+                    proof: None,
                 });
                 self.created_dirs
                     .insert(canonical_prefix, real[..=level].to_vec());
@@ -824,8 +853,8 @@ impl ExtractionSession {
         let mut file = dir
             .create_file(leaf)
             .map_err(|e| map_backend_error(e, format!("creating staged file `{leaf}`")))?;
-        let identity = match file.identity() {
-            Ok(id) => id,
+        let create_id = match file.probe() {
+            Ok(p) => p.identity,
             Err(e) => {
                 // The created file cannot be recorded without an
                 // identity — remove it best-effort (we exclusively
@@ -856,19 +885,37 @@ impl ExtractionSession {
         self.records.push(NodeRecord {
             components,
             kind: NodeKind::File,
-            identity,
+            identity: create_id,
+            proof: None,
         });
-        let written = self.copy_payload(&mut entry, &mut *file, declared)?;
-        // Refresh the recorded identity post-write: backends whose
+        let mut proof = ContentProof {
+            byte_len: 0,
+            hash: empty_hash(),
+        };
+        let copy = self.copy_payload(&mut entry, &mut *file, declared, &mut proof);
+        // Refresh the recorded probe post-write: backends whose
         // discriminator tracks change time (rather than immutable
         // birth time) must see the value the final write produced,
-        // or cleanup would retain our own files as "foreign".
-        let identity = file.identity().map_err(|e| {
-            map_backend_error(e, format!("re-reading staged file `{leaf}` identity"))
-        })?;
-        if let Some(rec) = self.records.last_mut() {
-            rec.identity = identity;
+        // or cleanup would retain our own files as "foreign". The
+        // content proof is recorded for whatever bytes completed —
+        // on a weak filesystem it is the only way cleanup can prove
+        // a partially staged file is ours.
+        match file.probe() {
+            Ok(p) => {
+                if let Some(rec) = self.records.last_mut() {
+                    rec.identity = p.identity;
+                    rec.proof = Some(proof);
+                }
+            }
+            Err(e) => {
+                let _ = copy;
+                return Err(map_backend_error(
+                    e,
+                    format!("re-reading staged file `{leaf}` identity"),
+                ));
+            }
         }
+        let written = copy?;
         drop(file);
         entry
             .finish_entry()
@@ -880,15 +927,20 @@ impl ExtractionSession {
     /// Bounded payload copy. The reader-side caps (declared size,
     /// per-entry budget) are enforced by the entry reader itself;
     /// this loop additionally cuts off measured output beyond the
-    /// per-entry budget so excess bytes never reach the file.
+    /// per-entry budget so excess bytes never reach the file. The
+    /// content proof is updated per completed `write_all`, so it
+    /// always describes the exact prefix the file is known to hold —
+    /// a partially staged file stays provable to cleanup.
     fn copy_payload<E: EntryFinish>(
         &self,
         entry: &mut E,
         file: &mut dyn StagingFile,
         declared: u64,
+        proof: &mut ContentProof,
     ) -> Result<u64, ArchiveError> {
         let cap = declared.min(self.options.limits.max_entry_uncompressed_bytes);
         let mut buf = vec![0u8; self.options.copy_buffer_bytes.clamp(4 * 1024, 1 << 20)];
+        let mut hasher = DefaultHasher::new();
         let mut written = 0u64;
         loop {
             let want = usize::try_from(cap - written)
@@ -906,7 +958,10 @@ impl ExtractionSession {
             }
             file.write_all(&buf[..n])
                 .map_err(|e| map_backend_error(e, "writing staged file"))?;
+            hasher.write(&buf[..n]);
             written = written.saturating_add(u64::try_from(n).unwrap_or(u64::MAX));
+            proof.byte_len = written;
+            proof.hash = hasher.clone().finish();
         }
         Ok(written)
     }
@@ -923,7 +978,7 @@ impl ExtractionSession {
             });
         };
         let root_path = root.path().to_path_buf();
-        let root_id = root.identity().ok();
+        let root_id = root_identity(&*root);
         let ops = self.ops.clone();
         run_cleanup(root, &records, &root_path).map_err(|failure| {
             let last = failure.error.to_string();
@@ -931,7 +986,7 @@ impl ExtractionSession {
                 failure,
                 handle: Box::new(ExtractionRecoveryHandle {
                     root_path: root_path.clone(),
-                    root_id: root_id.unwrap_or(EMPTY_ID),
+                    root_id,
                     records,
                     last_error: Some(last),
                     ops,
@@ -952,7 +1007,7 @@ impl ExtractionSession {
             };
         };
         let root_path = root.path().to_path_buf();
-        let root_id = root.identity().ok().unwrap_or(EMPTY_ID);
+        let root_id = root_identity(&*root);
         match run_cleanup(root, &records, &root_path) {
             Ok(receipt) if receipt.retained == 0 => ExtractionFailure {
                 error,
@@ -1067,7 +1122,7 @@ impl ExtractedTree {
             return Ok(empty_receipt(Path::new("")));
         };
         let root_path = root.path().to_path_buf();
-        let root_id = root.identity().ok();
+        let root_id = root_identity(&*root);
         let ops = self.ops.clone();
         run_cleanup(root, &records, &root_path).map_err(|failure| {
             let last = failure.error.to_string();
@@ -1075,7 +1130,7 @@ impl ExtractedTree {
                 failure,
                 handle: Box::new(ExtractionRecoveryHandle {
                     root_path: root_path.clone(),
-                    root_id: root_id.unwrap_or(EMPTY_ID),
+                    root_id,
                     records,
                     last_error: Some(last),
                     ops,
@@ -1145,9 +1200,10 @@ impl<R: Read> EntryFinish for crate::tar::TarEntryReader<'_, R> {
 }
 
 /// Deepest-first verified cleanup: descend by handle from the root,
-/// probe each recorded leaf's identity, delete only on exact match.
-/// Foreign/missing objects are retained, never deleted. The root is
-/// removed last after a final identity check.
+/// probe each recorded leaf, delete only the objects the session can
+/// still *prove* it created. Foreign/missing objects are retained,
+/// never deleted. The root is removed last after a final identity
+/// check.
 fn run_cleanup(
     root: Box<dyn StagingRoot>,
     records: &[NodeRecord],
@@ -1160,16 +1216,27 @@ fn run_cleanup(
         root: root_path.to_path_buf(),
     };
     let mut first_error: Option<ArchiveError> = None;
-    let root_id = root.identity().ok();
+    let root_id = root_identity(&*root);
     let mut order: Vec<&NodeRecord> = records.iter().collect();
     order.sort_by_key(|r| std::cmp::Reverse(r.components.len()));
     let by_path: BTreeMap<&[String], &NodeRecord> = records
         .iter()
         .map(|r| (r.components.as_slice(), r))
         .collect();
+    // Children each recorded dir may legitimately hold — the weak
+    // structural proof's whitelist.
+    let mut children: BTreeMap<&[String], BTreeSet<OsString>> = BTreeMap::new();
+    for record in records {
+        if let Some((leaf, parent)) = record.components.split_last() {
+            children
+                .entry(parent)
+                .or_default()
+                .insert(OsString::from(leaf));
+        }
+    }
     for record in order {
         receipt.attempted = receipt.attempted.saturating_add(1);
-        match cleanup_node(&*root, record, &by_path) {
+        match cleanup_node(&*root, record, &by_path, &children) {
             Ok(true) => receipt.removed = receipt.removed.saturating_add(1),
             Ok(false) => receipt.retained = receipt.retained.saturating_add(1),
             Err(e) => {
@@ -1180,10 +1247,13 @@ fn run_cleanup(
             }
         }
     }
-    // Root last: re-verify identity, then remove.
+    // Root last: re-verify identity, then remove. Held-open since
+    // creation, the handle pins the inode — on a weak filesystem an
+    // equal probe here can only be the same object (no foreign dir
+    // could ever take the pinned inode), so equality stays sound.
     receipt.attempted = receipt.attempted.saturating_add(1);
-    match root.identity() {
-        Ok(id) if root_id == Some(id) => match root.remove_root() {
+    match root.probe() {
+        Ok(p) if p.identity == root_id => match root.remove_root() {
             Ok(()) => receipt.removed = receipt.removed.saturating_add(1),
             Err(e) => {
                 receipt.retained = receipt.retained.saturating_add(1);
@@ -1202,7 +1272,7 @@ fn run_cleanup(
             receipt,
             error: ArchiveError::new(
                 ArchiveErrorKind::InvalidState,
-                "cleanup retained nodes (identity mismatch or missing objects)",
+                "cleanup retained nodes (identity mismatch, unprovable identity, or missing objects)",
             ),
         }),
         None => Ok(receipt),
@@ -1210,13 +1280,22 @@ fn run_cleanup(
 }
 
 /// Deletes one recorded node iff the object at its recorded path is
-/// still the object the session created (identity match). `Ok(false)`
-/// = retained (foreign/absent parent/identity mismatch); `Ok(true)`
-/// = removed or already absent.
+/// provably the object the session created. `Ok(false)` = retained
+/// (foreign/absent parent/identity mismatch/unprovable identity);
+/// `Ok(true)` = removed or already absent.
+///
+/// A matched generation-bearing file handle proves sameness on its
+/// own — a recreated object cannot reproduce the recorded handle.
+/// Everything weaker (birth/change-time discriminators, a reported
+/// `Strong` strength) can still alias delete+recreate on
+/// filesystems whose timestamps have coarse granularity, so the
+/// kind-appropriate secondary proof ([`weak_proof`]) is required
+/// before anything is deleted.
 fn cleanup_node(
     root: &dyn StagingDir,
     record: &NodeRecord,
     by_path: &BTreeMap<&[String], &NodeRecord>,
+    children: &BTreeMap<&[String], BTreeSet<OsString>>,
 ) -> Result<bool, ArchiveError> {
     let parents = record.components.len().saturating_sub(1);
     let mut owned: Vec<Box<dyn StagingDir>> = Vec::new();
@@ -1229,7 +1308,7 @@ fn cleanup_node(
                 let expected = by_path
                     .get(&record.components[..=level])
                     .map(|r| r.identity);
-                let id = next.identity().unwrap_or(EMPTY_ID);
+                let id = next.probe().map_or(EMPTY_ID, |p| p.identity);
                 if expected != Some(id) {
                     return Ok(false);
                 }
@@ -1242,10 +1321,23 @@ fn cleanup_node(
     }
     let dir: &dyn StagingDir = owned.last().map_or(root, |d| &**d);
     let leaf = &record.components[parents];
-    match dir.probe_identity(leaf) {
-        Ok(id) if id == record.identity => {}
+    let observed = match dir.probe_child(leaf) {
+        Ok(p) => p,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(true),
-        Ok(_) | Err(_) => return Ok(false),
+        Err(_) => return Ok(false),
+    };
+    if observed.identity != record.identity {
+        return Ok(false);
+    }
+    if observed.identity.handle.is_none() {
+        // No generation-bearing handle in the match: the remaining
+        // identity fields can alias a foreign object recreated at the
+        // same name, whatever strength the probe reports.
+        match weak_proof(dir, leaf, record, children) {
+            WeakProof::Ours => {}
+            WeakProof::Foreign => return Ok(false),
+            WeakProof::Gone => return Ok(true),
+        }
     }
     let removed = match record.kind {
         NodeKind::File => dir.remove_file(leaf),
@@ -1256,6 +1348,130 @@ fn cleanup_node(
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(true),
         Err(e) => Err(map_backend_error(e, format!("removing staged `{leaf}`"))),
     }
+}
+
+/// Result of the weak-identity secondary ownership proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WeakProof {
+    /// Proven to be the object the session created.
+    Ours,
+    /// Not provable (mismatch, absent record data, or I/O error) —
+    /// retained, never deleted.
+    Foreign,
+    /// Vanished between the leaf probe and the proof — nothing to
+    /// remove.
+    Gone,
+}
+
+/// Secondary ownership proof for a handle-less identity match.
+/// Identity equality has already been observed; this adds the
+/// channel a weak or coarse-discriminator FS cannot alias:
+///
+/// - **file**: a verified no-follow `open_leaf` re-probe plus
+///   `(byte_len, content hash)` equality against what the session
+///   wrote. The open's own probe must still match the record — the
+///   object we read is the object we judge.
+/// - **dir**: every direct child name must be one the session
+///   recorded (deepest-first order already removed our children, so
+///   a session dir reads empty). A foreign object planted inside
+///   makes the tree retained rather than deleted.
+fn weak_proof(
+    dir: &dyn StagingDir,
+    leaf: &str,
+    record: &NodeRecord,
+    children: &BTreeMap<&[String], BTreeSet<OsString>>,
+) -> WeakProof {
+    match record.kind {
+        NodeKind::File => {
+            let Some(proof) = record.proof else {
+                return WeakProof::Foreign;
+            };
+            let (mut reader, probe) = match dir.open_leaf(leaf) {
+                Ok(v) => v,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => return WeakProof::Gone,
+                Err(_) => return WeakProof::Foreign,
+            };
+            if probe.kind != VfsKind::File
+                || probe.identity != record.identity
+                || probe.byte_len != Some(proof.byte_len)
+            {
+                return WeakProof::Foreign;
+            }
+            match hash_reader(&mut *reader) {
+                Ok((len, hash)) if len == proof.byte_len && hash == proof.hash => WeakProof::Ours,
+                _ => WeakProof::Foreign,
+            }
+        }
+        NodeKind::Dir => {
+            let child = match dir.open_dir(leaf) {
+                Ok(d) => d,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => return WeakProof::Gone,
+                Err(_) => return WeakProof::Foreign,
+            };
+            let Ok(names) = child.list_names() else {
+                return WeakProof::Foreign;
+            };
+            let allowed = children.get(record.components.as_slice());
+            if names
+                .iter()
+                .all(|n| allowed.is_some_and(|s| s.contains(n.as_os_str())))
+            {
+                WeakProof::Ours
+            } else {
+                WeakProof::Foreign
+            }
+        }
+    }
+}
+
+/// Hashes a reader to end: `(bytes read, content hash)` — the same
+/// accumulator `copy_payload` uses, so session writes and cleanup
+/// reads compare equal.
+fn hash_reader(reader: &mut dyn Read) -> io::Result<(u64, u64)> {
+    let mut hasher = DefaultHasher::new();
+    let mut buf = [0u8; 8192];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.write(&buf[..n]);
+        total = total.saturating_add(u64::try_from(n).unwrap_or(u64::MAX));
+    }
+    Ok((total, hasher.finish()))
+}
+
+/// Hash of an empty stream — a staged file whose payload copy wrote
+/// nothing hashes to this.
+fn empty_hash() -> u64 {
+    DefaultHasher::new().finish()
+}
+
+/// Identity of an open root handle, with the conservative `EMPTY_ID`
+/// fallback when the probe fails.
+fn root_identity(root: &dyn StagingDir) -> NodeIdentity {
+    root.probe().map_or(EMPTY_ID, |p| p.identity)
+}
+
+/// Whether a *freshly reopened* staging root can be proven to be the
+/// one the session recorded. A matched generation-bearing file
+/// handle proves sameness on its own; without one, the remaining
+/// identity fields can alias a foreign directory swapped in while
+/// nothing held the inode — whatever strength the probes report — so
+/// the root must additionally hold no names the session never
+/// recorded: a foreign tree fails the check, while an empty or
+/// record-only tree can be safely re-cleaned.
+fn reopened_root_proven(root: &dyn StagingDir, probe: &VfsProbe, records: &[NodeRecord]) -> bool {
+    if probe.identity.handle.is_some() {
+        return true;
+    }
+    let recorded: BTreeSet<OsString> = records
+        .iter()
+        .map(|r| OsString::from(&r.components[0]))
+        .collect();
+    root.list_names()
+        .is_ok_and(|names| names.iter().all(|n| recorded.contains(n.as_os_str())))
 }
 
 fn empty_receipt(root: &Path) -> CleanupReceipt {
@@ -1320,7 +1536,8 @@ mod tests {
     //! cannot produce deterministically.
 
     use super::*;
-    use crate::extract::fs::mock::{MockExtractOps, MockStep, script};
+    use crate::extract::fs::IdentityStrength;
+    use crate::extract::fs::mock::{MockExtractOps, MockNode, MockStep, script};
     use crate::zip::{ZipArchiveReader, ZipArchiveWriter, ZipCompressionMethod, ZipEntryOptions};
     use std::io::{Cursor, Write};
 
@@ -1394,7 +1611,7 @@ mod tests {
                 MockStep::Fail(io::ErrorKind::Other, "disk full"),
             ],
         );
-        script(&state, "probe_identity", vec![MockStep::ForeignIdentity]);
+        script(&state, "probe_child", vec![MockStep::ForeignIdentity]);
         let mut archive = ZipArchiveReader::new(
             Cursor::new(zip_bytes(&[("a.txt", b"1"), ("b.txt", b"2")])),
             ArchiveReadLimits::default(),
@@ -1427,6 +1644,237 @@ mod tests {
         let handle = failure.into_handle().expect("recovery handle");
         assert_eq!(handle.inspect().state, RecoveryTreeState::Present);
         // Script drained → retry succeeds and empties the mock tree.
+        handle.cleanup().expect("retry cleanup");
+        assert!(state.lock().unwrap().nodes.is_empty());
+    }
+
+    // ---- weak-identity filesystem scenarios (Issue #958) ----
+    //
+    // `default_strength: Weak` makes every probe report a weak
+    // identity, like overlayfs in an unprivileged container (no btime,
+    // no file handle). The mock's `nodes` map then lets a test plant
+    // a foreign object that *aliases* a recorded identity — the exact
+    // delete+recreate collision a strong FS would discriminate.
+
+    fn weak_mock_session() -> (
+        ExtractionSession,
+        Arc<std::sync::Mutex<crate::extract::fs::mock::MockScript>>,
+    ) {
+        let (ops, state) = MockExtractOps::new();
+        state.lock().unwrap().default_strength = IdentityStrength::Weak;
+        let session = ExtractionSession::create_with_ops(
+            Path::new("parent"),
+            ExtractOptions::new(),
+            Arc::new(ops),
+        )
+        .expect("session");
+        (session, state)
+    }
+
+    fn staged_path(leaf: &str) -> PathBuf {
+        Path::new("parent").join("rvf-staging-mock").join(leaf)
+    }
+
+    #[test]
+    fn weak_fs_legitimate_cleanup_removes_the_tree() {
+        let (session, state) = weak_mock_session();
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("d/f.txt", b"data"), ("a.txt", b"1")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let tree = session.extract_zip(&mut archive).expect("extract");
+        let receipt = tree.cleanup().expect("weak cleanup must still work");
+        assert_eq!(receipt.retained, 0);
+        assert!(state.lock().unwrap().nodes.is_empty());
+    }
+
+    #[test]
+    fn weak_fs_aliased_foreign_file_is_retained() {
+        let (session, state) = weak_mock_session();
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("victim.txt", b"ours")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let tree = session.extract_zip(&mut archive).expect("extract");
+        // Foreign file recreated at the recorded name with the SAME
+        // weak identity (same-tick inode reuse) and the same length —
+        // only its content differs.
+        let path = staged_path("victim.txt");
+        let (id, strength) = {
+            let s = state.lock().unwrap();
+            let node = s.nodes.get(&path).expect("staged node");
+            (node.id, node.strength)
+        };
+        state.lock().unwrap().nodes.insert(
+            path.clone(),
+            MockNode {
+                id,
+                strength,
+                content: b"FORE".to_vec(),
+            },
+        );
+        let err = tree
+            .cleanup()
+            .expect_err("must refuse to delete the foreign file");
+        assert_eq!(err.failure.receipt.retained, 1);
+        let s = state.lock().unwrap();
+        assert_eq!(
+            s.nodes.get(&path).map(|n| n.content.as_slice()),
+            Some(b"FORE".as_slice()),
+            "the foreign object must survive cleanup",
+        );
+    }
+
+    #[test]
+    fn reported_strong_but_aliased_foreign_file_is_retained() {
+        // The docker-lane regression: a filesystem that *reports*
+        // `Strong` (btime exported) can still alias a recreated
+        // object when its timestamp granularity is coarse — same
+        // inode, same discriminator tick. Reported strength is not a
+        // safe substitute for the secondary proof.
+        let (session, state) = mock_session();
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("victim.txt", b"ours")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let tree = session.extract_zip(&mut archive).expect("extract");
+        let path = staged_path("victim.txt");
+        let (id, strength) = {
+            let s = state.lock().unwrap();
+            let node = s.nodes.get(&path).expect("staged node");
+            (node.id, node.strength)
+        };
+        assert_eq!(strength, IdentityStrength::Strong);
+        state.lock().unwrap().nodes.insert(
+            path.clone(),
+            MockNode {
+                id,
+                strength,
+                content: b"FORE".to_vec(),
+            },
+        );
+        let err = tree
+            .cleanup()
+            .expect_err("must refuse to delete the foreign file");
+        assert_eq!(err.failure.receipt.retained, 1);
+        assert_eq!(
+            state
+                .lock()
+                .unwrap()
+                .nodes
+                .get(&path)
+                .map(|n| n.content.as_slice()),
+            Some(b"FORE".as_slice()),
+        );
+    }
+
+    #[test]
+    fn weak_fs_dir_holding_a_planted_child_is_retained() {
+        let (session, state) = weak_mock_session();
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("d/f.txt", b"data")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let tree = session.extract_zip(&mut archive).expect("extract");
+        // Plant an unrecorded object inside recorded dir `d`: even if
+        // `d`'s weak identity aliases, a dir holding foreign objects
+        // must not be rmdir'd into oblivion.
+        let alien = staged_path("d/alien.txt");
+        state.lock().unwrap().nodes.insert(
+            alien.clone(),
+            MockNode {
+                id: NodeIdentity {
+                    volume: 7,
+                    index: 555,
+                    tag: NodeTypeTag::File,
+                    discriminator: 0,
+                    handle: None,
+                },
+                strength: IdentityStrength::Weak,
+                content: b"x".to_vec(),
+            },
+        );
+        let err = tree
+            .cleanup()
+            .expect_err("must retain the dir holding a foreign child");
+        assert_eq!(err.failure.receipt.retained, 1);
+        let s = state.lock().unwrap();
+        assert!(s.nodes.contains_key(&alien));
+        assert!(s.nodes.contains_key(&staged_path("d")));
+    }
+
+    #[test]
+    fn weak_fs_recovery_inspect_rejects_an_unrecorded_root() {
+        let (session, state) = weak_mock_session();
+        // `a.txt` stages; `b.txt`'s create fails → cleanup removes the
+        // legit file but `remove_root` is denied → handle attached.
+        script(
+            &state,
+            "create_file",
+            vec![
+                MockStep::Ok,
+                MockStep::Fail(io::ErrorKind::Other, "disk full"),
+            ],
+        );
+        script(
+            &state,
+            "remove_root",
+            vec![MockStep::Fail(io::ErrorKind::Other, "denied")],
+        );
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("a.txt", b"1"), ("b.txt", b"2")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let failure = session.extract_zip(&mut archive).expect_err("must fail");
+        let handle = failure.into_handle().expect("recovery handle");
+        // A foreign object appears under the retained root path: on a
+        // weak FS the reopened root's identity still equals the record,
+        // so the structural check is what proves it foreign.
+        state.lock().unwrap().nodes.insert(
+            Path::new("parent")
+                .join("rvf-staging-mock")
+                .join("alien.txt"),
+            MockNode {
+                id: NodeIdentity {
+                    volume: 7,
+                    index: 777,
+                    tag: NodeTypeTag::File,
+                    discriminator: 0,
+                    handle: None,
+                },
+                strength: IdentityStrength::Weak,
+                content: b"!".to_vec(),
+            },
+        );
+        assert_eq!(handle.inspect().state, RecoveryTreeState::Mismatch);
+        handle
+            .cleanup()
+            .expect_err("refuse to clean a foreign tree");
+    }
+
+    #[test]
+    fn weak_fs_recovery_retry_still_cleans_a_legit_tree() {
+        let (session, state) = weak_mock_session();
+        script(
+            &state,
+            "remove_root",
+            vec![MockStep::Fail(io::ErrorKind::Other, "denied")],
+        );
+        let mut archive = ZipArchiveReader::new(
+            Cursor::new(zip_bytes(&[("a.txt", b"1")])),
+            ArchiveReadLimits::default(),
+        )
+        .expect("reader");
+        let tree = session.extract_zip(&mut archive).expect("extract");
+        let err = tree.cleanup().expect_err("scripted remove_root fails");
+        let handle = err.handle;
+        // Weak identity + structural proof → still recognised as ours.
+        assert_eq!(handle.inspect().state, RecoveryTreeState::Present);
         handle.cleanup().expect("retry cleanup");
         assert!(state.lock().unwrap().nodes.is_empty());
     }
