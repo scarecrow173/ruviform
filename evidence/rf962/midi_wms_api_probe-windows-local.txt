@@ -1,0 +1,18 @@
+env-arch: x86_64
+{"stage":"presence","result":"info","component":"Windows.Devices.Midi2.dll","path":"C:\\WINDOWS\\System32\\Windows.Devices.Midi2.dll","present":"false"}
+{"stage":"presence","result":"info","component":"Microsoft.Windows.Devices.Midi2.dll","path":"C:\\WINDOWS\\System32\\Microsoft.Windows.Devices.Midi2.dll","present":"false"}
+{"stage":"presence","result":"info","component":"winmd","count":"0","names":""}
+{"stage":"presence","result":"info","component":"activatable_class_id","count":"0","classes":"","enum_error":""}
+ro-initialize: OK (MTA)
+{"stage":"ro_initialize","result":"pass","apartment":"mta"}
+activation: requesting statics/factories
+{"stage":"activation","result":"info","class":"Windows.Devices.Midi2.MidiService","control":"legacy_class_name","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"activation","result":"info","class":"Windows.Devices.Midi2.MidiLoopbackManager","control":"legacy_class_name","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"activation","result":"fail","class":"Windows.Devices.Midi2.Diagnostics.MidiDiagnostics","iid":"8087B303-0519-C0DE-31D1-EE0030001000","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"activation","result":"fail","class":"Windows.Devices.Midi2.MidiSession","iid":"8087B303-0519-C0DE-31D1-EE0010009000","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"activation","result":"fail","class":"Windows.Devices.Midi2.Transports.Loopback.MidiLoopbackManager","iid":"8087B303-0519-C0DE-31D1-EE00F0201000","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"activation","result":"fail","class":"Windows.Devices.Midi2.Transports.BasicLoopback.MidiBasicLoopbackManager","iid":"8087B303-0519-C0DE-31D1-EE00F0101000","hresult":"0x80040154","detail":"クラスが登録されていません"}
+{"stage":"service_ping","result":"skipped","reason":"diagnostics_statics_unavailable"}
+{"stage":"session","result":"skipped","reason":"session_statics_unavailable"}
+{"stage":"bloop_create","result":"skipped","reason":"bloop_statics_unavailable"}
+{"stage":"verdict","result":"notrun","api_reachable":"false","furthest_stage":"activation","service_pinged":"false","session_opened":"false","bloop_created":"false"}
