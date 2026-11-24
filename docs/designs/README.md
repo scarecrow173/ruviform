@@ -329,4 +329,4 @@ Directory: `docs/designs`
 | DES-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle 設計 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
 | DESIGN-891dirtyNoticePull9x | Issue #891 plugin→host state dirty 通知経路設計（DirtyNotice + 専用 pull verb、wire v7） | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
 | DESIGN-rf920-rt-boundary-01 | Issue #920 cross-thread 同一 instance RT pump 収束設計（L1 endpoint 経路） | approved | [issue-920-rt-boundary.md](./issue-920-rt-boundary.md) |
-| DESIGN-944uiCmdParams01 | Issue #944 rvf.ui.command.v1 user-entered params wire 契約 — 設計 | draft | [issue-944-ui-command-params.md](./issue-944-ui-command-params.md) |
+| DESIGN-944uiCommandParams01 | Issue #944 rvf.ui.command.v1 user-entered params wire 契約 — 設計 | draft | [issue-944-ui-command-params.md](./issue-944-ui-command-params.md) |
