@@ -340,18 +340,29 @@ jobs:
             $inf2cat = @(Find-Tool 'Inf2Cat.exe' -AllKitsHits)
             if ($inf2cat.Count) {
               $inf2cat | ForEach-Object { "  inf2cat hit: $_" | Out-Probe $log }
-              $osFlag = if ($os -eq 'windows-11-arm') { '10_0_ARM64' } else { '10_0_X64' }
-              Push-Location probe-pkg
-              & $inf2cat[0] /driver:. /os:$osFlag /verbose 2>&1 | Out-Probe $log
-              $icExit = $LASTEXITCODE
-              Pop-Location
-              "  Inf2Cat exit=$icExit os=$osFlag" | Out-Probe $log
-              if ($icExit -eq 0) {
-                $cat = Get-ChildItem probe-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($cat) { $catPath = $cat.FullName }
+              # attempt-6 教訓: Inf2Cat が exit=-1・無出力で失敗した。無引数実行の
+              # usage 出力・exit を診断として先に記録し、os flag 形式（`10_0_X64`
+              # / `10_X64` / `10_0_ARM64` / `10_A64`）を候補 retry で切り分ける。
+              & $inf2cat[0] 2>&1 | Select-Object -First 25 | Out-Probe $log
+              "  inf2cat(no-args) exit=$LASTEXITCODE" | Out-Probe $log
+              $osFlags = if ($os -eq 'windows-11-arm') { @('10_0_ARM64', '10_A64', '10_0_X64') } else { @('10_0_X64', '10_X64') }
+              foreach ($osFlag in $osFlags) {
+                "  --- Inf2Cat /os:$osFlag ---" | Out-Probe $log
+                Push-Location probe-pkg
+                & $inf2cat[0] /driver:. /os:$osFlag /verbose 2>&1 | Out-Probe $log
+                $icExit = $LASTEXITCODE
+                Pop-Location
+                "  Inf2Cat exit=$icExit os=$osFlag" | Out-Probe $log
+                if ($icExit -eq 0) {
+                  $cat = Get-ChildItem probe-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($cat) { $catPath = $cat.FullName; break }
+                }
               }
             } else {
-              "  Inf2Cat: absent — makecat fallback を試行" | Out-Probe $log
+              "  Inf2Cat: absent" | Out-Probe $log
+            }
+            if (-not $catPath) {
+              "  Inf2Cat 失敗/不在 — makecat fallback を試行" | Out-Probe $log
               $makecat = @(Find-Tool 'makecat.exe' -AllKitsHits)
               if ($makecat.Count) {
                 $cdf = "probe-pkg\package.cdf"
