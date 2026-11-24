@@ -1,0 +1,14 @@
+{
+  "msbuild": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe",
+  "vs_install": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+  "km_headers": 1,
+  "km_libs": 0,
+  "sys_path": "D:\\a\\ruviform\\ruviform\\drivers\\rvf-virtual-audio\\x64\\Release\\RvfVirtualAudio.sys",
+  "cat_path": "D:\\a\\ruviform\\ruviform\\vaudio-pkg\\rvfvirtualaudio.cat",
+  "pkg_dir": "D:\\a\\ruviform\\ruviform\\vaudio-pkg",
+  "cert_thumbprint": "03F16E6BFAD69A8D05DC6E1BA5B84E317064F68A",
+  "cert_cer_path": "D:\\a\\ruviform\\ruviform\\vaudio-cert.cer",
+  "inf_published": "oem12.inf",
+  "inf_staged": true,
+  "instance_id": "ROOT\\MEDIA\\0000"
+}

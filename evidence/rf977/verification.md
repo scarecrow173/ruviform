@@ -191,3 +191,13 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 **測定内容**: `mise run test-audio-virtual-endpoint` で `tests/virtual_endpoint.rs` の `render_capture_round_trip` を job 内実行（compile 含め ~30s — cargo cache で deps 解決済み）。
 
 **失敗分析**: pair candidate 検出・render open・format 交渉（in=48k Mono F32 / out=48k Stereo F32）まで全て成立し、capture `IAudioClient::Initialize` のみ **`E_ACCESSDENIED` → `permission_denied`**。capture bridge pin の `Category=KSNODETYPE_MICROPHONE` が Windows mic privacy consent の対象となり、headless runner（Server 2025・interactive consent 不可）で capture open が拒否された。**attempt-11 修正**: `micintoptable.h` の capture bridge pin `Category` を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` へ（render 側と対称。line-in は mic privacy gate 対象外かつ仮想 cable の形態として正しい — VB-CABLE 同型）。
+
+### attempt 11 — run 45504161772（merge SHA `d6e830b6`・attempt11-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | attempt-9/10 と同一経路・`pair_count=1` 再現 |
+| stream-roundtrip | **error** | `test_exit=101; verdict: Fail` — `input open failed: permission_denied` **再現** |
+| cleanup | ok | |
+
+**失敗分析**: `KSNODETYPE_LINE_CONNECTOR` 化でも capture open は `E_ACCESSDENIED` — **mic device capability の consent gate は endpoint Category 非依存**（全 capture endpoint が対象）であることが確定。gate の解除は driver 側では不可能で、runner 環境の provisioning（`DeviceAccess\Global\{E5323777-...}\Value=Allow`・HKLM+HKCU 両層）が必要。**attempt-12 修正**: stream-roundtrip stage 内で consent を Allow に provision し before/after を記録（ephemeral runner 限定・cert store 登録と同じ環境調整の一部）。driver 側の LINE_CONNECTOR は semantic 正当性のみを根拠として維持（PROVENANCE 訂正済み）。
