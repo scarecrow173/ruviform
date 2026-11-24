@@ -28,9 +28,11 @@
 //! - **Exclusive create.** `create_dir`/`create_file` fail
 //!   `AlreadyExists` when the name is already taken (including by a
 //!   link) — no overwrite, ever.
-//! - **Identity.** `identity`/`probe_identity` report a stable
-//!   (volume, file-index) pair so cleanup can refuse to delete objects
-//!   that are not the ones the session created.
+//! - **Identity.** `probe`/`probe_child` report the object's stable
+//!   (volume, file-index) identity *plus its strength*: on filesystems
+//!   that export no birth time or kernel file handle the identity is
+//!   `Weak` and cannot discriminate delete+recreate, so cleanup must
+//!   treat equality alone as insufficient proof of sameness.
 //!
 //! **RT contract:** non-RT only — every operation may block on
 //! filesystem I/O and allocate.
@@ -38,11 +40,13 @@
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub(crate) use ruviform_io_file::vfs::{NodeIdentity, NodeTypeTag};
+#[cfg(test)]
+pub(crate) use ruviform_io_file::rooted::IdentityStrength;
+pub(crate) use ruviform_io_file::vfs::{NodeIdentity, NodeTypeTag, VfsKind, VfsProbe};
 use ruviform_io_file::vfs::{VfsDir, VfsOps, platform_vfs_ops};
 
 /// The default platform backend factory.
@@ -83,13 +87,26 @@ pub(crate) trait PlatformExtractOps: Send + Sync + fmt::Debug {
 pub(crate) trait StagingDir: Send + fmt::Debug {
     /// Diagnostic path for messages — never an identity proof.
     fn path(&self) -> &Path;
-    /// Identity of this directory (its own handle; `tag` = `Dir`,
-    /// `discriminator` = 0).
-    fn identity(&self) -> io::Result<NodeIdentity>;
-    /// Identity of the child object named `name` without following
+    /// Probe of this directory itself (its own handle; `tag` = `Dir`,
+    /// `discriminator` = 0). The probe carries the identity's
+    /// [`IdentityStrength`].
+    fn probe(&self) -> io::Result<VfsProbe>;
+    /// Probe of the child object named `name` without following
     /// links (`AT_SYMLINK_NOFOLLOW` / `FILE_OPEN_REPARSE_POINT`) —
-    /// for a link this reports the *link's* identity (`tag` = `Other`).
-    fn probe_identity(&self, name: &str) -> io::Result<NodeIdentity>;
+    /// for a link this reports the *link's* probe (`tag` = `Other`).
+    fn probe_child(&self, name: &str) -> io::Result<VfsProbe>;
+    /// Verified no-follow read-open of the child leaf `name`: the
+    /// returned probe describes the *opened object itself*, never a
+    /// link target — callers must re-check `probe.kind`. Used to
+    /// re-verify a weak-identity file's content before deletion.
+    /// `Unsupported` where the backend cannot produce a verified
+    /// open.
+    fn open_leaf(&self, name: &str) -> io::Result<(Box<dyn Read + Send>, VfsProbe)>;
+    /// Direct-child entry names (`..` excluded) inside this
+    /// directory. Used by the weak-identity structural check: a
+    /// directory that holds unrecorded names cannot be proven to be
+    /// the one the session created.
+    fn list_names(&self) -> io::Result<Vec<OsString>>;
     /// Creates a child directory exclusively; `AlreadyExists` when
     /// taken (including by a link).
     fn create_dir(&self, name: &str) -> io::Result<Box<dyn StagingDir>>;
@@ -115,9 +132,12 @@ pub(crate) trait StagingRoot: StagingDir {
     fn remove_root(self: Box<Self>) -> io::Result<()>;
 }
 
-/// An open staging file — `Write` plus identity.
+/// An open staging file — `Write` plus identity probe.
 pub(crate) trait StagingFile: Write + Send + fmt::Debug {
-    fn identity(&self) -> io::Result<NodeIdentity>;
+    /// Probe of the open file itself — the descriptor pins the
+    /// object, so this always describes the file the session opened,
+    /// never a swapped-in name. Carries [`IdentityStrength`].
+    fn probe(&self) -> io::Result<VfsProbe>;
 }
 
 /// Shared helper: generates a collision-resistant staging name
@@ -232,12 +252,26 @@ impl StagingDir for OsStagingDir {
         self.dir.path()
     }
 
-    fn identity(&self) -> io::Result<NodeIdentity> {
-        self.dir.identity()
+    fn probe(&self) -> io::Result<VfsProbe> {
+        self.dir.stat_self()
     }
 
-    fn probe_identity(&self, name: &str) -> io::Result<NodeIdentity> {
-        self.dir.probe(OsStr::new(name)).map(|p| p.identity)
+    fn probe_child(&self, name: &str) -> io::Result<VfsProbe> {
+        self.dir.probe(OsStr::new(name))
+    }
+
+    fn open_leaf(&self, name: &str) -> io::Result<(Box<dyn Read + Send>, VfsProbe)> {
+        let (file, probe) = self.dir.open_regular_leaf(OsStr::new(name))?;
+        Ok((Box::new(file), probe))
+    }
+
+    fn list_names(&self) -> io::Result<Vec<OsString>> {
+        Ok(self
+            .dir
+            .list()?
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect())
     }
 
     fn create_dir(&self, name: &str) -> io::Result<Box<dyn StagingDir>> {
@@ -280,6 +314,15 @@ impl StagingRoot for OsStagingDir {
     /// the recorded name's identity against this handle's own
     /// identity first: a swapped-in link or foreign directory at the
     /// name reports an error instead of being deleted.
+    ///
+    /// This check stays sound on weak-identity filesystems for a
+    /// root that has been held open since creation: the open dir
+    /// handle pins the inode, so an equal probe of the name can only
+    /// be the same object — a foreign directory could never take the
+    /// pinned inode. Whether the *opened* root is the one the
+    /// session recorded is a separate question the caller answers
+    /// (a matched file handle, or the recovery path's structural
+    /// check).
     fn remove_root(self: Box<Self>) -> io::Result<()> {
         let Some(parent) = &self.parent else {
             return Err(io::Error::new(
@@ -319,8 +362,8 @@ impl Write for OsStagingFile {
 }
 
 impl StagingFile for OsStagingFile {
-    fn identity(&self) -> io::Result<NodeIdentity> {
-        self.ops.stat_file(&self.file).map(|p| p.identity)
+    fn probe(&self) -> io::Result<VfsProbe> {
+        self.ops.stat_file(&self.file)
     }
 }
 
@@ -329,6 +372,7 @@ impl StagingFile for OsStagingFile {
 pub(crate) mod mock {
     use super::*;
     use std::collections::BTreeMap;
+    use std::io::Cursor;
     use std::sync::Mutex;
 
     /// What the mock should do at the next matching call.
@@ -336,7 +380,7 @@ pub(crate) mod mock {
     pub(crate) enum MockStep {
         Ok,
         Fail(io::ErrorKind, &'static str),
-        /// `identity`/`probe_identity` returns a foreign id.
+        /// `probe`/`probe_child`/`open_leaf` returns a foreign probe.
         ForeignIdentity,
     }
 
@@ -359,7 +403,35 @@ pub(crate) mod mock {
         handle: None,
     };
 
-    #[derive(Debug, Default)]
+    /// An "on disk" node: identity, per-object identity strength, and
+    /// for regular files the bytes a verified `open_leaf` read would
+    /// return. Tests rewrite a node's identity/content to simulate a
+    /// foreign object that aliases (or differs from) a recorded one.
+    #[derive(Debug, Clone)]
+    pub(crate) struct MockNode {
+        pub id: NodeIdentity,
+        pub strength: IdentityStrength,
+        pub content: Vec<u8>,
+    }
+
+    impl MockNode {
+        fn probe(&self) -> VfsProbe {
+            let kind = match self.id.tag {
+                NodeTypeTag::File => VfsKind::File,
+                NodeTypeTag::Dir => VfsKind::Dir,
+                _ => VfsKind::Other,
+            };
+            VfsProbe {
+                identity: self.id,
+                kind,
+                byte_len: (kind != VfsKind::Dir).then_some(self.content.len() as u64),
+                modified: None,
+                strength: self.strength,
+            }
+        }
+    }
+
+    #[derive(Debug)]
     pub(crate) struct MockScript {
         /// `op` → FIFO of scripted outcomes.
         pub steps: BTreeMap<&'static str, std::collections::VecDeque<MockStep>>,
@@ -367,8 +439,22 @@ pub(crate) mod mock {
         pub calls: BTreeMap<&'static str, u32>,
         /// Next identity handed out for created nodes.
         pub next_id: u64,
-        /// "On disk" nodes: path → identity (created/deleted tracked).
-        pub nodes: BTreeMap<PathBuf, NodeIdentity>,
+        /// Identity strength assigned to newly created nodes.
+        pub default_strength: IdentityStrength,
+        /// "On disk" nodes: path → node (created/deleted tracked).
+        pub nodes: BTreeMap<PathBuf, MockNode>,
+    }
+
+    impl Default for MockScript {
+        fn default() -> Self {
+            Self {
+                steps: BTreeMap::new(),
+                calls: BTreeMap::new(),
+                next_id: 0,
+                default_strength: IdentityStrength::Strong,
+                nodes: BTreeMap::new(),
+            }
+        }
     }
 
     impl MockScript {
@@ -378,6 +464,16 @@ pub(crate) mod mock {
                 .get_mut(op)
                 .and_then(std::collections::VecDeque::pop_front)
                 .unwrap_or(MockStep::Ok)
+        }
+
+        fn foreign_probe(&self) -> VfsProbe {
+            VfsProbe {
+                identity: FOREIGN_ID,
+                kind: VfsKind::Other,
+                byte_len: None,
+                modified: None,
+                strength: self.default_strength,
+            }
         }
     }
 
@@ -404,11 +500,18 @@ pub(crate) mod mock {
             match s.pop("create_staging_root") {
                 MockStep::Ok => {
                     let path = parent.join("rvf-staging-mock");
-                    s.nodes.insert(path.clone(), ROOT_ID);
+                    let node = MockNode {
+                        id: ROOT_ID,
+                        strength: s.default_strength,
+                        content: Vec::new(),
+                    };
+                    let strength = node.strength;
+                    s.nodes.insert(path.clone(), node);
                     Ok(Box::new(MockDir {
                         state: self.state.clone(),
                         path,
                         id: ROOT_ID,
+                        strength,
                     }))
                 }
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
@@ -419,10 +522,11 @@ pub(crate) mod mock {
             let mut s = self.state.lock().unwrap();
             match s.pop("open_staging_root") {
                 MockStep::Ok => match s.nodes.get(path) {
-                    Some(id) => Ok(Box::new(MockDir {
+                    Some(node) => Ok(Box::new(MockDir {
                         state: self.state.clone(),
                         path: path.to_path_buf(),
-                        id: *id,
+                        id: node.id,
+                        strength: node.strength,
                     })),
                     None => Err(io::Error::new(
                         io::ErrorKind::NotFound,
@@ -440,31 +544,87 @@ pub(crate) mod mock {
         state: Arc<Mutex<MockScript>>,
         path: PathBuf,
         id: NodeIdentity,
+        strength: IdentityStrength,
+    }
+
+    impl MockDir {
+        fn own_probe(&self) -> VfsProbe {
+            VfsProbe {
+                identity: self.id,
+                kind: VfsKind::Dir,
+                byte_len: None,
+                modified: None,
+                strength: self.strength,
+            }
+        }
     }
 
     impl StagingDir for MockDir {
         fn path(&self) -> &Path {
             &self.path
         }
-        fn identity(&self) -> io::Result<NodeIdentity> {
+        fn probe(&self) -> io::Result<VfsProbe> {
             let mut s = self.state.lock().unwrap();
-            match s.pop("identity") {
-                MockStep::Ok => Ok(self.id),
-                MockStep::ForeignIdentity => Ok(FOREIGN_ID),
+            match s.pop("probe") {
+                // `stat_self` describes the *open object* — pinned by
+                // the handle even if the path was swapped or unlinked.
+                MockStep::Ok => Ok(self.own_probe()),
+                MockStep::ForeignIdentity => Ok(s.foreign_probe()),
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
             }
         }
-        fn probe_identity(&self, name: &str) -> io::Result<NodeIdentity> {
+        fn probe_child(&self, name: &str) -> io::Result<VfsProbe> {
             let mut s = self.state.lock().unwrap();
-            match s.pop("probe_identity") {
+            match s.pop("probe_child") {
                 MockStep::Ok => match s.nodes.get(&self.path.join(name)) {
-                    Some(id) => Ok(*id),
+                    Some(node) => Ok(node.probe()),
                     None => Err(io::Error::new(
                         io::ErrorKind::NotFound,
                         "mock: no such child",
                     )),
                 },
-                MockStep::ForeignIdentity => Ok(FOREIGN_ID),
+                MockStep::ForeignIdentity => Ok(s.foreign_probe()),
+                MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
+            }
+        }
+        fn open_leaf(&self, name: &str) -> io::Result<(Box<dyn Read + Send>, VfsProbe)> {
+            let mut s = self.state.lock().unwrap();
+            match s.pop("open_leaf") {
+                MockStep::Ok => match s.nodes.get(&self.path.join(name)) {
+                    Some(node) => {
+                        let probe = node.probe();
+                        if probe.kind != VfsKind::File {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "mock: leaf is not a regular file",
+                            ));
+                        }
+                        Ok((Box::new(Cursor::new(node.content.clone())), probe))
+                    }
+                    None => Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "mock: no such child",
+                    )),
+                },
+                MockStep::ForeignIdentity => {
+                    Ok((Box::new(Cursor::new(Vec::<u8>::new())), s.foreign_probe()))
+                }
+                MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
+            }
+        }
+        fn list_names(&self) -> io::Result<Vec<OsString>> {
+            let mut s = self.state.lock().unwrap();
+            match s.pop("list_names") {
+                MockStep::Ok => Ok(s
+                    .nodes
+                    .keys()
+                    .filter_map(|p| {
+                        (p.parent() == Some(self.path.as_path()))
+                            .then(|| p.file_name().map(OsString::from))
+                            .flatten()
+                    })
+                    .collect()),
+                MockStep::ForeignIdentity => Ok(vec![OsString::from("foreign-planted")]),
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
             }
         }
@@ -481,11 +641,18 @@ pub(crate) mod mock {
                         handle: None,
                     };
                     let path = self.path.join(name);
-                    s.nodes.insert(path.clone(), id);
+                    let node = MockNode {
+                        id,
+                        strength: s.default_strength,
+                        content: Vec::new(),
+                    };
+                    let strength = node.strength;
+                    s.nodes.insert(path.clone(), node);
                     Ok(Box::new(MockDir {
                         state: self.state.clone(),
                         path,
                         id,
+                        strength,
                     }))
                 }
                 MockStep::Fail(kind, msg) => Err(io::Error::new(kind, msg)),
@@ -498,10 +665,11 @@ pub(crate) mod mock {
                 MockStep::Ok => {
                     let path = self.path.join(name);
                     match s.nodes.get(&path) {
-                        Some(id) => Ok(Box::new(MockDir {
+                        Some(node) => Ok(Box::new(MockDir {
                             state: self.state.clone(),
                             path,
-                            id: *id,
+                            id: node.id,
+                            strength: node.strength,
                         })),
                         None => Err(io::Error::new(io::ErrorKind::NotFound, "mock: no such dir")),
                     }
@@ -522,9 +690,19 @@ pub(crate) mod mock {
                         discriminator: s.next_id,
                         handle: None,
                     };
-                    s.nodes.insert(self.path.join(name), id);
-                    Ok(Box::new(MockFile {
+                    let path = self.path.join(name);
+                    let node = MockNode {
                         id,
+                        strength: s.default_strength,
+                        content: Vec::new(),
+                    };
+                    let strength = node.strength;
+                    s.nodes.insert(path, node);
+                    Ok(Box::new(MockFile {
+                        state: self.state.clone(),
+                        path: self.path.join(name),
+                        id,
+                        strength,
                         written: Vec::new(),
                     }))
                 }
@@ -570,10 +748,29 @@ pub(crate) mod mock {
         }
     }
 
+    /// A mock staging file. Writes land in `written` and are flushed
+    /// to the node's `content` on drop — but only while the node at
+    /// the path is still the object this handle created (a foreign
+    /// object planted at the path keeps its own bytes, like a real
+    /// fd writing to an unlinked inode).
     #[derive(Debug)]
     struct MockFile {
+        state: Arc<Mutex<MockScript>>,
+        path: PathBuf,
         id: NodeIdentity,
+        strength: IdentityStrength,
         written: Vec<u8>,
+    }
+
+    impl Drop for MockFile {
+        fn drop(&mut self) {
+            let mut s = self.state.lock().unwrap();
+            if let Some(node) = s.nodes.get_mut(&self.path)
+                && node.id == self.id
+            {
+                node.content = self.written.clone();
+            }
+        }
     }
 
     impl Write for MockFile {
@@ -587,8 +784,16 @@ pub(crate) mod mock {
     }
 
     impl StagingFile for MockFile {
-        fn identity(&self) -> io::Result<NodeIdentity> {
-            Ok(self.id)
+        fn probe(&self) -> io::Result<VfsProbe> {
+            // `stat_file` describes the *open object* — pinned by the
+            // handle, never the name's current contents.
+            Ok(VfsProbe {
+                identity: self.id,
+                kind: VfsKind::File,
+                byte_len: Some(self.written.len() as u64),
+                modified: None,
+                strength: self.strength,
+            })
         }
     }
 
