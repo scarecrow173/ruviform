@@ -1,0 +1,3 @@
+  subject: CN=RvfTestSignedNull Probe (rf961)
+  thumbprint: D824DA05B93121208D9AABEE66EC26798D1FF460
+  cer: C:\a\ruviform\ruviform\probe-cert.cer

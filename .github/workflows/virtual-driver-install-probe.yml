@@ -689,6 +689,32 @@ jobs:
                 if ($sysdrv) { "  Win32_SystemDriver: State=$($sysdrv.State) Status=$($sysdrv.Status) PathName=$($sysdrv.PathName)" | Out-Probe $log }
                 else { "  Win32_SystemDriver RvfTestSignedNull: not found" | Out-Probe $log }
                 $prob = ($props | Where-Object { $_.KeyName -eq 'DEVPKEY_Device_ProblemCode' }).Data
+                if ($prob -ne 0) {
+                  # attempt-8 教訓: ARM64 で install 全通過後に load だけ失敗
+                  # (problem 52 = CM_PROB_UNSIGNED_DRIVER)。kernel の CI 判定
+                  # 根拠を切り分けるため、CI event log・setupapi.dev.log・
+                  # 実効 testsigning/SecureBoot を診断採取する。
+                  "`n  --- problem_code=$prob diagnostics ---" | Out-Probe $log
+                  try {
+                    "  [bcdedit {current}]" | Out-Probe $log
+                    bcdedit /enum '{current}' 2>&1 | Out-Probe $log
+                  } catch { "  bcdedit error: $($_.Exception.Message)" | Out-Probe $log }
+                  try {
+                    $sb = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
+                    "  Confirm-SecureBootUEFI=$sb" | Out-Probe $log
+                  } catch { "  Confirm-SecureBootUEFI error: $($_.Exception.Message)" | Out-Probe $log }
+                  try {
+                    "  [CodeIntegrity Operational — last 15]" | Out-Probe $log
+                    Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational' } -MaxEvents 15 -ErrorAction SilentlyContinue |
+                      ForEach-Object { "    $($_.TimeCreated.ToString('HH:mm:ss')) id=$($_.Id) $(($_.Message -split "`n" | Select-Object -First 1))" } | Out-Probe $log
+                  } catch { "  Get-WinEvent error: $($_.Exception.Message)" | Out-Probe $log }
+                  try {
+                    "  [setupapi.dev.log — RvfTestSigned entries]" | Out-Probe $log
+                    Get-Content 'C:\Windows\INF\setupapi.dev.log' -ErrorAction SilentlyContinue |
+                      Select-String -Pattern 'RvfTestSigned|unsigned|signature' -Context 1,3 |
+                      Select-Object -Last 12 | ForEach-Object { $_.Line; $_.Context.PostContext } | Out-Probe $log
+                  } catch { "  setupapi.dev.log error: $($_.Exception.Message)" | Out-Probe $log }
+                }
                 Add-StageRecord -JsonPath $json -Stage devnode-create -Status $(if ($dev.Status -eq 'OK') { 'ok' } else { 'error' }) -Detail "instance_id=$iid; status=$($dev.Status); problem_code=$prob; service=$($dev.Service)"
               } else {
                 "  devnode not enumerated ($iid)" | Out-Probe $log

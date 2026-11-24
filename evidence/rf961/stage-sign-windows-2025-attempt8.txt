@@ -1,0 +1,48 @@
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\signtool.exe
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe
+  signtool selected: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  --- signtool sign D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys ---
+The following certificate was selected:
+    Issued to: RvfTestSignedNull Probe (rf961)
+
+    Issued by: RvfTestSignedNull Probe (rf961)
+
+    Expires:   Thu Nov 26 20:17:20 2026
+
+    SHA1 hash: 619984065E113AD5717726132D6A60E1707F04FB
+
+
+Done Adding Additional Store
+Successfully signed: D:\a\ruviform\ruviform\drivers\testsigned-null\x64\Release\RvfTestSignedNull.sys
+
+
+Number of files successfully Signed: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  sign exit=0 file=RvfTestSignedNull.sys
+  --- signtool sign D:\a\ruviform\ruviform\probe-pkg\rvftestsignednull.cat ---
+The following certificate was selected:
+    Issued to: RvfTestSignedNull Probe (rf961)
+
+    Issued by: RvfTestSignedNull Probe (rf961)
+
+    Expires:   Thu Nov 26 20:17:20 2026
+
+    SHA1 hash: 619984065E113AD5717726132D6A60E1707F04FB
+
+
+Done Adding Additional Store
+Successfully signed: D:\a\ruviform\ruviform\probe-pkg\rvftestsignednull.cat
+
+
+Number of files successfully Signed: 1
+
+Number of warnings: 0
+
+Number of errors: 0
+
+  sign exit=0 file=rvftestsignednull.cat
