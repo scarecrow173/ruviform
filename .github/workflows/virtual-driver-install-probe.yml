@@ -252,6 +252,12 @@ jobs:
               $kmHeaderCount = @(Get-ChildItem (Join-Path $kitsRoot 'Include') -Recurse -Depth 2 -Filter 'wdm.h' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*\km\*' }).Count
               "  km headers after install attempt: $kmHeaderCount" | Out-Probe $log
               Set-ProbeState $state 'km_headers' $kmHeaderCount
+              # WDK 導入後の task dll inventory を再列挙（build 配下に無く VS/別パスへ
+              # 配置される可能性を含めて記録 — attempt-3 で post-install 配置が未確定だったため）
+              $postTasks = @(Get-ChildItem $kitsRoot -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue)
+              if ($vsInstall) { $postTasks += @(Get-ChildItem $vsInstall -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue) }
+              if ($postTasks.Count) { $postTasks | ForEach-Object { "  task dll (post-install): $($_.FullName)" | Out-Probe $log } }
+              else { "  task dll (post-install): absent" | Out-Probe $log }
             } else { "  winget: absent — job 内導入経路を評価不能" | Out-Probe $log }
           }
 
@@ -268,7 +274,10 @@ jobs:
               foreach ($binDir in @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build\*\bin" -Directory -ErrorAction SilentlyContinue)) {
                 $needed = Join-Path $binDir.FullName "Microsoft.DriverKit.Build.Tasks.$maj.0.dll"
                 if (Test-Path $needed) { "  task dll $($binDir.FullName)\$($maj).0: present" | Out-Probe $log; continue }
-                $existing = @(Get-ChildItem $binDir.FullName -Filter 'Microsoft.DriverKit.Build.Tasks.*.0.dll' -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+                # attempt-3 教訓: `*.0.dll` glob は PackageVerifier.<n>.0.dll（別アセンブリで
+                # ValidateNTTargetVersion を持たない）も拾うため MSB4062 が解消しない。
+                # 本体 `Microsoft.DriverKit.Build.Tasks.<n>.0.dll` のみを copy 元に限定する。
+                $existing = @(Get-ChildItem $binDir.FullName -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^Microsoft\.DriverKit\.Build\.Tasks\.\d+\.0\.dll$' } | Sort-Object Name -Descending)
                 if ($existing.Count) {
                   "  task dll $maj.0 absent in $($binDir.FullName) — $($existing[0].Name) を copy する workaround 試行" | Out-Probe $log
                   try { Copy-Item $existing[0].FullName $needed -ErrorAction Stop; "  copied: $needed" | Out-Probe $log }
