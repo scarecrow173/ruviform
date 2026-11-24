@@ -35,10 +35,9 @@
          job 生成の自己署名証明書で実施する（attempt-3 実測: SignMode 未指定で
          SIGNTASK が /fd 無し signtool を呼び失敗した） -->
     <SignMode>Off</SignMode>
-    <!-- build 内 Inf2Cat は workflow の msbuild 呼出で /p:RunInf2Cat=false
-         （global property）として無効化する — project PropertyGroup への記述は
-         WDK targets の既定値に上書きされ無効だった（attempt-6 実測）。catalog
-         生成は catalog-create stage が vaudio-pkg\ staging で実施 -->
+    <!-- build 内 Inf2Cat は実行する — `FilesToPackage` で sys を package dir
+         に含めて signability test を通す（下記 ItemGroup 参照）。catalog 生成は
+         catalog-create stage 側でも vaudio-pkg\ staging で行う -->
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetVersion>Windows10</TargetVersion>
@@ -98,6 +97,11 @@
     </Masm>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <!-- driver 出力を package dir へ含める — 無いと DriverPackageTarget が
+         sys を x64\Release\RvfVirtualAudio\ へ copy せず、in-build Inf2Cat の
+         signability test が INF CopyFiles 参照を解決できず失敗する（attempt-5/6/7 実測。
+         upstream TabletAudioSample.vcxproj と同型） -->
+    <FilesToPackage Include="$(TargetPath)" Condition="'$(ConfigurationType)'=='Driver'" />
     <Inf Include="RvfVirtualAudio.inf" />
     <ResourceCompile Include="RvfVirtualAudio.rc" />
     <ClCompile Include="adapter.cpp" />

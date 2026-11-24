@@ -138,3 +138,12 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | 以降 | blocked | fail-closed |
 
 **失敗分析**: vcxproj `<RunInf2Cat>false</RunInf2Cat>`（PropertyGroup）が無効 — WDK targets の既定値で上書きされた。**attempt-7 修正**: `/p:RunInf2Cat=false` を global property として msbuild コマンドラインで渡す（vcxproj の記述は撤去・comment で経緯を記録）。
+
+### attempt 7 — run 45498616766（merge SHA `5c6ab5b3`・attempt7-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| driver-build | **error** | `msbuild exit=1` — `/p:RunInf2Cat=false`（global property）でも build 内 Inf2Cat が実行 |
+| 以降 | blocked | fail-closed |
+
+**失敗分析**: `RunInf2Cat` はこの target のゲートではない（WindowsDriver.common.targets:1438 の Inf2Cat は別条件）。根本原因は **`FilesToPackage` 欠落** — upstream `TabletAudioSample.vcxproj` は `<FilesToPackage Include="$(TargetPath)"/>` で driver 出力を package dir（`x64\Release\RvfVirtualAudio\`）へ copy させている。本 vcxproj で欠落したため sys が package dir に無く、INF CopyFiles を signability test が解決できなかった。**attempt-8 修正**: `FilesToPackage` を追加し、in-build Inf2Cat を正常動作させる（`/p:RunInf2Cat=false` 撤去 — catalog-create stage 側でも `vaudio-pkg\` staging で実施する設計は維持）。
