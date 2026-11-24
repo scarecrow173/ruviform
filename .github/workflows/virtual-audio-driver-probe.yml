@@ -811,6 +811,31 @@ jobs:
           $probeStatus = Get-StageStatus $json 'endpoint-probe'
           "  prerequisite endpoint-probe: $probeStatus" | Out-Probe $log
 
+          # capture open の E_ACCESSDENIED 対策（attempt-10/11 実測）—
+          # capture endpoint へのアクセスは mic device capability の
+          # consent gate に掛かり、headless runner の既定は拒否側。
+          # endpoint Category の LINE_CONNECTOR 化では同 gate は解除
+          # されない（attempt-11 で実測）ため、machine/user 両層の
+          # DeviceAccess consent を Allow に provision する。ephemeral
+          # runner 上の job 内限定調整で、cert store 登録と同じ環境
+          # provisioning の一部。before/after を判定材料として記録する。
+          $micCap = '{E5323777-F976-4f5b-9B55-B94699C46E44}'
+          $consentNote = @()
+          foreach ($hive in 'HKLM:', 'HKCU:') {
+            $key = "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"
+            try {
+              $before = (Get-ItemProperty -Path $key -Name Value -ErrorAction SilentlyContinue).Value
+              if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+              Set-ItemProperty -Path $key -Name Value -Value 'Allow'
+              $after = (Get-ItemProperty -Path $key -Name Value).Value
+              "  mic-consent $key : '$before' -> '$after'" | Out-Probe $log
+              $consentNote += "$hive=$after"
+            } catch {
+              "  mic-consent $key error: $($_.Exception.Message)" | Out-Probe $log
+              $consentNote += "$hive=error"
+            }
+          }
+
           $out = @(& mise run test-audio-virtual-endpoint 2>&1)
           $testExit = $LASTEXITCODE
           $out | ForEach-Object { "  $_" | Out-Probe $log }
@@ -820,7 +845,7 @@ jobs:
 
           $status = 'ok'
           if ($verdict -match '^Fail') { $status = 'error' }
-          Add-StageRecord -JsonPath $json -Stage stream-roundtrip -Status $status -Detail "test_exit=$testExit; verdict=$verdict" -ExitCode $testExit
+          Add-StageRecord -JsonPath $json -Stage stream-roundtrip -Status $status -Detail "test_exit=$testExit; verdict=$verdict; consent=$($consentNote -join ',')" -ExitCode $testExit
           exit 0
 
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
