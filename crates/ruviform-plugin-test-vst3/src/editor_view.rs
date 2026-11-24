@@ -40,6 +40,18 @@
 //! `win32` shim answers `None`/no-op so `attached` converges to the
 //! defined `kResultFalse` rejection and the cdylib still builds.
 //!
+//! ## Private seam (`IRvfEditorOps`)
+//!
+//! Beside `IPlugView`, the view answers one ruviform-private IID
+//! (`crate::editor_ops::IRvfEditorOps`, `"RVFEDITOROPS0001"`) — the
+//! K1 fixture-private extension seam from
+//! `docs/designs/issue-630-editor-verbs.md`, carrying the editor
+//! verbs `IPlugView` has no surface for: element-focus delivery
+//! (`apply_focus` → `fe:{element}:{state}` token) and plugin-owned
+//! popup drive (`popup` → `po:`/`pc:` for `Dialog`,
+//! `co:`/`cc:` for `ChildWindow`). The event tokens land in the same
+//! title-channel log the `f:`/`kd:` verbs already use.
+//!
 //! [`TestEditorView`] is created only through
 //! `IEditController::createView("editor")` — it is not a factory
 //! class. Interior mutability follows the `controller.rs`
@@ -52,11 +64,14 @@ use std::cell::RefCell;
 use std::ffi::c_void;
 
 use vst3::Steinberg::{
-    FIDString, IPlugFrame, IPlugView, IPlugViewTrait, ViewRect, kInvalidArgument, kResultFalse,
-    kResultOk, kResultTrue, tresult,
+    FIDString, IPlugFrame, IPlugView, IPlugViewTrait, TBool, ViewRect, kInvalidArgument,
+    kResultFalse, kResultOk, kResultTrue, tresult,
 };
 use vst3::{Class, ComPtr, ComRef};
 
+use crate::editor_ops::{
+    IRvfEditorOps, IRvfEditorOpsTrait, POPUP_KIND_CHILD_WINDOW, POPUP_KIND_DIALOG,
+};
 use crate::strings::cstring_eq;
 
 /// The editor's preferred size — the deterministic fixed rect
@@ -113,6 +128,22 @@ struct ViewState {
     /// (`rvf-test-editor-popup-{n}`) so an observer can prove a
     /// close/open cycle really recreated the surface.
     popup_seq: u32,
+    /// The plugin-owned `ChildWindow` surface as a `usize` (`None` =
+    /// no live window) — a `WS_CHILD` HWND nested under the editor's
+    /// own child (`hwnd`), driven by the `IRvfEditorOps::popup` seam
+    /// rather than the key-toggle path `popup` serves. Same
+    /// handle-only contract: `Some` only when this build produced a
+    /// window.
+    child: Option<usize>,
+    /// The logical `ChildWindow` open state — the seam's open/close
+    /// oracle, mirroring `popup_open`: `true`/`false` after the verb
+    /// regardless of whether `child` holds a real HWND (off Windows
+    /// the flag still toggles so `co:`/`cc:` tokens record).
+    child_open: bool,
+    /// `ChildWindow` generation — stamped into the child HWND's
+    /// window text (`rvf-test-editor-child-{n}`) so the
+    /// `EnumChildWindows` oracle can prove recreation.
+    child_seq: u32,
 }
 
 /// The `key_code` that toggles the plugin-owned popup — `VK_P`
@@ -129,7 +160,7 @@ pub(crate) struct TestEditorView {
 }
 
 impl Class for TestEditorView {
-    type Interfaces = (IPlugView,);
+    type Interfaces = (IPlugView, IRvfEditorOps);
 }
 
 impl TestEditorView {
@@ -150,6 +181,9 @@ impl TestEditorView {
                 popup: None,
                 popup_open: false,
                 popup_seq: 0,
+                child: None,
+                child_open: false,
+                child_seq: 0,
             }),
         }
     }
@@ -170,11 +204,24 @@ impl TestEditorView {
         kResultOk
     }
 
-    /// Toggles the plugin-owned popup: open tries to create a real
-    /// `WS_POPUP` HWND titled `rvf-test-editor-popup-{seq}` owned by
-    /// the editor's root ancestor when one exists; close destroys it
-    /// when one exists. The `po:{seq}`/`pc:{seq}` tokens land in the
-    /// same event log the `kd:` tokens use — the verb dispatch is
+    /// Toggles the plugin-owned `Dialog` popup — the `VK_P` key
+    /// gesture expressed through the same explicit-state worker the
+    /// seam's `Dialog` verb drives (`po:{seq}`/`pc:{seq}` tokens).
+    fn popup_toggle(&self) -> tresult {
+        let Ok(state) = self.state.try_borrow() else {
+            return kResultFalse;
+        };
+        let open = !state.popup_open;
+        drop(state);
+        self.set_dialog_open(open)
+    }
+
+    /// The `GuiPopupKind::Dialog` verb — explicit-state form of
+    /// `popup_toggle`: open tries to create a real `WS_POPUP` HWND
+    /// titled `rvf-test-editor-popup-{seq}` owned by the editor's
+    /// root ancestor when one exists; close destroys it when one
+    /// exists. The `po:{seq}`/`pc:{seq}` tokens land in the same
+    /// event log the `kd:` tokens use — the verb dispatch is
     /// recorded whether or not this build can create HWNDs (off
     /// Windows the `win32` shim answers `None` and the log still
     /// shows the verb ran, the same split `attached` uses). The
@@ -182,24 +229,65 @@ impl TestEditorView {
     /// HWND slot: `state.popup` only carries a live handle, so an
     /// HWND-based oracle would leave the close branch — and `pc:` —
     /// unreachable wherever `win32::popup` answers `None` (Issue
-    /// #855).
-    fn popup_toggle(&self) -> tresult {
+    /// #855). Idempotent: a request matching the current state is
+    /// `kResultOk` and records no token.
+    fn set_dialog_open(&self, open: bool) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
             return kResultFalse;
         };
-        if state.popup_open {
+        if open == state.popup_open {
+            return kResultOk;
+        }
+        if open {
+            state.popup_seq = state.popup_seq.wrapping_add(1);
+            let seq = state.popup_seq;
+            state.popup = win32::popup(state.hwnd, &format!("rvf-test-editor-popup-{seq}"));
+            state.popup_open = true;
+            state.events.push(format!("po:{seq}"));
+        } else {
             state.popup_open = false;
             if let Some(popup) = state.popup.take() {
                 win32::destroy(popup);
             }
             let seq = state.popup_seq;
             state.events.push(format!("pc:{seq}"));
+        }
+        if let Some(hwnd) = state.hwnd {
+            win32::set_title(hwnd, &state.window_title());
+        }
+        kResultOk
+    }
+
+    /// The `GuiPopupKind::ChildWindow` verb — opens or closes the
+    /// plugin-owned auxiliary `WS_CHILD` surface titled
+    /// `rvf-test-editor-child-{seq}` nested under the editor's own
+    /// child HWND. `co:{seq}`/`cc:{seq}` tokens land in the same
+    /// event log; the HWND-side oracle is `EnumChildWindows` over the
+    /// editor child (title token + `WS_CHILD` style + parent match).
+    /// Same logical/HWND oracle split as `set_dialog_open`: the
+    /// `child_open` flag is the verb oracle, `state.child` only ever
+    /// carries a live handle, and a no-op request is `kResultOk`
+    /// with no token.
+    fn set_child_open(&self, open: bool) -> tresult {
+        let Ok(mut state) = self.state.try_borrow_mut() else {
+            return kResultFalse;
+        };
+        if open == state.child_open {
+            return kResultOk;
+        }
+        if open {
+            state.child_seq = state.child_seq.wrapping_add(1);
+            let seq = state.child_seq;
+            state.child = win32::child_window(state.hwnd, &format!("rvf-test-editor-child-{seq}"));
+            state.child_open = true;
+            state.events.push(format!("co:{seq}"));
         } else {
-            state.popup_seq = state.popup_seq.wrapping_add(1);
-            let seq = state.popup_seq;
-            state.popup = win32::popup(state.hwnd, &format!("rvf-test-editor-popup-{seq}"));
-            state.popup_open = true;
-            state.events.push(format!("po:{seq}"));
+            state.child_open = false;
+            if let Some(child) = state.child.take() {
+                win32::destroy(child);
+            }
+            let seq = state.child_seq;
+            state.events.push(format!("cc:{seq}"));
         }
         if let Some(hwnd) = state.hwnd {
             win32::set_title(hwnd, &state.window_title());
@@ -269,11 +357,12 @@ impl IPlugViewTrait for TestEditorView {
         }
     }
 
-    /// Detaches the view: destroys the child HWND and any open popup,
-    /// resets the logical popup open state (a re-attach must not
-    /// inherit a stale `pc:` cycle), and always reports `kResultOk` —
-    /// the host debug-asserts this result, so declining would turn a
-    /// benign double-`removed` into a failure.
+    /// Detaches the view: destroys the child HWND and any open
+    /// popup/child surface, resets both logical open states (a
+    /// re-attach must not inherit a stale `pc:`/`cc:` cycle), and
+    /// always reports `kResultOk` — the host debug-asserts this
+    /// result, so declining would turn a benign double-`removed`
+    /// into a failure.
     #[expect(unsafe_code)]
     unsafe fn removed(&self) -> tresult {
         let Ok(mut state) = self.state.try_borrow_mut() else {
@@ -283,6 +372,10 @@ impl IPlugViewTrait for TestEditorView {
             win32::destroy(popup);
         }
         state.popup_open = false;
+        if let Some(child) = state.child.take() {
+            win32::destroy(child);
+        }
+        state.child_open = false;
         if let Some(hwnd) = state.hwnd.take() {
             win32::destroy(hwnd);
         }
@@ -358,10 +451,25 @@ impl IPlugViewTrait for TestEditorView {
 
     /// Records the focus change — `f:{state}` lands in the event log
     /// the child HWND's window text carries. `TBool` is `uint8` in
-    /// the bindings.
+    /// the bindings. On a `1` the fixture additionally moves real OS
+    /// focus to its child HWND — the same `SetFocus` a real plugin
+    /// performs after `onFocus(true)`, which gives the host's
+    /// `GetFocus()==child` oracle something honest to observe. `0`
+    /// records only: where focus goes on release is the host's call
+    /// (`GuiFocusTarget::HostWindow` does `SetFocus(container)`
+    /// adapter-side).
     #[expect(unsafe_code)]
     unsafe fn onFocus(&self, state: u8) -> tresult {
-        self.record(format!("f:{state}"))
+        let result = self.record(format!("f:{state}"));
+        if result == kResultOk && state != 0 {
+            let Ok(view_state) = self.state.try_borrow() else {
+                return kResultFalse;
+            };
+            if let Some(hwnd) = view_state.hwnd {
+                win32::focus(hwnd);
+            }
+        }
+        result
     }
 
     /// Retains the host's `IPlugFrame` (or releases ours on null) —
@@ -408,6 +516,33 @@ impl IPlugViewTrait for TestEditorView {
     }
 }
 
+impl IRvfEditorOpsTrait for TestEditorView {
+    /// `apply_focus` — element-focus *delivery*: records
+    /// `fe:{element}:{focused}` in the same event log the `f:` tokens
+    /// use. Delivery semantics only — `element` is a logical id, not
+    /// an HWND, and no OS focus is claimed or moved here (unlike
+    /// `onFocus(1)`, which does `SetFocus(child)`).
+    #[expect(unsafe_code)]
+    unsafe fn apply_focus(&self, element: u32, focused: TBool) -> tresult {
+        self.record(format!("fe:{element}:{focused}"))
+    }
+
+    /// `popup` — the seam's popup drive: `kind` selects the surface
+    /// family (`Dialog` shares the `po:`/`pc:` path with the `VK_P`
+    /// toggle; `ChildWindow` drives the `co:`/`cc:` `WS_CHILD`
+    /// helper), `open` the transition. Unknown kinds are
+    /// `kInvalidArgument` — the defined rejection the adapter maps
+    /// to `PluginFailed`, never a silent accept.
+    #[expect(unsafe_code)]
+    unsafe fn popup(&self, kind: u32, open: TBool) -> tresult {
+        match kind {
+            POPUP_KIND_CHILD_WINDOW => self.set_child_open(open != 0),
+            POPUP_KIND_DIALOG => self.set_dialog_open(open != 0),
+            _ => kInvalidArgument,
+        }
+    }
+}
+
 /// Windows child-window management — the only Win32 surface in this
 /// crate. The window class deliberately registers
 /// `lpfnWndProc = DefWindowProcW` (not a function inside this cdylib):
@@ -431,6 +566,7 @@ mod win32 {
         GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
         GetModuleHandleExW,
     };
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GA_ROOT,
         GetAncestor, GetClassInfoW, GetClientRect, IsWindow, RegisterClassW, SWP_NOMOVE,
@@ -671,6 +807,65 @@ mod win32 {
         }
     }
 
+    /// Creates the plugin-owned `ChildWindow` surface — a `WS_CHILD |
+    /// WS_VISIBLE` HWND titled `rvf-test-editor-child-{seq}` nested
+    /// under the editor's own child (`parent`). The `EnumChildWindows`
+    /// oracle verifies the title token, the `WS_CHILD` style and the
+    /// parent match — distinct from `popup`, which is a top-level
+    /// `WS_POPUP` surface the top-level inventory observes. Returns
+    /// `None` on any defined failure (dead parent, registration or
+    /// creation failure) — the caller still logs the verb, the same
+    /// logical/HWND split `popup` carries.
+    pub(super) fn child_window(parent: Option<usize>, title: &str) -> Option<usize> {
+        // SAFETY: `IsWindow` is a pure handle-validity query — safe
+        // on any pointer value including a dead handle.
+        let parent = parent.filter(|hwnd| unsafe { IsWindow(*hwnd as HWND) } != 0)?;
+        if !ensure_registered() {
+            return None;
+        }
+        let class = class_name();
+        let title_w: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: `parent` passed the `IsWindow` gate; the class and
+        // title outlive the synchronous call; the returned HWND is a
+        // `WS_CHILD` descendant of `parent` and owned by this view
+        // until `destroy` (a parent destroy takes it down first).
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title_w.as_ptr(),
+                WS_CHILD | WS_VISIBLE,
+                0,
+                0,
+                200,
+                100,
+                parent as HWND,
+                ptr::null_mut(),
+                MODULE_H.load(Ordering::Relaxed) as HINSTANCE,
+                ptr::null(),
+            )
+        };
+        if window.is_null() {
+            None
+        } else {
+            Some(window as usize)
+        }
+    }
+
+    /// Moves keyboard focus to `hwnd` — the real-OS half of an
+    /// `onFocus(1)` delivery a real plugin performs itself. The
+    /// same-thread contract the whole `win32` module runs under:
+    /// `SetFocus` can only target windows the calling thread owns.
+    /// Best-effort — a dead handle is a defined `SetFocus` no-op.
+    pub(super) fn focus(hwnd: usize) {
+        // SAFETY: `hwnd` is the child this module created on the
+        // caller's UI thread; on a dead handle the call is a defined
+        // no-op error.
+        unsafe {
+            SetFocus(hwnd as HWND);
+        }
+    }
+
     /// Whether `hwnd` currently names a live window — the test-side
     /// existence check for popup/editor surfaces.
     #[cfg(test)]
@@ -703,6 +898,12 @@ mod win32 {
     pub(super) fn popup(_anchor: Option<usize>, _title: &str) -> Option<usize> {
         None
     }
+
+    pub(super) fn child_window(_parent: Option<usize>, _title: &str) -> Option<usize> {
+        None
+    }
+
+    pub(super) fn focus(_hwnd: usize) {}
 
     #[cfg(test)]
     pub(super) fn is_window(_hwnd: usize) -> bool {
@@ -894,6 +1095,124 @@ mod tests {
                 .collect();
             assert_eq!(popup_tokens, ["po:1", "po:2"]);
         }
+    }
+
+    /// The `IRvfEditorOps` seam is reachable through `queryInterface`
+    /// on the live `IPlugView` — the same `cast` the adapter's
+    /// `EditorElement`/`popup` arms take — and `apply_focus` records
+    /// `fe:{element}:{focused}`: delivery semantics, recorded in the
+    /// shared event log with no OS-focus claim.
+    #[expect(unsafe_code)]
+    #[test]
+    fn seam_element_focus_records_fe_token() {
+        let wrapper = ComWrapper::new(TestEditorView::new());
+        let view = wrapper
+            .to_com_ptr::<IPlugView>()
+            .expect("IPlugView is implemented");
+        let ops = view
+            .cast::<IRvfEditorOps>()
+            .expect("IRvfEditorOps answers QI on this view");
+        // SAFETY: `ops` is a live seam pointer QI'd from `view`; the
+        // args are plain scalar values.
+        unsafe {
+            assert_eq!(ops.apply_focus(9, 1), kResultOk);
+            assert_eq!(ops.apply_focus(3, 0), kResultOk);
+        }
+        assert_eq!(wrapper.state.borrow().events, ["fe:9:1", "fe:3:0"]);
+    }
+
+    /// `popup(Dialog, …)` drives the same `po:`/`pc:` surface the
+    /// `VK_P` toggle owns — explicit-state and idempotent: a
+    /// repeated open records no second `po:`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn seam_dialog_popup_records_po_pc_tokens() {
+        let wrapper = ComWrapper::new(TestEditorView::new());
+        let view = wrapper
+            .to_com_ptr::<IPlugView>()
+            .expect("IPlugView is implemented");
+        let ops = view
+            .cast::<IRvfEditorOps>()
+            .expect("IRvfEditorOps answers QI on this view");
+        // SAFETY: `ops` is a live seam pointer; args are scalars.
+        unsafe {
+            assert_eq!(ops.popup(POPUP_KIND_DIALOG, 1), kResultOk);
+            assert!(wrapper.state.borrow().popup_open);
+            // Idempotent open — accepted, no transition, no token.
+            assert_eq!(ops.popup(POPUP_KIND_DIALOG, 1), kResultOk);
+            assert_eq!(ops.popup(POPUP_KIND_DIALOG, 0), kResultOk);
+            assert!(!wrapper.state.borrow().popup_open);
+        }
+        assert_eq!(wrapper.state.borrow().events, ["po:1", "pc:1"]);
+    }
+
+    /// `popup(ChildWindow, …)` drives the `WS_CHILD` auxiliary
+    /// surface — `co:`/`cc:` tokens and the `child_open` oracle,
+    /// HWND-side `child` present only where this build creates real
+    /// windows.
+    #[expect(unsafe_code)]
+    #[test]
+    fn seam_child_popup_records_co_cc_tokens() {
+        let wrapper = ComWrapper::new(TestEditorView::new());
+        let view = wrapper
+            .to_com_ptr::<IPlugView>()
+            .expect("IPlugView is implemented");
+        let ops = view
+            .cast::<IRvfEditorOps>()
+            .expect("IRvfEditorOps answers QI on this view");
+        // SAFETY: `ops` is a live seam pointer; args are scalars.
+        unsafe {
+            assert_eq!(ops.popup(POPUP_KIND_CHILD_WINDOW, 1), kResultOk);
+            {
+                let state = wrapper.state.borrow();
+                assert!(state.child_open);
+                // No editor child HWND exists while detached — the
+                // logical oracle toggles, `child` stays handle-only.
+                assert!(state.child.is_none());
+            }
+            // Idempotent close path: open once more is a no-op.
+            assert_eq!(ops.popup(POPUP_KIND_CHILD_WINDOW, 1), kResultOk);
+            assert_eq!(ops.popup(POPUP_KIND_CHILD_WINDOW, 0), kResultOk);
+            assert!(!wrapper.state.borrow().child_open);
+        }
+        assert_eq!(wrapper.state.borrow().events, ["co:1", "cc:1"]);
+    }
+
+    /// An unknown `kind` is the defined `kInvalidArgument` rejection
+    /// — the adapter maps the non-`kResultOk` to `PluginFailed`.
+    #[expect(unsafe_code)]
+    #[test]
+    fn seam_popup_unknown_kind_is_invalid_argument() {
+        let view = TestEditorView::new();
+        // SAFETY: trait method on a live view; scalar args.
+        unsafe {
+            assert_eq!(view.popup(0xFFFF_FFFF, 1), kInvalidArgument);
+        }
+        assert_eq!(view.state.borrow().events, Vec::<String>::new());
+    }
+
+    /// `removed` tears the `ChildWindow` surface down beside the
+    /// `Dialog` popup and resets `child_open` — a re-attach starts a
+    /// fresh `co:` cycle.
+    #[expect(unsafe_code)]
+    #[test]
+    fn removed_tears_down_child_surface() {
+        let view = TestEditorView::new();
+        // SAFETY: trait methods on a live view; scalar args.
+        unsafe {
+            assert_eq!(view.popup(POPUP_KIND_CHILD_WINDOW, 1), kResultOk);
+            assert_eq!(view.popup(POPUP_KIND_DIALOG, 1), kResultOk);
+            assert_eq!(view.removed(), kResultOk);
+            {
+                let state = view.state.borrow();
+                assert!(state.child.is_none());
+                assert!(!state.child_open);
+                assert!(!state.popup_open);
+            }
+            // A fresh open after `removed` mints a new generation.
+            assert_eq!(view.popup(POPUP_KIND_CHILD_WINDOW, 1), kResultOk);
+        }
+        assert_eq!(view.state.borrow().events, ["co:1", "po:1", "co:2"]);
     }
 
     /// `canResize` honestly accepts (the fixture's `onSize` resizes
@@ -1102,6 +1421,135 @@ mod tests {
             assert_eq!(view.attached(parent, hwnd_type), kResultFalse);
             assert_eq!(view.removed(), kResultOk);
             assert_eq!(IsWindow(child), 0, "removed must destroy the child");
+            let _ = DestroyWindow(parent);
+        }
+    }
+
+    /// Windows-only: the seam verbs against a real attached editor —
+    /// `popup(ChildWindow)` produces a real `WS_CHILD` HWND
+    /// discoverable through `EnumChildWindows` (title token +
+    /// style + parent match), `onFocus(1)` moves real OS focus onto
+    /// the editor child, and `popup(Dialog)` produces the `WS_POPUP`
+    /// top-level surface. `#[ignore]` for the same window-station
+    /// requirement as `attached_creates_real_child_hwnd`.
+    #[cfg(target_os = "windows")]
+    #[ignore = "requires a Windows window station — real HWND verification lane"]
+    #[expect(unsafe_code)]
+    #[test]
+    fn seam_verbs_drive_real_windows() {
+        use windows_sys::Win32::Foundation::{HWND, LPARAM};
+        use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetFocus;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, EnumChildWindows, GW_CHILD, GWL_STYLE, GetParent,
+            GetWindow, GetWindowLongW, GetWindowTextLengthW, GetWindowTextW, IsWindow, WS_CHILD,
+            WS_OVERLAPPED, WS_POPUP,
+        };
+
+        /// `EnumChildWindows` callback — records the first HWND whose
+        /// title carries the `rvf-test-editor-child-` token.
+        unsafe extern "system" fn find_titled(hwnd: HWND, lparam: LPARAM) -> i32 {
+            let out = lparam as *mut HWND;
+            let mut buf = [0u16; 64];
+            // SAFETY: `hwnd` is a live window during enumeration;
+            // `buf` is a valid writable buffer; `out` points at the
+            // caller's `found_child` slot for the callback duration.
+            let len = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), 64) };
+            if len > 0
+                && String::from_utf16_lossy(&buf[..usize::try_from(len).unwrap_or(0)])
+                    .starts_with("rvf-test-editor-child-")
+            {
+                unsafe { *out = hwnd };
+                return 0;
+            }
+            1
+        }
+
+        let class: Vec<u16> = "STATIC".encode_utf16().chain(std::iter::once(0)).collect();
+        let parent = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                ptr::null(),
+                WS_OVERLAPPED,
+                0,
+                0,
+                320,
+                240,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                GetModuleHandleW(ptr::null()),
+                ptr::null(),
+            )
+        };
+        assert!(!parent.is_null(), "cannot create a parent HWND");
+
+        let wrapper = ComWrapper::new(TestEditorView::new());
+        let view = wrapper
+            .to_com_ptr::<IPlugView>()
+            .expect("IPlugView is implemented");
+        let ops = view
+            .cast::<IRvfEditorOps>()
+            .expect("IRvfEditorOps answers QI on this view");
+        let hwnd_type = vst3::Steinberg::kPlatformTypeHWND;
+        // SAFETY: `parent` is a live HWND this thread owns; `view`/
+        // `ops` are live COM pointers driven on that same thread.
+        unsafe {
+            assert_eq!(view.attached(parent, hwnd_type), kResultOk);
+            let editor_child: HWND = GetWindow(parent, GW_CHILD);
+            assert!(!editor_child.is_null(), "attached must create a child");
+
+            // `popup(ChildWindow)` — a real WS_CHILD under the editor
+            // child, enumerable with the title token.
+            assert_eq!(ops.popup(POPUP_KIND_CHILD_WINDOW, 1), kResultOk);
+            let mut found_child: HWND = ptr::null_mut();
+            let _ = EnumChildWindows(
+                editor_child,
+                Some(find_titled),
+                &raw mut found_child as LPARAM,
+            );
+            assert!(
+                !found_child.is_null(),
+                "EnumChildWindows must find rvf-test-editor-child-1"
+            );
+            assert_eq!(GetParent(found_child), editor_child);
+            assert_ne!(
+                GetWindowLongW(found_child, GWL_STYLE) & WS_CHILD.cast_signed(),
+                0
+            );
+
+            // `onFocus(1)` — the fixture's real SetFocus lands on the
+            // editor child; the host's GetFocus oracle can see it.
+            assert_eq!(view.onFocus(1), kResultOk);
+            assert_eq!(GetFocus(), editor_child, "f:1 must move real focus");
+
+            // `popup(Dialog)` — the WS_POPUP top-level surface.
+            assert_eq!(ops.popup(POPUP_KIND_DIALOG, 1), kResultOk);
+            let popup = wrapper.state.borrow().popup.expect("popup HWND recorded");
+            let popup = popup as HWND;
+            assert_ne!(IsWindow(popup), 0);
+            assert_eq!(
+                GetWindowLongW(popup, GWL_STYLE) & (WS_CHILD | WS_POPUP).cast_signed(),
+                WS_POPUP.cast_signed(),
+                "dialog surface must be WS_POPUP and not WS_CHILD"
+            );
+
+            // Close both, then `removed` — the child title carries the
+            // full verb chain in the shared event log.
+            assert_eq!(ops.popup(POPUP_KIND_CHILD_WINDOW, 0), kResultOk);
+            assert_eq!(ops.popup(POPUP_KIND_DIALOG, 0), kResultOk);
+            let title_len = GetWindowTextLengthW(editor_child);
+            let mut title = vec![0u16; usize::try_from(title_len).unwrap_or(0) + 1];
+            let read = GetWindowTextW(
+                editor_child,
+                title.as_mut_ptr(),
+                i32::try_from(title.len()).unwrap_or(i32::MAX),
+            );
+            let title = String::from_utf16_lossy(&title[..usize::try_from(read).unwrap_or(0)]);
+            for token in ["co:1", "f:1", "po:1", "cc:1", "pc:1"] {
+                assert!(title.contains(token), "missing {token} in {title}");
+            }
+            assert_eq!(view.removed(), kResultOk);
             let _ = DestroyWindow(parent);
         }
     }

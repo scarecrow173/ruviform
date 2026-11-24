@@ -93,6 +93,7 @@ mod block;
 mod component;
 mod controller;
 mod editor;
+mod editor_ops;
 mod editor_view;
 mod events;
 mod factory;
