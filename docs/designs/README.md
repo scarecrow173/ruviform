@@ -249,7 +249,7 @@ Directory: `docs/designs`
 | DESIGN-630clapEditorVerbs03 | Issue #630 CLAP editor verb 実バイナリ coverage slice — 設計 | approved | [issue-630-clap-editor-verbs.md](./issue-630-clap-editor-verbs.md) |
 | DSGN-034ZCLAPED3dl3ceM3kQ2x | Issue #630 CLAP test_editor slice — 設計 | approved | [issue-630-clap-test-editor.md](./issue-630-clap-test-editor.md) |
 | DESIGN-034XTB8x8FnnWOE3AoR7Q1 | Issue #630 CLAP slice — test-only crate ruviform-plugin-test-clap 設計 | approved | [issue-630-clap-test-plugin.md](./issue-630-clap-test-plugin.md) |
-| DESIGN-630editorVerbs01 | Issue #630 editor verb API 設計提案 — 設計 | draft | [issue-630-editor-verbs.md](./issue-630-editor-verbs.md) |
+| DESIGN-630editorVerbs01 | Issue #630 editor verb API 設計提案 — 設計 | approved | [issue-630-editor-verbs.md](./issue-630-editor-verbs.md) |
 | DESIGN-034XVrHUBVOxUT8uBVZNso | Issue #630 L1 runner slice — test plugin L1 out-of-process path 設計 | approved | [issue-630-l1-runner.md](./issue-630-l1-runner.md) |
 | DESIGN-630presetDiscoveryReeval03 | Issue #630 preset-discovery 外部検証再評価 slice — 設計 | approved | [issue-630-preset-discovery-reeval.md](./issue-630-preset-discovery-reeval.md) |
 | DESIGN-630presetSpawnFault03 | Issue #630 test_stateful preset surface + spawn/pre-Hello fault slice — 設計 | approved | [issue-630-preset-spawn-fault.md](./issue-630-preset-spawn-fault.md) |
