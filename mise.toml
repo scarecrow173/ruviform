@@ -232,7 +232,11 @@ cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugi
 # no VST3 destroy/recreate), re-dock records the defined
 # single-embed `gui already embedded` plugin refusal then close +
 # recover mints the new attach generation, and input/focus/popup
-# record the CLAP ops surface's defined Unsupported refusals. The
+# deliver through the `ruviform.editor-ops` seam — judged by the
+# fixture's title event log, the caller-queue `GetFocus` oracle
+# (`HostWindow`'s best-effort `SetFocus` lands `f:0` without a
+# verifiable OS focus move cross-thread), and the same popup HWND
+# oracles under the CLAP class. The
 # `real-clap-session-crash`/`real-clap-session-hang` rows run the
 # `ruviform-plugin-test-clap-l1-runner` Dedicated L1 child — the
 # CLAP `test_editor` carries the shared `Fault` param (the VST3
@@ -244,7 +248,7 @@ cargo run --locked -p ruviform-plugin-dock-test --features real-dock --bin plugi
 # NotRun + environment_blocked (writes only target/ +
 # evidence/rf630/).
 [tasks.test-ui-plugin-dock-real-clap]
-description = "Issue #630 real-window plugin-dock CLAP lane (manual/opt-in — NOT a CI-required gate): real plugin-test-clap cdylib + l1-runner bin (test_editor for the attach chain; runner is the Dedicated L1 child for real-clap-session-crash/hang — OutOfProcessPluginHost is session-probed, capability-gated Unsupported otherwise) + RealOsGuiTest real OS windows drive the same attach chain as the VST3 lane (blue pixel oracle, live-child hide/show, single-embed re-dock refusal + close/recover generation, defined-Unsupported input/focus/popup); JSONL to evidence/rf630/plugin-dock-real-clap.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf630/)"
+description = "Issue #630 real-window plugin-dock CLAP lane (manual/opt-in — NOT a CI-required gate): real plugin-test-clap cdylib + l1-runner bin (test_editor for the attach chain; runner is the Dedicated L1 child for real-clap-session-crash/hang — OutOfProcessPluginHost is session-probed, capability-gated Unsupported otherwise) + RealOsGuiTest real OS windows drive the same attach chain as the VST3 lane (blue pixel oracle, live-child hide/show, single-embed re-dock refusal + close/recover generation, effect-verified input/focus/popup through the ruviform.editor-ops seam — title event log + caller-queue GetFocus + both popup-kind HWND oracles under the CLAP class); JSONL to evidence/rf630/plugin-dock-real-clap.jsonl; headless hosts record NotRun + environment_blocked (writes only target/ + evidence/rf630/)"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail

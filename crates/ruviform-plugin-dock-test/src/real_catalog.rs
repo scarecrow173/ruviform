@@ -94,13 +94,15 @@ pub struct RealCatalogRow {
 /// attach-generation title advance for redock, and the fixture's
 /// `GetWindowTextW` event-log title tokens for input/focus) —
 /// never pixels. `real-editor-popup` (the Issue #630 AC4 shared
-/// remainder) extends the same non-pixel family: `send_key` `VK_P`
-/// toggles the fixture's popup twice and the verdict is judged by
-/// the `po:`/`pc:` title event-log tokens plus a real top-level
-/// `WS_POPUP` HWND oracle (own-process `RuviformTestEditor` class,
-/// `rvf-test-editor-popup-{seq}` title, `GW_OWNER` == the child's
-/// `GA_ROOT`, (0,0) 200x100 rect) and its close/teardown
-/// disappearance.
+/// remainder) extends the same non-pixel family: `set_popup`
+/// opens/closes both fixture popup kinds and the verdict is judged
+/// by the `po:`/`pc:`/`co:`/`cc:` title event-log tokens plus two
+/// real HWND oracles — a top-level `WS_POPUP` surface (own-process
+/// `RuviformTestEditor` class, `rvf-test-editor-popup-{seq}` title,
+/// `GW_OWNER` == the child's `GA_ROOT`, (0,0) 200x100 rect) and a
+/// `WS_CHILD` `rvf-test-editor-child-{seq}` descendant parented
+/// under the editor child — each observed through open, close, and
+/// teardown.
 /// The AC1/AC6 remainder rows
 /// (`real-session-terminate` and the Issue #389 lifecycle
 /// remainder: `real-session-degraded`, `real-session-recovery`,
@@ -345,11 +347,15 @@ pub const REAL_CATALOG: &[RealCatalogRow] = &[
 ///   `gui already embedded` plugin refusal
 ///   (`Failed{PluginFailed}`), and the format's re-open path is
 ///   close + re-open on a fresh session (a new child generation);
-/// - input/focus/popup: `send_gui_key`/`set_gui_focus` are the
-///   trait-default `Err(Unsupported)` on `ClapPlugin` and embedded
-///   `open_gui` never reaches floating — these cases run the verbs
-///   through the real lease and record the defined `Unsupported`
-///   landing honestly (Coordinator decision 1);
+/// - input/focus/popup: the `ruviform.editor-ops` seam (Issue #630
+///   K1) delivers `send_gui_key`/`set_gui_focus`/
+///   `set_gui_focus_target`/`set_gui_popup` into the fixture's
+///   event log, so these cases verify effects through the real
+///   lease — the same title-token oracles, the caller-queue
+///   `GetFocus` oracle, and both popup-kind HWND oracles under the
+///   CLAP class `RuviformClapTestEditor`; the `HostWindow` focus
+///   leg's best-effort `SetFocus(container)` lands `Ok` + `f:0`
+///   without a verifiable cross-thread OS focus move;
 /// - crash/hang: the CLAP `test_editor` carries the shared `Fault`
 ///   param (Issue #630 — the VST3 #885 mirror), so the dedicated L1
 ///   child arms `abort`/`hang` in-band exactly like the VST3 rows —

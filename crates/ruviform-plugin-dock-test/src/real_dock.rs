@@ -118,12 +118,16 @@
 //! |                         |             | down/up を実 lease 経由で実行し、child HWND title の   |
 //! |                         |             | fixture event log（`kd:`/`ku:` token）を検証           |
 //! | `real-editor-focus`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_focus`    |
-//! |                         |             | true→false を実 lease 経由で実行し、child HWND title   |
-//! |                         |             | の fixture event log（`f:` token）を検証               |
-//! | `real-editor-popup`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `send_key`     |
-//! |                         |             | `VK_P` popup toggle ×2: child title event log          |
-//! |                         |             | （`po:`/`pc:` token）+ own-process top-level           |
-//! |                         |             | `WS_POPUP` HWND oracle + close/teardown 収束           |
+//! |                         |             | true→false + `set_focus_target` 3 target を実 lease    |
+//! |                         |             | 経由で実行し、child HWND title の fixture event log    |
+//! |                         |             |（`f:`/`fe:` token）+ caller-queue `GetFocus` oracle   |
+//! |                         |             | + `HostWindow` の宣言された lane-topology landing を   |
+//! |                         |             | 検証                                                  |
+//! | `real-editor-popup`     | `RealOs`    | `Pass`/`Fail`/`NotRun`/`Unsupported` — `set_popup`    |
+//! |                         |             | {Dialog,ChildWindow} open/close: child title event    |
+//! |                         |             | log（`po:`/`pc:`/`co:`/`cc:` token）+ own-process     |
+//! |                         |             | top-level `WS_POPUP` HWND oracle + `EnumChildWindows`  |
+//! |                         |             | grandchild `WS_CHILD` oracle + close/teardown 収束    |
 //! | `real-session-crash`    | `RealOs`    | `Pass`/`Fail`/`Unsupported` — dedicated L1 child 上   |
 //! |                         |             | の `test_editor` を `open(Floating)` で attach し、   |
 //! |                         |             | in-band `Fault` `abort` で child kill →             |
@@ -178,11 +182,11 @@ use ruviform_plugin_core::{
 use ruviform_plugin_host::{
     AttachMode, ChildExit, EditorCapabilities, EditorOpError, EditorSessionError,
     EditorSessionEvent, EditorSessionState, EditorSize, EndpointBounds, FailureCause,
-    GuiKeyDirection, GuiKeyEvent, GuiModifiers, HostCommand, HostError, HostNotification,
-    HostReply, InProcessEditorOps, InProcessHost, L1EditorOps, MonotonicSessionClock, OpenOutcome,
-    OutOfProcessIsolation, OutOfProcessSpec, ParentLease, ParentSlotLease, PluginEditorSession,
-    PluginEditorSessionId, PluginEditorSessions, PluginEndpoint, PluginHandle, PluginHost,
-    SessionDeadlinePolicy, SessionFailCause,
+    GuiFocusTarget, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind, HostCommand,
+    HostError, HostNotification, HostReply, InProcessEditorOps, InProcessHost, L1EditorOps,
+    MonotonicSessionClock, OpenOutcome, OutOfProcessIsolation, OutOfProcessSpec, ParentLease,
+    ParentSlotLease, PluginEditorSession, PluginEditorSessionId, PluginEditorSessions,
+    PluginEndpoint, PluginHandle, PluginHost, SessionDeadlinePolicy, SessionFailCause,
 };
 use ruviform_plugin_vst3::host::Vst3Library;
 use ruviform_ui::behavior::{CommandIntent, CommandPhase, CommandReceipt, ValueInput};
@@ -2043,7 +2047,7 @@ fn real_native_slot_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) -> 
 // ---------------------------------------------------------------------
 
 /// The attach-phase contract checks for one observed child HWND.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ChildAttachFacts {
     /// `GetParent(child) == container` — the plugin parented its
     /// editor into the leased container, not elsewhere.
@@ -2058,7 +2062,7 @@ struct ChildAttachFacts {
 /// Facts recorded for one observed child HWND — plain integers and
 /// booleans so no Win32 type crosses into `observed`/evidence (the
 /// same `u64`-narrowed-handle convention as `container_token`).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ChildWindowFacts {
     /// The child HWND value as `u64`.
     hwnd: u64,
@@ -2146,6 +2150,7 @@ struct WindowInventory {
 mod oschild {
     use windows_sys::Win32::Foundation::{GetLastError, HWND, LPARAM, RECT, SetLastError};
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetFocus;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, GCL_STYLE, GWL_EXSTYLE, GWL_STYLE, GetClassLongPtrW, GetClassNameW,
         GetParent, GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
@@ -2244,6 +2249,20 @@ mod oschild {
     pub(super) fn is_alive(hwnd: u64) -> bool {
         // SAFETY: query-only handle-validity check.
         unsafe { IsWindow(hwnd as HWND) != 0 }
+    }
+
+    /// `GetFocus()` — the HWND holding focus in the CALLING thread's
+    /// input queue (`None` when the queue has no focus window).
+    /// Per-queue by Win32 contract: the editor-focus oracles read it
+    /// on the scenario caller thread, the same thread the fixture's
+    /// real `SetFocus(child)` runs on; the container HWND lives on
+    /// the GPUI app thread and can never appear here. Query-only.
+    #[expect(unsafe_code)]
+    pub(super) fn focused_hwnd() -> Option<u64> {
+        // SAFETY: query-only; `GetFocus` has no parameters and
+        // reports the calling thread's own queue state.
+        let hwnd = unsafe { GetFocus() };
+        (!hwnd.is_null()).then_some(hwnd as usize as u64)
     }
 
     /// One `GetWindowLongPtrW` read with the `SetLastError(0)`
@@ -2422,6 +2441,11 @@ mod oschild {
     /// No HWND concept off-Windows — never alive.
     pub(super) fn is_alive(_hwnd: u64) -> bool {
         false
+    }
+
+    /// No HWND concept off-Windows — never a focused HWND.
+    pub(super) fn focused_hwnd() -> Option<u64> {
+        None
     }
 
     /// No HWND concept off-Windows — always the unsupported,
@@ -10938,6 +10962,43 @@ struct EditorOpIdentity {
     evidence: &'static str,
 }
 
+/// The fixture's attach-generation title prefix — every direct
+/// child the editor owns stamps `rvf-test-editor-attach-{n}` and
+/// appends the verb event log after the `|`. Shared by both
+/// fixtures; popup surfaces use their own title prefixes.
+const EDITOR_TITLE_PREFIX: &str = "rvf-test-editor-attach-";
+
+/// The editor child's HWND inside an observation — the direct child
+/// stamped with the attach-generation title. `None` when no child
+/// carries the marker (the attach checks already recorded it).
+fn editor_child_hwnd(observation: &ChildWindowObservation) -> Option<u64> {
+    observation
+        .children
+        .iter()
+        .find(|child| child.title.starts_with(EDITOR_TITLE_PREFIX))
+        .map(|child| child.hwnd)
+}
+
+/// The observation restricted to the container's DIRECT children —
+/// a `ChildWindow`-kind popup enumerates as a `parent_matches ==
+/// false` descendant (its parent is the editor child), so while one
+/// exists the attach contract and the title event-log check must
+/// run against the attach children only; the popup gets its own
+/// descendant oracle.
+fn direct_children_view(observation: &ChildWindowObservation) -> ChildWindowObservation {
+    ChildWindowObservation {
+        children: observation
+            .children
+            .iter()
+            .filter(|child| child.attach.parent_matches)
+            .cloned()
+            .collect(),
+        caller_thread: observation.caller_thread,
+        container_thread: observation.container_thread,
+        supported: observation.supported,
+    }
+}
+
 /// Phase-1 child-HWND attach observation shared by the editor-op
 /// cases — identical contract to `observe_editor_child_lifecycle`'s
 /// first phase: enumerate the container's children while attached
@@ -10954,6 +11015,42 @@ fn observe_attached_children(
     };
     let attach_ok = if observation.supported {
         check_attached_children(&observation, container, steps, failure)
+    } else {
+        steps.push(json!({
+            "step": "child_hwnd_observation",
+            "verdict": "unsupported",
+            "detail": "OS child-HWND observation is Windows-only — an \
+                       accepted open cannot be verified off-Windows",
+        }));
+        false
+    };
+    (observation, attach_ok)
+}
+
+/// [`observe_attached_children`] with the contract checks applied
+/// to the container's direct children only — the variant the
+/// verb-driven cases re-run while a `ChildWindow`-kind popup exists
+/// (the grandchild's `parent_matches == false` would otherwise trip
+/// `child_contract`, and its own title would trip the event-log
+/// suffix check). Returns the full observation plus the check
+/// result; callers rebuild [`direct_children_view`] for the title
+/// and descendant oracles.
+fn observe_direct_children(
+    container: Option<u64>,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (ChildWindowObservation, bool) {
+    let observation = match container {
+        Some(token) => oschild::observe(token),
+        None => oschild::empty(),
+    };
+    let attach_ok = if observation.supported {
+        check_attached_children(
+            &direct_children_view(&observation),
+            container,
+            steps,
+            failure,
+        )
     } else {
         steps.push(json!({
             "step": "child_hwnd_observation",
@@ -11471,6 +11568,112 @@ fn title_log_check(
     }
 }
 
+/// How one session verb landed through `real_editor_ops` — the
+/// leg-level classification the multi-verb observers fold into the
+/// case's `OpLanding`.
+#[derive(Debug)]
+enum VerbDrive {
+    /// `Ok(())` — the plugin accepted the verb.
+    Ok,
+    /// `Err(Ops(EditorOpError::Unsupported))` — the defined refusal.
+    Refused,
+    /// `Err(Ops(_))` — the plugin declined or an adapter-side
+    /// precondition failed; carries which `EditorOpError` landed.
+    Declined(EditorOpError),
+    /// `Err(_)` — a non-`Ops` session error (contract violation).
+    Failed(EditorSessionError),
+    /// `sessions.session_mut` returned `None`.
+    Missing,
+}
+
+/// Cumulative event-log suffixes after each focus leg — `{set_focus
+/// true, set_focus false, target Editor, target Element{7}, target
+/// HostWindow, set_focus false}`. Both fixtures stamp `f:{0|1}` on
+/// every `onFocus`/`apply_focus` notification (the shared grammar),
+/// so the `HostWindow` leg appends `f:0` identically on both ABIs.
+const FOCUS_SUFFIXES: [&str; 6] = [
+    "|f:1",
+    "|f:1,f:0",
+    "|f:1,f:0,f:1",
+    "|f:1,f:0,f:1,fe:7:1",
+    "|f:1,f:0,f:1,fe:7:1,f:0",
+    "|f:1,f:0,f:1,fe:7:1,f:0,f:0",
+];
+
+/// ABI-parametrized fixture vocabulary for the verb-driven editor
+/// op observers — both fixtures share the event-log grammar
+/// (`rvf-test-editor-attach-{n}|{ev},{ev},…`) but differ on window
+/// class and popup token/title vocabulary.
+struct EditorAbi {
+    /// The window class the fixture registers its popup surfaces
+    /// under (`RuviformTestEditor` / `RuviformClapTestEditor` — the
+    /// CLAP fixture uses a distinct class so both cdylibs coexist in
+    /// one host process).
+    popup_class: &'static str,
+    /// `ChildWindow`-kind popup title prefix —
+    /// `rvf-test-editor-child-` (VST3 `co:`/`cc:` surface) /
+    /// `rvf-test-editor-popup-` (CLAP shares the popup title for
+    /// both kinds).
+    child_popup_title_prefix: &'static str,
+    /// Cumulative event-log suffixes after each popup leg —
+    /// `{Dialog open, Dialog close, ChildWindow open, ChildWindow
+    /// close}`. VST3 tokens are per-kind seq'd (`po:1`/`pc:1`/
+    /// `co:1`/`cc:1`); CLAP's single `verb_popup` slot shares one
+    /// seq (`po:1`/`pc:1`/`po:2`/`pc:2`).
+    popup_suffixes: [&'static str; 4],
+}
+
+/// The VST3 `test_editor` fixture's oracle vocabulary.
+static ABI_VST3: EditorAbi = EditorAbi {
+    popup_class: "RuviformTestEditor",
+    child_popup_title_prefix: "rvf-test-editor-child-",
+    popup_suffixes: [
+        "|po:1",
+        "|po:1,pc:1",
+        "|po:1,pc:1,co:1",
+        "|po:1,pc:1,co:1,cc:1",
+    ],
+};
+
+/// The CLAP `test_editor` fixture's oracle vocabulary.
+static ABI_CLAP: EditorAbi = EditorAbi {
+    popup_class: "RuviformClapTestEditor",
+    child_popup_title_prefix: "rvf-test-editor-popup-",
+    popup_suffixes: [
+        "|po:1",
+        "|po:1,pc:1",
+        "|po:1,pc:1,po:2",
+        "|po:1,pc:1,po:2,pc:2",
+    ],
+};
+
+/// Runs `op` against the session through a fresh
+/// [`real_editor_ops`] and classifies the landing — the multi-leg
+/// observers drive every verb leg through this one path so the
+/// landing vocabulary stays uniform.
+fn drive_editor_verb(
+    gui: &RealOsGuiTest,
+    sessions: &mut PluginEditorSessions,
+    session_id: PluginEditorSessionId,
+    host: &mut InProcessHost,
+    handle: PluginHandle,
+    op: impl FnOnce(
+        &mut PluginEditorSession,
+        &mut InProcessEditorOps<'_>,
+    ) -> Result<(), EditorSessionError>,
+) -> VerbDrive {
+    match sessions.session_mut(session_id).map(|session| {
+        let mut ops = real_editor_ops(gui, host, handle);
+        op(session, &mut ops)
+    }) {
+        Some(Ok(())) => VerbDrive::Ok,
+        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => VerbDrive::Refused,
+        Some(Err(EditorSessionError::Ops(error))) => VerbDrive::Declined(error),
+        Some(Err(error)) => VerbDrive::Failed(error),
+        None => VerbDrive::Missing,
+    }
+}
+
 /// The per-case constants of the input/focus verb observation —
 /// step name plus the window-text suffix the fixture's event log
 /// must carry once the verbs land.
@@ -11668,39 +11871,287 @@ fn observe_editor_input_lifecycle(
     )
 }
 
-/// `real-editor-focus` `observe_open` — `set_focus(true)` then
-/// `set_focus(false)`: the title log must become `|f:1,f:0`.
+/// The real-OS focus oracle for an `f:1` leg — the fixture's real
+/// `SetFocus(child)` must leave the CALLER queue's focus on the
+/// editor child HWND. `GetFocus` is per-thread: the child is
+/// caller-thread-owned (the plugin created it inside `attached` on
+/// the scenario thread), so the oracle is deterministic in this
+/// lane; the app-thread-owned container HWND can never satisfy it.
+fn check_focus_child_hwnd(
+    observation: &ChildWindowObservation,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let child = editor_child_hwnd(observation);
+    let focused = oschild::focused_hwnd();
+    if child.is_some() && focused == child {
+        steps.push(json!({
+            "step": "editor_focus_hwnd",
+            "verdict": "pass",
+            "child": child,
+            "focused": focused,
+        }));
+        true
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_focus_hwnd",
+            format!(
+                "accepted an f:1 leg but the caller queue's GetFocus()==\
+                 {focused:?}, expected the editor child {child:?}"
+            ),
+        );
+        false
+    }
+}
+
+/// One `set_focus*` leg — the session call, the step name, whether
+/// the `GetFocus()==child` oracle runs after acceptance (the
+/// `f:1` legs run the fixture's real `SetFocus(child)`), and the
+/// declared landing.
+#[derive(Clone, Copy)]
+struct FocusLeg {
+    /// Observation step name.
+    step: &'static str,
+    /// `Some` → `session.set_focus_target(target)`; `None` →
+    /// `session.set_focus(focused)`.
+    target: Option<GuiFocusTarget>,
+    /// `set_focus` flag — read only when `target.is_none()`.
+    focused: bool,
+    /// `GetFocus()==child` oracle after acceptance.
+    focus_child: bool,
+    /// `true` on the `HostWindow` leg — the landing is recorded as
+    /// the declared landing (`accepted-declared`, `effect_verified:
+    /// false`): whether the app-thread container's OS focus move
+    /// materializes is lane-topology dependent (the input queues
+    /// must be shared/attached for `SetFocus` to cross), so the
+    /// same-queue `host_path` lane stays the true oracle. The leg
+    /// records the caller queue's `GetFocus` as observation.
+    declared_landing: bool,
+}
+
+/// `real-editor-focus`/`real-clap-editor-focus` post-open
+/// observation: child-HWND attach contract → six `set_focus*` legs
+/// through the production `InProcessEditorOps` — `set_focus(true)`
+/// (`f:1` + the fixture's real `SetFocus(child)`, verified by the
+/// caller queue's `GetFocus()==child`), `set_focus(false)` (`f:0`),
+/// `set_focus_target(Editor)` (`f:1` + the same focus oracle),
+/// `set_focus_target(EditorElement{7})` (`fe:7:1` — synthetic
+/// delivery only), `set_focus_target(HostWindow)` (the declared
+/// lane-topology landing — `SetFocus` cannot cross thread queues),
+/// `set_focus(false)` restore — each leg's cumulative title
+/// event-log suffix verified → session stays `Attached` → close
+/// convergence. No pixel capture — the oracles are the fixture's
+/// event log and `GetFocus`, never pixels.
 #[expect(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn observe_editor_focus_lifecycle(
     gui: &RealOsGuiTest,
     container: Option<u64>,
-    lease_raw: u64,
+    _lease_raw: u64,
     sessions: &mut PluginEditorSessions,
     session_id: PluginEditorSessionId,
     host: &mut InProcessHost,
     handle: PluginHandle,
     steps: &mut Vec<Value>,
 ) -> EditorOpVerification {
-    observe_editor_verb_lifecycle(
-        gui,
-        container,
-        lease_raw,
+    let mut failure: Option<String> = None;
+    let (mut observation, mut attach_ok) =
+        observe_attached_children(container, steps, &mut failure);
+
+    let legs = [
+        FocusLeg {
+            step: "editor_focus_set",
+            target: None,
+            focused: true,
+            focus_child: true,
+            declared_landing: false,
+        },
+        FocusLeg {
+            step: "editor_focus_clear",
+            target: None,
+            focused: false,
+            focus_child: false,
+            declared_landing: false,
+        },
+        FocusLeg {
+            step: "editor_focus_target_editor",
+            target: Some(GuiFocusTarget::Editor),
+            focused: false,
+            focus_child: true,
+            declared_landing: false,
+        },
+        FocusLeg {
+            step: "editor_focus_target_element",
+            target: Some(GuiFocusTarget::EditorElement { element: 7 }),
+            focused: false,
+            focus_child: false,
+            declared_landing: false,
+        },
+        FocusLeg {
+            step: "editor_focus_target_host_window",
+            target: Some(GuiFocusTarget::HostWindow),
+            focused: false,
+            focus_child: false,
+            declared_landing: true,
+        },
+        FocusLeg {
+            step: "editor_focus_restore",
+            target: None,
+            focused: false,
+            focus_child: false,
+            declared_landing: false,
+        },
+    ];
+
+    let mut landing = OpLanding::Other;
+    let mut effect_ok = true;
+    for (index, leg) in legs.iter().enumerate() {
+        if landing == OpLanding::Refused {
+            break;
+        }
+        let expected_suffix = FOCUS_SUFFIXES[index];
+        match drive_editor_verb(
+            gui,
+            sessions,
+            session_id,
+            host,
+            handle,
+            |session, ops| match leg.target {
+                Some(target) => session.set_focus_target(ops, target),
+                None => session.set_focus(ops, leg.focused),
+            },
+        ) {
+            VerbDrive::Ok => {
+                if leg.declared_landing {
+                    // Accepted declared-landing: the `f:0` delivery token is
+                    // verified below like every leg, but whether the OS
+                    // focus move to the app-thread container materializes is
+                    // lane-topology dependent (`SetFocus` only crosses when
+                    // the input queues are shared/attached) — recorded as
+                    // `effect_verified: false` with the caller queue's
+                    // `GetFocus` as observation, never claimed as OS focus
+                    // routing.
+                    steps.push(json!({
+                        "step": leg.step,
+                        "verdict": "pass",
+                        "landing": "accepted-declared",
+                        "effect_verified": false,
+                        "expected_suffix": expected_suffix,
+                        "focused_hwnd": oschild::focused_hwnd(),
+                        "container": container,
+                        "detail": "accepted declared-landing — the f:0 token \
+                                   records the fixture's apply_focus \
+                                   notification (synthetic verb delivery); \
+                                   the OS focus move to the app-thread \
+                                   container is lane-topology dependent, so \
+                                   it is unverified here — the same-queue \
+                                   host_path lane is the true oracle",
+                    }));
+                } else {
+                    steps.push(json!({
+                        "step": leg.step,
+                        "verdict": "pass",
+                        "detail": "accepted — verifying the title event log and \
+                                   declared oracle (synthetic verb delivery; no OS \
+                                   input queue or focus routing exercised)",
+                        "expected_suffix": expected_suffix,
+                    }));
+                }
+                landing = OpLanding::Accepted;
+                if observation.supported {
+                    let (after, after_ok) = observe_direct_children(container, steps, &mut failure);
+                    attach_ok = attach_ok && after_ok;
+                    let direct = direct_children_view(&after);
+                    if title_log_check(
+                        &direct,
+                        expected_suffix,
+                        &format!("{step}_log", step = leg.step),
+                        steps,
+                        &mut failure,
+                    ) != Some(true)
+                    {
+                        effect_ok = false;
+                    }
+                    if leg.focus_child && !check_focus_child_hwnd(&direct, steps, &mut failure) {
+                        effect_ok = false;
+                    }
+                    observation = after;
+                }
+            }
+            VerbDrive::Refused => {
+                steps.push(json!({
+                    "step": leg.step,
+                    "verdict": "unsupported",
+                    "detail": "the editor verb ran through InProcessEditorOps \
+                               and the plugin declined it — the defined \
+                               EditorOpError::Unsupported",
+                }));
+                landing = OpLanding::Refused;
+            }
+            other => {
+                let landed = match &other {
+                    VerbDrive::Declined(error) => format!("Err(Ops({error:?}))"),
+                    VerbDrive::Failed(error) => format!("Err({error})"),
+                    VerbDrive::Missing => "a missing session".to_string(),
+                    VerbDrive::Ok | VerbDrive::Refused => {
+                        unreachable!("handled above")
+                    }
+                };
+                record_obs_fail(
+                    steps,
+                    &mut failure,
+                    leg.step,
+                    format!("expected Ok but the verb landed {landed}"),
+                );
+                effect_ok = false;
+            }
+        }
+    }
+
+    // Non-fatal contract: an accepted or refused verb leaves the
+    // session `Attached` — any other landing is a violation.
+    let mut state_ok = true;
+    if landing != OpLanding::Other {
+        let attached = sessions
+            .session(session_id)
+            .is_some_and(|session| matches!(session.state(), EditorSessionState::Attached { .. }));
+        if attached {
+            steps.push(json!({
+                "step": "session_state_after_op",
+                "verdict": "pass",
+                "state": "Attached",
+            }));
+        } else {
+            record_obs_fail(
+                steps,
+                &mut failure,
+                "session_state_after_op",
+                "session did not stay Attached after editor_focus",
+            );
+            state_ok = false;
+        }
+    }
+
+    let (close_ok, detach_ok, converged_ok, rendered) = conclude_editor_session(
+        &mut observation,
         sessions,
         session_id,
         host,
         handle,
         steps,
-        EditorVerbCase {
-            step: "editor_focus",
-            expected_suffix: "|f:1,f:0",
-            accepted_detail: "set_focus true→false accepted — verifying \
-                              the child HWND title carries f:1,f:0",
-        },
-        |session, ops| {
-            session.set_focus(ops, true)?;
-            session.set_focus(ops, false)
-        },
-    )
+        &mut failure,
+        ATTACH_CLOSE_EVENTS,
+    );
+    EditorOpVerification {
+        supported: observation.supported,
+        landing,
+        effect_confirmed: landing == OpLanding::Accepted && effect_ok,
+        verified: attach_ok && state_ok && effect_ok && close_ok && detach_ok && converged_ok,
+        failure,
+        extras: Value::Object(child_extras(container, &observation, &rendered)),
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -11708,28 +12159,10 @@ fn observe_editor_focus_lifecycle(
 // remainder)
 // ---------------------------------------------------------------------
 
-/// The `key_code` that toggles the fixture's plugin-owned popup —
-/// `VK_P` (`0x50`), the `POPUP_VK` the `test_editor` `IPlugView`
-/// maps `onKeyDown` onto `popup_toggle` with.
-const POPUP_KEY_CODE: i16 = 0x50;
-
-/// The UTF-16 key char paired with [`POPUP_KEY_CODE`] — `'p'`
-/// (`0x0070`), so the fixture's title event log records
-/// `kd:0070:0050:0000`/`ku:0070:0050:0000` around each
-/// `po:{seq}`/`pc:{seq}` toggle token.
-const POPUP_KEY: char = 'p';
-
-/// The window class the fixture registers its editor surfaces
-/// under — the popup shares the child's `RuviformTestEditor`
-/// class (`win32::popup` → `CreateWindowExW` on the same
-/// registered class), so class alone does not discriminate the
-/// popup from the child: the `WS_POPUP` style bit and the top-level
-/// enumeration do.
-const POPUP_CLASS: &str = "RuviformTestEditor";
-
-/// The title prefix `win32::popup` stamps — `rvf-test-editor-
-/// popup-{seq}` where `seq` is the fixture's per-view popup
-/// generation (`popup_seq`).
+/// The title prefix `win32::popup` on both fixtures stamps —
+/// `rvf-test-editor-popup-{seq}` where `seq` is the fixture's
+/// per-view popup generation (`popup_seq`/`verb_popup_seq`; CLAP
+/// shares this prefix across both popup kinds).
 const POPUP_TITLE_PREFIX: &str = "rvf-test-editor-popup-";
 
 /// `WS_POPUP` (`0x8000_0000`) — the `GWL_STYLE` bit that makes the
@@ -11745,27 +12178,17 @@ const WS_CHILD_STYLE: u64 = 0x4000_0000;
 /// HWND at screen origin (0,0) with size 200x100.
 const POPUP_RECT: (i32, i32, u32, u32) = (0, 0, 200, 100);
 
-/// The child-title event-log suffix after one accepted popup-open
-/// toggle — `onKeyDown` stamps `kd:` first, then `popup_toggle`
-/// appends `po:{seq}`, and `onKeyUp` appends `ku:`.
-const POPUP_OPEN_LOG_SUFFIX: &str = "|kd:0070:0050:0000,po:1,ku:0070:0050:0000";
-
-/// The full event-log suffix after the accepted open + close cycle
-/// — the second `onKeyDown` toggles `popup_open` off and appends
-/// `pc:{seq}`.
-const POPUP_CYCLE_LOG_SUFFIX: &str =
-    "|kd:0070:0050:0000,po:1,ku:0070:0050:0000,kd:0070:0050:0000,pc:1,ku:0070:0050:0000";
-
 /// Own-process top-level windows matching the fixture's popup
-/// identity — class `RuviformTestEditor`, a `rvf-test-editor-
+/// identity — the ABI's registered class, a `rvf-test-editor-
 /// popup-{seq}` title, and `owner` as the `GW_OWNER` window (the
 /// fixture anchors the popup to the editor child's `GA_ROOT`).
 /// `owner: None` matches nothing: an owner the oracle could not
 /// resolve is a recorded check failure upstream, never a wildcard.
-fn find_fixture_popups(
-    inventory: &ospres::Inventory,
+fn find_fixture_popups<'a>(
+    inventory: &'a ospres::Inventory,
     owner: Option<u64>,
-) -> Vec<&ospres::TopLevelWindow> {
+    popup_class: &str,
+) -> Vec<&'a ospres::TopLevelWindow> {
     let Some(owner) = owner else {
         return Vec::new();
     };
@@ -11773,7 +12196,7 @@ fn find_fixture_popups(
         .own_windows
         .iter()
         .filter(|window| {
-            window.class_name.as_deref() == Some(POPUP_CLASS)
+            window.class_name.as_deref() == Some(popup_class)
                 && window.owner == Some(owner)
                 && window
                     .title
@@ -11787,12 +12210,15 @@ fn find_fixture_popups(
 /// post-close residual check: a popup whose owner (or the whole
 /// anchor chain) already died still leaks across cases, and
 /// `GA_ROOT` is unresolvable once the child is destroyed.
-fn residual_fixture_popups(inventory: &ospres::Inventory) -> Vec<&ospres::TopLevelWindow> {
+fn residual_fixture_popups<'a>(
+    inventory: &'a ospres::Inventory,
+    popup_class: &str,
+) -> Vec<&'a ospres::TopLevelWindow> {
     inventory
         .own_windows
         .iter()
         .filter(|window| {
-            window.class_name.as_deref() == Some(POPUP_CLASS)
+            window.class_name.as_deref() == Some(popup_class)
                 && window
                     .title
                     .as_deref()
@@ -11811,6 +12237,7 @@ fn residual_fixture_popups(inventory: &ospres::Inventory) -> Vec<&ospres::TopLev
 /// `observed` extras on agreement.
 fn check_popup_open_hwnd(
     child_hwnd: Option<u64>,
+    abi: &'static EditorAbi,
     steps: &mut Vec<Value>,
     failure: &mut Option<String>,
 ) -> (Option<u64>, Value) {
@@ -11821,9 +12248,9 @@ fn check_popup_open_hwnd(
     // an unowned window).
     let expected_owner = child_hwnd.and_then(|hwnd| osmut::observe(hwnd).root);
     let inventory = ospres::inventory();
-    let popups = find_fixture_popups(&inventory, expected_owner);
+    let popups = find_fixture_popups(&inventory, expected_owner, abi.popup_class);
     if popups.len() != 1 {
-        let candidates: Vec<Value> = residual_fixture_popups(&inventory)
+        let candidates: Vec<Value> = residual_fixture_popups(&inventory, abi.popup_class)
             .iter()
             .map(|window| {
                 json!({
@@ -11838,11 +12265,12 @@ fn check_popup_open_hwnd(
             failure,
             "editor_popup_open_hwnd",
             format!(
-                "accepted popup open but found {} own-process {POPUP_CLASS} \
+                "accepted popup open but found {} own-process {} \
                  window(s) titled {POPUP_TITLE_PREFIX}* owned by root \
                  {expected_owner:?} (expected 1; unfiltered candidates \
                  {candidates:?})",
                 popups.len(),
+                abi.popup_class,
             ),
         );
         return (None, Value::Null);
@@ -11925,12 +12353,13 @@ fn check_popup_open_hwnd(
 fn check_popup_closed_hwnd(
     child_hwnd: Option<u64>,
     popup_hwnd: Option<u64>,
+    abi: &'static EditorAbi,
     steps: &mut Vec<Value>,
     failure: &mut Option<String>,
 ) -> bool {
     let expected_owner = child_hwnd.and_then(|hwnd| osmut::observe(hwnd).root);
     let inventory = ospres::inventory();
-    let remaining = find_fixture_popups(&inventory, expected_owner);
+    let remaining = find_fixture_popups(&inventory, expected_owner, abi.popup_class);
     // When the open phase never observed a popup, liveness is
     // vacuous — inventory-empty is then the whole contract.
     let recorded_dead = popup_hwnd.is_none_or(|hwnd| !oschild::is_alive(hwnd));
@@ -11965,9 +12394,13 @@ fn check_popup_closed_hwnd(
 /// is a fixture/teardown contract `Fail` and a lane-hygiene
 /// hazard: the popup sits at screen origin (0,0) 200x100 and would
 /// occlude later cases' observations.
-fn check_popup_teardown(steps: &mut Vec<Value>, failure: &mut Option<String>) -> bool {
+fn check_popup_teardown(
+    abi: &'static EditorAbi,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
     let inventory = ospres::inventory();
-    let residual = residual_fixture_popups(&inventory);
+    let residual = residual_fixture_popups(&inventory, abi.popup_class);
     if residual.is_empty() {
         steps.push(json!({
             "step": "editor_popup_teardown",
@@ -11998,20 +12431,185 @@ fn check_popup_teardown(steps: &mut Vec<Value>, failure: &mut Option<String>) ->
     }
 }
 
-/// `real-editor-popup` post-open observation (Issue #630 AC4 shared
-/// remainder): child-HWND attach contract → `session.send_key`
-/// down+up of the fixture's `VK_P` (`'p'`/`0x50`) through the
-/// production `InProcessEditorOps` → the child HWND title must carry
-/// `kd:`/`po:{seq}`/`ku:` tokens AND exactly one real `WS_POPUP`
-/// top-level HWND titled `rvf-test-editor-popup-{seq}` owned by the
-/// child's `GA_ROOT` must exist (class `RuviformTestEditor`, alive,
-/// `WS_POPUP` set / `WS_CHILD` clear, (0,0) 200x100) → a second
-/// down+up must append `pc:{seq}` and the popup must leave the
-/// inventory (`IsWindow == 0`) → the session stays `Attached` →
-/// close convergence plus a residual-popup teardown check
-/// (`removed()` destroys the popup too — a leftover at (0,0) would
-/// occlude later cases). No pixel capture — the oracles are the
-/// title event log and the HWND inventory, never pixels.
+/// A `ChildWindow`-kind popup HWND inside the container's
+/// descendant enumeration — the popup is parented under the EDITOR
+/// CHILD (so `attach.parent_matches`, which compares against the
+/// container, is `false`), and the fixture stamps it with the
+/// ABI's child-popup title prefix. `GetParent` answers the true
+/// parent for `WS_CHILD` windows, so `oschild::inventory`'s
+/// `parent` field is the discriminator.
+fn child_popup_hwnds(
+    observation: &ChildWindowObservation,
+    editor_child: u64,
+    abi: &EditorAbi,
+) -> Vec<u64> {
+    observation
+        .children
+        .iter()
+        .filter(|child| {
+            !child.attach.parent_matches
+                && child.title.starts_with(abi.child_popup_title_prefix)
+                && oschild::inventory(child.hwnd).parent == Some(editor_child)
+        })
+        .map(|child| child.hwnd)
+        .collect()
+}
+
+/// The `ChildWindow`-kind open oracle: exactly one descendant HWND
+/// parented under the editor child carrying the ABI's child-popup
+/// title — alive, `WS_CHILD` set with `WS_POPUP` clear, and at the
+/// fixture's fixed 200x100 size (`win32::child` positions in
+/// client coords, so only the size is oracle-checked, not the
+/// screen rect). Returns the HWND plus the recorded identity for
+/// `observed` extras.
+fn check_child_popup_open_hwnd(
+    observation: &ChildWindowObservation,
+    editor_child: Option<u64>,
+    abi: &'static EditorAbi,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> (Option<u64>, Value) {
+    let hwnds = editor_child
+        .map(|child| child_popup_hwnds(observation, child, abi))
+        .unwrap_or_default();
+    let record = json!({
+        "popup_hwnds": hwnds,
+        "count": hwnds.len(),
+        "parent": editor_child,
+        "title_prefix": abi.child_popup_title_prefix,
+    });
+    let [hwnd] = hwnds.as_slice() else {
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_child_open_hwnd",
+            format!(
+                "expected exactly 1 child-popup descendant of the editor \
+                 child {editor_child:?} titled {}*, found {}",
+                abi.child_popup_title_prefix,
+                hwnds.len(),
+            ),
+        );
+        return (None, record);
+    };
+    let hwnd = *hwnd;
+    let inv = oschild::inventory(hwnd);
+    let mut problems: Vec<String> = Vec::new();
+    if !inv.alive {
+        problems.push("not-alive".to_string());
+    }
+    match &inv.style {
+        Ok(style) => {
+            if style & WS_CHILD_STYLE == 0 {
+                problems.push("WS_CHILD-clear".to_string());
+            }
+            if style & WS_POPUP_STYLE != 0 {
+                problems.push("WS_POPUP-set".to_string());
+            }
+        }
+        Err(error) => problems.push(format!("style-unreadable:{error}")),
+    }
+    let (child_facts_width, child_facts_height) = observation
+        .children
+        .iter()
+        .find(|child| child.hwnd == hwnd)
+        .map(|child| (child.width, child.height))
+        .unwrap_or_default();
+    if (child_facts_width, child_facts_height)
+        != (POPUP_RECT.2.cast_signed(), POPUP_RECT.3.cast_signed())
+    {
+        problems.push(format!(
+            "size!={}x{} (got {child_facts_width}x{child_facts_height})",
+            POPUP_RECT.2, POPUP_RECT.3
+        ));
+    }
+    if problems.is_empty() {
+        steps.push(json!({
+            "step": "editor_popup_child_open_hwnd",
+            "verdict": "pass",
+            "popup_hwnd": hwnd,
+            "parent": editor_child,
+            "style": inv.style.as_ref().ok().map(|style| format!("{style:#x}")),
+            "size": [child_facts_width, child_facts_height],
+        }));
+        (Some(hwnd), record)
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_child_open_hwnd",
+            format!("child-popup HWND contract violated: {}", problems.join("+")),
+        );
+        (Some(hwnd), record)
+    }
+}
+
+/// The `ChildWindow`-kind close oracle: no descendant of the editor
+/// child carries the child-popup title anymore, and — when the open
+/// leg recorded one — the recorded HWND must be dead.
+fn check_child_popup_closed_hwnd(
+    observation: &ChildWindowObservation,
+    popup_hwnd: Option<u64>,
+    editor_child: Option<u64>,
+    abi: &'static EditorAbi,
+    steps: &mut Vec<Value>,
+    failure: &mut Option<String>,
+) -> bool {
+    let hwnds = editor_child
+        .map(|child| child_popup_hwnds(observation, child, abi))
+        .unwrap_or_default();
+    let recorded_dead = popup_hwnd.is_none_or(|hwnd| !oschild::is_alive(hwnd));
+    if hwnds.is_empty() && recorded_dead {
+        steps.push(json!({
+            "step": "editor_popup_child_closed_hwnd",
+            "verdict": "pass",
+            "closed_hwnd": popup_hwnd,
+        }));
+        true
+    } else {
+        record_obs_fail(
+            steps,
+            failure,
+            "editor_popup_child_closed_hwnd",
+            format!(
+                "accepted child-popup close but child-popup HWNDs remain \
+                 {hwnds:?} (recorded {popup_hwnd:?} dead:{recorded_dead})"
+            ),
+        );
+        false
+    }
+}
+
+/// One `set_popup` leg — the session call's popup kind and open
+/// flag, the step name, and which real-HWND oracle the acceptance
+/// verifies against.
+#[derive(Clone, Copy)]
+struct PopupLeg {
+    /// Observation step name.
+    step: &'static str,
+    /// `GuiPopupKind::Dialog`/`GuiPopupKind::ChildWindow`.
+    kind: GuiPopupKind,
+    /// `true` opens, `false` closes.
+    open: bool,
+}
+
+/// `real-editor-popup`/`real-clap-editor-popup` post-open
+/// observation: child-HWND attach contract → four `set_popup` legs
+/// through the production `InProcessEditorOps` —
+/// `set_popup(Dialog,true)` (`po:1`, verified against the top-level
+/// `WS_POPUP` HWND oracle — the ABI's class, the
+/// `rvf-test-editor-popup-` title, the (0,0) 200x100 rect, owned by
+/// the editor child's `GA_ROOT`, never a descendant of the leased
+/// container) → `set_popup(Dialog,false)` (`pc:1` + the same HWND
+/// destroyed) → `set_popup(ChildWindow,true)` (VST3 `co:1` / CLAP
+/// `po:2` — the `EnumChildWindows` grandchild oracle: a `WS_CHILD`
+/// descendant parented under the editor child carrying the ABI's
+/// child-popup title) → `set_popup(ChildWindow,false)` (VST3
+/// `cc:1` / CLAP `pc:2` + destroyed) — each leg's cumulative title
+/// event-log suffix verified → session stays `Attached` → close
+/// convergence → `ospres` teardown (zero fixture-class top-level
+/// popups). No pixel capture — the oracles are the fixture's event
+/// log plus the HWND inventories, never pixels.
 #[expect(clippy::too_many_arguments)]
 #[expect(clippy::too_many_lines)]
 fn observe_editor_popup_lifecycle(
@@ -12023,155 +12621,156 @@ fn observe_editor_popup_lifecycle(
     host: &mut InProcessHost,
     handle: PluginHandle,
     steps: &mut Vec<Value>,
+    abi: &'static EditorAbi,
 ) -> EditorOpVerification {
     let mut failure: Option<String> = None;
     let (mut observation, mut attach_ok) =
         observe_attached_children(container, steps, &mut failure);
 
+    let legs = [
+        PopupLeg {
+            step: "editor_popup_dialog_open",
+            kind: GuiPopupKind::Dialog,
+            open: true,
+        },
+        PopupLeg {
+            step: "editor_popup_dialog_close",
+            kind: GuiPopupKind::Dialog,
+            open: false,
+        },
+        PopupLeg {
+            step: "editor_popup_child_open",
+            kind: GuiPopupKind::ChildWindow,
+            open: true,
+        },
+        PopupLeg {
+            step: "editor_popup_child_close",
+            kind: GuiPopupKind::ChildWindow,
+            open: false,
+        },
+    ];
+
     let mut landing = OpLanding::Other;
     let mut effect_ok = true;
     let mut popup_hwnd: Option<u64> = None;
     let mut popup_record = Value::Null;
-    let key = |direction| GuiKeyEvent {
-        direction,
-        key: POPUP_KEY,
-        key_code: POPUP_KEY_CODE,
-        modifiers: GuiModifiers::NONE,
-    };
-
-    // Phase B — toggle 1 (open): `send_key` down+up through the
-    // production ops adapter. The fixture's `onKeyDown` records
-    // `kd:`, runs `popup_toggle` (popup_seq→1, `win32::popup`
-    // creates the HWND, `popup_open`=true), appends `po:1`;
-    // `onKeyUp` appends `ku:`.
-    match sessions.session_mut(session_id).map(|session| {
-        let mut ops = real_editor_ops(gui, host, handle);
-        session
-            .send_key(&mut ops, key(GuiKeyDirection::Down))
-            .and_then(|()| session.send_key(&mut ops, key(GuiKeyDirection::Up)))
-    }) {
-        Some(Err(EditorSessionError::Ops(EditorOpError::Unsupported))) => {
-            steps.push(json!({
-                "step": "editor_popup_open",
-                "verdict": "unsupported",
-                "detail": "session.send_key VK_P down+up → InProcessEditorOps \
-                           → HostCommand::SendGuiKey → the plugin declined \
-                           key delivery — the defined EditorOpError::Unsupported",
-            }));
-            landing = OpLanding::Refused;
+    let mut child_popup_hwnd: Option<u64> = None;
+    let mut child_popup_record = Value::Null;
+    for (index, leg) in legs.iter().enumerate() {
+        if landing == OpLanding::Refused {
+            break;
         }
-        Some(Ok(())) => {
-            steps.push(json!({
-                "step": "editor_popup_open",
-                "verdict": "pass",
-                "detail": "send_key 'p' down+up accepted — verifying the \
-                           title event log and the real WS_POPUP HWND",
-                "expected_suffix": POPUP_OPEN_LOG_SUFFIX,
-            }));
-            landing = OpLanding::Accepted;
-            // Effect oracles — re-enumerate while attached: (a) every
-            // child title must carry the `kd:`/`po:1`/`ku:` log and
-            // (b) exactly one real top-level popup HWND must exist
-            // with the fixture's identity. An accepted toggle whose
-            // effects never materialized is a contract failure,
-            // never a `NotRun`.
-            if observation.supported {
-                let (after, after_ok) = observe_attached_children(container, steps, &mut failure);
-                attach_ok = attach_ok && after_ok;
-                if title_log_check(
-                    &after,
-                    POPUP_OPEN_LOG_SUFFIX,
-                    "editor_popup_open_log",
-                    steps,
-                    &mut failure,
-                ) != Some(true)
-                {
-                    effect_ok = false;
-                }
-                let child = after.children.first().map(|child| child.hwnd);
-                let (hwnd, record) = check_popup_open_hwnd(child, steps, &mut failure);
-                popup_hwnd = hwnd;
-                popup_record = record;
-                if hwnd.is_none() {
-                    effect_ok = false;
-                }
-                observation = after;
-            }
-        }
-        Some(Err(error)) => {
-            record_obs_fail(steps, &mut failure, "editor_popup_open", error.to_string());
-        }
-        None => {
-            record_obs_fail(
-                steps,
-                &mut failure,
-                "editor_popup_open",
-                "editor session vanished before the popup open toggle",
-            );
-        }
-    }
-
-    // Phase C — toggle 2 (close): the same `send_key` pair must
-    // append `kd:`/`pc:1`/`ku:` and the popup must leave the
-    // top-level inventory. Runs only when the open toggle was
-    // accepted — a refused or failed open leaves `popup_open` false,
-    // so a second VK_P would OPEN a popup instead of closing one.
-    if landing == OpLanding::Accepted {
-        match sessions.session_mut(session_id).map(|session| {
-            let mut ops = real_editor_ops(gui, host, handle);
-            session
-                .send_key(&mut ops, key(GuiKeyDirection::Down))
-                .and_then(|()| session.send_key(&mut ops, key(GuiKeyDirection::Up)))
+        let expected_suffix = abi.popup_suffixes[index];
+        match drive_editor_verb(gui, sessions, session_id, host, handle, |session, ops| {
+            session.set_popup(ops, leg.kind, leg.open)
         }) {
-            Some(Ok(())) => {
+            VerbDrive::Ok => {
                 steps.push(json!({
-                    "step": "editor_popup_close",
+                    "step": leg.step,
                     "verdict": "pass",
-                    "detail": "second send_key 'p' down+up accepted — verifying \
-                               pc:1 and the popup's removal",
-                    "expected_suffix": POPUP_CYCLE_LOG_SUFFIX,
+                    "detail": "accepted — verifying the title event log and \
+                               the real HWND oracle (synthetic verb delivery; \
+                               no OS input queue or focus routing exercised)",
+                    "expected_suffix": expected_suffix,
                 }));
+                landing = OpLanding::Accepted;
                 if observation.supported {
-                    let (after, after_ok) =
-                        observe_attached_children(container, steps, &mut failure);
+                    let (after, after_ok) = observe_direct_children(container, steps, &mut failure);
                     attach_ok = attach_ok && after_ok;
+                    let direct = direct_children_view(&after);
                     if title_log_check(
-                        &after,
-                        POPUP_CYCLE_LOG_SUFFIX,
-                        "editor_popup_close_log",
+                        &direct,
+                        expected_suffix,
+                        &format!("{step}_log", step = leg.step),
                         steps,
                         &mut failure,
                     ) != Some(true)
                     {
                         effect_ok = false;
                     }
-                    let child = after.children.first().map(|child| child.hwnd);
-                    if !check_popup_closed_hwnd(child, popup_hwnd, steps, &mut failure) {
-                        effect_ok = false;
+                    let child = editor_child_hwnd(&direct);
+                    match (leg.kind, leg.open) {
+                        (GuiPopupKind::Dialog, true) => {
+                            let (hwnd, record) =
+                                check_popup_open_hwnd(child, abi, steps, &mut failure);
+                            popup_hwnd = hwnd;
+                            popup_record = record;
+                            if hwnd.is_none() {
+                                effect_ok = false;
+                            }
+                        }
+                        (GuiPopupKind::Dialog, false) => {
+                            if !check_popup_closed_hwnd(child, popup_hwnd, abi, steps, &mut failure)
+                            {
+                                effect_ok = false;
+                            }
+                        }
+                        (GuiPopupKind::ChildWindow, true) => {
+                            let (hwnd, record) = check_child_popup_open_hwnd(
+                                &after,
+                                child,
+                                abi,
+                                steps,
+                                &mut failure,
+                            );
+                            child_popup_hwnd = hwnd;
+                            child_popup_record = record;
+                            if hwnd.is_none() {
+                                effect_ok = false;
+                            }
+                        }
+                        (GuiPopupKind::ChildWindow, false) => {
+                            if !check_child_popup_closed_hwnd(
+                                &after,
+                                child_popup_hwnd,
+                                child,
+                                abi,
+                                steps,
+                                &mut failure,
+                            ) {
+                                effect_ok = false;
+                            }
+                        }
+                        _ => {
+                            record_obs_fail(
+                                steps,
+                                &mut failure,
+                                leg.step,
+                                format!(
+                                    "unsupported GuiPopupKind {:?} — extend the \
+                                     leg table for the new surface",
+                                    leg.kind
+                                ),
+                            );
+                            effect_ok = false;
+                        }
                     }
                     observation = after;
                 }
             }
-            // A refused or failed second toggle after an accepted
-            // open is a contract surprise — never a `Refused`
-            // landing (the op demonstrably exists on this surface).
-            Some(Err(error)) => {
-                record_obs_fail(steps, &mut failure, "editor_popup_close", error.to_string());
-                effect_ok = false;
+            VerbDrive::Refused => {
+                steps.push(json!({
+                    "step": leg.step,
+                    "verdict": "unsupported",
+                    "detail": "the editor verb ran through InProcessEditorOps \
+                               and the plugin declined it — the defined \
+                               EditorOpError::Unsupported",
+                }));
+                landing = OpLanding::Refused;
             }
-            None => {
+            other => {
                 record_obs_fail(
                     steps,
                     &mut failure,
-                    "editor_popup_close",
-                    "editor session vanished before the popup close toggle",
+                    leg.step,
+                    format!("expected Ok but the verb landed {other:?}"),
                 );
                 effect_ok = false;
             }
         }
     }
 
-    // Non-fatal contract: an accepted or refused toggle leaves the
+    // Non-fatal contract: an accepted or refused verb leaves the
     // session `Attached` — any other landing is a violation.
     let mut state_ok = true;
     if landing != OpLanding::Other {
@@ -12206,14 +12805,15 @@ fn observe_editor_popup_lifecycle(
         ATTACH_CLOSE_EVENTS,
     );
 
-    // Phase D — residual popup leak check: `removed()` must have
-    // destroyed the popup with the child. Runs on every supported
-    // host, accepted or not — a leaked popup would occlude later
-    // cases at screen origin.
-    let teardown_ok = !observation.supported || check_popup_teardown(steps, &mut failure);
+    // Residual popup leak check: `removed()` must have destroyed the
+    // popup with the child. Runs on every supported host, accepted
+    // or not — a leaked top-level popup would occlude later cases at
+    // screen origin.
+    let teardown_ok = !observation.supported || check_popup_teardown(abi, steps, &mut failure);
 
     let mut extras = child_extras(container, &observation, &rendered);
     extras.insert("popup".to_string(), popup_record);
+    extras.insert("child_popup".to_string(), child_popup_record);
     EditorOpVerification {
         supported: observation.supported,
         landing,
@@ -12526,13 +13126,20 @@ fn real_editor_focus_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
             plugin,
             plugin_error,
             &EditorOpIdentity {
-                pass_detail: "session.set_focus(true→false) accepted through \
-                              the REAL container lease; the child HWND title \
-                              carried the fixture's event log (f:1,f:0 via \
-                              GetWindowTextW), the session stayed Attached, \
-                              events [Attached{Docked}, Closed], and close \
+                pass_detail: "set_focus true→false + set_focus_target \
+                              {Editor,EditorElement{7},HostWindow} accepted \
+                              through the REAL container lease; the child HWND \
+                              title carried the fixture's event log \
+                              (f:1,f:0,f:1,fe:7:1 + f:0 via GetWindowTextW), \
+                              the caller queue's GetFocus==child held after \
+                              the f:1 legs, HostWindow recorded the declared \
+                              Ok+f:0 landing (the container focus move is \
+                              lane-topology dependent — the same-queue \
+                              host_path lane is the true oracle), the \
+                              session stayed Attached, events \
+                              [Attached{Docked}, Closed], and close \
                               convergence verified — no pixels",
-                evidence: "editor-focus:real-title-event-log-effect",
+                evidence: "editor-focus:real-targets-event-log-and-focus-hwnd",
             },
             observe_editor_focus_lifecycle,
         ))
@@ -12567,18 +13174,24 @@ fn real_editor_popup_case(ctx: &mut RealDockContext<'_>, spec: &ScenarioSpec) ->
             plugin,
             plugin_error,
             &EditorOpIdentity {
-                pass_detail: "session.send_key(down+up 'p' x2) accepted through \
-                              the REAL container lease; the child HWND title \
-                              carried the fixture's event log (po:1/pc:1 via \
-                              GetWindowTextW), exactly one WS_POPUP top-level \
-                              rvf-test-editor-popup-1 HWND owned by \
-                              GA_ROOT(child) was observed and removed, the \
+                pass_detail: "set_popup {Dialog,ChildWindow} open+close \
+                              accepted through the REAL container lease; the \
+                              child HWND title carried the fixture's event log \
+                              (po:1/pc:1/co:1/cc:1 via GetWindowTextW), the \
+                              WS_POPUP top-level rvf-test-editor-popup-1 HWND \
+                              owned by GA_ROOT(child) and the WS_CHILD \
+                              rvf-test-editor-child-1 descendant of the editor \
+                              child were each observed and destroyed, the \
                               session stayed Attached, events \
                               [Attached{Docked}, Closed], and close + \
                               popup-residual convergence verified — no pixels",
-                evidence: "editor-popup:real-hwnd-open-close",
+                evidence: "editor-popup:real-both-kinds-hwnd-lifecycle",
             },
-            observe_editor_popup_lifecycle,
+            |gui, container, lease_raw, sessions, session_id, host, handle, steps| {
+                observe_editor_popup_lifecycle(
+                    gui, container, lease_raw, sessions, session_id, host, handle, steps, &ABI_VST3,
+                )
+            },
         ))
     });
     finalize_case(
@@ -17407,12 +18020,12 @@ fn real_clap_editor_visibility_case(
     )
 }
 
-/// `real-clap-editor-input` — `send_key` on a CLAP plugin lands the
-/// trait-default `Err(Unsupported)` on `ClapPlugin::send_gui_key`,
-/// so the shared verb observer records the defined refusal through
-/// the real lease and [`editor_op_body`] reports the honest
-/// `Unsupported` (Coordinator decision 1 — the verb is absent on
-/// the CLAP L0 ops surface, never a fabricated delivery).
+/// `real-clap-editor-input` — the CLAP editor-verb seam
+/// (`ruviform.editor-ops`) delivers `send_key` to the fixture's
+/// `on_key` event log, so the shared verb observer verifies the
+/// effect through the real lease (Issue #630 K1; the row flipped
+/// off defined-refusal once the seam landed via the editor-verb
+/// stack).
 fn real_clap_editor_input_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
@@ -17422,18 +18035,25 @@ fn real_clap_editor_input_case(
         spec,
         &EditorOpIdentity {
             pass_detail: "session.send_key(down+up 'a') accepted through \
-                          the REAL container lease (unused — the CLAP \
-                          ops surface refuses SendGuiKey with the defined \
-                          Unsupported)",
-            evidence: "clap-editor-input:defined-refusal-real-lease",
+                          the REAL container lease and the \
+                          ruviform.editor-ops seam; the child HWND title \
+                          carried the fixture's event log \
+                          (kd:0061:0041:0000,ku:0061:0041:0000 via \
+                          GetWindowTextW), the session stayed Attached, \
+                          events [Attached{Docked}, Closed], and close \
+                          convergence verified — no pixels",
+            evidence: "clap-editor-input:synthetic-verb-delivery",
         },
         observe_editor_input_lifecycle,
     )
 }
 
-/// `real-clap-editor-focus` — same defined-refusal law as
-/// `real-clap-editor-input`: `set_gui_focus` is a trait-default
-/// `Err(Unsupported)` on `ClapPlugin`.
+/// `real-clap-editor-focus` — the CLAP seam delivers `set_focus`
+/// and `set_focus_target`; the `HostWindow` leg's best-effort
+/// `SetFocus(container)` lands `Ok` with the `f:0` token (the
+/// adapter documents the best-effort contract — the container
+/// focus move is lane-topology dependent and the same-queue
+/// `host_path` lane is the true oracle).
 fn real_clap_editor_focus_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
@@ -17442,20 +18062,32 @@ fn real_clap_editor_focus_case(
         ctx,
         spec,
         &EditorOpIdentity {
-            pass_detail: "session.set_focus(true→false) accepted through \
-                          the REAL container lease (unused — the CLAP \
-                          ops surface refuses SetGuiFocus with the \
-                          defined Unsupported)",
-            evidence: "clap-editor-focus:defined-refusal-real-lease",
+            pass_detail: "set_focus true→false + set_focus_target \
+                          {Editor,EditorElement{7},HostWindow} accepted \
+                          through the REAL container lease and the \
+                          ruviform.editor-ops seam; the child HWND title \
+                          carried the fixture's event log \
+                          (f:1,f:0,f:1,fe:7:1,f:0,f:0 via GetWindowTextW), \
+                          the caller queue's GetFocus==child held after \
+                          the f:1 legs, HostWindow recorded the declared \
+                          Ok+f:0 landing (container focus is structurally \
+                          unverified cross-thread — the same-queue \
+                          host_path lane is the true oracle), the session \
+                          stayed Attached, events [Attached{Docked}, \
+                          Closed], and close convergence verified — no \
+                          pixels",
+            evidence: "clap-editor-focus:real-targets-event-log-and-focus-hwnd",
         },
         observe_editor_focus_lifecycle,
     )
 }
 
-/// `real-clap-editor-popup` — the popup toggle is driven by
-/// `send_key`, which refuses `Unsupported` on the CLAP ops surface;
-/// the shared observer skips the second toggle, verifies no popup
-/// leaked, and lands the honest `Unsupported`.
+/// `real-clap-editor-popup` — the CLAP seam delivers `set_popup`
+/// for both kinds; the Dialog leg hits the top-level `WS_POPUP`
+/// oracle (class `RuviformClapTestEditor`) and the `ChildWindow` leg
+/// the `EnumChildWindows` grandchild oracle (the CLAP fixture
+/// titles both kinds `rvf-test-editor-popup-{seq}` on a shared
+/// seq).
 fn real_clap_editor_popup_case(
     ctx: &mut RealDockContext<'_>,
     spec: &ScenarioSpec,
@@ -17464,13 +18096,27 @@ fn real_clap_editor_popup_case(
         ctx,
         spec,
         &EditorOpIdentity {
-            pass_detail: "session.send_key(down+up 'p' x2) accepted through \
-                          the REAL container lease (unused — the CLAP \
-                          ops surface refuses SendGuiKey with the \
-                          defined Unsupported)",
-            evidence: "clap-editor-popup:defined-refusal-real-lease",
+            pass_detail: "set_popup {Dialog,ChildWindow} open+close \
+                          accepted through the REAL container lease and \
+                          the ruviform.editor-ops seam; the child HWND \
+                          title carried the fixture's event log \
+                          (po:1/pc:1/po:2/pc:2 via GetWindowTextW), the \
+                          WS_POPUP top-level RuviformClapTestEditor \
+                          rvf-test-editor-popup-1 HWND owned by \
+                          GA_ROOT(child) and the WS_CHILD \
+                          rvf-test-editor-popup-2 descendant of the \
+                          editor child were each observed and destroyed, \
+                          the session stayed Attached, events \
+                          [Attached{Docked}, Closed], and close + \
+                          popup-residual convergence verified — no \
+                          pixels",
+            evidence: "clap-editor-popup:real-both-kinds-hwnd-lifecycle",
         },
-        observe_editor_popup_lifecycle,
+        |gui, container, lease_raw, sessions, session_id, host, handle, steps| {
+            observe_editor_popup_lifecycle(
+                gui, container, lease_raw, sessions, session_id, host, handle, steps, &ABI_CLAP,
+            )
+        },
     )
 }
 
