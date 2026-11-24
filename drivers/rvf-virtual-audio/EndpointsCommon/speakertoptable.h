@@ -84,7 +84,7 @@ PCPIN_DESCRIPTOR SpeakerTopoMiniportPins[] =
       SpeakerTopoPinDataRangePointersBridge,            // DataRanges
       KSPIN_DATAFLOW_OUT,                               // DataFlow
       KSPIN_COMMUNICATION_NONE,                         // Communication
-      &KSNODETYPE_SPEAKER,                              // Category
+      &KSNODETYPE_LINE_CONNECTOR,                       // Category
       &RVF_CABLE_INPUT_NAME,                            // Name
       0                                                 // Reserved
     }
