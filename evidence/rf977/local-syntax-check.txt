@@ -1,0 +1,18 @@
+rf977 local syntax check — 2026-11-24T21:07:32Z
+host: DESKTOP-NH00KUI
+
+  Microsoft Windows [Version 10.0.26300.9974]
+
+== Invoke-EndpointProbe.ps1 ParseFile ==
+  OK — 0 parse errors
+
+== reused helpers ParseFile ==
+  tools/testsigned-driver/TestDevice.ps1: OK
+  tools/testsigned-driver/probe-stage.ps1: OK
+
+== workflow run: blocks parse (raw pwsh sanity) ==
+  run-block count=14
+  parse errors: 0 / 14 blocks
+
+== vcxproj XML well-formed ==
+  OK — XML well-formed (item counts verified by text: ClCompile=16, Inf=1, ResourceCompile=1, KmdfVersionNumber=2 configs)

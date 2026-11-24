@@ -349,3 +349,58 @@ NOT_PROVISIONED/NotRun を維持する。
   `test-midi-real-device`（opt-in manual lane の構造・
   description 記法）、`docs/development-environment.md`
   （lane 一覧表・opt-in lane 注記の記法）。
+
+## 追記（Issue #977 Slice B stage 1）: ruviform 独自 driver による audio provisioning
+
+本 runbook は外部 driver（VB-CABLE / loopMIDI / WMS loopback）前提で書かれたが、
+#952 の方式確定により ruviform 独自仮想 audio driver（SysVAD 派生）が第一経路と
+なった。Issue #977 stage 1 で `drivers/rvf-virtual-audio/`（render
+`Ruviform Cable Input` / capture `Ruviform Cable Output` の 1 pair）と
+provisioning 自動化 workflow を追加した。外部 driver 候補の手順・license 条項は
+引き続き本書前文を正本とする（独自 driver が採用経路として優先されるだけで、
+外部候補の判断記録は残す）。
+
+### provisioning 手順（独自 driver — GitHub-hosted `windows-2025` x64）
+
+manual workflow `.github/workflows/virtual-audio-driver-probe.yml`
+（`workflow_dispatch` のみ）が、専用 runner 前提手順に相当する全工程を stage
+分解で実施する:
+
+1. `env-build-surface` — OS build・testsigning/SecureBoot・WDK/署名 tool の記録。
+2. `driver-build` — repo 内ソースを MSBuild+WDK で build（WDK 不在時は winget
+   `Microsoft.WindowsWDK.10.0.26100` job 内導入 + DriverKit task dll
+   workaround — rf961 実測経路の踏襲）。
+3. `catalog-create` — `RvfVirtualAudio.inf` + `.sys` の `.cat` を Inf2Cat →
+   makecat fallback で生成。
+4. `cert-create` / `store-register` — self-signed CodeSigning cert を生成し
+   `LocalMachine\Root`+`TrustedPublisher` に pre-trust。
+5. `sign` / `sign-verify` — `.sys`+`.cat` を signtool 署名・`/pa` 検証。
+6. `pnputil-add-driver` — `pnputil /add-driver RvfVirtualAudio.inf /install`
+   で driver store へ staging。
+7. `enum-verify` — INF の driver store 在籍確認（devnode はこの時点 0 件）。
+8. `devnode-create` — `tools/testsigned-driver/TestDevice.ps1` を
+   `-ClassName MEDIA -ClassGuid {4d36e96c-e325-11ce-bfc1-08002be10318}
+   -HardwareId 'ROOT\RvfVirtualAudio'` で呼び出し、root-enumerated MEDIA
+   class devnode を作成。problem_code≠0 時は CI event log・
+   setupapi.dev.log・testsigning 実効値を診断採取する。
+9. `endpoint-probe` — `tools/virtual-audio-driver/Invoke-EndpointProbe.ps1`
+   が `endpoint_probe`（mise Rust toolchain 経由）を実行し `pair_count=` 等を
+   stage record に記録する。
+10. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+
+- license: MS-PL 派生のため外部 driver のような license 判断・再起動・
+  再配布上の摩擦はない（`drivers/rvf-virtual-audio/LICENSE-MS-PL.txt`・
+  `PROVENANCE.md` 参照）。
+- reboot/bcdedit: 実施しない（testsigning=Yes+SecureBoot OFF は runner 出荷
+  状態として確定済み — 本書前文の runner 要件と同じ根拠）。
+- driver 署名: 上記 4-5 の job 内 test-signing 経路。attestation/WHQL 署名は
+  要らない（x64 のみ対象 — #952 §Slice D 参照）。
+- 記録責任分担: stage ごとの `{stage,status,detail,exit_code}` が
+  `vaudio-probe-windows-2025.json`、生ログが `stage-*-windows-2025.txt`、
+  probe 出力が `endpoint-probe-windows-2025.txt` に残り、artifact として
+  `evidence/rf977/` に採取される（install 後の残件は cleanup stage が除去）。
+- provisioned pair の利用: endpoint 成立後は本書前文どおり
+  `mise run test-audio-virtual-endpoint` の入力として使う（round-trip 実走は
+  後続 stage — pair は独立 endpoint 2 個で speaker→capture の音声経路は
+  未実装。設計 doc `docs/designs/issue-977-virtual-audio-driver.md` の
+  Deferred Design Concerns 参照）。

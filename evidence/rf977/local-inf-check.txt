@@ -1,0 +1,39 @@
+rf977 INF structure check — 2026-11-24T21:08:41Z
+  OK Version.Signature
+  OK Version.Class=MEDIA
+  OK Version.ClassGuid=MEDIA guid
+  OK Version.CatalogFile
+  OK Version.PnpLockdown
+  OK Version.DriverVer past-dated
+  OK Manufacturer NTamd64 only
+  OK hwid ROOT\RvfVirtualAudio
+  OK DDInstall.NT section
+  OK DDInstall ks/wdmaudio needs
+  OK CopyFiles -> DIRID 13
+  OK ServiceBinary %13%
+  OK KmdfService + LibraryVersion
+  OK Interfaces section
+  OK HW DeviceType FILE_DEVICE_SOUND
+  OK HW Security SDDL
+  OK MediaCategories input chain
+  OK MediaCategories output chain
+  OK KSNAME TopologySpeaker
+  OK KSNAME WaveSpeaker
+  OK KSNAME TopologyMicIn
+  OK KSNAME WaveMicIn
+
+== %Strings% resolution — 参照された文字列キーが [Strings] で全て定義されるか ==
+  defined=28 used=28 missing=0
+
+== minipairs.h endpoint 名との一致 ==
+  TopologySpeaker : OK
+  WaveSpeaker : OK
+  TopologyMicIn : OK
+  WaveMicIn : OK
+
+== pin-name GUID が toptable 側でも同じ値か ==
+  RVF_CABLE_INPUT_NAME : OK
+  RVF_CABLE_OUTPUT_NAME: OK
+
+== summary ==
+  FAIL count: 0
