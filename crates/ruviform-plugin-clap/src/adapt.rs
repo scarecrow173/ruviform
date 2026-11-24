@@ -38,10 +38,12 @@
 use core::mem::size_of;
 use core::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
+use clack_common::events::UnknownEvent;
 use clack_common::events::event_types::{TransportEvent, TransportFlags};
 use clack_common::events::io::InputEvents;
 use clack_common::events::spaces::CoreEventSpace;
-use clack_common::events::{Match, Pckn, UnknownEvent};
+#[cfg(any(test, feature = "host"))]
+use clack_common::events::{Match, Pckn};
 use clack_plugin::plugin::PluginError;
 use clack_plugin::process::audio::{BufferError, ChannelPair, PortPair, SampleType};
 use clack_plugin::process::{PluginAudioConfiguration, ProcessStatus as ClapProcessStatus};
@@ -820,6 +822,7 @@ pub(crate) fn translate_events<'a>(
 /// honest canonical payload.
 ///
 /// **RT contract:** RT-suitable — pure, allocation-free.
+#[cfg(any(test, feature = "host"))]
 pub(crate) fn translate_output_event(
     unknown: &UnknownEvent,
     params: &[ParamInfo],
@@ -854,6 +857,7 @@ pub(crate) fn translate_output_event(
 /// VST3 bridge's `norm_f32_to_u32`.
 ///
 /// **RT contract:** RT-suitable — pure, allocation-free.
+#[cfg(any(test, feature = "host"))]
 fn translate_note_event(
     unknown: &UnknownEvent,
     pckn: Pckn,
