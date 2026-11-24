@@ -522,6 +522,29 @@ test("clapLegExclusions merges target and plugin exclusions without preset-disco
   ]);
 });
 
+test("CLAP_PLUGINS declares test_editor with the shared Fault param exclusion", () => {
+  // Issue #630 editor-verb slice: the CLAP test_editor carries the shared
+  // stepped Fault parameter for the real-dock crash/hang lanes, so its
+  // canonical leg must exclude the param-mutating validator cases that
+  // would arm a fatal mode in the sandboxed child — the same scope as
+  // test_fault's declared exclusion.
+  const editor = CLAP_PLUGINS.find((p) => p.name === "test_editor");
+  assert.ok(editor);
+  assert.equal(editor.id, "org.ruviform-test.clap-test-editor");
+  assert.equal(editor.exclude, "param-(set|fuzz)");
+  assert.ok(editor.excludeReason.length > 0);
+
+  const target = { excludes: [] };
+  assert.deepEqual(clapLegExclusions(target, editor), [
+    { pattern: "param-(set|fuzz)", reason: editor.excludeReason },
+  ]);
+
+  // The informational unfiltered run stays scoped to test_fault — the
+  // first plugin carrying a plugin-level exclusion.
+  const fault = CLAP_PLUGINS.find((p) => p.exclude);
+  assert.equal(fault.name, "test_fault");
+});
+
 test("applyVst3DeclaredUncreatable records decline evidence and keeps Passed", () => {
   const leg = {
     kind: "vst3-sdk-validator",

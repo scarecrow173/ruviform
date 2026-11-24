@@ -597,3 +597,63 @@ InvalidValue,HostLost,Io}` に写像し、session は `Attached`|`Hidden` 以外
   token で受領を記録する。OS input queue・focus routing・message pump を
   通る配送は検証対象外。証拠語彙は `clap-editor-input:synthetic-verb-
   delivery`。
+
+## 実装記録（slice 5 — dock-test row flip）
+
+- `real_dock.rs` に ABI-parametrized oracle 語彙 `EditorAbi` を新設
+  （popup class・child-popup title prefix・popup leg の cumulative
+  title suffix）。`ABI_VST3`/`ABI_CLAP` の 2 static で
+  VST3（`RuviformTestEditor`・`co:`/`cc:`・`rvf-test-editor-child-`）と
+  CLAP（`RuviformClapTestEditor`・両 kind `po:`/`pc:`・shared
+  `verb_popup_seq`）の fixture 差を吸収する。focus leg の suffix は両
+  ABI で同一 grammar のため shared const `FOCUS_SUFFIXES`。
+- `drive_editor_verb` で session verb の着地を `VerbDrive::{Ok,Refused,
+  Declined(EditorOpError),Failed,Missing}` に分類する。全 focus/popup
+  leg の宣言 landing は `Ok` で、`Refused` は defined `Unsupported`、
+  その他は contract failure として記録する。
+- `observe_editor_focus_lifecycle` を 6-leg 化（`set_focus(true)` →
+  `set_focus(false)` → `set_focus_target(Editor)` →
+  `set_focus_target(EditorElement{7})` → `set_focus_target(HostWindow)` →
+  `set_focus(false)` restore）。`f:1` leg は caller-queue の
+  `GetFocus()==child` を oracle とする（新設 `oschild::focused_hwnd` —
+  `GetFocus` は per-thread 契約で、fixture の実 `SetFocus(child)` と同じ
+  scenario caller thread の queue を読む）。
+- `HostWindow` leg —— 実走で予測が訂正された経緯を記録する。実装前の
+  解析では「container HWND は GPUI app thread 所有・verb 実行は caller
+  thread の分割構成で、`AttachThreadInput` 結合は設計上禁止（Issue
+  #115）のため `SetFocus(container)` は queue を越えられず、VST3
+  adapter は `GetFocus` verify 失敗で `PluginFailed` に着地する」と
+  判断し Coordinator も `Declined(Plugin)` 宣言を承認した。しかし実
+  lane では VST3 `win32::set_focus` の `SetFocus` + `GetFocus()==hwnd`
+  verify が成功し `Ok`+`f:0` に着地した（両 thread の input queue が
+  本 lane topology では事実上共有/attach され、caller queue の focus
+  が app-thread container へ移った）。両 ABI で `Ok`+`f:0` が宣言
+  landing。Coordinator 決定の honest-vocabulary 条件どおり
+  `accepted-declared`・`effect_verified:false` で記録し（OS focus move
+  の materialize は lane-topology 依存であり verified OS focus
+  routing とは主張しない）、caller queue の `GetFocus` 値を観測値と
+  して step に残す。同-queue `host_path` lane が真の oracle。
+- `observe_editor_popup_lifecycle` を `set_popup` 4-leg 化（Dialog
+  open/close → ChildWindow open/close）。`ChildWindow` kind は新設の
+  `EnumChildWindows` grandchild oracle（`editor_child_hwnd` で attach
+  child を同定し、`oschild::inventory(popup).parent == child` の
+  parent 一致 + ABI title prefix + `WS_CHILD` set/`WS_POPUP` clear +
+  200x100 size）で検証。popup が存在する間の attach contract・title
+  log 検証は `direct_children_view`（`parent_matches` direct child のみ
+  の filtered observation）に適用し、grandchild が `child_contract`/
+  `title_log` を誤爆させない構造にした。
+- `real-clap-editor-{input,focus,popup}` を defined-refusal
+  `Unsupported` から effect-verified に flip（evidence tag は
+  `clap-editor-input:synthetic-verb-delivery` /
+  `clap-editor-{focus,popup}:real-*`）。VST3 `real-editor-focus`/
+  `real-editor-popup` に target/kind coverage を追加（既存
+  `observe_editor_input_lifecycle` は両 ABI で共用）。
+- `ci/plugin-abi-validator`（Coordinator lease 付与範囲内）:
+  `test_editor` は共有 `Fault` param を持つため `param-(set|fuzz)` を
+  `test_fault` と同じ理由で宣言的除外に annotate し（CLAP mirror of
+  VST3 #885）、`tests/run.test.mjs` に entry と informational-run
+  finder の contract test を追加。
+- 実 GUI lane を本 Worker で実走し ledger 再生成: VST3
+  `evidence/rf631/plugin-dock-real-scenario.jsonl` 32 case 全 pass、
+  CLAP `evidence/rf630/plugin-dock-real-clap.jsonl` 14 case 全 pass
+  （`real-clap-editor-{input,focus,popup}` を含む）。

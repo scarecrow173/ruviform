@@ -78,9 +78,14 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // fatal fault modes (abort/exit/hang) through its stepped parameter —
 // param-mutating validator tests would crash the sandboxed child by
 // design, so its canonical run excludes the `param-set-*`/`param-fuzz-*`
-// cases. The unfiltered run is still executed as an *informational*
-// leg: its abnormal termination is recorded as Unsupported evidence of
-// the intentional-crash surface, not as a plugin defect.
+// cases. `test_editor` carries the same shared `Fault` param (the CLAP
+// half of the real-dock crash/hang arm, Issue #630) and gets the same
+// param-case exclusion — its fault surface exists for the dedicated
+// dock-test lanes, not as the plugin's purpose, so it records no
+// informational unfiltered leg of its own. The unfiltered run is still
+// executed as an *informational* leg for `test_fault`: its abnormal
+// termination is recorded as Unsupported evidence of the
+// intentional-crash surface, not as a plugin defect.
 // `test_spawn_fail` is enumerable but deliberately uncreatable
 // (`create_plugin` returns None — the spawn-phase rejection oracle);
 // its leg carries a declared create-decline expectation instead of a
@@ -98,7 +103,17 @@ export const CLAP_PLUGINS = [
   },
   { id: "org.ruviform-test.clap-test-stateful", name: "test_stateful" },
   { id: "org.ruviform-test.clap-test-instrument", name: "test_instrument" },
-  { id: "org.ruviform-test.clap-test-editor", name: "test_editor" },
+  {
+    id: "org.ruviform-test.clap-test-editor",
+    name: "test_editor",
+    exclude: "param-(set|fuzz)",
+    excludeReason:
+      "test_editor carries the shared stepped Fault parameter (Issue #630 — " +
+      "the CLAP mirror of the VST3 #885 real-dock crash/hang arm); " +
+      "param-mutating validator cases would arm abort/exit/hang and crash the " +
+      "sandboxed child by design. The fatal surface is covered by the dedicated " +
+      "L1 crash/hang dock-test lanes instead.",
+  },
   {
     id: "org.ruviform-test.clap-test-spawn-fail",
     name: "test_spawn_fail",
