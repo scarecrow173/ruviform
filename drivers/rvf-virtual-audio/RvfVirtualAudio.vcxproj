@@ -35,6 +35,11 @@
          job 生成の自己署名証明書で実施する（attempt-3 実測: SignMode 未指定で
          SIGNTASK が /fd 無し signtool を呼び失敗した） -->
     <SignMode>Off</SignMode>
+    <!-- build 内 Inf2Cat も無効化 — package staging（inf+sys 同居 dir）は
+         workflow の catalog-create stage が組み立てて実行する。flatten project
+         では INF がプロジェクト dir・sys が x64\Release\ に分離し、build 内
+         Inf2Cat の signability test が CopyFiles を解決できず失敗する（attempt-5 実測） -->
+    <RunInf2Cat>false</RunInf2Cat>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetVersion>Windows10</TargetVersion>
@@ -45,6 +50,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <SignMode>Off</SignMode>
+    <RunInf2Cat>false</RunInf2Cat>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

@@ -120,3 +120,12 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 | 以降 | blocked | fail-closed |
 
 **失敗分析**: `INF error 1199` — DIRID 13 (CopyFiles) は OS 10.0.16299 導入構文のため、その DDInstall を参照する Models section に TargetOSVersion decoration が必要。`SignMode Off` で build 内署名エラーは解消。**attempt-5 修正**: `[RvfVA.NTamd64]` → `[RvfVA.NTamd64.10.0...16299]`（本 driver は windows-2025 runner 専用で下位 OS 対象外）。
+
+### attempt 5 — run 45496106387（merge SHA `8fc74098`・attempt5-* 同梱）
+
+| stage | status | detail |
+| --- | --- | --- |
+| driver-build | **error** | `msbuild exit=1` — ただし **`RvfVirtualAudio.sys` 生成に成功**（compile/link/InfVerif/StampInf 全通過） |
+| 以降 | blocked | fail-closed |
+
+**失敗分析**: build 内 Inf2Cat（`MSB6006 exit=-2`）が signability test で失敗 — INF の `CopyFiles` 参照 `RvfVirtualAudio.sys` が package staging dir（`x64\Release\RvfVirtualAudio\`）に無い。flatten project では INF=プロジェクト dir・sys=x64\Release\ に分離するため必然的に解決不可。catalog 生成は workflow catalog-create stage が `vaudio-pkg\` staging で担う設計（rf961 と同型）のため `<RunInf2Cat>false</RunInf2Cat>` を追加。**残課題**: env の `inf2catKits=0` — Inf2Cat 不在なら makecat fallback（x64 arch-aware・実装済み）が動くかは attempt-6 で実測。
