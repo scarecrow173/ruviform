@@ -16,6 +16,7 @@
 #![cfg(feature = "l1-runner")]
 
 use std::ffi::OsString;
+use std::io::Write;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -32,7 +33,7 @@ use ruviform_plugin_core::{
 };
 use ruviform_plugin_host::{
     ChildExit, DiagnosticQuery, HostCommand, HostNotification, HostReply, OutOfProcessSpec,
-    PluginHandle, PluginHost,
+    PluginHandle, PluginHost, SpawnPhase,
 };
 
 /// This crate's cdylib file name —
@@ -143,35 +144,116 @@ fn sample_eq(actual: f32, expected: f32) -> bool {
     actual.to_bits() == expected.to_bits()
 }
 
+/// Bound on `Instantiate` retries after a pre-mint
+/// `SpawnFailed{Timeout}` — the rf#841 C1 signature. The failure is
+/// an environment deadline event (a stalled spawn-path wait), not a
+/// contract verdict: `SpawnFailed` is pre-mint only, so a fresh
+/// attempt is the defined recovery — the same "pre-contract
+/// environment retry" shape as `ARM_RESEND_CALLS` (rf#766). The
+/// bound keeps a persistent stall an honest failure instead of an
+/// absorbed flake (`docs/discovery/issue-841-spawn-deadline-flake.md`
+/// Decision C — assertion/gate unchanged).
+const SPAWN_TIMEOUT_RETRIES: u32 = 3;
+
+/// `Instantiate` with a bounded retry on the rf#841 C1 signature —
+/// `SpawnFailed{cause: Timeout}` proven pre-mint by its retained
+/// diagnostics record. The signature check is explicit per Decision
+/// C: the error's `cause` is `Timeout` AND the record is `Found`
+/// with `cause == Some(Timeout)` AND `phase` is one of the
+/// `spawn_timeout`-bounded waits' freeze phases — `{PreSpawn,
+/// Spawn, DrainInit, Handshake, Live}`, every variant the enum
+/// currently declares. `Live` is eligible here — and only inside
+/// this signature — because `SpawnFailed` is definitionally
+/// pre-mint (the variant exists only on the spawn/create paths, so
+/// a post-mint command timeout can never produce it): the phase
+/// tracks *child* lifecycle and goes `Live` the instant `Hello`
+/// passes, so the `Scan`/`CreateInstance` waits — themselves
+/// `spawn_timeout`-bounded mint-window waits — freeze `Live`
+/// records on both a fresh child and a pooled re-mint. A
+/// non-`Timeout` cause or an `Evicted`/`NotFound` query result is
+/// signature-missed and fails at once — never retried. Every
+/// `SpawnFailed` attempt is traced to the real stderr — bypassing
+/// the harness's per-test capture so the trace lands in lane logs
+/// even when a later attempt recovers the test — carrying the
+/// attempt index plus the record's `diagnostics_id`/`phase`/`cause`
+/// (the deadline-phase attribution the `SpawnFailed` payload alone
+/// cannot show — rf#841 Residual). On the terminal failure the
+/// retained record and the child's captured stderr are printed in
+/// full — the Issue #207 diagnosis aid. Bound exhaustion is an
+/// honest failure — the flake is never absorbed silently.
 fn instantiate(host: &mut PluginHost, plugin_id: &str) -> PluginHandle {
-    match host.execute(HostCommand::Instantiate {
-        plugin_id: plugin_id.to_owned(),
-    }) {
-        Ok(HostReply::Instantiated { handle }) => handle,
-        // A pre-mint failure carries a retained diagnostics record —
-        // print it so CI logs show the frozen phase/cause/stderr at
-        // the failure point (Issue #207 diagnosis aid; harmless on
-        // the success path since this arm never runs there).
-        Err(HostError::SpawnFailed {
-            cause,
-            diagnostics_id,
-        }) => {
-            eprintln!("SpawnFailed: cause={cause:?} diagnostics_id={diagnostics_id}");
-            match host.diagnostics_query(diagnostics_id) {
-                DiagnosticQuery::Found(record) => {
-                    eprintln!("diagnostics record: {record:#?}");
-                    eprintln!(
-                        "child stderr (lossy): {}",
-                        String::from_utf8_lossy(&record.stderr.bytes)
+    for attempt in 0..=SPAWN_TIMEOUT_RETRIES {
+        match host.execute(HostCommand::Instantiate {
+            plugin_id: plugin_id.to_owned(),
+        }) {
+            Ok(HostReply::Instantiated { handle }) => return handle,
+            Ok(other) => panic!("unexpected reply: {other:?}"),
+            Err(HostError::SpawnFailed {
+                cause,
+                diagnostics_id,
+            }) => {
+                let query = host.diagnostics_query(diagnostics_id);
+                let (phase, record_cause) = match &query {
+                    DiagnosticQuery::Found(record) => (Some(record.phase), record.cause),
+                    _ => (None, None),
+                };
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "instantiate SpawnFailed trace: plugin={plugin_id} \
+                     attempt={attempt} cause={cause:?} \
+                     diagnostics_id={diagnostics_id} phase={phase:?} \
+                     record_cause={record_cause:?}"
+                );
+                let signature = cause == FailureCause::Timeout
+                    && matches!(
+                        &query,
+                        DiagnosticQuery::Found(record)
+                            if matches!(
+                                record.phase,
+                                SpawnPhase::PreSpawn
+                                    | SpawnPhase::Spawn
+                                    | SpawnPhase::DrainInit
+                                    | SpawnPhase::Handshake
+                                    | SpawnPhase::Live
+                            ) && record.cause == Some(FailureCause::Timeout)
                     );
+                // A pre-mint failure carries a retained diagnostics
+                // record — print it so CI logs show the frozen
+                // phase/cause/stderr at the failure point (Issue
+                // #207 diagnosis aid; dumped only when this attempt
+                // is terminal).
+                if !signature || attempt == SPAWN_TIMEOUT_RETRIES {
+                    match &query {
+                        DiagnosticQuery::Found(record) => {
+                            eprintln!("diagnostics record: {record:#?}");
+                            eprintln!(
+                                "child stderr (lossy): {}",
+                                String::from_utf8_lossy(&record.stderr.bytes)
+                            );
+                        }
+                        other => eprintln!("diagnostics query result: {other:?}"),
+                    }
                 }
-                other => eprintln!("diagnostics query result: {other:?}"),
+                assert!(
+                    signature,
+                    "instantiate failed: SpawnFailed{{cause:{cause:?}, \
+                     diagnostics_id:{diagnostics_id}}} is outside the \
+                     pre-mint timeout signature (phase={phase:?} \
+                     record_cause={record_cause:?}) — not retried"
+                );
+                assert!(
+                    attempt < SPAWN_TIMEOUT_RETRIES,
+                    "instantiate failed: the pre-mint \
+                     SpawnFailed{{cause:Timeout}} signature persisted \
+                     through the {SPAWN_TIMEOUT_RETRIES}-retry bound \
+                     (phase={phase:?}) — an honest environment \
+                     failure, not an absorbed flake"
+                );
             }
-            panic!("instantiate failed: SpawnFailed {cause:?}");
+            Err(error) => panic!("instantiate failed: {error:?}"),
         }
-        Ok(other) => panic!("unexpected reply: {other:?}"),
-        Err(error) => panic!("instantiate failed: {error:?}"),
     }
+    unreachable!("the loop exits only through `return` or `panic!`")
 }
 
 /// One stereo block through `PluginHost::process` — the fixture

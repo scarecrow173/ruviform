@@ -17,6 +17,7 @@ relations:
     - "docs/discovery/issue-841-spawn-deadline-flake.md"
     - "evidence/rf630/spawn-timeout-verification.md"
     - "evidence/rf630/spawn-timeout-signature-sweep.md"
+    - "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
     - "evidence/rf841/verification.md"
     - "evidence/rf849/verification.md"
     - "evidence/rf631/verification.md"
@@ -30,11 +31,23 @@ relations:
         path: "evidence/rf630/spawn-timeout-logs/"
       - type: "file"
         path: "evidence/rf630/spawn-timeout-signature-sweep.md"
+      - type: "file"
+        path: "evidence/rf630/spawn-timeout-plugin-test-sweep.md"
     modified:
       - type: "file"
         path: "crates/ruviform-plugin-test-vst3/tests/l1_fault_test_plugin_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-test-clap/tests/l1_fault_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/tests/l1_real_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/tests/l1_stateful_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-clap/tests/l1_real_test_plugin_e2e.rs"
+      - type: "file"
+        path: "crates/ruviform-plugin-test-clap/tests/l1_stateful_test_plugin_e2e.rs"
       - type: "file"
         path: "crates/ruviform-plugin-host/tests/l1_proxy_e2e.rs"
       - type: "file"
@@ -144,7 +157,8 @@ bound 超過 panic した。canonical lane の 6 連続 run では
 - `ruviform-plugin-test-vst3`/`test-clap` の非 fault test file
   （`l1_real_test_plugin_e2e`・`l1_stateful_test_plugin_e2e` 等）の
   instantiate 経路は `SpawnFailed` で即 panic する — 同 signature
-  の穴は残り、別 slice の対象となる。`ruviform-plugin-host/tests/`
+  の穴は残り、別 slice の対象となる。**（続報: 後述の plugin-test
+  sweep slice で全件判定・閉塞済み）**。`ruviform-plugin-host/tests/`
   と `ruviform-plugin-export/tests/` は後続 slice
   （`evidence/rf630/spawn-timeout-signature-sweep.md`）で全件
   sweep 済み: 7 file の un-retried `Instantiate`/spawn/mint
@@ -159,3 +173,47 @@ bound 超過 panic した。canonical lane の 6 連続 run では
   window に含めると記述しているのに対し実装は `Hello` 直後に
   `Live` へ進める乖離は、lease 外 pin の都合で維持した —
   観測面上の既知の不一致として記録に留める。
+
+## 続報 — plugin-test crate non-fault file の sweep（本 slice で閉塞）
+
+上記残件の第一項が本 slice の対象だった。
+`crates/ruviform-plugin-test-vst3/tests/`（5 file）と
+`crates/ruviform-plugin-test-clap/tests/`（4 file）を grep と目視で
+全件 sweep し、signature-miss 判定基準に照らした結果は次のとおり
+（詳細は `evidence/rf630/spawn-timeout-plugin-test-sweep.md`）。
+
+- 穴あり — 5 file: 両 ABI の `l1_real_test_plugin_e2e.rs`・
+  `l1_stateful_test_plugin_e2e.rs`、および vst3
+  `os_endpoint_midi_e2e.rs` の `instantiate` helper が un-retried
+  surface だった。vst3 側は `HostCommand::Instantiate` の
+  `.unwrap()`、clap 側は `SpawnFailed` arm で diagnostics を印字
+  して `panic!` する形で、`spawn_timeout` bound の環境 stall が
+  test fail へ直結していた。#933 と同一の signature（`cause ==
+  Timeout`・record `Found`・`phase ∈ {PreSpawn, Spawn, DrainInit,
+  Handshake, Live}`・`record.cause == Some(Timeout)` の検査、
+  bound `SPAWN_TIMEOUT_RETRIES = 3`、signature-miss 即 fail、
+  bound 超過は panic で honest fail、attempt ごとの stderr
+  trace）で閉塞した。clap 側は Issue #207 の diagnostics 全量
+  印字を terminal failure 時に温存した。
+- 穴なし — 2 file: 両 `host_path.rs` は in-process host 経路で
+  `PluginHost`/`HostCommand::Instantiate` を持たず、`SpawnFailed`
+  variant を返しえない。
+- 対象外: 両 ABI の `l1_fault_test_plugin_e2e.rs`（#933/#935 の
+  正本）、期待値経路
+  `real_test_plugin_l1_missing_runner_is_spawn_failed`
+  （`SpawnFailed{cause: Spawn}` を契約値として pin — retry 非搭載
+  を維持）、parent-side `HostCommand::Scan`（descriptor replay で
+  あり spawn surface ではない）。
+- 検証: induce 補助（`CreateInstance` reply wait の zero-timeout
+  一時 patch、検証後 revert 済み）で 4 file について once 相当の
+  回復 pass と always 相当の bound 超過 panic を両側実測。
+  `os_endpoint_midi_e2e` は loopback pair 未 provision の host では
+  endpoint 列挙が先に `verdict: NotRun` を返す構造のため runtime
+  未到達 — compile 検証（`check-l1-real-plugin`・
+  `lint-l1-real-plugin` exit 0）と同一構造の実測済み helper との
+  対称性で裏付ける。canonical lane `mise run test-l1-real-plugin`
+  は全 leg `ok`。
+- 新たな残件: `ruviform-plugin-vst3`/`ruviform-plugin-clap`
+  adapter crate の `tests/l1_real_adapter_e2e.rs` 等は同型穴を
+  持ち得るが本 slice の lease 外 — 後続 slice の対象候補として
+  記録する。
