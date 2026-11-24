@@ -1,0 +1,301 @@
+name: virtual-endpoint-probe
+
+# Issue #955 / Issue #952 Slice A — GitHub-hosted runner 実測 probe。
+#
+# 目的: hosted Windows runner が実際に何を同梱しているかを測定し、
+# MIDI provisioning 経路（Windows MIDI Services in-box vs 独自 driver +
+# attestation 署名）の確定材料を実測値として集める。判定は evidence の
+# 解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
+#
+# leg 構成:
+#   windows-2025    x64 Server 2025 — 対照 leg。midisrv/WMS は Server SKU
+#                   上に存在しないはずであり、不在を実測として記録する。
+#   windows-11-arm  Windows 11 Enterprise 25H2 (arm64) — WMS in-box 条件を
+#                   満たす唯一の hosted image。probe example のネイティブ
+#                   ビルド自体が aarch64-pc-windows-msvc の compile 確認を
+#                   兼ねる。
+#
+# 契約:
+#   - workflow_dispatch 専用。required gate・ci-summary の needs・ruleset
+#     とは一切接続しない独立 manual lane。
+#   - 測定対象の不在（midisrv・BLOOP transport・midi console・PS module・
+#     audio endpoint 等）は判定材料であり job 失敗ではない。cargo の
+#     build/実行も exit code を evidence に記録して step を継続する。
+#     job が赤くなるのは probe 機構自体の破損（script エラー・checkout
+#     失敗・artifact upload 失敗）のみ。
+#   - probe 出力は job 内テキストファイルに保存し、leg ごとに artifact
+#     化する。merge 後の実走結果を evidence/rf952/ へ記録する経路は
+#     PR 本文を参照。
+#   - WMS service config JSON は Microsoft 非サポート面のため読み書き
+#     とも行わない。作成試行は midi console / PowerShell module /
+#     Windows.Devices.Midi2 API のサポート経路のみ。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MISE_ENABLE_TOOLS: rust
+  MISE_ENV: ci
+
+jobs:
+  probe:
+    name: probe (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      # 片 leg の失敗で他 leg を潰さない — leg 間で測定結果を対照する。
+      fail-fast: false
+      matrix:
+        os: [windows-2025, windows-11-arm]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up mise
+        uses: jdx/mise-action@v5.2.0
+        with:
+          install: false
+
+      - name: Restore Rust toolchain from mise.lock
+        run: |
+          mise trust
+          mise install --locked rust
+
+      - name: Restore cargo registry/git index cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # Slice A (a)(d)(e) + 補足: 環境 query。全項目 read-only で、測定対象が
+      # 不在の場合は "absent" を明示記録する — 不在そのものが判定材料。
+      - name: Probe environment (services, WMS surface, Secure Boot, tools)
+        shell: pwsh
+        run: |
+          $out = 'probe-env-${{ matrix.os }}.txt'
+          "== virtual-endpoint-probe / environment ==" | Tee-Object -FilePath $out
+          "runner: ${{ runner.name }} os=${{ runner.os }} arch=${{ runner.arch }}" | Tee-Object -FilePath $out -Append
+          "ref: ${{ github.ref }} sha: ${{ github.sha }}" | Tee-Object -FilePath $out -Append
+          "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} attempt=${{ github.run_attempt }}" | Tee-Object -FilePath $out -Append
+          "host: $(hostname) user: $(whoami) timestamp-utc: $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" | Tee-Object -FilePath $out -Append
+
+          "`n== os build ==" | Tee-Object -FilePath $out -Append
+          try {
+            Get-CimInstance Win32_OperatingSystem |
+              Select-Object Caption, Version, BuildNumber, OSArchitecture |
+              Format-List | Out-String -Width 200 | Tee-Object -FilePath $out -Append
+          } catch { "  query error: $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          cmd /c ver 2>&1 | Tee-Object -FilePath $out -Append
+
+          "`n== rust toolchain (compile context for the aarch64 check) ==" | Tee-Object -FilePath $out -Append
+          rustc -vV 2>&1 | Tee-Object -FilePath $out -Append
+          "rustc exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+          cargo -vV 2>&1 | Tee-Object -FilePath $out -Append
+          "cargo exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+
+          "`n== services ==" | Tee-Object -FilePath $out -Append
+          foreach ($name in 'AudioSrv', 'AudioEndpointBuilder', 'midisrv') {
+            $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+            if ($svc) { "  $($svc.Name): Status=$($svc.Status) StartType=$($svc.StartType)" | Tee-Object -FilePath $out -Append }
+            else { "  ${name}: absent" | Tee-Object -FilePath $out -Append }
+          }
+
+          "`n== midisrv transport surface ==" | Tee-Object -FilePath $out -Append
+          "  expected BLOOP transport id: {10088473-9478-4E62-850B-3D2315E135B8} (evidence/rf952/web-sources-signing-runner-wms.md)" | Tee-Object -FilePath $out -Append
+          $midisrv = Get-CimInstance Win32_Service -Filter "Name='midisrv'" -ErrorAction SilentlyContinue
+          if ($midisrv) {
+            $midisrv | Select-Object Name, State, StartMode, PathName, ProcessId |
+              Format-List | Out-String -Width 300 | Tee-Object -FilePath $out -Append
+            $proc = Get-Process -Id $midisrv.ProcessId -ErrorAction SilentlyContinue
+            if ($proc) {
+              "  loaded modules matching midi/loop/transport (incl. BLOOP if loaded):" | Tee-Object -FilePath $out -Append
+              try {
+                $hits = $proc.Modules | Select-Object -ExpandProperty ModuleName | Where-Object { $_ -match 'midi|loop|transport|bloop' } | Sort-Object
+                if ($hits) { $hits | ForEach-Object { "    $_" | Tee-Object -FilePath $out -Append } }
+                else { "    (none)" | Tee-Object -FilePath $out -Append }
+              } catch { "    module query error: $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+            } else { "  midisrv registered but not running (State=$($midisrv.State))" | Tee-Object -FilePath $out -Append }
+          } else { "  midisrv: absent (service not registered)" | Tee-Object -FilePath $out -Append }
+
+          "`n== midi console utility ==" | Tee-Object -FilePath $out -Append
+          $midi = Get-Command midi -ErrorAction SilentlyContinue
+          if ($midi) {
+            "  midi: $($midi.Source)" | Tee-Object -FilePath $out -Append
+            "  --- midi --version ---" | Tee-Object -FilePath $out -Append
+            & midi --version 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  midi --version exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            "  --- midi --help ---" | Tee-Object -FilePath $out -Append
+            & midi --help 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  midi --help exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+          } else { "  midi console: absent" | Tee-Object -FilePath $out -Append }
+
+          "`n== midi powershell module ==" | Tee-Object -FilePath $out -Append
+          foreach ($cmd in 'New-MidiLoopback', 'New-MidiBasicLoopback', 'Remove-MidiLoopback', 'Get-MidiEndpointList') {
+            $c = Get-Command $cmd -ErrorAction SilentlyContinue
+            if ($c) { "  ${cmd}: present ($($c.Source))" | Tee-Object -FilePath $out -Append }
+            else { "  ${cmd}: absent" | Tee-Object -FilePath $out -Append }
+          }
+          $mods = Get-Module -ListAvailable | Where-Object { $_.Name -match 'midi' }
+          if ($mods) { $mods | ForEach-Object { "  module: $($_.Name) $($_.Version) — $($_.ModuleBase)" | Tee-Object -FilePath $out -Append } }
+          else { "  no midi-related module listed" | Tee-Object -FilePath $out -Append }
+
+          "`n== midi-related packages and system files ==" | Tee-Object -FilePath $out -Append
+          # クエリの失敗と 0 件は別の結果 — 失敗は失敗として記録する。
+          foreach ($scope in 'current-user', 'all-users') {
+            try {
+              $pkgs = @(if ($scope -eq 'all-users') {
+                Get-AppxPackage -AllUsers -ErrorAction Stop | Where-Object { $_.Name -match 'midi' -or $_.PackageFamilyName -match 'midi' }
+              } else {
+                Get-AppxPackage -ErrorAction Stop | Where-Object { $_.Name -match 'midi' -or $_.PackageFamilyName -match 'midi' }
+              })
+              if ($pkgs.Count) { $pkgs | ForEach-Object { "  appx(${scope}): $($_.Name) $($_.Version) [$($_.PackageFamilyName)]" | Tee-Object -FilePath $out -Append } }
+              else { "  appx(${scope}): no midi-related package" | Tee-Object -FilePath $out -Append }
+            } catch { "  appx(${scope}): query error — $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          }
+          $sysFiles = Get-ChildItem "$env:WINDIR\System32" -Filter '*midi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name | Sort-Object
+          if ($sysFiles) { $sysFiles | ForEach-Object { "  System32: $_" | Tee-Object -FilePath $out -Append } }
+          else { "  System32: no *midi* file" | Tee-Object -FilePath $out -Append }
+          "  wdmaud2.drv (WinMM compat layer): $(if (Test-Path "$env:WINDIR\System32\wdmaud2.drv") { 'present' } else { 'absent' })" | Tee-Object -FilePath $out -Append
+
+          "`n== secure boot / test-signing state ==" | Tee-Object -FilePath $out -Append
+          try { "  Confirm-SecureBootUEFI: $(Confirm-SecureBootUEFI)" | Tee-Object -FilePath $out -Append }
+          catch { "  Confirm-SecureBootUEFI: error — $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          $sbReg = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue
+          if ($null -ne $sbReg -and $null -ne $sbReg.UEFISecureBootEnabled) {
+            "  UEFISecureBootEnabled (registry): $($sbReg.UEFISecureBootEnabled)" | Tee-Object -FilePath $out -Append
+          } else { "  UEFISecureBootEnabled (registry): unavailable" | Tee-Object -FilePath $out -Append }
+          "  --- bcdedit /enum ---" | Tee-Object -FilePath $out -Append
+          bcdedit /enum 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+          "  bcdedit exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+
+          "`n== driver build tools (slice B/D input) ==" | Tee-Object -FilePath $out -Append
+          foreach ($t in 'devcon', 'pnputil', 'signtool', 'infverif') {
+            $c = Get-Command $t -ErrorAction SilentlyContinue
+            if ($c) { "  ${t}: $($c.Source)" | Tee-Object -FilePath $out -Append }
+            else {
+              $hit = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Depth 3 -Filter "$t.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($hit) { "  ${t}: not on PATH, found at $($hit.FullName)" | Tee-Object -FilePath $out -Append }
+              else { "  ${t}: absent" | Tee-Object -FilePath $out -Append }
+            }
+          }
+
+      # Slice A (c)(e): 既存 probe の実走。windows-11-arm ではこのビルド自体が
+      # aarch64-pc-windows-msvc の compile 確認を兼ねる。build/実行の失敗は
+      # exit code と出力を evidence に残して継続 — 機構の破損のみ job 失敗。
+      - name: Run endpoint_probe (MMDevice enumeration)
+        shell: pwsh
+        run: |
+          $out = 'endpoint_probe-${{ matrix.os }}.txt'
+          "== endpoint_probe — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise exec -- cargo run -p ruviform-audio-device --example endpoint_probe 2>&1 | Tee-Object -FilePath $out -Append
+          "exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+
+      - name: Run midi_endpoint_probe (WinMM enumeration + WMS availability)
+        shell: pwsh
+        run: |
+          $out = 'midi_endpoint_probe-${{ matrix.os }}.txt'
+          "== midi_endpoint_probe — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe 2>&1 | Tee-Object -FilePath $out -Append
+          "exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+
+      # Slice A (b): 到達可能なサポート経路での transient loopback 作成試行。
+      # どの経路も存在しなくても失敗ではない — 到達可否そのものが実測値。
+      # 作成経路は midi console / PowerShell module / WinRT API のみ
+      # （service config JSON 直書きは Microsoft 非サポートのため実施しない）。
+      - name: Attempt transient WMS loopback creation (supported routes)
+        shell: pwsh
+        run: |
+          $out = 'loopback-attempt-${{ matrix.os }}.txt'
+          "== WMS loopback creation attempt — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+
+          $midi = Get-Command midi -ErrorAction SilentlyContinue
+
+          "`n-- pre-state: midi enumerate endpoints --" | Tee-Object -FilePath $out -Append
+          if ($midi) {
+            & midi enumerate endpoints 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            "`n-- midi service status --" | Tee-Object -FilePath $out -Append
+            & midi service status 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            "`n-- midi enumerate transports --" | Tee-Object -FilePath $out -Append
+            & midi enumerate transports 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            "`n-- midi loopback create --help (syntax discovery for slice C) --" | Tee-Object -FilePath $out -Append
+            & midi loopback create --help 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+          } else { "  midi console: absent — console routes skipped" | Tee-Object -FilePath $out -Append }
+
+          "`n-- route 1: midi console — transient LOOP A/B pair (observation only) --" | Tee-Object -FilePath $out -Append
+          if ($midi) {
+            & midi loopback create -a "RvfProbe A" -b "RvfProbe B" 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  midi loopback create exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+          } else { "  skipped (midi console absent)" | Tee-Object -FilePath $out -Append }
+
+          "`n-- route 2: PowerShell module — New-MidiBasicLoopback (BLOOP, single endpoint) --" | Tee-Object -FilePath $out -Append
+          if (Get-Command New-MidiBasicLoopback -ErrorAction SilentlyContinue) {
+            try {
+              New-MidiBasicLoopback -Name "RvfProbeBLOOP" 2>&1 | Out-String | Tee-Object -FilePath $out -Append
+              "  New-MidiBasicLoopback exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            } catch { "  New-MidiBasicLoopback error: $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          } else { "  skipped (New-MidiBasicLoopback absent)" | Tee-Object -FilePath $out -Append }
+
+          "`n-- route 3: PowerShell module — New-MidiLoopback (LOOP A/B pair, observation only) --" | Tee-Object -FilePath $out -Append
+          if (Get-Command New-MidiLoopback -ErrorAction SilentlyContinue) {
+            try {
+              New-MidiLoopback -BaseName "RvfProbeLOOP" 2>&1 | Out-String | Tee-Object -FilePath $out -Append
+              "  New-MidiLoopback exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+            } catch { "  New-MidiLoopback error: $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          } else { "  skipped (New-MidiLoopback absent)" | Tee-Object -FilePath $out -Append }
+
+          "`n-- route 4: Windows.Devices.Midi2 API reachability --" | Tee-Object -FilePath $out -Append
+          try {
+            $t = [Windows.Devices.Midi2.MidiLoopbackManager, Windows.Devices.Midi2, ContentType = WindowsRuntime]
+            "  Windows.Devices.Midi2.MidiLoopbackManager: resolvable ($t)" | Tee-Object -FilePath $out -Append
+          } catch { "  Windows.Devices.Midi2.MidiLoopbackManager: not resolvable — $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          try {
+            $t2 = [Windows.Devices.Midi2.MidiService, Windows.Devices.Midi2, ContentType = WindowsRuntime]
+            "  Windows.Devices.Midi2.MidiService: resolvable ($t2)" | Tee-Object -FilePath $out -Append
+          } catch { "  Windows.Devices.Midi2.MidiService: not resolvable — $($_.Exception.Message)" | Tee-Object -FilePath $out -Append }
+          "  note: full API provisioning (MidiLoopbackCreationConfig + SendUpdate) is slice C scope; this step records reachability only" | Tee-Object -FilePath $out -Append
+
+          "`n-- post-state: midi enumerate endpoints --" | Tee-Object -FilePath $out -Append
+          if ($midi) {
+            & midi enumerate endpoints 2>&1 | ForEach-Object { "  $_" | Tee-Object -FilePath $out -Append }
+            "  exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+          } else { "  midi console: absent" | Tee-Object -FilePath $out -Append }
+
+      # 作成試行後の WinMM 反映確認 — 同名 in/out port の出現を既存 probe で観測。
+      - name: Re-run midi_endpoint_probe after creation attempt
+        shell: pwsh
+        run: |
+          $out = 'midi_endpoint_probe-after-loopback-${{ matrix.os }}.txt'
+          "== midi_endpoint_probe (after loopback attempt) — ${{ matrix.os }} ==" | Tee-Object -FilePath $out
+          mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe 2>&1 | Tee-Object -FilePath $out -Append
+          "exit=$LASTEXITCODE" | Tee-Object -FilePath $out -Append
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtual-endpoint-probe-${{ matrix.os }}-attempt-${{ github.run_attempt }}
+          path: |
+            probe-env-${{ matrix.os }}.txt
+            endpoint_probe-${{ matrix.os }}.txt
+            midi_endpoint_probe-${{ matrix.os }}.txt
+            midi_endpoint_probe-after-loopback-${{ matrix.os }}.txt
+            loopback-attempt-${{ matrix.os }}.txt
+          if-no-files-found: warn
+          retention-days: 30
