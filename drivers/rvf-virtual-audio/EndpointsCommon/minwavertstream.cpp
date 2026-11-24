@@ -44,6 +44,17 @@ Return Value:
             m_AudioModuleCount = 0;
         }
 
+        //
+        // Defensive unregister: normally FreeAudioBuffer clears the
+        // registration before the DMA buffer is unmapped, but tear-down
+        // paths that skip it must not leave a dangling registry owner.
+        //
+        if (m_bLoopbackRegistered)
+        {
+            m_pMiniport->GetAdapterCommObj()->RvfLoopbackUnregisterRender(this);
+            m_bLoopbackRegistered = FALSE;
+        }
+
         if (m_bUnregisterStream)
         {
             m_pMiniport->StreamClosed(m_ulPin, this);
@@ -216,6 +227,7 @@ Return Value:
     m_pMiniport = NULL;
     m_ulPin = 0;
     m_bUnregisterStream = FALSE;
+    m_bLoopbackRegistered = FALSE;
     m_bCapture = FALSE;
     m_ulDmaBufferSize = 0;
     m_pDmaBuffer = NULL;
@@ -765,6 +777,16 @@ _In_        ULONG       Size_
 
     PAGED_CODE();
 
+    //
+    // Unregister the loopback source before the DMA pages are unmapped:
+    // a concurrent capture fill must never touch freed memory.
+    //
+    if (m_bLoopbackRegistered)
+    {
+        m_pMiniport->GetAdapterCommObj()->RvfLoopbackUnregisterRender(this);
+        m_bLoopbackRegistered = FALSE;
+    }
+
     if (Mdl_ != NULL)
     {
         if (m_pDmaBuffer != NULL)
@@ -830,6 +852,19 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
+
+    //
+    // Publish the render DMA buffer to the adapter loopback registry so
+    // the capture endpoint can read rendered PCM (virtual-cable path).
+    // Only the speaker's system-render host pin registers.
+    //
+    if (m_pDmaBuffer != NULL && !m_bCapture &&
+        m_pMiniport->IsSystemRenderPin(m_ulPin))
+    {
+        m_pMiniport->GetAdapterCommObj()->RvfLoopbackRegisterRender(
+            this, &m_pWfExt->Format, m_pDmaBuffer, m_ulDmaBufferSize);
+        m_bLoopbackRegistered = TRUE;
+    }
 
     *AudioBufferMdl_ = pBufferMdl;
     *ActualSize_ = RequestedSize_;
@@ -1209,6 +1244,18 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_bEoSReceived = FALSE;
             m_bLastBufferRendered = FALSE;
 
+            //
+            // Reset the DMA time bases and the sub-quantum carry-forwards.
+            // Upstream leaves these untouched at STOP, so a restarted
+            // stream would inherit residue from the previous run's
+            // position/notification accounting.
+            //
+            m_ullDmaTimeStamp = 0;
+            m_ullLastDPCTimeStamp = 0;
+            m_hnsElapsedTimeCarryForward = 0;
+            m_hnsDPCTimeCarryForward = 0;
+            m_byteDisplacementCarryForward = 0;
+
             KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
             // Wait until all work items are completed.
@@ -1342,7 +1389,14 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 m_pMiniport->m_KeywordDetector.Run();
             }
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
+            //
+            // Stamp the DMA time bases under the position lock so a
+            // concurrent GetPosition/GetPositions reader cannot observe
+            // them half-initialized relative to the RUN transition.
+            //
+            KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
             m_ullLastDPCTimeStamp = m_ullDmaTimeStamp = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ullPerfCounterTemp);
+            KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
             if (m_ulNotificationIntervalMs > 0)
             {
@@ -1364,6 +1418,15 @@ NTSTATUS CMiniportWaveRTStream::SetState
     }
 
     m_KsState = State_;
+
+    //
+    // Publish the render run state so the virtual-cable capture path
+    // copies real PCM only while the input side of the cable is live.
+    //
+    if (m_bLoopbackRegistered)
+    {
+        pAdapterComm->RvfLoopbackRenderRunning(this, State_ == KSSTATE_RUN);
+    }
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
 Done:
@@ -1487,6 +1550,15 @@ VOID CMiniportWaveRTStream::UpdatePosition
     //
     m_ullLinearPosition += ByteDisplacement;
 
+    //
+    // Publish the render play cursor for the virtual-cable capture path.
+    //
+    if (m_bLoopbackRegistered)
+    {
+        m_pMiniport->GetAdapterCommObj()->RvfLoopbackRenderPosition(
+            this, m_ullLinearPosition);
+    }
+
     // Update the DMA time stamp for the next call to GetPosition()
     //
     m_ullDmaTimeStamp = hnsCurrentTime;
@@ -1502,7 +1574,9 @@ VOID CMiniportWaveRTStream::WriteBytes
 
 Routine Description:
 
-This function writes the audio buffer using a sine wave generator
+This function writes the audio buffer from the render-to-capture loopback
+source. When no render stream is live on the virtual cable it produces
+silence (the SYSVAD synthesized tone is not used on this endpoint pair).
 Arguments:
 
 ByteDisplacement - # of bytes to process.
@@ -1510,13 +1584,15 @@ ByteDisplacement - # of bytes to process.
 --*/
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
+    PADAPTERCOMMON pAdapterComm = m_pMiniport->GetAdapterCommObj();
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-            m_ToneGenerator.GenerateSine(m_pDmaBuffer + bufferOffset, runWrite);
+        pAdapterComm->RvfLoopbackCaptureWrite(
+            m_pDmaBuffer + bufferOffset, runWrite, &m_pWfExt->Format);
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }

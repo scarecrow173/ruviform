@@ -27,7 +27,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 | --- | --- | --- |
 | `adapter.cpp` | `adapter.cpp` | ＝ |
 | `basetopo.cpp/.h` | 同名 | ＝ |
-| `common.cpp/.h` | 同名 | ＝ |
+| `common.cpp/.h` | 同名 | ≠ `IAdapterCommon` に loopback registry API 追加（`RvfLoopback*` メソッド + `RVF_LOOPBACK_RENDER_SOURCE` 保持） |
 | `hw.cpp/.h` | 同名 | ＝ |
 | `kshelper.cpp/.h` | 同名 | ＝ |
 | `savedata.cpp/.h` | 同名 | ＝ |
@@ -51,7 +51,8 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 | `MiniportStreamAudioEngineNode.cpp` | 同名 | ＝ |
 | `NewDelete.cpp/.h` | 同名 | ＝ |
 | `mintopo.cpp/.h` | 同名 | ＝ |
-| `minwavert.cpp/.h`, `minwavertstream.cpp/.h` | 同名 | ＝ |
+| `minwavert.cpp/.h` | 同名 | ＝ |
+| `minwavertstream.cpp/.h` | 同名 | ≠ capture 充填を ToneGenerator → loopback 経路へ置換 + render stream の register/unregister/run-state/play-cursor publish + STOP 時の時間基準・carry-forward リセット |
 | `simple.h` | 同名 | ＝ |
 | `speakertopo.cpp/.h` | 同名 | ＝ |
 | `speakertoptable.h` | `speakertoptable.h` | ≠ pin-name GUID を独自 GUID へ + Category を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` |
@@ -66,6 +67,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 ### 新規ファイル
 
 - `RvfVirtualAudio.inf` — `ComponentizedAudioSample.inx` 構成を単一 INF へ簡約（hwid `ROOT\RvfVirtualAudio`、x64 のみ、speaker/micin の 4 interface pair + KMDF service + MediaCategories 登録）。
+- `RvfLoopback.cpp/.h` — render→capture kernel loopback（"virtual cable"）のデータ経路。`CAdapterCommon` 内 registry（`RVF_LOOPBACK_RENDER_SOURCE`）に render stream が DMA buffer・format・run 状態・play cursor を登録し、capture stream の充填（`WriteBytes` 経由）が整数演算のみの変換（PCM16/24/32・f32・downmix・最近傍 rate map）で render buffer を読む。upstream に存在しない新規機構。
 - `RvfVirtualAudio.vcxproj` — 単一 KMDF driver project（`KmdfVersionNumber=1.33`、INF `KmdfLibraryVersion=1.33` と対）。ClCompile define は upstream `EndpointsCommon.vcxproj`（StaticLibrary）から `_USE_WAVERT_;_NEW_DELETE_OPERATORS_` を引き継ぐ（2026-11-24 attempt-2 実測修正: `_NEW_DELETE_OPERATORS_` 無しでは `NewDelete.h` 側の宣言は PortCls header に残り 3 引数 `operator new` が LNK2019 になる。`SYSVAD_BTH_BYPASS`/`SYSVAD_USB_SIDEBAND` は sideband 実装ファイルを vendor しないため意図的に未定義 — 呼出側は `#if defined(...)` guard で compile 対象外）。
 - `RvfVirtualAudio.rc` — `TabletAudioSample.rc` 派生の version resource。
 
@@ -75,6 +77,14 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 - `EndpointsCommon/speakertoptable.h`: `KSPIN_TOPO_LINEOUT_DEST` bridge pin の `Name` に独自 GUID `RVF_CABLE_INPUT_NAME = {131373ee-e400-4a68-ab5e-9ded0544f2b4}` を設定し、`Category` を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` に変更（2026-11-24 attempt-8 実測: KSNODETYPE_SPEAKER 系 Category の endpoint では Windows が pin-name を無視して "Speakers" をハードコードする — OSR/実測。LINE_CONNECTOR 化で `MediaCategories` 経由の "Ruviform Cable Input" が表示される）。仮想 cable の形態としても speaker より line-connector が自然。
 - `micintoptable.h`: `MICIN_CUSTOM_NAME` を独自 GUID `RVF_CABLE_OUTPUT_NAME = {46eab9d5-1e22-45f8-a744-1cf7561dc20a}` に置換し（INF `MediaCategories` で "Ruviform Cable Output" に結び付く）、capture bridge pin の `Category` を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` に変更（仮想 cable の形態として正しい — VB-CABLE 等と同型。2026-11-24 attempt-10 実測: capture `IAudioClient::Initialize` が `E_ACCESSDENIED`=`permission_denied` — mic device capability の consent gate による拒否。attempt-11 実測で LINE_CONNECTOR 化は同 gate を解除しないことが確定したため、gate 対策は workflow 側の DeviceAccess consent provisioning に分離 — driver 側の変更は semantic 正当性のみを根拠とする）。
 - `EndpointsCommon/MiniportAudioEngineNode.cpp`（2026-11-24 attempt-1 実測修正）: upstream は `EndpointsCommon` を `SYSVAD_BTH_BYPASS;SYSVAD_USB_SIDEBAND` 定義の StaticLibrary として build するため本ファイル内の sideband 呼出（`IsSidebandDevice()`/`m_pSidebandDevice`）が未ガードのまま compile する。本ツリーは macro 未定義で単一 vcxproj build するため、他 upstream ファイル（`mintopo.cpp` 等）と同じ `#if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)` guard を `if (...) {...} else` 8 箇所に適用 — sideband 無効時は else 側（非 sideband path）のみ compile される upstream 互換構造。
+
+- `common.cpp/.h`（2026-11-24 Slice B stage-2 変更）: `IAdapterCommon` に `RvfLoopbackRegisterRender`/`RvfLoopbackUnregisterRender`/`RvfLoopbackRenderRunning`/`RvfLoopbackRenderPosition`/`RvfLoopbackCaptureWrite` を追加。`CAdapterCommon` は両 wave miniport に共有される adapter 単位オブジェクトで、render stream の DMA buffer 参照・format・RUN 状態・play cursor を保持する registry（`m_LoopbackRender` + `m_LoopbackLock`）の置き場所として選定。
+- `EndpointsCommon/minwavertstream.cpp/.h`（2026-11-24 Slice B stage-2 変更）:
+  - capture の `WriteBytes` を `m_ToneGenerator.GenerateSine` から `pAdapterComm->RvfLoopbackCaptureWrite` へ置換（upstream SYSVAD は capture に合成サインを書くだけで render データを一切運ばない — attempt-13 の `observed_rms=0.3535`/440Hz share 0.000 がその実測）。render 未登録・未 RUN・format 非互換では silence（VB-CABLE 同型の cable semantics）。
+  - `AllocateAudioBuffer` で speaker system-render pin のみ `RvfLoopbackRegisterRender`（`m_bLoopbackRegistered` 追加）、`FreeAudioBuffer` 先頭（DMA unmap 前・UAF 防止）と destructor で `RvfLoopbackUnregisterRender`。
+  - `SetState` 完了時に `RvfLoopbackRenderRunning`、`UpdatePosition` 末尾で `RvfLoopbackRenderPosition`（linear byte cursor）を publish。
+  - `SetState(KSSTATE_STOP)` で `m_ullDmaTimeStamp`/`m_ullLastDPCTimeStamp`/3 種の carry-forward（`m_hnsElapsedTimeCarryForward`/`m_hnsDPCTimeCarryForward`/`m_byteDisplacementCarryForward`）をリセット — upstream はこれらを残すため restart 時に前回 run の残渣が position/notification 計算へ混入する（attempt-13 `output timestamp regressions: 2` の driver 側対応）。`SetState(KSSTATE_RUN)` の DMA time base stamp を `m_PositionSpinLock` 下へ移動し reader との atomicity を確保。
+  - `ToneGenerator.cpp/.h` は vendored 資産として保持（`Init` も既存どおり実行 — capture 経路から呼ばなくなったのみで削除はしない）。
 
 ## endpoint 名の根拠
 

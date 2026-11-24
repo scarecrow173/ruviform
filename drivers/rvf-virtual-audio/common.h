@@ -698,6 +698,52 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
         _In_ ULONG  CaptureEndpointNameLen,
         _In_ ULONG  CapturePinId
     ) PURE;
+
+    //
+    // Render-to-capture loopback ("virtual cable") registry.
+    //
+    // The render (speaker) stream registers its WaveRT DMA buffer here so
+    // capture (microphone) streams can copy rendered PCM instead of the
+    // SYSVAD synthesized tone. Owner is the registering stream instance and
+    // scopes every call so stale streams cannot touch another registration.
+    //
+    STDMETHOD_(VOID, RvfLoopbackRegisterRender)
+    (
+        THIS_
+        _In_ PVOID                Owner,
+        _In_ const WAVEFORMATEX   *Wfx,
+        _In_ BYTE                 *DmaBuffer,
+        _In_ ULONG                DmaBufferSize
+    ) PURE;
+
+    STDMETHOD_(VOID, RvfLoopbackUnregisterRender)
+    (
+        THIS_
+        _In_ PVOID                Owner
+    ) PURE;
+
+    STDMETHOD_(VOID, RvfLoopbackRenderRunning)
+    (
+        THIS_
+        _In_ PVOID                Owner,
+        _In_ BOOLEAN              Running
+    ) PURE;
+
+    STDMETHOD_(VOID, RvfLoopbackRenderPosition)
+    (
+        THIS_
+        _In_ PVOID                Owner,
+        _In_ ULONGLONG            LinearBytePos
+    ) PURE;
+
+    _IRQL_requires_max_(DISPATCH_LEVEL)
+    STDMETHOD_(VOID, RvfLoopbackCaptureWrite)
+    (
+        THIS_
+        _Out_writes_bytes_(ByteCount) BYTE *DstBuffer,
+        _In_ ULONG                    ByteCount,
+        _In_ const WAVEFORMATEX       *DstWfx
+    ) PURE;
 };
 
 typedef IAdapterCommon *PADAPTERCOMMON;

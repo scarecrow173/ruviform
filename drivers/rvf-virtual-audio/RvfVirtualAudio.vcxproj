@@ -110,6 +110,7 @@
     <ClCompile Include="hw.cpp" />
     <ClCompile Include="kshelper.cpp" />
     <ClCompile Include="savedata.cpp" />
+    <ClCompile Include="RvfLoopback.cpp" />
     <ClCompile Include="ToneGenerator.cpp" />
     <ClCompile Include="micintopo.cpp" />
     <ClCompile Include="EndpointsCommon\AudioModuleHelper.cpp" />

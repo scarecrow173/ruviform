@@ -93,6 +93,7 @@ protected:
     ULONG                       m_ulPin;
     BOOLEAN                     m_bCapture;
     BOOLEAN                     m_bUnregisterStream;
+    BOOLEAN                     m_bLoopbackRegistered;  // render stream published to the adapter loopback registry
     ULONG                       m_ulDmaBufferSize;
     BYTE*                       m_pDmaBuffer;
     ULONG                       m_ulNotificationsPerBuffer;
