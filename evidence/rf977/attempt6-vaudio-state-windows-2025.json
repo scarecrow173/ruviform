@@ -1,0 +1,9 @@
+{
+  "msbuild": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe",
+  "vs_install": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+  "km_headers": 1,
+  "km_libs": 0,
+  "cert_thumbprint": "FD13E163913C2D8D891E4D7BC76F1AE5D4601325",
+  "cert_cer_path": "D:\\a\\ruviform\\ruviform\\vaudio-cert.cer",
+  "inf_staged": false
+}

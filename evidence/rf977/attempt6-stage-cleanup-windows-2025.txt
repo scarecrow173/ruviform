@@ -1,0 +1,10 @@
+  instance_id: none — devnode 削除不要
+  inf_published: none — store からの uninstall 対象を列挙で再確認
+  store clean
+  removed Cert:\LocalMachine\Root\FD13E163913C2D8D891E4D7BC76F1AE5D4601325
+  removed Cert:\LocalMachine\TrustedPublisher\FD13E163913C2D8D891E4D7BC76F1AE5D4601325
+  removed Cert:\LocalMachine\My\FD13E163913C2D8D891E4D7BC76F1AE5D4601325
+
+  --- final state ---
+  RvfVirtualAudio.inf in store: False
+  cleanup done
