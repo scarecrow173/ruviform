@@ -876,6 +876,116 @@ jobs:
           Add-StageRecord -JsonPath $json -Stage stream-roundtrip -Status $status -Detail "test_exit=$testExit; verdict=$verdict; consent=$($consentNote -join ',')" -ExitCode $testExit
           exit 0
 
+      # midi-loopback: Issue #978 Slice C — tests/loopback.rs の実走。
+      # WinMM midiIn/midiOut で同名 "Ruviform MIDI Loopback" pair を検出し
+      # channel-voice 4 event の round-trip を検証する。port 検出は
+      # DMus filter の pin-name GUID→MediaCategories 名解決が前提 —
+      # devnode install 後にのみ成立するため、driver install の成否に
+      # 関わらず試行し verdict 行（Pass/NotRun/Fail）を detail に記録
+      # する。NotRun は未 provisioned の正直な観測値で失敗扱いしない
+      # （stream-roundtrip と同じ fail-closed contract）。verdict 行を
+      # 出せない異常終了（STATUS_ACCESS_VIOLATION 等、attempt-1 で
+      # test_exit=5 / 0xC0000005 を観測）は error として記録する —
+      # non-Fail を一律 ok 扱いした初版は crash を ok に見せていたため
+      # Pass/NotRun 以外は全て error に改めた。mic consent provisioning
+      # は MIDI port に無関係なため stream-roundtrip の consent 処理は
+      # 複写しない。
+      #
+      # diagnostics: WinMM calls は wdmaud2.drv を test process に
+      # in-process 読込するため、driver-side contract 違反は user-mode
+      # AV として出る。faulting call の bisection 用に child pwsh で
+      # midi-winmm-probe.ps1 を先走らせ（crash しても step は継続）、
+      # test 実行後は Application log の Application Error/WER 記録
+      # （faulting module + exception code）を log に採取する。
+      - name: Stage midi-loopback
+        if: always()
+        shell: pwsh
+        run: |
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $log = "stage-midi-loopback-$os.txt"
+          New-Item -ItemType File -Force $log | Out-Null
+
+          $probeStatus = Get-StageStatus $json 'endpoint-probe'
+          $devnodeStatus = Get-StageStatus $json 'devnode-create'
+          "  prerequisite endpoint-probe: $probeStatus / devnode-create: $devnodeStatus" | Out-Probe $log
+
+          # WinMM bisection probe — child process なので crash しても
+          # step は継続し、log の最後の "step:" 行が faulting call。
+          "  --- winmm-probe (child pwsh) ---" | Out-Probe $log
+          $probeOut = @(& pwsh -NoProfile -NonInteractive -File tools/testsigned-driver/midi-winmm-probe.ps1 2>&1)
+          $probeRc = $LASTEXITCODE
+          $probeOut | ForEach-Object { "  $_" | Out-Probe $log }
+          "  winmm-probe exit=$probeRc" | Out-Probe $log
+
+          # crash dump 採取設定 — attempt-2 で全 WinMM call が child pwsh
+          # probe で成功したのに test 本体のみ 0xC0000005 で落ちたため、
+          # faulting module/stack を dump 解析で確定する。LocalDumps は
+          # job agent の HKLM 書込権限で有効化。
+          $dumpDir = "$PWD\crashdumps"
+          New-Item -ItemType Directory -Force $dumpDir | Out-Null
+          $ld = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+          New-Item -Path $ld -Force | Out-Null
+          Set-ItemProperty -Path $ld -Name DumpFolder -Value $dumpDir -Type ExpandString
+          Set-ItemProperty -Path $ld -Name DumpCount -Value 5 -Type DWord
+          Set-ItemProperty -Path $ld -Name DumpType -Value 2 -Type DWord
+          "  LocalDumps enabled -> $dumpDir" | Out-Probe $log
+
+          # test 本体 — mise task は arg forward しないため同じ選択を
+          # mise exec 経由の cargo 直叩きで --nocapture を付与（crash 前の
+          # 部分出力も拾う）。toolchain env は mise task と同一。
+          "  --- loopback test ---" | Out-Probe $log
+          $out = @(& mise exec -- cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1 --nocapture 2>&1)
+          $testExit = $LASTEXITCODE
+          $out | ForEach-Object { "  $_" | Out-Probe $log }
+          $verdictLine = $out | Where-Object { $_ -match 'verdict:' } | Select-Object -Last 1
+          $verdict = if ($verdictLine) { ($verdictLine -replace '.*verdict:\s*', '').Trim() } else { 'no-verdict-line' }
+          "  test exit=$testExit verdict=$verdict" | Out-Probe $log
+
+          # crash diagnostics — 直近の Application Error / WER 記録から
+          # faulting module + exception code + offset を採取する。
+          "  --- application error / WER events (last 15 min) ---" | Out-Probe $log
+          try {
+            $evs = Get-WinEvent -FilterHashtable @{ LogName='Application'; StartTime=(Get-Date).AddMinutes(-15) } -ErrorAction Stop |
+              Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting|Application Hang' } |
+              Select-Object -First 10
+            if ($evs) {
+              foreach ($e in $evs) {
+                "  [$($e.TimeCreated.ToString('HH:mm:ss'))] $($e.ProviderName) id=$($e.Id)" | Out-Probe $log
+                ($e.Message -split "`n") | Select-Object -First 8 | ForEach-Object { "    $_" | Out-Probe $log }
+              }
+            } else {
+              "  (no error events)" | Out-Probe $log
+            }
+          } catch {
+            "  event collect failed: $($_.Exception.Message)" | Out-Probe $log
+          }
+          $dumps = @(Get-ChildItem $dumpDir -Filter '*.dmp' -ErrorAction SilentlyContinue)
+          "  crashdumps: $($dumps.Count) file(s) $(($dumps | ForEach-Object { "$($_.Name) $($_.Length)B" }) -join '; ')" | Out-Probe $log
+
+          # cdb 下で test exe を再実行 — probe で全 WinMM call が成功する
+          # のに Rust test だけが落ちるため、faulting module+stack を直接
+          # 採取する（LocalDumps は runner で async write が間に合わない
+          # ことがあるため debugger 直叩きを正本とする）。
+          $cdb = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe","$env:ProgramFiles\Windows Kits\10\Debuggers\x64\cdb.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $testExe = Get-ChildItem "target\debug\deps\loopback-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($cdb -and $testExe) {
+            "  --- cdb re-run: $($testExe.Name) ---" | Out-Probe $log
+            $cdbOut = @(& $cdb.FullName -g -G -c ".ecxr; .exr -1; kL40; lmva `${$ip}; q" $testExe.FullName --ignored --test-threads=1 2>&1)
+            $cdbOut | Select-Object -First 120 | ForEach-Object { "  $_" | Out-Probe $log }
+          } else {
+            "  cdb not found or test exe missing (cdb=$($cdb -ne $null) exe=$($testExe -ne $null))" | Out-Probe $log
+          }
+
+          # fail-closed: verdict Pass/NotRun のみ ok。Fail・crash・
+          # verdict 未到達・probe crash は error。
+          $status = 'ok'
+          if (-not ($verdict -match '^(Pass|NotRun)')) { $status = 'error' }
+          if ($probeRc -ne 0) { $status = 'error' }
+          Add-StageRecord -JsonPath $json -Stage midi-loopback -Status $status -Detail "test_exit=$testExit; verdict=$verdict; probe_exit=$probeRc" -ExitCode $testExit
+          exit 0
+
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
       # → 最終 enum 状態。ephemeral VM だが uninstall まで記録を残すため
       # 各 op を try/catch で全て試行する。
@@ -952,6 +1062,7 @@ jobs:
             vaudio-state-${{ matrix.os }}.json
             stage-*-${{ matrix.os }}.txt
             endpoint-probe-${{ matrix.os }}.txt
+            crashdumps/
             vaudio-pkg/
             vaudio-cert.cer
           if-no-files-found: warn

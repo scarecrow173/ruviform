@@ -218,6 +218,16 @@ WMS 経路の残件（client component 導入可否 — 未実測）:
 - **範囲見積もり**: driver 実装（`drivers/` 配下）+ `crates/**`（verifier 接続点の確認・必要なら調整）+ `mise.toml` lane 追加。
 - **残件**: WMS client component の job 内導入可否（Microsoft 配布物）— 成立すれば arm/WMS 経路が復活し得る別途調査項目（優先度は独自 driver 経路が既に実測成立しているため低い）。
 
+**実装記録（Issue #978）**:
+
+- **採用方式 — DMusUART vendoring + software loopback**: MIDI miniport には WDK 8.1 の "DirectMusic UART Driver Sample"（DMusUART — `uri247/wdk81` @ `5a28cfc` `DirectMusic UART Driver Sample/C++/`、MS-LPL v1.1）を vendoring して MPU-401 UART hardware 経路を software render→capture loopback に置き換えた。DMusUART は `microsoft/Windows-driver-samples`・`Windows-classic-samples` のいずれにも存在しないため、verbatim MSDN mirror からの vendoring が唯一の経路だった。ライセンスは MS-PL ではなく **MS-LPL v1.1**（§3(F) platform limitation — Windows-only は kernel driver に固有のため実質非制約、§3(D) に従い `LICENSE-MS-LPL.txt` を同梱）。出所・変更差分の正本は `drivers/rvf-virtual-audio/PROVENANCE.md`。
+- **filter 構成**: DMus filter は 5 pin（legacy render sink / DirectMusic render sink / bridge out / bridge in / capture source）を持つ単一 filter として、`CAdapterCommon::InstallSubdevice(CLSID_PortDMus, IID_IPortDMus, CreateMiniportRvfMidi)` で adapter に登録（`adapter.cpp` の `InstallMidiFilter`、`StartDevice` の `InstallAllCaptureFilters` 直後）。`g_MaxMiniports` に `g_MaxMidiFilters=1` を加算。
+- **同名 port 構成（`loopback.rs` の検出要件）**: render/capture 両 stream pin の `KSPIN_DESCRIPTOR.Name` に同一独自 GUID `RVF_MIDI_LOOPBACK_NAME = {714b96c3-8003-41c2-b673-1b086cbdb3db}` を割当て、INF の `HKR\MediaCategories\{guid}\Name = "Ruviform MIDI Loopback"` で文字列に結び付ける — audio endpoint の `RVF_CABLE_*` と同じ pin-name GUID→MediaCategories 機構。wdmaud が DMus filter を WinMM midiIn/midiOut に展開する際、pin-name がポート表示名になるため、同名の in/out pair が成立する。
+- **loopback 経路**: render stream の `ConsumeEvents` → `Write` で流れる MIDI byte を 128-byte 内部 ring FIFO へ積み、`IPortDMus::Notify(m_pServiceGroup)` で capture stream の `SourceEvtsToPort` を駆動し `DMUS_KERNEL_EVENT` として port へ返す（upstream の「UART TX → 実 HW → RX → ISR → FIFO → Notify」経路の内、TX/RX を software 置換）。FIFO は `KSPIN_LOCK` で serialize（`Write` は timer DPC 経由の DISPATCH_LEVEL 実行）。capture 未 RUN 時は cable 未接続として byte を破棄。FIFO full 時は partial write → timer retry。
+- **resource/IRQ 非依存化**: root-enumerated virtual device は IRQ・I/O port resource を持たないため、`ProcessResources`/`InitializeHardware`/`PcNewInterruptSync`/ISR を全削除し `m_fInitialized=TRUE` で `SetState(KSSTATE_RUN)` を成立させた（in-box `PcNewMiniport(CLSID_MiniportDriverDMusUART)` は実 I/O resource を要求するため使えない — vendoring+適応が必須経路）。
+- **workflow**: `virtual-audio-driver-probe.yml` に `midi-loopback` stage を追加 — install 済み devnode 上で `mise run test-midi-virtual-endpoint`（`tests/loopback.rs -- --ignored`）を実走し `verdict:` を stage record に記録（stream-roundtrip と同じ fail-closed stage 語彙）。
+- **`crates/**` 変更**: 不要 — `loopback.rs` の bidirectional name match は driver 側の port 命名だけで成立する（`crates/**` は本 worker の編集境界外）。
+
 ### Slice D — 署名 pipeline（ARM64 coverage が必要になった場合のみ）
 
 - **scope**: EV 証明書 + Partner Center + Hardware API/SDCM による attestation submission の CI 自動化、署名済み driver package の取得・install 手順・revocation/rotation 方針。**x64 のみなら本 slice は不要**（自己署名で全経路が実測成立済み）。ARM64 は test-signing 不可が実測確定（VBS CI policy）のため、attestation が唯一経路。

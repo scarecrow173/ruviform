@@ -111,6 +111,10 @@
     <ClCompile Include="kshelper.cpp" />
     <ClCompile Include="savedata.cpp" />
     <ClCompile Include="RvfLoopback.cpp" />
+    <!-- Issue #978: DMus MIDI loopback miniport — DMusUART (WDK 8.1,
+         MS-LPL) 由来の virtual device 適応版。PROVENANCE.md 参照 -->
+    <ClCompile Include="RvfMidiMiniport.cpp" />
+    <ClCompile Include="RvfMidiMpu.cpp" />
     <ClCompile Include="ToneGenerator.cpp" />
     <ClCompile Include="micintopo.cpp" />
     <ClCompile Include="EndpointsCommon\AudioModuleHelper.cpp" />

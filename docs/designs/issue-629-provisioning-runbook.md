@@ -461,6 +461,36 @@ format・loss を実 driver 層で制御できる唯一の選択肢だが、
 署名・配布・保守コストが大きい — 採用は別途 ADR/Issue で
 判断し、本 runbook の標準経路には含めない。
 
+### 3.7 MIDI: ruviform 独自 driver（RvfVirtualAudio 同梱）
+
+**Issue #978 で実装 — GitHub-hosted `windows-2025`（x64
+test-signing）での標準経路。** §3.3〜3.5 の COTS/OS-native
+候補は license（loopMIDI 私的非商用・loopBE freemium
+tier）または runner 到達不能（WMS: Server SKU 非対象・
+`windows-11-arm` でも provisioning 経路不在を rf#962 で
+実測確定）のため、Slice C で独自 driver 経路に一本化した
+（設計: `issue-952-virtual-endpoint-driver.md` Slice C 実装
+記録）。
+
+- 構成: `drivers/rvf-virtual-audio/` の Slice B package
+  に DMus MIDI miniport（WDK 8.1 DMusUART 由来・MS-LPL）を
+  同梱 — audio endpoint と同一 INF・署名・install 経路を
+  再利用する。
+- 観測: install 後、WinMM midiIn/midiOut **双方**に同名
+  `Ruviform MIDI Loopback` が列挙される（DMus filter の
+  render/capture 両 pin が同一 pin-name GUID
+  `{714b96c3-8003-41c2-b673-1b086cbdb3db}` を共有し、
+  INF `MediaCategories` が上記文字列へ結び付ける —
+  `loopback_round_trip` の bidirectional name-match
+  candidate 条件を満たす）。
+- loopback 意味論: midiOut への send byte は kernel 内
+  FIFO 経由でそのまま midiIn へ返る（実 cable 同型 —
+  capture 未 open 時は送信 byte は破棄）。
+- install/probe/lane 手順: `drivers/rvf-virtual-audio/
+  README.md` と `virtual-audio-driver-probe.yml` の
+  `midi-loopback` stage（`windows-2025`・test-signed・
+  `mise run test-midi-virtual-endpoint` 実走）に従う。
+
 ## 4. Provisioning 判定フロー（probe 主導）
 
 1. **runner 環境記録**: OS version/architecture/

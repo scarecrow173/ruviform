@@ -5,7 +5,9 @@
 ; root-enumerated software device（hardware id ROOT\RvfVirtualAudio）に
 ; KMDF port-class audio driver（RvfVirtualAudio.sys）を結合し、
 ; render "Ruviform Cable Input" / capture "Ruviform Cable Output" の
-; 仮想 audio endpoint 1 対を登録する。endpoint 名は topology bridge pin の
+; 仮想 audio endpoint 1 対と、Issue #978 の DMus MIDI loopback filter
+; （WinMM midiIn/midiOut で同名 "Ruviform MIDI Loopback" として列挙される
+; software MIDI loopback pair）を登録する。endpoint 名は pin の
 ; custom pin-name GUID を MediaCategories で文字列に結び付けて固定する。
 
 [Version]
@@ -68,8 +70,12 @@ HKR,PowerSettings,IdlePowerState,3,3,0,0,0
 ; bridge pin の custom pin-name GUID → endpoint 表示名の結び付け。
 ; {131373ee-e400-4a68-ab5e-9ded0544f2b4} → "Ruviform Cable Input"  (render)
 ; {46eab9d5-1e22-45f8-a744-1cf7561dc20a} → "Ruviform Cable Output" (capture)
+; MIDI loopback filter は render/capture 両 pin が同一 pin-name GUID を
+; 共有するため 1 登録で in/out 両方向の表示名が揃う。
+; {714b96c3-8003-41c2-b673-1b086cbdb3db} → "Ruviform MIDI Loopback"
 HKR,%MEDIA_CATEGORIES%\%RvfCableInputNameGuid%,Name,,%RvfVirtualAudio.RvfCableInputName%
 HKR,%MEDIA_CATEGORIES%\%RvfCableOutputNameGuid%,Name,,%RvfVirtualAudio.RvfCableOutputName%
+HKR,%MEDIA_CATEGORIES%\%RvfMidiLoopbackNameGuid%,Name,,%RvfVirtualAudio.RvfMidiLoopbackName%
 
 ;==========================================================================
 ; Interfaces — miniport pair (topology + wave) ごとに KSNAME を登録する。
@@ -86,6 +92,7 @@ AddInterface = %KSCATEGORY_TOPOLOGY%, %KSNAME_TopologyMicIn%,   RvfVirtualAudio.
 AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_WaveMicIn%,       RvfVirtualAudio.I.WaveMicIn
 AddInterface = %KSCATEGORY_CAPTURE%,  %KSNAME_WaveMicIn%,       RvfVirtualAudio.I.WaveMicIn
 AddInterface = %KSCATEGORY_REALTIME%, %KSNAME_WaveMicIn%,       RvfVirtualAudio.I.WaveMicIn
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_MidiLoopback%,    RvfVirtualAudio.I.MidiLoopback
 
 ; render topology filter
 [RvfVirtualAudio.I.TopologySpeaker]
@@ -119,6 +126,17 @@ AddReg = RvfVirtualAudio.I.WaveMicIn.AddReg
 
 [RvfVirtualAudio.I.WaveMicIn.AddReg]
 HKR,,FriendlyName,,%RvfVirtualAudio.WaveMicIn.szPname%
+HKR,,CLSID,,%Proxy.CLSID%
+
+; MIDI loopback filter（DMus — render+capture 両 pin を持つ単一 filter で
+; WinMM midiIn/midiOut の同名 pair を構成。FriendlyName は endpoint 名では
+; なく interface 参照名 — WinMM 表示名は MediaCategories の pin-name
+; GUID→文字列結び付けが決める）
+[RvfVirtualAudio.I.MidiLoopback]
+AddReg = RvfVirtualAudio.I.MidiLoopback.AddReg
+
+[RvfVirtualAudio.I.MidiLoopback.AddReg]
+HKR,,FriendlyName,,%RvfVirtualAudio.MidiLoopback.szPname%
 HKR,,CLSID,,%Proxy.CLSID%
 
 ;==========================================================================
@@ -157,11 +175,13 @@ HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGWGX;;;RC)"
 ProviderName              = "Ruviform"
 MfgName                   = "Ruviform"
 DiskName                  = "RvfVirtualAudio Installation Disk"
-; KSNAME — minipairs.h の L"..." endpoint 名と一致必須
+; KSNAME — minipairs.h の L"..." endpoint 名、および adapter.cpp の
+; InstallMidiFilter の L"MidiLoopback" と一致必須
 KSNAME_TopologySpeaker    = "TopologySpeaker"
 KSNAME_WaveSpeaker        = "WaveSpeaker"
 KSNAME_TopologyMicIn      = "TopologyMicIn"
 KSNAME_WaveMicIn          = "WaveMicIn"
+KSNAME_MidiLoopback       = "MidiLoopback"
 KSCATEGORY_AUDIO          = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
 KSCATEGORY_RENDER         = "{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
 KSCATEGORY_CAPTURE        = "{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
@@ -173,13 +193,16 @@ Proxy.CLSID               = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
 MEDIA_CATEGORIES          = "MediaCategories"
 RvfCableInputNameGuid     = "{131373EE-E400-4A68-AB5E-9DED0544F2B4}"
 RvfCableOutputNameGuid    = "{46EAB9D5-1E22-45F8-A744-1CF7561DC20A}"
+RvfMidiLoopbackNameGuid   = "{714B96C3-8003-41C2-B673-1B086CBDB3DB}"
 RvfVirtualAudio.DeviceDesc            = "Ruviform Virtual Audio Device"
 RvfVirtualAudio.MediaDesc             = "Ruviform Virtual Audio Device"
 RvfVirtualAudio.MidiDesc              = "Ruviform Virtual Audio Device (MIDI)"
 RvfVirtualAudio.SvcDesc               = "Ruviform Virtual Audio Driver"
 RvfVirtualAudio.RvfCableInputName     = "Ruviform Cable Input"
 RvfVirtualAudio.RvfCableOutputName    = "Ruviform Cable Output"
+RvfVirtualAudio.RvfMidiLoopbackName   = "Ruviform MIDI Loopback"
 RvfVirtualAudio.TopologySpeaker.szPname = "RvfVirtualAudio Topology Speaker"
 RvfVirtualAudio.WaveSpeaker.szPname     = "RvfVirtualAudio Wave Speaker"
 RvfVirtualAudio.TopologyMicIn.szPname   = "RvfVirtualAudio Topology Mic In"
 RvfVirtualAudio.WaveMicIn.szPname       = "RvfVirtualAudio Wave Mic In"
+RvfVirtualAudio.MidiLoopback.szPname    = "Ruviform MIDI Loopback"

@@ -1,0 +1,8 @@
+=== vcxproj XML well-formed check ===
+XML OK — ClCompile=19 (RvfMidiMiniport.cpp + RvfMidiMpu.cpp 含む)
+
+=== workflow run-block PowerShell parse ===
+16 blocks 中 15 parse OK。唯一の fail は pre-existing の env-build-surface block —
+ダブルクォート内の GitHub expression `${{ runner.name }}` が PS の `${var}` 構文と衝突する。
+GitHub は pwsh 実行前に式を置換するため実害なし（rf977 時点からの既存パターン。
+本変更の midi-loopback stage は parse OK）。
