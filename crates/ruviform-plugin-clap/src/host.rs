@@ -1209,21 +1209,21 @@ impl ClapPlugin {
     /// or a declined notification.
     #[cfg(target_os = "windows")]
     #[expect(unsafe_code)]
-    fn focus_host_window(&mut self) -> Result<(), HostError> {
+    fn focus_host_window(this: &mut Self) -> Result<(), HostError> {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetFocus;
         use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
         // The GUI-open gate and the container read must precede
         // `editor_ops` — its handle borrow lasts the whole call.
-        if self.gui.is_none() {
+        if this.gui.is_none() {
             return Err(HostError::Unsupported);
         }
-        let Some(parent) = self.gui_parent else {
+        let Some(parent) = this.gui_parent else {
             // An open GUI always records its container — a missing
             // lease here is a broken invariant, not a capability
             // answer.
             return Err(HostError::PluginFailed);
         };
-        let (handle, ops) = self.editor_ops()?;
+        let (handle, ops) = this.editor_ops()?;
         let hwnd = parent.payload() as *mut c_void;
         // SAFETY: `IsWindow` is a pure handle-validity query, safe on
         // any value.
@@ -1257,7 +1257,7 @@ impl ClapPlugin {
     ///
     /// Always [`HostError::Unsupported`].
     #[cfg(not(target_os = "windows"))]
-    fn focus_host_window(&mut self) -> Result<(), HostError> {
+    fn focus_host_window(_this: &mut Self) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
 
@@ -2321,7 +2321,7 @@ impl Plugin for ClapPlugin {
             GuiFocusTarget::EditorElement { element } => {
                 self.apply_editor_focus(1, EDITOR_OPS_TARGET_ELEMENT, element)
             }
-            GuiFocusTarget::HostWindow => self.focus_host_window(),
+            GuiFocusTarget::HostWindow => Self::focus_host_window(self),
             _ => Err(HostError::InvalidValue),
         }
     }

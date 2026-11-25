@@ -2267,8 +2267,11 @@ impl Vst3Plugin {
     /// container or the `onFocus` notification declined.
     #[cfg(target_os = "windows")]
     #[expect(unsafe_code)]
-    fn focus_host_window(&self, view: &ComPtr<IPlugView>) -> Result<(), HostError> {
-        let Some((parent, _platform)) = self.gui_parent else {
+    fn focus_host_window(
+        gui_parent: Option<(ParentLease, vst3::Steinberg::FIDString)>,
+        view: &ComPtr<IPlugView>,
+    ) -> Result<(), HostError> {
+        let Some((parent, _platform)) = gui_parent else {
             return Err(HostError::Unsupported);
         };
         let hwnd = parent.payload() as *mut c_void;
@@ -2286,7 +2289,10 @@ impl Vst3Plugin {
     /// Off-Windows the host-window focus handoff has no implemented
     /// OS surface — the defined refusal.
     #[cfg(not(target_os = "windows"))]
-    fn focus_host_window(&self, _view: &ComPtr<IPlugView>) -> Result<(), HostError> {
+    fn focus_host_window(
+        _gui_parent: Option<(ParentLease, vst3::Steinberg::FIDString)>,
+        _view: &ComPtr<IPlugView>,
+    ) -> Result<(), HostError> {
         Err(HostError::Unsupported)
     }
 
@@ -3686,7 +3692,7 @@ impl Plugin for Vst3Plugin {
                 }
                 Ok(())
             }
-            GuiFocusTarget::HostWindow => self.focus_host_window(view),
+            GuiFocusTarget::HostWindow => Self::focus_host_window(self.gui_parent, view),
             // `GuiFocusTarget` is `#[non_exhaustive]` — an unknown
             // target has no defined VST3 destination.
             _ => Err(HostError::InvalidValue),
