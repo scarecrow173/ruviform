@@ -41,6 +41,7 @@
 | `actions.jsonl` schema/JSONL validation | 0 | `validation-2026-11-25/actions-jsonl-validate.txt` | Pass — machine-readable action ledger parses |
 | provenance env override auxiliary run | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-provenance-override.txt` | Pass — override reaches RunMetadata evidence; verdict remains local honest NotRun |
 | provenance regex fixture validation | 0 | `validation-2026-11-25/provenance-regex-fixture.txt` | Pass — positive fixture maps to `endpoint_provenance=rvfmidi-testsigned-driver-probe` and `pass_without_provenance=False` |
+| pwsh original/hardened regex comparison | 0 | `validation-2026-11-25/provenance-regex-pwsh-check.txt` | Pass — pwsh reads the fixture as UTF-8 and both regexes match; hardening removes host-encoding sensitivity |
 
 The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). The machine-readable action ledger is `evidence/rf253/actions.jsonl` (`rf-actions-v1`): it records the command chronology, exit codes, evidence paths, and workflow dispatches. Entries reconstructed after the coordinator review carry `"reconstructed":true`; the final dispatch/watch entries are contemporaneous. After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; the final evidence/docs tree additionally re-ran `prek` successfully (`prek-all-files-final.txt`); other final-tree logs use the `*-rerun.txt` names in the table.
 
@@ -75,19 +76,22 @@ The normative mapping is in `docs/specs/issue-253-virtual-midi-e2e.md` (2026-11-
 
 ### Final branch-ref run
 
-- run: `45599137022` — https://github.com/scarecrow173/ruviform/actions/runs/45599137022
-- artifact/evidence directory: `workflow-run-45599137022-attempt1/`
-- workflow head SHA: `b54b8d588f699deb4235cb0018b188cfb1ffa191`
+- run: `45609378500` — https://github.com/scarecrow173/ruviform/actions/runs/45609378500
+- artifact/evidence directory: `workflow-run-45609378500-attempt1/`
+- workflow head SHA: `a1b6954f785c94f584b5706d1cb0552635f75a56`
 - run conclusion: `success` (GitHub-hosted `windows-2025`)
-- `midi-endpoint-probe`: `ok`; `midi_in_ports=1`, `midi_out_ports=2`, `loopback_candidates=2`, `provisioning=CANDIDATES_OBSERVED`, `candidate_ports=Ruviform MIDI Loopback`
-- `midi-loopback`: `ok`; `test_exit=0`, verdict `Pass — silent messages accepted by real WinMM output port`
-- `os-endpoint-midi-e2e`: `ok`; `build_exit=0`, `test_exit=0`, verdict `Pass — OS endpoint → attach → L1 test_instrument`, `case=pass`, `metadata=1`, `copied=1`, `provisioning_observed=True`, `midi_loopback_pass=True`
-- RunMetadata identity: `case_id=rf253.midi.virtual-endpoint.host-plugin-e2e`, `repo=scarecrow173/ruviform`, `sha=b54b8d588f699deb4235cb0018b188cfb1ffa191`, `level=ext-l3`, `environment_kind=virtual-os-endpoint`, `result=pass`
-- case observed counters: `sent=4 observed=4 matched=4 mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0 backend_dropped=0 backend_unsupported=0`; stamp/oracle evidence includes `provides_timestamps=true`, `clock_domain=Some(ClockDomainId(5932742974072178993))`, `stamp_base=1/1000`, `provenance=Carried`, `monotonic=true`, `trace_entries=4`, close invalidation true for input/output
-- provenance evidence in the same metadata: `virtual endpoint provenance: rvfmidi-testsigned-driver-probe`; pair `in="Ruviform MIDI Loopback" out="Ruviform MIDI Loopback"`
+- `midi-endpoint-probe`: `ok`; `devnode=ok; probe_exit=0; probe_exit=0; midi_in_ports=1; midi_out_ports=2; loopback_candidates=2; provisioning=CANDIDATES_OBSERVED; candidate_ports=Ruviform MIDI Loopback`
+- `midi-loopback`: `ok`; `test_exit=0; verdict=Pass — silent messages accepted by real WinMM output port; probe_exit=0`
+- `os-endpoint-midi-e2e`: `ok`; `build_exit=0; test_exit=0; verdict=Pass — OS endpoint → attach → L1 test_instrument; case=pass; metadata=1; copied=1; provisioning_observed=True; midi_loopback_pass=True; endpoint_provenance=rvfmidi-testsigned-driver-probe; pass_without_provenance=False`
+- RunMetadata identity: `case_id=rf253.midi.virtual-endpoint.host-plugin-e2e`, `repo=scarecrow173/ruviform`, `sha=a1b6954f785c94f584b5706d1cb0552635f75a56`, `level=ext-l3`, `environment_kind=virtual-os-endpoint`, `result=pass`
+- case observed counters: `sent=4 observed=4 matched=4 mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0 backend_dropped=0 backend_unsupported=0 tick_span=Some(25) note_tick_span=25 blocks_needed=18 invalidated_in=true invalidated_out=true provides_timestamps=true clock_domain=Some(ClockDomainId(5932742974072178993)) stamp_base=1/1000 provenance=Carried monotonic=true trace_entries=4 blocks_run=5 spacing_frames=384 total_frames=2400 block_frames=480`
+- provenance evidence in the same metadata: `virtual endpoint provenance: rvfmidi-testsigned-driver-probe`; stage detail includes `endpoint_provenance=rvfmidi-testsigned-driver-probe` and `pass_without_provenance=False`
 
-Interpretation: this is genuine provisioned branch-ref evidence for the vertical slice because the same attempt observed the RvfMidi loopback candidate and the MIDI loopback round-trip Pass before the e2e stage. It is still not post-merge integration acceptance; Coordinator must verify the merged main SHA through the required integration path.
+Interpretation: this is genuine provisioned branch-ref evidence for the corrected vertical slice because the same attempt observed the RvfMidi loopback candidate and the MIDI loopback round-trip Pass before the e2e stage, and the e2e stage evaluated the fail-closed provenance path without triggering `pass_without_provenance`. It is still not post-merge integration acceptance; Coordinator must verify the merged main SHA through the required integration path.
 
-### Superseded implementation-time run
+### Superseded or non-evidence runs
 
-- run `45597817992` / SHA `8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6` also completed `success` with the same case-level Pass shape; harvested under `workflow-run-45597817992-attempt1/`. It is superseded as final evidence because the later provenance-detection fix changed the workflow before run `45599137022`.
+- run `45599137022` / SHA `b54b8d588f699deb4235cb0018b188cfb1ffa191` completed `success` with case-level Pass, but predates the coordinator-requested fail-closed correction; harvested under `workflow-run-45599137022-attempt1/` and retained only as implementation-time evidence.
+- run `45597817992` / SHA `8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6` predates the first provenance-detection fix and is likewise superseded implementation-time evidence.
+- run `45606042015` was cancelled before the rf253 stages after `driver-build` remained in progress for more than 10 minutes versus roughly 3.5 minutes in prior successful runs. It has no rf253 evidence value.
+- run `45607932634` was cancelled before the rf253 stages so the encoding/regex hardening commit `a1b6954f` could be tested instead of the superseded `a7993436` workflow. It has no rf253 evidence value.
