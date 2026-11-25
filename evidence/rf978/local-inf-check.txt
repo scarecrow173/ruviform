@@ -1,0 +1,31 @@
+=== INF/adapter/header cross-check (check-wf-rf978.ps1) ===
+BLOCK FAIL: 変数名には { ではなく `{ を使用してください。
+workflow run blocks: ok=15 fail=1 total=16
+OK: Version section
+OK: MidiLoopback interface entry
+OK: MidiLoopback AddReg section
+OK: MidiLoopback FriendlyName
+OK: MediaCategories midi GUID
+OK: KSNAME_MidiLoopback string
+OK: RvfMidiLoopbackNameGuid value
+OK: MidiLoopback szPname
+OK: Loopback name string
+unresolved %Strings% refs: 13
+adapter InstallMidiFilter name: OK
+pin-name GUID in RvfMidi.h: OK
+pin-name GUID def in RvfMidiMiniport.cpp: OK
+pins using RVF_MIDI_LOOPBACK_NAME: 5 refs
+
+=== strings-ref + failing-block detail (check-wf-rf978b.ps1) ===
+missing tokens: 13
+non-DIRID missing: 0
+BLOCK 3 FAIL: 変数名には { ではなく `{ を使用してください。
+--- block start ---
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $state = "vaudio-state-$os.json"
+          $log = "stage-env-build-surface-$os.txt"
+          New-Item -ItemType File -Force $log | Out-Null
+
+          "runner: ${{ runner.name }} os=${{ runner.os }} arch=${{ runner.arch }}" | Out-Probe $log
