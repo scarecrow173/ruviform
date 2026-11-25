@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #629 provisioning runbook and MIDI virtual lane separation (closeout-prep slice)"
 created: "2026-11-17"
-updated: "2026-11-17"
+updated: "2026-11-25"
 owners:
   - "scarecrow173"
 relations:
@@ -444,17 +444,23 @@ stage 分解で実施する:
     repo/SHA を示すことで行う。
 14. `fault-cases` — Issue #1002 Slice G。`os-endpoint-wiring` 後・`cleanup`
     前に置き、OS 状態制御を workflow/PowerShell 側へ閉じ込めた fault harness
-    を実行する。case key は `device_loss_audio`（devnode disable → stream
-    invalidation 観測 → enable → reopen recovery）、
+    を実行する。controller 本体は `tools/virtual-audio-driver/Invoke-FaultCases.ps1`
+    に置き、workflow step は呼び出しと fail-closed stage record だけを担う。
+    case key は `device_loss_audio`（devnode disable を第一選択とし、
+    open stream により拒否された場合は remove/recreate fallback で stream
+    invalidation 観測 → enable/recreate → reopen recovery）、
     `permission_denial_audio`（microphone consent Deny + service restart →
     capture open oracle → Allow restore）、`midi_device_loss_observation`
-    （devnode disable 前/中/後の WinMM 列挙で `Ruviform MIDI Loopback` の
-    消失・再出現を観測）、`xrun_probe`（bounded user-mode starvation が現行
+    （devnode loss 前/消失中/復帰後の WinMM 列挙で `Ruviform MIDI Loopback`
+    の消失を正規 oracle として観測し、復帰後の再出現は限界 evidence として
+    記録）、`xrun_probe`（bounded user-mode starvation が現行
     adapter で `DeviceError::Xrun` として観測できるかの判断材料）とする。
     Rust test は `RUVIFORM_FAULT_*` で武装された場合だけ active になり、
     ready/observed/restore phase file で controller と同期する。canonical
     lane で未武装実行された場合は inactive 記録に留まり、既存の generic
-    `verdict:` 契約へ混入しない。case ごとの正規判定は
+    `verdict:` 契約へ混入しない。OS 側 stimulus は成立したが現行 driver/
+    adapter 契約が typed invalidation を surface しない場合は、測定 harness
+    の Fail と区別して case-level `Unsupported` として記録する。case ごとの正規判定は
     `fault-cases-results-<os>.json`（`rf1002-fault-case/v1`・repo/SHA/run id/
     attempt を含む）と生ログの `fault_case_result:` 行で行い、語彙は
     Pass/Fail/NotRun/Unsupported。stage `ok` は測定 harness が完走し

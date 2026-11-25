@@ -1,0 +1,1 @@
+== actionlint-virtual-audio :: mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml

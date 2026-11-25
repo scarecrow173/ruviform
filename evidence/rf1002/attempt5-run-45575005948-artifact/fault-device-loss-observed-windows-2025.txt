@@ -1,0 +1,1 @@
+case=device_loss_audio invalidated=0 control_error_kind=0 discontinuities=0 in_errors=0 out_errors=0

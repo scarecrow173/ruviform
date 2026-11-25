@@ -1,0 +1,13 @@
+== aux-midi-virtual-endpoint-nocapture :: mise exec -- cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1 --nocapture
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests\loopback.rs (target\debug\deps\loopback-ee97738cb252be08.exe)
+
+running 2 tests
+test loopback_round_trip ... enumerated: 0 input ports, 1 output ports
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match; provision a loopMIDI/Windows MIDI Services loopback pair first)
+ok
+test real_device_silent_output_smoke ... port: id=winmm-out:0:Microsoft GS Wavetable Synth name="Microsoft GS Wavetable Synth" origin=Unknown
+verdict: Pass — silent messages accepted by real WinMM output port
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s

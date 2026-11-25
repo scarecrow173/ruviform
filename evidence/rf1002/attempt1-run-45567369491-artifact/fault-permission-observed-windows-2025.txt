@@ -1,0 +1,1 @@
+case=permission_denial_audio capture-open-error=permission_denied exact_permission_denied=true

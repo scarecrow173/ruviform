@@ -1,0 +1,10 @@
+== test-midi-virtual-endpoint :: mise run test-midi-virtual-endpoint
+[test-midi-virtual-endpoint] $ cargo test -p ruviform-midi-device --test loopback -- --ignored --test-threads=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running tests\loopback.rs (target\debug\deps\loopback-ee97738cb252be08.exe)
+
+running 2 tests
+test loopback_round_trip ... ok
+test real_device_silent_output_smoke ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s

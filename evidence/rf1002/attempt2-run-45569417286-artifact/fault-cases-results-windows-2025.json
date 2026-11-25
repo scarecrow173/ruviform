@@ -1,0 +1,62 @@
+[
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "8718160524c96ac492b1e7f20cd3fb5e8d99f492",
+    "run_id": "45569417286",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "device_loss_audio",
+    "result": "Fail",
+    "expected": "streaminvalidated-or-control-device-not-found+reopen",
+    "observed": "invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed",
+    "detail": "stimulus=remove-recreate; no-input-devices-on-this-host;-invalidation_seen_false",
+    "raw_line": "fault_case_result: case=device_loss_audio result=fail expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=no-input-devices-on-this-host;-invalidation_seen_false",
+    "recorded_utc": "2026-11-25T07:43:12Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "8718160524c96ac492b1e7f20cd3fb5e8d99f492",
+    "run_id": "45569417286",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "midi_device_loss_observation",
+    "result": "Fail",
+    "expected": "present-before+absent-during+present-after",
+    "observed": "before=True/0; during=False/0; after=False/0",
+    "detail": "port-disappearance-or-reappearance-oracle-not-met",
+    "raw_line": null,
+    "recorded_utc": "2026-11-25T07:43:12Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "8718160524c96ac492b1e7f20cd3fb5e8d99f492",
+    "run_id": "45569417286",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "permission_denial_audio",
+    "result": "Fail",
+    "expected": "device-enumeration",
+    "observed": "enumeration-failed",
+    "detail": "permission-controller-failure; original=no-output-devices-on-this-host",
+    "raw_line": "fault_case_result: case=permission_denial_audio result=notrun expected=device-enumeration observed=enumeration-failed detail=no-output-devices-on-this-host",
+    "recorded_utc": "2026-11-25T07:43:12Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "8718160524c96ac492b1e7f20cd3fb5e8d99f492",
+    "run_id": "45569417286",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "xrun_probe",
+    "result": "NotRun",
+    "expected": "device-enumeration",
+    "observed": "enumeration-failed",
+    "detail": "no-output-devices-on-this-host",
+    "raw_line": "fault_case_result: case=xrun_probe result=notrun expected=device-enumeration observed=enumeration-failed detail=no-output-devices-on-this-host",
+    "recorded_utc": "2026-11-25T07:43:12Z"
+  }
+]

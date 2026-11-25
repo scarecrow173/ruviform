@@ -1,0 +1,2 @@
+== fmt-check ==
+[fmt-check] $ cargo fmt --all -- --check

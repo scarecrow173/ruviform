@@ -268,7 +268,7 @@ WMS 経路の残件（client component 導入可否 — 未実測）:
 - **独自 driver の置き場所**: `drivers/` に実績あり（`drivers/testsigned-null/`）。製品 driver の配置は同じ形で十分。
 - **verifier の LOOP A/B 意味論**: 独自 driver 経路では A/B pair 自体が存在しないため不発 — BLOOP/独自 port で `loopback.rs` 要件を満たす構成にすればよい。WMS 復活時のみ再燃。
 - **BLOOP transport の in-box 状態**: 実測で確定 — transport DLL は in-box だが client provisioning 経路が不在（rf#962）。
-- **capability matrix の ❌/⚠️ 項目**: 自前 driver で device-loss/xrun/permission-denial の故障注入が理論上回収可能 — 実装フェーズで対象 Case を選ぶ（runbook の実測待ち項目と合流）。
+- **capability matrix の ❌/⚠️ 項目**: 自前 driver で device-loss/xrun/permission-denial の故障注入が理論上回収可能 — Issue #1002 Slice G で対象 Case を選定し、driver 本体の制御面を追加せず OS 側制御で再現できる範囲を実走した。permission denial は OS privacy consent 制御で再現可能、device-loss は MIDI port disappearance を OS 制御で再現できる一方、typed audio invalidation は現行 driver/adapter 経路で観測できず recovery も不安定という実測結果を runbook §8/§12 に記録する。一方、bounded user-mode starvation では現行 adapter 経路で typed `DeviceError::Xrun` を観測できず、driver 注入面だけでなく adapter の Xrun 観測契約も必要と確定したため、実装は `scarecrow173/ruviform#1009` へ分離した。format switch・制御された loopback latency・driver 内データ drop/corruption は本 slice の範囲外であり、matrix では実測済み ✅ にしない。
 
 ## Verification Notes
 

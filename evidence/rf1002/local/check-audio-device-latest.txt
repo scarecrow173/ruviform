@@ -1,0 +1,5 @@
+[check] $ cargo check --locked --all-targets -p ruviform-audio-device
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.55s
+mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: escorted 8.5 TiB logical of ownerless outputs off the premises.

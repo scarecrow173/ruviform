@@ -1,0 +1,6 @@
+== check-ruviform-audio-device ==
+[check] $ cargo check --locked --all-targets -p ruviform-audio-device
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
+mbx[cache]: 8 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 518.8 GiB of outputs, one copy, several very confident checkouts.

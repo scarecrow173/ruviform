@@ -1,0 +1,62 @@
+[
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "c3978ebeabc68558cfa79f9517528621815aeefe",
+    "run_id": "45571459944",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "permission_denial_audio",
+    "result": "Pass",
+    "expected": "backend-permission-denied+post-restore-reopen",
+    "observed": "capture-open-error_permission_denied;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_39",
+    "detail": "os-consent-deny-mapped-exactly-and-allow-restored",
+    "raw_line": "fault_case_result: case=permission_denial_audio result=pass expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_39 detail=os-consent-deny-mapped-exactly-and-allow-restored",
+    "recorded_utc": "2026-11-25T08:00:33Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "c3978ebeabc68558cfa79f9517528621815aeefe",
+    "run_id": "45571459944",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "xrun_probe",
+    "result": "Unsupported",
+    "expected": "deviceerror-xrun-under-bounded-user-mode-starvation",
+    "observed": "xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_422",
+    "detail": "bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation",
+    "raw_line": "fault_case_result: case=xrun_probe result=unsupported expected=deviceerror-xrun-under-bounded-user-mode-starvation observed=xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_422 detail=bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation",
+    "recorded_utc": "2026-11-25T08:00:33Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "c3978ebeabc68558cfa79f9517528621815aeefe",
+    "run_id": "45571459944",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "device_loss_audio",
+    "result": "Fail",
+    "expected": "streaminvalidated-or-control-device-not-found+reopen",
+    "observed": "invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed",
+    "detail": "stimulus=remove-recreate; no-input-devices-on-this-host;-invalidation_seen_false",
+    "raw_line": "fault_case_result: case=device_loss_audio result=fail expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=no-input-devices-on-this-host;-invalidation_seen_false",
+    "recorded_utc": "2026-11-25T08:00:33Z"
+  },
+  {
+    "schema_version": "rf1002-fault-case/v1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "c3978ebeabc68558cfa79f9517528621815aeefe",
+    "run_id": "45571459944",
+    "run_attempt": "1",
+    "os": "windows-2025",
+    "case": "midi_device_loss_observation",
+    "result": "Fail",
+    "expected": "present-before+absent-during+present-after",
+    "observed": "before=True/0; during=False/0; after=False/0",
+    "detail": "port-disappearance-or-reappearance-oracle-not-met",
+    "raw_line": null,
+    "recorded_utc": "2026-11-25T08:00:33Z"
+  }
+]

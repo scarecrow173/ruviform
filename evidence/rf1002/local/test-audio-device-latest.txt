@@ -1,0 +1,139 @@
+[test] $ cargo test --locked -p ruviform-audio-device
+   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.94s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_device-f8465320a3fda709.exe)
+
+running 75 tests
+test convert::tests::boundary_drops_malformed_reports_instead_of_folding_to_unknown ... ok
+test convert::tests::chunk_input_timestamp_info_shifts_both_instants ... ok
+test convert::tests::layout_for_channels_rejects_unknown_counts ... ok
+test convert::tests::map_supported_buffer_size_drops_only_contradictory_bounds ... ok
+test convert::tests::negotiate_fixed_accepts_via_unknown_bound_among_ranges ... ok
+test convert::tests::negotiate_fixed_must_fit_reported_range ... ok
+test convert::tests::chunk_input_timestamp_info_overflow_keeps_original ... ok
+test convert::tests::map_sample_format_rejects_integers_and_dsd ... ok
+test convert::tests::negotiate_default_falls_back_when_no_bound_reported ... ok
+test convert::tests::layout_for_channels_maps_known_counts ... ok
+test convert::tests::chain_genuine_unknown_admits_fixed_but_malformed_cannot ... ok
+test convert::tests::negotiate_default_sizes_scratch_from_the_loosest_match ... ok
+test convert::tests::negotiate_fixed_considers_every_matching_range ... ok
+test convert::tests::map_supported_range_maps_valid_reports_verbatim ... ok
+test convert::tests::negotiate_input_rejects_unsupported_requests ... ok
+test convert::tests::map_sample_format_maps_floats_only ... ok
+test convert::tests::negotiate_input_matches_rate_channels_and_default_buffer ... ok
+test convert::tests::negotiate_matches_rate_channels_and_default_buffer ... ok
+test convert::tests::negotiate_rejects_unsupported_requests ... ok
+test convert::tests::negotiate_skips_malformed_ranges ... ok
+test convert::tests::read_interleaved_chunks_when_frames_exceed_capacity ... ok
+test convert::tests::pack_chunk_failure_zero_fills_dst ... ok
+test convert::tests::read_interleaved_never_fires_callback_on_degenerate_input ... ok
+test convert::tests::read_interleaved_unpacks_interleaved_into_planar ... ok
+test convert::tests::synthesize_default_prefers_same_channels_and_48k ... ok
+test convert::tests::synthesize_default_returns_none_without_mappable_channels ... ok
+test convert::tests::synthesize_default_skips_malformed_rate_bounds ... ok
+test convert::tests::write_interleaved_bounds_chunks_by_actual_scratch ... ok
+test convert::tests::write_interleaved_chunk_timestamp_add_overflow_keeps_original ... ok
+test convert::tests::write_interleaved_chunk_timestamp_none_playback_stays_none ... ok
+test convert::tests::write_interleaved_chunks_when_frames_exceed_capacity ... ok
+test convert::tests::write_interleaved_packs_planar_into_frame_major ... ok
+test convert::tests::write_interleaved_single_chunk_keeps_info_unchanged ... ok
+test convert::tests::write_interleaved_synthesizes_per_chunk_timestamps ... ok
+test convert::tests::write_interleaved_zero_fills_unwritten_and_tail ... ok
+test device::tests::clock_profile_capture_provenance_matches_backend_semantics ... ok
+test device::tests::clock_profile_input_and_output_share_the_domain ... ok
+test device::tests::clock_profile_shared_monotonic_hosts_claim_monotonic ... ok
+test device::tests::clock_profile_unverifiable_hosts_stay_unknown ... ok
+test error::tests::device_changed_is_a_non_fatal_advisory ... ok
+test error::tests::device_not_available_maps_per_context ... ok
+test error::tests::direct_variants_map_identically_on_both_paths ... ok
+test error::tests::mapped_errors_never_allocate_and_stay_displayable ... ok
+test error::tests::unclassifiable_variants_map_to_backend_classifications ... ok
+test error::tests::xrun_is_xrun_only_on_the_error_callback_path ... ok
+test host_impl::tests::default_host_reports_a_consistent_id ... ok
+test host_impl::tests::default_host_selects_the_first_available_id ... ok
+test host_impl::tests::host_id_exposes_a_static_name ... ok
+test host_impl::tests::host_is_a_device_enumerator ... ok
+test stream::tests::input_callback_state_delivers_planar_view_and_info ... ok
+test stream::tests::instant_to_media_time_falls_back_to_epoch_delta ... ok
+test stream::tests::instant_to_media_time_none_when_both_overflow ... ok
+test stream::tests::instant_to_media_time_primary_path ... ok
+test stream::tests::map_input_timestamp_capture_overflow_is_none ... ok
+test stream::tests::map_input_timestamp_carries_callback_and_capture ... ok
+test stream::tests::map_input_timestamp_zero_capture_is_unreported ... ok
+test stream::tests::map_output_timestamp_carries_callback_and_playback ... ok
+test stream::tests::rt_input_callback_path_allocates_nothing ... ok
+test stream::tests::rt_output_callback_path_allocates_nothing ... ok
+test wasapi_input::tests::buffer_duration_100ns_matches_cpal_formula ... ok
+test wasapi_input::tests::handle_packet_chunked_delivery_advances_frame_position ... ok
+test wasapi_input::tests::handle_packet_reports_discontinuity_and_still_delivers ... ok
+test wasapi_input::tests::handle_packet_zero_qpc_is_unreported_capture ... ok
+test wasapi_input::tests::latency_frames_converts_hns ... ok
+test wasapi_input::tests::handle_packet_supplies_frame_position_and_carried_capture ... ok
+test wasapi_input::tests::position_tracker_detects_jump_and_resyncs ... ok
+test wasapi_input::tests::map_win_error_maps_audclnt_codes_per_context ... ok
+test wasapi_input::tests::position_tracker_contiguous_packets_do_not_flag ... ok
+test wasapi_input::tests::position_tracker_first_packet_anchors_unconditionally ... ok
+test wasapi_input::tests::position_tracker_detects_position_reset ... ok
+test wasapi_input::tests::qpc100ns_to_stream_instant_converts_units ... ok
+test wasapi_input::tests::rt_wasapi_packet_path_allocates_nothing ... ok
+test wasapi_input::tests::position_tracker_saturates_at_u64_max ... ok
+test wasapi_input::tests::timestamp_types_align_with_port_contract ... ok
+test wasapi_input::tests::wave_format_extensible_f32_is_ieee_float ... ok
+
+test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\mock_backend.rs (target\debug\deps\mock_backend-91e3c24df7dea6c3.exe)
+
+running 4 tests
+test adapter_host_satisfies_the_same_enumerator_contract ... ok
+test closures_coerce_onto_the_hrtb_callback_types ... ok
+test ports_are_object_safe_and_send ... ok
+test full_session_flow_over_boxed_trait_objects ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\mock_input_backend.rs (target\debug\deps\mock_input_backend-2610f95683175494.exe)
+
+running 12 tests
+test bounded_handoff_delivers_all_blocks_in_order ... ok
+test capture_stamp_bridges_to_input_stamp_vocabulary ... ok
+test queue_pressure_drops_are_observed_not_silent ... ok
+test rt_input_callback_queue_pressure_stays_bounded ... ok
+test deterministic_capture_blocks_carry_metadata ... ok
+test input_closures_coerce_onto_the_hrtb_callback_types ... ok
+test input_ports_are_object_safe_and_send ... ok
+test same_clock_correlation_via_clock_domain ... ok
+test open_failures_use_the_defined_error_surface ... ok
+test rt_input_callback_handoff_allocates_nothing ... ok
+test scripted_errors_reach_the_error_callback ... ok
+test cpal_adapter_input_open_reports_typed_surface ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\real_input_e2e.rs (target\debug\deps\real_input_e2e-521a442c82f80f4a.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-a5ad70dacee2fc9c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_audio_device
+
+running 6 tests
+test crates\ruviform-audio-device\src\host.rs - host_impl::Host (line 29) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::host (line 155) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::default_host (line 112) - compile ... ok
+test crates\ruviform-audio-device\src\lib.rs - (line 55) - compile ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::HostId (line 51) ... ok
+test crates\ruviform-audio-device\src\host.rs - host_impl::available_host_ids (line 131) ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.56s; merged doctests compilation took 0.46s
+mbx[cache]: 0 hits, 0 misses, 1 incremental, 1 bypassed; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 256530 compilations, and the box has forgotten none of them.

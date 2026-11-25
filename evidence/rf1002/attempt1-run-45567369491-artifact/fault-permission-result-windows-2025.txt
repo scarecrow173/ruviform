@@ -1,0 +1,1 @@
+fault_case_result: case=permission_denial_audio result=fail expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_recovery-failed detail=restore-signal-missing;-exact_true

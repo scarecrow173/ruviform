@@ -1,0 +1,4 @@
+== check-ruviform-audio-test ==
+[check] $ cargo check --locked --all-targets -p ruviform-audio-test
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+mbx[savings]: 518.8 GiB of target/ is an elaborate illusion. the disk is in on it.

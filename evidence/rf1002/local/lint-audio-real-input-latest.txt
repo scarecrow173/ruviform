@@ -1,0 +1,5 @@
+[lint-audio-real-input] $ cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.62s
+mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 4d 14h of compiling skipped across 6926 builds. rustc suspects nothing.
