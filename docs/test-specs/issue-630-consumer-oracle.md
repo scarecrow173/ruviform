@@ -4,7 +4,7 @@ type: "test-spec"
 status: "approved"
 title: "Issue #630 AC7 consumer-oracle slice — test specification"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-25"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -83,13 +83,37 @@ docs+evidence 完結の slice のため、検証はコード実走ではなく
 
 ## Feature: dep 非汚染の実測
 
-- **Rule**: 両 consumer `Cargo.lock` に
-  `ruviform-plugin-test-{vst3,clap}`・`ruviform-plugin-dock-test`
-  が非含有である。
+- **Rule**: audio-lens `Cargo.lock` の fixture crate 名 grep を
+  repo ごとに実行し、測定時点の含有/非含有を記録する。2026-11-25
+  時点の観測では `ruviform-plugin-test-{vst3,clap}`・
+  `ruviform-plugin-dock-test` が非含有だった。
   **Example**: `grep -n "ruviform-plugin-test\|ruviform-plugin-dock-test"
-  ../synvelis/Cargo.lock ../audio-lens/Cargo.lock` が exit 1
-  （no match）で終了 — 実行コマンド・両 repo SHA・exit code を
-  evidence に記録。
+  ../audio-lens/Cargo.lock` は 2026-11-25 時点で exit 1
+  （no match）。
+- **Rule**: synvelis `Cargo.lock` の fixture crate 名 grep は
+  audio-lens と分けて実行し、match の有無だけで violation を
+  判定しない。match がある場合は依存経路を確認する。2026-11-25
+  時点の観測では fixture crate 名を含有したが、経路は
+  `synvelis-app` の dev-dep だった。
+  **Example**: `grep -n "ruviform-plugin-test\|ruviform-plugin-dock-test"
+  ../synvelis/Cargo.lock` は 2026-11-25 時点で exit 0。
+- **Rule**: synvelis production DAG には fixture crate が非含有
+  であることを `crates/synvelis-app/Cargo.toml` の section 単位で
+  確認する。dev-dep 経路の自主採用は production DAG 汚染や
+  ruviform による強制ではない。
+  **Example**: `sed -n '/^\[dependencies\]/,/^\[/p'
+  ../synvelis/crates/synvelis-app/Cargo.toml | grep -nE
+  "^(ruviform-plugin-test|ruviform-plugin-dock-test)"` は exit 1
+  （production `[dependencies]` 非含有）、`sed -n
+  '/^\[dev-dependencies\]/,/^\[/p'
+  ../synvelis/crates/synvelis-app/Cargo.toml | grep -nE
+  "^(ruviform-plugin-test|ruviform-plugin-dock-test)"` は exit 0
+  （dev-dep 経路含有）— 2026-11-25 時点。依存行に anchor して、
+  コメント中の fixture 名を含有と誤認しない。
+- **Rule**: 実行コマンド・両 repo SHA・exit code・観測結果を
+  evidence に記録し、測定時点の事実として固定する。combined grep
+  はどちらか一方の repo で match すれば exit 0 になるため、
+  repo ごとの結論には使わない。
 
 ## Feature: 衛生チェックと lease 境界
 
