@@ -1,0 +1,5 @@
+[lint] $ if [ "$#" -lt 1 ]; then
+    Checking ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-test)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.66s
+mbx[cache]: 0 hits, 1 misses; 0 B downloaded, 0 B uploaded, 6.8 KiB stored locally
+mbx[savings]: 14.2 TiB logical of old files removed to date. the broom sends its regards.

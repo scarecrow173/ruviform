@@ -419,8 +419,30 @@ stage 分解で実施する:
     channel-voice event round-trip の `verdict:` を記録する（Issue #978 —
     rf978 attempt-6 で Pass 実績）。事前に `midi-winmm-probe.ps1` を child
     pwsh で走らせて WinMM call の bisection 診断を採取する。
-13. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
-14. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
+13. `os-endpoint-wiring` — Issue #1001 Slice F。`mise exec -- cargo test -p
+    ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1
+    --nocapture` を実行し、AC3 wiring leg 2 件（audio case id
+    `rf629.audio.virtual-endpoint.render-capture` / midi case id
+    `rf629.midi.virtual-endpoint.loopback`）の verdict と `run_metadata:`
+    JSON を採取する。canonical lane は `mise run test-os-endpoint-wiring`
+    （`--nocapture` なし）で、passing test の stderr は libtest が capture
+    するため、この直接 cargo 実行は verdict/RunMetadata を surface させる
+    補助証拠と明確に区別する。`stream-roundtrip` で実施済みの mic consent
+    provisioning を同一 job 内で再利用するため `midi-loopback` 後・
+    `cleanup` 前に配置する。stage は `RUVIFORM_RUN_REPO` に
+    `${{ github.repository }}`、`RUVIFORM_RUN_SHA` に `${{ github.sha }}` を
+    設定し、`run_metadata_path:`
+    行が示す `CARGO_TARGET_TMPDIR` 内 JSON を workspace 内
+    `os-endpoint-run-metadata-<os>/` へ copy して artifact に含める。stage
+    record detail には audio/midi 各 result・verdict 行数・metadata 件数・
+    copy 件数を記録する。Pass/NotRun は fail-closed contract 上の正常終端
+    （stage `ok`）だが、Fail・crash・verdict 未到達・RunMetadata 未到達/
+    不正・copy 不能は `error`。AC3 の Pass 判定は stage status ではなく
+    artifact の両 RunMetadata JSON 本体が `result:"pass"`・
+    `level:"ext-l3"`・`environment_kind:"virtual-os-endpoint"`・対象
+    repo/SHA を示すことで行う。
+14. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+15. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
     artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 
 - license: MS-PL（audio 部）/MS-LPL（MIDI miniport 部）派生のため外部 driver
@@ -436,23 +458,33 @@ stage 分解で実施する:
   語彙 ok/absent/blocked/not_run/error）として `vaudio-probe-windows-2025.json`
   に記録する判定材料であり job 失敗ではない。生ログは
   `stage-*-windows-2025.txt`、probe 出力は `endpoint-probe-windows-2025.txt` /
-  `midi-endpoint-probe-windows-2025.txt` に残り、失敗時も `if: always()` の
+  `midi-endpoint-probe-windows-2025.txt`、wiring leg の RunMetadata JSON は
+  `os-endpoint-run-metadata-windows-2025/` に残り、失敗時も `if: always()` の
   artifact upload で保全される。attempt 固有 artifact 名で全 attempt の
   evidence が残る。
 - 記録責任分担: stage record・生ログ・probe 出力は artifact として採取され、
-  `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/` に attempt 番号
-  対応付きで記録される（install 後の残件は cleanup stage が除去）。
+  `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/`・`evidence/rf1001/`
+  に attempt 番号対応付きで記録される（install 後の残件は cleanup stage が
+  除去）。`os-endpoint-wiring` の AC3 判定では stage record に加えて
+  `run-metadata-rf629-audio-virtual-endpoint-render-capture.json` と
+  `run-metadata-rf629-midi-virtual-endpoint-loopback.json` を保存する。
 - provisioned pair の利用: endpoint 成立後は本書前文どおり
   `mise run test-audio-virtual-endpoint`・`mise run
-  test-midi-virtual-endpoint` の入力として使う — 本 workflow が両 lane の
-  実走まで束ねるため、1 回の dispatch で provisioning → probe → lane 実走 →
-  evidence upload が通る（Issue #979 の受入構成）。
+  test-midi-virtual-endpoint`・`mise run test-os-endpoint-wiring` の入力として
+  使う — 独自 driver が供給する `Ruviform Cable Input` /
+  `Ruviform Cable Output` / `Ruviform MIDI Loopback` は wiring leg の
+  name-stem pair・bidirectional name match 条件を満たす。本 workflow が両 lane
+  の実走まで束ねるため、1 回の dispatch で provisioning → probe → lane 実走 →
+  evidence upload が通る（Issue #979/#1001 の受入構成）。
 - 判定: lane stage の成否は stage record detail で確認するが、語彙は
   stage ごとに異なる。`midi-loopback` は cdb 経由で test 出力が透過する
   ため pass 時も `verdict: Pass — …` 行が detail に残る。一方
   `stream-roundtrip` は cargo test の capture により pass 時
   `verdict=no-verdict-line` となるのが正常で、`test result: ok. 1 passed`
   + `finished in` の非ゼロ秒数（vacuous early return は 0.00s）で実走を
-  判断する（11 項参照）。未 provisioning 環境では verifier 自身が
+  判断する（11 項参照）。`os-endpoint-wiring` は補助 `--nocapture` 実行の
+  ため pass 時も 2 件の `verdict:` 行と `run_metadata:`/`run_metadata_path:`
+  行が生ログに残り、audio/midi の result は stage record detail と JSON 本体で
+  読む。未 provisioning 環境では verifier 自身が
   `verdict: NotRun — NOT_PROVISIONED` を返し、stage は `ok` 記録のまま
   完走する（fail-closed — 未実行・不合格を Pass にしない）。

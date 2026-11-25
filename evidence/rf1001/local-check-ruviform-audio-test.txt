@@ -1,0 +1,23 @@
+[check] $ cargo check --locked --all-targets -p ruviform-audio-test
+    Checking ruviform-media-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-media-core)
+    Checking ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-io-file)
+    Checking ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-rt)
+    Checking ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-math)
+    Checking ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-exec)
+    Checking ruviform-audio-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-core)
+    Checking ruviform-video-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-video-core)
+    Checking ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-observability)
+    Checking ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-dsp)
+    Checking ruviform-graph v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-graph)
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-device)
+    Checking ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-midi-device)
+    Checking ruviform-media-io v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-media-io)
+    Checking ruviform-plugin-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-plugin-core)
+    Checking ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-analysis)
+    Checking ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-plugin-host)
+    Checking ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio)
+    Checking ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-plugin-bridge)
+    Checking ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-test)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.21s
+mbx[cache]: 32 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: disposed of 14.2 TiB logical without being asked. that is rather the point.

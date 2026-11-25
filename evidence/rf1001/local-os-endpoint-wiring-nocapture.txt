@@ -1,0 +1,17 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 2 tests
+test audio_virtual_endpoint_round_trip ... os_endpoint: audio render→capture wiring verifier
+  host: WASAPI
+run_metadata: {"case_id":"rf629.audio.virtual-endpoint.render-capture","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"marker-rms-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"dd286442ccc1a2ecb892d31520cc7ebe5c9bf555","os":"windows","arch":"x86_64","expected":"","observed":"NOT_PROVISIONED — no render↔capture virtual name-stem pair","evidence":[]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf1001-wiring-legs\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json
+verdict: NotRun — NOT_PROVISIONED (no render↔capture virtual name-stem pair; provision VB-CABLE/VAC-style endpoints first)
+ok
+test midi_virtual_endpoint_loopback ... enumerated: 0 input ports, 1 output ports
+run_metadata: {"case_id":"rf629.midi.virtual-endpoint.loopback","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"ordered-subsequence+stamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"dd286442ccc1a2ecb892d31520cc7ebe5c9bf555","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence round-trip","observed":"NOT_PROVISIONED — no bidirectional name match","evidence":[]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf1001-wiring-legs\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match)
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.09s

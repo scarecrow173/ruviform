@@ -1,0 +1,289 @@
+[test] $ cargo test --locked -p ruviform-audio-test
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling windows-link v0.2.1
+   Compiling ruviform-media-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-media-core)
+   Compiling cfg-if v1.0.5
+   Compiling rustversion v1.0.23
+   Compiling zerocopy v0.8.63
+   Compiling windows_x86_64_msvc v0.34.0
+   Compiling rtrb v0.4.1
+   Compiling fearless_simd v1.2.0
+   Compiling serde_core v1.0.229
+   Compiling log v0.4.35
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling cpal v0.18.2
+   Compiling windows-sys v0.61.2
+   Compiling windows-strings v0.5.1
+   Compiling ruviform-audio-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-core)
+   Compiling getrandom v0.2.17
+   Compiling windows-result v0.4.1
+   Compiling ruviform-video-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-video-core)
+   Compiling windows-threading v0.2.1
+   Compiling serde_json v1.0.154
+   Compiling rand_core v0.6.4
+   Compiling ruviform-graph v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-graph)
+   Compiling memchr v2.8.3
+   Compiling ruviform-plugin-core v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-plugin-core)
+   Compiling ruviform-media-io v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-media-io)
+   Compiling dasp_sample v0.11.0
+   Compiling ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-io-file)
+   Compiling itoa v1.0.19
+   Compiling audio_thread_priority v0.38.0
+   Compiling ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-midi-device)
+   Compiling assert_no_alloc v1.1.2
+   Compiling ppv-lite86 v0.2.21
+   Compiling windows v0.34.0
+   Compiling syn v3.0.10
+   Compiling syn v2.0.119
+   Compiling rand_chacha v0.3.1
+   Compiling arc-swap v1.9.5
+   Compiling rand v0.8.8
+   Compiling windows-implement v0.60.2
+   Compiling windows-interface v0.59.3
+   Compiling fearless_simd_macros v0.1.0
+   Compiling serde_derive v1.0.229
+   Compiling ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-rt)
+   Compiling win-sys v0.3.1
+   Compiling ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-observability)
+   Compiling shared_memory v0.12.4
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-exec)
+   Compiling ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-math)
+   Compiling windows-core v0.62.2
+   Compiling ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-dsp)
+   Compiling windows-collections v0.3.2
+   Compiling windows-numerics v0.3.1
+   Compiling windows-future v0.3.2
+   Compiling ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-analysis)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-plugin-host)
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio)
+   Compiling windows v0.62.2
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-plugin-bridge)
+   Compiling ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-test)
+mbx[progress]: 15s elapsed; 57 hits, 23 misses, 1 bypassed, 0 not looked up; ~57.78s compiler work saved
+   Compiling ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1001-wiring-legs\crates\ruviform-audio-device)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.37s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_test-a046a1106d65785a.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\backend.rs (target\debug\deps\backend-b726e5a923f0dd3b.exe)
+
+running 15 tests
+test device_describe_reports_spec ... ok
+test enumerate_level_error ... ok
+test frames_cycle_varies_delivery ... ok
+test unsupported_config_and_direction ... ok
+test open_and_busy_faults ... ok
+test enumerate_and_default_selection ... ok
+test midi_feed_orders_and_drains_by_frame ... ok
+test output_callback_receives_view_and_timestamp ... ok
+test spec_validation_rejects_malformed ... ok
+test output_stream_reports_and_pumps ... ok
+test start_and_stop_faults ... ok
+test midi_feed_skips_unrepresentable_positions ... ok
+test input_stream_replays_scenario ... ok
+test input_gap_reports_xrun_and_silence ... ok
+test vanish_and_reappear ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\backend_faults.rs (target\debug\deps\backend_faults-903d8d499f884bf2.exe)
+
+running 15 tests
+test inject_input_fault_mid_stream ... ok
+test inject_fault_mid_stream_reaches_live_core ... ok
+test inject_cancellation_mid_stream_aborts_next_output_delivery ... ok
+test frames_fault_overrides_delivery ... ok
+test backend_cancelled_error_alone_does_not_terminate_stream ... ok
+test clock_domain_and_per_device_clock ... ok
+test frame_position_and_capture_faults_on_input ... ok
+test inject_cancellation_mid_stream_aborts_next_input_delivery ... ok
+test cancellation_with_invalidate_reports_ordered_errors ... ok
+test error_fault_fires_on_matching_callback_only ... ok
+test open_fault_persistent_and_once_on_input ... ok
+test vanish_mid_input_stream_invalidates_once ... ok
+test invalidate_fault_kills_stream_and_allows_reopen ... ok
+test cancellation_aborts_output_delivery_and_terminates ... ok
+test cancellation_aborts_input_delivery_and_terminates ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\clock.rs (target\debug\deps\clock-09674d1c2c73cdb8.exe)
+
+running 9 tests
+test drift_is_deterministic_ppm ... ok
+test negative_offset_clamps_at_zero ... ok
+test driver_pause_resume_and_seek ... ok
+test identical_config_reproduces_identical_streams ... ok
+test jitter_is_bounded_and_deterministic ... ok
+test driver_deadline_tracks_elapsed ... ok
+test tick_is_pure_function_of_elapsed ... ok
+test monotonic_nanos_is_exact_rational ... ok
+test zero_sample_rate_is_rejected ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metadata.rs (target\debug\deps\metadata-884251a12df8ece7.exe)
+
+running 13 tests
+test builder_records_result_and_evidence ... ok
+test deterministic_constructor_uses_case_schema_v1_defaults ... ok
+test identical_parameters_reproduce_identical_metadata ... ok
+test environment_kind_wire_spellings_match_case_schema_v1 ... ok
+test enum_wire_spellings_match_case_schema_v1 ... ok
+test load_json_reports_io_error_for_missing_file ... ok
+test environment_kind_deserialize_accepts_both_vocab_spellings ... ok
+test json_string_round_trip_preserves_all_fields ... ok
+test json_rejects_unknown_vocabulary_and_malformed_input ... ok
+test environment_kind_serde_matches_as_str ... ok
+test json_wire_uses_case_schema_v1_kebab_case ... ok
+test run_metadata_from_json_accepts_test_plugin_spelling ... ok
+test json_file_save_load_round_trip ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\midi.rs (target\debug\deps\midi-f26cfd3b42350121.exe)
+mbx[progress]: 30s elapsed; 57 hits, 39 misses, 1 bypassed, 0 not looked up; ~57.78s compiler work saved
+
+running 7 tests
+test zero_block_frames_is_rejected ... ok
+test events_beyond_total_frames_do_not_fire ... ok
+test pause_stops_event_delivery ... ok
+test seek_skips_intermediate_positions ... ok
+test playthrough_trace_matches_independent_oracle ... ok
+test unrepresentable_position_is_rejected_at_compile ... ok
+test loop_region_repeats_in_loop_events ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\midi_faults.rs (target\debug\deps\midi_faults-3aa251a53a68c2ea.exe)
+
+running 6 tests
+test read_faults_report_in_arm_order_then_invalidate ... ok
+test mid_stream_cancel_aborts_in_flight_block_then_terminates ... ok
+test backend_cancelled_error_value_alone_does_not_terminate ... ok
+test loss_counters_do_not_terminate_the_subscription ... ok
+test cancelled_leg_reports_stream_invalidated_on_every_pump ... ok
+test pre_armed_cancel_reports_backend_error_then_stream_invalidates ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 6 tests
+test audio_virtual_endpoint_round_trip ... ignored, requires a provisioned virtual audio endpoint pair; manual opt-in check
+test midi_virtual_endpoint_loopback ... ignored, requires a provisioned MIDI loopback pair; manual opt-in check
+test timestamp_epoch_classifier_distinguishes_transient_and_fatal_regressions ... ok
+test midi_scenario_trace_records_run_metadata ... ok
+test for_environment_builds_endpoint_case_record ... ok
+test pcm_fixture_block_records_run_metadata ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pcm.rs (target\debug\deps\pcm-783eb7570f1d8753.exe)
+
+running 14 tests
+test invalid_fixtures_are_rejected ... ok
+test fill_rejects_wrong_buffer_length ... ok
+test block_carries_format_metadata ... ok
+test midi_oracle_playthrough_orders_by_position_then_sequence ... ok
+test impulse_hits_only_on_period_boundaries ... ok
+test noise_is_seeded_and_per_channel ... ok
+test fill_view_matches_fill ... ok
+test oracle_literal_vectors ... ok
+test scenario_segments_and_gaps ... ok
+test ramp_and_square_are_deterministic ... ok
+test silence_and_constant_are_exact ... ok
+test fill_is_position_independent ... ok
+test sine_stays_within_amplitude_and_is_deterministic ... ok
+test oracle_matches_generator_all_patterns ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pipeline_input.rs (target\debug\deps\pipeline_input-66087c5e4ba0f016.exe)
+
+running 13 tests
+test non_f32_fixture_rate_mismatch_is_device_error ... ok
+test open_fault_surfaces_device_error ... ok
+test gain_zero_outputs_digital_silence ... ok
+test frame_position_fault_is_observed_verbatim ... ok
+test persistent_open_error_blocks_every_open ... ok
+test scripted_error_fault_is_drained_into_errors ... ok
+test invalidate_fault_kills_stream_and_next_pump_fails ... ok
+test scenario_gap_delivers_silence_and_reports_xrun ... ok
+test unsupported_config_rejected_before_stream_opens ... ok
+test frames_fault_changes_block_size_and_output_still_matches ... ok
+test captured_input_flows_through_typed_runtime_with_gain ... ok
+test capture_pool_exhaustion_counts_starved_loss ... ok
+test capture_none_fault_still_processes_pcm ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\pipeline_midi.rs (target\debug\deps\pipeline_midi-851609246560caf7.exe)
+
+running 11 tests
+test late_stamp_is_clamped_to_offset_zero_and_counted ... ok
+test channel_capacity_backpressure_defers_then_delivers_in_order ... ok
+test open_failure_surfaces_device_error ... ok
+test invalid_channel_capacity_is_config_error ... ok
+test unmapped_domain_stamp_is_rejected_and_counted ... ok
+test close_makes_next_pump_fail_with_stream_invalidated ... ok
+test cues_arrive_at_independent_expected_block_offsets ... ok
+test backend_drops_and_unsupported_are_observable_per_pump_and_cumulative ... ok
+test feed_stamp_domain_matches_leg_anchor_domain ... ok
+test unrepresentable_cue_positions_are_counted_not_silent ... ok
+test out_of_order_cue_list_still_delivers_in_stamp_order ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\pipeline_output.rs (target\debug\deps\pipeline_output-cf8a391f5504b293.exe)
+
+running 11 tests
+test device_spec_without_output_reports_unsupported ... ok
+test persistent_open_error_blocks_every_session_open ... ok
+test open_fault_surfaces_as_session_error ... ok
+test invalidate_fault_stops_delivery_and_pump_fails ... ok
+test empty_graph_renders_silence ... ok
+test negotiated_format_is_reported_by_session ... ok
+test vanished_device_invalidates_open_stream ... ok
+test capture_disabled_records_nothing_but_pumps_continue ... ok
+test xrun_fault_fires_through_production_callback_path ... ok
+test pcm_fixture_non_sine_patterns_compare_exact ... ok
+test session_open_pumps_fixture_pcm_matching_independent_expected ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\rt_contract.rs (target\debug\deps\rt_contract-f12909d673fad655.exe)
+
+running 9 tests
+test rt_pcm_fill_does_not_alloc ... ok
+test rt_scheduler_callback_and_trace_sink_do_not_alloc ... ok
+test rt_virtual_clock_reads_do_not_alloc ... ok
+test rt_trace_sink_span_direct_does_not_alloc ... ok
+test rt_scripted_backend_output_pump_does_not_alloc ... ok
+test rt_scripted_backend_input_pump_does_not_alloc ... ok
+test rt_pipeline_output_session_pump_does_not_alloc ... ok
+test rt_pipeline_midi_collect_does_not_alloc ... ok
+test rt_pipeline_input_capture_and_process_does_not_alloc ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_audio_test
+
+running 3 tests
+test crates\ruviform-audio-test\src\clock.rs - clock::VirtualClockDriver (line 246) ... ok
+test crates\ruviform-audio-test\src\midi.rs - midi::MidiTrace (line 182) ... ok
+test crates\ruviform-audio-test\src\pcm.rs - pcm::PcmFixture::fill (line 258) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+all doctests ran in 0.79s; merged doctests compilation took 0.68s
+mbx[cache]: 57 hits, 39 misses, 2 bypassed; 0 B downloaded, 0 B uploaded, 696.0 MiB stored locally
+mbx[gc]: removed 2 target directories (345.0 MiB logical, 1 abandoned and 1 live); 0 B logical remain
+mbx[gc]: evicted 0 objects and 0 action results (35.1 KiB logical); 255.9 GiB logical remain
+mbx[savings]: 256156 compilations served. ask rustc how many it remembers doing.

@@ -88,6 +88,17 @@ const CAPTURE_SECONDS: u64 = 3;
 const REQUESTED_FRAMES: usize = 480;
 /// Hard bound on the audio leg's total runtime.
 const MAX_RUN: Duration = Duration::from_secs(60);
+/// Per-epoch startup grace window for the timestamp-regression
+/// oracle, in callbacks. Shared-mode render streams re-anchor their
+/// position↔QPC correlation at every `start()`, so regressions inside
+/// this bounded window of an epoch start are OS startup transients;
+/// deeper regressions stay fatal. Matches the rf#977 device-verifier
+/// contract (`EPOCH_START_GRACE_CALLBACKS`).
+const EPOCH_START_GRACE_CALLBACKS: u64 = 24;
+/// Bound on the per-direction regression-index log used to classify
+/// epoch transients; raw regressions past this bound cannot be
+/// classified and stay fatal.
+const REGRESSION_INDEX_SLOTS: usize = 32;
 
 /// Impulse-train stimulus supplied through `PcmFixture::fill_view`:
 /// one 0.8 impulse every 100 ms of render time. The independent
@@ -185,7 +196,10 @@ fn emit_record(meta: &RunMetadata) {
         .to_json()
         .unwrap_or_else(|error| format!("{{\"serialize_error\":\"{error}\"}}"));
     eprintln!("run_metadata: {json}");
-    if let Ok(dir) = std::env::var("CARGO_TARGET_TMPDIR") {
+    let dir = std::env::var("CARGO_TARGET_TMPDIR")
+        .ok()
+        .or_else(|| option_env!("CARGO_TARGET_TMPDIR").map(str::to_owned));
+    if let Some(dir) = dir {
         let file = format!(
             "run-metadata-{}.json",
             meta.case_id
@@ -225,6 +239,44 @@ fn for_environment_builds_endpoint_case_record() {
     assert!(json.contains("\"result\":\"not-run\""));
     let back = RunMetadata::from_json(&json).unwrap();
     assert_eq!(back, meta);
+}
+
+fn regression_slots(indices: &[u64]) -> [AtomicU64; REGRESSION_INDEX_SLOTS] {
+    let slots: [AtomicU64; REGRESSION_INDEX_SLOTS] =
+        std::array::from_fn(|_| AtomicU64::new(u64::MAX));
+    for (slot, index) in slots.iter().zip(indices) {
+        slot.store(*index, Ordering::Relaxed);
+    }
+    slots
+}
+
+/// Timestamp-epoch classification is behaviorally fixed without a
+/// provisioned device: grace at each epoch start is transient, while
+/// mid-epoch regressions and unclassifiable slot overflow stay fatal.
+#[test]
+fn timestamp_epoch_classifier_distinguishes_transient_and_fatal_regressions() {
+    let boundary = 100_u64;
+    let slots = regression_slots(&[0, 23, 24, 50, 100, 123, 124, 130]);
+    assert_eq!(effective_regressions(8, &slots, boundary), 4);
+
+    let first_epoch_only = regression_slots(&[0, 23, 24, 50]);
+    assert_eq!(
+        effective_regressions(4, &first_epoch_only, u64::MAX),
+        2,
+        "without a restart boundary only callbacks 0..23 are epoch-start grace"
+    );
+
+    let overflow_indices = [0_u64; REGRESSION_INDEX_SLOTS];
+    let overflow = regression_slots(&overflow_indices);
+    assert_eq!(
+        effective_regressions(
+            u64::try_from(REGRESSION_INDEX_SLOTS + 1).unwrap(),
+            &overflow,
+            boundary,
+        ),
+        1,
+        "the regression past the bounded index log is unclassifiable and fatal"
+    );
 }
 
 /// PCM leg: `PcmFixture` block → per-channel `oracle::
@@ -776,6 +828,12 @@ struct EndpointProbe {
     in_channel_mismatches: AtomicU64,
     in_timestamp_regressions: AtomicU64,
     in_last_callback_ns: AtomicI64,
+    in_timestamp_epoch_resets: AtomicU64,
+    in_regression_first_cb: AtomicU64,
+    in_regression_last_cb: AtomicU64,
+    in_regression_max_backstep_ns: AtomicI64,
+    in_epoch_boundary_cb: AtomicU64,
+    in_regression_cbs: [AtomicU64; REGRESSION_INDEX_SLOTS],
     in_domain_mismatches: AtomicU64,
     in_non_finite: AtomicU64,
     in_expected_domain: AtomicU64,
@@ -785,6 +843,12 @@ struct EndpointProbe {
     out_channel_mismatches: AtomicU64,
     out_timestamp_regressions: AtomicU64,
     out_last_callback_ns: AtomicI64,
+    out_timestamp_epoch_resets: AtomicU64,
+    out_regression_first_cb: AtomicU64,
+    out_regression_last_cb: AtomicU64,
+    out_regression_max_backstep_ns: AtomicI64,
+    out_epoch_boundary_cb: AtomicU64,
+    out_regression_cbs: [AtomicU64; REGRESSION_INDEX_SLOTS],
     out_fill_errors: AtomicU64,
     out_errors: AtomicU64,
     /// Absolute render-frame cursor for `PcmFixture::fill_view`.
@@ -803,7 +867,15 @@ impl EndpointProbe {
                 .unwrap_or(usize::MAX);
         Self {
             in_last_callback_ns: AtomicI64::new(i64::MIN),
+            in_regression_first_cb: AtomicU64::new(u64::MAX),
+            in_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            in_epoch_boundary_cb: AtomicU64::new(u64::MAX),
+            in_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             out_last_callback_ns: AtomicI64::new(i64::MIN),
+            out_regression_first_cb: AtomicU64::new(u64::MAX),
+            out_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            out_epoch_boundary_cb: AtomicU64::new(u64::MAX),
+            out_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             capture: Mutex::new(CaptureBuf::new(capacity)),
             in_expected_channels: usize::try_from(input_format.layout.channels())
                 .unwrap_or(usize::MAX),
@@ -1240,7 +1312,7 @@ fn run_audio_round_trip(pair: Pair) -> Result<(u32, u32), Vec<String>> {
         return Err(vec![format!("stream start failed: {error}")]);
     }
     thread::sleep(Duration::from_secs(CAPTURE_SECONDS));
-    let lifecycle = run_audio_lifecycle(&*in_stream, &*out_stream);
+    let lifecycle = run_audio_lifecycle(&probe, &*in_stream, &*out_stream);
     drop(in_stream);
     drop(out_stream);
 
@@ -1253,7 +1325,11 @@ fn run_audio_round_trip(pair: Pair) -> Result<(u32, u32), Vec<String>> {
     }
 }
 
-fn run_audio_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStream) -> Vec<String> {
+fn run_audio_lifecycle(
+    probe: &EndpointProbe,
+    in_stream: &dyn InputStream,
+    out_stream: &dyn OutputStream,
+) -> Vec<String> {
     let mut lifecycle = Vec::new();
     for (label, result) in [
         ("input stop", in_stream.stop()),
@@ -1273,6 +1349,28 @@ fn run_audio_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStrea
             lifecycle.push(format!("post-stop {label} query failed: {error}"));
         }
     }
+    // Epoch boundary: stop/start re-anchors the OS-side timestamp
+    // epoch on shared-mode streams. Split both baselines so the
+    // oracle keeps measuring monotonicity inside each continuous run;
+    // the reset itself is lifecycle evidence, not hidden.
+    probe.in_last_callback_ns.store(i64::MIN, Ordering::Relaxed);
+    probe
+        .out_last_callback_ns
+        .store(i64::MIN, Ordering::Relaxed);
+    probe
+        .in_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
+    probe
+        .out_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
+    probe.in_epoch_boundary_cb.store(
+        probe.in_callbacks.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    probe.out_epoch_boundary_cb.store(
+        probe.out_callbacks.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
     match in_stream.start().and_then(|()| out_stream.start()) {
         Ok(()) => {
             thread::sleep(Duration::from_millis(300));
@@ -1358,7 +1456,7 @@ fn input_data_callback(probe: &Arc<EndpointProbe>) -> InputDataCallback {
 
 fn observe_input(probe: &EndpointProbe, input: AudioBufferView<'_, f32>, info: InputCallbackInfo) {
     let frames = input.frames();
-    probe.in_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.in_callbacks.fetch_add(1, Ordering::Relaxed);
     probe.in_frames.fetch_add(frames as u64, Ordering::Relaxed);
     if input.channels() != probe.in_expected_channels {
         probe.in_channel_mismatches.fetch_add(1, Ordering::Relaxed);
@@ -1368,9 +1466,23 @@ fn observe_input(probe: &EndpointProbe, input: AudioBufferView<'_, f32>, info: I
         .in_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
     if callback_ns < previous {
-        probe
+        let slot = probe
             .in_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        if let Ok(index) = usize::try_from(slot)
+            && index < REGRESSION_INDEX_SLOTS
+        {
+            probe.in_regression_cbs[index].store(callback_index, Ordering::Relaxed);
+        }
+        probe
+            .in_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     if info.clock_domain.get() != probe.in_expected_domain.load(Ordering::Relaxed) {
         probe.in_domain_mismatches.fetch_add(1, Ordering::Relaxed);
@@ -1408,7 +1520,7 @@ fn observe_output(
     fixture: PcmFixture,
 ) {
     let frames = out.frames();
-    probe.out_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.out_callbacks.fetch_add(1, Ordering::Relaxed);
     probe.out_frames.fetch_add(frames as u64, Ordering::Relaxed);
     if out.channels() != probe.out_expected_channels {
         probe.out_channel_mismatches.fetch_add(1, Ordering::Relaxed);
@@ -1418,9 +1530,23 @@ fn observe_output(
         .out_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
     if callback_ns < previous {
-        probe
+        let slot = probe
             .out_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        if let Ok(index) = usize::try_from(slot)
+            && index < REGRESSION_INDEX_SLOTS
+        {
+            probe.out_regression_cbs[index].store(callback_index, Ordering::Relaxed);
+        }
+        probe
+            .out_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     let base = probe
         .out_render_cursor
@@ -1442,6 +1568,27 @@ fn output_error_callback(probe: &Arc<EndpointProbe>) -> OutputErrorCallback {
     Box::new(move |_error: DeviceError| {
         probe.out_errors.fetch_add(1, Ordering::Relaxed);
     })
+}
+
+/// Effective regression count: raw regressions minus those inside
+/// the per-epoch startup grace window. `boundary_cb` splits the run
+/// into epoch 1 (indices below it) and epoch 2 (at/above it);
+/// `u64::MAX` means no restart boundary was recorded. Only the first
+/// [`REGRESSION_INDEX_SLOTS`] regressions have a recorded index —
+/// anything past that cannot be classified and stays fatal.
+fn effective_regressions(raw: u64, slots: &[AtomicU64], boundary_cb: u64) -> u64 {
+    let mut transients = 0_u64;
+    for slot in slots
+        .iter()
+        .take(usize::try_from(raw).unwrap_or(usize::MAX))
+    {
+        let cb = slot.load(Ordering::Relaxed);
+        let epoch_start = if cb < boundary_cb { 0 } else { boundary_cb };
+        if cb.saturating_sub(epoch_start) < EPOCH_START_GRACE_CALLBACKS {
+            transients += 1;
+        }
+    }
+    raw - transients
 }
 
 /// Control-thread contract + oracle analysis — returns the failure
@@ -1472,11 +1619,19 @@ fn analyze_endpoint(probe: &EndpointProbe, in_format: &AudioFormat) -> Vec<Strin
         ),
         (
             "input timestamp regressions",
-            probe.in_timestamp_regressions.load(Ordering::Relaxed),
+            effective_regressions(
+                probe.in_timestamp_regressions.load(Ordering::Relaxed),
+                &probe.in_regression_cbs,
+                probe.in_epoch_boundary_cb.load(Ordering::Relaxed),
+            ),
         ),
         (
             "output timestamp regressions",
-            probe.out_timestamp_regressions.load(Ordering::Relaxed),
+            effective_regressions(
+                probe.out_timestamp_regressions.load(Ordering::Relaxed),
+                &probe.out_regression_cbs,
+                probe.out_epoch_boundary_cb.load(Ordering::Relaxed),
+            ),
         ),
         (
             "input clock-domain mismatches",
@@ -1508,6 +1663,24 @@ fn analyze_endpoint(probe: &EndpointProbe, in_format: &AudioFormat) -> Vec<Strin
     failures.extend(oracle_markers(&samples, rate));
     failures.extend(oracle_level(&samples));
 
+    log_endpoint_stats(probe, samples.len(), in_cb, out_cb);
+    failures
+}
+
+fn regression_index_log(slots: &[AtomicU64], raw: u64) -> String {
+    slots
+        .iter()
+        .take(usize::try_from(raw).unwrap_or(usize::MAX))
+        .map(|slot| slot.load(Ordering::Relaxed).to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn log_endpoint_stats(probe: &EndpointProbe, capture_stored: usize, in_cb: u64, out_cb: u64) {
+    let in_raw_regressions = probe.in_timestamp_regressions.load(Ordering::Relaxed);
+    let out_raw_regressions = probe.out_timestamp_regressions.load(Ordering::Relaxed);
+    let in_boundary_cb = probe.in_epoch_boundary_cb.load(Ordering::Relaxed);
+    let out_boundary_cb = probe.out_epoch_boundary_cb.load(Ordering::Relaxed);
     eprintln!(
         "  stats: in_cb={in_cb} out_cb={out_cb} in_frames={} out_frames={} \
          in_err={} out_err={} capture_stored={} overflow={} lock_failures={}",
@@ -1515,11 +1688,33 @@ fn analyze_endpoint(probe: &EndpointProbe, in_format: &AudioFormat) -> Vec<Strin
         probe.out_frames.load(Ordering::Relaxed),
         probe.in_errors.load(Ordering::Relaxed),
         probe.out_errors.load(Ordering::Relaxed),
-        samples.len(),
+        capture_stored,
         capture_overflow(probe),
         probe.capture_lock_failures.load(Ordering::Relaxed),
     );
-    failures
+    eprintln!(
+        "  timestamps: in regressions={} effective={} epoch_resets={} boundary_cb={} first..last={}..{} max_backstep_ns={} idx=[{}] | out regressions={} effective={} epoch_resets={} boundary_cb={} first..last={}..{} max_backstep_ns={} idx=[{}]",
+        in_raw_regressions,
+        effective_regressions(in_raw_regressions, &probe.in_regression_cbs, in_boundary_cb),
+        probe.in_timestamp_epoch_resets.load(Ordering::Relaxed),
+        in_boundary_cb,
+        probe.in_regression_first_cb.load(Ordering::Relaxed),
+        probe.in_regression_last_cb.load(Ordering::Relaxed),
+        probe.in_regression_max_backstep_ns.load(Ordering::Relaxed),
+        regression_index_log(&probe.in_regression_cbs, in_raw_regressions),
+        out_raw_regressions,
+        effective_regressions(
+            out_raw_regressions,
+            &probe.out_regression_cbs,
+            out_boundary_cb,
+        ),
+        probe.out_timestamp_epoch_resets.load(Ordering::Relaxed),
+        out_boundary_cb,
+        probe.out_regression_first_cb.load(Ordering::Relaxed),
+        probe.out_regression_last_cb.load(Ordering::Relaxed),
+        probe.out_regression_max_backstep_ns.load(Ordering::Relaxed),
+        regression_index_log(&probe.out_regression_cbs, out_raw_regressions),
+    );
 }
 
 fn capture_samples(probe: &EndpointProbe) -> Vec<f32> {
