@@ -1,0 +1,108 @@
+[test] $ cargo test --locked -p ruviform-audio-plugin-bridge
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling syn v3.0.10
+   Compiling fearless_simd_macros v0.1.0
+   Compiling ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-math)
+   Compiling ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-dsp)
+   Compiling ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-analysis)
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio)
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-plugin-bridge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.04s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_audio_plugin_bridge-d81065aa63ae30af.exe)
+
+running 4 tests
+test bus::tests::bus_to_port_def_maps_role_layout_activation ... ok
+test bus::tests::validate_declared_against_report ... ok
+test cap::tests::capability_matrix_is_honest ... ok
+test status::tests::set_input_mirrors_whole_counters_including_unsupported ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\e2e.rs (target\debug\deps\e2e-87418fb5b8ca5c96.exe)
+
+running 5 tests
+test capability_matrix_is_honest ... ok
+test loop_100_min_128_zero_violating_calls ... ok
+test multi_bus_audio_routes_and_processes ... ok
+test event_offsets_are_process_start_relative ... ok
+test loop_200_partial_delivery_no_violations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\frame_base.rs (target\debug\deps\frame_base-3072897ad9ba3937.exe)
+
+running 6 tests
+test verified_context_round_trips_same_origin ... ok
+test check_frame_base_accepts_and_rejects ... ok
+test install_plan_queue_full_still_typed ... ok
+test verified_base_timed_param_event_lands_at_absolute_frame ... ok
+test device_restart_rebases_epoch_not_frame_base ... ok
+test foreign_base_plan_install_rejected_nondestructively ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\midi_delivery.rs (target\debug\deps\midi_delivery-2b8983a2ba551192.exe)
+
+running 10 tests
+test midi_delivery_anchor_none_pending_waits_then_maps ... ok
+test midi_delivery_block_boundary_and_pending ... ok
+test midi_delivery_anchor_republish_domain_switch ... ok
+test rt_midi_delivery_collect_and_merge_no_alloc ... ok
+test midi_delivery_rejections_are_observable ... ok
+test midi_delivery_unsupported_is_observable ... ok
+test midi_delivery_anchor_rejection_classification ... ok
+test midi_delivery_anchor_republish_remaps_pending ... ok
+test midi_delivery_note_cc_bend_with_frame_offsets ... ok
+test midi_delivery_zero_frame_block ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\midi_wiring.rs (target\debug\deps\midi_wiring-3d776858e9c7231c.exe)
+
+running 16 tests
+test real_midi_device_drives_input_tx_to_stage ... ignored, requires an OS MIDI input device; manual opt-in check
+test input_leg_rejects_zero_capacity ... ok
+test plan_midi_replays_at_scheduled_offsets ... ok
+test stop_releases_live_notes_too ... ok
+test loop_refires_midi_events_per_lap ... ok
+test ledger_eviction_delivers_synthetic_off ... ok
+test set_clock_jump_triggers_release_and_chase ... ok
+test overflow_reports_are_observable ... ok
+test rt_midi_wiring_no_alloc ... ok
+test foreign_epoch_set_clock_is_rejected ... ok
+test seek_releases_and_chases_sounding_notes ... ok
+test mock_backend_drives_input_stage_to_plugin ... ok
+test live_input_reaches_plugin_with_frame_offsets ... ok
+test live_input_waits_for_clock_anchor ... ok
+test stop_releases_sounding_notes ... ok
+test input_leg_is_opt_in ... ok
+
+test result: ok. 15 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\param_delivery.rs (target\debug\deps\param_delivery-ba7149a856e8f513.exe)
+
+running 9 tests
+test param_write_defined_rejections ... ok
+test target_binding_rejections ... ok
+test ledger_tracks_stage_distinction ... ok
+test rt_param_dispatch_no_alloc ... ok
+test non_processing_endpoint_rejected ... ok
+test beat_to_media_then_delivers_at_exact_frame ... ok
+test param_events_multi_time_multi_target_deliver_in_order ... ok
+test loop_occurrence_refires_event_once_per_lap ... ok
+test async_install_plan_lands_at_due_frame ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests ruviform_audio_plugin_bridge
+
+running 2 tests
+test crates\ruviform-audio-plugin-bridge\src\target.rs - target::ParamTargetTable (line 103) ... ok
+test crates\ruviform-audio-plugin-bridge\src\dispatch.rs - dispatch::ParamDispatchLedger (line 136) ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 0.81s; merged doctests compilation took 0.71s
+mbx[cache]: 0 hits, 5 misses, 8 not looked up, 1 bypassed; 0 B downloaded, 0 B uploaded, 267.4 MiB stored locally
+mbx[savings]: linked 527.2 GiB into place. copying is for people with disk to spare.

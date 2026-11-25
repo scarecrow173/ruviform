@@ -1,0 +1,46 @@
+{
+  "run_id": 45597817992,
+  "run_url": "https://github.com/scarecrow173/ruviform/actions/runs/45597817992",
+  "artifact": "virtual-audio-driver-probe-windows-2025-attempt-1",
+  "head_sha": "8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6",
+  "conclusion": "success",
+  "stage_records": {
+    "midi-endpoint-probe": {
+      "stage": "midi-endpoint-probe",
+      "status": "ok",
+      "detail": "devnode=ok; probe_exit=0; probe_exit=0; midi_in_ports=1; midi_out_ports=2; loopback_candidates=2; provisioning=CANDIDATES_OBSERVED; candidate_ports=Ruviform MIDI Loopback",
+      "exit_code": 0,
+      "recorded_utc": "2026-11-25T10:49:07Z"
+    },
+    "midi-loopback": {
+      "stage": "midi-loopback",
+      "status": "ok",
+      "detail": "test_exit=0; verdict=Pass — silent messages accepted by real WinMM output port; probe_exit=0",
+      "exit_code": 0,
+      "recorded_utc": "2026-11-25T10:49:22Z"
+    },
+    "os-endpoint-midi-e2e": {
+      "stage": "os-endpoint-midi-e2e",
+      "status": "ok",
+      "detail": "build_exit=0; test_exit=0; verdict=Pass — OS endpoint → attach → L1 test_instrument; case=pass; metadata=1; copied=1; provisioning_observed=True; midi_loopback_pass=True",
+      "exit_code": 0,
+      "recorded_utc": "2026-11-25T10:50:28Z"
+    }
+  },
+  "case": {
+    "case_id": "rf253.midi.virtual-endpoint.host-plugin-e2e",
+    "result": "pass",
+    "level": "ext-l3",
+    "environment_kind": "virtual-os-endpoint",
+    "repo": "scarecrow173/ruviform",
+    "sha": "8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6",
+    "observed": "sent=4 observed=4 matched=4 mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0 backend_dropped=0 backend_unsupported=0 tick_span=Some(25) note_tick_span=25 blocks_needed=18 invalidated_in=true invalidated_out=true provides_timestamps=true clock_domain=Some(ClockDomainId(5932742974072178993)) stamp_base=1/1000 provenance=Carried monotonic=true trace_entries=4 blocks_run=5 spacing_frames=384 total_frames=2400 block_frames=480",
+    "evidence": [
+      "crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs",
+      "workflow stage os-endpoint-midi-e2e in virtual-audio-driver-probe.yml",
+      "name match is only a loopback candidate; RvfMidi provisioning provenance in workflow evidence is the basis for the virtual-os-endpoint claim",
+      "virtual endpoint provenance: rvfmidi-testsigned-driver-probe",
+      "pair candidate: in=\"Ruviform MIDI Loopback\" out=\"Ruviform MIDI Loopback\"; workflow RvfMidi provisioning provenance is required for acceptance"
+    ]
+  }
+}

@@ -284,7 +284,7 @@ evidence を読んで行う。Issue #253 は close しない。
 | --- | --- | --- |
 | playthrough supply | 本 case が直接検証する。commands 空の RF#628 trace を `midi_expected_playthrough` + `midi_trace_eq` + monotonic invariant に照合する | `crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs` |
 | seek/loop/pause | OS endpoint stimulus には使わない。RF#628 deterministic trace のコマンド意味論として既存テストが担保する | `crates/ruviform-audio-test/tests/midi.rs` の `seek_skips_intermediate_positions`/`loop_region_repeats_in_loop_events`/`pause_stops_event_delivery` |
-| stop | OS endpoint stimulus には使わない。transport command 適用・budget 意味論は media-core scheduler 契約が担保する | `crates/ruviform-media-core/src/transport_schedule.rs` の scheduler tests |
+| stop | OS endpoint stimulus には使わない。transport command 適用・budget 意味論は media-core scheduler 契約が担保し、sounding/live note release の plugin-bridge 観測 oracle は `midi_wiring` が担保する | `crates/ruviform-media-core/src/transport_schedule.rs` の scheduler tests、`crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` の `stop_releases_sounding_notes`/`stop_releases_live_notes_too` |
 | queue overflow/loss | 本 case は overflow を人為注入せず、`InputTx`/pump/`InputStage` counters を観測・記録する。overflow/ledger eviction の決定的再現は bridge 側の既存 oracle が担う | `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` の `overflow_reports_are_observable`/`ledger_eviction_delivers_synthetic_off` |
 
 したがって旧来の「Test Runtime（#628）との結線」は no-command playthrough

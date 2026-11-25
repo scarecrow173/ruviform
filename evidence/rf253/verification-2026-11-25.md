@@ -28,14 +28,16 @@
 | `mise run test ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/test-plugin-test-vst3.txt` | Pass |
 | `mise run check-l1-real-plugin` | 0 | `validation-2026-11-25/check-l1-real-plugin.txt` | Pass — `--all-targets` feature-enabled compile |
 | `mise run test-l1-real-plugin` | 0 | `validation-2026-11-25/test-l1-real-plugin.txt` | Pass — existing L1 real-plugin suites non-regressed |
+| `mise run test ruviform-audio-test` | 0 | `validation-2026-11-25/test-audio-test.txt` | Pass — RF#628 seek/loop/pause oracle tests included |
+| `mise run test ruviform-audio-plugin-bridge` | 0 | `validation-2026-11-25/test-audio-plugin-bridge.txt` | Pass — stop/overflow/ledger-eviction oracle tests included |
 | `mise run lint-l1-real-plugin` | 0 | `validation-2026-11-25/lint-l1-real-plugin-rerun.txt` | Pass — feature-enabled clippy `-D warnings` |
 | `mise run test-os-endpoint-midi-e2e` | 0 | `validation-2026-11-25/test-os-endpoint-midi-e2e.txt` | canonical lane completed; terminal case verdict is inside libtest capture |
 | `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-nocapture.txt` | auxiliary verdict harvest: `verdict: NotRun — NOT_PROVISIONED`; RunMetadata emitted and written |
 | `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-rerun.txt` | Pass |
 | PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-rerun.txt` | Pass — syntax parse only, not execution |
-| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-rerun.txt` | Pass — all hooks green |
+| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-final.txt` | Pass — all hooks green |
 
-The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; those final-tree logs use the `*-rerun.txt` names in the table.
+The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; the final evidence/docs tree additionally re-ran `prek` successfully (`prek-all-files-final.txt`); other final-tree logs use the `*-rerun.txt` names in the table.
 
 ## Terminal RunMetadata observed locally
 
@@ -57,14 +59,26 @@ The normative mapping is in `docs/specs/issue-253-virtual-midi-e2e.md` (2026-11-
 | --- | --- |
 | commands-empty playthrough supply | verified directly by `os_endpoint_midi_e2e.rs` through RF#628 trace equality and monotonicity |
 | seek / loop / pause command semantics | owned by `crates/ruviform-audio-test/tests/midi.rs` (`seek_skips_intermediate_positions`, `loop_region_repeats_in_loop_events`, `pause_stops_event_delivery`); not re-implemented here |
-| stop command semantics | owned by media-core transport scheduler tests; not used as OS endpoint stimulus here |
+| stop command semantics | command application/budget semantics are owned by media-core transport scheduler tests; sounding/live note release is owned by `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` (`stop_releases_sounding_notes`, `stop_releases_live_notes_too`); not used as OS endpoint stimulus here |
 | overflow / loss determinism | owned by `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` (`overflow_reports_are_observable`, `ledger_eviction_delivers_synthetic_off`); this e2e observes and records counters but does not inject overflow |
 
 ## Provisioned workflow evidence
 
-Pending at the time this ledger was written. The branch-ref `workflow_dispatch` run(s) must be recorded here before acceptance interpretation. Required harvest:
+### Final branch-ref run
 
-- `vaudio-probe-windows-2025.json` stage record for `os-endpoint-midi-e2e`
-- `stage-os-endpoint-midi-e2e-windows-2025.txt`
-- `os-endpoint-midi-e2e-run-metadata-windows-2025/run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json`
-- `midi-endpoint-probe` / `midi-loopback` provenance in the same attempt
+- run: `45599137022` — https://github.com/scarecrow173/ruviform/actions/runs/45599137022
+- artifact/evidence directory: `workflow-run-45599137022-attempt1/`
+- workflow head SHA: `b54b8d588f699deb4235cb0018b188cfb1ffa191`
+- run conclusion: `success` (GitHub-hosted `windows-2025`)
+- `midi-endpoint-probe`: `ok`; `midi_in_ports=1`, `midi_out_ports=2`, `loopback_candidates=2`, `provisioning=CANDIDATES_OBSERVED`, `candidate_ports=Ruviform MIDI Loopback`
+- `midi-loopback`: `ok`; `test_exit=0`, verdict `Pass — silent messages accepted by real WinMM output port`
+- `os-endpoint-midi-e2e`: `ok`; `build_exit=0`, `test_exit=0`, verdict `Pass — OS endpoint → attach → L1 test_instrument`, `case=pass`, `metadata=1`, `copied=1`, `provisioning_observed=True`, `midi_loopback_pass=True`
+- RunMetadata identity: `case_id=rf253.midi.virtual-endpoint.host-plugin-e2e`, `repo=scarecrow173/ruviform`, `sha=b54b8d588f699deb4235cb0018b188cfb1ffa191`, `level=ext-l3`, `environment_kind=virtual-os-endpoint`, `result=pass`
+- case observed counters: `sent=4 observed=4 matched=4 mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0 backend_dropped=0 backend_unsupported=0`; stamp/oracle evidence includes `provides_timestamps=true`, `clock_domain=Some(ClockDomainId(5932742974072178993))`, `stamp_base=1/1000`, `provenance=Carried`, `monotonic=true`, `trace_entries=4`, close invalidation true for input/output
+- provenance evidence in the same metadata: `virtual endpoint provenance: rvfmidi-testsigned-driver-probe`; pair `in="Ruviform MIDI Loopback" out="Ruviform MIDI Loopback"`
+
+Interpretation: this is genuine provisioned branch-ref evidence for the vertical slice because the same attempt observed the RvfMidi loopback candidate and the MIDI loopback round-trip Pass before the e2e stage. It is still not post-merge integration acceptance; Coordinator must verify the merged main SHA through the required integration path.
+
+### Superseded implementation-time run
+
+- run `45597817992` / SHA `8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6` also completed `success` with the same case-level Pass shape; harvested under `workflow-run-45597817992-attempt1/`. It is superseded as final evidence because the later provenance-detection fix changed the workflow before run `45599137022`.

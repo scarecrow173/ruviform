@@ -1,0 +1,44 @@
+   Compiling windows-sys v0.61.2
+   Compiling windows v0.62.2
+   Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.69s
+     Running `target\debug\examples\midi_endpoint_probe.exe`
+midi_endpoint_probe — Issue #629 virtual-endpoint capability probe (WinMM)
+manual diagnostic; the output is survey evidence, not a test verdict
+
+== environment ==
+  os=windows arch=x86_64 family=windows
+  os_version: Microsoft Windows [Version 10.0.26100.33828]
+
+== WinMM port enumeration ==
+  [input] Ruviform MIDI Loopback index=0 mid=0x0001 pid=0x0067 driver_ver=2560  [loopback-candidate: name appears in both directions, unconfirmed]
+      interface_id: \\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback
+  [output] Microsoft GS Wavetable Synth index=0 mid=0x0001 pid=0x001b driver_ver=256
+      support=0x00000001 tech=7 voices=32 notes=32 ch_mask=0xffff
+      note: interface_id: NotRun — midiOutMessage DRV_QUERYDEVICEINTERFACE crashed on this host's driver; input-path query only
+  [output] Ruviform MIDI Loopback index=1 mid=0x0001 pid=0x0066 driver_ver=2560  [loopback-candidate: name appears in both directions, unconfirmed]
+      support=0x00000000 tech=1 voices=0 notes=0 ch_mask=0xffff
+      note: interface_id: NotRun — midiOutMessage DRV_QUERYDEVICEINTERFACE crashed on this host's driver; input-path query only
+
+== production port view (ruviform_midi_device) ==
+  production input ports: 1
+    - Ruviform MIDI Loopback  id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback  origin=Unknown  ump=false timestamps=true domain=Some(ClockDomainId(5932742974072178993))
+  production output ports: 2
+    - Microsoft GS Wavetable Synth  id=winmm-out:0:Microsoft GS Wavetable Synth  origin=Unknown  ump=false timestamps=false domain=None
+    - Ruviform MIDI Loopback  id=winmm-out:1:Ruviform MIDI Loopback  origin=Unknown  ump=false timestamps=false domain=None
+
+== Windows MIDI Services availability ==
+  New-MidiLoopback: absent
+  midisrv: absent
+
+== verdict ==
+  winmm input ports: 1, output ports: 2
+  loopback-style candidates (bidirectional name match, unconfirmed): 2
+  driver signature check: NotRun — driver/package signature query needs SetupAPI surfaces outside the declared `windows-sys` features (discovery doc gap)
+  provisioning: CANDIDATES_OBSERVED
+  capability notes:
+    winmm in/out capability enumeration: observed
+    input interface-id enumeration: observed; output interface-id: NotRun (midiOutMessage crash, see per-port notes)
+    port open + Note/CC/PitchBend/timestamp/order round-trip: NotRun — the `midiOut*` send path exists since the second slice; remaining gap is a provisioned loopback pair (verifier: tests/loopback.rs)
+    virtual hotplug / device-loss / permission-denial: NotRun — same reason
+  midi virtual-endpoint cases: NotRun — WinMM cannot prove a port is virtual (`MidiPortOrigin::Unknown`); the round-trip verifier is fail-closed `NotRun` without a provisioned pair
