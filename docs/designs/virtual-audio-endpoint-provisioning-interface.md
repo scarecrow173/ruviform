@@ -54,6 +54,10 @@ relations:
 
 # Virtual Audio Endpoint Provisioning Interface 設計
 
+> Cross-repo link note: Synvelis 側文書への `blob/main` URL は、対応 PR merge 後の
+> canonical location を示す。proposal 時点の main には未存在であり、両 PR の統合後に
+> 実在させる意図のリンクである。
+
 ## 1. 目的と非目的
 
 本設計は、Ruviform Virtual Audio Device を ephemeral Windows runner 上で
