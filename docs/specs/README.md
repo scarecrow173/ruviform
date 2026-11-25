@@ -330,3 +330,4 @@ Directory: `docs/specs`
 | SPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
 | SPEC-891dirtyNoteCtrctPul1 | Issue #891 plugin→host state dirty 通知経路 — 中立語彙・pull 配送・形式別応答契約 | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
 | SPEC-Rf895DrpSbtCse3mQ8xKw2Y7 | Issue #895 dropped_submits の条件別分離 — 原因別 counter の永続的帰属 | approved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |
+| SPEC-Rf999InputWidget01 | Issue #999 — ComponentSpec 任意値 text/number 入力 widget の wire 契約 | approved | [rf999-input-widget.md](./rf999-input-widget.md) |
