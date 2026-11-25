@@ -1,0 +1,4 @@
+== lint-ruviform-audio-test ==
+[lint] $ if [ "$#" -lt 1 ]; then
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.50s
+mbx[savings]: 256528 compilations old. not one compiled twice.

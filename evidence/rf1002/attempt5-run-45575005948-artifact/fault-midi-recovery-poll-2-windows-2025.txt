@@ -1,0 +1,8 @@
+step: midiOutGetNumDevs
+  midiOutGetNumDevs=1
+step: midiOutGetDevCapsW[0]
+  midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+step: midiInGetNumDevs
+  midiInGetNumDevs=0
+  loopbackOut=[] loopbackIn=[]
+probe: done

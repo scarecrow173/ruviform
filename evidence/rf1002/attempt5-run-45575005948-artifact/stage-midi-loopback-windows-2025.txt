@@ -1,0 +1,195 @@
+  prerequisite endpoint-probe: ok / devnode-create: ok
+  --- winmm-probe (child pwsh) ---
+  step: midiOutGetNumDevs
+    midiOutGetNumDevs=2
+  step: midiOutGetDevCapsW[0]
+    midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+  step: midiOutGetDevCapsW[1]
+    midiOut[1] rc=0 name='Ruviform MIDI Loopback' tech=0x0001 support=0x00000000
+  step: midiInGetNumDevs
+    midiInGetNumDevs=1
+  step: midiInGetDevCapsW[0]
+    midiIn[0] rc=0 name='Ruviform MIDI Loopback' support=0x00000000
+    loopbackOut=[1] loopbackIn=[0]
+  step: midiOutOpen[1]
+    midiOutOpen rc=0 hmo=0x2499d0e43a0
+  step: midiOutShortMsg[1] note-on
+    midiOutShortMsg rc=0
+  step: midiOutReset[1]
+  step: midiOutClose[1]
+    midiOutClose rc=0
+  step: midiInOpen[0] (CALLBACK_FUNCTION|MIDI_IO_STATUS)
+    midiInOpen rc=0 hmi=0x2499d0e4430
+  step: midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)
+    open-handle ifsize rc=8 size=0
+  step: midiInPrepareHeader+AddBuffer[0]
+    prepare rc=0
+    addbuf rc=0
+  step: midiInPrepareHeader+AddBuffer[1]
+    prepare rc=0
+    addbuf rc=0
+  step: midiInStart[0]
+    midiInStart rc=0
+  step: loopback send note-on via midiOut[1]
+    loopback send done
+    callback count=3 lastMsg=0x3c3 lastP1=0x3c80 lastP2=0x136
+  step: midiInStop[0]
+  step: midiInReset[0]
+  step: midiInUnprepareHeader
+  step: midiInUnprepareHeader
+  step: midiInClose[0]
+    midiInClose rc=0
+    callback count(final)=6 lastMsg=0x3c2
+  step: midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle 0] (correct arg order)
+    dev-index ifsize rc=0 size=144
+    dev-index if rc=0 if='\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback'
+  probe: done
+  winmm-probe exit=0
+  LocalDumps enabled -> D:\a\ruviform\ruviform\crashdumps
+  --- loopback test ---
+     Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+       Running tests\loopback.rs (target\debug\deps\loopback-aca75d615475415d.exe)
+
+  running 2 tests
+  enumerated: 1 input ports, 2 output ports
+    candidate[0]: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback"
+  verdict: Pass — round-trip observed through real OS ports
+    pair: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback"
+    sent=4 observed=4 matched=4 dropped=0 unsupported=0 elapsed=122.36ms tick_span=Some(92)
+    evidence note: name match is a candidate, not proof of a virtual endpoint (`MidiPortOrigin::Unknown`) — this is OS-L1 round-trip evidence, not `virtual-os-endpoint`
+  test loopback_round_trip ... ok
+  port: id=winmm-out:0:Microsoft GS Wavetable Synth name="Microsoft GS Wavetable Synth" origin=Unknown
+  verdict: Pass — silent messages accepted by real WinMM output port
+  test real_device_silent_output_smoke ... ok
+
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.80s
+
+  test exit=0 verdict=Pass — silent messages accepted by real WinMM output port
+  --- application error / WER events (last 15 min) ---
+  [08:22:18] Application Error id=1000
+    Faulting application name: svchost.exe_Audiosrv, version: 10.0.26100.32684, time stamp: 0x10211893
+
+    Faulting module name: audiosrv.dll, version: 10.0.26100.33822, time stamp: 0xccd41401
+
+    Exception code: 0xc0000005
+
+    Fault offset: 0x0000000000088c98
+
+    Faulting process id: 0xC44
+
+    Faulting application start time: 0x1DD7CB615F350DA
+
+    Faulting application path: C:\Windows\System32\svchost.exe
+
+    Faulting module path: c:\windows\system32\audiosrv.dll
+
+  [08:22:18] Application Error id=1000
+    Faulting application name: svchost.exe, version: 10.0.26100.32684, time stamp: 0x10211893
+
+    Faulting module name: combase.dll, version: 10.0.26100.33648, time stamp: 0x6607d4b6
+
+    Exception code: 0xc0000005
+
+    Fault offset: 0x000000000010e8e8
+
+    Faulting process id: 0xC90
+
+    Faulting application start time: 0x1DD7CB51189045B
+
+    Faulting application path: C:\Windows\System32\svchost.exe
+
+    Faulting module path: C:\Windows\System32\combase.dll
+
+  crashdumps: 0 file(s)
+  --- cdb re-run: loopback-aca75d615475415d.exe ---
+
+  ************* Preparing the environment for Debugger Extensions Gallery repositories **************
+     ExtensionRepository : Implicit
+     UseExperimentalFeatureForNugetShare : true
+     AllowNugetExeUpdate : true
+     NonInteractiveNuget : true
+     AllowNugetMSCredentialProviderInstall : true
+     AllowParallelInitializationOfLocalRepositories : true
+
+     EnableRedirectToV8JsProvider : false
+
+     -- Configuring repositories
+        ----> Repository : LocalInstalled, Enabled: true
+        ----> Repository : UserExtensions, Enabled: true
+
+  >>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.016 seconds
+
+  ************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+  >>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.109 seconds
+     ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+     ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+  Microsoft (R) Windows Debugger Version 10.0.26100.9457 AMD64
+  Copyright (c) Microsoft Corporation. All rights reserved.
+
+  CommandLine: D:\a\ruviform\ruviform\target\debug\deps\loopback-aca75d615475415d.exe --ignored --test-threads=1
+
+  ************* Path validation summary **************
+  Response                         Time (ms)     Location
+  Deferred                                       srv*
+  Symbol search path is: srv*
+  Executable search path is:
+  ModLoad: 00007ff6`735f0000 00007ff6`736d4000   loopback-aca75d615475415d.exe
+  ModLoad: 00007ffc`2bf00000 00007ffc`2c164000   ntdll.dll
+  ModLoad: 00007ffc`2ad40000 00007ffc`2ae09000   C:\Windows\System32\KERNEL32.DLL
+  ModLoad: 00007ffc`29740000 00007ffc`29b2c000   C:\Windows\System32\KERNELBASE.dll
+  ModLoad: 00007ffc`29030000 00007ffc`290dc000   C:\Windows\System32\bcryptprimitives.dll
+  ModLoad: 00007ffc`29460000 00007ffc`295ab000   C:\Windows\System32\ucrtbase.dll
+  ModLoad: 00007ffc`0fbe0000 00007ffc`0fc15000   C:\Windows\SYSTEM32\winmm.dll
+  ModLoad: 00007ffc`28310000 00007ffc`2833b000   C:\Windows\SYSTEM32\USERENV.dll
+  ModLoad: 00007ffc`1e7b0000 00007ffc`1e7db000   C:\Windows\SYSTEM32\VCRUNTIME140.dll
+  ModLoad: 00007ffc`2ae10000 00007ffc`2af28000   C:\Windows\System32\RPCRT4.dll
+
+  running 2 tests
+  test loopback_round_trip ... ModLoad: 00007ffb`f7e60000 00007ffb`f7e96000   C:\Windows\SYSTEM32\winmmbase.dll
+  ModLoad: 00007ffc`29e80000 00007ffc`29f73000   C:\Windows\System32\shcore.dll
+  ModLoad: 00007ffc`2aa90000 00007ffc`2ab37000   C:\Windows\System32\sechost.dll
+  ModLoad: 00007ffc`20380000 00007ffc`20418000   C:\Windows\SYSTEM32\MMDevAPI.DLL
+  ModLoad: 00007ffc`29bd0000 00007ffc`29c73000   C:\Windows\System32\msvcp_win.dll
+  ModLoad: 00007ffb`f3050000 00007ffb`f3097000   C:\Windows\SYSTEM32\wdmaud.drv
+  ModLoad: 00007ffc`2a2b0000 00007ffc`2a637000   C:\Windows\System32\combase.dll
+  ModLoad: 00007ffc`28b20000 00007ffc`28b4d000   C:\Windows\SYSTEM32\DEVOBJ.dll
+  ModLoad: 00007ffc`28b60000 00007ffc`28bb7000   C:\Windows\SYSTEM32\cfgmgr32.dll
+  ModLoad: 0000025c`ce0c0000 0000025c`ce117000   C:\Windows\SYSTEM32\cfgmgr32.dll
+  ModLoad: 0000025c`ce120000 0000025c`ce177000   C:\Windows\SYSTEM32\CFGMGR32.dll
+  ModLoad: 00007ffc`0d8a0000 00007ffc`0da54000   C:\Windows\SYSTEM32\AUDIOSES.DLL
+  ModLoad: 00007ffb`f53a0000 00007ffb`f53af000   C:\Windows\SYSTEM32\msacm32.drv
+  ModLoad: 00007ffb`f4ba0000 00007ffb`f4bc1000   C:\Windows\SYSTEM32\MSACM32.dll
+  ModLoad: 00007ffb`f4dd0000 00007ffb`f4ddc000   C:\Windows\SYSTEM32\midimap.dll
+  ModLoad: 00007ffc`09180000 00007ffc`0918a000   C:\Windows\SYSTEM32\ksuser.dll
+  ok
+  test real_device_silent_output_smoke ... ModLoad: 00007ffc`272f0000 00007ffc`2730b000   C:\Windows\SYSTEM32\kernel.appcore.dll
+  ModLoad: 00007ffc`2bd50000 00007ffc`2bdf9000   C:\Windows\System32\msvcrt.dll
+  ModLoad: 00007ffc`29fb0000 00007ffc`2a061000   C:\Windows\System32\clbcatq.dll
+  ModLoad: 00007ffc`28e70000 00007ffc`28ece000   C:\Windows\SYSTEM32\powrprof.dll
+  ModLoad: 00007ffc`28e50000 00007ffc`28e64000   C:\Windows\SYSTEM32\UMPDC.dll
+  ModLoad: 00007ffc`270e0000 00007ffc`270f4000   C:\Windows\SYSTEM32\resourcepolicyclient.dll
+  ModLoad: 00007ffc`0b190000 00007ffc`0b2e2000   C:\Windows\System32\Windows.UI.dll
+  ModLoad: 00007ffc`2a8c0000 00007ffc`2aa85000   C:\Windows\System32\user32.dll
+  ModLoad: 00007ffc`29000000 00007ffc`29027000   C:\Windows\System32\win32u.dll
+  ModLoad: 00007ffc`29f80000 00007ffc`29fab000   C:\Windows\System32\GDI32.dll
+  ModLoad: 00007ffc`291b0000 00007ffc`292dd000   C:\Windows\System32\gdi32full.dll
+  ModLoad: 00007ffc`2af30000 00007ffc`2af61000   C:\Windows\System32\IMM32.DLL
+  ModLoad: 00007ffc`23b10000 00007ffc`23b1b000   C:\Windows\SYSTEM32\AVRT.dll
+  ok
+
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'

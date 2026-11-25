@@ -1,0 +1,8 @@
+  prerequisite devnode-create: ok
+  probe_exit=0
+  midi_in_ports=1
+  midi_out_ports=2
+  loopback_candidates=2
+  provisioning=CANDIDATES_OBSERVED
+  candidate_ports=Ruviform MIDI Loopback
+  probe script exit=0 loopback_candidates=2 provisioning=CANDIDATES_OBSERVED

@@ -1,0 +1,4 @@
+== check-audio-device :: mise run check ruviform-audio-device
+[check] $ cargo check --locked --all-targets -p ruviform-audio-device
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.85s
+mbx[savings]: escorted 8.5 TiB logical of ownerless outputs off the premises.

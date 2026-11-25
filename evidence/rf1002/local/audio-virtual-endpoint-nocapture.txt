@@ -1,0 +1,17 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-b9126c31aa0efe3b.exe)
+
+running 4 tests
+test render_capture_round_trip ... virtual_endpoint: WASAPI render→capture streaming verifier
+  capture 3s per pair, watchdog 60s
+  host: WASAPI
+verdict: NotRun — no input devices on this host
+ok
+test virtual_audio_device_loss_fault ... fault_case_result: case=device_loss_audio result=inactive expected=controller-armed-fault-run observed=controller-not-armed detail=passive-canonical-lane-run
+ok
+test virtual_audio_permission_denial_fault ... fault_case_result: case=permission_denial_audio result=inactive expected=controller-armed-fault-run observed=controller-not-armed detail=passive-canonical-lane-run
+ok
+test virtual_audio_xrun_probe ... fault_case_result: case=xrun_probe result=inactive expected=controller-armed-fault-run observed=controller-not-armed detail=passive-canonical-lane-run
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s

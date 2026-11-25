@@ -1,0 +1,121 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:36:59Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "ok",
+    "detail": "arch=x64; sys=D:\\a\\ruviform\\ruviform\\drivers\\rvf-virtual-audio\\x64\\Release\\RvfVirtualAudio.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:39:33Z"
+  },
+  {
+    "stage": "catalog-create",
+    "status": "ok",
+    "detail": "cat=D:\\a\\ruviform\\ruviform\\vaudio-pkg\\rvfvirtualaudio.cat",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:39:34Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=DBB1C7B1CB1D9A000B4764831CEB2ECCD87BA007",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:39:35Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=DBB1C7B1CB1D9A000B4764831CEB2ECCD87BA007; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:39:36Z"
+  },
+  {
+    "stage": "sign",
+    "status": "ok",
+    "detail": "signtool=C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe; targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:39:37Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "ok",
+    "detail": "targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:39:38Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "ok",
+    "detail": "published=oem12.inf",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:39:39Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "ok",
+    "detail": "inf_in_store=True; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:39:40Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "ok",
+    "detail": "instance_id=ROOT\\MEDIA\\0000; status=OK; problem_code=0; service=RvfVirtualAudio",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:39:55Z"
+  },
+  {
+    "stage": "endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=ok; probe_exit=0; probe_exit=0; endpoints_enumerated=2; virtual_candidates=2; pair_count=1; pairs=Ruviform Cable Input (Ruviform Virtual Audio Device) <-> Ruviform Cable Output (Ruviform Virtual Audio Device)",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:40:27Z"
+  },
+  {
+    "stage": "midi-endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=ok; probe_exit=0; probe_exit=0; midi_in_ports=1; midi_out_ports=2; loopback_candidates=2; provisioning=CANDIDATES_OBSERVED; candidate_ports=Ruviform MIDI Loopback",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:40:32Z"
+  },
+  {
+    "stage": "stream-roundtrip",
+    "status": "ok",
+    "detail": "test_exit=0; verdict=no-verdict-line; consent=hklm-devacc=Allow,hkcu-devacc=Allow,hklm-cam=Allow,hkcu-cam=Allow,policy=1,AudioEndpointBuilder=Running,Audiosrv=Running",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:40:42Z"
+  },
+  {
+    "stage": "midi-loopback",
+    "status": "ok",
+    "detail": "test_exit=0; verdict=Pass — silent messages accepted by real WinMM output port; probe_exit=0",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:40:47Z"
+  },
+  {
+    "stage": "os-endpoint-wiring",
+    "status": "ok",
+    "detail": "test_exit=0; audio=pass; midi=pass; verdicts=2; metadata=2; copied=2",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T07:41:27Z"
+  },
+  {
+    "stage": "fault-cases",
+    "status": "error",
+    "detail": "cases=device_loss_audio=Fail,midi_device_loss_observation=Fail,permission_denial_audio=Fail,xrun_probe=NotRun; harness_problems=2",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:43:12Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T07:43:14Z"
+  }
+]

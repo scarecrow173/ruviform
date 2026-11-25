@@ -9,7 +9,8 @@ name: virtual-audio-driver-probe
 # driver store staging → root-enumerated MEDIA devnode 結合 → MMDevice
 # endpoint 列挙 → endpoint_probe pair 候補検出 → midi_endpoint_probe
 # loopback 候補検出 → virtual_endpoint streaming round-trip →
-# tests/loopback.rs MIDI round-trip → cleanup まで stage 分解で
+# tests/loopback.rs MIDI round-trip → os_endpoint wiring → fault-cases
+# → cleanup まで stage 分解で
 # 実測し、どの stage まで成立するかを判定材料として記録する。判定は
 # evidence の解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
 #
@@ -80,7 +81,7 @@ jobs:
         shell: pwsh
         run: |
           $os = '${{ matrix.os }}'
-          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "stage-*-$os.txt", "endpoint-probe-$os.txt", "midi-endpoint-probe-$os.txt", "os-endpoint-run-metadata-$os", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "stage-*-$os.txt", "endpoint-probe-$os.txt", "midi-endpoint-probe-$os.txt", "os-endpoint-run-metadata-$os", "fault-*-$os*", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
 
       # endpoint_probe 実行用の Rust toolchain。driver install 経路とは独立
       # に復元し、endpoint-probe stage がいつでも走れる状態にしておく。
@@ -1139,6 +1140,35 @@ jobs:
           Add-StageRecord -JsonPath $json -Stage os-endpoint-wiring -Status $status -Detail $detail -ExitCode $testExit
           exit 0
 
+      # fault-cases: Issue #1002 Slice G — AC5 fault harness の provisioned
+      # 実走。os-endpoint-wiring が必要とする mic consent provisioning を
+      # 汚染しないよう wiring 後・cleanup 前に置く。OS 状態制御（devnode
+      # disable/enable・mic consent Deny/Allow・service restart）はこの
+      # stage に閉じ、Rust test は Expected/Observed oracle と reopen
+      # recovery だけを担当する。controller 未 armed の canonical lane では
+      # fault test は inactive 記録に留まり、既存 verdict 契約に混入しない。
+      # case-level Pass/Fail/NotRun/Unsupported を正規判定とし、stage ok は
+      # 測定 harness が完走し case-level Fail がなかった意味に限定する。
+      - name: Stage fault-cases
+        if: always()
+        shell: pwsh
+        env:
+          RUVIFORM_RUN_REPO: ${{ github.repository }}
+          RUVIFORM_RUN_SHA: ${{ github.sha }}
+        run: |
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $log = "stage-fault-cases-$os.txt"
+          New-Item -ItemType File -Force $log | Out-Null
+          try {
+            & ./tools/virtual-audio-driver/Invoke-FaultCases.ps1 -Os $os 2>&1
+          } catch {
+            "  fault controller invocation error: $($_.Exception.Message)" | Out-Probe $log | Out-Null
+            Add-StageRecord -JsonPath $json -Stage fault-cases -Status error -Detail "controller-invocation-error: $($_.Exception.Message)"
+          }
+          exit 0
+
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
       # → 最終 enum 状態。ephemeral VM だが uninstall まで記録を残すため
       # 各 op を try/catch で全て試行する。
@@ -1217,6 +1247,7 @@ jobs:
             endpoint-probe-${{ matrix.os }}.txt
             midi-endpoint-probe-${{ matrix.os }}.txt
             os-endpoint-run-metadata-${{ matrix.os }}/
+            fault-*-${{ matrix.os }}*
             crashdumps/
             vaudio-pkg/
             vaudio-cert.cer

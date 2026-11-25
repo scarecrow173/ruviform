@@ -1,0 +1,103 @@
+  prerequisite stream-roundtrip: ok / midi-loopback: ok
+  run metadata identity: repo=scarecrow173/ruviform sha=6265671a50541a3ace2559bfb6f1ad277fc89691
+  --- os_endpoint wiring legs (--nocapture auxiliary evidence; canonical lane: mise run test-os-endpoint-wiring) ---
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling cfg-if v1.0.5
+     Compiling zerocopy v0.8.63
+     Compiling windows-sys v0.61.2
+     Compiling windows_x86_64_msvc v0.34.0
+     Compiling getrandom v0.2.17
+     Compiling rand_core v0.6.4
+     Compiling syn v2.0.119
+     Compiling syn v3.0.10
+     Compiling ppv-lite86 v0.2.21
+     Compiling ruviform-video-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-video-core)
+     Compiling fearless_simd v1.2.0
+     Compiling windows-implement v0.60.2
+     Compiling windows-interface v0.59.3
+     Compiling fearless_simd_macros v0.1.0
+     Compiling windows v0.34.0
+     Compiling windows-core v0.62.2
+     Compiling rand_chacha v0.3.1
+     Compiling serde_core v1.0.229
+     Compiling log v0.4.35
+     Compiling rand v0.8.8
+     Compiling audio_thread_priority v0.38.0
+     Compiling ruviform-observability v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-observability)
+     Compiling zmij v1.0.23
+     Compiling windows-future v0.3.2
+     Compiling ruviform-exec v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-exec)
+     Compiling win-sys v0.3.1
+     Compiling shared_memory v0.12.4
+     Compiling windows-collections v0.3.2
+     Compiling windows-numerics v0.3.1
+     Compiling ruviform-plugin-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-core)
+     Compiling ruviform-media-io v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-media-io)
+     Compiling ruviform-io-file v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-io-file)
+     Compiling ruviform-graph v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-graph)
+     Compiling serde_json v1.0.154
+     Compiling serde v1.0.229
+     Compiling ruviform-plugin-host v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-host)
+     Compiling windows v0.62.2
+     Compiling serde_derive v1.0.229
+     Compiling ruviform-math v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-math)
+     Compiling ruviform-dsp v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-dsp)
+     Compiling ruviform-audio-analysis v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-analysis)
+     Compiling ruviform-audio v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio)
+     Compiling itoa v1.0.19
+     Compiling memchr v2.8.3
+     Compiling ruviform-audio-plugin-bridge v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-plugin-bridge)
+     Compiling ruviform-audio-test v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-test)
+     Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+     Compiling cpal v0.18.2
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 47.17s
+       Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-3d246563a972734a.exe)
+
+  running 2 tests
+  os_endpoint: audio render→capture wiring verifier
+    host: WASAPI
+    pair candidates: 1
+  pair[0]: render="Ruviform Cable Input (Ruviform Virtual Audio Device)" capture="Ruviform Cable Output (Ruviform Virtual Audio Device)" (candidate, unconfirmed)
+    render: "Ruviform Cable Input (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.0.00000000}.{cfed5f6f-079f-41f1-b4e1-cbbacc92af3a}") | capture: "Ruviform Cable Output (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.1.00000000}.{af7adbab-3653-44a0-ab3c-4d7122fb0084}")
+    negotiated in=AudioFormat { sample_rate: SampleRate(48000), layout: Mono, sample_format: F32 } out=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 }
+    in stream: format=AudioFormat { sample_rate: SampleRate(48000), layout: Mono, sample_format: F32 } domain=ClockDomainId(2) | out stream: format=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } domain=ClockDomainId(2)
+    oracle level: observed_rms=0.01155 expected_rms≈0.01155 ratio=1.000
+    stats: in_cb=330 out_cb=333 in_frames=158400 out_frames=159456 in_err=0 out_err=0 capture_stored=158400 overflow=0 lock_failures=0
+    error kinds: in xrun=0 discontinuity=0 invalidated=0 backend=0 | out xrun=0 invalidated=0 backend=0
+    timestamps: in regressions=0 effective=0 epoch_resets=1 boundary_cb=298 first..last=18446744073709551615..0 max_backstep_ns=9223372036854775807 idx=[] | out regressions=3 effective=1 epoch_resets=1 boundary_cb=303 first..last=3..75 max_backstep_ns=-10175600 idx=[3,4,75]
+    pair[0] failed:
+      - output timestamp regressions: 1
+  run_metadata: {"case_id":"rf629.audio.virtual-endpoint.render-capture","requirement":"required","result":"fail","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"marker-rms-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"6265671a50541a3ace2559bfb6f1ad277fc89691","os":"windows","arch":"x86_64","expected":"","observed":"no pair candidate completed the round-trip: pair[0]: output timestamp regressions: 1","evidence":[]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json
+
+  thread 'audio_virtual_endpoint_round_trip' (1884) panicked at crates\ruviform-audio-test\tests\os_endpoint.rs:1255:5:
+  verdict: Fail — no pair candidate completed the round-trip:
+  pair[0]: output timestamp regressions: 1
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  test audio_virtual_endpoint_round_trip ... FAILED
+  enumerated: 1 input ports, 2 output ports
+    pair candidates: 1
+    pair: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback" (candidate, unconfirmed)
+  run_metadata: {"case_id":"rf629.midi.virtual-endpoint.loopback","requirement":"required","result":"pass","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"ordered-subsequence+stamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"6265671a50541a3ace2559bfb6f1ad277fc89691","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence round-trip (ordered subsequence)","observed":"sent=4 observed=4 dropped=0 unsupported=0 elapsed=123.279ms tick_span=Some(92) invalidated_in=true invalidated_out=true","evidence":["crates/ruviform-audio-test/tests/os_endpoint.rs","name match is a candidate, not proof of a virtual endpoint"]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json
+  verdict: Pass — round-trip observed through real OS ports
+    evidence note: name match is a candidate, not proof of a virtual endpoint — this is OS-L1 round-trip evidence at best, recorded under virtual-os-endpoint pending human-confirmed provisioning
+  test midi_virtual_endpoint_loopback ... ok
+
+  failures:
+
+  failures:
+      audio_virtual_endpoint_round_trip
+
+  test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 3.52s
+
+  error: test failed, to rerun pass `-p ruviform-audio-test --test os_endpoint`
+  test exit=101
+  verdict lines=2
+  metadata: audio=fail midi=pass records=2
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json -> os-endpoint-run-metadata-windows-2025
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json -> os-endpoint-run-metadata-windows-2025
+  collected metadata files: run-metadata-rf629-audio-virtual-endpoint-render-capture.json, run-metadata-rf629-midi-virtual-endpoint-loopback.json
+  metadata problems: audio:result=fail

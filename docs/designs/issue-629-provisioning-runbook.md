@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #629 provisioning runbook and MIDI virtual lane separation design"
 created: "2026-11-17"
-updated: "2026-11-17"
+updated: "2026-11-25"
 owners:
   - "scarecrow173"
 relations:
@@ -517,7 +517,7 @@ license・配布・再起動の摩擦から、Slice B で独自 driver 経路に
   install 全 stage（`env-build-surface`〜`devnode-create`）→
   `endpoint-probe`→`midi-endpoint-probe`→`stream-roundtrip`
   （`mise run test-audio-virtual-endpoint` 実走）→ `midi-loopback` →
-  `os-endpoint-wiring` → `cleanup` を束ねる。stage 一覧の正本は spec 版
+  `os-endpoint-wiring` → `fault-cases` → `cleanup` を束ねる。stage 一覧の正本は spec 版
   runbook 追記節（`docs/specs/issue-629-provisioning-runbook.md`）。
 
 ## 4. Provisioning 判定フロー（probe 主導）
@@ -622,13 +622,56 @@ NotRun として fail-closed に報告」に対応する記録の
   Pass や実 OS L3 実走 Pass と主張しない — provisioning
   + 実走証拠が揃うまで Required Case は `NotRun` のまま。
 
-## 8. Capability Matrix（確定版 — provisioning 実測待ち項目を明記）
+## 8. Capability Matrix（採用経路 `RvfVirtualAudio` + `RvfMidi` 実測確定版）
 
-survey doc「Capability Matrix（暫定）」を引き継いだ確定版。
-凡例: ✅=再現可能見込み / ⚠️=条件付き / ❓=未確認（probe
-実測要）/ ❌=不可または非現実 / `NotRun`=本 slice 範囲外。
-**❓/⚠️ は全て provisioning 実測待ち — 本版は公開情報 +
-probe 設計ベースの確定版であり、実測で更新する。**
+本節の第一表は、採用経路である ruviform 独自 virtual audio endpoint
+（`RvfVirtualAudio`）と MIDI loopback miniport（`RvfMidi`）の実測 matrix
+である。測定 lane は GitHub-hosted `windows-2025` x64（probe 観測 OS
+`10.0.26100.33828`）に限定し、他 OS/build へ一般化しない。凡例:
+✅=採用 lane で実測済み / ⚠️=一部は実測済みだが明確な限界がある /
+`NotRun`=本 slice で実測していない / `Unsupported`=bounded な実験では
+現行構成で再現・観測できないと確定。✅ は必ず evidence 列の run id または
+repo 内 evidence/文書へ結び付く。COTS 候補の比較は後掲の歴史資料であり、
+採用経路の判定と混ぜない。
+
+| Capability | 採用経路の判定 | 実測根拠・限界 |
+| --- | --- | --- |
+| provisioned audio endpoint 列挙 | ✅ | run `45543608858`・`evidence/rf979/attempt1-endpoint-probe-windows-2025.txt`: `Ruviform Cable Input`/`Ruviform Cable Output` が active で 2 endpoint、pair_count=1。非 active state を同時に列挙した証拠ではない。 |
+| endpoint identity/state 取得 | ✅ | 同じく run `45543608858`: MMDevice id・state=active・production port id（`wasapi:...`）を両方向で観測。MIDI input 側 interface id `\\?\root#media#0000#...\midiloopback` を `attempt1-midi-endpoint-probe-windows-2025.txt` で観測。 |
+| format 交渉（shared mode） | ✅ | 同じく run `45543608858`: render mix format 2ch/48k extensible、capture mix format 1ch/48k extensible。両 endpoint で `f32/2ch/48k`・`f32/2ch/44.1k`・`s16/2ch/48k` が `IsFormatSupported(shared)` supported。`ppclosestmatch` は有効 out-param を渡す規約で測定。`GetStreamLatency` は両 endpoint `0x88890001` refusal であり、latency 値の取得証拠ではない。 |
+| capture/render open・stream | ✅ | run `45543608858` `stream-roundtrip`: `render_capture_round_trip` exit 0・非ゼロ秒（3.48s）で完走。run `45555696425`・`evidence/rf1001/attempt2-run-metadata-rf629-audio-virtual-endpoint-render-capture.json`: `result=pass`・`level=ext-l3`・`environment_kind=virtual-os-endpoint`。 |
+| callback/stream viability | ✅ | run `45555696425` の audio wiring leg: marker/RMS oracle、callback、timestamp epoch grace 契約を通して Pass。rf#1001 attempt1 の mid-epoch regression は fail-closed 動作として記録済み。deep latency/position oracle の全項目を matrix capability とみなさない。 |
+| MIDI Note/CC/PitchBend/timestamp/order round-trip | ✅ | run `45543608858` `midi-loopback`: `loopback_round_trip` と silent output smoke が exit 0。run `45555696425`・`evidence/rf1001/attempt2-run-metadata-rf629-midi-virtual-endpoint-loopback.json`: `result=pass`・`level=ext-l3`・`environment_kind=virtual-os-endpoint`。 |
+| Windows MIDI Services 非依存 | ✅ | run `45543608858` `midi-endpoint-probe`: `New-MidiLoopback: absent`・`midisrv: absent` の環境で `Ruviform MIDI Loopback` midiIn=1/midiOut=2（GS synth を含む）と round-trip が成立。WMS は採用経路の前提ではない。 |
+| license/provenance | ✅ | runtime capability ではなく文書確認: `drivers/rvf-virtual-audio/PROVENANCE.md` で audio 部は SysVAD 派生 MS-PL、MIDI miniport 部は DMusUART 派生 MS-LPL v1.1 と区別し、license 全文同梱と platform limitation を記録済み。 |
+| virtual hotplug / devnode loss stimulus | ⚠️ | run `45575005948` `device_loss_audio`/`stage-fault-cases`: open stream 中の `Disable-PnpDevice`/`pnputil /disable-device` は拒否されたが、remove/recreate fallback による devnode removal stimulus は成立し、MIDI port disappearance が独立に観測された。recreate は新しい instance `ROOT\MEDIA\0001` を bind したものの、audio/MIDI endpoint surface は 45 秒の bounded polling 内に再列挙されなかった。したがって PnP removal stimulus は再現できるが、clean な disable/enable hotplug 制御または透過的 recovery とはみなさない。 |
+| audio device-loss invalidation + recovery | Unsupported | run `45575005948` `device_loss_audio=Unsupported`: removal が stream 生存中に挟まったにもかかわらず `StreamInvalidated`=0・control-path `DeviceNotFound` 相当=0・`ClockDiscontinuity`=0。now/stop/start 制御経路でも typed invalidation は surface しなかった。typed invalidation は attempt1-5 で一貫して未観測だが、recovery は attempt1 `45567369491` で clean reopen（callbacks=38）が成功し、attempt3-5 では `no input devices on this host` となった不安定な境界である。OS removal と MIDI disappearance は stimulus 成立の代替 evidence だが、typed invalidation + 保証された recovery を組み合わせた capability は現行構成では成立しない。driver/adapter 側の PnP invalidation 契約を本 slice では実装しない。 |
+| MIDI device-loss disappearance observation | ✅ | run `45575005948` `midi_device_loss_observation=Pass`: before=True/exit0、during=False/exit0、after=False/exit0。正規 oracle は少なくとも disappearance を観測することであり、`Ruviform MIDI Loopback` が removal 中に WinMM enumeration から消えたことを確認した。open 中 Rust MIDI adapter への非同期通知を観測した証拠ではない。 |
+| MIDI reappearance after remove/recreate | ⚠️ | run `45575005948`: recreate と AudioEndpointBuilder/Audiosrv restart 後、45 秒（10 probe）の bounded polling でも midiIn=0/midiOut=1（GS synth のみ）のままで after=False。ただし attempt1 `45567369491` では audio reopen recovery（callbacks=38）が成功しており、attempt1 の MIDI probe は measurement bug で invalid なため、reappearance 不能とは断定しない。現行 evidence では再出現の再現性が確立していない不安定な境界である。 |
+| microphone permission denial + restore | ✅ | run `45575005948` `permission_denial_audio=Pass`: microphone consent Deny + service restart 後の capture open が exact `DeviceError::Backend("permission_denied")`。Allow restore 後に `Ruviform Cable Output` が再列挙され、clean open/start/stop・callbacks=39 を確認。どの consent layer が効いたかは単一層へ断定せず、runbook の OS 制御面として記録する。 |
+| xrun / underrun / overrun 注入と観測 | Unsupported | run `45575005948` `xrun_probe`: active stream（callbacks=423）に bounded user-mode starvation（2 spinner・900ms）を与えても `DeviceError::Xrun`・`ClockDiscontinuity`・`StreamInvalidated`・その他 error が 0。native input は discontinuity を `ClockDiscontinuity` に写し、cpal WASAPI output には typed xrun 発火経路がない現行契約では、OS/user-mode 制御だけでは typed xrun evidence を作れない。決定的注入面と adapter 観測契約は `scarecrow173/ruviform#1009` へ分離。 |
+| format switch（streaming 中の動的切替） | NotRun | 本 slice では OS/driver 制御による streaming 中 format switch harness を実装せず、実測していない。採用経路で未実測のまま ✅ にしない。 |
+| loopback latency の数値測定 | ⚠️ | render→capture round-trip 自体は ✅。ただし `GetStreamLatency` は endpoint refusal（`0x88890001`）、canonical lane の passing output は capture され、本 slice は bounded な数値 latency oracle を追加していない。したがって遅延値・制御性は未確定であり、signal viability の証拠と混同しない。 |
+
+### survey Open Questions #1-#7 の closure
+
+| OQ | closure | 根拠 |
+| --- | --- | --- |
+| #1 VB-CABLE disable/enable・既定 device 切替で `IMMNotificationClient` が発火するか | **採用経路では NotApplicable** | VB-CABLE は採用経路ではない。代替となる Rvf devnode loss/recovery は rf#1002 fault case で実測し、typed audio invalidation/recovery は Unsupported、MIDI disappearance は Pass という境界を上表へ記録した。 |
+| #2 loopMIDI port 出現/消失が `midiInGetNumDevs` に動的反映されるか | **採用経路では NotApplicable** | loopMIDI は採用経路ではない。代替となる `Ruviform MIDI Loopback` disappearance/reappearance は rf#1002 `midi_device_loss_observation` で実測し、disappearance=Pass・reappearance は再現性未確立（⚠️）の境界を上表へ記録した。 |
+| #3 対象 runner で Windows MIDI Services が利用可能か | **採用経路では NotApplicable（実測済み）** | run `45543608858` で `New-MidiLoopback`/`midisrv` absent を観測。採用経路は WMS に依存せず、この状態で MIDI round-trip が成立した。 |
+| #4 VB-CABLE/loopMIDI license が CI provisioning を許容するか | **採用経路では NotApplicable** | 外部 COTS driver を採用しない。Rvf 側 license/provenance は `drivers/rvf-virtual-audio/PROVENANCE.md` で確定済み。 |
+| #5 `IsFormatSupported` の `ppclosestmatch` 必須挙動は build 依存か | **採用 lane で実測解消（一般化しない）** | windows-2025 laneでは有効 out-param 規約で 3 format query が supported を返した（run `45543608858`）。実装は常に有効 out-param を渡す。NULL 拒否が他 buildで恒常かは本 slice の capability ではなく、一般化しない。 |
+| #6 capture permission denial を仮想 endpoint で再現できるか | **実測で解消** | run `45575005948` `permission_denial_audio=Pass` で Deny 後 capture open が exact `Backend("permission_denied")`、Allow restore 後の clean reopen（callbacks=39）まで確認した。 |
+| #7 `midiOutMessage` crash が GS synth 固有か winmm 全般か | **採用 laneの境界として解消（一般化しない）** | run `45543608858` で output interface-id query は host の `Microsoft GS Wavetable Synth` 側 crash により NotRun、Rvf input interface-id queryは成功。採用経路の round-trip は output interface-id query を必要としない。全 driver/WinMM 一般性は断定しない。 |
+
+### 参考（歴史・比較資料）: COTS/SysVAD matrix
+
+以下は採用経路確定前の比較資料であり、判定列は採用経路の実測値ではない。
+❓/⚠️ の語は当時の公開情報・probe 設計ベースの見込みであり、採用経路
+`RvfVirtualAudio` + `RvfMidi` の受入判定には使わない。特に SysVAD 列の ✅ は
+upstream sample が持つ理論上の実装可能性であって、ruviform 採用 driver での
+provisioned 実測を意味しない。
 
 | Capability | VB-CABLE/Hi-Fi | VAC | loopMIDI/WMS loopback | SysVAD |
 | --- | --- | --- | --- | --- |
@@ -644,27 +687,6 @@ probe 設計ベースの確定版であり、実測で更新する。**
 | **xrun / latency** | ⚠️（VB-CABLE は内部バッファ 7168 frame・latency 調整可。決定的 xrun 注入は困難） | ⚠️（clock register で位置制御は可・xrun 強制は ❓） | n/a | ✅（driver で drop 注入可） |
 | **loopback latency**（signal→capture の往復遅延） | ✅（internal SR 48kHz・latency パラメータあり・実測可能） | ✅ | ✅（timestamp は WinMM ms domain — adapter が `MidiPortCapabilities.clock_domain` で報告） | ✅ |
 | **MIDI Note/CC/PitchBend/Timestamp/Order** | n/a | n/a | ✅（loopback pair 経由 — send path は 2nd slice `scarecrow173/ruviform#658` で実装済み。round-trip verifier は 3rd slice `tests/loopback.rs`、provisioned pair 前提で未 provision 環境は `NotRun`） | n/a |
-
-### 実測待ち項目（survey Open Questions #1-#7 の対応）
-
-provisioning 実測で確定させる項目 — runbook §5 の lane
-実行と probe 出力で収集する:
-
-1. VB-CABLE endpoint の disable/enable・既定 device 切替で
-   `IMMNotificationClient` が発火するか（hotplug 相当）。
-2. loopMIDI port の出現/消失が `midiInGetNumDevs` に動的
-   反映されるか（app 起動/終了で index が変わるか）。
-3. Windows MIDI Services が対象 runner の OS build で
-   利用可能か（25H2+ かつ feature rollout 状態）。
-4. VB-CABLE/loopMIDI の license が専用 CI/test runner への
-   install と自動 provisioning を許容するか（§2 で確認・
-   記録）。
-5. `IsFormatSupported` の `ppclosestmatch` 必須挙動は
-   Windows build 依存か恒常か（他 build での再現性）。
-6. capture 側の permission denial（microphone privacy）を
-   仮想 endpoint で再現できるか。
-7. `midiOutMessage` crash が GS Wavetable Synth 固有か
-   winmm 全般か（他 driver での再現性）。
 
 ## 9. AC7 consumer 照合（headless 記録）
 
@@ -778,3 +800,38 @@ provisioned 環境へ接続する。設計判断は次のとおり。
   verifier の latency/position/tone/xrun など深い oracle は複製しない。
   分類は epoch 1 grace・epoch 2 grace・mid-epoch fatal・slot overflow
   fatal を区別する deterministic test で固定する。
+
+## 12. 追記（2026-11-25）— fault case 実測確定（Issue #1002 Slice G）
+
+`fault-cases` stage の正規判定は workflow conclusion ではなく
+`fault-cases-results-windows-2025.json` の case-level result で行う。最終
+fault attempt は branch-ref run `45575005948` / SHA
+`6265671a50541a3ace2559bfb6f1ad277fc89691` で、stage record は
+`fault-cases=ok`・`harness_problems=0` だった。同 run では既存の
+`stream-roundtrip`・`midi-loopback`・`os-endpoint-wiring`（audio/midi 両
+RunMetadata Pass）も完走し、fault stage が先行 lane を壊していないことを
+確認した。ここでの `ok` は測定 harness 完走だけを意味し、capability の合否は
+次の case result である。
+
+| case | result | 実測確定 |
+| --- | --- | --- |
+| `permission_denial_audio` | Pass | microphone consent Deny + service restart 後の capture open が exact `Backend("permission_denied")` に分類され、Allow restore 後に endpoint 再列挙と clean open/start/stop（callbacks=39）まで回復した。 |
+| `midi_device_loss_observation` | Pass | `Ruviform MIDI Loopback` は removal 前に存在し、removal 中の WinMM enumeration から消失した（before=True/exit0, during=False/exit0）。after=False も同時に記録し、reappearance を Pass にしていない。 |
+| `device_loss_audio` | Unsupported | removal stimulus は stream 生存中に適用されたが、`StreamInvalidated`/control-path `DeviceNotFound`/`ClockDiscontinuity` は 0。recreate 後の endpoint surface はこの run では bounded window に復帰しなかった。typed invalidation は全 attempt で未観測だが、recovery は attempt1 で成功・attempt3-5 で失敗しており再現性がない。したがって typed audio device-loss invalidation + 保証された recovery を OS 制御だけで観測する capability は成立しない。 |
+| `xrun_probe` | Unsupported | active stream callbacks=423 に bounded user-mode starvation を与えても xrun/discontinuity/invalidated/error はすべて 0。現行 adapter 契約では typed `DeviceError::Xrun` を OS/user-mode 制御だけでは観測できない。 |
+
+device-loss の解釈は、「fault stimulus が効かなかった」ではなく、「PnP removal
+自体は MIDI enumeration disappearance で独立確認できたが、audio adapter が
+要求する typed invalidation/recovery oracle へ写らなかった」である。open
+handle の lifetime、driver の PnP removal 処理、WASAPI error surface のどこに
+恒久修正を置くべきか、また stop/start control probing が removal pending 状態の recovery へ影響するかは本 slice の lease 外なので断定しない。AC5 の代替
+evidence は controller action log、before/during/after WinMM probe、phase file、
+reopen observation、case JSON であり、error が出なかった事実を Pass に読み替えない。
+
+xrun の要否判断は「必要」に確定する。必要なのは driver 制御面だけではなく、
+drop/gap/underrun を adapter がどの error kind・timestamp/frame evidence として
+露出するかの観測契約も含む。実装は `scarecrow173/ruviform#1009`（仮想 endpoint
+の決定的 xrun 注入と adapter 観測契約）へ分離した。OS-L1 deterministic backend
+の `StreamFault::Error(DeviceError::Xrun)` は API/backend 契約の evidence として
+再利用できるが、EXT-L3 xrun Pass の代用にはしない。`ClockDiscontinuity` は現行
+native input の discontinuity 表現であり、typed Xrun と等価とはみなさない。

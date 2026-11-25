@@ -1,0 +1,44 @@
+step: midiOutGetNumDevs
+  midiOutGetNumDevs=2
+step: midiOutGetDevCapsW[0]
+  midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+step: midiOutGetDevCapsW[1]
+  midiOut[1] rc=0 name='Ruviform MIDI Loopback' tech=0x0001 support=0x00000000
+step: midiInGetNumDevs
+  midiInGetNumDevs=1
+step: midiInGetDevCapsW[0]
+  midiIn[0] rc=0 name='Ruviform MIDI Loopback' support=0x00000000
+  loopbackOut=[1] loopbackIn=[0]
+step: midiOutOpen[1]
+  midiOutOpen rc=0 hmo=0x19c15549680
+step: midiOutShortMsg[1] note-on
+  midiOutShortMsg rc=0
+step: midiOutReset[1]
+step: midiOutClose[1]
+  midiOutClose rc=0
+step: midiInOpen[0] (CALLBACK_FUNCTION|MIDI_IO_STATUS)
+  midiInOpen rc=0 hmi=0x19c15c7f4c0
+step: midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)
+  open-handle ifsize rc=8 size=0
+step: midiInPrepareHeader+AddBuffer[0]
+  prepare rc=0
+  addbuf rc=0
+step: midiInPrepareHeader+AddBuffer[1]
+  prepare rc=0
+  addbuf rc=0
+step: midiInStart[0]
+  midiInStart rc=0
+step: loopback send note-on via midiOut[1]
+  loopback send done
+  callback count=3 lastMsg=0x3c3 lastP1=0x3c80 lastP2=0x133
+step: midiInStop[0]
+step: midiInReset[0]
+step: midiInUnprepareHeader
+step: midiInUnprepareHeader
+step: midiInClose[0]
+  midiInClose rc=0
+  callback count(final)=6 lastMsg=0x3c2
+step: midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle 0] (correct arg order)
+  dev-index ifsize rc=0 size=144
+  dev-index if rc=0 if='\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback'
+probe: done

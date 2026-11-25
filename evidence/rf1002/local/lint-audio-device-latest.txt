@@ -1,0 +1,5 @@
+[lint] $ if [ "$#" -lt 1 ]; then
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.59s
+mbx[cache]: 0 hits, 0 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 4d 14h saved across 6925 builds. put it toward something with a progress bar.

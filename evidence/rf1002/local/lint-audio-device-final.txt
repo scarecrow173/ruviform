@@ -1,0 +1,4 @@
+== lint-audio-device :: mise run lint ruviform-audio-device
+[lint] $ if [ "$#" -lt 1 ]; then
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+mbx[savings]: 256717 compilations on file. the box remembers.

@@ -1,0 +1,4 @@
+tools/virtual-audio-driver/Invoke-FaultCases.ps1 OK
+tools/virtual-audio-driver/Invoke-FaultCases.ps1 exit=0
+tools/testsigned-driver/TestDevice.ps1 OK
+tools/testsigned-driver/TestDevice.ps1 exit=0

@@ -1,0 +1,4 @@
+== check-audio-test :: mise run check ruviform-audio-test
+[check] $ cargo check --locked --all-targets -p ruviform-audio-test
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+mbx[savings]: 4d 14h of rustc's calendar cleared across 6944 builds.

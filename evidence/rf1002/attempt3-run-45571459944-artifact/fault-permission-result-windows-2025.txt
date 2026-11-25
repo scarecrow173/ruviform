@@ -1,0 +1,1 @@
+fault_case_result: case=permission_denial_audio result=pass expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_39 detail=os-consent-deny-mapped-exactly-and-allow-restored

@@ -1,0 +1,15 @@
+fmt-check	0	mise run fmt-check
+check-audio-device	0	mise run check ruviform-audio-device
+lint-audio-device	0	mise run lint ruviform-audio-device
+test-audio-device	0	mise run test ruviform-audio-device
+lint-audio-real-input	0	mise run lint-audio-real-input
+check-audio-test	0	mise run check ruviform-audio-test
+lint-audio-test	0	mise run lint ruviform-audio-test
+test-audio-test	0	mise run test ruviform-audio-test
+test-os-endpoint-wiring	0	mise run test-os-endpoint-wiring
+test-audio-virtual-endpoint	0	mise run test-audio-virtual-endpoint
+test-midi-virtual-endpoint	0	mise run test-midi-virtual-endpoint
+test-ci-daily	0	mise run test-ci-daily
+test-ci-tracker	0	mise run test-ci-tracker
+prek-all-files	0	mise exec -- prek run --all-files
+actionlint-virtual-audio	0	mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml

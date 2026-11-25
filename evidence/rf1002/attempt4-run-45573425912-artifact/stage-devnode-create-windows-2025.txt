@@ -1,0 +1,20 @@
+  --- TestDevice.ps1 -Action create (MEDIA class) ---
+  instance_id=ROOT\MEDIA\0000
+  bind_ok=True
+  reboot_required=False
+  bound_inf=D:\a\ruviform\ruviform\vaudio-pkg\RvfVirtualAudio.inf
+  instance_id=ROOT\MEDIA\0000
+
+  --- Get-PnpDevice ---
+  Status=OK Class=MEDIA
+  FriendlyName=Ruviform Virtual Audio Device
+  Service=RvfVirtualAudio
+  DEVPKEY_Device_ProblemCode = 0
+  DEVPKEY_Device_DevNodeStatus = 25174027
+  DEVPKEY_Device_DriverVersion = 1.0.0.0
+  DEVPKEY_Device_DriverDate = 01/01/2025 00:00:00
+  Win32_SystemDriver: State=Running Status=OK PathName=C:\Windows\system32\DriverStore\FileRepository\rvfvirtualaudio.inf_amd64_3e1f28c5e8b39de1\RvfVirtualAudio.sys
+
+  --- MMDevice 観測（endpoint 生成の一次確認 — Get-MMDevice） ---
+  Win32_SoundDevice count=1
+  sound device: Ruviform Virtual Audio Device status=OK

@@ -1,0 +1,33 @@
+[
+  {
+    "case": "device_loss_audio",
+    "result": "Fail",
+    "expected": "streaminvalidated-or-control-device-not-found+reopen",
+    "observed": "invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_38",
+    "detail": "invalidation-oracle-not-observed",
+    "raw_line": "fault_case_result: case=device_loss_audio result=fail expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_38 detail=invalidation-oracle-not-observed"
+  },
+  {
+    "case": "midi_device_loss_observation",
+    "result": "Fail",
+    "expected": "present-before+absent-during+present-after",
+    "observed": "before=True/0; during=True/1; after=True/0",
+    "detail": "midi-winmm-probe-measurement-failed"
+  },
+  {
+    "case": "permission_denial_audio",
+    "result": "Fail",
+    "expected": "backend-permission-denied+post-restore-reopen",
+    "observed": "capture-open-error_permission_denied;-recovery_recovery-failed",
+    "detail": "permission-controller-failure; original=restore-signal-missing;-exact_true",
+    "raw_line": "fault_case_result: case=permission_denial_audio result=fail expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_recovery-failed detail=restore-signal-missing;-exact_true"
+  },
+  {
+    "case": "xrun_probe",
+    "result": "Unsupported",
+    "expected": "deviceerror-xrun-under-bounded-user-mode-starvation",
+    "observed": "xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_421",
+    "detail": "bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation",
+    "raw_line": "fault_case_result: case=xrun_probe result=unsupported expected=deviceerror-xrun-under-bounded-user-mode-starvation observed=xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_421 detail=bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation"
+  }
+]

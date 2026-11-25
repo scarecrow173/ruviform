@@ -1,0 +1,143 @@
+  prerequisite devnode-create: ok
+  prerequisite endpoint-probe: ok
+  prerequisite midi-endpoint-probe: ok
+  prerequisite stream-roundtrip: ok
+  prerequisite midi-loopback: ok
+  prerequisite os-endpoint-wiring: ok
+  controller context: instance_id=ROOT\MEDIA\0000 admin=True
+  provisioning details: audio_pair=True midi_candidates=True
+  --- case device_loss_audio ---
+    midi[before-disable] step: midiOutGetNumDevs
+    midi[before-disable]   midiOutGetNumDevs=2
+    midi[before-disable] step: midiOutGetDevCapsW[0]
+    midi[before-disable]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[before-disable] step: midiOutGetDevCapsW[1]
+    midi[before-disable]   midiOut[1] rc=0 name='Ruviform MIDI Loopback' tech=0x0001 support=0x00000000
+    midi[before-disable] step: midiInGetNumDevs
+    midi[before-disable]   midiInGetNumDevs=1
+    midi[before-disable] step: midiInGetDevCapsW[0]
+    midi[before-disable]   midiIn[0] rc=0 name='Ruviform MIDI Loopback' support=0x00000000
+    midi[before-disable]   loopbackOut=[1] loopbackIn=[0]
+    midi[before-disable] step: midiOutOpen[1]
+    midi[before-disable]   midiOutOpen rc=0 hmo=0x18e231f4b10
+    midi[before-disable] step: midiOutShortMsg[1] note-on
+    midi[before-disable]   midiOutShortMsg rc=0
+    midi[before-disable] step: midiOutReset[1]
+    midi[before-disable] step: midiOutClose[1]
+    midi[before-disable]   midiOutClose rc=0
+    midi[before-disable] step: midiInOpen[0] (CALLBACK_FUNCTION|MIDI_IO_STATUS)
+    midi[before-disable]   midiInOpen rc=0 hmi=0x18e231f4b10
+    midi[before-disable] step: midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)
+    midi[before-disable]   open-handle ifsize rc=8 size=0
+    midi[before-disable] step: midiInPrepareHeader+AddBuffer[0]
+    midi[before-disable]   prepare rc=0
+    midi[before-disable]   addbuf rc=0
+    midi[before-disable] step: midiInPrepareHeader+AddBuffer[1]
+    midi[before-disable]   prepare rc=0
+    midi[before-disable]   addbuf rc=0
+    midi[before-disable] step: midiInStart[0]
+    midi[before-disable]   midiInStart rc=0
+    midi[before-disable] step: loopback send note-on via midiOut[1]
+    midi[before-disable]   loopback send done
+    midi[before-disable]   callback count=3 lastMsg=0x3c3 lastP1=0x3c80 lastP2=0x12e
+    midi[before-disable] step: midiInStop[0]
+    midi[before-disable] step: midiInReset[0]
+    midi[before-disable] step: midiInUnprepareHeader
+    midi[before-disable] step: midiInUnprepareHeader
+    midi[before-disable] step: midiInClose[0]
+    midi[before-disable]   midiInClose rc=0
+    midi[before-disable]   callback count(final)=6 lastMsg=0x3c2
+    midi[before-disable] step: midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle 0] (correct arg order)
+    midi[before-disable]   dev-index ifsize rc=0 size=144
+    midi[before-disable]   dev-index if rc=0 if='\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback'
+    midi[before-disable] probe: done
+  midi probe[before-disable]: exit=0 loopback_present=True file=fault-midi-before-disable-windows-2025.txt
+  device-loss test job id=1
+  ready signal observed; disabling devnode
+  disable error: Disable-PnpDevice failed (Generic failure ); pnputil /disable-device exit=50
+  disable success=False
+  disable failed; attempting remove/recreate fallback while streams are live
+    remove-fallback: removed=True
+  remove fallback success=True
+    midi[during-disable] step: midiOutGetNumDevs
+    midi[during-disable]   midiOutGetNumDevs=1
+    midi[during-disable] step: midiOutGetDevCapsW[0]
+    midi[during-disable]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[during-disable] step: midiInGetNumDevs
+    midi[during-disable]   midiInGetNumDevs=0
+    midi[during-disable]   loopbackOut=[] loopbackIn=[]
+    midi[during-disable] probe: done
+  midi probe[during-disable]: exit=0 loopback_present=False file=fault-midi-during-disable-windows-2025.txt
+  observed signal: True
+    recreate: instance_id=ROOT\MEDIA\0001
+    recreate: bind_ok=True
+    recreate: reboot_required=False
+    recreate: bound_inf=D:\a\ruviform\ruviform\vaudio-pkg\RvfVirtualAudio.inf
+  recreate success=True new_instance_id=ROOT\MEDIA\0001
+    midi[after-enable] step: midiOutGetNumDevs
+    midi[after-enable]   midiOutGetNumDevs=1
+    midi[after-enable] step: midiOutGetDevCapsW[0]
+    midi[after-enable]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[after-enable] step: midiInGetNumDevs
+    midi[after-enable]   midiInGetNumDevs=0
+    midi[after-enable]   loopbackOut=[] loopbackIn=[]
+    midi[after-enable] probe: done
+  midi probe[after-enable]: exit=0 loopback_present=False file=fault-midi-after-enable-windows-2025.txt
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: controlled devnode loss/recovery
+    test: fault_case_result: case=device_loss_audio result=fail expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=no-input-devices-on-this-host;-invalidation_seen_false
+    test: test virtual_audio_device_loss_fault ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 20.27s
+    test:
+  case result: case=device_loss_audio result=Fail expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=stimulus=remove-recreate; no-input-devices-on-this-host;-invalidation_seen_false
+  case result: case=midi_device_loss_observation result=Fail expected=present-before+absent-during+present-after observed=before=True/0; during=False/0; after=False/0 detail=port-disappearance-or-reappearance-oracle-not-met
+  --- case permission_denial_audio ---
+  mic-consent-Deny [hklm-devacc] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hkcu-devacc] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hklm-cam] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hkcu-cam] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [policy] HKLM:SOFTWARE\Policies\Microsoft\Windows\AppPrivacy\LetAppsAccessMicrophone : '1' -> '2'
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+  permission controller setup problems:
+  permission test job id=8
+  permission observed signal: False
+  restoring mic consent Allow and audio services
+  mic-consent-Allow [hklm-devacc] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hkcu-devacc] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hklm-cam] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hkcu-cam] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [policy] HKLM:SOFTWARE\Policies\Microsoft\Windows\AppPrivacy\LetAppsAccessMicrophone : '2' -> '1'
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+  permission restore problems:
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: microphone privacy denial/recovery
+    test: fault_case_result: case=permission_denial_audio result=notrun expected=device-enumeration observed=enumeration-failed detail=no-output-devices-on-this-host
+    test: test virtual_audio_permission_denial_fault ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.01s
+    test:
+  case result: case=permission_denial_audio result=Fail expected=device-enumeration observed=enumeration-failed detail=permission-controller-failure; original=no-output-devices-on-this-host
+  --- case xrun_probe ---
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: bounded xrun observation probe
+    test: fault_case_result: case=xrun_probe result=notrun expected=device-enumeration observed=enumeration-failed detail=no-output-devices-on-this-host
+    test: test virtual_audio_xrun_probe ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+    test:
+  xrun probe exit=0
+  case result: case=xrun_probe result=NotRun expected=device-enumeration observed=enumeration-failed detail=no-output-devices-on-this-host
+  machine-readable case results: fault-cases-results-windows-2025.json
+  harness problems: permission-observed-signal-missing; permission-restore-incomplete

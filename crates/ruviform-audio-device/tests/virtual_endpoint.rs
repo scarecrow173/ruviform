@@ -42,19 +42,23 @@
 //! returns without asserting. A name match is a *candidate*, not
 //! proof of a virtual endpoint — a Pass here is OS-L1 "real OS API
 //! round-trip" evidence, never `environment_kind=
-//! virtual-os-endpoint`. `StreamInvalidated` needs interactive
-//! device removal and stays `NotRun` (AC5 / later slice); xruns and
-//! error events are recorded, not gated.
+//! virtual-os-endpoint`. Controller-armed fault cases in this file
+//! exercise `StreamInvalidated`, permission denial and bounded xrun
+//! observation for AC5; unarmed canonical-lane runs keep those cases
+//! explicitly inactive, and ordinary round-trip error events are
+//! recorded, not gated.
 
 #![cfg(feature = "real-device")]
 
 use std::f64::consts::TAU;
+use std::fs;
 use std::io::Write as _;
+use std::path::Path;
 use std::process;
 use std::sync::atomic::{AtomicI64, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ruviform_audio_core::device::{
     BufferSize, Device, DeviceEnumerator, DeviceError, InputCallbackInfo, InputDataCallback,
@@ -74,7 +78,7 @@ const CAPTURE_SECONDS: u64 = 3;
 const RESTART_SETTLE: Duration = Duration::from_millis(300);
 /// Hard bound on total runtime — the watchdog aborts the process if
 /// any control-path call (enumerate/open/start/stop) hangs.
-const MAX_RUN: Duration = Duration::from_secs(60);
+const MAX_RUN: Duration = Duration::from_secs(120);
 /// Requested fixed buffer size in frames (10 ms at 48 kHz).
 const REQUESTED_FRAMES: usize = 480;
 /// Per-epoch startup grace window for the timestamp-regression
@@ -202,6 +206,7 @@ struct Probe {
     out_latency_count: AtomicU64,
     out_errors: AtomicUsize,
     out_xruns: AtomicUsize,
+    out_invalidated: AtomicUsize,
     out_last_error_kind: AtomicUsize,
     /// Absolute render-frame cursor — advanced once per callback by
     /// the delivered frame count so [`signal_sample`] sees a
@@ -389,6 +394,683 @@ fn render_capture_round_trip() {
         "verdict: Fail — no pair candidate completed the round-trip:\n{}",
         pair_failures.join("\n")
     );
+}
+
+// ---------------------------------------------------------------------------
+// Fault-case harness (AC5 / Issue #1002)
+//
+// These tests never mutate PnP, registry or service state themselves. The
+// workflow-owned controller arms a case through environment variables,
+// performs the OS-side stimulus, and synchronizes through small phase files.
+// Without an armed controller every case is explicitly inactive so the
+// canonical manual lane can collect the target without changing the existing
+// round-trip verdict contract.
+// ---------------------------------------------------------------------------
+
+const FAULT_ENV_DEVICE_LOSS: &str = "RUVIFORM_FAULT_DEVICE_LOSS";
+const FAULT_ENV_PERMISSION_DENIAL: &str = "RUVIFORM_FAULT_PERMISSION_DENIAL";
+const FAULT_ENV_XRUN_PROBE: &str = "RUVIFORM_FAULT_XRUN_PROBE";
+const FAULT_ENV_READY_FILE: &str = "RUVIFORM_FAULT_READY_FILE";
+const FAULT_ENV_OBSERVED_FILE: &str = "RUVIFORM_FAULT_OBSERVED_FILE";
+const FAULT_ENV_RESTORE_FILE: &str = "RUVIFORM_FAULT_RESTORE_FILE";
+const FAULT_ENV_RESULT_FILE: &str = "RUVIFORM_FAULT_RESULT_FILE";
+const FAULT_ENV_XRUN_SPIN_THREADS: &str = "RUVIFORM_FAULT_XRUN_SPIN_THREADS";
+
+/// Whether the workflow controller armed this process for one fault case.
+fn fault_armed(variable: &str) -> bool {
+    std::env::var(variable).is_ok_and(|value| {
+        let normalized = value.trim().to_ascii_lowercase();
+        normalized == "1" || normalized == "true" || normalized == "yes"
+    })
+}
+
+/// One-line stable key=value record. The workflow parses this line and the
+/// optional result file verbatim; whitespace is folded out of values so the
+/// record remains machine-readable without a JSON dependency in this crate.
+fn fault_emit(case: &str, result: &str, expected: &str, observed: &str, detail: &str) {
+    fn token(value: &str) -> String {
+        value
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join("-")
+            .replace(['"', '=', '\n', '\r'], "_")
+    }
+    let line = format!(
+        "fault_case_result: case={} result={} expected={} observed={} detail={}",
+        token(case),
+        token(result),
+        token(expected),
+        token(observed),
+        token(detail),
+    );
+    eprintln!("{line}");
+    if let Ok(path) = std::env::var(FAULT_ENV_RESULT_FILE)
+        && let Err(error) = fs::write(&path, format!("{line}\n"))
+    {
+        eprintln!("fault_result_write_error: {error}");
+    }
+}
+
+/// Explicit passive terminal state for the canonical lane. This deliberately
+/// avoids the generic `verdict:` vocabulary consumed by the existing stages.
+fn fault_inactive(case: &str) {
+    fault_emit(
+        case,
+        "inactive",
+        "controller-armed-fault-run",
+        "controller-not-armed",
+        "passive-canonical-lane-run",
+    );
+}
+
+fn fault_write_phase(variable: &str, contents: &str) {
+    if let Ok(path) = std::env::var(variable)
+        && let Err(error) = fs::write(&path, format!("{contents}\n"))
+    {
+        eprintln!("fault_phase_write_error: path={path} error={error}");
+    }
+}
+
+fn fault_wait_for_file(variable: &str, timeout: Duration) -> bool {
+    let Ok(path) = std::env::var(variable) else {
+        return false;
+    };
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if Path::new(&path).exists() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    Path::new(&path).exists()
+}
+
+/// Selects the first currently enumerable virtual render↔capture pair.
+fn first_virtual_pair(host: &Host) -> Result<Option<Pair>, String> {
+    let renders = enumerate_devices(host, Direction::Render)?;
+    let captures = enumerate_devices(host, Direction::Capture)?;
+    Ok(pair_candidates(renders, captures).into_iter().next())
+}
+
+/// Re-enumerates the capture endpoint by virtual stem and performs a clean
+/// open → start → stop recovery probe. Callback count is evidence; the
+/// recovery oracle is the successful control-path sequence after re-enumeration.
+fn reopen_capture_after_recovery(host: &Host, stem: &str) -> Result<String, String> {
+    let mut last_error = "recovery not attempted".to_owned();
+    for _attempt in 0..36 {
+        match reopen_capture_once(host, stem) {
+            Ok(observation) => return Ok(observation),
+            Err(error) => {
+                last_error = error;
+                thread::sleep(Duration::from_millis(750));
+            }
+        }
+    }
+    Err(last_error)
+}
+
+fn reopen_capture_once(host: &Host, stem: &str) -> Result<String, String> {
+    let captures = enumerate_devices(host, Direction::Capture)?;
+    let Some(candidate) = captures
+        .into_iter()
+        .find(|candidate| candidate.stem.as_deref() == Some(stem))
+    else {
+        return Err(format!(
+            "capture endpoint with stem {stem:?} did not re-enumerate"
+        ));
+    };
+    let name = candidate.name.clone();
+    let Some(format) = candidate.format else {
+        return Err(format!(
+            "re-enumerated capture endpoint {name:?} has no F32-openable format"
+        ));
+    };
+    let probe = Arc::new(Probe::new(&format, &format));
+    let stream = open_input_with_fallback(candidate.device.as_ref(), format, &probe)
+        .map_err(|error| format!("recovery input open failed: {error}"))?;
+    stream
+        .start()
+        .map_err(|error| format!("recovery input start failed: {error}"))?;
+    thread::sleep(Duration::from_millis(400));
+    stream
+        .stop()
+        .map_err(|error| format!("recovery input stop failed: {error}"))?;
+    let callbacks = probe.in_callbacks.load(Ordering::Relaxed);
+    drop(stream);
+    Ok(format!(
+        "re-enumerated device={name:?}; clean open-start-stop; callbacks={callbacks}"
+    ))
+}
+
+/// Controlled devnode-loss fault case. The workflow disables the devnode only
+/// after the ready file appears; this test observes the adapter-visible error
+/// and then proves post-enable re-enumeration plus clean input reopen.
+#[test]
+#[ignore = "requires the workflow fault controller and a provisioned virtual audio pair"]
+#[expect(clippy::too_many_lines)]
+fn virtual_audio_device_loss_fault() {
+    let case = "device_loss_audio";
+    if !fault_armed(FAULT_ENV_DEVICE_LOSS) {
+        fault_inactive(case);
+        return;
+    }
+    spawn_watchdog();
+    eprintln!("virtual_endpoint fault: controlled devnode loss/recovery");
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "host-unavailable",
+                &format!("default_host: {error}"),
+            );
+            return;
+        }
+    };
+    let pair = match first_virtual_pair(&host) {
+        Ok(Some(pair)) => pair,
+        Ok(None) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "no-pair-candidate",
+                "not-provisioned",
+            );
+            return;
+        }
+        Err(reason) => {
+            fault_emit(
+                case,
+                "notrun",
+                "device-enumeration",
+                "enumeration-failed",
+                &reason,
+            );
+            return;
+        }
+    };
+
+    let capture_stem = pair.capture.stem.clone().unwrap_or_default();
+    let capture_name = pair.capture.name.clone();
+    let render_name = pair.render.name.clone();
+    let Some(in_format) = pair.capture.format else {
+        fault_emit(
+            case,
+            "fail",
+            "f32-input-format",
+            "no-input-format",
+            &capture_name,
+        );
+        return;
+    };
+    let Some(out_format) = pair.render.format else {
+        fault_emit(
+            case,
+            "fail",
+            "f32-output-format",
+            "no-output-format",
+            &render_name,
+        );
+        return;
+    };
+    let probe = Arc::new(Probe::new(&in_format, &out_format));
+    let in_stream = match open_input_with_fallback(pair.capture.device.as_ref(), in_format, &probe)
+    {
+        Ok(stream) => stream,
+        Err(error) => {
+            fault_emit(
+                case,
+                "fail",
+                "input-open-before-fault",
+                "input-open-error",
+                &error.to_string(),
+            );
+            return;
+        }
+    };
+    let out_stream = match open_output_with_fallback(
+        pair.render.device.as_ref(),
+        out_format,
+        &probe,
+        out_format.sample_rate.get(),
+    ) {
+        Ok(stream) => stream,
+        Err(error) => {
+            fault_emit(
+                case,
+                "fail",
+                "output-open-before-fault",
+                "output-open-error",
+                &error.to_string(),
+            );
+            return;
+        }
+    };
+    if let Err(error) = in_stream.start().and_then(|()| out_stream.start()) {
+        fault_emit(
+            case,
+            "fail",
+            "streams-start-before-fault",
+            "stream-start-error",
+            &error.to_string(),
+        );
+        return;
+    }
+
+    fault_write_phase(
+        FAULT_ENV_READY_FILE,
+        &format!("case={case} streams-started render={render_name:?} capture={capture_name:?}"),
+    );
+
+    let control_error_kind = AtomicUsize::new(0);
+    let observation_start = Instant::now();
+    let observation_limit = Duration::from_secs(15);
+    let mut control_probe_done = false;
+    while observation_start.elapsed() < observation_limit {
+        if let Err(error) = in_stream.now() {
+            control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
+        }
+        if let Err(error) = out_stream.now() {
+            control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
+        }
+        if !control_probe_done && observation_start.elapsed() >= Duration::from_secs(4) {
+            control_probe_done = true;
+            // `now()` is a local stream-clock query on both the native and
+            // cpal paths; it cannot surface endpoint loss. Exercise real
+            // backend control operations instead. Native input executes
+            // these on its worker and reports a device-invalidated failure
+            // through the error callback; cpal output can return the
+            // control-path error directly.
+            for result in [
+                in_stream.stop(),
+                out_stream.stop(),
+                in_stream.start(),
+                out_stream.start(),
+            ] {
+                if let Err(error) = result {
+                    control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
+                }
+            }
+        }
+        let invalidated = probe.in_invalidated.load(Ordering::Relaxed)
+            + probe.out_invalidated.load(Ordering::Relaxed);
+        let control = control_error_kind.load(Ordering::Relaxed);
+        if invalidated > 0 || control == 1 || control == 7 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    let invalidated = probe.in_invalidated.load(Ordering::Relaxed)
+        + probe.out_invalidated.load(Ordering::Relaxed);
+    let control = control_error_kind.load(Ordering::Relaxed);
+    let discontinuities = probe.in_discontinuities.load(Ordering::Relaxed);
+    // Release the invalidated streams before asking the controller to
+    // restore the devnode. PnP removal/disable can otherwise remain pending
+    // behind the open handles and make recovery impossible for a reason
+    // unrelated to endpoint re-enumeration. The observed file is therefore
+    // both the measurement signal and the handles-closed signal.
+    drop(in_stream);
+    drop(out_stream);
+    fault_write_phase(
+        FAULT_ENV_OBSERVED_FILE,
+        &format!(
+            "case={case} invalidated={invalidated} control_error_kind={control} discontinuities={discontinuities} in_errors={} out_errors={}",
+            probe.in_errors.load(Ordering::Relaxed),
+            probe.out_errors.load(Ordering::Relaxed),
+        ),
+    );
+    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(35));
+    let recovery = if restored {
+        thread::sleep(Duration::from_millis(700));
+        reopen_capture_after_recovery(&host, &capture_stem)
+    } else {
+        Err("restore signal missing".to_owned())
+    };
+
+    let invalidation_seen = invalidated > 0 || control == 1 || control == 7;
+    let recovery_ok = recovery.is_ok();
+    let observed = format!(
+        "invalidated={invalidated}; control_error_kind={control}; discontinuities={discontinuities}; recovery={}",
+        recovery.as_deref().unwrap_or("recovery-failed")
+    );
+    if invalidation_seen && recovery_ok {
+        fault_emit(
+            case,
+            "pass",
+            "streaminvalidated-or-control-device-not-found+reopen",
+            &observed,
+            "devnode-disabled-while-stream-lived-and-recovery-succeeded",
+        );
+    } else if !invalidation_seen {
+        let detail = match recovery {
+            Ok(_) => "typed-invalidation-not-surfaced".to_owned(),
+            Err(error) => format!("typed-invalidation-not-surfaced; recovery_observation={error}"),
+        };
+        fault_emit(
+            case,
+            "unsupported",
+            "streaminvalidated-or-control-device-not-found+reopen",
+            &observed,
+            &detail,
+        );
+    } else {
+        let detail = match recovery {
+            Ok(_) => "invalidation-oracle-not-observed".to_owned(),
+            Err(error) => format!("{error}; invalidation_seen={invalidation_seen}"),
+        };
+        fault_emit(
+            case,
+            "fail",
+            "streaminvalidated-or-control-device-not-found+reopen",
+            &observed,
+            &detail,
+        );
+    }
+}
+
+/// Controlled microphone-privacy denial case. The workflow has already set
+/// the consent surface to Deny and restarted audio services before launching
+/// this process. The oracle is exact: open must fail as
+/// `DeviceError::Backend("permission_denied")`, then the post-restore reopen
+/// must succeed.
+#[test]
+#[ignore = "requires the workflow fault controller and a provisioned virtual audio pair"]
+#[expect(clippy::too_many_lines)]
+fn virtual_audio_permission_denial_fault() {
+    let case = "permission_denial_audio";
+    if !fault_armed(FAULT_ENV_PERMISSION_DENIAL) {
+        fault_inactive(case);
+        return;
+    }
+    spawn_watchdog();
+    eprintln!("virtual_endpoint fault: microphone privacy denial/recovery");
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "host-unavailable",
+                &format!("default_host: {error}"),
+            );
+            return;
+        }
+    };
+    let pair = match first_virtual_pair(&host) {
+        Ok(Some(pair)) => pair,
+        Ok(None) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "no-pair-candidate",
+                "not-provisioned",
+            );
+            return;
+        }
+        Err(reason) => {
+            fault_emit(
+                case,
+                "notrun",
+                "device-enumeration",
+                "enumeration-failed",
+                &reason,
+            );
+            return;
+        }
+    };
+    let capture_stem = pair.capture.stem.clone().unwrap_or_default();
+    let capture_name = pair.capture.name.clone();
+    let Some(in_format) = pair.capture.format else {
+        fault_emit(
+            case,
+            "fail",
+            "f32-input-format",
+            "no-input-format",
+            &capture_name,
+        );
+        return;
+    };
+    let probe = Arc::new(Probe::new(&in_format, &in_format));
+    let open_result = open_input_with_fallback(pair.capture.device.as_ref(), in_format, &probe);
+    let denial_exact = matches!(
+        open_result.as_ref().err(),
+        Some(DeviceError::Backend("permission_denied"))
+    );
+    let open_observation = match &open_result {
+        Ok(_) => "capture-open-succeeded-under-deny".to_owned(),
+        Err(error) => format!("capture-open-error={error}"),
+    };
+    fault_write_phase(
+        FAULT_ENV_OBSERVED_FILE,
+        &format!("case={case} {open_observation} exact_permission_denied={denial_exact}"),
+    );
+    drop(open_result);
+
+    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(35));
+    let recovery = if restored {
+        thread::sleep(Duration::from_millis(700));
+        reopen_capture_after_recovery(&host, &capture_stem)
+    } else {
+        Err("restore signal missing".to_owned())
+    };
+    let observed = format!(
+        "{open_observation}; recovery={}",
+        recovery.as_deref().unwrap_or("recovery-failed")
+    );
+    if denial_exact && recovery.is_ok() {
+        fault_emit(
+            case,
+            "pass",
+            "backend-permission-denied+post-restore-reopen",
+            &observed,
+            "os-consent-deny-mapped-exactly-and-allow-restored",
+        );
+    } else {
+        let detail = match recovery {
+            Ok(_) => format!("permission-denial-oracle-mismatch exact={denial_exact}"),
+            Err(error) => format!("{error}; exact={denial_exact}"),
+        };
+        fault_emit(
+            case,
+            "fail",
+            "backend-permission-denied+post-restore-reopen",
+            &observed,
+            &detail,
+        );
+    }
+}
+
+/// Bounded xrun observation probe. This is not a deterministic xrun injector:
+/// it records whether bounded user-mode CPU starvation surfaces as
+/// `DeviceError::Xrun`, as another error kind, or not at all through the
+/// current WASAPI adapter contracts.
+#[test]
+#[ignore = "requires the workflow fault controller and a provisioned virtual audio pair"]
+#[expect(clippy::too_many_lines)]
+fn virtual_audio_xrun_probe() {
+    let case = "xrun_probe";
+    if !fault_armed(FAULT_ENV_XRUN_PROBE) {
+        fault_inactive(case);
+        return;
+    }
+    spawn_watchdog();
+    eprintln!("virtual_endpoint fault: bounded xrun observation probe");
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "host-unavailable",
+                &format!("default_host: {error}"),
+            );
+            return;
+        }
+    };
+    let pair = match first_virtual_pair(&host) {
+        Ok(Some(pair)) => pair,
+        Ok(None) => {
+            fault_emit(
+                case,
+                "notrun",
+                "provisioned-virtual-pair",
+                "no-pair-candidate",
+                "not-provisioned",
+            );
+            return;
+        }
+        Err(reason) => {
+            fault_emit(
+                case,
+                "notrun",
+                "device-enumeration",
+                "enumeration-failed",
+                &reason,
+            );
+            return;
+        }
+    };
+    let Some(in_format) = pair.capture.format else {
+        fault_emit(
+            case,
+            "fail",
+            "f32-input-format",
+            "no-input-format",
+            &pair.capture.name,
+        );
+        return;
+    };
+    let Some(out_format) = pair.render.format else {
+        fault_emit(
+            case,
+            "fail",
+            "f32-output-format",
+            "no-output-format",
+            &pair.render.name,
+        );
+        return;
+    };
+    let probe = Arc::new(Probe::new(&in_format, &out_format));
+    let in_stream = match open_input_with_fallback(pair.capture.device.as_ref(), in_format, &probe)
+    {
+        Ok(stream) => stream,
+        Err(error) => {
+            fault_emit(
+                case,
+                "fail",
+                "input-open",
+                "input-open-error",
+                &error.to_string(),
+            );
+            return;
+        }
+    };
+    let out_stream = match open_output_with_fallback(
+        pair.render.device.as_ref(),
+        out_format,
+        &probe,
+        out_format.sample_rate.get(),
+    ) {
+        Ok(stream) => stream,
+        Err(error) => {
+            fault_emit(
+                case,
+                "fail",
+                "output-open",
+                "output-open-error",
+                &error.to_string(),
+            );
+            return;
+        }
+    };
+    if let Err(error) = in_stream.start().and_then(|()| out_stream.start()) {
+        fault_emit(
+            case,
+            "fail",
+            "streams-start",
+            "stream-start-error",
+            &error.to_string(),
+        );
+        return;
+    }
+
+    let spin_threads = std::env::var(FAULT_ENV_XRUN_SPIN_THREADS)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(1)
+        .min(2);
+    thread::sleep(Duration::from_millis(500));
+    let spinners: Vec<_> = (0..spin_threads)
+        .map(|index| {
+            thread::spawn(move || {
+                let end = Instant::now() + Duration::from_millis(900);
+                while Instant::now() < end {
+                    std::hint::spin_loop();
+                }
+                eprintln!("xrun_probe spinner[{index}] done");
+            })
+        })
+        .collect();
+    for spinner in spinners {
+        let _ = spinner.join();
+    }
+    thread::sleep(Duration::from_millis(700));
+    let _ = in_stream.stop();
+    let _ = out_stream.stop();
+    drop(in_stream);
+    drop(out_stream);
+
+    let in_xruns = probe.in_xruns.load(Ordering::Relaxed);
+    let out_xruns = probe.out_xruns.load(Ordering::Relaxed);
+    let discontinuities = probe.in_discontinuities.load(Ordering::Relaxed);
+    let invalidated = probe.in_invalidated.load(Ordering::Relaxed)
+        + probe.out_invalidated.load(Ordering::Relaxed);
+    let in_errors = probe.in_errors.load(Ordering::Relaxed);
+    let out_errors = probe.out_errors.load(Ordering::Relaxed);
+    let in_callbacks = probe.in_callbacks.load(Ordering::Relaxed);
+    let out_callbacks = probe.out_callbacks.load(Ordering::Relaxed);
+    let observed = format!(
+        "xruns={}; discontinuities={discontinuities}; invalidated={invalidated}; errors={}; callbacks={}",
+        in_xruns + out_xruns,
+        in_errors + out_errors,
+        in_callbacks + out_callbacks,
+    );
+    print_error_stats(&probe);
+    if in_xruns + out_xruns > 0 {
+        fault_emit(
+            case,
+            "pass",
+            "deviceerror-xrun-under-bounded-user-mode-starvation",
+            &observed,
+            "xrun-observed",
+        );
+    } else if in_callbacks == 0 || out_callbacks == 0 {
+        fault_emit(
+            case,
+            "fail",
+            "active-input-and-output-callbacks",
+            &observed,
+            "stream-callbacks-missing; xrun-experiment-invalid",
+        );
+    } else {
+        fault_emit(
+            case,
+            "unsupported",
+            "deviceerror-xrun-under-bounded-user-mode-starvation",
+            &observed,
+            "bounded-starvation-produced-no-xrun; current-adapter-contract-limits-observation",
+        );
+    }
 }
 
 /// Enumerates devices of one direction into pairable candidates.
@@ -952,6 +1634,9 @@ fn output_error_callback(probe: &Arc<Probe>) -> OutputErrorCallback {
         if error == DeviceError::Xrun {
             probe.out_xruns.fetch_add(1, Ordering::Relaxed);
         }
+        if error == DeviceError::StreamInvalidated {
+            probe.out_invalidated.fetch_add(1, Ordering::Relaxed);
+        }
     })
 }
 
@@ -1270,9 +1955,7 @@ fn print_pair_evidence(probe: &Probe) {
     print_callback_stats(probe);
     print_latency_stats(probe);
     print_error_stats(probe);
-    eprintln!(
-        "  StreamInvalidated: NotRun — requires interactive device removal (AC5/later slice)"
-    );
+    eprintln!("  StreamInvalidated: exercised only by controller-armed fault cases in this target");
 }
 
 /// Callback/frame/timestamp/position/capture-buffer statistics.

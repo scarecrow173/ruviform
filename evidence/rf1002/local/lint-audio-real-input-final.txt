@@ -1,0 +1,3 @@
+== lint-audio-real-input :: mise run lint-audio-real-input
+[lint-audio-real-input] $ cargo clippy -p ruviform-audio-device --all-targets --features real-device -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s

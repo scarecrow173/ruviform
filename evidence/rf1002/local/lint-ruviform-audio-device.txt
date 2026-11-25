@@ -1,0 +1,6 @@
+== lint-ruviform-audio-device ==
+[lint] $ if [ "$#" -lt 1 ]; then
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1002-capability-fault\crates\ruviform-audio-device)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+mbx[cache]: 0 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: swept up 14.2 TiB logical so far. the broom is content-addressed.

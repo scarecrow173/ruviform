@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #629 provisioning runbook and MIDI virtual lane separation (closeout-prep slice)"
 created: "2026-11-17"
-updated: "2026-11-17"
+updated: "2026-11-25"
 owners:
   - "scarecrow173"
 relations:
@@ -407,12 +407,13 @@ stage 分解で実施する:
     test の stdout/stderr を capture して表示しないため、test が emit した
     `verdict: Pass` 行は artifact ログに表面化しない（`verdict:` 行が
     表面化するのは Fail/NotRun 経路のみ — 失敗・異常時に capture 内容が
-    出力される）。実走判定は `test result: ok. 1 passed` と
+    出力される）。実走判定は `test result: ok` と round-trip test 本体の
     `finished in X.XXs` の非ゼロ秒数で読む — endpoint 不在の vacuous
     early return は `finished in 0.00s` になる（rf977 attempt-14 の
     観測）ため、非ゼロ秒数 + 同一 run の `endpoint-probe` `pair_count=1`
     で真の round-trip 実走と判断する（rf977 attempt-21・rf979 attempt-1
-    ともに 3.48s）。
+    ともに 3.48s）。Issue #1002 以降は同一 target に未武装で inactive 終了
+    する fault test も含まれるため、合計 pass 件数は実走判定に使わない。
 12. `midi-loopback` — `tests/loopback.rs`（`cargo test -p
     ruviform-midi-device --test loopback -- --ignored --test-threads=1`）を
     実走し、`Ruviform MIDI Loopback` の bidirectional name match pair 検出と
@@ -441,8 +442,34 @@ stage 分解で実施する:
     artifact の両 RunMetadata JSON 本体が `result:"pass"`・
     `level:"ext-l3"`・`environment_kind:"virtual-os-endpoint"`・対象
     repo/SHA を示すことで行う。
-14. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
-15. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
+14. `fault-cases` — Issue #1002 Slice G。`os-endpoint-wiring` 後・`cleanup`
+    前に置き、OS 状態制御を workflow/PowerShell 側へ閉じ込めた fault harness
+    を実行する。controller 本体は `tools/virtual-audio-driver/Invoke-FaultCases.ps1`
+    に置き、workflow step は呼び出しと fail-closed stage record だけを担う。
+    case key は `device_loss_audio`（devnode disable を第一選択とし、
+    open stream により拒否された場合は remove/recreate fallback で stream
+    invalidation 観測 → enable/recreate → reopen recovery）、
+    `permission_denial_audio`（microphone consent Deny + service restart →
+    capture open oracle → Allow restore）、`midi_device_loss_observation`
+    （devnode loss 前/消失中/復帰後の WinMM 列挙で `Ruviform MIDI Loopback`
+    の消失を正規 oracle として観測し、復帰後の再出現は限界 evidence として
+    記録）、`xrun_probe`（bounded user-mode starvation が現行
+    adapter で `DeviceError::Xrun` として観測できるかの判断材料）とする。
+    Rust test は `RUVIFORM_FAULT_*` で武装された場合だけ active になり、
+    ready/observed/restore phase file で controller と同期する。canonical
+    lane で未武装実行された場合は inactive 記録に留まり、既存の generic
+    `verdict:` 契約へ混入しない。OS 側 stimulus は成立したが現行 driver/
+    adapter 契約が typed invalidation を surface しない場合は、測定 harness
+    の Fail と区別して case-level `Unsupported` として記録する。case ごとの正規判定は
+    `fault-cases-results-<os>.json`（`rf1002-fault-case/v1`・repo/SHA/run id/
+    attempt を含む）と生ログの `fault_case_result:` 行で行い、語彙は
+    Pass/Fail/NotRun/Unsupported。stage `ok` は測定 harness が完走し
+    case-level Fail がなかった意味に限定し、前提不足なら `not_run`、
+    controller/復帰/case-level Fail は `error` とする。disable した devnode
+    と変更した microphone consent/service 状態は finally/cleanup で必ず
+    Allow+Running へ戻す。
+15. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+16. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
     artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 
 - license: MS-PL（audio 部）/MS-LPL（MIDI miniport 部）派生のため外部 driver
@@ -459,15 +486,20 @@ stage 分解で実施する:
   に記録する判定材料であり job 失敗ではない。生ログは
   `stage-*-windows-2025.txt`、probe 出力は `endpoint-probe-windows-2025.txt` /
   `midi-endpoint-probe-windows-2025.txt`、wiring leg の RunMetadata JSON は
-  `os-endpoint-run-metadata-windows-2025/` に残り、失敗時も `if: always()` の
-  artifact upload で保全される。attempt 固有 artifact 名で全 attempt の
-  evidence が残る。
+  `os-endpoint-run-metadata-windows-2025/`、fault case の機械可読結果は
+  `fault-cases-results-windows-2025.json`、同期/観測用の fault file は
+  `fault-*-windows-2025*` に残り、失敗時も `if: always()` の artifact upload
+  で保全される。attempt 固有 artifact 名で全 attempt の evidence が残る。
 - 記録責任分担: stage record・生ログ・probe 出力は artifact として採取され、
-  `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/`・`evidence/rf1001/`
-  に attempt 番号対応付きで記録される（install 後の残件は cleanup stage が
-  除去）。`os-endpoint-wiring` の AC3 判定では stage record に加えて
-  `run-metadata-rf629-audio-virtual-endpoint-render-capture.json` と
+  `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/`・`evidence/rf1001/`・
+  `evidence/rf1002/` に attempt 番号対応付きで記録される（install 後の残件は
+  cleanup stage が除去）。`os-endpoint-wiring` の AC3 判定では stage record に
+  加えて `run-metadata-rf629-audio-virtual-endpoint-render-capture.json` と
   `run-metadata-rf629-midi-virtual-endpoint-loopback.json` を保存する。
+  `fault-cases` の AC5 判定では stage record/conclusion ではなく
+  `fault-cases-results-windows-2025.json` の case-level result、
+  `stage-fault-cases-windows-2025.txt` の controller action/復帰記録、
+  必要に応じて fault test の `fault_case_result:` 生行を保存する。
 - provisioned pair の利用: endpoint 成立後は本書前文どおり
   `mise run test-audio-virtual-endpoint`・`mise run
   test-midi-virtual-endpoint`・`mise run test-os-endpoint-wiring` の入力として
@@ -480,11 +512,18 @@ stage 分解で実施する:
   stage ごとに異なる。`midi-loopback` は cdb 経由で test 出力が透過する
   ため pass 時も `verdict: Pass — …` 行が detail に残る。一方
   `stream-roundtrip` は cargo test の capture により pass 時
-  `verdict=no-verdict-line` となるのが正常で、`test result: ok. 1 passed`
-  + `finished in` の非ゼロ秒数（vacuous early return は 0.00s）で実走を
-  判断する（11 項参照）。`os-endpoint-wiring` は補助 `--nocapture` 実行の
-  ため pass 時も 2 件の `verdict:` 行と `run_metadata:`/`run_metadata_path:`
-  行が生ログに残り、audio/midi の result は stage record detail と JSON 本体で
-  読む。未 provisioning 環境では verifier 自身が
-  `verdict: NotRun — NOT_PROVISIONED` を返し、stage は `ok` 記録のまま
+  `verdict=no-verdict-line` となるのが正常で、`test result: ok`
+  + round-trip test 本体の `finished in` の非ゼロ秒数（vacuous early return
+  は 0.00s）で実走を
+  判断する（11 項参照）。Issue #1002 で同一 test target に fault case が
+  追加されたため、pass 件数は `1 passed` 固定では読まず、round-trip test
+  自体の非ゼロ秒数・pair 検出と、未武装 fault test が inactive terminal
+  state に留まることを区別する。`os-endpoint-wiring` は補助 `--nocapture`
+  実行のため pass 時も 2 件の `verdict:` 行と
+  `run_metadata:`/`run_metadata_path:` 行が生ログに残り、audio/midi の
+  result は stage record detail と JSON 本体で読む。`fault-cases` は run
+  conclusion や stage `ok` を case の Pass と混同せず、case ごとの
+  `result`・`expected`・`observed`・`detail` を
+  `fault-cases-results-<os>.json` で読む。未 provisioning 環境では verifier
+  自身が `verdict: NotRun — NOT_PROVISIONED` を返し、stage は `ok` 記録のまま
   完走する（fail-closed — 未実行・不合格を Pass にしない）。

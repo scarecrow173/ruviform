@@ -1,0 +1,1 @@
+fault_case_result: case=xrun_probe result=unsupported expected=deviceerror-xrun-under-bounded-user-mode-starvation observed=xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_421 detail=bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation
