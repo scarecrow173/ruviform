@@ -121,6 +121,13 @@ function New-RvfState {
             vs_install         = $null
             km_headers         = 0
             km_libs            = 0
+            initial_toolset_count = 0
+            initial_km_headers   = 0
+            initial_km_libs      = 0
+            initial_signtool_hits = 0
+            initial_inf2cat_hits = 0
+            initial_makecat_hits = 0
+            winget_present       = $null
         }
         inputs        = $Inputs
         stages        = @()
@@ -152,6 +159,7 @@ function New-RvfState {
             consent_before     = @()
             consent_after      = @()
             service_restart    = @()
+            pre_devnode        = $null
         }
         artifacts     = @()
         cleanup       = $null
@@ -1114,6 +1122,15 @@ function Invoke-RvfProvision {
         Start-RvfStageLog 'environment'
         $envInfo = Get-RvfEnvironmentInfo
         Write-RvfEnvironmentSurface $envInfo
+        $initialSurface = Get-RvfBuildSurface -Arch $Arch
+        Write-RvfLog "initial build surface: msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}) toolset=$($initialSurface.toolset_count) kmHeaders=$($initialSurface.km_headers) kmLibs=$($initialSurface.km_libs) signtoolKits=$($initialSurface.signtool_hits.Count) inf2catKits=$($initialSurface.inf2cat_hits.Count) makecatKits=$($initialSurface.makecat_hits.Count) winget=$(if (Get-Command winget -ErrorAction SilentlyContinue) {'present'} else {'absent'})"
+        $state.runner.initial_toolset_count = $initialSurface.toolset_count
+        $state.runner.initial_km_headers = $initialSurface.km_headers
+        $state.runner.initial_km_libs = $initialSurface.km_libs
+        $state.runner.initial_signtool_hits = $initialSurface.signtool_hits.Count
+        $state.runner.initial_inf2cat_hits = $initialSurface.inf2cat_hits.Count
+        $state.runner.initial_makecat_hits = $initialSurface.makecat_hits.Count
+        $state.runner.winget_present = [bool](Get-Command winget -ErrorAction SilentlyContinue)
         $state.runner.os_caption = $envInfo.os_caption
         $state.runner.os_version = $envInfo.os_version
         $state.runner.os_build = $envInfo.os_build
@@ -1138,7 +1155,8 @@ function Invoke-RvfProvision {
             Stop-RvfStageLog
             throw 'RVF_STAGE_STOP'
         }
-        Add-RvfStageRecord -State $state -Stage 'environment' -Status ok -Detail 'ephemeral github-hosted windows-2025 x64 admin surface confirmed'
+        $envDetail = "msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}); toolset=$($initialSurface.toolset_count); kmHeaders=$($initialSurface.km_headers); kmLibs=$($initialSurface.km_libs); signtoolKits=$($initialSurface.signtool_hits.Count); inf2catKits=$($initialSurface.inf2cat_hits.Count); winget=$(if ($state.runner.winget_present) {'present'} else {'absent'})"
+        Add-RvfStageRecord -State $state -Stage 'environment' -Status ok -Detail $envDetail
         Stop-RvfStageLog
 
         Start-RvfStageLog 'source'
@@ -1428,6 +1446,25 @@ function Invoke-RvfProvision {
         }
         $mutatedOsState = $true
         Add-RvfStageRecord -State $state -Stage 'driver-store' -Status ok -Detail "published=$published" -ExitCode $add.exit_code
+        Stop-RvfStageLog
+
+        # Legacy manual-probe parity: enum-verify is a read-only pre-devnode
+        # observation. Record it before creating the root-enumerated devnode.
+        Start-RvfStageLog 'enum-verify-pre-devnode'
+        foreach ($line in @($enum.output)) { Write-RvfLog "  enum-drivers: $line" }
+        $preInfInStore = [bool]$published
+        $preDevices = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match 'ruviform|RvfVirtualAudio' -or $_.InstanceId -match 'RvfVirtualAudio' })
+        Write-RvfLog "  RvfVirtualAudio.inf in driver store: $preInfInStore"
+        if ($preDevices.Count) { foreach ($preDev in $preDevices) { Write-RvfLog "  $($preDev.InstanceId) Status=$($preDev.Status) Class=$($preDev.Class) Name=$($preDev.FriendlyName)" } }
+        else { Write-RvfLog '  matching PnpDevice: 0' }
+        $state.os_state.pre_devnode = [pscustomobject][ordered]@{
+            inf_in_store      = $preInfInStore
+            published_name    = $published
+            matching_devnodes = $preDevices.Count
+            devices           = @($preDevices | ForEach-Object { [pscustomobject]@{ instance_id = $_.InstanceId; status = "$($_.Status)"; class = "$($_.Class)"; friendly_name = "$($_.FriendlyName)" } })
+            recorded_utc      = ConvertTo-RvfUtc (Get-Date)
+        }
+        Write-RvfLog "  pre-devnode observation: inf_in_store=$preInfInStore matching_devnodes=$($preDevices.Count)"
         Stop-RvfStageLog
 
         Start-RvfStageLog 'devnode'

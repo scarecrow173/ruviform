@@ -200,6 +200,7 @@ jobs:
             [pscustomobject]@{ primitive = 'sign'; legacy = 'sign' },
             [pscustomobject]@{ primitive = 'sign-verify'; legacy = 'sign-verify' },
             [pscustomobject]@{ primitive = 'driver-store'; legacy = 'pnputil-add-driver' },
+            [pscustomobject]@{ primitive = 'enum-verify-pre-devnode'; legacy = 'enum-verify' },
             [pscustomobject]@{ primitive = 'devnode'; legacy = 'devnode-create' }
           )
           foreach ($map in $stageMap) {
@@ -212,7 +213,16 @@ jobs:
               "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} attempt=${{ github.run_attempt }}" | Out-Probe $legacyLog
               "host: $(hostname) user: $(whoami) timestamp-utc: $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" | Out-Probe $legacyLog
             }
-            $primitiveLog = Join-Path $localEvidence "stage-$($map.primitive).log"
+            if ($map.legacy -eq 'driver-build') {
+              $wdkLog = Join-Path $localEvidence 'stage-wdk.log'
+              if (Test-Path -LiteralPath $wdkLog) {
+                '== primitive wdk/tool discovery and install ==' | Out-Probe $legacyLog
+                Get-Content -LiteralPath $wdkLog -Encoding UTF8 | ForEach-Object { $_ | Out-Probe $legacyLog }
+                '== primitive driver build ==' | Out-Probe $legacyLog
+              }
+            }
+            $primitiveLogName = if ($map.legacy -eq 'enum-verify') { 'stage-enum-verify-pre-devnode.log' } else { "stage-$($map.primitive).log" }
+            $primitiveLog = Join-Path $localEvidence $primitiveLogName
             if (Test-Path -LiteralPath $primitiveLog) {
               Get-Content -LiteralPath $primitiveLog -Encoding UTF8 | ForEach-Object { $_ | Out-Probe $legacyLog }
             } else {
@@ -224,9 +234,20 @@ jobs:
             $projectedStatus = 'blocked'
             $projectedDetail = "primitive stage '$($map.primitive)' not executed; provision terminal=$($primitive.status)/$($primitive.detail)"
             $projectedExit = $null
-            if ($rec) {
+            if ($map.legacy -eq 'enum-verify') {
+              $pre = $primitive.os_state.pre_devnode
+              if ($pre) {
+                $projectedStatus = if ($pre.inf_in_store) { 'ok' } else { 'error' }
+                $projectedDetail = "inf_in_store=$($pre.inf_in_store); matching_devnodes=$($pre.matching_devnodes)"
+                if ($pre.published_name) { Set-ProbeState $state 'inf_published' $pre.published_name }
+                Set-ProbeState $state 'inf_staged' [bool]$pre.inf_in_store
+              } else {
+                $projectedStatus = 'blocked'
+                $projectedDetail = 'pre-devnode enum observation missing from primitive state'
+              }
+            } elseif ($rec) {
               $projectedStatus = $rec.status
-              $projectedDetail = "primitive_status=$($rec.status); $($rec.detail)"
+              $projectedDetail = $rec.detail
               $projectedExit = $rec.exit_code
             } elseif ($map.legacy -eq 'driver-build') {
               $wdks = @($primitive.stages | Where-Object { $_.stage -eq 'wdk' } | Select-Object -Last 1)
@@ -241,47 +262,6 @@ jobs:
 
           "primitive terminal status=$($primitive.status) detail=$($primitive.detail) exit=$primitiveExit state=$localStatePath" | Tee-Object -FilePath (Join-Path $localEvidence 'workflow-adapter-summary.txt')
           if ($contractViolation) { exit 2 }
-          exit 0
-
-      # staging 反映確認（read-only 観測）: enum-drivers で INF が driver store
-      # に存在すること・この時点では primitive devnode 以外に余分な devnode が
-      # 無いことを記録する。OS state は変更しない。
-      - name: Stage enum-verify
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-enum-verify-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          "  --- pnputil /enum-drivers ---" | Out-Probe $log
-          $enum = @(& pnputil /enum-drivers 2>&1)
-          $enum | Out-Probe $log
-          "  enum-drivers exit=$LASTEXITCODE" | Out-Probe $log
-          $hitIdx = -1
-          for ($i = 0; $i -lt $enum.Count; $i++) {
-            if ($enum[$i] -match 'RvfVirtualAudio\.inf') { $hitIdx = $i; break }
-          }
-          $staged = $hitIdx -ge 0
-          "  RvfVirtualAudio.inf in driver store: $staged" | Out-Probe $log
-          if ($staged) {
-            for ($j = $hitIdx; $j -ge 0; $j--) {
-              if ($enum[$j] -match 'Published Name\s*:\s*(\S+)') {
-                "  published name (entry match): $($Matches[1])" | Out-Probe $log
-                Set-ProbeState $state 'inf_published' $Matches[1]
-                break
-              }
-            }
-          }
-          "`n  --- Get-PnpDevice (rvf match) ---" | Out-Probe $log
-          $devs = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match 'ruviform|RvfVirtualAudio' -or $_.InstanceId -match 'RvfVirtualAudio' })
-          if ($devs.Count) { $devs | ForEach-Object { "  $($_.InstanceId) Status=$($_.Status) Class=$($_.Class) Name=$($_.FriendlyName)" | Out-Probe $log } }
-          else { "  matching PnpDevice: 0" | Out-Probe $log }
-          Add-StageRecord -JsonPath $json -Stage enum-verify -Status $(if ($staged) { 'ok' } else { 'error' }) -Detail "inf_in_store=$staged; matching_devnodes=$($devs.Count)"
-          Set-ProbeState $state 'inf_staged' $staged
           exit 0
 
       # endpoint_probe: MMDevice 列挙 + render↔capture pair 候補検出。

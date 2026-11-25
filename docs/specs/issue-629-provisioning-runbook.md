@@ -386,7 +386,7 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
 5. `sign` / `sign-verify` — `.sys`+`.cat` を signtool 署名・`/pa` 検証。
 6. `pnputil-add-driver` — `pnputil /add-driver RvfVirtualAudio.inf /install`
    で driver store へ staging。
-7. `enum-verify` — INF の driver store 在籍確認（devnode はこの時点 0 件）。
+7. `enum-verify` — INF の driver store 在籍確認と、devnode 作成前の Ruviform/RvfVirtualAudio matching devnode 数の read-only 観測。sv#115 Slice A では primitive が `pnputil-add-driver` 後・`devnode-create` 前に計測し、workflow が legacy stage へ投影する（正常系では matching devnode 0 件）。
 8. `devnode-create` — `tools/testsigned-driver/TestDevice.ps1` を
    `-ClassName MEDIA -ClassGuid {4d36e96c-e325-11ce-bfc1-08002be10318}
    -HardwareId 'ROOT\RvfVirtualAudio'` で呼び出し、root-enumerated MEDIA
@@ -432,7 +432,7 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
     JSON を採取する。canonical lane は `mise run test-os-endpoint-wiring`
     （`--nocapture` なし）で、passing test の stderr は libtest が capture
     するため、この直接 cargo 実行は verdict/RunMetadata を surface させる
-    補助証拠と明確に区別する。`stream-roundtrip` で実施済みの mic consent
+    補助証拠と明確に区別する。provisioning primitive で実施済みの mic consent
     provisioning を同一 job 内で再利用するため `midi-loopback` 後・
     `cleanup` 前に配置する。stage は `RUVIFORM_RUN_REPO` に
     `${{ github.repository }}`、`RUVIFORM_RUN_SHA` に `${{ github.sha }}` を
