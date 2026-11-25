@@ -979,11 +979,15 @@ jobs:
           }
 
           # fail-closed: verdict Pass/NotRun のみ ok。Fail・crash・
-          # verdict 未到達・probe crash は error。
+          # verdict 未到達は error。probe crash は「expected crash」step
+          # （device-index-as-handle DRV_QUERYDEVICEINTERFACE の独立
+          # repro — cdb で確定した winmmbase latent NULL-deref と同一
+          # signature）に到達してからのもののみ確認済みとして許容する。
+          $probeReachedExpectedCrash = [bool]($probeOut | Where-Object { $_ -match 'expected crash' })
           $status = 'ok'
           if (-not ($verdict -match '^(Pass|NotRun)')) { $status = 'error' }
-          if ($probeRc -ne 0) { $status = 'error' }
-          Add-StageRecord -JsonPath $json -Stage midi-loopback -Status $status -Detail "test_exit=$testExit; verdict=$verdict; probe_exit=$probeRc" -ExitCode $testExit
+          if ($probeRc -ne 0 -and -not $probeReachedExpectedCrash) { $status = 'error' }
+          Add-StageRecord -JsonPath $json -Stage midi-loopback -Status $status -Detail "test_exit=$testExit; verdict=$verdict; probe_exit=$probeRc; probe_expected_crash=$probeReachedExpectedCrash" -ExitCode $testExit
           exit 0
 
       # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去

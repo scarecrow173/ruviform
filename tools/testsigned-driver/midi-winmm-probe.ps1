@@ -74,8 +74,10 @@ public static class WinMM {
         InLastParam2 = dwParam2;
     }
 
-    public const uint DRV_QUERYDEVICEINTERFACESIZE = 1006;
-    public const uint DRV_QUERYDEVICEINTERFACE     = 1007;
+    // windows-sys Multimedia/mod.rs: DRV_MCI_FIRST+12/+13。
+    // 1006/1007 は誤値で attempt-2/3 の probe は別 message を叩いていた。
+    public const uint DRV_QUERYDEVICEINTERFACESIZE = 2061;
+    public const uint DRV_QUERYDEVICEINTERFACE     = 2060;
     public const uint CALLBACK_FUNCTION            = 0x00030000;
     public const uint CALLBACK_NULL                = 0x00000000;
     public const uint MIDI_IO_STATUS               = 0x00000020;
@@ -93,8 +95,6 @@ public static class WinMM {
 
 function Step([string]$name) { Write-Output "step: $name" }
 
-$inIfaces  = @{}
-$outIfaces = @{}
 $loopbackOut = @()
 $loopbackIn  = @()
 
@@ -107,28 +107,6 @@ for ($i = 0; $i -lt $outNum; $i++) {
     $caps = New-Object WinMM+MIDIOUTCAPSW
     $rc = [WinMM]::midiOutGetDevCapsW([UIntPtr]$i, [ref]$caps, [uint32][System.Runtime.InteropServices.Marshal]::SizeOf($caps))
     Write-Output "  midiOut[$i] rc=$rc name='$($caps.szPname)' tech=0x$($caps.wTechnology.ToString('x4')) support=0x$($caps.dwSupport.ToString('x8'))"
-
-    Step "midiOutMessage DRV_QUERYDEVICEINTERFACE[$i]"
-    $sizeBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
-    [System.Runtime.InteropServices.Marshal]::WriteInt64($sizeBuf, 0)
-    $rc = [WinMM]::midiOutMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACESIZE, $sizeBuf, [IntPtr]::Zero)
-    $size = [System.Runtime.InteropServices.Marshal]::ReadInt64($sizeBuf)
-    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sizeBuf)
-    Write-Output "  ifsize rc=$rc size=$size"
-    if ($rc -eq 0 -and $size -gt 0) {
-        $buf = New-Object byte[] ($size)
-        $h = [System.Runtime.InteropServices.GCHandle]::Alloc($buf, 'Pinned')
-        try {
-            $rc = [WinMM]::midiOutMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACE, $h.AddrOfPinnedObject(), [IntPtr]$size)
-            if ($rc -eq 0) {
-                $iface = [System.Text.Encoding]::Unicode.GetString($buf).TrimEnd([char]0)
-                $outIfaces[$i] = $iface
-                Write-Output "  if='$iface'"
-            } else {
-                Write-Output "  if fetch rc=$rc"
-            }
-        } finally { $h.Free() }
-    }
     if ($caps.szPname -match 'Ruviform MIDI Loopback') { $loopbackOut += $i }
 }
 
@@ -141,28 +119,6 @@ for ($i = 0; $i -lt $inNum; $i++) {
     $caps = New-Object WinMM+MIDIINCAPSW
     $rc = [WinMM]::midiInGetDevCapsW([UIntPtr]$i, [ref]$caps, [uint32][System.Runtime.InteropServices.Marshal]::SizeOf($caps))
     Write-Output "  midiIn[$i] rc=$rc name='$($caps.szPname)' support=0x$($caps.dwSupport.ToString('x8'))"
-
-    Step "midiInMessage DRV_QUERYDEVICEINTERFACE[$i]"
-    $sizeBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
-    [System.Runtime.InteropServices.Marshal]::WriteInt64($sizeBuf, 0)
-    $rc = [WinMM]::midiInMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACESIZE, $sizeBuf, [IntPtr]::Zero)
-    $size = [System.Runtime.InteropServices.Marshal]::ReadInt64($sizeBuf)
-    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sizeBuf)
-    Write-Output "  ifsize rc=$rc size=$size"
-    if ($rc -eq 0 -and $size -gt 0) {
-        $buf = New-Object byte[] ($size)
-        $h = [System.Runtime.InteropServices.GCHandle]::Alloc($buf, 'Pinned')
-        try {
-            $rc = [WinMM]::midiInMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACE, $h.AddrOfPinnedObject(), [IntPtr]$size)
-            if ($rc -eq 0) {
-                $iface = [System.Text.Encoding]::Unicode.GetString($buf).TrimEnd([char]0)
-                $inIfaces[$i] = $iface
-                Write-Output "  if='$iface'"
-            } else {
-                Write-Output "  if fetch rc=$rc"
-            }
-        } finally { $h.Free() }
-    }
     if ($caps.szPname -match 'Ruviform MIDI Loopback') { $loopbackIn += $i }
 }
 
@@ -197,6 +153,23 @@ if ($loopbackIn.Count -gt 0) {
     $rc = [WinMM]::midiInOpen([ref]$hmi, $i, $cbPtr, [IntPtr]::Zero, ([WinMM]::CALLBACK_FUNCTION -bor [WinMM]::MIDI_IO_STATUS))
     Write-Output "  midiInOpen rc=$rc hmi=0x$($hmi.ToString('x'))"
     if ($rc -eq 0) {
+        # open handle での DRV_QUERYDEVICEINTERFACE* — device-index 版と
+        # 対比し open-handle 経路が正しい workaround かを検証する。
+        Step "midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)"
+        $sizeBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
+        [System.Runtime.InteropServices.Marshal]::WriteInt64($sizeBuf, 0)
+        $rc = [WinMM]::midiInMessage($hmi, [WinMM]::DRV_QUERYDEVICEINTERFACESIZE, $sizeBuf, [IntPtr]::Zero)
+        $size = [System.Runtime.InteropServices.Marshal]::ReadInt64($sizeBuf)
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sizeBuf)
+        Write-Output "  open-handle ifsize rc=$rc size=$size"
+        if ($rc -eq 0 -and $size -gt 0) {
+            $buf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($size)
+            $rc = [WinMM]::midiInMessage($hmi, [WinMM]::DRV_QUERYDEVICEINTERFACE, $buf, [IntPtr]$size)
+            $iface = if ($rc -eq 0) { [System.Runtime.InteropServices.Marshal]::PtrToStringUni($buf) } else { $null }
+            Write-Output "  open-handle if rc=$rc if='$iface'"
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($buf)
+        }
+
         # SysEx buffers x2 (test は 4 だが crash bisect には十分)
         $hdrs = @()
         for ($b = 0; $b -lt 2; $b++) {
@@ -248,6 +221,31 @@ if ($loopbackIn.Count -gt 0) {
         Write-Output "  midiInClose rc=$rc"
         "  callback count(final)=$([WinMM]::InMsgCount) lastMsg=0x$([WinMM]::InLastMsg.ToString('x'))" | Write-Output
     }
+}
+
+# ---- device-index-as-handle DRV_QUERYDEVICEINTERFACE — expected-crash repro ----
+# cdb 解析で確定: tests/loopback.rs の interface_id() が
+# midiInMessage(index-as-handle, DRV_QUERYDEVICEINTERFACESIZE) を叩くと
+# winmmbase!mregHandleInternalMessages → StringCchCopyW(→0x90) で
+# AV する（Server 2025 winmmbase の latent NULL-deref — real WDM device
+# のみ発火、GS のような softsynth は interface 不在で早期 return）。
+# この section が最後 — crash 時はこの step 行が log の末尾になる。
+if ($loopbackIn.Count -gt 0) {
+    $i = $loopbackIn[0]
+    Step "midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle $i] (expected crash)"
+    $sizeBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
+    [System.Runtime.InteropServices.Marshal]::WriteInt64($sizeBuf, 0)
+    $rc = [WinMM]::midiInMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACESIZE, $sizeBuf, [IntPtr]::Zero)
+    $size = [System.Runtime.InteropServices.Marshal]::ReadInt64($sizeBuf)
+    Write-Output "  dev-index ifsize rc=$rc size=$size"
+    if ($rc -eq 0 -and $size -gt 0) {
+        $buf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($size)
+        $rc = [WinMM]::midiInMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACE, $buf, [IntPtr]$size)
+        $iface = if ($rc -eq 0) { [System.Runtime.InteropServices.Marshal]::PtrToStringUni($buf) } else { $null }
+        Write-Output "  dev-index if rc=$rc if='$iface'"
+        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($buf)
+    }
+    [System.Runtime.InteropServices.Marshal]::FreeHGlobal($sizeBuf)
 }
 
 Write-Output "probe: done"
