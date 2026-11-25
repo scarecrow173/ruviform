@@ -515,10 +515,10 @@ license・配布・再起動の摩擦から、Slice B で独自 driver 経路に
   `stream-roundtrip` stage の `tests/virtual_endpoint.rs` が担う）。
 - install/probe/lane 手順: `virtual-audio-driver-probe.yml` が
   install 全 stage（`env-build-surface`〜`devnode-create`）→
-  `endpoint-probe`→`stream-roundtrip`（`mise run
-  test-audio-virtual-endpoint` 実走）→ `cleanup` を束ねる。
-  stage 一覧の正本は spec 版 runbook 追記節
-  （`docs/specs/issue-629-provisioning-runbook.md`）。
+  `endpoint-probe`→`midi-endpoint-probe`→`stream-roundtrip`
+  （`mise run test-audio-virtual-endpoint` 実走）→ `midi-loopback` →
+  `os-endpoint-wiring` → `cleanup` を束ねる。stage 一覧の正本は spec 版
+  runbook 追記節（`docs/specs/issue-629-provisioning-runbook.md`）。
 
 ## 4. Provisioning 判定フロー（probe 主導）
 
@@ -732,3 +732,49 @@ capability probe 判定・lane 検証手順・NotRun 解釈は本 lane にも
 `RunMetadata` を emit する（fail-closed 契約は device
 verifier と同一）。詳細は
 `docs/designs/issue-629-os-endpoint-lane.md` を参照。
+
+## 11. 追記（2026-11-25）— wiring leg provisioned 実走 stage
+
+Issue #1001 Slice F では、§10 の canonical lane を workflow の
+provisioned 環境へ接続する。設計判断は次のとおり。
+
+- **stage 配置**: `os-endpoint-wiring` は `midi-loopback` 後・
+  `cleanup` 前に置く。audio capture は microphone privacy consent
+  gate を通る必要があるが、`stream-roundtrip` が同一 job 内で
+  DeviceAccess/ConsentStore/AppPrivacy の Allow 化と
+  AudioEndpointBuilder/Audiosrv restart を済ませるため、wiring
+  stage では複写しない。配置を変えないことが consent provisioning
+  の共有を成立させる。
+- **canonical lane と補助証拠の分離**: canonical lane は従来どおり
+  `mise run test-os-endpoint-wiring`（`--nocapture` なし）である。
+  workflow stage は verdict と `run_metadata:`/`run_metadata_path:`
+  を artifact 生ログへ表面化させる必要があるため、補助証拠として
+  `mise exec -- cargo test -p ruviform-audio-test --test os_endpoint --
+  --ignored --test-threads=1 --nocapture` を直接実行する。`mise.toml`
+  の lane 定義は変えない。
+- **RunMetadata artifact**: test は `CARGO_TARGET_TMPDIR` 配下に
+  `run-metadata-<case>.json` を書く。Cargo は integration test へ
+  同ディレクトリを compile-time env として供給するが runtime env が
+  常にあるわけではないため、emit 側は runtime env を優先しつつ
+  compile-time `option_env!("CARGO_TARGET_TMPDIR")` を fallback に
+  使う。workflow は stderr の `run_metadata_path:` 行から JSON 本体を
+  workspace 内 `os-endpoint-run-metadata-<os>/` へ copy し、reset と
+  upload artifact path に含める。copy 不能は捨てず stage `error` に
+  写す。
+- **stage 判定**: stage record は従来どおり absence-is-data /
+  fail-closed 語彙に従う。両 leg の Pass/NotRun は観測終端なので
+  stage `ok`、Fail・crash・verdict 未到達・RunMetadata 未到達/不正・
+  artifact copy 不能は `error`。ただし stage `ok` は rf#1001 AC3 の
+  Pass 証拠ではなく、受入判定は audio/midi 両 RunMetadata JSON の
+  `result:"pass"`・`level:"ext-l3"`・
+  `environment_kind:"virtual-os-endpoint"`・repo/SHA を読む。
+- **audio timestamp epoch oracle**: rf#977 で確定した shared-mode
+  render stream の timestamp epoch 契約を contract 級 oracle の範囲で
+  wiring legへ移植する。stop/start 境界で input/output 両方向の
+  baseline を split し、callback index を bounded regression slots
+  （32）へ記録する。epoch 先頭 `EPOCH_START_GRACE_CALLBACKS=24`
+  内の regression のみ transient として raw count から引き、
+  mid-epoch regression と slot overflow は fatal のまま残す。device
+  verifier の latency/position/tone/xrun など深い oracle は複製しない。
+  分類は epoch 1 grace・epoch 2 grace・mid-epoch fatal・slot overflow
+  fatal を区別する deterministic test で固定する。

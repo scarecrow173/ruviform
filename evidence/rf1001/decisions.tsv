@@ -1,0 +1,6 @@
+ts	phase	decision	why	evidence	result
+2026-11-25T05:16:03Z	start	started rf1001 wiring-leg implementation	worker task requires Slice F implementation and evidence	orca task_67bf63159087	open
+2026-11-25T05:22:38Z	implement	audio epoch oracle passes package tests	deterministic classifier and existing os_endpoint tests compile and run	evidence/rf1001/local-test-ruviform-audio-test.log	pass
+2026-11-25T05:26:09Z	fix	use Cargo compile-time target tmpdir fallback for metadata files	observed runtime lacks CARGO_TARGET_TMPDIR so run_metadata_path never emitted	evidence/rf1001/local-os-endpoint-wiring-nocapture.log	open
+2026-11-25T05:33:57Z	implement	refactored endpoint stats logging for clippy	keeps epoch evidence visible without lint suppression	evidence/rf1001/local-lint.log	pass
+2026-11-25T05:33:58Z	verify	local verification complete before dispatch	fmt/lint/test/canonical/ci contracts/prek/actionlint pass; wiring host remains unprovisioned NotRun	evidence/rf1001/local-final-verification.log	pass
