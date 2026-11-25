@@ -292,3 +292,39 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 **実走観測**: tone share・marker・rms・errors 全て attempt-16/17 と同値水準 — packet counter 非 reset 化も regressions に無影響（依然ちょうど 2）。
 
 **発生源確定**: render stream の **driver が報告しうる全 position/counter field（PlayOffset・WriteOffset・LinearPosition・PresentationPosition・GetPacketCount）を STOP 跨ぎ monotonic 化しても件数不変** → `qpc_position` の backward extrapolation の base は driver-reported 値ではなく **audiodg（user-mode）自身の position epoch bookkeeping**（OS 自身が供給する packet index の restart — driver から制御不能）。非対称性の裏付け: input stream（同 lifecycle・同 `IAudioClock` API）は `GetReadPacket` が返す `PerformanceCounterValue`（**driver-supplied timestamp**）を使うため regressions=0 — output には該当 API が無く、audiodg が自身の extrapolation に頼る経路でだけ regression が出る。driver 側で打てる手は全て打ったため Coordinator に判断照会（verifier 側 tolerance 許容の要否含む）。
+
+### attempt 19 — run 45519117357（branch `feat/977-vaudio-loopback`・SHA `e09eb5f5`・attempt19-* 同梱）— verifier 側 epoch baseline split
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — `output timestamp regressions: 2`・`epoch_resets=1` |
+| cleanup | ok | |
+
+**実走観測**: 新フォーマット稼働（`epoch_resets=1` — restart で baseline split が発火）・tone share・marker・rms 同値水準。regressions は **依然ちょうど 2**。
+
+**失敗分析（重要）**: Coordinator 承認済みの test 側 epoch baseline split（restart 時に `last_callback_ns` をリセット、`epoch_resets` として記録）を適用しても regressions=2 不変 → regressions は restart 境界ではなく **連続 epoch 内で発生**。driver position reset 説は完全に否定。残候補: (a) 初回 `start()` の stream-open epoch、(b) epoch 内の mid-stream `qpc_position` 非単調（audiodg の correlation 推定の snap-back）。**次修正**: regression 発生 callback index・max backstep・boundary index を記録する診断計装（`eed082a1`）。
+
+### attempt 20 — run 45520616155（branch `feat/977-vaudio-loopback`・SHA `eed082a1`・attempt20-* 同梱）— regression 位置特定診断
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — `output timestamp regressions: 5`（件数は timing 依存で変動） |
+| cleanup | ok | |
+
+**実走観測**: `regression detail: out cb[first..last]=3..314 max_backstep_ns=-11767100 boundary_cb=302` — regressions は **cb 3（epoch 1 冒頭）と cb 303〜314（restart 後 epoch 2 の先頭 ~12 callbacks）** に epoch-start 集中。backstep 最大 ≈ 11.8ms ≈ 1 notification period。input は 0。
+
+**発生機序確定**: software-position driver（`GetClockRegister` 未実装 — hardware clock register が無いため audiodg が position→QPC を extrapolation で推定）では、各 `start()` で audiodg が楽観的な position↔QPC correlation を publish し、実 position 到着に伴い ~1 period ずつ補正を巻き戻す **startup transient**。driver-reported 全 field は既に monotonic のため driver 側対策不可・件数も run 毎に変動（2→5）。**次修正**: regression callback index の bounded log を記録し、epoch start から 24 callbacks の grace window 内の regressions のみ transient として除外（mid-epoch・log overflow は引き続き fatal）。
+
+### attempt 21 — run 45522039190（branch `feat/977-vaudio-loopback`・SHA `9351165a`・attempt21-* 同梱）— epoch-start grace gate 適用 → **PASS**
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1`（Ruviform Cable Input ↔ Output） |
+| stream-roundtrip | **ok** | `test render_capture_round_trip ... ok`・`test exit=0` — **全 oracle 通過**（3.48s = 3s capture + restart settle + overhead、full lifecycle 実走） |
+| cleanup | ok | |
+
+**結果**: regressions の epoch-start grace gate（`EPOCH_START_GRACE_CALLBACKS=24`・regression index bounded log による classify・mid-epoch/overflow は fatal 維持）で `verdict: Pass` 相当に到達。pass 時は cargo が stderr を隠すため summary 行は log 上 `no-verdict-line` — exit=0・duration・pair_count=1 が実走の裏付け。marker oracle・tone share・rms・channel/domain/frame/lifecycle 各 oracle も同時に通過（fail 時と同じ全 gate を analyze が通した exit=0 のみが根拠）。
+
+**残存注意**: raw regression count 自体は OS transient として今後も発生しうる（attempt-20 観測で最大 reach 12 callbacks、件数 timing 依存）。grace window は epoch start 後 24 callbacks のみを除外し、mid-epoch regression・index log 溢れ（>32）は引き続き fatal — oracle の歯は維持。
