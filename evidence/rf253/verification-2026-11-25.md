@@ -22,20 +22,20 @@
 
 | command | exit | evidence | result |
 | --- | ---: | --- | --- |
-| `mise run fmt-check` | 0 | `validation-2026-11-25/fmt-check.log` | Pass |
-| `mise run check ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/check-plugin-test-vst3.log` | Pass |
-| `mise run lint ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/lint-plugin-test-vst3.log` | Pass — clippy `-D warnings` |
-| `mise run test ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/test-plugin-test-vst3.log` | Pass |
-| `mise run check-l1-real-plugin` | 0 | `validation-2026-11-25/check-l1-real-plugin.log` | Pass — `--all-targets` feature-enabled compile |
-| `mise run test-l1-real-plugin` | 0 | `validation-2026-11-25/test-l1-real-plugin.log` | Pass — existing L1 real-plugin suites non-regressed |
-| `mise run lint-l1-real-plugin` | 0 | `validation-2026-11-25/lint-l1-real-plugin-rerun.log` | Pass — feature-enabled clippy `-D warnings` |
-| `mise run test-os-endpoint-midi-e2e` | 0 | `validation-2026-11-25/test-os-endpoint-midi-e2e.log` | canonical lane completed; terminal case verdict is inside libtest capture |
-| `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-nocapture.log` | auxiliary verdict harvest: `verdict: NotRun — NOT_PROVISIONED`; RunMetadata emitted and written |
-| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-rerun.log` | Pass |
-| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-rerun.log` | Pass — syntax parse only, not execution |
-| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-rerun.log` | Pass — all hooks green |
+| `mise run fmt-check` | 0 | `validation-2026-11-25/fmt-check.txt` | Pass |
+| `mise run check ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/check-plugin-test-vst3.txt` | Pass |
+| `mise run lint ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/lint-plugin-test-vst3.txt` | Pass — clippy `-D warnings` |
+| `mise run test ruviform-plugin-test-vst3` | 0 | `validation-2026-11-25/test-plugin-test-vst3.txt` | Pass |
+| `mise run check-l1-real-plugin` | 0 | `validation-2026-11-25/check-l1-real-plugin.txt` | Pass — `--all-targets` feature-enabled compile |
+| `mise run test-l1-real-plugin` | 0 | `validation-2026-11-25/test-l1-real-plugin.txt` | Pass — existing L1 real-plugin suites non-regressed |
+| `mise run lint-l1-real-plugin` | 0 | `validation-2026-11-25/lint-l1-real-plugin-rerun.txt` | Pass — feature-enabled clippy `-D warnings` |
+| `mise run test-os-endpoint-midi-e2e` | 0 | `validation-2026-11-25/test-os-endpoint-midi-e2e.txt` | canonical lane completed; terminal case verdict is inside libtest capture |
+| `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-nocapture.txt` | auxiliary verdict harvest: `verdict: NotRun — NOT_PROVISIONED`; RunMetadata emitted and written |
+| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-rerun.txt` | Pass |
+| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-rerun.txt` | Pass — syntax parse only, not execution |
+| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-rerun.txt` | Pass — all hooks green |
 
-The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; those final-tree logs use the `*-rerun.log` names in the table.
+The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; those final-tree logs use the `*-rerun.txt` names in the table.
 
 ## Terminal RunMetadata observed locally
 

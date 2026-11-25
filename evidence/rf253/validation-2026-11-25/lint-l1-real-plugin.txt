@@ -1,0 +1,7 @@
+[lint-l1-real-plugin] $ cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --all-targets --features ruviform-plugin-clap/host,ruviform-plugin-vst3/host,ruviform-plugin-test-vst3/l1-runner,ruviform-plugin-test-clap/l1-runner -- -D warnings
+    Checking ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-clap)
+    Checking ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-vst3)
+    Checking ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-clap)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.07s
+mbx[cache]: 0 hits, 17 misses; 0 B downloaded, 0 B uploaded, 750.3 KiB stored locally
+mbx[savings]: your deleted worktrees left 8.7 TiB logical behind. left. past tense.

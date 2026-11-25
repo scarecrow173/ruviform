@@ -1,0 +1,5 @@
+[lint-l1-real-plugin] $ cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --all-targets --features ruviform-plugin-clap/host,ruviform-plugin-vst3/host,ruviform-plugin-test-vst3/l1-runner,ruviform-plugin-test-clap/l1-runner -- -D warnings
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-vst3)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+mbx[cache]: 0 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 526.0 GiB shared among checkouts that each believe they are an only child.

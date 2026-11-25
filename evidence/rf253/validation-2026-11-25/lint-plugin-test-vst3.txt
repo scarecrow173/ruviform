@@ -1,0 +1,5 @@
+[lint] $ if [ "$#" -lt 1 ]; then
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-vst3)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.51s
+mbx[cache]: 0 hits, 7 misses; 0 B downloaded, 0 B uploaded, 394.1 KiB stored locally
+mbx[savings]: 8.7 TiB logical of target/ had outlived its checkouts. it has been dealt with.
