@@ -20,6 +20,7 @@ Abstract:
 #include "savedata.h"
 #include "IHVPrivatePropertySet.h"
 #include "simple.h"
+#include "RvfLoopback.h"
 
 #ifdef SYSVAD_BTH_BYPASS
 #include <limits.h>
@@ -87,6 +88,12 @@ class CAdapterCommon :
         static LONG             m_AdapterInstances;     // # of adapter objects.
 
         DWORD                   m_dwIdleRequests;
+
+        // Render-to-capture loopback ("virtual cable") registry. See
+        // RvfLoopback.h — the render stream publishes its DMA buffer, run
+        // state and play cursor here; capture streams copy out of it.
+        KSPIN_LOCK                  m_LoopbackLock;
+        RVF_LOOPBACK_RENDER_SOURCE  m_LoopbackRender;
 
 #ifdef SYSVAD_USB_SIDEBAND
         typedef struct _SysvadPowerRelationsDo
@@ -283,6 +290,39 @@ class CAdapterCommon :
             _In_ WCHAR              *CaptureEndpointTopoName,
             _In_ ULONG              CaptureEndpointNameLen,
             _In_ ULONG              CapturePinId
+        );
+
+        // Render-to-capture loopback registry (see RvfLoopback.h).
+        STDMETHODIMP_(VOID)     RvfLoopbackRegisterRender
+        (
+            _In_ PVOID                Owner,
+            _In_ const WAVEFORMATEX   *Wfx,
+            _In_ BYTE                 *DmaBuffer,
+            _In_ ULONG                DmaBufferSize
+        );
+
+        STDMETHODIMP_(VOID)     RvfLoopbackUnregisterRender
+        (
+            _In_ PVOID                Owner
+        );
+
+        STDMETHODIMP_(VOID)     RvfLoopbackRenderRunning
+        (
+            _In_ PVOID                Owner,
+            _In_ BOOLEAN              Running
+        );
+
+        STDMETHODIMP_(VOID)     RvfLoopbackRenderPosition
+        (
+            _In_ PVOID                Owner,
+            _In_ ULONGLONG            LinearBytePos
+        );
+
+        STDMETHODIMP_(VOID)     RvfLoopbackCaptureWrite
+        (
+            _Out_writes_bytes_(ByteCount) BYTE *DstBuffer,
+            _In_ ULONG                    ByteCount,
+            _In_ const WAVEFORMATEX       *DstWfx
         );
 
 #ifdef SYSVAD_BTH_BYPASS
@@ -788,6 +828,9 @@ Return Value:
     m_PowerState            = PowerDeviceD0;
     m_pHW                   = NULL;
     m_pPortClsEtwHelper     = NULL;
+
+    KeInitializeSpinLock(&m_LoopbackLock);
+    RtlZeroMemory(&m_LoopbackRender, sizeof(m_LoopbackRender));
 
     InitializeListHead(&m_SubdeviceCache);
 
@@ -5111,3 +5154,127 @@ CAdapterCommon::NotifyEndpointPair
 
     return ntStatus;
 }
+
+//=============================================================================
+// Render-to-capture loopback ("virtual cable") registry.
+//
+// SYSVAD has no data path between endpoints; RvfVirtualAudio adds one via
+// this shared registry so PCM rendered to the speaker endpoint becomes the
+// capture endpoint's data (RvfLoopback.h has the data-path description).
+// Register/unregister/state calls run at <= DISPATCH_LEVEL and only touch
+// m_LoopbackRender under m_LoopbackLock. Stream callers nest this lock
+// inside their m_PositionSpinLock; no path here acquires a stream lock, so
+// the ordering cannot deadlock.
+//=============================================================================
+#pragma code_seg()
+STDMETHODIMP_(void)
+CAdapterCommon::RvfLoopbackRegisterRender
+(
+    _In_ PVOID                Owner,
+    _In_ const WAVEFORMATEX   *Wfx,
+    _In_ BYTE                 *DmaBuffer,
+    _In_ ULONG                DmaBufferSize
+)
+{
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackLock, &oldIrql);
+
+    RtlZeroMemory(&m_LoopbackRender, sizeof(m_LoopbackRender));
+    RvfLoopbackFormatFromWfx(Wfx, &m_LoopbackRender.Format);
+    m_LoopbackRender.Owner         = Owner;
+    m_LoopbackRender.DmaBuffer     = DmaBuffer;
+    m_LoopbackRender.DmaBufferSize = DmaBufferSize;
+    m_LoopbackRender.Registered    = TRUE;
+
+    KeReleaseSpinLock(&m_LoopbackLock, oldIrql);
+} // RvfLoopbackRegisterRender
+
+//=============================================================================
+#pragma code_seg()
+STDMETHODIMP_(void)
+CAdapterCommon::RvfLoopbackUnregisterRender
+(
+    _In_ PVOID                Owner
+)
+{
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackLock, &oldIrql);
+
+    if (m_LoopbackRender.Registered && m_LoopbackRender.Owner == Owner)
+    {
+        RtlZeroMemory(&m_LoopbackRender, sizeof(m_LoopbackRender));
+    }
+
+    KeReleaseSpinLock(&m_LoopbackLock, oldIrql);
+} // RvfLoopbackUnregisterRender
+
+//=============================================================================
+#pragma code_seg()
+STDMETHODIMP_(void)
+CAdapterCommon::RvfLoopbackRenderRunning
+(
+    _In_ PVOID                Owner,
+    _In_ BOOLEAN              Running
+)
+{
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_LoopbackLock, &oldIrql);
+
+    if (m_LoopbackRender.Registered && m_LoopbackRender.Owner == Owner)
+    {
+        //
+        // The play cursor itself is left untouched: the render stream's
+        // position stays monotonic across stop/start, and the capture
+        // side keeps its own contiguous read cursor.
+        //
+        m_LoopbackRender.Running = Running;
+    }
+
+    KeReleaseSpinLock(&m_LoopbackLock, oldIrql);
+} // RvfLoopbackRenderRunning
+
+//=============================================================================
+#pragma code_seg()
+STDMETHODIMP_(void)
+CAdapterCommon::RvfLoopbackRenderPosition
+(
+    _In_ PVOID                Owner,
+    _In_ ULONGLONG            LinearBytePos
+)
+{
+    //
+    // Called from the render stream's position update (possibly at
+    // DISPATCH_LEVEL, under the stream's position lock). This is a single
+    // aligned 64-bit store, atomic on both x86 and x64, so no lock is
+    // taken — the registry fields it touches are stable while Registered.
+    //
+    if (m_LoopbackRender.Registered && m_LoopbackRender.Owner == Owner)
+    {
+        m_LoopbackRender.PlayBytePos = LinearBytePos;
+    }
+} // RvfLoopbackRenderPosition
+
+//=============================================================================
+#pragma code_seg()
+STDMETHODIMP_(void)
+CAdapterCommon::RvfLoopbackCaptureWrite
+(
+    _Out_writes_bytes_(ByteCount) BYTE *DstBuffer,
+    _In_ ULONG                    ByteCount,
+    _In_ const WAVEFORMATEX       *DstWfx
+)
+{
+    RVF_LOOPBACK_FORMAT dstFormat;
+    KIRQL               oldIrql;
+
+    RvfLoopbackFormatFromWfx(DstWfx, &dstFormat);
+
+    //
+    // Hold the registry lock across the copy: this races against render
+    // stream teardown (FreeAudioBuffer unregisters before unmapping the
+    // DMA pages), and the lock is what keeps the source pointer valid.
+    //
+    KeAcquireSpinLock(&m_LoopbackLock, &oldIrql);
+    RvfLoopbackCopyToCapture(&m_LoopbackRender, DstBuffer, ByteCount, &dstFormat);
+    KeReleaseSpinLock(&m_LoopbackLock, oldIrql);
+} // RvfLoopbackCaptureWrite

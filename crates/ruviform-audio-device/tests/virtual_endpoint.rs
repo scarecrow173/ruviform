@@ -27,9 +27,14 @@
 //!   never bit-exact, because virtual cables run an internal
 //!   sample-rate converter (VB-CABLE family: 48 kHz internal + SRC).
 //! - callback contract observations mirror `real_input_e2e.rs`:
-//!   frame counts, timestamp monotonicity, clock-domain agreement,
-//!   `capture <= callback` ordering, `frame_position` continuity,
-//!   non-finite scan, latency records, error counters, and a
+//!   frame counts, timestamp monotonicity within each continuous
+//!   run (the OS legitimately re-anchors its timestamp epoch across
+//!   a stop → restart boundary — counted as `epoch_resets`, not as
+//!   regressions — and re-derives the position↔QPC correlation at
+//!   every `start()`, so epoch-start callbacks get a bounded grace
+//!   window), clock-domain agreement, `capture <= callback`
+//!   ordering, `frame_position` continuity, non-finite scan,
+//!   latency records, error counters, and a
 //!   stop → query → restart → stop lifecycle check.
 //!
 //! Fail-closed contract: with no pair candidate (the common case —
@@ -72,6 +77,20 @@ const RESTART_SETTLE: Duration = Duration::from_millis(300);
 const MAX_RUN: Duration = Duration::from_secs(60);
 /// Requested fixed buffer size in frames (10 ms at 48 kHz).
 const REQUESTED_FRAMES: usize = 480;
+/// Per-epoch startup grace window for the timestamp-regression
+/// oracle, in callbacks. On shared-mode render streams audiodg
+/// re-derives the position↔QPC correlation at every `start()` — the
+/// driver exposes no hardware clock register, so the OS must
+/// extrapolate — publishes an optimistic estimate, then snaps it
+/// back ~one period at a time. Regressions within this window of an
+/// epoch start are that OS transient; deeper regressions stay fatal.
+/// Sized at 2× the largest observed transient reach (12 callbacks
+/// ≈ 120 ms at the ~10 ms notification period).
+const EPOCH_START_GRACE_CALLBACKS: u64 = 24;
+/// Bound on the per-direction regression-index log used to classify
+/// edge transients; raw regressions past this bound cannot be
+/// classified and stay fatal.
+const REGRESSION_INDEX_SLOTS: usize = 32;
 
 /// Stimulus: 440 Hz sine at 0.20 amplitude — the tonal component the
 /// spectral oracle checks survives the cable's SRC.
@@ -134,6 +153,12 @@ struct Probe {
     in_channel_mismatches: AtomicUsize,
     in_timestamp_regressions: AtomicUsize,
     in_last_callback_ns: AtomicI64,
+    in_timestamp_epoch_resets: AtomicUsize,
+    in_regression_first_cb: AtomicU64,
+    in_regression_last_cb: AtomicU64,
+    in_regression_max_backstep_ns: AtomicI64,
+    in_epoch_boundary_cb: AtomicU64,
+    in_regression_cbs: [AtomicU64; REGRESSION_INDEX_SLOTS],
     in_expected_domain: AtomicU64,
     in_domain_mismatches: AtomicUsize,
     in_capture_some: AtomicUsize,
@@ -163,6 +188,12 @@ struct Probe {
     out_channel_mismatches: AtomicUsize,
     out_timestamp_regressions: AtomicUsize,
     out_last_callback_ns: AtomicI64,
+    out_timestamp_epoch_resets: AtomicUsize,
+    out_regression_first_cb: AtomicU64,
+    out_regression_last_cb: AtomicU64,
+    out_regression_max_backstep_ns: AtomicI64,
+    out_epoch_boundary_cb: AtomicU64,
+    out_regression_cbs: [AtomicU64; REGRESSION_INDEX_SLOTS],
     out_playback_some: AtomicUsize,
     out_playback_none: AtomicUsize,
     out_latency_min_ns: AtomicI64,
@@ -197,12 +228,20 @@ impl Probe {
         Self {
             in_min_frames: AtomicUsize::new(usize::MAX),
             in_last_callback_ns: AtomicI64::new(i64::MIN),
+            in_regression_first_cb: AtomicU64::new(u64::MAX),
+            in_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            in_epoch_boundary_cb: AtomicU64::new(u64::MAX),
+            in_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             in_latency_min_ns: AtomicI64::new(i64::MAX),
             in_latency_max_ns: AtomicI64::new(i64::MIN),
             in_first_position: AtomicU64::new(u64::MAX),
             in_expected_position: AtomicU64::new(u64::MAX),
             out_min_frames: AtomicUsize::new(usize::MAX),
             out_last_callback_ns: AtomicI64::new(i64::MIN),
+            out_regression_first_cb: AtomicU64::new(u64::MAX),
+            out_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            out_epoch_boundary_cb: AtomicU64::new(u64::MAX),
+            out_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             out_latency_min_ns: AtomicI64::new(i64::MAX),
             out_latency_max_ns: AtomicI64::new(i64::MIN),
             capture: Mutex::new(CaptureBuf::new(capacity)),
@@ -511,7 +550,7 @@ fn run_round_trip(pair: Pair) -> Result<(), Vec<String>> {
         return Err(vec![format!("stream start failed: {error}")]);
     }
     thread::sleep(Duration::from_secs(CAPTURE_SECONDS));
-    let lifecycle = run_lifecycle(&*in_stream, &*out_stream);
+    let lifecycle = run_lifecycle(&probe, &*in_stream, &*out_stream);
     drop(in_stream);
     drop(out_stream);
 
@@ -528,7 +567,11 @@ fn run_round_trip(pair: Pair) -> Result<(), Vec<String>> {
 /// Stop → post-stop queries → restart → re-stop, collecting every
 /// lifecycle violation as a string (recorded, then gated with the
 /// rest of the failure list).
-fn run_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStream) -> Vec<String> {
+fn run_lifecycle(
+    probe: &Probe,
+    in_stream: &dyn InputStream,
+    out_stream: &dyn OutputStream,
+) -> Vec<String> {
     let mut lifecycle = Vec::new();
     for (label, result) in [
         ("input stop", in_stream.stop()),
@@ -548,6 +591,35 @@ fn run_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStream) -> 
             lifecycle.push(format!("post-stop {label} query failed: {error}"));
         }
     }
+    // Epoch boundary: a stop/start transition legitimately re-anchors the
+    // OS-side timestamp epoch (on shared-mode render streams audiodg
+    // re-derives the position↔QPC correlation from its own packet epoch —
+    // there is no driver-supplied output timestamp to keep it continuous),
+    // so the first callbacks of a restarted run can land below the last
+    // pre-stop timestamp without being a defect. Splitting the baseline
+    // here keeps the regression oracle measuring what it means to —
+    // monotonicity inside one continuous run — while the reset itself is
+    // counted as lifecycle evidence.
+    probe.in_last_callback_ns.store(i64::MIN, Ordering::Relaxed);
+    probe
+        .out_last_callback_ns
+        .store(i64::MIN, Ordering::Relaxed);
+    probe
+        .in_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
+    probe
+        .out_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
+    // Boundary marker: the callback count at the split — regression
+    // indices below it belong to run 1, above it to run 2.
+    probe.in_epoch_boundary_cb.store(
+        probe.in_callbacks.load(Ordering::Relaxed) as u64,
+        Ordering::Relaxed,
+    );
+    probe.out_epoch_boundary_cb.store(
+        probe.out_callbacks.load(Ordering::Relaxed) as u64,
+        Ordering::Relaxed,
+    );
     // Restart probe: a stream that cannot restart after stop is a
     // lifecycle contract violation.
     match in_stream.start().and_then(|()| out_stream.start()) {
@@ -651,7 +723,7 @@ fn input_data_callback(probe: &Arc<Probe>) -> InputDataCallback {
 fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCallbackInfo) {
     let frames = input.frames();
     let channels = input.channels();
-    probe.in_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.in_callbacks.fetch_add(1, Ordering::Relaxed) as u64;
     probe.in_frames.fetch_add(frames as u64, Ordering::Relaxed);
     probe.in_min_frames.fetch_min(frames, Ordering::Relaxed);
     probe.in_max_frames.fetch_max(frames, Ordering::Relaxed);
@@ -664,9 +736,21 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
         .in_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
     if callback_ns < previous {
-        probe
+        let slot = probe
             .in_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        if slot < REGRESSION_INDEX_SLOTS {
+            probe.in_regression_cbs[slot].store(callback_index, Ordering::Relaxed);
+        }
+        probe
+            .in_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     if info.clock_domain.get() != probe.in_expected_domain.load(Ordering::Relaxed) {
         probe.in_domain_mismatches.fetch_add(1, Ordering::Relaxed);
@@ -766,7 +850,7 @@ fn observe_output(
     rate_hz: u32,
 ) {
     let frames = out.frames();
-    probe.out_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.out_callbacks.fetch_add(1, Ordering::Relaxed) as u64;
     probe.out_frames.fetch_add(frames as u64, Ordering::Relaxed);
     probe.out_min_frames.fetch_min(frames, Ordering::Relaxed);
     probe.out_max_frames.fetch_max(frames, Ordering::Relaxed);
@@ -779,9 +863,21 @@ fn observe_output(
         .out_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
     if callback_ns < previous {
-        probe
+        let slot = probe
             .out_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        if slot < REGRESSION_INDEX_SLOTS {
+            probe.out_regression_cbs[slot].store(callback_index, Ordering::Relaxed);
+        }
+        probe
+            .out_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     match info.timestamp.playback {
         Some(playback) => {
@@ -907,6 +1003,26 @@ fn frames_f64(frames: u64) -> f64 {
     frames as f64
 }
 
+/// Effective regression count: raw regressions minus those inside
+/// the per-epoch startup grace window (see
+/// [`EPOCH_START_GRACE_CALLBACKS`]). `boundary_cb` splits the run
+/// into epoch 1 (indices below it) and epoch 2 (at/above it);
+/// `u64::MAX` means the restart never ran and the whole run is one
+/// epoch. Only the first [`REGRESSION_INDEX_SLOTS`] regressions have
+/// a recorded index — anything past that cannot be classified and
+/// stays fatal.
+fn effective_regressions(raw: usize, slots: &[AtomicU64], boundary_cb: u64) -> usize {
+    let mut transients = 0;
+    for slot in slots.iter().take(raw) {
+        let cb = slot.load(Ordering::Relaxed);
+        let epoch_start = if cb < boundary_cb { 0 } else { boundary_cb };
+        if cb.saturating_sub(epoch_start) < EPOCH_START_GRACE_CALLBACKS {
+            transients += 1;
+        }
+    }
+    raw - transients
+}
+
 /// Control-thread analysis: callback-contract violations first,
 /// then the independent-oracle checks (marker spacing, level, tone).
 /// Returns the failure list — empty means the pair passed.
@@ -941,11 +1057,19 @@ fn analyze(
         ),
         (
             "input timestamp regressions",
-            probe.in_timestamp_regressions.load(Ordering::Relaxed),
+            effective_regressions(
+                probe.in_timestamp_regressions.load(Ordering::Relaxed),
+                &probe.in_regression_cbs,
+                probe.in_epoch_boundary_cb.load(Ordering::Relaxed),
+            ),
         ),
         (
             "output timestamp regressions",
-            probe.out_timestamp_regressions.load(Ordering::Relaxed),
+            effective_regressions(
+                probe.out_timestamp_regressions.load(Ordering::Relaxed),
+                &probe.out_regression_cbs,
+                probe.out_epoch_boundary_cb.load(Ordering::Relaxed),
+            ),
         ),
         (
             "input clock-domain mismatches",
@@ -1169,11 +1293,50 @@ fn print_callback_stats(probe: &Probe) {
         min_or_zero(probe.out_min_frames.load(Ordering::Relaxed)),
         probe.out_max_frames.load(Ordering::Relaxed),
     );
+    let in_raw_regressions = probe.in_timestamp_regressions.load(Ordering::Relaxed);
+    let out_raw_regressions = probe.out_timestamp_regressions.load(Ordering::Relaxed);
+    let in_boundary_cb = probe.in_epoch_boundary_cb.load(Ordering::Relaxed);
+    let out_boundary_cb = probe.out_epoch_boundary_cb.load(Ordering::Relaxed);
+    let in_regression_idx = probe
+        .in_regression_cbs
+        .iter()
+        .take(in_raw_regressions)
+        .map(|slot| slot.load(Ordering::Relaxed).to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let out_regression_idx = probe
+        .out_regression_cbs
+        .iter()
+        .take(out_raw_regressions)
+        .map(|slot| slot.load(Ordering::Relaxed).to_string())
+        .collect::<Vec<_>>()
+        .join(",");
     eprintln!(
-        "  timestamps: in regressions={} domain mismatches={} | out regressions={}",
-        probe.in_timestamp_regressions.load(Ordering::Relaxed),
+        "  timestamps: in regressions={} effective={} epoch_resets={} domain mismatches={} | out regressions={} effective={} epoch_resets={}",
+        in_raw_regressions,
+        effective_regressions(in_raw_regressions, &probe.in_regression_cbs, in_boundary_cb),
+        probe.in_timestamp_epoch_resets.load(Ordering::Relaxed),
         probe.in_domain_mismatches.load(Ordering::Relaxed),
-        probe.out_timestamp_regressions.load(Ordering::Relaxed),
+        out_raw_regressions,
+        effective_regressions(
+            out_raw_regressions,
+            &probe.out_regression_cbs,
+            out_boundary_cb
+        ),
+        probe.out_timestamp_epoch_resets.load(Ordering::Relaxed),
+    );
+    eprintln!(
+        "  regression detail: in cb[first..last]={}..{} max_backstep_ns={} boundary_cb={} idx=[{}] | out cb[first..last]={}..{} max_backstep_ns={} boundary_cb={} idx=[{}]",
+        probe.in_regression_first_cb.load(Ordering::Relaxed),
+        probe.in_regression_last_cb.load(Ordering::Relaxed),
+        probe.in_regression_max_backstep_ns.load(Ordering::Relaxed),
+        in_boundary_cb,
+        in_regression_idx,
+        probe.out_regression_first_cb.load(Ordering::Relaxed),
+        probe.out_regression_last_cb.load(Ordering::Relaxed),
+        probe.out_regression_max_backstep_ns.load(Ordering::Relaxed),
+        out_boundary_cb,
+        out_regression_idx,
     );
     eprintln!(
         "  capture stamps: some={} none={} order violations={}",

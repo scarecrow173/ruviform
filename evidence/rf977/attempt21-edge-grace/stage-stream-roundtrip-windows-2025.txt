@@ -1,0 +1,19 @@
+  prerequisite endpoint-probe: ok
+  mic-consent [hklm-devacc] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : '' -> 'Allow'
+  mic-consent [hkcu-devacc] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : '' -> 'Allow'
+  mic-consent [hklm-cam] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Allow' -> 'Allow'
+  mic-consent [hkcu-cam] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : '' -> 'Allow'
+  mic-consent [policy] HKLM:SOFTWARE\Policies\Microsoft\Windows\AppPrivacy\LetAppsAccessMicrophone : '' -> '1'
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+  [35m[test-audio-virtual-endpoint][0m [1m$ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1[0m
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 1.85s
+       Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+
+  running 1 test
+  test render_capture_round_trip ... ok
+
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.48s
+
+  test exit=0 verdict=no-verdict-line

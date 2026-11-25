@@ -1,0 +1,93 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:35:19Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "ok",
+    "detail": "arch=x64; sys=D:\\a\\ruviform\\ruviform\\drivers\\rvf-virtual-audio\\x64\\Release\\RvfVirtualAudio.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T00:38:15Z"
+  },
+  {
+    "stage": "catalog-create",
+    "status": "ok",
+    "detail": "cat=D:\\a\\ruviform\\ruviform\\vaudio-pkg\\rvfvirtualaudio.cat",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:38:16Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=361024CFD0C74E34510EAA29DF389F6BA18B1C60",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:38:17Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=361024CFD0C74E34510EAA29DF389F6BA18B1C60; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:38:18Z"
+  },
+  {
+    "stage": "sign",
+    "status": "ok",
+    "detail": "signtool=C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe; targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T00:38:19Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "ok",
+    "detail": "targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T00:38:20Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "ok",
+    "detail": "published=oem12.inf",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T00:38:21Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "ok",
+    "detail": "inf_in_store=True; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:38:22Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "ok",
+    "detail": "instance_id=ROOT\\MEDIA\\0000; status=OK; problem_code=0; service=RvfVirtualAudio",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:38:32Z"
+  },
+  {
+    "stage": "endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=ok; probe_exit=0; probe_exit=0; endpoints_enumerated=2; virtual_candidates=2; pair_count=1; pairs=Ruviform Cable Input (Ruviform Virtual Audio Device) <-> Ruviform Cable Output (Ruviform Virtual Audio Device)",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-25T00:39:06Z"
+  },
+  {
+    "stage": "stream-roundtrip",
+    "status": "error",
+    "detail": "test_exit=101; verdict=Fail — no pair candidate completed the round-trip:; consent=hklm-devacc=Allow,hkcu-devacc=Allow,hklm-cam=Allow,hkcu-cam=Allow,policy=1,AudioEndpointBuilder=Running,Audiosrv=Running",
+    "exit_code": 101,
+    "recorded_utc": "2026-11-25T00:39:16Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "",
+    "exit_code": null,
+    "recorded_utc": "2026-11-25T00:39:18Z"
+  }
+]

@@ -1,0 +1,7 @@
+  prerequisite devnode-create: ok
+  probe_exit=0
+  endpoints_enumerated=2
+  virtual_candidates=2
+  pair_count=1
+  pairs=Ruviform Cable Input (Ruviform Virtual Audio Device) <-> Ruviform Cable Output (Ruviform Virtual Audio Device)
+  probe script exit=0 pair_count=1 endpoints=2
