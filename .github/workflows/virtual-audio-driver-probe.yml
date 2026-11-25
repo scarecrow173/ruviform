@@ -174,8 +174,10 @@ jobs:
           $primitive = Get-Content -LiteralPath $localStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
           Set-ProbeState $state 'msbuild' $primitive.runner.msbuild
           Set-ProbeState $state 'vs_install' $primitive.runner.vs_install
-          Set-ProbeState $state 'km_headers' $primitive.runner.km_headers
-          Set-ProbeState $state 'km_libs' $primitive.runner.km_libs
+          $legacyKmHeaders = $primitive.runner.initial_km_headers
+          if ($primitive.runner.wdk_install_attempted) { $legacyKmHeaders = $primitive.runner.wdm_header_count }
+          Set-ProbeState $state 'km_headers' $legacyKmHeaders
+          Set-ProbeState $state 'km_libs' $primitive.runner.initial_km_libs
           Set-ProbeState $state 'sys_path' $primitive.package.sys_path
           if (Test-Path -LiteralPath $localPkg) {
             $localCat = Get-ChildItem -LiteralPath $localPkg -Filter '*.cat' -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -188,7 +190,7 @@ jobs:
           Set-ProbeState $state 'cert_thumbprint' $primitive.os_state.cert_thumbprint
           if (Test-Path -LiteralPath $localCer) { Set-ProbeState $state 'cert_cer_path' $localCer }
           Set-ProbeState $state 'inf_published' $primitive.os_state.inf_published
-          Set-ProbeState $state 'inf_staged' [bool]$primitive.os_state.inf_published
+          Set-ProbeState $state 'inf_staged' ([bool]$primitive.os_state.inf_published)
           Set-ProbeState $state 'instance_id' $primitive.os_state.instance_id
 
           $stageMap = @(
@@ -240,7 +242,7 @@ jobs:
                 $projectedStatus = if ($pre.inf_in_store) { 'ok' } else { 'error' }
                 $projectedDetail = "inf_in_store=$($pre.inf_in_store); matching_devnodes=$($pre.matching_devnodes)"
                 if ($pre.published_name) { Set-ProbeState $state 'inf_published' $pre.published_name }
-                Set-ProbeState $state 'inf_staged' [bool]$pre.inf_in_store
+                Set-ProbeState $state 'inf_staged' ([bool]$pre.inf_in_store)
               } else {
                 $projectedStatus = 'blocked'
                 $projectedDetail = 'pre-devnode enum observation missing from primitive state'
@@ -249,6 +251,10 @@ jobs:
               $projectedStatus = $rec.status
               $projectedDetail = $rec.detail
               $projectedExit = $rec.exit_code
+              if ($map.legacy -eq 'catalog-create' -and (Test-Path -LiteralPath $localPkg)) {
+                $localCatRecord = Get-ChildItem -LiteralPath $localPkg -Filter '*.cat' -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($localCatRecord) { $projectedDetail = "cat=$($localCatRecord.FullName)" }
+              }
             } elseif ($map.legacy -eq 'driver-build') {
               $wdks = @($primitive.stages | Where-Object { $_.stage -eq 'wdk' } | Select-Object -Last 1)
               if ($wdks.Count -and $wdks[0].status -ne 'ok') {

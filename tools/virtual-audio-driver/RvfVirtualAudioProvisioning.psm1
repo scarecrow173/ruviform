@@ -123,6 +123,8 @@ function New-RvfState {
             km_libs            = 0
             initial_toolset_count = 0
             initial_km_headers   = 0
+            wdk_install_attempted = $false
+            wdm_header_count     = 0
             initial_km_libs      = 0
             initial_signtool_hits = 0
             initial_inf2cat_hits = 0
@@ -395,15 +397,20 @@ function Get-RvfBuildSurface {
         if ($cmd) { $msbuild = $cmd.Source }
     }
     $toolset = @()
+    $toolsetAllPlatforms = @()
     if ($vsInstall) {
         $toolset = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\$Arch\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
+        $toolsetAllPlatforms = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\*\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
     }
     $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
     $includeRoot = Join-Path $kitsRoot 'Include'
     $kmHeaders = 0
+    $wdmHeaders = 0
     foreach ($header in 'wdm.h', 'wdf.h', 'portcls.h', 'stdunk.h') {
         if (Test-Path $includeRoot) {
-            $kmHeaders += @(Get-ChildItem $includeRoot -Recurse -Depth 2 -Filter $header -ErrorAction SilentlyContinue).Count
+            $hits = @(Get-ChildItem $includeRoot -Recurse -Depth 2 -Filter $header -ErrorAction SilentlyContinue).Count
+            $kmHeaders += $hits
+            if ($header -eq 'wdm.h') { $wdmHeaders = $hits }
         }
     }
     $libRoot = Join-Path $kitsRoot 'Lib'
@@ -422,7 +429,10 @@ function Get-RvfBuildSurface {
         msbuild          = $msbuild
         toolset_count    = $toolset.Count
         toolsets         = @($toolset | ForEach-Object { $_.FullName })
+        toolset_all_count = $toolsetAllPlatforms.Count
+        toolsets_all     = @($toolsetAllPlatforms | ForEach-Object { $_.FullName })
         km_headers       = $kmHeaders
+        wdm_header_count = $wdmHeaders
         km_libs          = $kmLibs
         driverkit_tasks  = @($driverKitTasks | ForEach-Object { $_.FullName })
         signtool_hits    = @(Find-RvfTool 'signtool.exe' -AllKitsHits)
@@ -1123,8 +1133,8 @@ function Invoke-RvfProvision {
         $envInfo = Get-RvfEnvironmentInfo
         Write-RvfEnvironmentSurface $envInfo
         $initialSurface = Get-RvfBuildSurface -Arch $Arch
-        Write-RvfLog "initial build surface: msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}) toolset=$($initialSurface.toolset_count) kmHeaders=$($initialSurface.km_headers) kmLibs=$($initialSurface.km_libs) signtoolKits=$($initialSurface.signtool_hits.Count) inf2catKits=$($initialSurface.inf2cat_hits.Count) makecatKits=$($initialSurface.makecat_hits.Count) winget=$(if (Get-Command winget -ErrorAction SilentlyContinue) {'present'} else {'absent'})"
-        $state.runner.initial_toolset_count = $initialSurface.toolset_count
+        Write-RvfLog "initial build surface: msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}) toolset=$($initialSurface.toolset_all_count) kmHeaders=$($initialSurface.km_headers) kmLibs=$($initialSurface.km_libs) signtoolKits=$($initialSurface.signtool_hits.Count) inf2catKits=$($initialSurface.inf2cat_hits.Count) makecatKits=$($initialSurface.makecat_hits.Count) winget=$(if (Get-Command winget -ErrorAction SilentlyContinue) {'present'} else {'absent'})"
+        $state.runner.initial_toolset_count = $initialSurface.toolset_all_count
         $state.runner.initial_km_headers = $initialSurface.km_headers
         $state.runner.initial_km_libs = $initialSurface.km_libs
         $state.runner.initial_signtool_hits = $initialSurface.signtool_hits.Count
@@ -1155,7 +1165,7 @@ function Invoke-RvfProvision {
             Stop-RvfStageLog
             throw 'RVF_STAGE_STOP'
         }
-        $envDetail = "msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}); toolset=$($initialSurface.toolset_count); kmHeaders=$($initialSurface.km_headers); kmLibs=$($initialSurface.km_libs); signtoolKits=$($initialSurface.signtool_hits.Count); inf2catKits=$($initialSurface.inf2cat_hits.Count); winget=$(if ($state.runner.winget_present) {'present'} else {'absent'})"
+        $envDetail = "msbuild=$(if ($initialSurface.msbuild) {'present'} else {'absent'}); toolset=$($initialSurface.toolset_all_count); kmHeaders=$($initialSurface.km_headers); kmLibs=$($initialSurface.km_libs); signtoolKits=$($initialSurface.signtool_hits.Count); inf2catKits=$($initialSurface.inf2cat_hits.Count); winget=$(if ($state.runner.winget_present) {'present'} else {'absent'})"
         Add-RvfStageRecord -State $state -Stage 'environment' -Status ok -Detail $envDetail
         Stop-RvfStageLog
 
@@ -1197,11 +1207,13 @@ function Invoke-RvfProvision {
 
         Start-RvfStageLog 'wdk'
         $surface = Get-RvfBuildSurface -Arch $Arch
+        $wdkInstallAttempted = $false
         Write-RvfLog "  initial: msbuild=$($surface.msbuild) toolset=$($surface.toolset_count) kmHeaders=$($surface.km_headers) kmLibs=$($surface.km_libs) signtoolKits=$($surface.signtool_hits.Count) inf2catKits=$($surface.inf2cat_hits.Count)"
         if ((-not $surface.msbuild -or -not $surface.toolset_count -or -not $surface.km_headers) -and $AllowWdkInstall) {
             Write-RvfLog '  == job-local WDK install (winget / Microsoft.WindowsWDK.10.0.26100) =='
             $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
             if ($wingetCmd) {
+                $wdkInstallAttempted = $true
                 $winget = Invoke-RvfProcess -FilePath $wingetCmd.Source -Arguments @('install', '--id', 'Microsoft.WindowsWDK.10.0.26100', '--exact', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity') -TimeoutSeconds ([Math]::Min(1800, $TimeoutSeconds))
                 Write-RvfProcessOutput $winget '  winget: '
                 Write-RvfLog "  winget exit=$($winget.exit_code) timed_out=$($winget.timed_out)"
@@ -1216,6 +1228,8 @@ function Invoke-RvfProvision {
         $state.runner.vs_install = $surface.vs_install
         $state.runner.km_headers = $surface.km_headers
         $state.runner.km_libs = $surface.km_libs
+        $state.runner.wdm_header_count = $surface.wdm_header_count
+        $state.runner.wdk_install_attempted = $wdkInstallAttempted
         if (-not $surface.msbuild -or -not $surface.toolset_count -or -not $surface.km_headers) {
             $terminalStatus = 'absent'
             $terminalDetail = 'WDK_ABSENT'
