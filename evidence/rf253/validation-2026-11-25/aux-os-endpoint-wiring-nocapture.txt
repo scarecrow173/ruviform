@@ -1,0 +1,32 @@
+   Compiling rustversion v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling serde v1.0.229
+   Compiling arc-swap v1.9.5
+   Compiling ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-rt)
+   Compiling ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-observability)
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-exec)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-host)
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio)
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-plugin-bridge)
+   Compiling ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-test)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 2 tests
+test audio_virtual_endpoint_round_trip ... os_endpoint: audio render→capture wiring verifier
+  host: WASAPI
+run_metadata: {"case_id":"rf629.audio.virtual-endpoint.render-capture","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"marker-rms-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"","observed":"no input devices on this host","evidence":[]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf253-midi-e2e\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json
+verdict: NotRun — no input devices on this host
+ok
+test midi_virtual_endpoint_loopback ... enumerated: 0 input ports, 1 output ports
+run_metadata: {"case_id":"rf629.midi.virtual-endpoint.loopback","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"ordered-subsequence+stamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence round-trip","observed":"NOT_PROVISIONED — no bidirectional name match","evidence":[]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf253-midi-e2e\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json
+verdict: NotRun — NOT_PROVISIONED (no bidirectional name match)
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.05s
+
+mbx[cache]: 13 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: worktrees come and go. their 8.7 TiB logical now goes with them.

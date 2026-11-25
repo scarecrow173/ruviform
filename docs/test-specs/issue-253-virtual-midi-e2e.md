@@ -184,7 +184,7 @@ terminal record contract を追加する: capability-gate `NotRun`、pair open �
 し、panic path でも terminal record を best-effort で残す。fixture artifact 欠落は
 R2 どおり `Fail` である。
 
-stop/seek/overflow の oracle ownership mapping は spec の 2026-11-25 追記を正本
+order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock の oracle ownership mapping は spec の 2026-11-25 追記を正本
 とする。本 test は no-command playthrough と overflow counter の honest observation
 だけを保証し、stop/seek/loop/pause stimulus や overflow fault injection を OS
 endpoint 経由で保証しない。

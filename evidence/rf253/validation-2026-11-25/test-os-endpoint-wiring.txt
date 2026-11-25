@@ -1,0 +1,9 @@
+[test-os-endpoint-wiring] $ cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-e9a5c22a311ca0a4.exe)
+
+running 2 tests
+test audio_virtual_endpoint_round_trip ... ok
+test midi_virtual_endpoint_loopback ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.08s

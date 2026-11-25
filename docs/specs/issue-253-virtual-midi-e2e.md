@@ -249,9 +249,11 @@ provisioned pair の無いホストでは `verdict: NotRun —
 NOT_PROVISIONED` で fail-closed に終わる（Pass 偽装なし）。
 `check-l1-real-plugin`/`lint-l1-real-plugin` の `--all-targets`
 compile/lint 収集は変わらず有効で、専用 lint lane は設けない。
-provisioned pair での実走 Pass は引き続き
-`scarecrow173/ruviform#762` の provisioned Windows runner が
-gate する。実行記録は `evidence/rf253/`。
+provisioned pair での実走 Pass は rf#762 の self-hosted runner 調達ではなく、
+ruviform 独自 test-signed driver を install する GitHub-hosted `windows-2025`
+branch-ref `virtual-audio-driver-probe.yml` が gate する。rf#762 は GUI-L2 等の
+別用途の残余価値はあるが、本 MIDI e2e の必須前提ではない。実行記録は
+`evidence/rf253/`。
 
 ## 追記（2026-11-25）— RF#628 supply・RunMetadata・provisioned RvfMidi stage
 
@@ -278,15 +280,23 @@ fixture build → `--nocapture` 補助実行 → verdict/RunMetadata harvest →
 は harness の honest 完走を意味し、AC 判定は RunMetadata JSON と provenance
 evidence を読んで行う。Issue #253 は close しない。
 
-### stop/seek/overflow oracle ownership mapping
+### order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock oracle ownership mapping
 
-| concern | 本 case での扱い | oracle owner |
-| --- | --- | --- |
-| playthrough supply | 本 case が直接検証する。commands 空の RF#628 trace を `midi_expected_playthrough` + `midi_trace_eq` + monotonic invariant に照合する | `crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs` |
-| seek/loop/pause | OS endpoint stimulus には使わない。RF#628 deterministic trace のコマンド意味論として既存テストが担保する | `crates/ruviform-audio-test/tests/midi.rs` の `seek_skips_intermediate_positions`/`loop_region_repeats_in_loop_events`/`pause_stops_event_delivery` |
-| stop | OS endpoint stimulus には使わない。transport command 適用・budget 意味論は media-core scheduler 契約が担保し、sounding/live note release の plugin-bridge 観測 oracle は `midi_wiring` が担保する | `crates/ruviform-media-core/src/transport_schedule.rs` の scheduler tests、`crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` の `stop_releases_sounding_notes`/`stop_releases_live_notes_too` |
-| queue overflow/loss | 本 case は overflow を人為注入せず、`InputTx`/pump/`InputStage` counters を観測・記録する。overflow/ledger eviction の決定的再現は bridge 側の既存 oracle が担う | `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` の `overflow_reports_are_observable`/`ledger_eviction_delivers_synthetic_off` |
+分類語彙: `direct` は本 OS endpoint case が実測で観測するもの、`delegated` は既存の決定的 unit/integration oracle が意味論を所有し本 case が再実装しないもの、`residual` は本 slice では最終受入を閉じない残課題である。run id は Rust test 関数名または本 case の verifier 名を示す。
+
+| concern | run id / oracle owner | 分類 | 本 case での扱い |
+| --- | --- | --- | --- |
+| playthrough supply | `os_endpoint_midi_loopback_drives_test_instrument` / `crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs` | direct | commands 空の RF#628 trace を `midi_expected_playthrough` + `midi_trace_eq` + monotonic invariant に照合する |
+| order | `same_frame_events_keep_source_order` / `crates/ruviform-media-core/src/transport_schedule.rs`; `out_of_order_cue_list_still_delivers_in_stamp_order`・`channel_capacity_backpressure_defers_then_delivers_in_order` / `crates/ruviform-audio-test/tests/pipeline_midi.rs`; `os_endpoint_midi_loopback_drives_test_instrument` | delegated + direct | scheduler/pipeline の順序意味論は既存 oracle が所有し、本 case は OS 受信列が独立 literal の ordered subsequence であることだけを観測する |
+| loss | `loss_counters_do_not_terminate_the_subscription` / `crates/ruviform-audio-test/tests/midi_faults.rs`; `backend_drops_and_unsupported_are_observable_per_pump_and_cumulative` / `crates/ruviform-audio-test/tests/pipeline_midi.rs`; `os_endpoint_midi_loopback_drives_test_instrument` | delegated + direct | fault 時の loss 意味論は既存 oracle が所有し、本 case は `InputTx`/`InputStage` counters を記録し、通常経路で 0 であることを観測する |
+| overflow | `pending_budget_rejects_overflow` / `crates/ruviform-media-core/src/transport_schedule.rs`; `overflow_reports_are_observable`・`ledger_eviction_delivers_synthetic_off` / `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` | delegated | 本 case は overflow を人為注入しない。scheduler budget、ledger/chase overflow、eviction synthetic-off の決定的再現は既存 oracle が所有する |
+| stop | `stop_releases_sounding_notes`・`stop_releases_live_notes_too` / `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs`; `pending_budget_rejects_overflow` / `crates/ruviform-media-core/src/transport_schedule.rs` | delegated | OS endpoint stimulus には使わない。stop command 適用・budget 意味論は scheduler、sounding/live note release は plugin-bridge が所有する |
+| seek/loop/pause | `seek_skips_intermediate_positions`・`loop_region_repeats_in_loop_events`・`pause_stops_event_delivery` / `crates/ruviform-audio-test/tests/midi.rs`; `seek_releases_and_chases_sounding_notes` / `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` | delegated | RF#628 deterministic trace のコマンド意味論と bridge の release/chase は既存 oracle が所有し、本 case の stimulus は Play-at-0 のみである |
+| RT | `rt_run_callback_no_alloc`・`rt_device_restart_no_alloc` / `crates/ruviform-media-core/src/transport_schedule.rs`; `rt_midi_wiring_no_alloc` / `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` | delegated | allocation-free / RT 境界は既存 no-alloc oracle が所有する。本 OS endpoint case は wall-clock pacing を使う EXT-L3 であり、新しい RT safe 主張を追加しない |
+| disconnect / close / loss of endpoint | `device_restart_vs_seek_distinct_epoch_generation` / `crates/ruviform-media-core/src/transport_schedule.rs`; `invalidate_fault_kills_stream_and_allows_reopen`・`vanish_mid_input_stream_invalidates_once` / `crates/ruviform-audio-test/tests/backend_faults.rs`; `close_makes_next_pump_fail_with_stream_invalidated` / `crates/ruviform-audio-test/tests/pipeline_midi.rs`; `assert_close_semantics` in `os_endpoint_midi_loopback_drives_test_instrument` | delegated + direct + residual | close 後の `StreamInvalidated` は本 case が直接観測する。device restart epoch と backend invalidate/vanish 意味論は既存 oracle が所有し、provisioned endpoint 消失・復帰の最終受入は #629/#1002 系 fault evidence 側の residual とする |
+| timestamp-clock | `cues_arrive_at_independent_expected_block_offsets`・`late_stamp_is_clamped_to_offset_zero_and_counted`・`unmapped_domain_stamp_is_rejected_and_counted`・`feed_stamp_domain_matches_leg_anchor_domain` / `crates/ruviform-audio-test/tests/pipeline_midi.rs`; `live_input_waits_for_clock_anchor`・`set_clock_jump_triggers_release_and_chase` / `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs`; `os_endpoint_midi_loopback_drives_test_instrument` | delegated + direct | timestamp domain/late/unmapped/clock jump の意味論は既存 oracle が所有し、本 case は観測 OS timestamp・clock domain・stamp base・monotonicity・PCM offset を direct に記録する。deterministic clock を実 OS 時刻の証明として扱わない |
 
 したがって旧来の「Test Runtime（#628）との結線」は no-command playthrough
 supply について本 slice で解消されたが、stop/seek/loop/pause を OS endpoint
-経由で再現する case や overflow fault injection は本 slice の非目標のままである。
+経由で再現する case、overflow fault injection、provisioned endpoint 消失/復帰の
+最終受入は本 slice の非目標または residual のままである。

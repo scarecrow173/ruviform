@@ -324,7 +324,7 @@ result を検査して metadata JSON を artifact へ集める。`midi-endpoint-
 これらが欠ける未 provisioning 環境での honest `NotRun` は absence-is-data
 として error にしない。
 
-stop/seek/overflow の責務 mapping は spec の 2026-11-25 追記を正本とする。
+order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock の責務 mapping は spec の 2026-11-25 追記を正本とする。
 本 design の旧 deferred concern「Test Runtime 結線」は no-command playthrough
 supply に限り解消され、transport command stimulus・overflow fault injection は
 引き続き後続 case とする。

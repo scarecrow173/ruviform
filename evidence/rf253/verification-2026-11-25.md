@@ -33,9 +33,11 @@
 | `mise run lint-l1-real-plugin` | 0 | `validation-2026-11-25/lint-l1-real-plugin-rerun.txt` | Pass — feature-enabled clippy `-D warnings` |
 | `mise run test-os-endpoint-midi-e2e` | 0 | `validation-2026-11-25/test-os-endpoint-midi-e2e.txt` | canonical lane completed; terminal case verdict is inside libtest capture |
 | `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-nocapture.txt` | auxiliary verdict harvest: `verdict: NotRun — NOT_PROVISIONED`; RunMetadata emitted and written |
-| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-rerun.txt` | Pass |
-| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-rerun.txt` | Pass — syntax parse only, not execution |
-| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-final.txt` | Pass — all hooks green |
+| `mise run test-os-endpoint-wiring` | 0 | `validation-2026-11-25/test-os-endpoint-wiring.txt` / `.exit` | canonical wiring lane completed; passing output captures terminal verdicts |
+| `mise exec -- cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-wiring-nocapture.txt` / `.exit` | auxiliary verdict harvest: audio `NotRun — no input devices on this host`; MIDI `NotRun — NOT_PROVISIONED`; no local Pass claimed |
+| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-final2.txt` | Pass — includes provenance fail-closed workflow edit |
+| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-final2.txt` | Pass — syntax parse only, not execution; includes provenance fail-closed edit |
+| `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-final2.txt` | Pass — all hooks green |
 
 The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; the final evidence/docs tree additionally re-ran `prek` successfully (`prek-all-files-final.txt`); other final-tree logs use the `*-rerun.txt` names in the table.
 
@@ -51,16 +53,20 @@ The auxiliary `--nocapture` run emitted:
 
 Interpretation: the local run verifies honest fail-closed behavior only. The `environment_kind=virtual-os-endpoint` field is the case envelope; acceptance-grade Pass interpretation still requires the workflow's RvfMidi provisioning provenance (`midi-endpoint-probe` candidates and `midi-loopback` Pass), and no such Pass is claimed locally.
 
-## stop/seek/overflow oracle ownership mapping
+## order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock oracle ownership mapping
 
-The normative mapping is in `docs/specs/issue-253-virtual-midi-e2e.md` (2026-11-25 addendum). Summary:
+The normative mapping is in `docs/specs/issue-253-virtual-midi-e2e.md` (2026-11-25 addendum). It now records run ids and `direct`/`delegated`/`residual` classification for every required concern. Summary:
 
-| concern | owner for this slice |
+| concern | classification and owner summary |
 | --- | --- |
-| commands-empty playthrough supply | verified directly by `os_endpoint_midi_e2e.rs` through RF#628 trace equality and monotonicity |
-| seek / loop / pause command semantics | owned by `crates/ruviform-audio-test/tests/midi.rs` (`seek_skips_intermediate_positions`, `loop_region_repeats_in_loop_events`, `pause_stops_event_delivery`); not re-implemented here |
-| stop command semantics | command application/budget semantics are owned by media-core transport scheduler tests; sounding/live note release is owned by `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` (`stop_releases_sounding_notes`, `stop_releases_live_notes_too`); not used as OS endpoint stimulus here |
-| overflow / loss determinism | owned by `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` (`overflow_reports_are_observable`, `ledger_eviction_delivers_synthetic_off`); this e2e observes and records counters but does not inject overflow |
+| order | delegated scheduler/pipeline order oracles plus direct ordered-subsequence observation in `os_endpoint_midi_loopback_drives_test_instrument` |
+| loss | delegated fault/loss-counter oracles plus direct `InputTx`/`InputStage` counter observation |
+| overflow | delegated scheduler budget + bridge ledger/chase/eviction oracles; not injected in this case |
+| stop | delegated scheduler command/budget semantics and bridge `stop_releases_sounding_notes` / `stop_releases_live_notes_too` |
+| seek/loop/pause | delegated RF#628 trace tests and bridge `seek_releases_and_chases_sounding_notes` |
+| RT | delegated media-core/bridge no-alloc tests; this EXT-L3 wall-clock case adds no new RT-safety claim |
+| disconnect/close | close invalidation is direct; restart/invalidate/vanish semantics are delegated; provisioned endpoint disappearance/recovery final acceptance remains residual to #629/#1002 evidence |
+| timestamp-clock | delegated domain/late/unmapped/clock-jump oracles plus direct OS timestamp/clock-domain/stamp-base/PCM-offset observation |
 
 ## Provisioned workflow evidence
 
