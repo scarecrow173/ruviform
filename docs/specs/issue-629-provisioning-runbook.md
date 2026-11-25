@@ -369,7 +369,11 @@ stage の追加と本節・lane 表の整合を行った。外部 driver 候補�
 manual workflow `.github/workflows/virtual-audio-driver-probe.yml`
 （`workflow_dispatch` のみ・opt-in manual lane — required gate・`ci-summary`
 の `needs`・ruleset と非接続）が、専用 runner 前提手順に相当する全工程を
-stage 分解で実施する:
+stage 分解で実施する。sv#115 Slice A 以降、build/test-sign/install/devnode/
+mic consent/endpoint readiness/cleanup の OS state 変更は
+`tools/virtual-audio-driver/Provision-RvfVirtualAudioEndpoint.ps1` と
+`Unprovision-RvfVirtualAudioEndpoint.ps1` に抽出され、workflow は primitive
+state JSON を従来 stage 名・state key・stage log 名へ投影する:
 
 1. `env-build-surface` — OS build・testsigning/SecureBoot・WDK/署名 tool の記録。
 2. `driver-build` — repo 内ソースを MSBuild+WDK で build（WDK 不在時は winget
@@ -382,7 +386,7 @@ stage 分解で実施する:
 5. `sign` / `sign-verify` — `.sys`+`.cat` を signtool 署名・`/pa` 検証。
 6. `pnputil-add-driver` — `pnputil /add-driver RvfVirtualAudio.inf /install`
    で driver store へ staging。
-7. `enum-verify` — INF の driver store 在籍確認（devnode はこの時点 0 件）。
+7. `enum-verify` — INF の driver store 在籍確認と、devnode 作成前の Ruviform/RvfVirtualAudio matching devnode 数の read-only 観測。sv#115 Slice A では primitive が `pnputil-add-driver` 後・`devnode-create` 前に計測し、workflow が legacy stage へ投影する（正常系では matching devnode 0 件）。
 8. `devnode-create` — `tools/testsigned-driver/TestDevice.ps1` を
    `-ClassName MEDIA -ClassGuid {4d36e96c-e325-11ce-bfc1-08002be10318}
    -HardwareId 'ROOT\RvfVirtualAudio'` で呼び出し、root-enumerated MEDIA
@@ -402,7 +406,7 @@ stage 分解で実施する:
     `Ruviform Cable Output` の capture に届く真の audio round-trip（Issue
     #977 stage 2 — rf977 attempt-21 で Pass 実績）。mic consent provisioning
     （DeviceAccess/ConsentStore/AppPrivacy + AudioEndpointBuilder/Audiosrv
-    restart）も本 stage で実施する。**verdict の読み方**: pass 時の detail
+    restart）は provisioning primitive の `mic-consent` stage で実施済みであり、本 stage は provisioned 環境を使う test 側に限定する。**verdict の読み方**: pass 時の detail
     は `verdict=no-verdict-line` になるのが正常 — cargo test は passing
     test の stdout/stderr を capture して表示しないため、test が emit した
     `verdict: Pass` 行は artifact ログに表面化しない（`verdict:` 行が
@@ -428,7 +432,7 @@ stage 分解で実施する:
     JSON を採取する。canonical lane は `mise run test-os-endpoint-wiring`
     （`--nocapture` なし）で、passing test の stderr は libtest が capture
     するため、この直接 cargo 実行は verdict/RunMetadata を surface させる
-    補助証拠と明確に区別する。`stream-roundtrip` で実施済みの mic consent
+    補助証拠と明確に区別する。provisioning primitive で実施済みの mic consent
     provisioning を同一 job 内で再利用するため `midi-loopback` 後・
     `cleanup` 前に配置する。stage は `RUVIFORM_RUN_REPO` に
     `${{ github.repository }}`、`RUVIFORM_RUN_SHA` に `${{ github.sha }}` を
@@ -469,7 +473,7 @@ stage 分解で実施する:
     controller/復帰/case-level Fail は `error` とする。disable した devnode
     と変更した microphone consent/service 状態は finally/cleanup で必ず
     Allow+Running へ戻す。
-16. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+16. `cleanup` — `Unprovision-RvfVirtualAudioEndpoint.ps1` による devnode 削除・`pnputil /delete-driver`・証明書除去・consent before-value 復元・audio service restart と residue 観測。
 17. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
     artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 

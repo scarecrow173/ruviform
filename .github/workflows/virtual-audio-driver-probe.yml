@@ -5,9 +5,11 @@ name: virtual-audio-driver-probe
 # stage を、Issue #979 Slice E で midi-endpoint-probe stage を追加済み。
 #
 # 目的: repo 内ソースのみの SysVAD 派生 driver package
-# （drivers/rvf-virtual-audio/）を runner 上で build → test-sign →
-# driver store staging → root-enumerated MEDIA devnode 結合 → MMDevice
-# endpoint 列挙 → endpoint_probe pair 候補検出 → midi_endpoint_probe
+# （drivers/rvf-virtual-audio/）を provisioning primitive
+# （tools/virtual-audio-driver/Provision-RvfVirtualAudioEndpoint.ps1）で
+# build → test-sign → driver store staging → root-enumerated MEDIA devnode
+# 結合 → endpoint readiness 確認し、MMDevice endpoint 列挙 →
+# endpoint_probe pair 候補検出 → midi_endpoint_probe
 # loopback 候補検出 → virtual_endpoint streaming round-trip →
 # tests/loopback.rs MIDI round-trip → os_endpoint wiring →
 # os-endpoint-midi-e2e → fault-cases → cleanup まで stage 分解で
@@ -37,8 +39,11 @@ name: virtual-audio-driver-probe
 #   - driver package は repo 内ソースのみ。prebuilt .sys/.cat/.cer の
 #     commit・外部 binary download は行わない。
 #   - devnode 作成は devcon 非依存（setupapi/newdev P/Invoke —
-#     tools/testsigned-driver/TestDevice.ps1）。MEDIA class 指定で
-#     audio device class として作成する。
+#     tools/testsigned-driver/TestDevice.ps1 を primitive から再利用）。
+#     MEDIA class 指定で audio device class として作成する。
+#   - OS state を変更する provisioning/cleanup logic は workflow inline に
+#     残さず、Provision/Unprovision script pair の state JSON と exit code
+#     を workflow adapter が従来 stage/artifact 形状へ投影する。
 #   - endpoint_probe は観測 probe であり pair 未検出を失敗扱いしない
 #     （probe 本体が宣言するとおり出力は survey evidence）。
 #
@@ -81,7 +86,7 @@ jobs:
         shell: pwsh
         run: |
           $os = '${{ matrix.os }}'
-          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "stage-*-$os.txt", "endpoint-probe-$os.txt", "midi-endpoint-probe-$os.txt", "os-endpoint-run-metadata-$os", "os-endpoint-midi-e2e-run-metadata-$os", "fault-*-$os*", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "vaudio-primitive-state.json", "vaudio-unprovision-state.json", "vaudio-primitive-provision", "vaudio-primitive-unprovision", "stage-*-$os.txt", "endpoint-probe-$os.txt", "midi-endpoint-probe-$os.txt", "os-endpoint-run-metadata-$os", "os-endpoint-midi-e2e-run-metadata-$os", "fault-*-$os*", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
 
       # endpoint_probe 実行用の Rust toolchain。driver install 経路とは独立
       # に復元し、endpoint-probe stage がいつでも走れる状態にしておく。
@@ -105,10 +110,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # build surface の列挙。OS build・testsigning/SecureBoot 再確認・
-      # km headers/WDK libs/MSBuild driver targets/inf2cat 類・cert
-      # ツール・winget・signtool の leg 別 kit 版を記録する。
-      - name: Stage env-build-surface
+      # provisioning primitive — build/test-sign/install/devnode/mic consent/
+      # readiness は tools/virtual-audio-driver/Provision-RvfVirtualAudioEndpoint.ps1
+      # へ抽出した。workflow 側は子 process の exit code を捕捉し、primitive の
+      # 観測状態（exit 1）で job を赤くせず、contract violation（exit 2）だけを
+      # probe 機構破損として返す。legacy artifact 利用者のため、実測した primitive
+      # stage だけを従来 stage 名へ投影し、state key も互換維持する。
+      - name: Provision virtual audio endpoint primitive
         if: always()
         shell: pwsh
         run: |
@@ -116,653 +124,150 @@ jobs:
           $os = '${{ matrix.os }}'
           $json = "vaudio-probe-$os.json"
           $state = "vaudio-state-$os.json"
-          $log = "stage-env-build-surface-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
+          $runnerTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+          $primitiveRoot = Join-Path $runnerTemp 'rvf-virtual-audio-primitive'
+          $workspace = Join-Path $primitiveRoot 'workspace'
+          $provisionEvidence = Join-Path $primitiveRoot 'provision-evidence'
+          $primitiveStatePath = Join-Path $primitiveRoot 'provision-state.json'
+          New-Item -ItemType Directory -Force $workspace, $provisionEvidence | Out-Null
 
-          "runner: ${{ runner.name }} os=${{ runner.os }} arch=${{ runner.arch }}" | Out-Probe $log
-          "ref: ${{ github.ref }} sha: ${{ github.sha }}" | Out-Probe $log
-          "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} attempt=${{ github.run_attempt }}" | Out-Probe $log
-          "host: $(hostname) user: $(whoami) timestamp-utc: $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" | Out-Probe $log
+          $primitiveArgs = @(
+            '-NoProfile', '-NonInteractive', '-File', './tools/virtual-audio-driver/Provision-RvfVirtualAudioEndpoint.ps1',
+            '-SourceRoot', $PWD.Path,
+            '-ExpectedSourceRev', '${{ github.sha }}',
+            '-WorkspaceRoot', $workspace,
+            '-StatePath', $primitiveStatePath,
+            '-EvidenceDir', $provisionEvidence,
+            '-Arch', 'x64',
+            '-Configuration', 'Release',
+            '-TimeoutSeconds', '3600',
+            '-CleanupOnFailure', 'Full',
+            '-AllowWdkInstall',
+            '-AllowMicConsentProvisioning'
+          )
+          $provisionOut = @(& pwsh @primitiveArgs 2>&1)
+          $primitiveExit = $LASTEXITCODE
+          $provisionOut | Tee-Object -FilePath (Join-Path $provisionEvidence 'workflow-adapter-provision.txt')
+          "primitive exit=$primitiveExit" | Tee-Object -FilePath (Join-Path $provisionEvidence 'workflow-adapter-provision.txt') -Append
 
-          "`n== os build ==" | Out-Probe $log
-          try {
-            Get-CimInstance Win32_OperatingSystem |
-              Select-Object Caption, Version, BuildNumber, OSArchitecture |
-              Format-List | Out-String -Width 200 | Out-Probe $log
-          } catch { "  query error: $($_.Exception.Message)" | Out-Probe $log }
-          cmd /c ver 2>&1 | Out-Probe $log
-
-          "`n== secure boot / test-signing state (re-confirm) ==" | Out-Probe $log
-          try { "  Confirm-SecureBootUEFI: $(Confirm-SecureBootUEFI)" | Out-Probe $log }
-          catch { "  Confirm-SecureBootUEFI: error — $($_.Exception.Message)" | Out-Probe $log }
-          $sbReg = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue
-          if ($null -ne $sbReg -and $null -ne $sbReg.UEFISecureBootEnabled) {
-            "  UEFISecureBootEnabled (registry): $($sbReg.UEFISecureBootEnabled)" | Out-Probe $log
-          } else { "  UEFISecureBootEnabled (registry): unavailable" | Out-Probe $log }
-          "  --- bcdedit /enum ---" | Out-Probe $log
-          bcdedit /enum 2>&1 | ForEach-Object { "  $_" | Out-Probe $log }
-          "  bcdedit exit=$LASTEXITCODE" | Out-Probe $log
-
-          "`n== tools on PATH ==" | Out-Probe $log
-          foreach ($t in 'pnputil', 'signtool', 'devcon', 'infverif', 'Inf2Cat', 'makecat', 'certutil', 'vswhere', 'msbuild', 'cl', 'link', 'winget', 'dotnet') {
-            $c = Get-Command $t -ErrorAction SilentlyContinue
-            if ($c) { "  ${t}: $($c.Source)" | Out-Probe $log }
-            else { "  ${t}: not on PATH" | Out-Probe $log }
+          $contractViolation = ($primitiveExit -eq 2)
+          if (-not (Test-Path -LiteralPath $primitiveStatePath)) {
+            Add-StageRecord -JsonPath $json -Stage env-build-surface -Status error -Detail "PROVISION_CONTRACT_NO_STATE exit=$primitiveExit" -ExitCode $primitiveExit
+            exit 2
           }
 
-          "`n== Windows Kits bin hits ==" | Out-Probe $log
-          foreach ($t in 'signtool.exe', 'Inf2Cat.exe', 'makecat.exe', 'devcon.exe', 'infverif.exe', 'certutil.exe') {
-            $hits = @(Find-Tool $t -AllKitsHits)
-            if ($hits.Count) { $hits | ForEach-Object { "  ${t} -> $_" | Out-Probe $log } }
-            else { "  ${t}: absent" | Out-Probe $log }
+          $localStatePath = "$PWD\vaudio-primitive-state.json"
+          Copy-Item -LiteralPath $primitiveStatePath -Destination $localStatePath -Force
+          $localEvidence = "$PWD\vaudio-primitive-provision"
+          New-Item -ItemType Directory -Force $localEvidence | Out-Null
+          Copy-Item -Path (Join-Path $provisionEvidence '*') -Destination $localEvidence -Recurse -Force -ErrorAction SilentlyContinue
+          $primitivePkg = Join-Path $workspace 'vaudio-pkg'
+          $localPkg = "$PWD\vaudio-pkg"
+          if (Test-Path -LiteralPath $primitivePkg) {
+            if (Test-Path -LiteralPath $localPkg) { Remove-Item -LiteralPath $localPkg -Recurse -Force }
+            Copy-Item -LiteralPath $primitivePkg -Destination $localPkg -Recurse -Force
           }
+          $primitiveCer = Join-Path $provisionEvidence 'vaudio-cert.cer'
+          $localCer = "$PWD\vaudio-cert.cer"
+          if (Test-Path -LiteralPath $primitiveCer) { Copy-Item -LiteralPath $primitiveCer -Destination $localCer -Force }
 
-          "`n== WDK surface (Include/Lib/build versions) ==" | Out-Probe $log
-          $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-          foreach ($d in 'Include', 'Lib', 'bin', 'build') {
-            $p = Join-Path $kitsRoot $d
-            if (Test-Path $p) {
-              $vers = (Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name) -join ', '
-              "  ${d}: $vers" | Out-Probe $log
-            } else { "  ${d}: absent" | Out-Probe $log }
-          }
-          $kmHeaderCount = 0
-          foreach ($h in 'wdm.h', 'wdf.h', 'portcls.h', 'stdunk.h') {
-            $hits = @(Get-ChildItem (Join-Path $kitsRoot 'Include') -Recurse -Depth 2 -Filter $h -ErrorAction SilentlyContinue)
-            if ($hits.Count) { $hits | ForEach-Object { "  header: $($_.FullName)" | Out-Probe $log }; $kmHeaderCount += $hits.Count }
-            else { "  header ${h}: absent" | Out-Probe $log }
-          }
-          $kmLibs = @(Get-ChildItem (Join-Path $kitsRoot 'Lib') -Recurse -Depth 2 -Directory -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\km\\' })
-          if ($kmLibs.Count) { $kmLibs | ForEach-Object { "  km lib: $($_.FullName)" | Out-Probe $log } }
-          else { "  km libs: absent" | Out-Probe $log }
-          # audio driver build が依存する portcls/stdunk lib の存在確認
-          foreach ($l in 'portcls.lib', 'stdunk.lib', 'libcntpr.lib') {
-            $lhits = @(Get-ChildItem (Join-Path $kitsRoot 'Lib') -Recurse -Depth 3 -Filter $l -ErrorAction SilentlyContinue)
-            if ($lhits.Count) { $lhits | Select-Object -First 2 | ForEach-Object { "  lib: $($_.FullName)" | Out-Probe $log } }
-            else { "  lib ${l}: absent" | Out-Probe $log }
-          }
-
-          "`n== visual studio / msbuild / driver toolset ==" | Out-Probe $log
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $msbuild = $null
-          $vsInstall = $null
-          if (Test-Path $vswhere) {
-            "  vswhere: $vswhere" | Out-Probe $log
-            $vsInstall = & $vswhere -latest -products * -property installationPath 2>&1 | Select-Object -First 1
-            "  vs install: $vsInstall" | Out-Probe $log
-            $mb = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>&1
-            $mb | ForEach-Object { "  msbuild: $_" | Out-Probe $log }
-            # amd64 host の MSBuild を優先 — 32bit MSBuild は x86\InfVerif.dll を要求するが
-            # WDK は amd64/arm64 のみ同梱し "INF verification exception" になる（attempt-2 実測）。
-            # vswhere の find pattern は `Bin\amd64\MSBuild.exe` を返さないため 32bit 側の hit から派生する
-            $msbuild = $null
-            foreach ($m in $mb) {
-              $amd64 = $m -replace 'Bin\\MSBuild\.exe$', 'Bin\amd64\MSBuild.exe'
-              if ($amd64 -ne $m -and (Test-Path $amd64)) { $msbuild = $amd64; break }
-            }
-            if (-not $msbuild) { $msbuild = @($mb | Where-Object { $_ -and (Test-Path $_) }) | Select-Object -First 1 }
-          } else { "  vswhere: absent" | Out-Probe $log }
-          $toolset = @()
-          if ($vsInstall) {
-            $toolset = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\*\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
-          }
-          if ($toolset.Count) { $toolset | ForEach-Object { "  toolset: $($_.FullName)" | Out-Probe $log } }
-          else { "  WindowsKernelModeDriver toolset: absent" | Out-Probe $log }
-
-          "`n== certificate tooling ==" | Out-Probe $log
-          foreach ($c in 'New-SelfSignedCertificate', 'Import-Certificate', 'Export-Certificate') {
-            $cmd = Get-Command $c -ErrorAction SilentlyContinue
-            if ($cmd) { "  ${c}: present (module=$($cmd.ModuleName))" | Out-Probe $log }
-            else { "  ${c}: absent" | Out-Probe $log }
-          }
-
-          if ($msbuild) { Set-ProbeState $state 'msbuild' $msbuild }
-          if ($vsInstall) { Set-ProbeState $state 'vs_install' $vsInstall }
-          Set-ProbeState $state 'km_headers' $kmHeaderCount
-          Set-ProbeState $state 'km_libs' $kmLibs.Count
-          $detail = "msbuild=$(if ($msbuild) {'present'} else {'absent'}); toolset=$($toolset.Count); kmHeaders=$kmHeaderCount; kmLibs=$($kmLibs.Count); signtoolKits=$(@(Find-Tool 'signtool.exe' -AllKitsHits).Count); inf2catKits=$(@(Find-Tool 'Inf2Cat.exe' -AllKitsHits).Count); winget=$(if (Get-Command winget -ErrorAction SilentlyContinue) {'present'} else {'absent'})"
-          Add-StageRecord -JsonPath $json -Stage env-build-surface -Status ok -Detail $detail
-          exit 0
-
-      # driver build。msbuild + WindowsKernelModeDriver toolset があれば
-      # repo 内ソースを build し、なければ winget 由来の job 内 WDK 導入
-      # を試行して記録する。build 不能なら後続 install 系 stage は依存
-      # artifacts 不在で blocked となる（absence-is-data）。
-      - name: Stage driver-build
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $arch = 'x64'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-driver-build-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-          "target platform: $arch" | Out-Probe $log
-
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $msbuild = Get-ProbeState $state 'msbuild'
-          $vsInstall = Get-ProbeState $state 'vs_install'
-          if (-not $msbuild -and (Test-Path $vswhere)) {
-            $mb = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>&1
-            # env-build-surface と同じく amd64 優先（InfVerif.dll は amd64 のみ同梱）— 32bit hit から派生
-            foreach ($m in $mb) {
-              $amd64 = $m -replace 'Bin\\MSBuild\.exe$', 'Bin\amd64\MSBuild.exe'
-              if ($amd64 -ne $m -and (Test-Path $amd64)) { $msbuild = $amd64; break }
-            }
-            if (-not $msbuild) { $msbuild = @($mb | Where-Object { $_ -and (Test-Path $_) }) | Select-Object -First 1 }
-          }
-          if (-not $msbuild) {
-            $c = Get-Command msbuild -ErrorAction SilentlyContinue
-            if ($c) { $msbuild = $c.Source }
-          }
-          if (-not $vsInstall -and (Test-Path $vswhere)) {
-            $vsInstall = & $vswhere -latest -products * -property installationPath 2>&1 | Select-Object -First 1
-          }
-          "msbuild: $(if ($msbuild) { $msbuild } else { 'absent' })" | Out-Probe $log
-
-          $toolset = @()
-          if ($vsInstall) {
-            $toolset = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\$arch\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
-          }
-          "toolset($arch): $(if ($toolset.Count) { ($toolset | ForEach-Object { $_.FullName }) -join '; ' } else { 'absent' })" | Out-Probe $log
-
-          $kmHeaderCount = [int](Get-ProbeState $state 'km_headers')
-          $kmLibCount = [int](Get-ProbeState $state 'km_libs')
-          "km headers: $kmHeaderCount; km libs: $kmLibCount" | Out-Probe $log
-          $dkTasks = @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build" -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue)
-          if ($dkTasks) { $dkTasks | ForEach-Object { "  driverkit task dll: $($_.FullName)" | Out-Probe $log } }
-          else { "  DriverKit build task dll: absent" | Out-Probe $log }
-
-          if (-not $msbuild -or -not $toolset.Count -or -not $kmHeaderCount) {
-            "`n== job 内 WDK 導入（winget / Microsoft.WindowsWDK.10.0.26100） ==" | Out-Probe $log
-            $wg = Get-Command winget -ErrorAction SilentlyContinue
-            if ($wg) {
-              "  winget: $($wg.Source)" | Out-Probe $log
-              # rf961 attempt-2 実測: winget の id は versioned であり bare
-              # `Microsoft.WindowsWDK` は "No package found matching input
-              # criteria"（exit -1978335212）を返す。versioned id を明示する。
-              $sw = [Diagnostics.Stopwatch]::StartNew()
-              & winget install --id Microsoft.WindowsWDK.10.0.26100 --exact --accept-source-agreements --accept-package-agreements --disable-interactivity 2>&1 | ForEach-Object { "  $_" | Out-Probe $log }
-              $wgExit = $LASTEXITCODE
-              $sw.Stop()
-              "  winget install exit=$wgExit elapsed_s=$([int]$sw.Elapsed.TotalSeconds)" | Out-Probe $log
-              if (Test-Path $vswhere) {
-                $vsInstall = & $vswhere -latest -products * -property installationPath 2>&1 | Select-Object -First 1
-                $toolset = @(Get-ChildItem "$vsInstall\MSBuild\Microsoft\VC\*\Platforms\$arch\PlatformToolsets\WindowsKernelModeDriver*" -Directory -ErrorAction SilentlyContinue)
-                "  toolset after install attempt: $(if ($toolset.Count) { 'present' } else { 'absent' })" | Out-Probe $log
-              }
-              $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
-              $kmHeaderCount = @(Get-ChildItem (Join-Path $kitsRoot 'Include') -Recurse -Depth 2 -Filter 'wdm.h' -ErrorAction SilentlyContinue).Count
-              "  km headers after install attempt: $kmHeaderCount" | Out-Probe $log
-              Set-ProbeState $state 'km_headers' $kmHeaderCount
-              $postTasks = @(Get-ChildItem $kitsRoot -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue)
-              if ($vsInstall) { $postTasks += @(Get-ChildItem $vsInstall -Recurse -Filter 'Microsoft.DriverKit.Build.Tasks.*.dll' -ErrorAction SilentlyContinue) }
-              if ($postTasks.Count) { $postTasks | ForEach-Object { "  task dll (post-install): $($_.FullName)" | Out-Probe $log } }
-              else { "  task dll (post-install): absent" | Out-Probe $log }
-            } else { "  winget: absent — job 内導入経路を評価不能" | Out-Probe $log }
-          }
-
-          # DriverKit task dll の MSBuild major version 照合 workaround —
-          # rf961 attempt-4 教訓。`Microsoft.DriverKit.Build.Tasks*.<ver>.0.dll`
-          # family 全体を `.<maj>.0.dll` 名へ copy する。
-          if ($msbuild) {
-            $msbuildVerText = @(& $msbuild -version -nologo 2>&1 | Select-Object -Last 1) -join ''
-            $msbuildVer = $msbuildVerText -as [version]
-            $maj = if ($msbuildVer) { $msbuildVer.Major } else { 0 }
-            "  msbuild version: $msbuildVerText (major=$maj)" | Out-Probe $log
-            if ($maj) {
-              foreach ($binDir in @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build\*\bin" -Directory -ErrorAction SilentlyContinue)) {
-                foreach ($src in @(Get-ChildItem $binDir.FullName -Filter 'Microsoft.DriverKit.Build.Tasks*.dll' -ErrorAction SilentlyContinue)) {
-                  if ($src.Name -notmatch '\.\d+\.0\.dll$' -or $src.Name -match "\.$maj\.0\.dll$") { continue }
-                  $dst = Join-Path $binDir.FullName ($src.Name -replace '\.\d+\.0\.dll$', ".$maj.0.dll")
-                  if (Test-Path $dst) { continue }
-                  "  task dll copy: $($src.Name) -> $(Split-Path $dst -Leaf)" | Out-Probe $log
-                  try { Copy-Item $src.FullName $dst -ErrorAction Stop } catch { "  copy failed: $($_.Exception.Message)" | Out-Probe $log }
-                }
-              }
-            }
-          }
-
-          $built = $false
-          $sysPath = $null
-          $buildExit = $null
-          if ($msbuild -and $toolset.Count) {
-            "`n== msbuild RvfVirtualAudio ($arch) ==" | Out-Probe $log
-            & $msbuild drivers\rvf-virtual-audio\RvfVirtualAudio.vcxproj /p:Configuration=Release /p:Platform=$arch /v:m /nologo 2>&1 | Out-Probe $log
-            $buildExit = $LASTEXITCODE
-            "  msbuild exit=$buildExit" | Out-Probe $log
-            $sys = Get-ChildItem drivers\rvf-virtual-audio -Recurse -Filter 'RvfVirtualAudio.sys' -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($buildExit -eq 0 -and $sys) {
-              $built = $true
-              $sysPath = $sys.FullName
-              "  built: $sysPath" | Out-Probe $log
-            }
-          }
-
-          if ($built) {
-            Set-ProbeState $state 'sys_path' $sysPath
-            Add-StageRecord -JsonPath $json -Stage driver-build -Status ok -Detail "arch=$arch; sys=$sysPath" -ExitCode $buildExit
-          } elseif (-not $msbuild -or -not $toolset.Count -or -not $kmHeaderCount) {
-            Add-StageRecord -JsonPath $json -Stage driver-build -Status absent -Detail "msbuild=$(if ($msbuild) {'present'} else {'absent'}); toolset=$($toolset.Count); kmHeaders=$kmHeaderCount; winget-eval は log 参照"
+          $primitive = Get-Content -LiteralPath $localStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+          Set-ProbeState $state 'msbuild' $primitive.runner.msbuild
+          Set-ProbeState $state 'vs_install' $primitive.runner.vs_install
+          $legacyKmHeaders = $primitive.runner.initial_km_headers
+          if ($primitive.runner.wdk_install_attempted) { $legacyKmHeaders = $primitive.runner.wdm_header_count }
+          Set-ProbeState $state 'km_headers' $legacyKmHeaders
+          Set-ProbeState $state 'km_libs' $primitive.runner.initial_km_libs
+          Set-ProbeState $state 'sys_path' $primitive.package.sys_path
+          if (Test-Path -LiteralPath $localPkg) {
+            $localCat = Get-ChildItem -LiteralPath $localPkg -Filter '*.cat' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($localCat) { Set-ProbeState $state 'cat_path' $localCat.FullName } else { Set-ProbeState $state 'cat_path' $primitive.package.cat_path }
+            Set-ProbeState $state 'pkg_dir' $localPkg
           } else {
-            Add-StageRecord -JsonPath $json -Stage driver-build -Status error -Detail "msbuild exit=$buildExit" -ExitCode $buildExit
+            Set-ProbeState $state 'cat_path' $primitive.package.cat_path
+            Set-ProbeState $state 'pkg_dir' $primitive.package.package_dir
           }
-          exit 0
+          Set-ProbeState $state 'cert_thumbprint' $primitive.os_state.cert_thumbprint
+          if (Test-Path -LiteralPath $localCer) { Set-ProbeState $state 'cert_cer_path' $localCer }
+          Set-ProbeState $state 'inf_published' $primitive.os_state.inf_published
+          Set-ProbeState $state 'inf_staged' ([bool]$primitive.os_state.inf_published)
+          Set-ProbeState $state 'instance_id' $primitive.os_state.instance_id
 
-      # catalog 生成: build 済み sys + INF を vaudio-pkg に集め、Inf2Cat →
-      # makecat（.cdf を job 内生成）の順で .cat を作る。両 tool が無ければ
-      # blocked。package 自体も artifact 証拠に含める。
-      - name: Stage catalog-create
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-catalog-create-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          $sysPath = Get-ProbeState $state 'sys_path'
-          if (-not $sysPath -or -not (Test-Path $sysPath)) {
-            "sys_path: absent (driver-build 未成立 — $($sysPath))" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage catalog-create -Status blocked -Detail 'driver-build で sys が生成されなかった'
-          } else {
-            New-Item -ItemType Directory -Force vaudio-pkg | Out-Null
-            Copy-Item $sysPath vaudio-pkg\
-            Copy-Item drivers\rvf-virtual-audio\RvfVirtualAudio.inf vaudio-pkg\
-            Get-ChildItem vaudio-pkg | ForEach-Object { "  pkg: $($_.Name) $($_.Length)B" | Out-Probe $log }
-
-            $catPath = $null
-            $inf2cat = @(Find-Tool 'Inf2Cat.exe' -AllKitsHits)
-            if ($inf2cat.Count) {
-              $inf2cat | ForEach-Object { "  inf2cat hit: $_" | Out-Probe $log }
-              # rf961 attempt-6 教訓: Inf2Cat が exit=-1・無出力で失敗した。
-              # 無引数実行の usage 出力・exit を診断として先に記録する。
-              try {
-                & $inf2cat[0] 2>&1 | Select-Object -First 25 | Out-Probe $log
-                "  inf2cat(no-args) exit=$LASTEXITCODE" | Out-Probe $log
-              } catch {
-                "  inf2cat(no-args) invoke error: $($_.Exception.Message)" | Out-Probe $log
+          $stageMap = @(
+            [pscustomobject]@{ primitive = 'environment'; legacy = 'env-build-surface' },
+            [pscustomobject]@{ primitive = 'driver-build'; legacy = 'driver-build' },
+            [pscustomobject]@{ primitive = 'catalog'; legacy = 'catalog-create' },
+            [pscustomobject]@{ primitive = 'cert-create'; legacy = 'cert-create' },
+            [pscustomobject]@{ primitive = 'cert-install'; legacy = 'store-register' },
+            [pscustomobject]@{ primitive = 'sign'; legacy = 'sign' },
+            [pscustomobject]@{ primitive = 'sign-verify'; legacy = 'sign-verify' },
+            [pscustomobject]@{ primitive = 'driver-store'; legacy = 'pnputil-add-driver' },
+            [pscustomobject]@{ primitive = 'enum-verify-pre-devnode'; legacy = 'enum-verify' },
+            [pscustomobject]@{ primitive = 'devnode'; legacy = 'devnode-create' }
+          )
+          foreach ($map in $stageMap) {
+            $legacyLog = "stage-$($map.legacy)-$os.txt"
+            New-Item -ItemType File -Force $legacyLog | Out-Null
+            "projected from primitive stage '$($map.primitive)' (rvf-virtual-audio-provisioning/v1)" | Out-Probe $legacyLog
+            if ($map.legacy -eq 'env-build-surface') {
+              "runner: ${{ runner.name }} os=${{ runner.os }} arch=${{ runner.arch }}" | Out-Probe $legacyLog
+              "ref: ${{ github.ref }} sha: ${{ github.sha }}" | Out-Probe $legacyLog
+              "run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} attempt=${{ github.run_attempt }}" | Out-Probe $legacyLog
+              "host: $(hostname) user: $(whoami) timestamp-utc: $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))" | Out-Probe $legacyLog
+            }
+            if ($map.legacy -eq 'driver-build') {
+              $wdkLog = Join-Path $localEvidence 'stage-wdk.log'
+              if (Test-Path -LiteralPath $wdkLog) {
+                '== primitive wdk/tool discovery and install ==' | Out-Probe $legacyLog
+                Get-Content -LiteralPath $wdkLog -Encoding UTF8 | ForEach-Object { $_ | Out-Probe $legacyLog }
+                '== primitive driver build ==' | Out-Probe $legacyLog
               }
-              foreach ($osFlag in @('10_0_X64', '10_X64')) {
-                "  --- Inf2Cat /os:$osFlag ---" | Out-Probe $log
-                try {
-                  Push-Location vaudio-pkg
-                  & $inf2cat[0] /driver:. /os:$osFlag /verbose 2>&1 | Out-Probe $log
-                  $icExit = $LASTEXITCODE
-                  Pop-Location
-                } catch {
-                  Pop-Location -ErrorAction SilentlyContinue
-                  $icExit = -99
-                  "  Inf2Cat invoke error: $($_.Exception.Message)" | Out-Probe $log
-                }
-                "  Inf2Cat exit=$icExit os=$osFlag" | Out-Probe $log
-                if ($icExit -eq 0) {
-                  $cat = Get-ChildItem vaudio-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if ($cat) { $catPath = $cat.FullName; break }
-                }
-              }
+            }
+            $primitiveLogName = if ($map.legacy -eq 'enum-verify') { 'stage-enum-verify-pre-devnode.log' } else { "stage-$($map.primitive).log" }
+            $primitiveLog = Join-Path $localEvidence $primitiveLogName
+            if (Test-Path -LiteralPath $primitiveLog) {
+              Get-Content -LiteralPath $primitiveLog -Encoding UTF8 | ForEach-Object { $_ | Out-Probe $legacyLog }
             } else {
-              "  Inf2Cat: absent" | Out-Probe $log
-            }
-            if (-not $catPath) {
-              "  Inf2Cat 失敗/不在 — makecat fallback を試行" | Out-Probe $log
-              $mcHits = @(Find-Tool 'makecat.exe' -AllKitsHits)
-              if ($mcHits.Count) {
-                $makecat = @($mcHits | Where-Object { $_ -match '\\x64\\' } | Select-Object -First 1)[0]
-                if (-not $makecat) { $makecat = $mcHits[0] }
-                "  makecat selected: $makecat" | Out-Probe $log
-                $cdf = "vaudio-pkg\package.cdf"
-                "[CatalogHeader]`nName=RvfVirtualAudio.cat`nResultDir=$PWD\vaudio-pkg`nPublicVersion=0x00000001`nEncodingType=0x00010001`nCATATTR1=0x10010001:OSAttr:2:6.0`n[CatalogFiles]`n<HASH>RvfVirtualAudio.inf=RvfVirtualAudio.inf`n<HASH>RvfVirtualAudio.sys=RvfVirtualAudio.sys" | Set-Content $cdf -Encoding ascii
-                try {
-                  Push-Location vaudio-pkg
-                  & $makecat -v package.cdf 2>&1 | Out-Probe $log
-                  $mcExit = $LASTEXITCODE
-                  Pop-Location
-                  "  makecat exit=$mcExit" | Out-Probe $log
-                  $cat = Get-ChildItem vaudio-pkg\*.cat -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if ($cat) { $catPath = $cat.FullName }
-                } catch {
-                  Pop-Location -ErrorAction SilentlyContinue
-                  "  makecat invoke error: $($_.Exception.Message)" | Out-Probe $log
-                }
-              } else { "  makecat: absent" | Out-Probe $log }
+              "  primitive stage log absent: $primitiveLog" | Out-Probe $legacyLog
             }
 
-            if ($catPath) {
-              Set-ProbeState $state 'cat_path' $catPath
-              Set-ProbeState $state 'pkg_dir' "$PWD\vaudio-pkg"
-              Add-StageRecord -JsonPath $json -Stage catalog-create -Status ok -Detail "cat=$catPath"
-            } else {
-              Add-StageRecord -JsonPath $json -Stage catalog-create -Status blocked -Detail 'Inf2Cat/makecat 共に absent または .cat 生成失敗 — job 内 WDK 導入評価は driver-build log 参照'
-            }
-          }
-          exit 0
-
-      # 証明書生成: job 内 self-signed CodeSigning 証明書。build 系 stage と
-      # 独立して測れるため build 失敗時でも実施する。
-      - name: Stage cert-create
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-cert-create-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          try {
-            $cert = New-SelfSignedCertificate -Type CodeSigningCert `
-              -Subject 'CN=RvfVirtualAudio Probe (rf977)' `
-              -CertStoreLocation 'Cert:\LocalMachine\My' `
-              -KeyLength 2048 -HashAlgorithm sha256 -KeyExportPolicy Exportable `
-              -NotAfter (Get-Date).AddDays(2) -ErrorAction Stop
-            $cerPath = "$PWD\vaudio-cert.cer"
-            Export-Certificate -Cert $cert -FilePath $cerPath -ErrorAction Stop | Out-Null
-            "  subject: $($cert.Subject)" | Out-Probe $log
-            "  thumbprint: $($cert.Thumbprint)" | Out-Probe $log
-            "  cer: $cerPath" | Out-Probe $log
-            Set-ProbeState $state 'cert_thumbprint' $cert.Thumbprint
-            Set-ProbeState $state 'cert_cer_path' $cerPath
-            Add-StageRecord -JsonPath $json -Stage cert-create -Status ok -Detail "thumbprint=$($cert.Thumbprint)"
-          } catch {
-            "  cert-create error: $($_.Exception.Message)" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage cert-create -Status error -Detail $_.Exception.Message
-          }
-          exit 0
-
-      # store 登録: Root と TrustedPublisher の両 store へ pre-trust。
-      # Scream/VB-CABLE の job 内 install 実績と同手順（web-sources §2.3）。
-      - name: Stage store-register
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-store-register-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          $thumb = Get-ProbeState $state 'cert_thumbprint'
-          $cerPath = Get-ProbeState $state 'cert_cer_path'
-          if (-not $thumb -or -not (Test-Path $cerPath)) {
-            "  cert not available (thumb=$thumb cer=$cerPath)" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage store-register -Status blocked -Detail 'cert-create で証明書が生成されなかった'
-          } else {
-            $ok = $true
-            foreach ($store in 'Root', 'TrustedPublisher') {
-              try {
-                Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\LocalMachine\$store" -ErrorAction Stop | Out-Null
-                $found = Get-Item "Cert:\LocalMachine\$store\$thumb" -ErrorAction SilentlyContinue
-                "  ${store}: registered=$($null -ne $found)" | Out-Probe $log
-              } catch {
-                "  ${store}: error — $($_.Exception.Message)" | Out-Probe $log
-                $ok = $false
-              }
-            }
-            Add-StageRecord -JsonPath $json -Stage store-register -Status $(if ($ok) { 'ok' } else { 'error' }) -Detail "thumbprint=$thumb; stores=Root+TrustedPublisher"
-          }
-          exit 0
-
-      # 署名: .sys（embedded）と .cat の両方を signtool /fd sha256 /sha1 で
-      # 署名する。signtool は Kits bin 配下を full path 解決し、host arch
-      # 一致 hit を優先する（rf961 attempt-5 教訓）。
-      - name: Stage sign
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-sign-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          $thumb = Get-ProbeState $state 'cert_thumbprint'
-          $sysPath = Get-ProbeState $state 'sys_path'
-          $catPath = Get-ProbeState $state 'cat_path'
-          $targets = @()
-          if ($sysPath -and (Test-Path $sysPath)) { $targets += $sysPath }
-          if ($catPath -and (Test-Path $catPath)) { $targets += $catPath }
-          if (-not $thumb -or -not $targets.Count) {
-            "  prerequisites missing (thumb=$thumb targets=$($targets -join ','))" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage sign -Status blocked -Detail '証明書または署名対象（sys/cat）が未生成'
-          } else {
-            $hits = @(Find-Tool 'signtool.exe' -AllKitsHits)
-            $hits | ForEach-Object { "  signtool hit: $_" | Out-Probe $log }
-            if (-not $hits.Count) {
-              Add-StageRecord -JsonPath $json -Stage sign -Status absent -Detail 'signtool が PATH/Kits bin に不在'
-            } else {
-              $signtool = @($hits | Where-Object { $_ -match '\\x64\\' } | Select-Object -First 1)[0]
-              if (-not $signtool) { $signtool = $hits[0]; "  arch(x64) 一致 hit なし — first hit に fallback" | Out-Probe $log }
-              "  signtool selected: $signtool" | Out-Probe $log
-              $exitSum = 0
-              foreach ($f in $targets) {
-                "  --- signtool sign $f ---" | Out-Probe $log
-                # /sm: 証明書は Cert:\LocalMachine\My に生成するため machine
-                # store を検索対象に指定する（/sha1 の既定は CurrentUser\My）。
-                try {
-                  & $signtool sign /fd sha256 /sha1 $thumb /sm /v $f 2>&1 | Out-Probe $log
-                  $e = $LASTEXITCODE
-                } catch {
-                  "  sign invoke error: $($_.Exception.Message)" | Out-Probe $log
-                  $e = 1
-                }
-                "  sign exit=$e file=$(Split-Path $f -Leaf)" | Out-Probe $log
-                $exitSum += $e
-              }
-              Add-StageRecord -JsonPath $json -Stage sign -Status $(if ($exitSum -eq 0) { 'ok' } else { 'error' }) -Detail "signtool=$signtool; targets=$(($targets | ForEach-Object { Split-Path $_ -Leaf }) -join ',')" -ExitCode $exitSum
-            }
-          }
-          exit 0
-
-      # 署名検証: signtool verify /pa で署名の妥当性を確認する。
-      - name: Stage sign-verify
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-sign-verify-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          if ((Get-StageStatus $json 'sign') -ne 'ok') {
-            "  skipped: sign stage status=$(Get-StageStatus $json 'sign')" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage sign-verify -Status blocked -Detail 'sign が ok でない'
-          } else {
-            $sysPath = Get-ProbeState $state 'sys_path'
-            $catPath = Get-ProbeState $state 'cat_path'
-            $targets = @($sysPath, $catPath) | Where-Object { $_ -and (Test-Path $_) }
-            $vHits = @(Find-Tool 'signtool.exe' -AllKitsHits)
-            $signtool = @($vHits | Where-Object { $_ -match '\\x64\\' } | Select-Object -First 1)[0]
-            if (-not $signtool) { $signtool = $vHits[0] }
-            "  signtool selected: $signtool" | Out-Probe $log
-            $exitSum = 0
-            foreach ($f in $targets) {
-              "  --- signtool verify /pa $f ---" | Out-Probe $log
-              try {
-                & $signtool verify /pa /v $f 2>&1 | Out-Probe $log
-                $e = $LASTEXITCODE
-              } catch {
-                "  verify invoke error: $($_.Exception.Message)" | Out-Probe $log
-                $e = 1
-              }
-              "  verify exit=$e file=$(Split-Path $f -Leaf)" | Out-Probe $log
-              $exitSum += $e
-            }
-            Add-StageRecord -JsonPath $json -Stage sign-verify -Status $(if ($exitSum -eq 0) { 'ok' } else { 'error' }) -Detail "targets=$(($targets | ForEach-Object { Split-Path $_ -Leaf }) -join ',')" -ExitCode $exitSum
-          }
-          exit 0
-
-      # driver store への staging + install 試行。失敗したらこの stage が
-      # 「失敗 stage 特定」材料になる（署名検証・store・引数・class 制約の
-      # 切り分けは exit code + 出力で記録）。
-      - name: Stage pnputil-add-driver
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-pnputil-add-driver-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          if ((Get-StageStatus $json 'sign-verify') -ne 'ok') {
-            "  skipped: sign-verify status=$(Get-StageStatus $json 'sign-verify')" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage pnputil-add-driver -Status blocked -Detail 'sign-verify が ok でない（package 未署名のまま add しても署名検証失敗が予見されるため未試行）'
-          } else {
-            $inf = "$PWD\vaudio-pkg\RvfVirtualAudio.inf"
-            "  --- pnputil /add-driver $inf /install ---" | Out-Probe $log
-            $addOut = @(& pnputil /add-driver $inf /install 2>&1)
-            $addOut | Out-Probe $log
-            $pnExit = $LASTEXITCODE
-            "  pnputil exit=$pnExit" | Out-Probe $log
-            $pub = $null
-            $m = @($addOut | Select-String -Pattern 'Published Name\s*:\s*(\S+)').Matches
-            if ($m.Count -and $m[0].Groups[1].Value -match 'oem\d+\.inf') {
-              $pub = $m[0].Groups[1].Value
-            }
-            if ($pub) { Set-ProbeState $state 'inf_published' $pub; "  published: $pub" | Out-Probe $log }
-            else { "  published name: not parsed — add-driver 出力・enum log 参照" | Out-Probe $log }
-            Add-StageRecord -JsonPath $json -Stage pnputil-add-driver -Status $(if ($pnExit -eq 0) { 'ok' } else { 'error' }) -Detail "published=$pub" -ExitCode $pnExit
-          }
-          exit 0
-
-      # staging 反映確認: enum-drivers で INF が driver store に存在する
-      # こと・この時点では devnode が無いこと（Get-PnpDevice 0 件）を記録。
-      - name: Stage enum-verify
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-enum-verify-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          "  --- pnputil /enum-drivers ---" | Out-Probe $log
-          $enum = @(& pnputil /enum-drivers 2>&1)
-          $enum | Out-Probe $log
-          "  enum-drivers exit=$LASTEXITCODE" | Out-Probe $log
-          $hitIdx = -1
-          for ($i = 0; $i -lt $enum.Count; $i++) {
-            if ($enum[$i] -match 'RvfVirtualAudio\.inf') { $hitIdx = $i; break }
-          }
-          $staged = $hitIdx -ge 0
-          "  RvfVirtualAudio.inf in driver store: $staged" | Out-Probe $log
-          if ($staged) {
-            for ($j = $hitIdx; $j -ge 0; $j--) {
-              if ($enum[$j] -match 'Published Name\s*:\s*(\S+)') {
-                "  published name (entry match): $($Matches[1])" | Out-Probe $log
-                Set-ProbeState $state 'inf_published' $Matches[1]
-                break
-              }
-            }
-          }
-          "`n  --- Get-PnpDevice (rvf match — devnode 作成前は 0 件期待) ---" | Out-Probe $log
-          $devs = @(Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -match 'ruviform|RvfVirtualAudio' -or $_.InstanceId -match 'RvfVirtualAudio' })
-          if ($devs.Count) { $devs | ForEach-Object { "  $($_.InstanceId) Status=$($_.Status) Class=$($_.Class) Name=$($_.FriendlyName)" | Out-Probe $log } }
-          else { "  matching PnpDevice: 0" | Out-Probe $log }
-          Add-StageRecord -JsonPath $json -Stage enum-verify -Status $(if ($staged) { 'ok' } else { 'error' }) -Detail "inf_in_store=$staged; matching_devnodes=$($devs.Count)"
-          Set-ProbeState $state 'inf_staged' $staged
-          exit 0
-
-      # devnode 作成（setupapi/newdev P/Invoke — devcon 非依存）→ driver
-      # 結合 → PnP 列挙・device status/problem code・driver load 状態を
-      # 観測する。audio class devnode には MEDIA class GUID を指定する。
-      - name: Stage devnode-create
-        if: always()
-        shell: pwsh
-        run: |
-          . ./tools/testsigned-driver/probe-stage.ps1
-          $os = '${{ matrix.os }}'
-          $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
-          $log = "stage-devnode-create-$os.txt"
-          New-Item -ItemType File -Force $log | Out-Null
-
-          $staged = Get-ProbeState $state 'inf_staged'
-          if ($staged -ne $true) {
-            "  skipped: inf not staged (staged=$staged)" | Out-Probe $log
-            Add-StageRecord -JsonPath $json -Stage devnode-create -Status blocked -Detail 'INF が driver store に staging されていない'
-          } else {
-            try {
-              $inf = "$PWD\vaudio-pkg\RvfVirtualAudio.inf"
-              "  --- TestDevice.ps1 -Action create (MEDIA class) ---" | Out-Probe $log
-              $lines = @(& ./tools/testsigned-driver/TestDevice.ps1 -Action create `
-                -HardwareId 'ROOT\RvfVirtualAudio' `
-                -ClassName 'MEDIA' `
-                -ClassGuid '4d36e96c-e325-11ce-bfc1-08002be10318' `
-                -DeviceDescription 'Ruviform Virtual Audio Device' `
-                -InfPath $inf 2>&1)
-              $lines | ForEach-Object { "  $_" | Out-Probe $log }
-              $iid = ($lines | Where-Object { $_ -match '^instance_id=' } | Select-Object -First 1) -replace '^instance_id=', ''
-              "  instance_id=$iid" | Out-Probe $log
-              if ($iid) { Set-ProbeState $state 'instance_id' $iid }
-
-              Start-Sleep -Seconds 3
-              "`n  --- Get-PnpDevice ---" | Out-Probe $log
-              $dev = Get-PnpDevice -InstanceId $iid -ErrorAction SilentlyContinue
-              if ($dev) {
-                "  Status=$($dev.Status) Class=$($dev.Class)" | Out-Probe $log
-                "  FriendlyName=$($dev.FriendlyName)" | Out-Probe $log
-                "  Service=$($dev.Service)" | Out-Probe $log
-                $props = Get-PnpDeviceProperty -InstanceId $iid -KeyName 'DEVPKEY_Device_ProblemCode', 'DEVPKEY_Device_DevNodeStatus', 'DEVPKEY_Device_DriverVersion', 'DEVPKEY_Device_DriverDate' -ErrorAction SilentlyContinue
-                $props | ForEach-Object { "  $($_.KeyName) = $($_.Data)" | Out-Probe $log }
-                $sysdrv = Get-CimInstance Win32_SystemDriver -Filter "Name='RvfVirtualAudio'" -ErrorAction SilentlyContinue
-                if ($sysdrv) { "  Win32_SystemDriver: State=$($sysdrv.State) Status=$($sysdrv.Status) PathName=$($sysdrv.PathName)" | Out-Probe $log }
-                else { "  Win32_SystemDriver RvfVirtualAudio: not found" | Out-Probe $log }
-                "`n  --- MMDevice 観測（endpoint 生成の一次確認 — Get-MMDevice） ---" | Out-Probe $log
-                try {
-                  $mmDevs = @(Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue)
-                  "  Win32_SoundDevice count=$($mmDevs.Count)" | Out-Probe $log
-                  $mmDevs | Where-Object { $_.Name -match 'ruviform|RvfVirtualAudio' } | ForEach-Object { "  sound device: $($_.Name) status=$($_.Status)" | Out-Probe $log }
-                } catch { "  Win32_SoundDevice error: $($_.Exception.Message)" | Out-Probe $log }
-                $prob = ($props | Where-Object { $_.KeyName -eq 'DEVPKEY_Device_ProblemCode' }).Data
-                if ($prob -ne 0) {
-                  # problem code 診断 — rf961 attempt-8 教訓（load 系失敗の
-                  # CI 判定根拠を切り分けるため CI event log・setupapi.dev.log・
-                  # 実効 testsigning/SecureBoot を採取する）。
-                  "`n  --- problem_code=$prob diagnostics ---" | Out-Probe $log
-                  try {
-                    "  [bcdedit {current}]" | Out-Probe $log
-                    bcdedit /enum '{current}' 2>&1 | Out-Probe $log
-                  } catch { "  bcdedit error: $($_.Exception.Message)" | Out-Probe $log }
-                  try {
-                    $sb = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
-                    "  Confirm-SecureBootUEFI=$sb" | Out-Probe $log
-                  } catch { "  Confirm-SecureBootUEFI error: $($_.Exception.Message)" | Out-Probe $log }
-                  try {
-                    "  [CodeIntegrity Operational — last 15]" | Out-Probe $log
-                    Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational' } -MaxEvents 15 -ErrorAction SilentlyContinue |
-                      ForEach-Object { "    $($_.TimeCreated.ToString('HH:mm:ss')) id=$($_.Id) $(($_.Message -split "`n" | Select-Object -First 1))" } | Out-Probe $log
-                  } catch { "  Get-WinEvent error: $($_.Exception.Message)" | Out-Probe $log }
-                  try {
-                    "  [setupapi.dev.log — RvfVirtualAudio entries]" | Out-Probe $log
-                    Get-Content 'C:\Windows\INF\setupapi.dev.log' -ErrorAction SilentlyContinue |
-                      Select-String -Pattern 'RvfVirtualAudio|Ruviform|unsigned|signature' -Context 1,3 |
-                      Select-Object -Last 12 | ForEach-Object { $_.Line; $_.Context.PostContext } | Out-Probe $log
-                  } catch { "  setupapi.dev.log error: $($_.Exception.Message)" | Out-Probe $log }
-                }
-                Add-StageRecord -JsonPath $json -Stage devnode-create -Status $(if ($dev.Status -eq 'OK') { 'ok' } else { 'error' }) -Detail "instance_id=$iid; status=$($dev.Status); problem_code=$prob; service=$($dev.Service)"
+            $recs = @($primitive.stages | Where-Object { $_.stage -eq $map.primitive } | Select-Object -Last 1)
+            $rec = if ($recs.Count) { $recs[0] } else { $null }
+            $projectedStatus = 'blocked'
+            $projectedDetail = "primitive stage '$($map.primitive)' not executed; provision terminal=$($primitive.status)/$($primitive.detail)"
+            $projectedExit = $null
+            if ($map.legacy -eq 'enum-verify') {
+              $pre = $primitive.os_state.pre_devnode
+              if ($pre) {
+                $projectedStatus = if ($pre.inf_in_store) { 'ok' } else { 'error' }
+                $projectedDetail = "inf_in_store=$($pre.inf_in_store); matching_devnodes=$($pre.matching_devnodes)"
+                if ($pre.published_name) { Set-ProbeState $state 'inf_published' $pre.published_name }
+                Set-ProbeState $state 'inf_staged' ([bool]$pre.inf_in_store)
               } else {
-                "  devnode not enumerated ($iid)" | Out-Probe $log
-                Add-StageRecord -JsonPath $json -Stage devnode-create -Status error -Detail "devnode 作成後に Get-PnpDevice で列挙されない (instance_id=$iid)"
+                $projectedStatus = 'blocked'
+                $projectedDetail = 'pre-devnode enum observation missing from primitive state'
               }
-            } catch {
-              "  devnode-create error: $($_.Exception.Message)" | Out-Probe $log
-              Add-StageRecord -JsonPath $json -Stage devnode-create -Status error -Detail $_.Exception.Message
+            } elseif ($rec) {
+              $projectedStatus = $rec.status
+              $projectedDetail = $rec.detail
+              $projectedExit = $rec.exit_code
+              if ($map.legacy -eq 'catalog-create' -and (Test-Path -LiteralPath $localPkg)) {
+                $localCatRecord = Get-ChildItem -LiteralPath $localPkg -Filter '*.cat' -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($localCatRecord) { $projectedDetail = "cat=$($localCatRecord.FullName)" }
+              }
+            } elseif ($map.legacy -eq 'driver-build') {
+              $wdks = @($primitive.stages | Where-Object { $_.stage -eq 'wdk' } | Select-Object -Last 1)
+              if ($wdks.Count -and $wdks[0].status -ne 'ok') {
+                $projectedStatus = $wdks[0].status
+                $projectedDetail = "driver-build not executed because wdk stage=$($wdks[0].status); $($wdks[0].detail)"
+                $projectedExit = $wdks[0].exit_code
+              }
             }
+            Add-StageRecord -JsonPath $json -Stage $map.legacy -Status $projectedStatus -Detail $projectedDetail -ExitCode $projectedExit
           }
+
+          "primitive terminal status=$($primitive.status) detail=$($primitive.detail) exit=$primitiveExit state=$localStatePath" | Tee-Object -FilePath (Join-Path $localEvidence 'workflow-adapter-summary.txt')
+          if ($contractViolation) { exit 2 }
           exit 0
 
       # endpoint_probe: MMDevice 列挙 + render↔capture pair 候補検出。
@@ -842,58 +347,29 @@ jobs:
           $probeStatus = Get-StageStatus $json 'endpoint-probe'
           "  prerequisite endpoint-probe: $probeStatus" | Out-Probe $log
 
-          # capture open の E_ACCESSDENIED 対策（attempt-10/11/12 実測）—
-          # capture endpoint へのアクセスは mic device capability の
-          # consent gate に掛かる。endpoint Category の LINE_CONNECTOR 化
-          # でも解除されず（attempt-11）、DeviceAccess\Global の Allow 化
-          # だけでも解除されなかった（attempt-12 — consent 評価は別系統
-          # または audiosrv が起動時に cache する）。残る層を全て
-          # provision する: DeviceAccess\Global・CapabilityAccessManager
-          # \ConsentStore・AppPrivacy policy を Allow にした上で
-          # AudioEndpointBuilder/Audiosrv を再起動し consent 再評価を
-          # 強制する。ephemeral runner 上の job 内限定調整で、cert store
-          # 登録と同じ環境 provisioning の一部。before/after + service
-          # 状態を判定材料として記録する。
-          $micCap = '{E5323777-F976-4f5b-9B55-B94699C46E44}'
+          # mic consent provisioning は Provision-RvfVirtualAudioEndpoint.ps1
+          # へ抽出済み（workflow inline の OS state 変更を残さない）。ここでは
+          # primitive state に記録済みの before/after・service restart を read-only
+          # で detail へ引き、test は provisioning 済み環境を使う側に限定する。
           $consentNote = @()
-          $consentTargets = @(
-            @{ hive = 'HKLM:'; key = "SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"; name = 'Value'; val = 'Allow'; tag = 'hklm-devacc' },
-            @{ hive = 'HKCU:'; key = "SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\$micCap"; name = 'Value'; val = 'Allow'; tag = 'hkcu-devacc' },
-            @{ hive = 'HKLM:'; key = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'; name = 'Value'; val = 'Allow'; tag = 'hklm-cam' },
-            @{ hive = 'HKCU:'; key = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'; name = 'Value'; val = 'Allow'; tag = 'hkcu-cam' },
-            @{ hive = 'HKLM:'; key = 'SOFTWARE\Policies\Microsoft\Windows\AppPrivacy'; name = 'LetAppsAccessMicrophone'; val = 1; tag = 'policy' }
-          )
-          foreach ($t in $consentTargets) {
-            $key = "$($t.hive)$($t.key)"
+          $primitiveStateForConsent = Join-Path $PWD 'vaudio-primitive-state.json'
+          if (Test-Path -LiteralPath $primitiveStateForConsent) {
             try {
-              $before = (Get-ItemProperty -Path $key -Name $t.name -ErrorAction SilentlyContinue).($t.name)
-              if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
-              Set-ItemProperty -Path $key -Name $t.name -Value $t.val
-              $after = (Get-ItemProperty -Path $key -Name $t.name).($t.name)
-              "  mic-consent [$($t.tag)] $key\$($t.name) : '$before' -> '$after'" | Out-Probe $log
-              $consentNote += "$($t.tag)=$after"
+              $provisionState = Get-Content -LiteralPath $primitiveStateForConsent -Raw -Encoding UTF8 | ConvertFrom-Json
+              foreach ($entry in @($provisionState.os_state.consent_after)) {
+                if ($entry.tag) { $consentNote += "$($entry.tag)=$($entry.value)" }
+              }
+              foreach ($entry in @($provisionState.os_state.service_restart)) {
+                if ($entry.service) { $consentNote += "$($entry.service)=$($entry.after)" }
+              }
             } catch {
-              "  mic-consent [$($t.tag)] $key error: $($_.Exception.Message)" | Out-Probe $log
-              $consentNote += "$($t.tag)=error"
+              $consentNote += "primitive-state-read-error=$($_.Exception.Message)"
             }
+          } else {
+            $consentNote += 'primitive-state=absent'
           }
-
-          # consent 変更は audio service が起動時に読む — restart で再評価
-          # を強制する。AudioEndpointBuilder 停止で Audiosrv も連鎖停止
-          # するため、builder→audiosrv の順に restart する。
-          foreach ($svc in 'AudioEndpointBuilder', 'Audiosrv') {
-            try {
-              $s0 = (Get-Service $svc -ErrorAction SilentlyContinue).Status
-              Restart-Service $svc -Force -ErrorAction Stop
-              $s1 = (Get-Service $svc).Status
-              "  svc $svc : $s0 -> $s1" | Out-Probe $log
-              $consentNote += "$svc=$s1"
-            } catch {
-              "  svc $svc restart error: $($_.Exception.Message)" | Out-Probe $log
-              $consentNote += "$svc=error"
-            }
-          }
-          Start-Sleep -Seconds 2
+          if (-not $consentNote.Count) { $consentNote += 'primitive-consent=unrecorded' }
+          "  mic-consent primitive record: $($consentNote -join ', ')" | Out-Probe $log
 
           $out = @(& mise run test-audio-virtual-endpoint 2>&1)
           $testExit = $LASTEXITCODE
@@ -1334,9 +810,10 @@ jobs:
           }
           exit 0
 
-      # cleanup: devnode 削除・driver uninstall・両 store からの証明書除去
-      # → 最終 enum 状態。ephemeral VM だが uninstall まで記録を残すため
-      # 各 op を try/catch で全て試行する。
+      # cleanup: test/probe/artifact upload の成否に関係なく、primitive の
+      # unprovision を partial state に対して実行する。exit 1（residue/error を
+      # 含む観測結果）は stage evidence として記録して workflow は継続し、
+      # exit 2（contract violation）だけを probe 機構破損として返す。
       - name: Stage cleanup
         if: always()
         shell: pwsh
@@ -1344,58 +821,57 @@ jobs:
           . ./tools/testsigned-driver/probe-stage.ps1
           $os = '${{ matrix.os }}'
           $json = "vaudio-probe-$os.json"
-          $state = "vaudio-state-$os.json"
           $log = "stage-cleanup-$os.txt"
           New-Item -ItemType File -Force $log | Out-Null
-          $problems = @()
 
-          $iid = Get-ProbeState $state 'instance_id'
-          if ($iid) {
-            "  --- remove devnode $iid ---" | Out-Probe $log
-            try {
-              $lines = @(& ./tools/testsigned-driver/TestDevice.ps1 -Action remove -InstanceId $iid 2>&1)
-              $lines | ForEach-Object { "  $_" | Out-Probe $log }
-            } catch {
-              "  TestDevice remove error: $($_.Exception.Message) — pnputil fallback" | Out-Probe $log
-              & pnputil /remove-device "$iid" 2>&1 | Out-Probe $log
-              "  pnputil /remove-device exit=$LASTEXITCODE" | Out-Probe $log
-            }
-            $gone = -not (Get-PnpDevice -InstanceId $iid -ErrorAction SilentlyContinue)
-            "  devnode removed=$gone" | Out-Probe $log
-            if (-not $gone) { $problems += 'devnode残留' }
-          } else { "  instance_id: none — devnode 削除不要" | Out-Probe $log }
+          $runnerTemp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+          $primitiveRoot = Join-Path $runnerTemp 'rvf-virtual-audio-primitive'
+          $unprovisionEvidence = Join-Path $primitiveRoot 'unprovision-evidence'
+          $statePath = Join-Path $PWD 'vaudio-primitive-state.json'
+          New-Item -ItemType Directory -Force $unprovisionEvidence | Out-Null
+          if (-not (Test-Path -LiteralPath $statePath)) {
+            "  primitive state missing: $statePath" | Out-Probe $log
+            Add-StageRecord -JsonPath $json -Stage cleanup -Status error -Detail 'PROVISION_STATE_MISSING unprovision input state is absent'
+            exit 2
+          }
 
-          $pub = Get-ProbeState $state 'inf_published'
-          if ($pub) {
-            "  --- pnputil /delete-driver $pub /uninstall /force ---" | Out-Probe $log
-            & pnputil /delete-driver $pub /uninstall /force 2>&1 | Out-Probe $log
-            "  pnputil /delete-driver exit=$LASTEXITCODE" | Out-Probe $log
-            if ($LASTEXITCODE -ne 0) { $problems += 'delete-driver失敗' }
+          $unprovisionArgs = @(
+            '-NoProfile', '-NonInteractive', '-File', './tools/virtual-audio-driver/Unprovision-RvfVirtualAudioEndpoint.ps1',
+            '-StatePath', $statePath,
+            '-WorkspaceRoot', (Join-Path $primitiveRoot 'workspace'),
+            '-EvidenceDir', $unprovisionEvidence,
+            '-CleanupMode', 'Full',
+            '-TimeoutSeconds', '900'
+          )
+          $cleanupOut = @(& pwsh @unprovisionArgs 2>&1)
+          $cleanupExit = $LASTEXITCODE
+          $cleanupOut | Tee-Object -FilePath (Join-Path $unprovisionEvidence 'workflow-adapter-unprovision.txt')
+          "unprovision exit=$cleanupExit" | Tee-Object -FilePath (Join-Path $unprovisionEvidence 'workflow-adapter-unprovision.txt') -Append
+
+          $localEvidence = "$PWD\vaudio-primitive-unprovision"
+          New-Item -ItemType Directory -Force $localEvidence | Out-Null
+          Copy-Item -Path (Join-Path $unprovisionEvidence '*') -Destination $localEvidence -Recurse -Force -ErrorAction SilentlyContinue
+
+          "unprovision primitive output (exit=$cleanupExit)" | Out-Probe $log
+          foreach ($line in $cleanupOut) { "  $line" | Out-Probe $log }
+          $cleanupStatePath = Join-Path $localEvidence 'unprovision-state.json'
+          if (Test-Path -LiteralPath $cleanupStatePath) {
+            Copy-Item -LiteralPath $cleanupStatePath -Destination "$PWD\vaudio-unprovision-state.json" -Force
+            $cleanupState = Get-Content -LiteralPath $cleanupStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $leftovers = @($cleanupState.cleanup.leftovers | Where-Object { $null -ne $_ })
+            $errors = @($cleanupState.cleanup.errors | Where-Object { $null -ne $_ })
+            foreach ($leftover in $leftovers) { "  leftover: $leftover" | Out-Probe $log }
+            foreach ($err in $errors) { "  cleanup-error: $err" | Out-Probe $log }
+            $status = if ($cleanupState.status -eq 'ok') { 'ok' } else { 'error' }
+            $detail = "primitive_status=$($cleanupState.status); detail=$($cleanupState.detail); leftovers=$($leftovers.Count); errors=$($errors.Count)"
+            Add-StageRecord -JsonPath $json -Stage cleanup -Status $status -Detail $detail -ExitCode $cleanupExit
           } else {
-            "  inf_published: none — store からの uninstall 対象を列挙で再確認" | Out-Probe $log
-            $enumOut = & pnputil /enum-drivers 2>&1 | Out-String
-            if ($enumOut -match 'RvfVirtualAudio\.inf') {
-              "  INF が残存 — 手動名解決できないため delete 未実施" | Out-Probe $log
-              $problems += 'inf残留'
-            } else { "  store clean" | Out-Probe $log }
+            "  unprovision state missing: $cleanupStatePath" | Out-Probe $log
+            Add-StageRecord -JsonPath $json -Stage cleanup -Status error -Detail "UNPROVISION_CONTRACT_NO_STATE exit=$cleanupExit" -ExitCode $cleanupExit
+            exit 2
           }
-
-          $thumb = Get-ProbeState $state 'cert_thumbprint'
-          if ($thumb) {
-            foreach ($store in 'Root', 'TrustedPublisher', 'My') {
-              $p = "Cert:\LocalMachine\$store\$thumb"
-              if (Test-Path $p) {
-                try { Remove-Item $p -Force -ErrorAction Stop; "  removed $p" | Out-Probe $log }
-                catch { "  remove $p error: $($_.Exception.Message)" | Out-Probe $log; $problems += 'cert残留' }
-              } else { "  $p : already absent" | Out-Probe $log }
-            }
-          }
-
-          "`n  --- final state ---" | Out-Probe $log
-          $enumOut = & pnputil /enum-drivers 2>&1 | Out-String
-          "  RvfVirtualAudio.inf in store: $($enumOut -match 'RvfVirtualAudio\.inf')" | Out-Probe $log
-          Add-StageRecord -JsonPath $json -Stage cleanup -Status $(if ($problems.Count) { 'error' } else { 'ok' }) -Detail ($problems -join ';')
           "  cleanup done" | Out-Probe $log
+          if ($cleanupExit -eq 2) { exit 2 }
           exit 0
 
       - name: Upload probe evidence
@@ -1408,6 +884,10 @@ jobs:
           path: |
             vaudio-probe-${{ matrix.os }}.json
             vaudio-state-${{ matrix.os }}.json
+            vaudio-primitive-state.json
+            vaudio-unprovision-state.json
+            vaudio-primitive-provision/
+            vaudio-primitive-unprovision/
             stage-*-${{ matrix.os }}.txt
             endpoint-probe-${{ matrix.os }}.txt
             midi-endpoint-probe-${{ matrix.os }}.txt
