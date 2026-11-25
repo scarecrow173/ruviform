@@ -51,10 +51,43 @@ public static class WinMM {
     [DllImport("winmm.dll")] public static extern uint midiInClose(IntPtr hmi);
     [DllImport("winmm.dll")] public static extern uint midiInStart(IntPtr hmi);
     [DllImport("winmm.dll")] public static extern uint midiInStop(IntPtr hmi);
+    [DllImport("winmm.dll")] public static extern uint midiInReset(IntPtr hmi);
     [DllImport("winmm.dll")] public static extern uint midiInMessage(IntPtr hmi, uint uMsg, IntPtr dw1, IntPtr dw2);
+    [DllImport("winmm.dll")] public static extern uint midiInPrepareHeader(IntPtr hmi, IntPtr lpMidiInHdr, uint cbMidiInHdr);
+    [DllImport("winmm.dll")] public static extern uint midiInUnprepareHeader(IntPtr hmi, IntPtr lpMidiInHdr, uint cbMidiInHdr);
+    [DllImport("winmm.dll")] public static extern uint midiInAddBuffer(IntPtr hmi, IntPtr lpMidiInHdr, uint cbMidiInHdr);
+
+    // tests/loopback.rs と同じ callback 経路を踏むための CALLBACK_FUNCTION
+    // delegate — test は CALLBACK_FUNCTION|MIDI_IO_STATUS で開き SysEx
+    // buffer を prepare+add して midiInStart する。
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    public delegate void MidiInProc(IntPtr hmi, uint wMsg, UIntPtr dwInstance, UIntPtr dwParam1, UIntPtr dwParam2);
+    public static MidiInProc InCallback = new MidiInProc(StaticInCallback);
+    public static volatile int InMsgCount = 0;
+    public static volatile uint InLastMsg = 0;
+    public static volatile UIntPtr InLastParam1 = UIntPtr.Zero;
+    public static volatile UIntPtr InLastParam2 = UIntPtr.Zero;
+    static void StaticInCallback(IntPtr hmi, uint wMsg, UIntPtr dwInstance, UIntPtr dwParam1, UIntPtr dwParam2) {
+        InMsgCount++;
+        InLastMsg = wMsg;
+        InLastParam1 = dwParam1;
+        InLastParam2 = dwParam2;
+    }
 
     public const uint DRV_QUERYDEVICEINTERFACESIZE = 1006;
     public const uint DRV_QUERYDEVICEINTERFACE     = 1007;
+    public const uint CALLBACK_FUNCTION            = 0x00030000;
+    public const uint CALLBACK_NULL                = 0x00000000;
+    public const uint MIDI_IO_STATUS               = 0x00000020;
+    public const uint MIDIHDR_SIZE                 = 120;  // x64 sizeof(MIDIHDR)
+    public const uint MHDR_DONE                    = 0x00000001;
+    public const uint MM_MIM_OPEN                  = 0x3C1;
+    public const uint MM_MIM_CLOSE                 = 0x3C2;
+    public const uint MM_MIM_DATA                  = 0x3C3;
+    public const uint MM_MIM_LONGDATA              = 0x3C4;
+    public const uint MM_MIM_ERROR                 = 0x3C5;
+    public const uint MM_MIM_MOREDATA              = 0x3CC;
+    public const uint MM_MIM_LONGERROR             = 0x3CD;
 }
 '@
 
@@ -155,11 +188,31 @@ if ($loopbackOut.Count -gt 0) {
 }
 if ($loopbackIn.Count -gt 0) {
     $i = $loopbackIn[0]
-    Step "midiInOpen[$i] (CALLBACK_NULL)"
+    # test と同じ flags: CALLBACK_FUNCTION | MIDI_IO_STATUS + SysEx
+    # buffer prepare/add — callback が MIM_DATA を受け取れば driver の
+    # render→capture loopback 経路が user-mode 観測として機能している。
+    Step "midiInOpen[$i] (CALLBACK_FUNCTION|MIDI_IO_STATUS)"
     $hmi = [IntPtr]::Zero
-    $rc = [WinMM]::midiInOpen([ref]$hmi, $i, [IntPtr]::Zero, [IntPtr]::Zero, 0)
+    $cbPtr = [System.Runtime.InteropServices.Marshal]::GetFunctionPointerForDelegate([WinMM]::InCallback)
+    $rc = [WinMM]::midiInOpen([ref]$hmi, $i, $cbPtr, [IntPtr]::Zero, ([WinMM]::CALLBACK_FUNCTION -bor [WinMM]::MIDI_IO_STATUS))
     Write-Output "  midiInOpen rc=$rc hmi=0x$($hmi.ToString('x'))"
     if ($rc -eq 0) {
+        # SysEx buffers x2 (test は 4 だが crash bisect には十分)
+        $hdrs = @()
+        for ($b = 0; $b -lt 2; $b++) {
+            Step "midiInPrepareHeader+AddBuffer[$b]"
+            $hdrMem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal([int][WinMM]::MIDIHDR_SIZE)
+            $dataMem = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(1024)
+            $zero = New-Object byte[] ([int][WinMM]::MIDIHDR_SIZE)
+            [System.Runtime.InteropServices.Marshal]::Copy($zero, 0, $hdrMem, [int][WinMM]::MIDIHDR_SIZE)
+            [System.Runtime.InteropServices.Marshal]::WriteInt64($hdrMem, 0, $dataMem.ToInt64())  # lpData
+            [System.Runtime.InteropServices.Marshal]::WriteInt32($hdrMem, 8, 1024)               # dwBufferLength
+            $rc = [WinMM]::midiInPrepareHeader($hmi, $hdrMem, [WinMM]::MIDIHDR_SIZE)
+            Write-Output "  prepare rc=$rc"
+            $rc = [WinMM]::midiInAddBuffer($hmi, $hdrMem, [WinMM]::MIDIHDR_SIZE)
+            Write-Output "  addbuf rc=$rc"
+            $hdrs += ,@($hdrMem, $dataMem)
+        }
         Step "midiInStart[$i]"
         $rc = [WinMM]::midiInStart($hmi)
         Write-Output "  midiInStart rc=$rc"
@@ -170,20 +223,30 @@ if ($loopbackIn.Count -gt 0) {
             $rc = [WinMM]::midiOutOpen([ref]$hmo, $oi, [IntPtr]::Zero, [IntPtr]::Zero, 0)
             if ($rc -eq 0) {
                 [void][WinMM]::midiOutShortMsg($hmo, 0x007F3C90)
-                Start-Sleep -Milliseconds 200
+                Start-Sleep -Milliseconds 300
                 [void][WinMM]::midiOutShortMsg($hmo, 0x00003C80)   # note-off
-                Start-Sleep -Milliseconds 50
+                Start-Sleep -Milliseconds 200
                 [void][WinMM]::midiOutClose($hmo)
                 Write-Output "  loopback send done"
             } else {
                 Write-Output "  midiOutOpen for send rc=$rc"
             }
         }
+        "  callback count=$([WinMM]::InMsgCount) lastMsg=0x$([WinMM]::InLastMsg.ToString('x')) lastP1=0x$([WinMM]::InLastParam1.ToUInt64().ToString('x')) lastP2=0x$([WinMM]::InLastParam2.ToUInt64().ToString('x'))" | Write-Output
         Step "midiInStop[$i]"
         [void][WinMM]::midiInStop($hmi)
+        Step "midiInReset[$i]"
+        [void][WinMM]::midiInReset($hmi)
+        foreach ($pair in $hdrs) {
+            Step "midiInUnprepareHeader"
+            [void][WinMM]::midiInUnprepareHeader($hmi, $pair[0], [WinMM]::MIDIHDR_SIZE)
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pair[0])
+            [System.Runtime.InteropServices.Marshal]::FreeHGlobal($pair[1])
+        }
         Step "midiInClose[$i]"
         $rc = [WinMM]::midiInClose($hmi)
         Write-Output "  midiInClose rc=$rc"
+        "  callback count(final)=$([WinMM]::InMsgCount) lastMsg=0x$([WinMM]::InLastMsg.ToString('x'))" | Write-Output
     }
 }
 

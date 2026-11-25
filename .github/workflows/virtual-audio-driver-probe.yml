@@ -919,6 +919,19 @@ jobs:
           $probeOut | ForEach-Object { "  $_" | Out-Probe $log }
           "  winmm-probe exit=$probeRc" | Out-Probe $log
 
+          # crash dump 採取設定 — attempt-2 で全 WinMM call が child pwsh
+          # probe で成功したのに test 本体のみ 0xC0000005 で落ちたため、
+          # faulting module/stack を dump 解析で確定する。LocalDumps は
+          # job agent の HKLM 書込権限で有効化。
+          $dumpDir = "$PWD\crashdumps"
+          New-Item -ItemType Directory -Force $dumpDir | Out-Null
+          $ld = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+          New-Item -Path $ld -Force | Out-Null
+          Set-ItemProperty -Path $ld -Name DumpFolder -Value $dumpDir -Type ExpandString
+          Set-ItemProperty -Path $ld -Name DumpCount -Value 5 -Type DWord
+          Set-ItemProperty -Path $ld -Name DumpType -Value 2 -Type DWord
+          "  LocalDumps enabled -> $dumpDir" | Out-Probe $log
+
           # test 本体 — mise task は arg forward しないため同じ選択を
           # mise exec 経由の cargo 直叩きで --nocapture を付与（crash 前の
           # 部分出力も拾う）。toolchain env は mise task と同一。
@@ -948,6 +961,8 @@ jobs:
           } catch {
             "  event collect failed: $($_.Exception.Message)" | Out-Probe $log
           }
+          $dumps = @(Get-ChildItem $dumpDir -Filter '*.dmp' -ErrorAction SilentlyContinue)
+          "  crashdumps: $($dumps.Count) file(s) $(($dumps | ForEach-Object { "$($_.Name) $($_.Length)B" }) -join '; ')" | Out-Probe $log
 
           # fail-closed: verdict Pass/NotRun のみ ok。Fail・crash・
           # verdict 未到達・probe crash は error。
@@ -1033,6 +1048,7 @@ jobs:
             vaudio-state-${{ matrix.os }}.json
             stage-*-${{ matrix.os }}.txt
             endpoint-probe-${{ matrix.os }}.txt
+            crashdumps/
             vaudio-pkg/
             vaudio-cert.cer
           if-no-files-found: warn
