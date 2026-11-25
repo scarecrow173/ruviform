@@ -1,0 +1,21 @@
+{"seq": 1, "ts": "local", "type": "harness", "summary": "Slice E 着手: POLICIES.md・issue-952 design・workflow・rf977/978 evidence・runbook 読込。canonical lane は virtual-audio-driver-probe.yml 増設なしと確認"}
+{"seq": 2, "ts": "local", "type": "decision", "summary": "midi_endpoint_probe 整合: rf978 §1.3 は意図的省略だったが AC 語彙忠実のため案(a) midi-endpoint-probe stage 追加を採用（Coordinator 推奨案）"}
+{"seq": 3, "ts": "local", "type": "bug-found", "summary": "examples/midi_endpoint_probe.rs interface_id_in が midiInMessage(DRV_QUERYDEVICEINTERFACE) の引数順取り違え（dw1=size,dw2=buf）— rf978 §4.1 と同 bug が example 側に未反映。provisioned 環境で決定的 AV crash"}
+{"seq": 4, "ts": "local", "type": "harness", "summary": "Coordinator へ crates lease 拡張の決裁依頼 → 承認（条件: 引数順2行のみ/記録/proportional 検証）"}
+{"seq": 5, "ts": "local", "type": "edit", "summary": "example 修正: interface_id_in の midiInMessage 引数を正順（dw1=buf,dw2=size）に入替 — 2行のみ"}
+{"seq": 6, "ts": "local", "type": "edit", "summary": "tools/virtual-audio-driver/Invoke-MidiEndpointProbe.ps1 新規（Invoke-EndpointProbe.ps1 同型 — key=value 行を返す）"}
+{"seq": 7, "ts": "local", "type": "edit", "summary": "workflow: midi-endpoint-probe stage 追加（endpoint-probe 直後・if always・末尾 exit 0）+ reset/upload 対象に midi-endpoint-probe-<os>.txt 追加 + header comment 更新"}
+{"seq": 8, "ts": "local", "type": "edit", "summary": "docs: development-environment.md lane 表+workflow 節 / specs+designs issue-629 runbook / issue-952 Slice E 実装記録 / drivers READMEs / tools README 更新。docs index は未編集"}
+{"seq": 9, "ts": "local", "type": "verify", "cmd": "mise run fmt-check", "result": "Pass (exit 0)"}
+{"seq": 10, "ts": "local", "type": "verify", "cmd": "mise exec -- prek run --all-files", "result": "Pass (全 hook Passed・exit 0)"}
+{"seq": 11, "ts": "local", "type": "verify", "cmd": "mise run test-ci-daily", "result": "Pass (113 pass / 0 fail)"}
+{"seq": 12, "ts": "local", "type": "verify", "cmd": "mise run test-ci-tracker", "result": "Pass (108 pass / 0 fail)"}
+{"seq": 13, "ts": "local", "type": "verify", "cmd": "mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml", "result": "Pass (exit 0)"}
+{"seq": 14, "ts": "local", "type": "verify", "cmd": "mise run check ruviform-midi-device", "result": "Pass (exit 0)"}
+{"seq": 15, "ts": "local", "type": "verify", "cmd": "mise run lint ruviform-midi-device", "result": "Pass (exit 0・-D warnings)"}
+{"seq": 16, "ts": "local", "type": "verify", "cmd": "pwsh -File evidence/rf979/invoke-syntax-check.ps1", "result": "Pass (ps1 ParseFile 5/5 OK・workflow run-block parse 17/17 OK — local-syntax-check.txt)"}
+{"seq": 17, "ts": "2026-11-25T03:55Z", "type": "harness", "summary": "git rebase origin/main（1009a94f まで 2 commit 取込・clean）→ push feat/979-endpoint-lane → gh workflow run dispatch"}
+{"seq": 18, "ts": "2026-11-25T03:56Z", "type": "runner", "cmd": "gh workflow run virtual-audio-driver-probe.yml --ref feat/979-endpoint-lane", "result": "run 45543608858 started (SHA e0e6aa65)"}
+{"seq": 19, "ts": "2026-11-25T04:10Z", "type": "runner", "cmd": "gh run watch 45543608858 --exit-status", "result": "conclusion=success・全14 stage ok（attempt1-watch.txt）"}
+{"seq": 20, "ts": "2026-11-25T04:11Z", "type": "runner", "cmd": "gh run download 45543608858", "result": "artifact virtual-audio-driver-probe-windows-2025-attempt-1 取得 — midi-endpoint-probe: probe_exit=0 crash なし・loopback_candidates=2・CANDIDATES_OBSERVED。stream-roundtrip 1 passed/3.48s 実走、midi-loopback 2 passed verdict Pass"}
+{"seq": 21, "ts": "local", "type": "verify", "cmd": "stage record 解釈（verification.md §4）", "result": "AC1/2/3 全て Pass — example 引数順修正の動作を interface_id 応答で実走立証"}

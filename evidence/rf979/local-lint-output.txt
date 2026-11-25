@@ -1,0 +1,2 @@
+[lint] $ if [ "$#" -lt 1 ]; then
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
