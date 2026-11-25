@@ -490,6 +490,35 @@ tier）または runner 到達不能（WMS: Server SKU 非対象・
   README.md` と `virtual-audio-driver-probe.yml` の
   `midi-loopback` stage（`windows-2025`・test-signed・
   `mise run test-midi-virtual-endpoint` 実走）に従う。
+  Issue #979 で `midi-endpoint-probe` stage も追加 — `midi_endpoint_probe`
+  example が WinMM midiIn/midiOut 列挙・loopback 候補・
+  `provisioning=` を stage record に記録する（`endpoint-probe` の
+  MIDI 版・spec 版 runbook 追記節の stage 一覧が正本）。
+
+### 3.8 Audio: ruviform 独自 driver（RvfVirtualAudio）
+
+**Issue #977 で実装 — GitHub-hosted `windows-2025`（x64
+test-signing）での標準経路。** §3.1〜3.2 の外部 COTS driver は
+license・配布・再起動の摩擦から、Slice B で独自 driver 経路に一本化
+した（設計: `issue-952-virtual-endpoint-driver.md` Slice B 実装記録）。
+
+- 構成: `drivers/rvf-virtual-audio/`（SysVAD 派生・MS-PL）が render
+  `Ruviform Cable Input` / capture `Ruviform Cable Output` の
+  MMDevice endpoint 1 pair を生成する。stage 2 で kernel loopback
+  （render stream の DMA buffer を capture stream が読む経路）を実装
+  し、speaker→capture の音声経路が成立（rf977 attempt-21 で
+  round-trip Pass — `issue-952-virtual-endpoint-driver.md` Slice B
+  loopback 構造節参照）。
+- 観測: install 後、`endpoint_probe` が `Ruviform Cable *` の
+  render↔capture pair を `pair_count=1` で検出する（name-stem
+  match・unconfirmed の candidate 報告 — round-trip の確定証拠は
+  `stream-roundtrip` stage の `tests/virtual_endpoint.rs` が担う）。
+- install/probe/lane 手順: `virtual-audio-driver-probe.yml` が
+  install 全 stage（`env-build-surface`〜`devnode-create`）→
+  `endpoint-probe`→`stream-roundtrip`（`mise run
+  test-audio-virtual-endpoint` 実走）→ `cleanup` を束ねる。
+  stage 一覧の正本は spec 版 runbook 追記節
+  （`docs/specs/issue-629-provisioning-runbook.md`）。
 
 ## 4. Provisioning 判定フロー（probe 主導）
 

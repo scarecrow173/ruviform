@@ -350,21 +350,26 @@ NOT_PROVISIONED/NotRun を維持する。
   description 記法）、`docs/development-environment.md`
   （lane 一覧表・opt-in lane 注記の記法）。
 
-## 追記（Issue #977 Slice B stage 1）: ruviform 独自 driver による audio provisioning
+## 追記（Issue #977 Slice B / #978 Slice C / #979 Slice E）: ruviform 独自 driver による provisioning と lane 実走
 
 本 runbook は外部 driver（VB-CABLE / loopMIDI / WMS loopback）前提で書かれたが、
 #952 の方式確定により ruviform 独自仮想 audio driver（SysVAD 派生）が第一経路と
 なった。Issue #977 stage 1 で `drivers/rvf-virtual-audio/`（render
 `Ruviform Cable Input` / capture `Ruviform Cable Output` の 1 pair）と
-provisioning 自動化 workflow を追加した。外部 driver 候補の手順・license 条項は
-引き続き本書前文を正本とする（独自 driver が採用経路として優先されるだけで、
-外部候補の判断記録は残す）。
+provisioning 自動化 workflow を追加し、stage 2 で render→capture の kernel
+loopback を実装（音声経路成立 — rf977 attempt-21 で round-trip Pass）、Issue
+#978 で同 package に DMus MIDI loopback miniport（`Ruviform MIDI Loopback`
+in/out 同名 pair）を同梱した。Issue #979（Slice E）では `midi-endpoint-probe`
+stage の追加と本節・lane 表の整合を行った。外部 driver 候補の手順・license
+条項は引き続き本書前文を正本とする（独自 driver が採用経路として優先される
+だけで、外部候補の判断記録は残す）。
 
-### provisioning 手順（独自 driver — GitHub-hosted `windows-2025` x64）
+### provisioning・lane 実走手順（独自 driver — GitHub-hosted `windows-2025` x64）
 
 manual workflow `.github/workflows/virtual-audio-driver-probe.yml`
-（`workflow_dispatch` のみ）が、専用 runner 前提手順に相当する全工程を stage
-分解で実施する:
+（`workflow_dispatch` のみ・opt-in manual lane — required gate・`ci-summary`
+の `needs`・ruleset と非接続）が、専用 runner 前提手順に相当する全工程を
+stage 分解で実施する:
 
 1. `env-build-surface` — OS build・testsigning/SecureBoot・WDK/署名 tool の記録。
 2. `driver-build` — repo 内ソースを MSBuild+WDK で build（WDK 不在時は winget
@@ -386,21 +391,68 @@ manual workflow `.github/workflows/virtual-audio-driver-probe.yml`
 9. `endpoint-probe` — `tools/virtual-audio-driver/Invoke-EndpointProbe.ps1`
    が `endpoint_probe`（mise Rust toolchain 経由）を実行し `pair_count=` 等を
    stage record に記録する。
-10. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+10. `midi-endpoint-probe` — `tools/virtual-audio-driver/Invoke-MidiEndpointProbe.ps1`
+    が `midi_endpoint_probe`（同じく mise 経由）を実行し WinMM
+    midiIn/midiOut 列挙・`loopback_candidates=`・`provisioning=` を stage
+    record に記録する（Issue #979 で追加 — `endpoint-probe` の MIDI 版。
+    候補未検出は観測値で失敗扱いしない）。
+11. `stream-roundtrip` — `mise run test-audio-virtual-endpoint`
+    （`tests/virtual_endpoint.rs`）を実走し、`verdict:` 行を stage record に
+    記録する。`Ruviform Cable Input` への render は kernel loopback 経由で
+    `Ruviform Cable Output` の capture に届く真の audio round-trip（Issue
+    #977 stage 2 — rf977 attempt-21 で Pass 実績）。mic consent provisioning
+    （DeviceAccess/ConsentStore/AppPrivacy + AudioEndpointBuilder/Audiosrv
+    restart）も本 stage で実施する。**verdict の読み方**: pass 時の detail
+    は `verdict=no-verdict-line` になるのが正常 — cargo test は passing
+    test の stdout/stderr を capture して表示しないため、test が emit した
+    `verdict: Pass` 行は artifact ログに表面化しない（`verdict:` 行が
+    表面化するのは Fail/NotRun 経路のみ — 失敗・異常時に capture 内容が
+    出力される）。実走判定は `test result: ok. 1 passed` と
+    `finished in X.XXs` の非ゼロ秒数で読む — endpoint 不在の vacuous
+    early return は `finished in 0.00s` になる（rf977 attempt-14 の
+    観測）ため、非ゼロ秒数 + 同一 run の `endpoint-probe` `pair_count=1`
+    で真の round-trip 実走と判断する（rf977 attempt-21・rf979 attempt-1
+    ともに 3.48s）。
+12. `midi-loopback` — `tests/loopback.rs`（`cargo test -p
+    ruviform-midi-device --test loopback -- --ignored --test-threads=1`）を
+    実走し、`Ruviform MIDI Loopback` の bidirectional name match pair 検出と
+    channel-voice event round-trip の `verdict:` を記録する（Issue #978 —
+    rf978 attempt-6 で Pass 実績）。事前に `midi-winmm-probe.ps1` を child
+    pwsh で走らせて WinMM call の bisection 診断を採取する。
+13. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+14. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
+    artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 
-- license: MS-PL 派生のため外部 driver のような license 判断・再起動・
-  再配布上の摩擦はない（`drivers/rvf-virtual-audio/LICENSE-MS-PL.txt`・
+- license: MS-PL（audio 部）/MS-LPL（MIDI miniport 部）派生のため外部 driver
+  のような license 判断・再起動・再配布上の摩擦はない
+  （`drivers/rvf-virtual-audio/LICENSE-MS-PL.txt`・`LICENSE-MS-LPL.txt`・
   `PROVENANCE.md` 参照）。
 - reboot/bcdedit: 実施しない（testsigning=Yes+SecureBoot OFF は runner 出荷
   状態として確定済み — 本書前文の runner 要件と同じ根拠）。
 - driver 署名: 上記 4-5 の job 内 test-signing 経路。attestation/WHQL 署名は
   要らない（x64 のみ対象 — #952 §Slice D 参照）。
-- 記録責任分担: stage ごとの `{stage,status,detail,exit_code}` が
-  `vaudio-probe-windows-2025.json`、生ログが `stage-*-windows-2025.txt`、
-  probe 出力が `endpoint-probe-windows-2025.txt` に残り、artifact として
-  `evidence/rf977/` に採取される（install 後の残件は cleanup stage が除去）。
+- absence-is-data 契約: 各 stage は `if: always()` + 末尾 `exit 0` で完走し、
+  stage の失敗・測定対象の不在は `{stage,status,detail,exit_code}`（status
+  語彙 ok/absent/blocked/not_run/error）として `vaudio-probe-windows-2025.json`
+  に記録する判定材料であり job 失敗ではない。生ログは
+  `stage-*-windows-2025.txt`、probe 出力は `endpoint-probe-windows-2025.txt` /
+  `midi-endpoint-probe-windows-2025.txt` に残り、失敗時も `if: always()` の
+  artifact upload で保全される。attempt 固有 artifact 名で全 attempt の
+  evidence が残る。
+- 記録責任分担: stage record・生ログ・probe 出力は artifact として採取され、
+  `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/` に attempt 番号
+  対応付きで記録される（install 後の残件は cleanup stage が除去）。
 - provisioned pair の利用: endpoint 成立後は本書前文どおり
-  `mise run test-audio-virtual-endpoint` の入力として使う（round-trip 実走は
-  後続 stage — pair は独立 endpoint 2 個で speaker→capture の音声経路は
-  未実装。設計 doc `docs/designs/issue-977-virtual-audio-driver.md` の
-  Deferred Design Concerns 参照）。
+  `mise run test-audio-virtual-endpoint`・`mise run
+  test-midi-virtual-endpoint` の入力として使う — 本 workflow が両 lane の
+  実走まで束ねるため、1 回の dispatch で provisioning → probe → lane 実走 →
+  evidence upload が通る（Issue #979 の受入構成）。
+- 判定: lane stage の成否は stage record detail で確認するが、語彙は
+  stage ごとに異なる。`midi-loopback` は cdb 経由で test 出力が透過する
+  ため pass 時も `verdict: Pass — …` 行が detail に残る。一方
+  `stream-roundtrip` は cargo test の capture により pass 時
+  `verdict=no-verdict-line` となるのが正常で、`test result: ok. 1 passed`
+  + `finished in` の非ゼロ秒数（vacuous early return は 0.00s）で実走を
+  判断する（11 項参照）。未 provisioning 環境では verifier 自身が
+  `verdict: NotRun — NOT_PROVISIONED` を返し、stage は `ok` 記録のまま
+  完走する（fail-closed — 未実行・不合格を Pass にしない）。

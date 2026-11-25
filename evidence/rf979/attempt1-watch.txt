@@ -1,0 +1,2519 @@
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  * Checkout repository
+  * Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  * Checkout repository
+  * Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  * Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  * Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  * Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  * Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  * Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 1 minute ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 2 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 3 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  * Stage driver-build
+  * Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  * Stage cert-create
+  * Stage store-register
+  * Stage sign
+  * Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  * Stage pnputil-add-driver
+  * Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  * Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 4 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  * Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  * Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  * Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  ✓ Stage stream-roundtrip
+  * Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  ✓ Stage stream-roundtrip
+  ✓ Stage midi-loopback
+  * Stage cleanup
+  * Upload probe evidence
+  * Post Restore cargo registry/git index cache
+  * Post Set up mise
+  * Post Checkout repository
+Refreshing run status every 3 seconds. Press Ctrl+C to quit.
+
+* feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+* vaudio-probe (windows-2025) (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  ✓ Stage stream-roundtrip
+  ✓ Stage midi-loopback
+  ✓ Stage cleanup
+  ✓ Upload probe evidence
+  ✓ Post Restore cargo registry/git index cache
+  ✓ Post Set up mise
+  * Post Checkout repository
+✓ feat/979-endpoint-lane virtual-audio-driver-probe · 45543608858
+Triggered via workflow_dispatch about 5 minutes ago
+
+JOBS
+✓ vaudio-probe (windows-2025) in 5m37s (ID 138967805785)
+  ✓ Set up job
+  ✓ Checkout repository
+  ✓ Reset probe workspace
+  ✓ Set up mise
+  ✓ Restore Rust toolchain from mise.lock
+  ✓ Restore cargo registry/git index cache
+  ✓ Stage env-build-surface
+  ✓ Stage driver-build
+  ✓ Stage catalog-create
+  ✓ Stage cert-create
+  ✓ Stage store-register
+  ✓ Stage sign
+  ✓ Stage sign-verify
+  ✓ Stage pnputil-add-driver
+  ✓ Stage enum-verify
+  ✓ Stage devnode-create
+  ✓ Stage endpoint-probe
+  ✓ Stage midi-endpoint-probe
+  ✓ Stage stream-roundtrip
+  ✓ Stage midi-loopback
+  ✓ Stage cleanup
+  ✓ Upload probe evidence
+  ✓ Post Restore cargo registry/git index cache
+  ✓ Post Set up mise
+  ✓ Post Checkout repository
+  ✓ Complete job
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+vaudio-probe (windows-2025): .github#3

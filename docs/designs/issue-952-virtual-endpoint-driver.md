@@ -239,6 +239,14 @@ WMS 経路の残件（client component 導入可否 — 未実測）:
 - **scope**: provisioning → probe → lane 実走 → evidence 採取を束ねる opt-in manual workflow または self-hosted runner 向け runbook 更新、`docs/development-environment.md` lane 表更新。
 - **範囲見積もり**: `.github/**`（opt-in workflow — POLICIES §5 の opt-in lane 規範に従う）+ `docs/` 更新。
 
+**実装記録（Issue #979）**:
+
+- **canonical lane = 既存 `virtual-audio-driver-probe.yml`** — 新規 workflow・別 lane の増設はしない（POLICIES §5「独立の重複Workflowを無条件に追加しない」）。Slice B/C の成果物で install（`driver-build`〜`pnputil-add-driver`）→ provisioning（`enum-verify`・`devnode-create`）→ `endpoint-probe` → lane 実走（`stream-roundtrip`・`midi-loopback`）→ `cleanup` → artifact upload のチェーンは既に成立し全 stage green の実績があった（rf977 attempt-21・rf978 attempt-6）。本 slice は残差分の整合と運用ドキュメントを担当する。
+- **`midi_endpoint_probe` 整合 — `midi-endpoint-probe` stage を追加**: AC の列（install→provisioning→`endpoint_probe`/`midi_endpoint_probe`→lane 実走）に対し、rf978 §1.3 では「loopback test 自身の WinMM 列挙が probe 証拠を兼ねる」として独立 probe を意図的に省略していた。本 slice では AC 語彙に忠実な明示観測として `endpoint-probe` 直後に `midi-endpoint-probe` stage を追加した — `tools/virtual-audio-driver/Invoke-MidiEndpointProbe.ps1`（新規・`Invoke-EndpointProbe.ps1` 同型）が `mise exec -- cargo run -p ruviform-midi-device --example midi_endpoint_probe` を実行し、WinMM midiIn/midiOut 列挙数・`loopback_candidates`・`provisioning`・候補 port 名を `key=value` 行で stage record に記録する。devnode 非依存の観測 probe で `if: always()` + 末尾 `exit 0`、候補未検出は失敗扱いしない（`endpoint-probe` と同契約 — absence-is-data 維持）。
+- **`midi_endpoint_probe` example の latent crash 修正（slice 範囲外の実在 crate bug）**: example 内 `interface_id_in` が rf978 §4.1 で確定したのと同じ `midiInMessage(DRV_QUERYDEVICEINTERFACE)` の引数取り違え（`dw1=size, dw2=buf`）を残していた — adapter 側（`src/os/windows.rs`）は rf978 attempt-6 で正順に修正済みだが、example 側の独立実装に未反映だった。`Ruviform MIDI Loopback` のような interface query に応答する midiIn port を列挙した時点で決定的に AV crash（`StringCchCopyW` が `size` を pointer 解釈したアドレスへ write — rf978 attempt-4 の `0x90` と同機構）するため、正順（`dw1=buf, dw2=size`）へ 2 行修正した（Coordinator lease 承認 — 発見経緯・修正内容は `evidence/rf979/verification.md` に記録）。
+- **docs 整合**: `docs/development-environment.md` の lane 表（`test-audio-virtual-endpoint`・`test-midi-virtual-endpoint`）と workflow 節に probe workflow の入口（dispatch 手順・stage/verdict 語彙・artifact の読み方）を追記。`docs/specs/issue-629-provisioning-runbook.md` 追記節を全 stage（`stream-roundtrip`・`midi-loopback`・`midi-endpoint-probe`・`cleanup`・artifact upload を含む）に更新し、「pair は独立 endpoint 2 個で音声経路未実装」の陳腐化記述を修正（kernel loopback は PR #997 で実装済み・rf977 attempt-21 で round-trip Pass）。`docs/designs/issue-629-provisioning-runbook.md` に audio 側の §3.8 を追記し §3.7 の MIDI 記述を `midi-endpoint-probe` stage に同期。
+- **確定条件**: branch ref への `workflow_dispatch` 実走で全 stage の status・`endpoint-probe` の `pair_count=1`・`stream-roundtrip` の `verdict: Pass`・`midi-loopback` の `verdict: Pass`・run conclusion success・artifact upload 成立を記録し、`evidence/rf979/` に台帳と artifact を残す。merge 後の main ref での再実走は統合検証として別途行う。
+
 ## Risks and Trade-offs
 
 | Risk | 影響 | 対応 |

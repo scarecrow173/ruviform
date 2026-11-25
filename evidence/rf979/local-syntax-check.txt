@@ -1,0 +1,6 @@
+PARSE OK: tools/virtual-audio-driver/Invoke-MidiEndpointProbe.ps1
+PARSE OK: tools/virtual-audio-driver/Invoke-EndpointProbe.ps1
+PARSE OK: tools/testsigned-driver/probe-stage.ps1
+PARSE OK: tools/testsigned-driver/midi-winmm-probe.ps1
+PARSE OK: tools/testsigned-driver/TestDevice.ps1
+workflow run-blocks parse: ok=17 ng=0 of 17
