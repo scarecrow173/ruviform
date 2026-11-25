@@ -29,7 +29,7 @@ CLAP 側も `focus_host_window` は private inherent method だが、Windows 側
 | `mise run test ruviform-plugin-clap --features host` | 0 | Pass（82 lib tests + 2 runner bin tests + 3 doctests。L1 E2E integration tests は通常実行では ignored） |
 | `mise run lint-l1-real-plugin` | 0 | Pass（CLAP 修正後に再実施） |
 | `mise run test-l1-real-plugin` | 0 | Pass（CLAP 修正後に再実施。CLAP/VST3 host feature build、lib/bin tests、real plugin/fault/stateful L1 E2E を含む） |
-| `mise exec -- prek run --all-files` | 0 | Pass（VST3 修正後。最終コミット前に再実施する） |
+| `mise exec -- prek run --all-files` | 0 | Pass（VST3/CLAP 修正後と evidence 更新後に実施） |
 
 ## branch CI
 
@@ -51,16 +51,21 @@ branch は `scarecrow173/rf1011-ubuntu-clippy` である。ruviform の `ci.yml`
 
 | 項目 | 値 |
 | --- | --- |
-| 最終 HEAD SHA | Pending |
-| run ID / URL | Pending |
-| run の `headSha` | Pending |
-| 全体 conclusion | Pending |
-| `verify (ubuntu-latest)` | Pending |
-| `l1-real-verify (ubuntu-latest)` | Pending |
+| コード検証対象 SHA | `156b25c1693701c0a30ac27bcd8459d44dc7c11d` |
+| run | `45633428519` — https://github.com/scarecrow173/ruviform/actions/runs/45633428519 |
+| run の `headSha` | `156b25c1693701c0a30ac27bcd8459d44dc7c11d` |
+| 全体 conclusion | `failure` |
+| `verify (ubuntu-latest)` | `success`（job `139272452070`） |
+| `l1-real-verify (ubuntu-latest)` | `success`（job `139272452679`） |
+| ubuntu lane 以外の失敗 | `verify-macos`（job `139272452223`）と `ui-verify-macos`（job `139272452342`）が `cancelled`。GitHub-hosted macOS runner を複数 attempt で acquire できなかったインフラ失敗で、今回のコード差分に起因する compile/test/lint failure ではない。`ci-summary`（job `139282922868`）はこれらを集約して `failure` になった |
+
+run `45633428519` は SHA `156b25c1693701c0a30ac27bcd8459d44dc7c11d` のコードを検証し、Worker の責務である ubuntu 2 job はいずれも `success` だった。この結果を記録する後続 commit は `evidence/rf1011/verification.md` だけの evidence-only commit であり、Rust コードの振る舞いを変えないため、Coordinator の承認により再 dispatch は行わない。したがって、最終 branch HEAD そのものを指す CI run ではなく、最終コード内容を検証した run として読む必要がある。
 
 ## lease 外の追加 clippy 指摘と Coordinator 確認
 
 lease 外の `crates/ruviform-plugin-clap/src/host.rs` に追加指摘があったため、編集前に Coordinator へファイル名・lint・最小修正方針を確認した。Coordinator は同ファイルを rf#1011 の lease に追加し、両 cfg variant を private associated function に揃える方針を承認した。callsite inline + helper 削除の別案は、cfg が呼び出し側へ移って構造が劣るとして不採用になった。
+
+branch CI の結果を evidence に記録すると、その記録 commit 自体が branch HEAD を進める固定点矛盾についても Coordinator に確認した。Coordinator は run `45633428519` をコード内容の最終検証とし、結果を記録する evidence-only commit では再 dispatch を不要と判断した。ただし、この commit が evidence/docs のみであることを diff で検証し、最終 HEAD の CI pass と誤読されないよう SHA 対応を明記する条件が付いた。
 
 ## 統合検証の境界
 
