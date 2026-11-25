@@ -19,7 +19,7 @@ $provisioningObserved = ($probeText -match 'provisioning:\s*CANDIDATES_OBSERVED'
 $midiLoopbackText = ''
 $midiLoopbackLog = "stage-midi-loopback-$os.txt"
 if (Test-Path -LiteralPath $midiLoopbackLog) { $midiLoopbackText = Get-Content -LiteralPath $midiLoopbackLog -Raw -ErrorAction SilentlyContinue }
-$midiLoopbackPass = $midiLoopbackText -match 'test exit=\d+ verdict=Pass'
+$midiLoopbackPass = $midiLoopbackText -match 'verdict:\s*Pass\s+—\s+round-trip observed through real OS ports'
 "  RvfMidi provenance: candidates_observed=$provisioningObserved midi_loopback_pass=$midiLoopbackPass" | Out-Probe $log
 $endpointProvenance = if ($provisioningObserved -and $midiLoopbackPass) { 'rvfmidi-testsigned-driver-probe' } else { 'workflow-unverified-loopback-candidate' }
 $env:RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE = $endpointProvenance
