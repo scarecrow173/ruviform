@@ -241,11 +241,35 @@ if ($Action -eq 'create') {
     }
     $device = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
     if ($Action -eq 'disable') {
-        Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+        try {
+            Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+            "method=Disable-PnpDevice"
+        } catch {
+            $cmdletError = $_.Exception.Message
+            $pnputilOut = @(& pnputil /disable-device "$InstanceId" 2>&1)
+            $pnputilExit = $LASTEXITCODE
+            $pnputilOut | ForEach-Object { "pnputil-disable: $_" }
+            if ($pnputilExit -ne 0) {
+                throw "Disable-PnpDevice failed ($cmdletError); pnputil /disable-device exit=$pnputilExit"
+            }
+            "method=pnputil-disable-device"
+        }
         $after = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
         "disabled=true"
     } else {
-        Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+        try {
+            Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+            "method=Enable-PnpDevice"
+        } catch {
+            $cmdletError = $_.Exception.Message
+            $pnputilOut = @(& pnputil /enable-device "$InstanceId" 2>&1)
+            $pnputilExit = $LASTEXITCODE
+            $pnputilOut | ForEach-Object { "pnputil-enable: $_" }
+            if ($pnputilExit -ne 0) {
+                throw "Enable-PnpDevice failed ($cmdletError); pnputil /enable-device exit=$pnputilExit"
+            }
+            "method=pnputil-enable-device"
+        }
         $after = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
         "enabled=true"
     }

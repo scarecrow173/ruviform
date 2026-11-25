@@ -496,6 +496,20 @@ fn first_virtual_pair(host: &Host) -> Result<Option<Pair>, String> {
 /// open → start → stop recovery probe. Callback count is evidence; the
 /// recovery oracle is the successful control-path sequence after re-enumeration.
 fn reopen_capture_after_recovery(host: &Host, stem: &str) -> Result<String, String> {
+    let mut last_error = "recovery not attempted".to_owned();
+    for _attempt in 0..8 {
+        match reopen_capture_once(host, stem) {
+            Ok(observation) => return Ok(observation),
+            Err(error) => {
+                last_error = error;
+                thread::sleep(Duration::from_millis(500));
+            }
+        }
+    }
+    Err(last_error)
+}
+
+fn reopen_capture_once(host: &Host, stem: &str) -> Result<String, String> {
     let captures = enumerate_devices(host, Direction::Capture)?;
     let Some(candidate) = captures
         .into_iter()
@@ -675,6 +689,13 @@ fn virtual_audio_device_loss_fault() {
         + probe.out_invalidated.load(Ordering::Relaxed);
     let control = control_error_kind.load(Ordering::Relaxed);
     let discontinuities = probe.in_discontinuities.load(Ordering::Relaxed);
+    // Release the invalidated streams before asking the controller to
+    // restore the devnode. PnP removal/disable can otherwise remain pending
+    // behind the open handles and make recovery impossible for a reason
+    // unrelated to endpoint re-enumeration. The observed file is therefore
+    // both the measurement signal and the handles-closed signal.
+    drop(in_stream);
+    drop(out_stream);
     fault_write_phase(
         FAULT_ENV_OBSERVED_FILE,
         &format!(
@@ -683,10 +704,7 @@ fn virtual_audio_device_loss_fault() {
             probe.out_errors.load(Ordering::Relaxed),
         ),
     );
-
     let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(25));
-    drop(in_stream);
-    drop(out_stream);
     let recovery = if restored {
         thread::sleep(Duration::from_millis(700));
         reopen_capture_after_recovery(&host, &capture_stem)
