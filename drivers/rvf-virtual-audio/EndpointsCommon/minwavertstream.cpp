@@ -1231,9 +1231,9 @@ NTSTATUS CMiniportWaveRTStream::SetState
             }
             KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
             // Reset DMA
-            m_llPacketCounter = 0;
             if (m_bCapture)
             {
+                m_llPacketCounter = 0;
                 m_ullPlayPosition = 0;
                 m_ullWritePosition = 0;
                 m_ullLinearPosition = 0;
@@ -1243,17 +1243,15 @@ NTSTATUS CMiniportWaveRTStream::SetState
             {
                 //
                 // Keep every render position clock monotonic across
-                // stop/start — the mod-buffer cursors included. The OS
-                // correlates the reported device position with QPC for
-                // IAudioClock::GetPosition on shared-mode WaveRT; a
-                // position reset on the render stream is extrapolated to
-                // a timestamp that lands before the pre-stop correlation
-                // and surfaces as a callback timestamp regression on the
-                // next run's first callbacks. The packet/OS counters
-                // still reset — they are the buffer-protocol contract —
-                // but all four position fields only feed reporting, and
-                // the mid-buffer mod cursors stay consistent since the
-                // virtual DMA keeps consuming the circular buffer.
+                // stop/start — mod-buffer cursors, linear/presentation
+                // clocks, and the completion-packet counter the OS can
+                // read via GetPacketCount (device position ≈ packets ×
+                // packet size; a reset is extrapolated to a timestamp
+                // before the pre-stop correlation and surfaces as an
+                // IAudioClock callback regression on the next run's
+                // first callbacks). The OS-supplied indices still reset
+                // — they are the buffer-protocol contract — but all
+                // driver-reported position fields only feed reporting.
                 //
             }
 

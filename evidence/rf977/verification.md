@@ -244,3 +244,27 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 **失敗分析**: worker ホストは WDK 非搭載で compile 不可のため、静的確認で捕捉できなかった警告を runner の `/WX` が拾った — `RvfLoopback.cpp:323` で `IsEqualGUIDAligned`（int 返却）を `BOOLEAN` へ代入し `C4242` → `C2220` error。修正: 三項で `? TRUE : FALSE` 化。compile error は本箇所のみ（他翻訳単位は通過）。
 
 **次修正**: 上記 C4242 修正のみ — loopback 機構自体は未実走のため attempt-15 で driver-build→round-trip 全経路を再測定。
+
+### attempt 15 — run 45512530945（branch `feat/977-vaudio-loopback`・SHA `34a30b92`・attempt15-* 同梱）— **loopback 実データ疎通**
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `test_exit=101`・`verdict: Fail` — ただし loopback が **実 PCM を運搬** |
+| cleanup | ok | |
+
+**実走観測**: `observed_rms=0.1449`（expected `0.1446`・ratio 1.002 — 刺激振幅そのもの）・`peak_bits=0x3f474a00`（≈0.78）・`non_finite=0`・`in=48k Mono F32 / out=48k Stereo F32`・`same_clock_domain=true`・`callbacks in=328 out=333`・`out frames/callback min=96 max=480`（可変長）。marker は検出されるようになったが間隔 `0.1104s`（100ms±10% の上限 110ms 超過）・tone share `0.085`（<0.25）。`out regressions=2` は attempt-13 と同数で loopback 非依存。
+
+**失敗分析**: `RvfLoopbackCopyToCapture` が **fill 毎に `PlayBytePos` へ re-anchor** していたため、render/capture 両 stream の独立 position クロックの jitter が fill 境界の dup/skip として現れた。結果として (a) marker burst の実効間隔が伸び、(b) 不連続が帯域外ノイズとして 440Hz share を押し下げた。**次修正**: capture 側に連続読みカーソル（`ReadBytePos`/`ReadPosValid`）を持たせ、drift が半 buffer を超えた時のみ再 anchor。regressions は render stream の position reset（STOP）に発生源を特定 — render stream の `m_ullLinearPosition`/`m_ullPresentationPosition` を STOP を跨いで monotonic 維持へ。
+
+### attempt 16 — run 45513922182（branch `feat/977-vaudio-loopback`・SHA `45b13a49`・attempt16-* 同梱）— **marker+tone oracle 通過**
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `test_exit=101`・`verdict: Fail` — 残 `output timestamp regressions: 2` のみ |
+| cleanup | ok | |
+
+**実走観測**: `oracle marker` 成立（mean interval が ±10% 内へ）・`oracle tone: 440Hz share of power=0.954`（≥0.25 — 連続カーソルで不連続 smear が消失）・`observed_rms` 正常・`non_finite=0`。失敗は `output timestamp regressions: 2` のみに集約。
+
+**失敗分析**: `m_ullLinearPosition`/`m_ullPresentationPosition` の monotonic 化は **regressions に無影響**（依然ちょうど 2）→ cpal `output_timestamp()` が `timestamp.callback` に使う `qpc_position`（`IAudioClock::GetPosition` 直値）の extrapolation base は linear/presentation ではない。残る STOP reset 対象は `KSAUDIO_POSITION` の **`m_ullPlayPosition`/`m_ullWritePosition`（mod cursor）** — audiodg が PlayOffset unwrap で device position を追跡し、position epoch restart が `qpc_position` の backward extrapolation として regressions を生む仮説。**次修正**: render stream では全 position clock（Play/Write/Linear/Presentation）を STOP を跨いで monotonic 維持（packet counter・OS write position は protocol 契約なので reset 維持）。
