@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents / slice 4: PCM WAV backend）"
 created: "2026-11-20"
-updated: "2026-11-24"
+updated: "2026-11-25"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -80,16 +80,28 @@ relations:
 
 # Formal Verification — wire codec + archive + structured + WAV slice（rvf.ipc.v1 / rvf.uitest.v1 / tar / zip / json / yaml / toml / csv / xml / riff-wave）
 
-Issue `scarecrow173/ruviform#806` の D 層検証（property-based
-testing → bounded model checking → 将来の TLA+/Lean 昇格）実装
-spec。slice 1 で unsafe を含まない wire codec に proptest と
-Kani の 2 層を常設し、slice 2 で同じ型を `ruviform-io-archive`
-の TAR/ZIP reader と `ArchiveReadLimits` に、slice 3 で
-`ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader と
-共有 `InputLimits`/`BoundedRead` byte budget に、slice 4 で
-`ruviform-io-wav` の RIFF/WAVE serialization・canonical
-planar `f32`→wire sample 変換・muxer finalize/`WavReceipt`
-契約に適用した。
+> **整合性 note（2026-11-25）**: 本文書は Issue
+> `scarecrow173/ruviform#806` で導入された個別 verification
+> lane・Bound・証跡の inventory/spec である。現行の形式的検証方法論の
+> 正本は `POLICIES.md` §6「形式的検証の原則・検証粒度・検証境界」
+> であり、本書の `D 層` や `proptest → Kani → TLA+/Lean` という表現は
+> 固定昇格路ではなく、rf#806 当時の導入経緯または個別 lane の説明
+> として読む。新規検証では Property・リスク・必要保証から手法と境界を
+> 選ぶ。
+>
+> `ruviform-io-structured` に対する `--no-unwinding-checks` と WAV の
+> `cfg(kani)` 診断 payload 置換は未移行の legacy exception であり、
+> `scarecrow173/ruviform#1015` の再評価対象である。これらを通常の
+> Proof Pass の根拠や新規にコピーしてよい pattern として扱わない。
+
+Issue `scarecrow173/ruviform#806` の実装 spec。slice 1 で unsafe を
+含まない wire codec に proptest と Kani を個別 Property に対応する
+complementary lane として常設し、slice 2 で同じ型を
+`ruviform-io-archive` の TAR/ZIP reader と `ArchiveReadLimits` に、
+slice 3 で `ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader
+と共有 `InputLimits`/`BoundedRead` byte budget に、slice 4 で
+`ruviform-io-wav` の RIFF/WAVE serialization・canonical planar
+`f32`→wire sample 変換・muxer finalize/`WavReceipt` 契約に適用した。
 
 ## 対象と検証する契約
 
@@ -144,10 +156,12 @@ planar `f32`→wire sample 変換・muxer finalize/`WavReceipt`
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
 | `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` の根拠は Kani bound の節を参照） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` は後述の legacy exception） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 
-`test-formal` は常時実行可能な第一層。`test-formal-kani` は
-環境検出つきの第二層で、次の順に解決する。
+`test-formal` は常時実行可能な pure Rust lane、`test-formal-kani` は
+環境検出つきの bounded model checking lane であり、どちらも既存 Property
+に対して選ばれた complementary lane である。`test-formal-kani` は次の順に
+環境を解決する。
 
 1. ネイティブ `cargo kani` があればそれを使う。
 2. なければ `wsl.exe -l -q` でディストロを列挙し、`cargo` と
@@ -226,12 +240,14 @@ boundary matrix として設計した。
   そのため `src/wav.rs` では診断文面の構築を
   `unsupported_sample_format` helper に隔離し、`cfg(kani)` 時は
   `format!` を持たない軽量診断に切り替える（`ErrorKind`・分岐
-  条件は不変 — 診断 payload 文面のみの `cfg` 差分）。これにより
+  条件は不変 — 診断 payload 文面のみの `cfg` 差分）。この置換は
+  `scarecrow173/ruviform#1015` が再評価する legacy exception であり、
+  新規 proof にコピーしてよい pattern ではない。これにより
   非 wire format の `Unsupported` kind は
   `wire_new_non_wire_is_unsupported` が concrete 全 5 variant で
   証明し、membership の exhaustiveness は
   `format_tag_membership_is_wire_formats`、encoder/muxer 実経路は
-  proptest が担保する 3 層構成。
+  proptest が担保する 3 つの補完関係。
 - symbolic `SampleRate::new` は `TimeBase::new` の Euclid `while`
   loop で nested symbolic `%` を生成し、rate を symbolic に含む
   harness は全て参照環境で infeasible だった。rate を使う全
@@ -260,6 +276,10 @@ boundary matrix として設計した。
 
 仮定:
 
+- `kani::assume` は正当な事前条件または明示的な限定領域に限り、
+  充足可能性と必要経路の到達可能性を評価する。Bound を縮める場合は
+  保証差を記録する。個別 harness がこの評価軸を満たすかどうかの
+  再審査は `scarecrow173/ruviform#1015` に委ねる。
 - `kani::assume(len <= STREAM_LEN)` で stream 長を bound 内に制限
   （それ以外は unconditional — 入力を絞る assume は契約を弱める
   ので置かない）。
@@ -274,7 +294,8 @@ boundary matrix として設計した。
   `String` 生成の RawVec unwind コストを回避できる。`Ok` 以外を
   early return するのは入力型の制約であって契約弱化の `assume`
   ではない（`&str` 引数に invalid UTF-8 は型上到達不能）。
-- CSV harness 固有: `CsvReader::new` が呼ぶ `csv_core` の
+- CSV harness 固有の legacy exception（`scarecrow173/ruviform#1015`
+  の再評価対象）: `CsvReader::new` が呼ぶ `csv_core` の
   `build_dfa` は `for c in 0..256` が dominant loop（完全証明には
   unwind >= 257 が必要）。skeleton の byte は全て < 128 であり、
   c >= 128 の DFA row は concrete 入力から到達不能なので、
@@ -286,11 +307,28 @@ boundary matrix として設計した。
   で現実と乖離していれば concrete 期待値（field 内容・error
   kind）の assert が落ちる。それ以外の全 loop（NFA_STATES・
   `for _ in 0..4`・reader 内部）は bound 内で完全に網羅される。
+  この検査無効化に依存する結果は 通常の Proof Pass に含めず、
+  新規 proof にコピーしてよい pattern としない。
 - serde_json の float 復号精度: `float_roundtrip` feature は無効の
   ため、最短表現 decimal が parse 時に 1 ulp ずれる場合がある。
   proptest 側は `json_value_eq`（整数は厳密・float は 1 ulp 以内）
   で「wire 上の意味的同一性」を検証する。これは codec 契約の
   外側にある serde_json 既知の精度限界であり、契約違反ではない。
+
+## Legacy exception（`scarecrow173/ruviform#1015` の再評価対象）
+
+次の 2 件は `POLICIES.md` §6.4 が原則回避または原則禁止とする例外で
+あり、独立した妥当性根拠と review を伴う再評価が完了するまで未移行の
+legacy exception として扱う。
+
+- `ruviform-io-structured` に対するクレート単位の
+  `--no-unwinding-checks` invocation。
+- WAV backend の `cfg(kani)` による診断 payload 置換。
+
+これらを 通常の Proof Pass の根拠や新規 proof にコピー可能な
+pattern として扱わない。本文書内の関連記述は、当時の境界と未証明領域を
+示す inventory であり、例外の承認ではない。proof placement のための
+`#[cfg(kani)] mod proofs` とは区別する。
 
 ## Kani 環境のプロビジョニング
 
@@ -349,18 +387,27 @@ ruviform skill の語彙に従う。環境欠如は `not_run` +
 しない。ローカル検証は変更範囲の検証であり、merge 後の対象 SHA
 に対する必須 CI 結果が統合検証の証拠（本記録はそれを代替しない）。
 
-## 昇格経路（本 slice 外）
+要求状態、verdict、保証種別、対象（実装/モデル/抽象化）、同期状態、
+失敗原因は独立した軸である。Timeout、OOM、環境欠如、プロセスの exit 0、
+CI green を Proof Pass としない。証跡には対象 SHA、tool version、実行
+条件、保証範囲、mutation 証跡を記録し、再検証と対応確認が完了するまで
+検証済み sync commit を進めない。
 
-Kani（bounded model checking）への次の昇格候補:
+## 手法適合候補（固定昇格路ではない）
 
-| 候補 target | 対象 crate / 契約 | Kani が向く理由 |
+以下は tool fit の観点で各手法が適合し得る候補領域の inventory であり、
+採用義務・順序・昇格経路ではない。実際の手法・境界・必要保証は
+`POLICIES.md` §6 に従い Property ごとに決定する。
+
+| 候補 target | 対象 crate / 契約 | Kani が適合し得る理由 |
 | --- | --- | --- |
 | parser family | `ruviform-ui-theme`（`rvf-dtcg-profile.v1` の parse/validate → typed `ResolvedTheme`） | wire codec と同型 — bounded symbolic byte 列に対し「panic なし・エラー分類が安定集合・受理なら構造契約を満たす」を尽きられる。`ruviform-io-archive`（tar/zip header・`limits` の上限 gate）は slice 2 で、`ruviform-io-structured`（JSON/YAML/TOML/CSV/XML reader・`InputLimits`/`BoundedRead` byte budget・`DocumentErrorKind` 安定集合・per-format named limit gate）は slice 3 で、`ruviform-io-wav`（RIFF/WAVE header・`Wire` gate・canonical `f32`→wire 変換・muxer finalize/`WavReceipt`）は slice 4 で本形を適用済み |
 | unsafe 局在コード | `ruviform-math`（SIMD dispatch）、`ruviform-audio-device` / `ruviform-midi-device` / `ruviform-observability` の `#[expect(unsafe_code)]` 局所箇所 | unsafe ブロックの前後条件・pointer/len 不変条件を symbolic に検証 — 通常 test では到達不能な入力経路をカバーできる（harness は unsafe 自体ではなく公開境界の契約を検証する設計にする） |
-| DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすく、全サイズ証明が必要になった段階で Lean へ再昇格できる |
+| DSP helper 算術 | `ruviform-dsp`（biquad/fft/fir/resample/window の係数・index・累積計算）、`ruviform-math` の scalar helper | 「オーバーフロー/除算ゼロ/index 範囲外が起きない」「精度 bound」等の算術不変条件は bounded symbolic 入力で尽きやすい。数学的定理としてより強い保証が必要な個別 Property では Lean が適合し得る |
 
 - ordering / state machine 系（session・dock・close 協議）は
-  TLA+ 候補（`scarecrow173/ruviform#389` 系）。
-- 全サイズの数学的不変条件（DSP・算術）は Lean 4 候補。
+  TLA+ が適合し得る候補（`scarecrow173/ruviform#389` 系）。
+- 全サイズの数学的不変条件（DSP・算術）は Lean 4 が適合し得る候補。
 - 本 slice で確立した「coverage 記録 + sync commit + 1 コマンド
-  再実行 + mutation-fail 証跡」の型を、そのまま昇格先にも適用する。
+  再実行 + mutation-fail 証跡」の型は、固定昇格路ではなく個別に
+  選ばれた新規検証にも適用できる。
