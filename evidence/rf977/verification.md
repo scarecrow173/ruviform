@@ -268,3 +268,27 @@ Issue #977（[Issue #952](https://github.com/scarecrow173/ruviform/issues/952) S
 **実走観測**: `oracle marker` 成立（mean interval が ±10% 内へ）・`oracle tone: 440Hz share of power=0.954`（≥0.25 — 連続カーソルで不連続 smear が消失）・`observed_rms` 正常・`non_finite=0`。失敗は `output timestamp regressions: 2` のみに集約。
 
 **失敗分析**: `m_ullLinearPosition`/`m_ullPresentationPosition` の monotonic 化は **regressions に無影響**（依然ちょうど 2）→ cpal `output_timestamp()` が `timestamp.callback` に使う `qpc_position`（`IAudioClock::GetPosition` 直値）の extrapolation base は linear/presentation ではない。残る STOP reset 対象は `KSAUDIO_POSITION` の **`m_ullPlayPosition`/`m_ullWritePosition`（mod cursor）** — audiodg が PlayOffset unwrap で device position を追跡し、position epoch restart が `qpc_position` の backward extrapolation として regressions を生む仮説。**次修正**: render stream では全 position clock（Play/Write/Linear/Presentation）を STOP を跨いで monotonic 維持（packet counter・OS write position は protocol 契約なので reset 維持）。
+
+### attempt 17 — run 45515209274（branch `feat/977-vaudio-loopback`・SHA `0e131c65`・attempt17-* 同梱）— mod cursor monotonic 化
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — `output timestamp regressions: 2` のみ（attempt-16 と同一） |
+| cleanup | ok | |
+
+**実走観測**: `observed_rms=0.1444`（ratio 0.998）・`tone share=0.957`・marker 正常・`non_finite=0`・`errors out=0` — mod cursor の非 reset 化で新規 glitch/error は発生せず。regressions は依然 **ちょうど 2**。
+
+**失敗分析**: PlayOffset/WriteOffset も monotonic にしても不変 → `qpc_position` の extrapolation base は mod cursor でもない。driver が報告する全 position field（4 種）は monotonic 化済みで不変のため、残る driver-reported 値は `GetPacketCount`（`m_llPacketCounter` — OS が packets×packet_size で device position を導出しうる）。**次修正**: render stream の packet counter も monotonic 維持（capture は GetReadPacket の epoch 依存計算があるため reset 維持）。
+
+### attempt 18 — run 45516401796（branch `feat/977-vaudio-loopback`・SHA `44fd9020`・attempt18-* 同梱）— packet counter monotonic 化・発生源確定
+
+| stage | status | detail |
+| --- | --- | --- |
+| 〜 endpoint-probe | ok | `pair_count=1` 再現 |
+| stream-roundtrip | **error** | `verdict: Fail` — `output timestamp regressions: 2` のみ |
+| cleanup | ok | |
+
+**実走観測**: tone share・marker・rms・errors 全て attempt-16/17 と同値水準 — packet counter 非 reset 化も regressions に無影響（依然ちょうど 2）。
+
+**発生源確定**: render stream の **driver が報告しうる全 position/counter field（PlayOffset・WriteOffset・LinearPosition・PresentationPosition・GetPacketCount）を STOP 跨ぎ monotonic 化しても件数不変** → `qpc_position` の backward extrapolation の base は driver-reported 値ではなく **audiodg（user-mode）自身の position epoch bookkeeping**（OS 自身が供給する packet index の restart — driver から制御不能）。非対称性の裏付け: input stream（同 lifecycle・同 `IAudioClock` API）は `GetReadPacket` が返す `PerformanceCounterValue`（**driver-supplied timestamp**）を使うため regressions=0 — output には該当 API が無く、audiodg が自身の extrapolation に頼る経路でだけ regression が出る。driver 側で打てる手は全て打ったため Coordinator に判断照会（verifier 側 tolerance 許容の要否含む）。
