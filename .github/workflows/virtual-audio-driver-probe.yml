@@ -1,13 +1,15 @@
 name: virtual-audio-driver-probe
 
 # Issue #977 Slice B stage 1 — virtual audio endpoint driver の手動 install
-# 実測 probe。
+# 実測 probe。Issue #978 Slice C で DMus MIDI miniport の midi-loopback
+# stage を、Issue #979 Slice E で midi-endpoint-probe stage を追加済み。
 #
 # 目的: repo 内ソースのみの SysVAD 派生 driver package
 # （drivers/rvf-virtual-audio/）を runner 上で build → test-sign →
 # driver store staging → root-enumerated MEDIA devnode 結合 → MMDevice
-# endpoint 列挙 → endpoint_probe pair 候補検出 → virtual_endpoint
-# streaming round-trip → cleanup まで stage 分解で
+# endpoint 列挙 → endpoint_probe pair 候補検出 → midi_endpoint_probe
+# loopback 候補検出 → virtual_endpoint streaming round-trip →
+# tests/loopback.rs MIDI round-trip → cleanup まで stage 分解で
 # 実測し、どの stage まで成立するかを判定材料として記録する。判定は
 # evidence の解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
 #
@@ -78,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           $os = '${{ matrix.os }}'
-          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "stage-*-$os.txt", "endpoint-probe-$os.txt", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item "vaudio-probe-$os.json", "vaudio-state-$os.json", "stage-*-$os.txt", "endpoint-probe-$os.txt", "midi-endpoint-probe-$os.txt", 'vaudio-pkg', 'vaudio-cert.cer' -Recurse -Force -ErrorAction SilentlyContinue
 
       # endpoint_probe 実行用の Rust toolchain。driver install 経路とは独立
       # に復元し、endpoint-probe stage がいつでも走れる状態にしておく。
@@ -790,6 +792,34 @@ jobs:
           Add-StageRecord -JsonPath $json -Stage endpoint-probe -Status $(if ($probeExit -eq 0) { 'ok' } else { 'error' }) -Detail $detail -ExitCode $probeExit
           exit 0
 
+      # midi_endpoint_probe: WinMM midiIn/midiOut 列挙 + loopback-style
+      # pair 候補検出（endpoint-probe の MIDI 版）。driver install の成否に
+      # 関わらず実施する（未 install でも列挙結果・候補不在は判定材料）。
+      # 候補未検出は観測値であり失敗扱いしない。
+      - name: Stage midi-endpoint-probe
+        if: always()
+        shell: pwsh
+        run: |
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $log = "stage-midi-endpoint-probe-$os.txt"
+          New-Item -ItemType File -Force $log | Out-Null
+
+          $devnodeStatus = Get-StageStatus $json 'devnode-create'
+          "  prerequisite devnode-create: $devnodeStatus" | Out-Probe $log
+
+          $kv = @(& ./tools/virtual-audio-driver/Invoke-MidiEndpointProbe.ps1 -OutFile "midi-endpoint-probe-$os.txt" 2>&1)
+          $kv | ForEach-Object { "  $_" | Out-Probe $log }
+          $probeExit = $LASTEXITCODE
+          $candidates = (($kv | Where-Object { $_ -match '^loopback_candidates=' } | Select-Object -First 1) -replace '^loopback_candidates=', '')
+          $provisioning = (($kv | Where-Object { $_ -match '^provisioning=' } | Select-Object -First 1) -replace '^provisioning=', '')
+          "  probe script exit=$probeExit loopback_candidates=$candidates provisioning=$provisioning" | Out-Probe $log
+
+          $detail = "devnode=$devnodeStatus; probe_exit=$probeExit; $(($kv | Where-Object { $_ -match '=' }) -join '; ')"
+          Add-StageRecord -JsonPath $json -Stage midi-endpoint-probe -Status $(if ($probeExit -eq 0) { 'ok' } else { 'error' }) -Detail $detail -ExitCode $probeExit
+          exit 0
+
       # stream-roundtrip: tests/virtual_endpoint.rs の実走（AC3）— pair
       # candidate の render 側に 440Hz sine + marker burst を出力し、
       # capture 側で marker spacing・level ratio・tonal concentration を
@@ -1062,6 +1092,7 @@ jobs:
             vaudio-state-${{ matrix.os }}.json
             stage-*-${{ matrix.os }}.txt
             endpoint-probe-${{ matrix.os }}.txt
+            midi-endpoint-probe-${{ matrix.os }}.txt
             crashdumps/
             vaudio-pkg/
             vaudio-cert.cer
