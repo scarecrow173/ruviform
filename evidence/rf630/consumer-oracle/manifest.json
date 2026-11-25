@@ -6,8 +6,8 @@
   "created": "2026-11-21",
   "repo": {
     "name": "scarecrow173/ruviform",
-    "shaAtFreeze": "5ea61d83ddfe6eba4849a05b5c9c4962478ef464",
-    "branch": "docs/630-consumer-oracle-manifest-repin"
+    "shaAtFreeze": "1009a94fb0ad6032a65e2d72b1cbe56b19f9b593",
+    "branch": "docs/630-ac7-consumer-oracle-reeval"
   },
   "policyVocabulary": {
     "source": "POLICIES.md §3 — 要求状態と検証結果は別軸",
@@ -243,7 +243,7 @@
         {
           "path": "crates/synvelis-player/src/binding.rs",
           "symbols": ["PluginBindingSession", "check_frame_base"],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         }
       ],
       "issueNamedFixtures": ["test_gain", "test_stateful", "test_fault"],
@@ -266,7 +266,7 @@
         {
           "path": "crates/synvelis-player/src/process_boundary.rs",
           "symbols": ["ProcessBoundarySession", "PrecisionProvenance"],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         }
       ],
       "issueNamedFixtures": ["test_gain", "test_instrument", "test_stateful", "test_fault"],
@@ -289,12 +289,12 @@
         {
           "path": "crates/synvelis-player/src/plugin_state.rs",
           "symbols": ["PluginStatePort", "PluginStateHost"],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         },
         {
           "path": "crates/synvelis-project/src/plugin_state.rs",
           "symbols": ["StateCaptureQuality"],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         }
       ],
       "issueNamedFixtures": ["test_stateful", "test_fault"],
@@ -317,12 +317,12 @@
         {
           "path": "evidence/sv176/pd-01-07-case-definitions.md",
           "symbols": ["PD-01..07", "PluginArtifactEvidence"],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         },
         {
           "path": "evidence/sv176/acceptance-ledger.md",
           "symbols": [],
-          "repoShaVerified": "726f80e76ae7bfed607bef8717cb50fab254fe19"
+          "repoShaVerified": "8585cda756231f4e33a50370b4e1f3cf42c53059"
         }
       ],
       "issueNamedFixtures": ["test_editor"],
@@ -335,7 +335,7 @@
       "consumerRun": {
         "disposition": "external-owner",
         "owner": "scarecrow173/synvelis#176 + scarecrow173/ruviform#631",
-        "note": "実 GPUI Window Runner・Native Dock 画素/Focus/Resize/Tab/2Window/ReDock/Crash/RT の PD-01..07 実走は sv#176（製品受入）と #631（real-dock lane）の責務 — freeze 済み ledger も Real OS/Real Plugin 行を NotRun のまま保持"
+        "note": "実 GPUI Window Runner・Native Dock 画素/Focus/Resize/Tab/2Window/ReDock/Crash/RT の PD-01..07 実走は sv#176（製品受入）と #631（real-dock lane）の責務 — freeze 済み ledger も Real OS/Real Plugin 行（行 1/7）を NotRun のまま保持。sv#176 S1（synvelis PR #640・merge commit `71275d85747c05741787e8b20f0f7f3c4e51f287`）で headless real-ABI leg は実走済み（synvelis @ `8585cda7` で出典確認）: upstream `rf631.plugin-dock` HEADLESS_MATRIX では `artifact`/`host-lifecycle`/`session-lifecycle`/`host-terminate`/`open-or-degrade` = pass（実 VST3 test_gain バイナリ in-process — fake driver 行 `view-mount`/`command-receipt` の pass とは区別）・`editor-attach` = unsupported（test_gain は editor 面を持たない — `createView` null の defined refusal で fake pass ではない）・`dock-pixels` = not_run（VisualCapture 不在）。product/CLAP legs は `clap-artifact`/`clap-host-lifecycle` = pass（実 CLAP バイナリ）・product dock 3 leg（`product-dock-test-gain-open`/`product-dock-test-editor-attach`/`product-dock-clap-test-gain-open`）= unsupported（いずれも defined refusal — pass 相当ではない）。出典: `evidence/sv176/s1-headless-probe.{jsonl,md}`・`evidence/sv176/s1-legs/*.jsonl`・`crates/synvelis-app/tests/plugin_dock_probe.rs`（7 tests pass）。これらは in-process real-ABI の headless 結果であり、Native Dock/実 OS の PD-01..07 受入判定ではない — `disposition` は external-owner を維持し、本 manifest は Pass/Fail の consumer 判定を付けない"
       }
     },
     {
@@ -357,13 +357,13 @@
     }
   ],
   "dependencyNonContamination": {
-    "claim": "Ruviform Test Plugin 自体は AudioLens（および Synvelis）への新依存を強制しない",
+    "claim": "Ruviform Test Plugin 自体は AudioLens（および Synvelis）への新依存を強制しない — 「強制しない」の証明は構造半分（ruviform production DAG が fixture crate に非依存）と実測半分（consumer lock grep）の 2 半分で、consumer 側の自主採用（dev-dep 経路の test-only 利用）は強制の否定にならない",
     "structuralHalf": {
-      "fact": "両 test crate は test-only 宣言済みで、production crate は test fixture crate に非依存（README の Independence boundary / dev-dependency のみ）",
-      "measurement": "grep -n \"ruviform-plugin-test\\|ruviform-plugin-dock-test\" ../synvelis/Cargo.lock ../audio-lens/Cargo.lock → 両 consumer Cargo.lock に非含有（exit 1 = 期待値）。実行記録は evidence/rf630/consumer-oracle-verification.md",
+      "fact": "両 test crate は test-only 宣言済みで、ruviform の production crate は test fixture crate に非依存（README の Independence boundary / dev-dependency のみ）。consumer への fixture 取り込みを強制する仕組みは ruviform 側に存在しない",
+      "measurement": "grep -n \"ruviform-plugin-test\\|ruviform-plugin-dock-test\" ../synvelis/Cargo.lock ../audio-lens/Cargo.lock を再実施（2026-11-25）。audio-lens `Cargo.lock` は 3 crate 名とも非含有（exit 1 = 期待値 — AC7 の AudioLens 節「AudioLens への新依存を強制しない」は不変に成立）。synvelis `Cargo.lock` は fixture 3 crate 名を含有（exit 0）— ただし経路は consumer の自主採用: sv#176 S1（synvelis PR #640・merge commit `71275d85747c05741787e8b20f0f7f3c4e51f287`）で `crates/synvelis-app/Cargo.toml` の `[dev-dependencies]` にのみ追加され（同ファイル 41-53 行・コメントに由来明記）、`[dependencies]`（production DAG）には fixture crate 非含有であることを同ファイルで確認。dev-dep 採用は ruviform による強制ではなく synvelis 側の headless probe（sv#176 S1）が必要とした test-only 経路 — production DAG 非依存（構造半分・維持）と AudioLens 節（実測半分・不変）を分離して記録する。実行記録は evidence/rf630/consumer-oracle-verification.md",
       "consumerPinsAtMeasurement": {
-        "synvelis": "726f80e76ae7bfed607bef8717cb50fab254fe19（ruviform resolved rev cd4213a1d665600f6adfefa0c3a90f2be9b4e4ce）",
-        "audio-lens": "04be32dcfb802ccb4f3e40f11ebebe8b1d3f2f03（ruviform resolved rev e4c9f6f0715da3ac479f8c437d21a021327e51da）"
+        "synvelis": "8585cda756231f4e33a50370b4e1f3cf42c53059（ruviform resolved rev 20dc41f71c47674b3e51d1eb0921124b94f8bfaf — fixture 3 crate を synvelis-app dev-dep で含有・production DAG 非含有）",
+        "audio-lens": "7fd87add13e24858f6677d9c2dea135bf581ebe6（ruviform resolved rev e4c9f6f0715da3ac479f8c437d21a021327e51da — fixture crate 非含有）"
       }
     }
   },
@@ -383,9 +383,10 @@
     },
     {
       "id": "ac4-real-window-dcomp",
-      "disposition": "gate",
-      "summary": "AC4 の実 Window/DComp 既知 Fail 再現・解消判定 — 修正 Issue 着地待ちの外部 gate（既知 soft）",
-      "owner": "scarecrow173/ruviform#532"
+      "disposition": "resolved",
+      "summary": "AC4 の実 Window/DComp 既知 Fail 再現・解消判定 — `scarecrow173/ruviform#532` は CLOSED（2026-11-21T11:35:15Z・`gh issue view` 実測）。ac-inventory AC4 行は Pass 判定済み: VST3 leg 32 case + CLAP leg 14 case 全 pass（`plugin-dock-real-scenario.jsonl`/`plugin-dock-real-clap.jsonl` @ `41b8a6ec`）・class A/B 修正実走 + class C 確定機序の `expected_outcome` 記録で DComp 既知 Fail の再現・解消判定に使用可能。`clap-output-event-drain` の先例どおり追跡のため entry は残す",
+      "owner": "scarecrow173/ruviform#532",
+      "resolvedEvidence": "evidence/rf630/ac-inventory.md（AC4 行 — Pass・両 lane 実走全 pass）"
     },
     {
       "id": "consumer-run-legs",
