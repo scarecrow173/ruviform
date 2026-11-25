@@ -402,7 +402,17 @@ stage 分解で実施する:
     `Ruviform Cable Output` の capture に届く真の audio round-trip（Issue
     #977 stage 2 — rf977 attempt-21 で Pass 実績）。mic consent provisioning
     （DeviceAccess/ConsentStore/AppPrivacy + AudioEndpointBuilder/Audiosrv
-    restart）も本 stage で実施する。
+    restart）も本 stage で実施する。**verdict の読み方**: pass 時の detail
+    は `verdict=no-verdict-line` になるのが正常 — cargo test は passing
+    test の stdout/stderr を capture して表示しないため、test が emit した
+    `verdict: Pass` 行は artifact ログに表面化しない（`verdict:` 行が
+    表面化するのは Fail/NotRun 経路のみ — 失敗・異常時に capture 内容が
+    出力される）。実走判定は `test result: ok. 1 passed` と
+    `finished in X.XXs` の非ゼロ秒数で読む — endpoint 不在の vacuous
+    early return は `finished in 0.00s` になる（rf977 attempt-14 の
+    観測）ため、非ゼロ秒数 + 同一 run の `endpoint-probe` `pair_count=1`
+    で真の round-trip 実走と判断する（rf977 attempt-21・rf979 attempt-1
+    ともに 3.48s）。
 12. `midi-loopback` — `tests/loopback.rs`（`cargo test -p
     ruviform-midi-device --test loopback -- --ignored --test-threads=1`）を
     実走し、`Ruviform MIDI Loopback` の bidirectional name match pair 検出と
@@ -437,7 +447,12 @@ stage 分解で実施する:
   test-midi-virtual-endpoint` の入力として使う — 本 workflow が両 lane の
   実走まで束ねるため、1 回の dispatch で provisioning → probe → lane 実走 →
   evidence upload が通る（Issue #979 の受入構成）。
-- 判定: lane stage の `verdict: Pass` は `verdict` 行を detail に持つ stage
-  record で確認する。未 provisioning 環境では verifier 自身が
+- 判定: lane stage の成否は stage record detail で確認するが、語彙は
+  stage ごとに異なる。`midi-loopback` は cdb 経由で test 出力が透過する
+  ため pass 時も `verdict: Pass — …` 行が detail に残る。一方
+  `stream-roundtrip` は cargo test の capture により pass 時
+  `verdict=no-verdict-line` となるのが正常で、`test result: ok. 1 passed`
+  + `finished in` の非ゼロ秒数（vacuous early return は 0.00s）で実走を
+  判断する（11 項参照）。未 provisioning 環境では verifier 自身が
   `verdict: NotRun — NOT_PROVISIONED` を返し、stage は `ok` 記録のまま
   完走する（fail-closed — 未実行・不合格を Pass にしない）。
