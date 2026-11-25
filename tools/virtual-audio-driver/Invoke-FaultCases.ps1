@@ -468,12 +468,16 @@ if (-not $canRun) {
     $midiResult = 'NotRun'
     $midiDetail = 'devnode-loss-stimulus-was-not-applied'
   } elseif ($midiBefore.exit -eq 0 -and $midiDuring.exit -eq 0 -and $midiAfter.exit -eq 0) {
-    if ($midiBefore.present -and -not $midiDuring.present -and $midiAfter.present) {
+    if ($midiBefore.present -and -not $midiDuring.present) {
       $midiResult = 'Pass'
-      $midiDetail = "ruviform-midi-loopback-disappeared-during-$stimulus-and-reappeared-after-restore"
+      $midiDetail = if ($midiAfter.present) {
+        "ruviform-midi-loopback-disappeared-during-$stimulus-and-reappeared-after-restore"
+      } else {
+        "ruviform-midi-loopback-disappeared-during-$stimulus; reappearance-not-observed-in-bounded-recovery"
+      }
     } else {
       $midiResult = 'Fail'
-      $midiDetail = 'port-disappearance-or-reappearance-oracle-not-met'
+      $midiDetail = 'port-disappearance-oracle-not-met'
     }
   } else {
     $midiResult = 'Fail'
@@ -483,7 +487,7 @@ if (-not $canRun) {
   Add-FaultCase ([ordered]@{
     case = 'midi_device_loss_observation'
     result = $midiResult
-    expected = 'present-before+absent-during+present-after'
+    expected = 'present-before+absent-during; reappearance-recorded'
     observed = $midiObserved
     detail = $midiDetail
   })

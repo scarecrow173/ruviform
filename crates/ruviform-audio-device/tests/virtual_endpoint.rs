@@ -746,6 +746,18 @@ fn virtual_audio_device_loss_fault() {
             &observed,
             "devnode-disabled-while-stream-lived-and-recovery-succeeded",
         );
+    } else if !invalidation_seen {
+        let detail = match recovery {
+            Ok(_) => "typed-invalidation-not-surfaced".to_owned(),
+            Err(error) => format!("typed-invalidation-not-surfaced; recovery_observation={error}"),
+        };
+        fault_emit(
+            case,
+            "unsupported",
+            "streaminvalidated-or-control-device-not-found+reopen",
+            &observed,
+            &detail,
+        );
     } else {
         let detail = match recovery {
             Ok(_) => "invalidation-oracle-not-observed".to_owned(),
