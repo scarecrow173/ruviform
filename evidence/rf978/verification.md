@@ -53,10 +53,37 @@ MIDI miniport には WDK 8.1 "DirectMusic UART Driver Sample"（DMusUART — `ur
 | InstallSubdevice 照合 | common.h:580 signature + common.cpp:1764 impl | **Pass**（引数順一致・MiniportPair NULL は callback forward のみで安全） |
 | Cargo `check`/`lint`/`test`/`build`・`*-full` | — | **NotApplicable**（`crates/` 変更なし — 編集境界外） |
 | driver kernel build / 署名 / install / MIDI 列挙 / round-trip | — | **NotRun**（worker ホストに WDK/MSBuild 未搭載 — `Windows Kits\10\Include` に `km/` 不在を確認。runner 上で判定） |
-| runner 実走（branch `workflow_dispatch`） | — | **NotRun**（§2 — push 後に実施し結果を §4 に追記） |
+| runner 実走（branch `workflow_dispatch`） | — | **Done**（attempt 1-4 — §4。driver-build/install/endpoint-probe/stream-roundtrip **Pass**、midi-loopback は §4.1 の crate latent bug で test crash） |
 
 補助証拠: 同ディレクトリの `local-syntax-check.txt`・`local-inf-check.txt`。ローカル実行ログは `actions.jsonl`。
 
 ## 4. runner 実走記録
 
-（push 後の `workflow_dispatch` 結果をここへ attempt ごとに追記する）
+| attempt | run | stage 結果 | 観測 |
+| --- | --- | --- | --- |
+| 1 | [45530647095](https://github.com/scarecrow173/ruviform/actions/runs/45530647095) | driver-build / install / endpoint-probe / stream-roundtrip / midi-loopback **全 step green** | `midi-loopback` は `test_exit=5; verdict=no-verdict-line` — test process が `STATUS_ACCESS_VIOLATION (0xc0000005)` で crash し verdict 未到達。当時の mapping は `^Fail` のみ error 化するため crash が `ok` に丸められた（後続 attempt で fail-closed 化） |
+| 2 | [45531712361](https://github.com/scarecrow173/ruviform/actions/runs/45531712361) | midi-loopback `error`（正直化） | 子プロセス WinMM probe 追加 — 全 call succeed、`Ruviform MIDI Loopback` が in/out 両方向で列挙・open/send/close・loopback send 経路まで完動を確認。**ただし probe の DRV_QUERYDEVICEINTERFACE 定数が誤値（1006/1007、正値 2060/2061）で interface query だけは未実測だった** |
+| 3 | [45533730791](https://github.com/scarecrow173/ruviform/actions/runs/45533730791) | midi-loopback `error` | CALLBACK_FUNCTION+MIDI_IO_STATUS+MIDIHDR probe 追加 — **`callback count=3 lastMsg=0x3c3 (MM_MIM_DATA) lastP1=0x3c80`（送付した note-off byte が render→capture FIFO 経路を通り user-mode callback に届いた）＝ driver loopback が end-to-end で機能する決定的証拠**。test は依然 `enumerated:` 未到達で crash。LocalDumps/WER では dump 取得できず |
+| 4 | [45534521149](https://github.com/scarecrow173/ruviform/actions/runs/45534521149) | midi-loopback `error` | test exe を cdb 直下で実行し **crash stack を確定**（下記 §4.1）。crash は `interface_id()` → `midiInMessage(index, DRV_QUERYDEVICEINTERFACE=2060)` 内部の `winmmbase!StringCchCopyW` — write to `0x90` |
+| 5 | [45535388527](https://github.com/scarecrow173/ruviform/actions/runs/45535388527) | midi-loopback `error`（test は依然 crash — crate bug 未修正のため） | probe に正しい定数（2060/2061）と正しい引数順の DRV query を実装 — **device-index-as-handle で `rc=0`・`\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback` を取得**（§4.1 の引数取り違えを対照証明）。open-handle 版は `rc=8` NOTSUPPORTED（workaround として不適 — index 経路のみ応答）。callback round-trip も再現（`count=3 lastMsg=0x3c3 lastP1=0x3c80`） |
+
+### 4.1 crash root cause（attempt-4 cdb + attempt-5 probe で確定）
+
+```
+winmmbase!StringCchCopyW+0x2e        <- AV: Attempt to write to address 0x90
+winmmbase!mregHandleInternalMessages+0x1e5
+winmmbase!midiIDMessage+0x10c
+winmmbase!midiInMessage+0x57
+loopback!interface_id                <- midiInMessage(index, DRV_QUERYDEVICEINTERFACE, ...)
+loopback!enumerate_at -> input_ports -> select_loopback_pair
+```
+
+- `crates/ruviform-midi-device` `os::windows::interface_id()`（`windows.rs`）は `DRV_QUERYDEVICEINTERFACE` を **`dw1=size, dw2=buf` の取り違え順**で呼ぶ。WinMM 契約（および midir 実装）は `dw1=buf pointer, dw2=size`。
+- winmmbase は `dw1` を宛先 pointer として `StringCchCopyW` するため、**AV address `0x90` = interface string byte size 144 が pointer 解釈されたもの**。attempt-5 で正しい引数順の同 query が `rc=0` + interface path（72 UTF-16 units = 144 bytes = `0x90` で整合）を返すことを対照証明済み。
+- latent 条件: `SIZE` query が 0 を返す port（legacy / interface 未応答）は early-return で crash に到達しない。interface を応答する real WDM device（本 port を含む）が input に存在した時点で確定 crash — OS/driver 非依存の純粋な crate bug。`resolve_index` も同じ `interface_id` を通るため同じ crash 経路を持つ。
+- **修正は `crates/**`（本 task の編集境界外）**: `interface_id` の `DRV_QUERYDEVICEINTERFACE` 呼出しで `dw1`/`dw2` を正順に入れ替える（`buf.as_mut_ptr() as usize, size as usize`）— 1 行修正。
+- 付随観測: open-handle 版の同 query は `rc=8` NOTSUPPORTED（「open してから query」の workaround は不適）。device-id-as-handle 経路のみ応答する — midir と同じ呼出し形態が正しい。
+
+### 4.2 driver 機能判定
+
+`midiIn`/`midiOut` 両方向の `Ruviform MIDI Loopback` 同名列挙・open/close・`midiOutShortMsg` 送信・**render→capture FIFO 経由の callback 受信（note byte 往復、attempt-3/5 で再現）**・**DRV_QUERYDEVICEINTERFACE（正しい引数順）での interface path 応答** まで probe で完動を確認 — WinMM 契約上の deliverable（同名 pair 列挙 + round-trip 成立 + interface-id 応答）は driver 側で達成済み。`tests/loopback.rs` が verdict に到達できないのは §4.1 の crate 引数取り違え bug による（`crates/**` は編集境界外 — coordinator 判断へ報告）。

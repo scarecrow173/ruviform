@@ -223,16 +223,17 @@ if ($loopbackIn.Count -gt 0) {
     }
 }
 
-# ---- device-index-as-handle DRV_QUERYDEVICEINTERFACE — expected-crash repro ----
-# cdb 解析で確定: tests/loopback.rs の interface_id() が
-# midiInMessage(index-as-handle, DRV_QUERYDEVICEINTERFACESIZE) を叩くと
-# winmmbase!mregHandleInternalMessages → StringCchCopyW(→0x90) で
-# AV する（Server 2025 winmmbase の latent NULL-deref — real WDM device
-# のみ発火、GS のような softsynth は interface 不在で早期 return）。
-# この section が最後 — crash 時はこの step 行が log の末尾になる。
+# ---- device-index-as-handle DRV_QUERYDEVICEINTERFACE — crate bug の対照実験 ----
+# cdb 解析 + 本 probe で確定した真因: tests/loopback.rs の interface_id() は
+# midiInMessage(index, DRV_QUERYDEVICEINTERFACE, dw1=size, dw2=buf) と
+# dw1/dw2 を取り違えて呼ぶ（正: dw1=buf, dw2=size — midir と同じ）。winmmbase は
+# dw1 を宛先 pointer として StringCchCopyW するため size 値（=0x90/144byte）
+# 宛への AV になる。本 section は正しい引数順で同 query を発行し、
+# interface path が普通に返ることを対照証明する（attempt-5 で実測 rc=0、
+# '\\?\root#media#0000#{...}\midiloopback' 取得済み）。
 if ($loopbackIn.Count -gt 0) {
     $i = $loopbackIn[0]
-    Step "midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle $i] (expected crash)"
+    Step "midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle $i] (correct arg order)"
     $sizeBuf = [System.Runtime.InteropServices.Marshal]::AllocHGlobal(8)
     [System.Runtime.InteropServices.Marshal]::WriteInt64($sizeBuf, 0)
     $rc = [WinMM]::midiInMessage([IntPtr]$i, [WinMM]::DRV_QUERYDEVICEINTERFACESIZE, $sizeBuf, [IntPtr]::Zero)
