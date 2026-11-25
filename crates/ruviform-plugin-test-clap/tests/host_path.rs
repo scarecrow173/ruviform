@@ -16,13 +16,22 @@
 
 use std::path::PathBuf;
 
-use ruviform_audio_core::{PlanarBufferView, PlanarBufferViewMut, SampleRate};
-use ruviform_media_core::{MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey};
+use ruviform_audio_core::{
+    AudioFormat, ChannelLayout, PlanarBufferView, PlanarBufferViewMut, SampleFormat, SampleRate,
+};
+use ruviform_audio_plugin_bridge::{AttachConfig, AttachError, attach};
+use ruviform_media_core::{
+    DeliveryPolicy, MidiChannel, MidiEvent, MidiGroup, MidiKind, NoteKey, ScheduleBudget, TimeBase,
+};
 use ruviform_plugin_clap::host::ClapLibrary;
 use ruviform_plugin_core::{
-    ErasedPlugin, Event, EventKind, EventList, GuiFocusTarget, GuiKeyDirection, GuiKeyEvent,
-    GuiModifiers, GuiPopupKind, GuiSize, HostError, HostInput, HostOutput, ParamEvent, ParamId,
-    ParamValue, ParentLease, PluginFactory, ProcessConfig, ProcessContext, ProcessResult,
+    BusDescriptor, BusDirection, BusRole, ErasedPlugin, Event, EventKind, EventList,
+    GuiFocusTarget, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiSize, HostError,
+    HostInput, HostOutput, ParamEvent, ParamId, ParamValue, ParentLease, PluginFactory,
+    ProcessConfig, ProcessContext, ProcessResult,
+};
+use ruviform_plugin_host::{
+    BusReport, EndpointBounds, HostCommand, HostReply, InProcessHost, PluginHandle, PluginHost,
 };
 
 const FRAMES: usize = 64;
@@ -129,6 +138,173 @@ fn drive_block(plugin: &mut dyn ErasedPlugin, events: &[Event]) -> (ProcessResul
         )
     };
     (result, [out_left, out_right])
+}
+
+/// `test_gain`'s expected neutral bus table — the ABI projection
+/// keeps input before output, both stereo Main. ABI bus names are
+/// dynamic while `BusDescriptor::name` is `'static`, so v1 honestly
+/// projects every name as the empty string (the adapter rustdoc's
+/// documented limitation).
+const EXPECTED_GAIN_BUSES: [BusDescriptor; 2] = [
+    BusDescriptor {
+        direction: BusDirection::Input,
+        layout: ChannelLayout::Stereo,
+        name: "",
+        role: BusRole::Main,
+        enabled: true,
+    },
+    BusDescriptor {
+        direction: BusDirection::Output,
+        layout: ChannelLayout::Stereo,
+        name: "",
+        role: BusRole::Main,
+        enabled: true,
+    },
+];
+
+/// The consumer-declared stereo input/output table used by the
+/// attach regression test. Names are consumer-side graph metadata;
+/// the cross-check intentionally compares direction, role and layout.
+fn consumer_buses() -> Vec<BusDescriptor> {
+    vec![
+        BusDescriptor {
+            direction: BusDirection::Input,
+            layout: ChannelLayout::Stereo,
+            name: "In",
+            role: BusRole::Main,
+            enabled: true,
+        },
+        BusDescriptor {
+            direction: BusDirection::Output,
+            layout: ChannelLayout::Stereo,
+            name: "Out",
+            role: BusRole::Main,
+            enabled: true,
+        },
+    ]
+}
+
+fn scan_reply(descriptors: HostReply) -> Vec<ruviform_plugin_core::PluginDescriptor> {
+    match descriptors {
+        HostReply::Scanned(descriptors) => descriptors,
+        _ => panic!("Scan returns Scanned"),
+    }
+}
+
+fn instantiate_reply(reply: &HostReply) -> PluginHandle {
+    match reply {
+        HostReply::Instantiated { handle } => *handle,
+        _ => panic!("Instantiate returns Instantiated"),
+    }
+}
+
+/// Register/Scan/Instantiate/Initialize `test_gain` through the
+/// production host bridge and the neutral in-process host — the
+/// rf#630 reproduction path, without replacing the real fixture by a
+/// mock plugin.
+fn initialized_gain_inprocess_host() -> (InProcessHost, PluginHandle) {
+    let library = load_library();
+    let factories = library.factories();
+    let mut host = InProcessHost::new();
+    for factory in factories {
+        host.register_factory(Box::new(factory));
+    }
+    let descriptors = scan_reply(host.execute(HostCommand::Scan).unwrap());
+    let gain_id = descriptors
+        .iter()
+        .find(|descriptor| descriptor.name == "test_gain")
+        .expect("the fixture ships test_gain")
+        .id
+        .to_owned();
+    let handle = instantiate_reply(
+        &host
+            .execute(HostCommand::Instantiate { plugin_id: gain_id })
+            .unwrap(),
+    );
+    host.execute(HostCommand::Initialize { handle }).unwrap();
+    (host, handle)
+}
+
+/// The same real production registration/instantiate path through the
+/// composite `PluginHost`, then advanced to `Processing` so
+/// `attach()` can reach endpoint preparation.
+fn processing_gain_plugin_host() -> (PluginHost, PluginHandle, ProcessConfig) {
+    let library = load_library();
+    let factories = library.factories();
+    let mut host = PluginHost::new();
+    for factory in factories {
+        host.register_factory(Box::new(factory));
+    }
+    let descriptors = scan_reply(host.execute(HostCommand::Scan).unwrap());
+    let gain_id = descriptors
+        .iter()
+        .find(|descriptor| descriptor.name == "test_gain")
+        .expect("the fixture ships test_gain")
+        .id
+        .to_owned();
+    let handle = instantiate_reply(
+        &host
+            .execute(HostCommand::Instantiate { plugin_id: gain_id })
+            .unwrap(),
+    );
+    host.execute(HostCommand::Initialize { handle }).unwrap();
+    let config = ProcessConfig::new(SampleRate::new(48_000).unwrap(), 1, FRAMES_U32).unwrap();
+    host.execute(HostCommand::Activate { handle, config })
+        .unwrap();
+    host.execute(HostCommand::StartProcessing { handle })
+        .unwrap();
+    (host, handle, config)
+}
+
+/// rf#630 reproduction: the real `test_gain` fixture's stereo Main
+/// input/output ABI declaration reaches neutral enumeration as a
+/// `Reported` table, not the pre-fix empty default that looked like
+/// "declared none".
+#[test]
+fn reports_gain_bus_table_through_inprocess_host() {
+    let (mut host, handle) = initialized_gain_inprocess_host();
+    assert_eq!(
+        host.buses(handle).unwrap(),
+        BusReport::Reported(EXPECTED_GAIN_BUSES.to_vec())
+    );
+}
+
+/// rf#1012 regression: with the fixture's real bus table projected,
+/// consumer-declared stereo input/output passes bridge bus validation
+/// and reaches endpoint preparation. The current in-process real ABI
+/// adapters expose no `create_sendable` endpoint capability, so
+/// `EndpointUnavailable` is the defined later-stage rejection today;
+/// success is accepted for the future endpoint-capable implementation.
+/// The rejected shape this test protects is
+/// `AttachError::Bus(BusError::MissingPort)`.
+#[test]
+fn attach_gain_bus_validation_reaches_endpoint_preparation() {
+    let (mut host, handle, config) = processing_gain_plugin_host();
+    let attach_config = AttachConfig {
+        buses: consumer_buses(),
+        port_format: AudioFormat {
+            sample_rate: SampleRate::new(48_000).unwrap(),
+            layout: ChannelLayout::Stereo,
+            sample_format: SampleFormat::F32,
+        },
+        bounds: EndpointBounds {
+            max_frames: FRAMES_U32,
+            channels: 2,
+        },
+        process_config: config,
+        frame_base: TimeBase::sample_rate(48_000).unwrap(),
+        policy: DeliveryPolicy::Exact,
+        budget: ScheduleBudget::default(),
+        input: None,
+    };
+    let result = attach(&mut host, handle, &attach_config);
+    if let Err(AttachError::Bus(error)) = &result {
+        panic!("bus validation must pass the real stereo table, got {error}");
+    }
+    match result {
+        Ok(_) | Err(AttachError::Host(HostError::EndpointUnavailable)) => {}
+        Err(error) => panic!("attach must reach endpoint preparation, got {error}"),
+    }
 }
 
 /// Discovery through the production path: `ClapLibrary::load` scans

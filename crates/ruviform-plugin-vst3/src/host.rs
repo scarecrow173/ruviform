@@ -167,7 +167,16 @@
 //! - `IComponent::activateBus`/`IAudioProcessor::setBusArrangements`
 //!   are never called — the bridge drives the plugin's *default-active*
 //!   bus layout only; a plugin requiring non-default bus state is
-//!   outside the v1 boundary.
+//!   outside the v1 boundary. The public bus table is the faithful
+//!   default topology projection, not a multi-bus processing
+//!   capability claim: the RT path below still accepts exactly one
+//!   input bus and one output bus. ABI bus names are dynamic and do
+//!   not satisfy `BusDescriptor.name`'s `'static` ownership contract,
+//!   so v1 projects every name as the empty string (a documented
+//!   limitation, not a lossless metadata projection). A VST3 bus has
+//!   no "can be activated" flag distinct from presence in the table;
+//!   `enabled` is therefore `true` for every projected bus and
+//!   `kDefaultActive` is not misread as a capability bit.
 //! - `ProcessData.outputParameterChanges`/`outputEvents` carry the
 //!   plugin→host process direction (Issue #253): `prepare` builds a
 //!   writable mirror of the declared-param queue set
@@ -212,21 +221,23 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use libloading::Library;
+use ruviform_audio_core::{ChannelLayout, SpeakerMask};
 use ruviform_media_core::{Rounding, TimeBase, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STATE_BYTES};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind,
-    EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind,
-    GuiRequest, GuiRequestSink, GuiRequestVerdict, GuiSize, HostError, ParamEvent, ParamFlags,
-    ParamId, ParamInfo, ParamNotice, ParamNoticeQueue, ParentLease, Plugin, PluginDescriptor,
-    PluginFactory, PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult,
-    ProcessStatus, RescanAspects, TransportInfo, erase,
+    BufferView, BufferViewMut, BusDescriptor, BusDirection as NeutralBusDirection, BusRole,
+    DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event, EventKind, EventList, GuiFocusTarget,
+    GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiModifiers, GuiPopupKind, GuiRequest,
+    GuiRequestSink, GuiRequestVerdict, GuiSize, HostError, ParamEvent, ParamFlags, ParamId,
+    ParamInfo, ParamNotice, ParamNoticeQueue, ParentLease, Plugin, PluginDescriptor, PluginFactory,
+    PluginProcessor, PrepareError, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus,
+    RescanAspects, TransportInfo, erase,
 };
 use vst3::Steinberg::IBStream_::IStreamSeekMode_::{kIBSeekCur, kIBSeekEnd, kIBSeekSet};
 use vst3::Steinberg::KeyModifier_::{kAlternateKey, kCommandKey, kControlKey, kShiftKey};
 use vst3::Steinberg::Vst::{
-    AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, Chord,
-    Event as VstEvent, FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait,
+    AudioBusBuffers, AudioBusBuffers__type0, BusDirection, BusDirections_, BusInfo, BusTypes_,
+    Chord, Event as VstEvent, FrameRate, IAttributeList, IAttributeList_iid, IAttributeListTrait,
     IAudioProcessor, IAudioProcessorTrait, IComponent, IComponentHandler, IComponentHandler2,
     IComponentHandler2Trait, IComponentHandlerTrait, IComponentTrait, IConnectionPoint,
     IConnectionPointTrait, IEditController, IEditControllerTrait, IEventList, IHostApplication,
@@ -234,7 +245,9 @@ use vst3::Steinberg::Vst::{
     IParamValueQueueTrait, IParameterChanges, IParameterChangesTrait, MediaTypes_, ParamID,
     ParamValue, ParameterInfo, ParameterInfo_::ParameterFlags_,
     ProcessContext as VstProcessContext, ProcessContext_, ProcessData, ProcessModes_, ProcessSetup,
-    RestartFlags_, String128, SymbolicSampleSizes_, TChar, ViewType,
+    RestartFlags_, SpeakerArr, SpeakerArrangement, String128, SymbolicSampleSizes_, TChar,
+    ViewType, kSpeakerC, kSpeakerL, kSpeakerLfe, kSpeakerLs, kSpeakerR, kSpeakerRs, kSpeakerSl,
+    kSpeakerSr,
 };
 use vst3::Steinberg::{
     FUnknown, FUnknown_iid, IBStream, IBStreamTrait, IPlugFrame, IPlugFrameTrait, IPlugView,
@@ -281,6 +294,12 @@ const MAX_SCAN_CHANNELS: usize = 64;
 /// Fallback channel count when a component cannot describe its audio
 /// buses — the fixture's declared stereo pair.
 const CHANNELS_PER_BUS: usize = 2;
+
+/// Defensive iteration bound for faithful public bus enumeration. This
+/// is deliberately separate from the `MAX_SCAN_*` clamps used to size
+/// prepare scratch: a plugin exceeding it makes the whole public table
+/// unavailable instead of publishing a truncated topology.
+const MAX_ENUMERATED_AUDIO_BUSES: i32 = 1_024;
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -1988,6 +2007,143 @@ enum Phase {
     Processing,
 }
 
+/// VST3 speaker bits that have a verified neutral speaker-position
+/// meaning. Arrangements containing any other bit decline projection.
+const ARRANGEMENT_POSITIONS: [(SpeakerArrangement, SpeakerMask); 8] = [
+    (kSpeakerL, SpeakerMask::FRONT_LEFT),
+    (kSpeakerR, SpeakerMask::FRONT_RIGHT),
+    (kSpeakerC, SpeakerMask::FRONT_CENTER),
+    (kSpeakerLfe, SpeakerMask::LOW_FREQUENCY),
+    (kSpeakerLs, SpeakerMask::BACK_LEFT),
+    (kSpeakerRs, SpeakerMask::BACK_RIGHT),
+    (kSpeakerSl, SpeakerMask::SIDE_LEFT),
+    (kSpeakerSr, SpeakerMask::SIDE_RIGHT),
+];
+
+/// Projects a VST3 speaker arrangement onto the neutral layout
+/// vocabulary. Exact named arrangements map to their named neutral
+/// layouts; other arrangements are admitted only when every speaker
+/// bit has a verified neutral position. Ambisonic/count-only/
+/// reserved-bit topologies return `None` rather than a guessed layout.
+fn layout_from_speaker_arrangement(
+    arrangement: SpeakerArrangement,
+    channels: u32,
+) -> Option<ChannelLayout> {
+    if arrangement.count_ones() != channels {
+        return None;
+    }
+    if arrangement == SpeakerArr::kMono {
+        return Some(ChannelLayout::Mono);
+    }
+    if arrangement == SpeakerArr::kStereo {
+        return Some(ChannelLayout::Stereo);
+    }
+    if arrangement == SpeakerArr::k40Music {
+        return Some(ChannelLayout::Quad);
+    }
+    if arrangement == SpeakerArr::k51 {
+        return Some(ChannelLayout::FivePointOne);
+    }
+    if arrangement == SpeakerArr::k71Music {
+        return Some(ChannelLayout::SevenPointOne);
+    }
+
+    let mut remaining = arrangement;
+    let mut mask = SpeakerMask::empty();
+    for (speaker, position) in ARRANGEMENT_POSITIONS {
+        if remaining & speaker != 0 {
+            mask = mask.union(position);
+            remaining &= !speaker;
+        }
+    }
+    if remaining != 0 {
+        return None;
+    }
+    ChannelLayout::custom(mask).ok()
+}
+
+/// Queries the component/processor's complete audio bus table while
+/// the objects are live and initialized but still outside the RT path.
+/// Input buses precede output buses, each in ascending ABI index order.
+/// Every inconsistency — negative or excessive counts, failed queries,
+/// direction/media/type mismatches, channel-count/arrangement mismatch,
+/// unknown bus types, or an arrangement the neutral layout cannot
+/// honestly carry — discards the partial table and returns `None`.
+#[expect(unsafe_code)]
+fn enumerate_bus_table(
+    component: &ComPtr<IComponent>,
+    processor: &ComPtr<IAudioProcessor>,
+) -> Option<Vec<BusDescriptor>> {
+    let mut buses = Vec::new();
+    for (dir, direction) in [
+        (
+            sdk_enum_i32(BusDirections_::kInput),
+            NeutralBusDirection::Input,
+        ),
+        (
+            sdk_enum_i32(BusDirections_::kOutput),
+            NeutralBusDirection::Output,
+        ),
+    ] {
+        // SAFETY: `component`/`processor` are live objects; `info` and
+        // `arrangement` are valid out-params for each call.
+        unsafe {
+            let count = component.getBusCount(sdk_enum_i32(MediaTypes_::kAudio), dir);
+            if !(0..=MAX_ENUMERATED_AUDIO_BUSES).contains(&count) {
+                return None;
+            }
+            for index in 0..count {
+                let mut info = BusInfo {
+                    mediaType: 0,
+                    direction: 0,
+                    channelCount: 0,
+                    name: [0; 128],
+                    busType: 0,
+                    flags: 0,
+                };
+                if component.getBusInfo(
+                    sdk_enum_i32(MediaTypes_::kAudio),
+                    dir,
+                    index,
+                    &raw mut info,
+                ) != kResultOk
+                {
+                    return None;
+                }
+                if info.mediaType != sdk_enum_i32(MediaTypes_::kAudio)
+                    || info.direction != dir
+                    || info.channelCount <= 0
+                {
+                    return None;
+                }
+                let Ok(channels) = u32::try_from(info.channelCount) else {
+                    return None;
+                };
+                let mut arrangement: SpeakerArrangement = 0;
+                if processor.getBusArrangement(dir, index, &raw mut arrangement) != kResultOk {
+                    return None;
+                }
+                let layout = layout_from_speaker_arrangement(arrangement, channels)?;
+                let role = if info.busType == sdk_enum_i32(BusTypes_::kMain) {
+                    BusRole::Main
+                } else if info.busType == sdk_enum_i32(BusTypes_::kAux) {
+                    BusRole::Aux
+                } else {
+                    return None;
+                };
+                buses.push(BusDescriptor {
+                    direction,
+                    layout,
+                    name: "",
+                    role,
+                    enabled: true,
+                });
+            }
+        }
+    }
+    Some(buses)
+}
+
 /// Bridge [`Plugin`] over the dormant COM objects — `create()` only
 /// wires identity; the `createInstance` + `initialize` chain runs in
 /// `init` per the lifecycle table in the module docs.
@@ -2047,6 +2203,9 @@ struct Vst3Plugin {
     /// Negotiated max block + rate from `setupProcessing`.
     max_frames: usize,
     sample_rate: u32,
+    /// Faithful bus topology projected once at successful `init` —
+    /// `None` when any part of the ABI query/projection is unavailable.
+    bus_cache: Option<Vec<BusDescriptor>>,
     /// Negotiated bus channel counts (`prepare`-time `getBusInfo`).
     in_channels: usize,
     out_channels: usize,
@@ -2156,6 +2315,7 @@ impl Vst3Plugin {
             phase: Phase::Dormant,
             max_frames: 0,
             sample_rate: 0,
+            bus_cache: None,
             in_channels: 0,
             out_channels: 0,
             input_scratch: Vec::new(),
@@ -3151,6 +3311,14 @@ impl Plugin for Vst3Plugin {
         self.params
     }
 
+    /// The cached faithful ABI bus projection captured at successful
+    /// `init` — input buses then output buses, each in ABI index order.
+    /// `None` before initialization and whenever any part of the ABI
+    /// query/projection was inconsistent or unrepresentable.
+    fn buses(&self) -> Option<&[BusDescriptor]> {
+        self.bus_cache.as_deref()
+    }
+
     /// `init` → `createInstance`(component CID) → `IComponent` +
     /// `IAudioProcessor` → `getControllerClassId` →
     /// `createInstance`(controller CID) — or `cast` on the component
@@ -3259,9 +3427,11 @@ impl Plugin for Vst3Plugin {
             // CC→parameter routing and every MIDI event keeps the
             // ordinary event path.
             let midi_mapping = controller.cast::<IMidiMapping>();
+            let bus_cache = enumerate_bus_table(&component, &processor);
             self.component = Some(component);
             self.processor = Some(processor);
             self.controller = Some(controller);
+            self.bus_cache = bus_cache;
             self.single_component = single_component;
             self.handler = Some(handler_ptr);
             self.midi_mapping = midi_mapping;

@@ -1,0 +1,6 @@
+fmt-check-final	0	mise run fmt-check
+test-plugin-vst3-final	0	mise run test ruviform-plugin-vst3
+test-plugin-clap-final	0	mise run test ruviform-plugin-clap
+check-full-final	0	mise run check-full
+lint-full-final	0	mise run lint-full
+prek-all-files-final	0	mise exec -- prek run --all-files

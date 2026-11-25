@@ -1,0 +1,67 @@
+[test] $ cargo test --locked -p ruviform-plugin-vst3
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.54s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-ec6dc6d7417e2b09.exe)
+
+running 44 tests
+test block::tests::block_offset_drops_out_of_block_events ... ok
+test block::tests::partial_cross_alias_and_output_duplicate_are_detected ... ok
+test block::tests::in_place_channel_bounces_and_writes_back ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test block::tests::event_scratch_collects_sorts_and_truncates ... ok
+test component::tests::enum_queries_reject_out_of_range_values ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::musical_from_context_gates_and_unset_forms ... ok
+test component::tests::musical_from_context_maps_valid_fields ... ok
+test block::tests::shifted_range_overlap_is_rejected ... ok
+test component::tests::param_change_events_reach_the_processor ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test component::tests::process_rejects_bad_block_shapes ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::re_activation_cycles_through_lifecycle ... ok
+test component::tests::param_scan_budget_exhaustion_keeps_collected_events ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test component::tests::setup_processing_accepted_while_initialized ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+test component::tests::terminate_allows_reinitialize ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test component::tests::zero_frame_block_flushes_offset_zero_events ... ok
+test controller::tests::get_param_value_by_string_enforces_the_domain ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test controller::tests::state_stream_reports_not_implemented ... ok
+test gain::tests::gain_applies_param_event_then_scales ... ok
+test gain::tests::process_queues_and_drains_output_reports ... ok
+test gain::tests::process_without_events_reports_nothing ... ok
+test midi::tests::collect_incoming_drains_to_scratch_with_stats ... ok
+test midi::tests::incoming_all_kinds_map_semantically ... ok
+test midi::tests::incoming_note_on_maps_canonical_fields ... ok
+test midi::tests::incoming_rejects_out_of_range_fields ... ok
+test midi::tests::incoming_skips_unsupported_and_invalid ... ok
+test midi::tests::incoming_velocity_extremes_map_exactly ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test tests::sdk_enum_i32_boundaries ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-d60e55a6c5846b48.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_vst3
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[cache]: 0 hits, 1 misses, 1 incremental, 2 bypassed; 0 B downloaded, 0 B uploaded, 3.7 MiB stored locally
+mbx[savings]: 262678 compilations old. not one compiled twice.

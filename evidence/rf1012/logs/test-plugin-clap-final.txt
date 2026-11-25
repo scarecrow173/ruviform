@@ -1,0 +1,82 @@
+[test] $ cargo test --locked -p ruviform-plugin-clap
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.55s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-68e09908366681e7.exe)
+
+running 55 tests
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test adapt::tests::atomic_lifecycle_violations_leave_honest_state ... ok
+test adapt::tests::atomic_lifecycle_failed_survives_the_atomic_round_trip ... ok
+test adapt::tests::atomic_lifecycle_reactivation_cycle ... ok
+test adapt::tests::atomic_lifecycle_forward_chain_and_destroy ... ok
+test adapt::tests::build_block_views_paired_stereo_is_borrowed_zero_copy ... ok
+test adapt::tests::build_block_views_rejects_asymmetric_pairs ... ok
+test adapt::tests::build_block_views_rejects_cross_alias_and_duplicate_outputs ... ok
+test adapt::tests::in_place_pair_classifies_and_scales_shared_buffer ... ok
+test adapt::tests::build_block_views_rejects_excess_channels ... ok
+test adapt::tests::map_process_result_maps_neutral_statuses ... ok
+test adapt::tests::build_block_views_rejects_malformed_output_descriptors ... ok
+test adapt::tests::build_block_views_rejects_partial_range_overlap ... ok
+test adapt::tests::build_block_views_rejects_f64_only_and_mismatched_pairs ... ok
+test adapt::tests::beats_to_ticks_clap_factor_golden ... ok
+test adapt::tests::null_channel_pointers_are_legal_only_at_zero_frames ... ok
+test adapt::tests::param_mirror_roundtrip_is_atomic_plain ... ok
+test adapt::tests::to_process_config_maps_activation_bounds ... ok
+test adapt::tests::to_process_config_rejects_invalid_activation ... ok
+test adapt::tests::to_process_config_rounds_fractional_sample_rate ... ok
+test adapt::tests::translate_events_bounds_count_and_offsets ... ok
+test adapt::tests::translate_events_skips_non_param_and_foreign_events ... ok
+test adapt::tests::translate_events_sorts_same_offset_events_stably ... ok
+test adapt::tests::translate_events_translates_midi_channel_voice ... ok
+test adapt::tests::translate_output_event_carries_malformed_stamp_and_skips_payload ... ok
+test adapt::tests::translate_output_event_translates_midi_and_skips_rest ... ok
+test adapt::tests::translate_output_event_translates_note_events ... ok
+test adapt::tests::translate_output_event_translates_param_value ... ok
+test adapt::tests::translate_output_notice_maps_gesture_edges ... ok
+test gain::tests::empty_block_flushes_events_and_sleeps ... ok
+test gain::tests::in_place_mode_scales_output_as_input ... ok
+test gain::tests::param_events_apply_sample_accurately ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test gain::tests::unknown_param_ids_are_ignored ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test plugin::tests::lifecycle_deactivate_while_processing_is_rejected_honestly ... ok
+test plugin::tests::host_driven_process_rejection_surfaces_as_error ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::lifecycle_destroy_from_initialized_only ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::lifecycle_reactivation_cycles_are_legal ... ok
+test plugin::tests::param_info_reports_validator_clean_metadata ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test plugin::tests::process_rejects_frames_beyond_negotiated_max ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+test tests::public_surface_is_binding_neutral ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-198fb6e83c484bbb.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_clap
+
+running 3 tests
+test crates\ruviform-plugin-clap\src\gain.rs - gain::GAIN_PARAM (line 38) ... ok
+test crates\ruviform-plugin-clap\src\lib.rs - version (line 99) ... ok
+test crates\ruviform-plugin-clap\src\gain.rs - gain::GainProcessor (line 65) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+all doctests ran in 0.60s; merged doctests compilation took 0.48s
+mbx[cache]: 0 hits, 1 misses, 1 incremental, 2 bypassed; 0 B downloaded, 0 B uploaded, 3.7 MiB stored locally
+mbx[savings]: 533.4 GiB of target/ is an elaborate illusion. the disk is in on it.

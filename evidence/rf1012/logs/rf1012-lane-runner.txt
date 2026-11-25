@@ -1,0 +1,1076 @@
+
+=== lint-l1-real-plugin-rerun-after-clippy-fix: mise run lint-l1-real-plugin ===
+[lint-l1-real-plugin] $ cargo clippy -p ruviform-plugin-clap -p ruviform-plugin-vst3 -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --all-targets --features ruviform-plugin-clap/host,ruviform-plugin-vst3/host,ruviform-plugin-test-vst3/l1-runner,ruviform-plugin-test-clap/l1-runner -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.35s
+
+=== test-plugin-test-vst3: mise run test ruviform-plugin-test-vst3 ===
+[test] $ cargo test --locked -p ruviform-plugin-test-vst3
+   Compiling windows-sys v0.61.2
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling serde v1.0.229
+   Compiling syn v3.0.10
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.19
+   Compiling fearless_simd_macros v0.1.0
+   Compiling serde_derive v1.0.229
+   Compiling ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-file)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-host)
+   Compiling ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+   Compiling ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-midi-device)
+   Compiling audio_thread_priority v0.38.0
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-math)
+   Compiling ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-dsp)
+   Compiling ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-analysis)
+mbx[progress]: 15s elapsed; 25 hits, 0 misses, 3 bypassed, 0 not looked up; ~26.57s compiler work saved
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-exec)
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio)
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-plugin-bridge)
+   Compiling ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-test)
+mbx[progress]: 30s elapsed; 29 hits, 0 misses, 3 bypassed, 0 not looked up; ~33.44s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 37.15s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_test_vst3-9398cef0879c509c.exe)
+
+running 123 tests
+test block::tests::event_scratch_sorts_and_bounds ... ok
+test block::tests::block_offset_bounds ... ok
+test block::tests::in_place_aliased_output_bounces_and_writes_back ... ok
+test block::tests::duplicated_output_channels_bounce_last_writer_wins ... ok
+test block::tests::rt_prepare_finish_block_does_not_allocate ... ok
+test block::tests::smaller_block_does_not_inherit_stale_bounce_flags ... ok
+test component::tests::bus_arrangements_reject_mismatches ... ok
+test component::tests::enum_queries_reject_out_of_range_values ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::param_event_applies_sample_accurately ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test component::tests::terminate_allows_reinitialize ... ok
+test component::tests::zero_frame_block_flushes_events ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::mono_arrangement_and_block_process ... ok
+test block::tests::partial_overlap_rejects ... ok
+test component::tests::setup_processing_accepted_while_initialized ... ok
+test block::tests::prepare_accepts_mono_within_capacity ... ok
+test component::tests::gain_persists_across_blocks ... ok
+test controller::tests::param_domain_mapping_is_non_identity ... ok
+test controller::tests::editor_controller_create_view_dispatches_on_name ... ok
+test controller::tests::editor_controller_reports_fault_param ... ok
+test component::tests::same_offset_events_last_wins ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test controller::tests::param_value_by_string_parses_plain_domain ... ok
+test controller::tests::parameter_info_reports_gain_descriptor ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test controller::tests::state_stream_reports_not_implemented ... ok
+test editor::tests::error_mode_returns_process_error ... ok
+test editor::tests::invalid_mode_fills_nan_outputs ... ok
+test editor_view::tests::attached_creates_real_child_hwnd ... ignored, requires a Windows window station — #631 real-dock lane owns the formal evidence
+test editor::tests::rt_unarmed_block_is_alloc_free ... ok
+test editor::tests::none_mode_event_stays_inert ... ok
+test editor_view::tests::platform_support_is_hwnd_only ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+test controller::tests::param_string_formats_plain_domain ... ok
+test editor::tests::disarm_restores_pass_through ... ok
+test editor::tests::editor_block_is_pass_through ... ok
+test editor_view::tests::seam_verbs_drive_real_windows ... ignored, requires a Windows window station — real HWND verification lane
+test editor_view::tests::set_frame_accepts_null_and_real_frame ... ok
+test editor::tests::bad_time_mode_claims_infinite_tail ... ok
+test editor_view::tests::seam_element_focus_records_fe_token ... ok
+test editor_view::tests::seam_popup_unknown_kind_is_invalid_argument ... ok
+test editor_view::tests::notification_verbs_acknowledge ... ok
+test editor_view::tests::seam_child_popup_records_co_cc_tokens ... ok
+test editor_view::tests::attach_rejects_invalid_parents_honestly ... ok
+test editor_view::tests::editor_view_type_constant_is_editor ... ok
+test editor::tests::alloc_fault_marks_armed_block ... ok
+test editor_view::tests::input_focus_verbs_record_event_tokens_in_order ... ok
+test editor_view::tests::resize_verbs_are_honest ... ok
+test editor_view::tests::size_round_trips_through_on_size ... ok
+test fault::tests::error_mode_returns_process_error ... ok
+test fault::tests::foreign_param_events_do_not_arm ... ok
+test fault::tests::invalid_mode_fills_nan_outputs ... ok
+test fault::tests::none_mode_event_stays_inert ... ok
+test gain::tests::mid_block_event_switches_at_its_offset ... ok
+test gain::tests::normalized_maps_to_plain_non_identically ... ok
+test gain::tests::offset_zero_event_applies_to_whole_block ... ok
+test gain::tests::same_offset_events_last_wins ... ok
+test fault::tests::disarm_restores_pass_through ... ok
+test gain::tests::default_gain_is_unity ... ok
+test fault::tests::decode_fault_maps_bands_and_exit_codes ... ok
+test gain::tests::gain_persists_across_blocks ... ok
+test gain::tests::zero_frame_block_flushes_events_and_persists_gain ... ok
+test fault::tests::alloc_fault_marks_armed_block ... ok
+test fault::tests::rt_unarmed_block_is_alloc_free ... ok
+test gain::tests::stereo_applies_per_channel ... ok
+test fault::tests::bad_time_mode_claims_infinite_tail ... ok
+test fault::tests::unarmed_block_is_pass_through ... ok
+test gain::tests::unrelated_param_events_are_ignored ... ok
+test instrument::tests::gain_param_scales_voices ... ok
+test instrument::tests::ninth_note_steals_oldest_voice ... ok
+test instrument::tests::cc7_scales_volume_and_cc1_enables_tremolo ... ok
+test instrument::tests::click_respects_cc7_volume ... ok
+test instrument::tests::note_off_releases_then_silences ... ok
+test instrument::tests::note_on_offset_gates_voice_start ... ok
+test instrument::tests::note_on_renders_deterministic_voice ... ok
+test instrument::tests::velocity_scales_amplitude ... ok
+test instrument::tests::silence_without_events ... ok
+test preset::tests::unit_info_enumerates_root_unit_and_factory_list ... ok
+test preset::tests::unit_data_shares_the_live_gain_cell ... ok
+test instrument::tests::retrigger_same_key_resets_phase ... ok
+test single::tests::component_handler_installs_once ... ok
+test single::tests::domain_verbs_match_gain_law ... ok
+test preset::tests::component_state_verbs_still_round_trip ... ok
+test preset::tests::program_data_round_trips_and_rejects ... ok
+test single::tests::value_and_state_verbs_share_one_cell ... ok
+test stateful::tests::blob_round_trips_bit_exact ... ok
+test instrument::tests::stopped_transport_produces_no_clicks ... ok
+test stateful::tests::component_state_verbs_round_trip_through_ibstream ... ok
+test stateful::tests::cell_store_clamps_into_param_domain ... ok
+test instrument::tests::seek_shifts_click_position ... ok
+test instrument::tests::playing_transport_clicks_at_beat_boundaries ... ok
+test single::tests::terminate_is_strict_to_initialized ... ok
+test single::tests::reports_own_controller_class_id ... ok
+test instrument::tests::zero_frame_block_flushes_events ... ok
+test preset::tests::component_exposes_preset_interfaces ... ok
+test stateful::tests::malformed_blobs_are_rejected ... ok
+test single::tests::double_initialize_is_rejected ... ok
+test single::tests::malformed_state_blobs_are_rejected ... ok
+test stateful::tests::controller_state_verbs_round_trip_domains ... ok
+test stateful::tests::processor_gain_flows_through_shared_cell ... ok
+test stateful::tests::rt_process_through_shared_cell_is_allocation_free ... ok
+test stateful::tests::stateless_controller_verbs_stay_not_implemented ... ok
+test stateful::tests::inspect_reports_provenance_and_typed_rejections ... ok
+test stateful::tests::v1_component_blob_migrates_on_next_save ... ok
+test tests::sdk_enum_i32_boundaries ... ok
+test stateful::tests::prepare_preserves_cell_state ... ok
+test strings::tests::cstring_eq_bounds_the_scan ... ok
+test strings::tests::cstring_eq_compares_content_exactly ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test editor_view::tests::removed_tears_down_child_surface ... ok
+test editor_view::tests::seam_dialog_popup_records_po_pc_tokens ... ok
+test editor_view::tests::removed_resets_popup_open_state ... ok
+test editor_view::tests::popup_key_toggles_plugin_owned_window ... ok
+test editor_view::tests::popup_verbs_are_recorded_without_popup_hwnd ... ok
+
+test result: ok. 121 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests\host_path.rs (target\debug\deps\host_path-9fe34009aab2864c.exe)
+
+running 29 tests
+test editor_verbs_drive_real_windows_through_bridge ... ignored, requires a Windows window station — real HWND verification lane
+test discovers_suite_plugins_through_production_host ... ok
+test editor_open_gui_rejects_opaque_parent_lease ... ok
+test fault_invalid_mode_fills_nan_outputs ... ok
+test fault_bad_time_mode_claims_infinite_tail ... ok
+test fault_rt_alloc_mode_marks_armed_block ... ok
+test fault_error_mode_is_defined_rejection_not_crash ... ok
+test attach_gain_bus_validation_reaches_endpoint_preparation ... ok
+test editor_fault_error_mode_is_defined_rejection ... ok
+test editor_verbs_after_declined_open_stay_unsupported ... ok
+test editor_verbs_without_open_gui_are_unsupported ... ok
+test instrument_note_lifecycle_releases_to_silence ... ok
+test editor_processes_audio_as_pass_through ... ok
+test gain_and_fault_have_no_editor_view ... ok
+test editor_reports_fault_param_in_plain_domain ... ok
+test fault_unarmed_and_none_mode_are_pass_through ... ok
+test reports_fault_param_in_plain_domain ... ok
+test processes_audio_with_sample_accurate_gain_events ... ok
+test reports_gain_bus_table_through_inprocess_host ... ok
+test reports_gain_param_in_plain_domain ... ok
+test stateful_reports_gain_param_in_plain_domain ... ok
+test stateful_processes_audio_with_sample_accurate_gain_events ... ok
+test single_component_reports_gain_param_in_plain_domain ... ok
+test stateful_restore_migrates_v1_and_degrades_extension ... ok
+test single_component_restore_rejects_malformed_blob ... ok
+test stateful_restore_rejects_malformed_blob ... ok
+test single_component_save_mutate_restore_save_round_trips ... ok
+test stateless_classes_decline_state_verbs ... ok
+test stateful_save_mutate_restore_save_round_trips ... ok
+
+test result: ok. 28 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\l1_fault_test_plugin_e2e.rs (target\debug\deps\l1_fault_test_plugin_e2e-0b79d806830afed8.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_real_test_plugin_e2e.rs (target\debug\deps\l1_real_test_plugin_e2e-a6504327e2448190.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_stateful_test_plugin_e2e.rs (target\debug\deps\l1_stateful_test_plugin_e2e-228cedf7cc5331cc.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-ebfbcf801f345f49.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_test_vst3
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[cache]: 29 hits, 6 misses, 3 incremental, 4 bypassed; 0 B downloaded, 0 B uploaded, 26.0 MiB stored locally
+mbx[savings]: cleaned up 8.8 TiB logical after checkouts that left without saying goodbye.
+
+=== test-plugin-test-clap: mise run test ruviform-plugin-test-clap ===
+[test] $ cargo test --locked -p ruviform-plugin-test-clap
+   Compiling windows-sys v0.61.2
+   Compiling clack-extensions v0.2.0
+   Compiling ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-file)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-host)
+   Compiling ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+   Compiling audio_thread_priority v0.38.0
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+mbx[progress]: 15s elapsed; 5 hits, 0 misses, 3 bypassed, 0 not looked up; ~9.79s compiler work saved
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-exec)
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio)
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-plugin-bridge)
+   Compiling ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-test)
+mbx[progress]: 30s elapsed; 9 hits, 0 misses, 3 bypassed, 0 not looked up; ~15.02s compiler work saved
+mbx[progress]: 45s elapsed; 9 hits, 0 misses, 3 bypassed, 0 not looked up; ~15.02s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.89s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_test_clap-12e57c88ec5ae353.exe)
+
+running 91 tests
+test editor::tests::api_support_is_win32_embedded_on_windows_only ... ok
+test editor::tests::bad_time_mode_claims_infinite_tail ... ok
+test block::tests::dense_event_stream_within_bound_translates ... ok
+test editor::tests::alloc_fault_marks_armed_block ... ok
+test editor::tests::bad_time_mode_emits_tail_and_bad_time_event ... ok
+test block::tests::fractional_sample_rate_rounds_to_nearest_hz ... ok
+test block::tests::note_on_and_off_translate_to_neutral_midi ... ok
+test editor::tests::create_and_destroy_are_idempotent_edges ... ok
+test editor::tests::error_mode_returns_process_error ... ok
+test editor::tests::foreign_param_events_do_not_arm ... ok
+test editor::tests::set_parent_creates_real_child_hwnd ... ignored, requires a Windows window station — real-attach lane owns the formal evidence
+test editor::tests::invalid_mode_emits_nan_and_invalid_event ... ok
+test editor::tests::invalid_mode_fills_nan_outputs ... ok
+test editor::tests::set_parent_rejects_invalid_parents_honestly ... ok
+test editor::tests::size_and_transient_verbs_are_honest ... ok
+test editor::tests::show_and_hide_require_an_attached_parent ... ok
+test fault::tests::alloc_fault_marks_armed_block ... ok
+test fault::tests::alloc_fault_marks_armed_abi_output ... ok
+test fault::tests::bad_time_mode_claims_infinite_tail ... ok
+test fault::tests::disarm_restores_pass_through ... ok
+test fault::tests::error_mode_returns_process_error ... ok
+test fault::tests::foreign_param_events_do_not_arm ... ok
+test fault::tests::invalid_mode_fills_nan_outputs ... ok
+test fault::tests::rt_unarmed_block_is_alloc_free ... ok
+test fault::tests::invalid_mode_emits_nan_and_invalid_event ... ok
+test gain::tests::gain_persists_across_blocks ... ok
+test gain::tests::in_place_channel_scales_output_as_input ... ok
+test gain::tests::mid_block_event_switches_at_its_offset ... ok
+test gain::tests::normalized_maps_to_plain_non_identically ... ok
+test gain::tests::offset_zero_event_applies_to_whole_block ... ok
+test gain::tests::prepare_resets_gain_to_default ... ok
+test gain::tests::stereo_applies_per_channel ... ok
+test gain::tests::unrelated_param_events_are_ignored ... ok
+test gain::tests::zero_frame_block_flushes_events_and_persists_gain ... ok
+test instrument_core::tests::cc7_scales_volume_and_cc1_enables_tremolo ... ok
+test instrument_core::tests::click_respects_cc7_volume ... ok
+test instrument_core::tests::gain_param_scales_voices ... ok
+test block::tests::raw_midi_bytes_translate_to_neutral_midi ... ok
+test editor::tests::disarm_restores_pass_through ... ok
+test editor::tests::processor_is_bitwise_pass_through ... ok
+test editor::tests::alloc_fault_marks_armed_abi_output ... ok
+test fault::tests::bad_time_mode_emits_tail_and_bad_time_event ... ok
+test fault::tests::decode_fault_maps_bands_and_exit_codes ... ok
+test fault::tests::unarmed_block_is_pass_through ... ok
+test gain::tests::default_gain_is_unity ... ok
+test gain::tests::same_offset_events_last_wins ... ok
+test gain::tests::set_gain_plain_clamps_to_range ... ok
+test instrument_core::tests::ninth_note_steals_oldest_voice ... ok
+test editor::tests::rt_unarmed_block_is_alloc_free ... ok
+test instrument_core::tests::note_on_offset_gates_voice_start ... ok
+test instrument_core::tests::note_on_renders_deterministic_voice ... ok
+test instrument_core::tests::retrigger_same_key_resets_phase ... ok
+test instrument_core::tests::silence_without_events ... ok
+test instrument_core::tests::zero_frame_block_flushes_events ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::params_extension_reports_and_flushes_gain ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test preset::tests::load_key_dispatch_is_catalog_scoped ... ok
+test preset::tests::catalog_is_the_shared_four_preset_pool ... ok
+test preset::tests::factory_reports_one_wellformed_provider ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test preset::tests::preset_discovery_exposes_catalog_through_real_abi ... ok
+test stateful::tests::activation_preserves_loaded_gain ... ok
+test stateful::tests::inspect_reports_provenance_and_typed_rejections ... ok
+test stateful::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test stateful::tests::process_applies_param_event_sample_accurately ... ok
+test stateful::tests::params_extension_reports_and_flushes_gain ... ok
+test stateful::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test instrument_core::tests::playing_transport_clicks_at_beat_boundaries ... ok
+test instrument_core::tests::note_off_releases_then_silences ... ok
+test stateful::tests::state_extension_saves_and_loads_plain_gain ... ok
+test stateful::tests::state_blob_round_trips_plain_gain ... ok
+test stateful::tests::state_extension_load_rejects_malformed_blobs ... ok
+test stateful::tests::state_load_requests_params_values_rescan ... ok
+test stateful::tests::v1_and_degraded_blobs_load_and_resave_canonical ... ok
+test instrument_core::tests::seek_shifts_click_position ... ok
+test instrument_core::tests::velocity_scales_amplitude ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test preset::tests::preset_load_rejects_undefined_inputs_and_reports_errors ... ok
+test preset::tests::preset_load_restores_gain_and_reports_loaded ... ok
+test stateful::tests::state_blob_clamps_finite_out_of_range ... ok
+test stateful::tests::state_blob_rejects_malformed_input ... ok
+test instrument_core::tests::stopped_transport_produces_no_clicks ... ok
+test editor::tests::editor_ops_verbs_reject_undefined_inputs ... ok
+test editor::tests::destroy_tears_down_the_verb_popup ... ok
+test editor::tests::editor_ops_verbs_record_event_log_tokens ... ok
+test editor::tests::floating_popup_surface_is_honest ... ok
+
+test result: ok. 90 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\host_path.rs (target\debug\deps\host_path-bc091e4c18eae607.exe)
+
+running 30 tests
+test editor_gui_verbs_over_real_child_hwnd ... ignored, requires an interactive Windows window station — real-HWND lane
+test editor_verb_surface_over_real_child_hwnd ... ignored, requires an interactive Windows window station — real-HWND lane
+[CLAP_PLUGIN_ERROR] processor returned an unmapped status
+test discovers_suite_plugins_through_production_host ... ok
+[CLAP_PLUGIN_ERROR] processor returned an unmapped status
+test editor_reports_fault_param_in_plain_domain ... ok
+test fault_bad_time_mode_claims_infinite_tail ... ok
+test fault_invalid_mode_fills_nan_outputs ... ok
+test editor_gui_verbs_decline_without_open_gui ... ok
+test fault_bad_time_output_event_is_host_observable ... ok
+test fault_error_mode_is_defined_rejection_not_crash ... ok
+test editor_verb_surface_declines_without_open_gui ... ok
+test fault_unarmed_and_none_mode_are_pass_through ... ok
+test editor_fault_error_mode_is_defined_rejection ... ok
+test attach_gain_bus_validation_reaches_endpoint_preparation ... ok
+test instrument_note_lifecycle_releases_to_silence ... ok
+test processes_audio_with_sample_accurate_gain_events ... ok
+[CLAP_PLUGIN_ERROR] malformed state blob
+[CLAP_PLUGIN_ERROR] malformed state blob
+[CLAP_PLUGIN_ERROR] malformed state blob
+[CLAP_PLUGIN_ERROR] malformed state blob
+[CLAP_PLUGIN_ERROR] malformed state blob
+test stateful_restore_migrates_v1_and_degrades_extension ... ok
+test stateful_restore_rejects_malformed_blob ... ok
+test stateful_save_mutate_restore_save_round_trips ... ok
+test non_editor_classes_decline_open_gui ... ok
+test reports_gain_param_in_plain_domain ... ok
+test non_editor_classes_decline_editor_verbs ... ok
+test reports_stateful_param_in_plain_domain ... ok
+test non_editor_classes_decline_gui_verbs ... ok
+test stateless_classes_decline_state_verbs ... ok
+test reports_fault_param_in_plain_domain ... ok
+test fault_rt_alloc_mode_marks_armed_block ... ok
+test editor_processes_audio_as_pass_through ... ok
+test fault_invalid_output_event_is_defined_skip ... ok
+test reports_gain_bus_table_through_inprocess_host ... ok
+[CLAP_PLUGIN_ERROR] set_parent: child window creation failed
+test editor_open_gui_rejects_opaque_parent_lease ... ok
+
+test result: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\l1_fault_test_plugin_e2e.rs (target\debug\deps\l1_fault_test_plugin_e2e-7e8de3fbca4671c0.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_real_test_plugin_e2e.rs (target\debug\deps\l1_real_test_plugin_e2e-eb58a1119614d4c7.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\l1_stateful_test_plugin_e2e.rs (target\debug\deps\l1_stateful_test_plugin_e2e-44b7061d5dc7ca81.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ruviform_plugin_test_clap
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[cache]: 9 hits, 5 misses, 3 incremental, 4 bypassed; 0 B downloaded, 0 B uploaded, 31.2 MiB stored locally
+mbx[savings]: linked 533.3 GiB into place. copying is for people with disk to spare.
+
+=== test-l1-real-plugin: mise run test-l1-real-plugin ===
+[test-l1-real-plugin] $ cargo build -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host
+   Compiling windows-sys v0.61.2
+   Compiling clack-host v0.2.0
+   Compiling ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+   Compiling clack-extensions v0.2.0
+mbx[progress]: 15s elapsed; 3 hits, 0 misses, 0 bypassed, 0 not looked up; ~3.21s compiler work saved
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+mbx[progress]: 30s elapsed; 3 hits, 1 misses, 2 bypassed, 0 not looked up; ~3.21s compiler work saved
+mbx[progress]: 45s elapsed; 3 hits, 1 misses, 2 bypassed, 0 not looked up; ~3.21s compiler work saved
+mbx[progress]: 1m elapsed; 3 hits, 1 misses, 2 bypassed, 0 not looked up; ~3.21s compiler work saved
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 09s
+mbx[cache]: 3 hits, 3 misses, 2 incremental, 2 bypassed; 0 B downloaded, 0 B uploaded, 45.1 MiB stored locally
+mbx[savings]: 8.8 TiB logical of outputs had survived their checkouts. an unnatural state, now corrected.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --lib --bins
+   Compiling windows-sys v0.61.2
+   Compiling clack-extensions v0.2.0
+   Compiling ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-host)
+mbx[progress]: 15s elapsed; 2 hits, 0 misses, 0 bypassed, 0 not looked up; ~2.09s compiler work saved
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+mbx[progress]: 30s elapsed; 2 hits, 2 misses, 2 bypassed, 0 not looked up; ~2.09s compiler work saved
+mbx[progress]: 45s elapsed; 2 hits, 4 misses, 2 bypassed, 0 not looked up; ~2.09s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.60s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_clap-4f1add3d9b3fd538.exe)
+
+running 82 tests
+test adapt::tests::beats_to_ticks_clap_factor_golden ... ok
+test adapt::tests::adapt_transport_maps_status_position_and_loop ... ok
+test adapt::tests::adapt_transport_maps_musical_fields ... ok
+test adapt::tests::atomic_lifecycle_violations_leave_honest_state ... ok
+test adapt::tests::build_block_views_rejects_asymmetric_pairs ... ok
+test adapt::tests::build_block_views_paired_stereo_is_borrowed_zero_copy ... ok
+test adapt::tests::adapt_transport_musical_gates_and_unset_forms ... ok
+test adapt::tests::atomic_lifecycle_failed_survives_the_atomic_round_trip ... ok
+test adapt::tests::build_block_views_rejects_cross_alias_and_duplicate_outputs ... ok
+test adapt::tests::build_block_views_rejects_excess_channels ... ok
+test adapt::tests::map_process_result_maps_neutral_statuses ... ok
+test adapt::tests::in_place_pair_classifies_and_scales_shared_buffer ... ok
+test adapt::tests::build_block_views_rejects_partial_range_overlap ... ok
+test adapt::tests::atomic_lifecycle_reactivation_cycle ... ok
+test adapt::tests::build_block_views_rejects_f64_only_and_mismatched_pairs ... ok
+test adapt::tests::atomic_lifecycle_forward_chain_and_destroy ... ok
+test adapt::tests::build_block_views_rejects_malformed_output_descriptors ... ok
+test adapt::tests::null_channel_pointers_are_legal_only_at_zero_frames ... ok
+test adapt::tests::param_mirror_roundtrip_is_atomic_plain ... ok
+test adapt::tests::to_process_config_maps_activation_bounds ... ok
+test adapt::tests::to_process_config_rejects_invalid_activation ... ok
+test adapt::tests::translate_events_sorts_same_offset_events_stably ... ok
+test adapt::tests::translate_events_bounds_count_and_offsets ... ok
+test adapt::tests::translate_events_skips_non_param_and_foreign_events ... ok
+test adapt::tests::to_process_config_rounds_fractional_sample_rate ... ok
+test adapt::tests::translate_events_translates_midi_channel_voice ... ok
+test adapt::tests::translate_output_event_carries_malformed_stamp_and_skips_payload ... ok
+test adapt::tests::translate_output_event_translates_midi_and_skips_rest ... ok
+test adapt::tests::translate_output_notice_maps_gesture_edges ... ok
+test gain::tests::empty_block_flushes_events_and_sleeps ... ok
+test adapt::tests::translate_output_event_translates_note_events ... ok
+test adapt::tests::translate_output_event_translates_param_value ... ok
+test gain::tests::in_place_mode_scales_output_as_input ... ok
+test gain::tests::param_events_apply_sample_accurately ... ok
+test gain::tests::rt_process_full_stereo_block ... ok
+test gain::tests::unknown_param_ids_are_ignored ... ok
+test host::tests::host_gui_request_queue_bound_refuses ... ok
+test host::tests::gui_size_component_saturates_at_pixel_bounds ... ok
+test host::tests::descriptors_match_fixture_known_values ... ok
+test host::tests::entry_error_keeps_erased_display_and_source ... ok
+test host::tests::factory_reports_cached_descriptor_and_no_sendable ... ok
+test host::tests::bounded_output_buffer_refuses_past_count_bound ... ok
+test host::tests::descriptors_are_cached_across_calls ... ok
+test host::tests::host_gui_verbs_enqueue_then_drain ... ok
+test host::tests::host_state_mark_dirty_enqueues_then_drains ... ok
+test host::tests::lifecycle_roundtrip_processes_passthrough_block ... ok
+test host::tests::host_params_and_preset_load_enqueue_then_drain ... ok
+test host::tests::host_params_flag_maps_cover_named_and_unknown_bits ... ok
+test host::tests::load_non_clap_binary_returns_error ... ok
+test host::tests::open_gui_before_init_is_plugin_failed ... ok
+test host::tests::load_missing_path_returns_error ... ok
+test host::tests::open_gui_without_gui_extension_is_unsupported ... ok
+test host::tests::prepare_above_wire_max_frames_is_unsupported ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test host::tests::state_verbs_gate_and_fixture_declines ... ok
+test host::tests::process_above_max_frames_is_defined_error ... ok
+test host::tests::process_with_mismatched_channel_length_is_defined_error ... ok
+test host::tests::prepare_while_processing_is_defined_error ... ok
+test host::tests::process_below_min_frames_is_defined_error ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+test host::tests::push_events_encodes_midi_kinds ... ok
+test host::tests::params_table_matches_fixture_at_every_lifecycle_point ... ok
+test host::tests::rt_process_drives_fixture_block_allocation_free ... ok
+test plugin::tests::host_driven_process_rejection_surfaces_as_error ... ok
+test host::tests::param_event_reaches_plugin_denormalized ... ok
+test plugin::tests::lifecycle_reactivation_cycles_are_legal ... ok
+test plugin::tests::param_info_reports_validator_clean_metadata ... ok
+test plugin::tests::lifecycle_deactivate_while_processing_is_rejected_honestly ... ok
+test plugin::tests::lifecycle_destroy_from_initialized_only ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::process_accepts_transport_and_steady_time ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test plugin::tests::process_rejects_frames_beyond_negotiated_max ... ok
+test plugin::tests::rt_process_on_audio_thread_passes_thread_check ... ok
+test plugin::tests::rt_process_off_audio_thread_is_defined_rejection ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test tests::public_surface_is_binding_neutral ... ok
+test tests::version_is_not_empty ... ok
+
+test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running unittests src\bin\ruviform-plugin-clap-l1-runner.rs (target\debug\deps\ruviform_plugin_clap_l1_runner-8c4b927f6107c648.exe)
+
+running 2 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_vst3-0c00aa43582b07cd.exe)
+
+running 99 tests
+test block::tests::shifted_range_overlap_is_rejected ... ok
+test block::tests::in_place_channel_bounces_and_writes_back ... ok
+test block::tests::rt_prepare_process_finish_round_trip ... ok
+test block::tests::event_scratch_collects_sorts_and_truncates ... ok
+test block::tests::block_offset_drops_out_of_block_events ... ok
+test component::tests::enum_queries_reject_out_of_range_values ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test block::tests::partial_cross_alias_and_output_duplicate_are_detected ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test component::tests::musical_from_context_gates_and_unset_forms ... ok
+test component::tests::process_rejects_bad_block_shapes ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::param_scan_budget_exhaustion_keeps_collected_events ... ok
+test component::tests::param_change_events_reach_the_processor ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test component::tests::musical_from_context_maps_valid_fields ... ok
+test component::tests::re_activation_cycles_through_lifecycle ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::transport_combines_media_and_musical ... ok
+test component::tests::terminate_allows_reinitialize ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test component::tests::setup_processing_accepted_while_initialized ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test gain::tests::gain_applies_param_event_then_scales ... ok
+test component::tests::rt_param_scan_total_budget_bounds_worst_case ... ok
+test gain::tests::process_queues_and_drains_output_reports ... ok
+test component::tests::zero_frame_block_flushes_offset_zero_events ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test controller::tests::state_stream_reports_not_implemented ... ok
+test host::tests::component_handler_dirty_surfaces_enqueue_notices ... ok
+test host::tests::component_handler_param_surfaces_enqueue_notices ... ok
+test host::tests::declining_seam_is_plugin_failed ... ok
+test host::tests::controller_class_is_not_a_plugin ... ok
+test host::tests::frame_state_roundtrip_and_malformed_rejected ... ok
+test host::tests::factory_reports_cached_descriptor_and_no_sendable ... ok
+test host::tests::focus_target_editor_uses_on_focus ... ok
+test host::tests::focus_target_element_delivers_seam ... ok
+test gain::tests::process_without_events_reports_nothing ... ok
+test host::tests::bridge_stream_read_write_seek_tell_roundtrip ... ok
+test host::tests::descriptors_match_fixture_known_values ... ok
+test host::tests::descriptors_are_cached_across_calls ... ok
+test host::tests::load_non_vst3_binary_returns_error ... ok
+test host::tests::open_gui_before_init_is_plugin_failed ... ok
+test host::tests::open_gui_null_view_is_unsupported ... ok
+test controller::tests::get_param_value_by_string_enforces_the_domain ... ok
+test host::tests::bridge_stream_rejects_invalid_arguments ... ok
+test host::tests::bridge_stream_sparse_write_and_bounded_reads ... ok
+test host::tests::plug_frame_resize_rejects_null_arguments ... ok
+test host::tests::midi_events_reach_process_as_input_events ... ok
+test host::tests::plugin_output_reports_drain_as_canonical_events ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+test host::tests::host_window_focus_requires_a_stored_parent ... ok
+test host::tests::plug_frame_resize_accept_verbatim_onsize ... ok
+test host::tests::imidi_mapping_routes_volume_cc_to_gain_param ... ok
+test host::tests::plug_frame_resize_refusal_and_unrouted_stay_false ... ok
+test host::tests::prepare_rejects_frames_above_wire_ceiling ... ok
+test host::tests::drop_mid_processing_completes_teardown ... ok
+test host::tests::editor_verbs_without_view_are_unsupported ... ok
+test host::tests::plug_frame_resize_accept_runs_onsize_roundtrip ... ok
+test host::tests::load_missing_path_returns_error ... ok
+test host::tests::params_table_matches_fixture_at_every_lifecycle_point ... ok
+test host::tests::popup_verbs_deliver_seam_kind_codes ... ok
+test host::tests::lifecycle_roundtrip_processes_passthrough_block ... ok
+test host::tests::seamless_view_declines_element_and_popups ... ok
+test host::tests::oversized_block_is_defined_error ... ok
+test host::tests::param_event_reaches_plugin_normalized ... ok
+test host::tests::process_with_transport_snapshot_is_defined ... ok
+test host::tests::state_knotimplemented_maps_to_unsupported ... ok
+test host::tests::state_roundtrip_distributed_order_and_payloads ... ok
+test host::tests::state_roundtrip_single_component_skips_controller ... ok
+test host::tests::state_restore_foreign_blob_delegates_to_plugin ... ok
+test host::tests::state_restore_rejects_corrupt_frame_before_plugin_calls ... ok
+test host::tests::process_before_start_is_defined_error ... ok
+test midi::tests::control_assignment_covers_cc_pressure_and_bend ... ok
+test midi::tests::outgoing_group_nonzero_is_defined_skip ... ok
+test midi::tests::fill_event_list_suppresses_mapped_events ... ok
+test midi::tests::outgoing_note_on_maps_fields ... ok
+test midi::tests::assignment_table_capture_reads_fixture_controller ... ok
+test host::tests::unmapped_cc_passes_through_without_param_routing ... ok
+test midi::tests::incoming_rejects_out_of_range_fields ... ok
+test midi::tests::incoming_note_on_maps_canonical_fields ... ok
+test tests::sdk_enum_i32_boundaries ... ok
+test midi::tests::ppq_position_uses_musical_snapshot ... ok
+test midi::tests::routed_assignment_resolves_through_table ... ok
+test midi::tests::incoming_skips_unsupported_and_invalid ... ok
+test midi::tests::collect_incoming_drains_to_scratch_with_stats ... ok
+test midi::tests::incoming_velocity_extremes_map_exactly ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test midi::tests::bridge_event_list_com_round_trip ... ok
+test host::tests::transport_snapshot_maps_to_process_context ... ok
+test midi::tests::fill_event_list_translates_counts_and_preserves_offsets ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test midi::tests::incoming_all_kinds_map_semantically ... ok
+test host::tests::state_verbs_gate_and_fixture_declines ... ok
+test midi::tests::outgoing_pitch_bend_uses_lsb_msb_pair ... ok
+test midi::tests::outgoing_program_change_channel_pressure_and_cc ... ok
+
+test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src\bin\ruviform-plugin-vst3-l1-runner.rs (target\debug\deps\ruviform_plugin_vst3_l1_runner-1f5e21185cf5d4b0.exe)
+
+running 2 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+mbx[cache]: 2 hits, 6 misses, 2 incremental, 2 bypassed; 0 B downloaded, 0 B uploaded, 87.8 MiB stored locally
+mbx[savings]: 15.1 TiB logical of build debris has left the building.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-clap -p ruviform-plugin-vst3 --features host --test l1_real_adapter_e2e -- --ignored
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.55s
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-9356ba1f37a89fd0.exe)
+
+running 3 tests
+test real_adapter_l1_missing_runner_is_spawn_failed ... ok
+test real_adapter_l1_kill_reports_failed_once ... ok
+test real_adapter_l1_full_series ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+     Running tests\l1_real_adapter_e2e.rs (target\debug\deps\l1_real_adapter_e2e-27eadda6747d8af6.exe)
+
+running 3 tests
+test real_adapter_l1_missing_runner_is_spawn_failed ... ok
+test real_adapter_l1_kill_reports_failed_once ... ok
+test real_adapter_l1_full_series ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+mbx[cache]: 0 hits, 4 misses; 0 B downloaded, 0 B uploaded, 86.5 MiB stored locally
+mbx[savings]: disposed of 15.1 TiB logical without being asked. that is rather the point.
+[test-l1-real-plugin] $ cargo build -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner
+   Compiling clack-extensions v0.2.0
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+mbx[progress]: 15s elapsed; 1 hits, 0 misses, 2 bypassed, 0 not looked up; ~1.00s compiler work saved
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+mbx[progress]: 30s elapsed; 1 hits, 0 misses, 4 bypassed, 0 not looked up; ~1.00s compiler work saved
+mbx[progress]: 45s elapsed; 1 hits, 1 misses, 4 bypassed, 0 not looked up; ~1.00s compiler work saved
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 50.87s
+mbx[cache]: 1 hits, 2 misses, 4 incremental, 4 bypassed; 0 B downloaded, 0 B uploaded, 35.4 MiB stored locally
+mbx[savings]: 4d 16h of compiling skipped across 7179 builds. rustc suspects nothing.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --lib --bins
+   Compiling ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+   Compiling ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 4 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 4 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 38.93s
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_test_clap-a2d21ecbd0e25c5d.exe)
+
+running 91 tests
+test editor::tests::api_support_is_win32_embedded_on_windows_only ... ok
+test editor::tests::bad_time_mode_claims_infinite_tail ... ok
+test editor::tests::alloc_fault_marks_armed_block ... ok
+test block::tests::dense_event_stream_within_bound_translates ... ok
+test editor::tests::foreign_param_events_do_not_arm ... ok
+test editor::tests::bad_time_mode_emits_tail_and_bad_time_event ... ok
+test editor::tests::error_mode_returns_process_error ... ok
+test editor::tests::set_parent_creates_real_child_hwnd ... ignored, requires a Windows window station — real-attach lane owns the formal evidence
+test editor::tests::set_parent_rejects_invalid_parents_honestly ... ok
+test editor::tests::show_and_hide_require_an_attached_parent ... ok
+test block::tests::raw_midi_bytes_translate_to_neutral_midi ... ok
+test editor::tests::disarm_restores_pass_through ... ok
+test editor::tests::alloc_fault_marks_armed_abi_output ... ok
+test block::tests::fractional_sample_rate_rounds_to_nearest_hz ... ok
+test block::tests::note_on_and_off_translate_to_neutral_midi ... ok
+test editor::tests::create_and_destroy_are_idempotent_edges ... ok
+test editor::tests::invalid_mode_emits_nan_and_invalid_event ... ok
+test editor::tests::invalid_mode_fills_nan_outputs ... ok
+test editor::tests::processor_is_bitwise_pass_through ... ok
+test editor::tests::rt_unarmed_block_is_alloc_free ... ok
+test editor::tests::size_and_transient_verbs_are_honest ... ok
+test fault::tests::alloc_fault_marks_armed_abi_output ... ok
+test fault::tests::alloc_fault_marks_armed_block ... ok
+test fault::tests::bad_time_mode_claims_infinite_tail ... ok
+test fault::tests::bad_time_mode_emits_tail_and_bad_time_event ... ok
+test fault::tests::disarm_restores_pass_through ... ok
+test fault::tests::error_mode_returns_process_error ... ok
+test fault::tests::decode_fault_maps_bands_and_exit_codes ... ok
+test fault::tests::foreign_param_events_do_not_arm ... ok
+test fault::tests::invalid_mode_emits_nan_and_invalid_event ... ok
+test fault::tests::invalid_mode_fills_nan_outputs ... ok
+test fault::tests::rt_unarmed_block_is_alloc_free ... ok
+test gain::tests::in_place_channel_scales_output_as_input ... ok
+test gain::tests::gain_persists_across_blocks ... ok
+test fault::tests::unarmed_block_is_pass_through ... ok
+test gain::tests::default_gain_is_unity ... ok
+test gain::tests::mid_block_event_switches_at_its_offset ... ok
+test gain::tests::normalized_maps_to_plain_non_identically ... ok
+test gain::tests::offset_zero_event_applies_to_whole_block ... ok
+test gain::tests::prepare_resets_gain_to_default ... ok
+test gain::tests::same_offset_events_last_wins ... ok
+test gain::tests::zero_frame_block_flushes_events_and_persists_gain ... ok
+test instrument_core::tests::cc7_scales_volume_and_cc1_enables_tremolo ... ok
+test gain::tests::stereo_applies_per_channel ... ok
+test gain::tests::unrelated_param_events_are_ignored ... ok
+test instrument_core::tests::gain_param_scales_voices ... ok
+test editor::tests::editor_ops_verbs_reject_undefined_inputs ... ok
+test editor::tests::destroy_tears_down_the_verb_popup ... ok
+test editor::tests::editor_ops_verbs_record_event_log_tokens ... ok
+test gain::tests::set_gain_plain_clamps_to_range ... ok
+test instrument_core::tests::ninth_note_steals_oldest_voice ... ok
+test editor::tests::floating_popup_surface_is_honest ... ok
+test instrument_core::tests::note_on_offset_gates_voice_start ... ok
+test instrument_core::tests::note_off_releases_then_silences ... ok
+test instrument_core::tests::note_on_renders_deterministic_voice ... ok
+test instrument_core::tests::click_respects_cc7_volume ... ok
+test instrument_core::tests::retrigger_same_key_resets_phase ... ok
+test instrument_core::tests::playing_transport_clicks_at_beat_boundaries ... ok
+test plugin::tests::lifecycle_activate_failure_reports_initialized ... ok
+test instrument_core::tests::zero_frame_block_flushes_events ... ok
+test plugin::tests::process_without_audio_ports_flushes_events_and_sleeps ... ok
+test plugin::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test plugin::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test preset::tests::catalog_is_the_shared_four_preset_pool ... ok
+test instrument_core::tests::silence_without_events ... ok
+test plugin::tests::host_driven_entry_runs_full_lifecycle_through_abi ... ok
+test plugin::tests::lifecycle_process_before_start_is_protocol_violation ... ok
+test plugin::tests::params_extension_reports_and_flushes_gain ... ok
+test preset::tests::factory_reports_one_wellformed_provider ... ok
+test stateful::tests::inspect_reports_provenance_and_typed_rejections ... ok
+test stateful::tests::lifecycle_happy_path_maps_created_to_destroyed ... ok
+test stateful::tests::activation_preserves_loaded_gain ... ok
+test stateful::tests::params_extension_reports_and_flushes_gain ... ok
+test stateful::tests::state_blob_round_trips_plain_gain ... ok
+test stateful::tests::state_extension_load_rejects_malformed_blobs ... ok
+test stateful::tests::state_extension_saves_and_loads_plain_gain ... ok
+test stateful::tests::state_load_requests_params_values_rescan ... ok
+test instrument_core::tests::seek_shifts_click_position ... ok
+test preset::tests::load_key_dispatch_is_catalog_scoped ... ok
+test stateful::tests::process_applies_param_event_sample_accurately ... ok
+test stateful::tests::rt_process_drives_paired_stereo_block_allocation_free ... ok
+test stateful::tests::v1_and_degraded_blobs_load_and_resave_canonical ... ok
+test preset::tests::preset_discovery_exposes_catalog_through_real_abi ... ok
+test instrument_core::tests::velocity_scales_amplitude ... ok
+test plugin::tests::process_applies_param_event_sample_accurately ... ok
+test plugin::tests::process_in_place_block_scales_shared_region ... ok
+test stateful::tests::state_blob_clamps_finite_out_of_range ... ok
+test preset::tests::preset_load_restores_gain_and_reports_loaded ... ok
+test stateful::tests::state_blob_rejects_malformed_input ... ok
+test preset::tests::preset_load_rejects_undefined_inputs_and_reports_errors ... ok
+test instrument_core::tests::stopped_transport_produces_no_clicks ... ok
+
+test result: ok. 90 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running unittests src\bin\ruviform-plugin-test-clap-l1-runner.rs (target\debug\deps\ruviform_plugin_test_clap_l1_runner-9fc526e76685f072.exe)
+
+running 3 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::spawn_fault_parse_recognizes_documented_modes ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\ruviform_plugin_test_vst3-e8a86b4cc0bab90e.exe)
+
+running 123 tests
+test block::tests::block_offset_bounds ... ok
+test block::tests::event_scratch_sorts_and_bounds ... ok
+test block::tests::prepare_rejects_each_boundary_violation ... ok
+test block::tests::rt_prepare_finish_block_does_not_allocate ... ok
+test block::tests::duplicated_output_channels_bounce_last_writer_wins ... ok
+test block::tests::prepare_builds_zero_copy_views ... ok
+test block::tests::smaller_block_does_not_inherit_stale_bounce_flags ... ok
+test component::tests::bus_arrangements_reject_mismatches ... ok
+test block::tests::prepare_accepts_mono_within_capacity ... ok
+test component::tests::in_place_aliased_buffers_bounce_and_write_back ... ok
+test component::tests::mono_arrangement_and_block_process ... ok
+test component::tests::gain_persists_across_blocks ... ok
+test component::tests::out_of_block_event_offsets_are_dropped ... ok
+test component::tests::process_rejected_outside_processing_state ... ok
+test component::tests::param_event_applies_sample_accurately ... ok
+test component::tests::setup_processing_accepted_while_initialized ... ok
+test component::tests::same_offset_events_last_wins ... ok
+test component::tests::rt_process_copies_gain_zero_copy ... ok
+test block::tests::partial_overlap_rejects ... ok
+test component::tests::enum_queries_reject_out_of_range_values ... ok
+test block::tests::in_place_aliased_output_bounces_and_writes_back ... ok
+test component::tests::protocol_violations_are_defined_rejects ... ok
+test component::tests::foreign_param_queues_never_reach_the_processor ... ok
+test component::tests::rt_param_scan_stays_bounded_when_host_counts_lie ... ok
+test component::tests::state_stream_reports_not_implemented ... ok
+test component::tests::terminate_allows_reinitialize ... ok
+test component::tests::setup_processing_rejects_excessive_max_frames ... ok
+test controller::tests::param_string_formats_plain_domain ... ok
+test controller::tests::param_value_by_string_parses_plain_domain ... ok
+test controller::tests::parameter_info_reports_gain_descriptor ... ok
+test controller::tests::set_param_normalized_enforces_the_domain ... ok
+test controller::tests::editor_controller_reports_fault_param ... ok
+test controller::tests::param_domain_mapping_is_non_identity ... ok
+test controller::tests::editor_controller_create_view_dispatches_on_name ... ok
+test controller::tests::state_stream_reports_not_implemented ... ok
+test component::tests::zero_frame_block_flushes_events ... ok
+test editor::tests::alloc_fault_marks_armed_block ... ok
+test editor::tests::bad_time_mode_claims_infinite_tail ... ok
+test editor::tests::disarm_restores_pass_through ... ok
+test editor::tests::editor_block_is_pass_through ... ok
+test editor::tests::error_mode_returns_process_error ... ok
+test editor_view::tests::attached_creates_real_child_hwnd ... ignored, requires a Windows window station — #631 real-dock lane owns the formal evidence
+test editor_view::tests::notification_verbs_acknowledge ... ok
+test editor_view::tests::platform_support_is_hwnd_only ... ok
+test editor_view::tests::editor_view_type_constant_is_editor ... ok
+test editor::tests::invalid_mode_fills_nan_outputs ... ok
+test editor::tests::none_mode_event_stays_inert ... ok
+test editor_view::tests::input_focus_verbs_record_event_tokens_in_order ... ok
+test editor::tests::rt_unarmed_block_is_alloc_free ... ok
+test editor_view::tests::attach_rejects_invalid_parents_honestly ... ok
+test editor_view::tests::seam_verbs_drive_real_windows ... ignored, requires a Windows window station — real HWND verification lane
+test editor_view::tests::seam_element_focus_records_fe_token ... ok
+test editor_view::tests::resize_verbs_are_honest ... ok
+test editor_view::tests::seam_child_popup_records_co_cc_tokens ... ok
+test fault::tests::bad_time_mode_claims_infinite_tail ... ok
+test fault::tests::decode_fault_maps_bands_and_exit_codes ... ok
+test editor_view::tests::seam_popup_unknown_kind_is_invalid_argument ... ok
+test editor_view::tests::set_frame_accepts_null_and_real_frame ... ok
+test fault::tests::alloc_fault_marks_armed_block ... ok
+test editor_view::tests::size_round_trips_through_on_size ... ok
+test fault::tests::disarm_restores_pass_through ... ok
+test fault::tests::error_mode_returns_process_error ... ok
+test fault::tests::foreign_param_events_do_not_arm ... ok
+test fault::tests::invalid_mode_fills_nan_outputs ... ok
+test fault::tests::unarmed_block_is_pass_through ... ok
+test fault::tests::none_mode_event_stays_inert ... ok
+test fault::tests::rt_unarmed_block_is_alloc_free ... ok
+test gain::tests::default_gain_is_unity ... ok
+test gain::tests::normalized_maps_to_plain_non_identically ... ok
+test gain::tests::offset_zero_event_applies_to_whole_block ... ok
+test gain::tests::same_offset_events_last_wins ... ok
+test gain::tests::stereo_applies_per_channel ... ok
+test gain::tests::unrelated_param_events_are_ignored ... ok
+test gain::tests::zero_frame_block_flushes_events_and_persists_gain ... ok
+test gain::tests::gain_persists_across_blocks ... ok
+test gain::tests::mid_block_event_switches_at_its_offset ... ok
+test instrument::tests::cc7_scales_volume_and_cc1_enables_tremolo ... ok
+test instrument::tests::gain_param_scales_voices ... ok
+test instrument::tests::click_respects_cc7_volume ... ok
+test instrument::tests::note_on_renders_deterministic_voice ... ok
+test instrument::tests::ninth_note_steals_oldest_voice ... ok
+test instrument::tests::note_on_offset_gates_voice_start ... ok
+test instrument::tests::note_off_releases_then_silences ... ok
+test instrument::tests::retrigger_same_key_resets_phase ... ok
+test instrument::tests::silence_without_events ... ok
+test instrument::tests::playing_transport_clicks_at_beat_boundaries ... ok
+test instrument::tests::velocity_scales_amplitude ... ok
+test instrument::tests::seek_shifts_click_position ... ok
+test preset::tests::component_exposes_preset_interfaces ... ok
+test preset::tests::program_data_round_trips_and_rejects ... ok
+test preset::tests::unit_data_shares_the_live_gain_cell ... ok
+test preset::tests::component_state_verbs_still_round_trip ... ok
+test instrument::tests::zero_frame_block_flushes_events ... ok
+test preset::tests::unit_info_enumerates_root_unit_and_factory_list ... ok
+test instrument::tests::stopped_transport_produces_no_clicks ... ok
+test single::tests::component_handler_installs_once ... ok
+test single::tests::malformed_state_blobs_are_rejected ... ok
+test single::tests::reports_own_controller_class_id ... ok
+test single::tests::terminate_is_strict_to_initialized ... ok
+test editor_view::tests::removed_tears_down_child_surface ... ok
+test single::tests::domain_verbs_match_gain_law ... ok
+test single::tests::double_initialize_is_rejected ... ok
+test editor_view::tests::seam_dialog_popup_records_po_pc_tokens ... ok
+test stateful::tests::inspect_reports_provenance_and_typed_rejections ... ok
+test stateful::tests::malformed_blobs_are_rejected ... ok
+test single::tests::value_and_state_verbs_share_one_cell ... ok
+test stateful::tests::blob_round_trips_bit_exact ... ok
+test stateful::tests::cell_store_clamps_into_param_domain ... ok
+test stateful::tests::prepare_preserves_cell_state ... ok
+test stateful::tests::component_state_verbs_round_trip_through_ibstream ... ok
+test stateful::tests::controller_state_verbs_round_trip_domains ... ok
+test stateful::tests::processor_gain_flows_through_shared_cell ... ok
+test stateful::tests::rt_process_through_shared_cell_is_allocation_free ... ok
+test stateful::tests::stateless_controller_verbs_stay_not_implemented ... ok
+test strings::tests::copy_wstring_terminates_and_truncates ... ok
+test strings::tests::cstring_eq_bounds_the_scan ... ok
+test strings::tests::cstring_eq_compares_content_exactly ... ok
+test tests::sdk_enum_i32_boundaries ... ok
+test stateful::tests::v1_component_blob_migrates_on_next_save ... ok
+test strings::tests::copy_cstring_terminates_and_truncates ... ok
+test editor_view::tests::removed_resets_popup_open_state ... ok
+test editor_view::tests::popup_verbs_are_recorded_without_popup_hwnd ... ok
+test editor_view::tests::popup_key_toggles_plugin_owned_window ... ok
+
+test result: ok. 121 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running unittests src\bin\ruviform-plugin-test-vst3-l1-runner.rs (target\debug\deps\ruviform_plugin_test_vst3_l1_runner-b7e7fc145422358d.exe)
+
+running 3 tests
+test tests::override_dir_resolves_inside_the_given_dir ... ok
+test tests::spawn_fault_parse_recognizes_documented_modes ... ok
+test tests::sibling_resolution_finds_the_workspace_fixture ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+mbx[cache]: 0 hits, 4 misses, 4 incremental, 4 bypassed; 0 B downloaded, 0 B uploaded, 61.1 MiB stored locally
+mbx[savings]: 15.1 TiB logical of old files removed while you were busy compiling other things.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --test l1_real_test_plugin_e2e -- --ignored
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+mbx[progress]: 15s elapsed; 0 hits, 2 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.23s
+     Running tests\l1_real_test_plugin_e2e.rs (target\debug\deps\l1_real_test_plugin_e2e-9ee5da039102104f.exe)
+
+running 11 tests
+test real_test_plugin_l1_missing_runner_is_spawn_failed ... ok
+test attach_integration::attach_midi_cc7_mute_reaches_fixture ... ok
+test real_test_plugin_l1_kill_reports_failed_once ... ok
+test real_test_plugin_l1_instrument_note_lifecycle ... ok
+test real_test_plugin_l1_dropped_submits_attributes_causes ... ok
+test real_test_plugin_l1_instrument_cc_and_offset_gating ... ok
+test attach_integration::attach_midi_note_on_lands_at_stamped_frame_offset ... ok
+test attach_integration::attach_midi_note_off_releases_to_silence ... ok
+test real_test_plugin_l1_full_series ... ok
+test real_test_plugin_l1_instrument_note_off_releases_to_silence ... ok
+test real_test_plugin_l1_instrument_transport_clicks ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+     Running tests\l1_real_test_plugin_e2e.rs (target\debug\deps\l1_real_test_plugin_e2e-2f3b65ba0e6e0452.exe)
+
+running 11 tests
+test real_test_plugin_l1_missing_runner_is_spawn_failed ... ok
+test real_test_plugin_l1_kill_reports_failed_once ... ok
+test real_test_plugin_l1_instrument_cc_and_offset_gating ... ok
+test attach_integration::attach_midi_cc7_mute_reaches_fixture ... ok
+test attach_integration::attach_midi_note_off_releases_to_silence ... ok
+test real_test_plugin_l1_dropped_submits_attributes_causes ... ok
+test attach_integration::attach_midi_note_on_lands_at_stamped_frame_offset ... ok
+test real_test_plugin_l1_instrument_note_lifecycle ... ok
+test real_test_plugin_l1_instrument_transport_clicks ... ok
+test real_test_plugin_l1_full_series ... ok
+test real_test_plugin_l1_instrument_note_off_releases_to_silence ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+mbx[cache]: 0 hits, 4 misses; 0 B downloaded, 0 B uploaded, 126.0 MiB stored locally
+mbx[savings]: the running total stands at 4d 16h across 7181 builds. nobody is counting except the box.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --test l1_fault_test_plugin_e2e -- --ignored
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.55s
+     Running tests\l1_fault_test_plugin_e2e.rs (target\debug\deps\l1_fault_test_plugin_e2e-0185c9e3cc0c1c8a.exe)
+
+running 20 tests
+test real_test_spawn_l1_bad_fixture_is_spawn_failed ... ok
+test real_test_fault_l1_descriptor_and_clean_block ... ok
+test real_test_spawn_l1_descriptor_mismatch_is_handshake ... ok
+test real_test_fault_l1_voluntary_exit_reports_code ... ok
+test real_test_fault_l1_bad_time_claims_infinite_tail ... ok
+test real_test_fault_l1_rt_alloc_marks_armed_blocks ... ok
+test real_test_spawn_l1_stderr_is_captured ... ok
+test real_test_fault_l1_output_events_drain ... ok
+test real_test_spawn_l1_exit_before_hello ... ok
+test real_test_spawn_l1_usage_rejection_is_spawn_failed ... ok
+test real_test_fault_l1_invalid_emits_nan_block ... ok
+test real_test_fault_l1_error_is_defined_rejection ... ok
+test real_test_fault_l1_exit_zero_is_failure ... ok
+test real_test_spawn_l1_create_instance_rejection ... ok
+test real_test_spawn_l1_hang_before_hello_times_out ... ok
+test real_test_spawn_l1_abort_before_hello ... ok
+test real_test_fault_l1_abort_fails_instance ... ok
+test real_test_fault_l1_dedicated_isolation ... ok
+test real_test_fault_l1_hang_converges_on_timeout ... ok
+test real_test_fault_l1_bundled_crash_fans_out ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running tests\l1_fault_test_plugin_e2e.rs (target\debug\deps\l1_fault_test_plugin_e2e-d4e25e8af9799ce1.exe)
+
+running 21 tests
+test real_test_spawn_l1_bad_fixture_is_spawn_failed ... ok
+test real_test_fault_l1_descriptor_and_clean_block ... ok
+test real_test_fault_l1_invalid_emits_nan_block ... ok
+test real_test_fault_l1_exit_zero_is_failure ... ok
+test real_test_fault_l1_error_is_defined_rejection ... ok
+test real_test_fault_l1_bad_time_claims_infinite_tail ... ok
+test real_test_fault_l1_voluntary_exit_reports_code ... ok
+test real_test_spawn_l1_descriptor_mismatch_is_handshake ... ok
+test real_test_spawn_l1_create_instance_rejection ... ok
+test real_test_fault_l1_rt_alloc_marks_armed_blocks ... ok
+test real_test_editor_l1_fault_hang_converges_on_timeout ... ok
+test real_test_spawn_l1_stderr_is_captured ... ok
+test real_test_spawn_l1_exit_before_hello ... ok
+test real_test_spawn_l1_usage_rejection_is_spawn_failed ... ok
+test real_test_fault_l1_hang_converges_on_timeout ... ok
+test real_test_spawn_l1_abort_before_hello ... ok
+test real_test_fault_l1_abort_fails_instance ... ok
+mbx[progress]: 15s elapsed; 0 hits, 2 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+test real_test_editor_l1_fault_abort_fails_instance ... ok
+test real_test_fault_l1_bundled_crash_fans_out ... ok
+test real_test_spawn_l1_hang_before_hello_times_out ... ok
+test real_test_fault_l1_dedicated_isolation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 45.8 MiB stored locally
+mbx[savings]: 15.1 TiB logical of old files removed while you were busy compiling other things.
+[test-l1-real-plugin] $ cargo test -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --features l1-runner --test l1_stateful_test_plugin_e2e -- --ignored
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+   Compiling ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.14s
+     Running tests\l1_stateful_test_plugin_e2e.rs (target\debug\deps\l1_stateful_test_plugin_e2e-8d6b895a992d1b21.exe)
+
+running 5 tests
+test real_stateful_test_plugin_l1_save_mutate_restore_save ... ok
+test real_stateful_test_plugin_l1_state_restore_announces_dirty ... ok
+test real_stateful_test_plugin_l1_rejects_malformed_state ... ok
+test real_stateful_test_plugin_l1_state_restore_requests_param_rescan ... ok
+test real_stateful_test_plugin_l1_migrates_and_degrades_state ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests\l1_stateful_test_plugin_e2e.rs (target\debug\deps\l1_stateful_test_plugin_e2e-830bccb34250a7bd.exe)
+
+running 7 tests
+test real_stateful_test_plugin_l1_rejects_malformed_state ... ok
+test real_stateful_test_plugin_l1_state_restore_reports_param_value ... ok
+test real_stateful_test_plugin_l1_migrates_and_degrades_state ... ok
+test real_stateful_single_test_plugin_l1_save_mutate_restore_save ... ok
+test real_stateful_test_plugin_l1_state_restore_announces_dirty ... ok
+test real_stateful_single_test_plugin_l1_rejects_malformed_state ... ok
+test real_stateful_test_plugin_l1_save_mutate_restore_save ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+mbx[progress]: 15s elapsed; 0 hits, 2 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 45.2 MiB stored locally
