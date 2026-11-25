@@ -18,16 +18,16 @@ worker ホストは `Ruviform Cable Input`/`Ruviform Cable Output`/`Ruviform MID
 
 | 検証 | 結果 | evidence |
 | --- | --- | --- |
-| `mise run fmt-check` | exit 0 | `local-final-verification.log` |
-| `mise run check ruviform-audio-test` | exit 0（前段ログ） | `local-test-ruviform-audio-test.log` |
-| `mise run lint ruviform-audio-test` | exit 0 | `local-lint.log` |
-| `mise run test ruviform-audio-test` | exit 0 | `local-final-verification.log` |
-| `mise run test-os-endpoint-wiring` | exit 0・両 ignored leg `ok`（canonical、stderr capture のため verdict 非表示） | `local-final-verification.log` / `local-test-os-endpoint-wiring-canonical.log` |
-| 補助: `mise exec -- cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1 --nocapture` | exit 0。audio/midi とも `verdict: NotRun — NOT_PROVISIONED`、`run_metadata` は `result:"not-run"` / `level:"ext-l3"` / `environment_kind:"virtual-os-endpoint"` | `local-os-endpoint-wiring-nocapture.log` / `local-run-metadata-*.json` |
-| `mise run test-ci-daily` | exit 0 | `local-hygiene-verification.log` |
-| `mise run test-ci-tracker` | exit 0 | `local-hygiene-verification.log` |
-| `mise exec -- prek run --all-files` | exit 0 | `local-hygiene-verification.log` |
-| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | exit 0 | `local-actionlint.log` |
+| `mise run fmt-check` | exit 0 | `local-final-verification.txt` |
+| `mise run check ruviform-audio-test` | exit 0（Completion Gate 指摘後に追加実行） | `local-check-ruviform-audio-test.txt` |
+| `mise run lint ruviform-audio-test` | exit 0 | `local-lint.txt` |
+| `mise run test ruviform-audio-test` | exit 0 | `local-final-verification.txt` |
+| `mise run test-os-endpoint-wiring` | exit 0・両 ignored leg `ok`（canonical、stderr capture のため verdict 非表示） | `local-final-verification.txt` / `local-test-os-endpoint-wiring-canonical.txt` |
+| 補助: `mise exec -- cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1 --nocapture` | exit 0。audio/midi とも `verdict: NotRun — NOT_PROVISIONED`、`run_metadata` は `result:"not-run"` / `level:"ext-l3"` / `environment_kind:"virtual-os-endpoint"` | `local-os-endpoint-wiring-nocapture.txt` / `local-run-metadata-*.json` |
+| `mise run test-ci-daily` | exit 0 | `local-hygiene-verification.txt` |
+| `mise run test-ci-tracker` | exit 0 | `local-hygiene-verification.txt` |
+| `mise exec -- prek run --all-files` | exit 0 | `local-hygiene-verification.txt` |
+| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | exit 0 | `local-actionlint.txt` |
 
 ローカル RunMetadata JSON は compile-time/runtime tmpdir 配線の確認用で、`repo:"scarecrow173/ruviform"` と base SHA が記録されている。branch head SHA は workflow dispatch 時に `${{ github.sha }}` で注入する。
 
