@@ -81,7 +81,7 @@ loopback!enumerate_at -> input_ports -> select_loopback_pair
 - `crates/ruviform-midi-device` `os::windows::interface_id()`（`windows.rs`）は `DRV_QUERYDEVICEINTERFACE` を **`dw1=size, dw2=buf` の取り違え順**で呼ぶ。WinMM 契約（および midir 実装）は `dw1=buf pointer, dw2=size`。
 - winmmbase は `dw1` を宛先 pointer として `StringCchCopyW` するため、**AV address `0x90` = interface string byte size 144 が pointer 解釈されたもの**。attempt-5 で正しい引数順の同 query が `rc=0` + interface path（72 UTF-16 units = 144 bytes = `0x90` で整合）を返すことを対照証明済み。
 - latent 条件: `SIZE` query が 0 を返す port（legacy / interface 未応答）は early-return で crash に到達しない。interface を応答する real WDM device（本 port を含む）が input に存在した時点で確定 crash — OS/driver 非依存の純粋な crate bug。`resolve_index` も同じ `interface_id` を通るため同じ crash 経路を持つ。
-- **修正は `crates/**`（本 task の編集境界外）**: `interface_id` の `DRV_QUERYDEVICEINTERFACE` 呼出しで `dw1`/`dw2` を正順に入れ替える（`buf.as_mut_ptr() as usize, size as usize`）— 1 行修正。
+- **修正は `crates/**`**: `interface_id` の `DRV_QUERYDEVICEINTERFACE` 呼出しで `dw1`/`dw2` を正順に入れ替える（`buf.as_mut_ptr() as usize, size as usize`）— 1 行修正。coordinator 判断で `crates/ruviform-midi-device/src/os/windows.rs` が rf#978 占有に追加され attempt-6 として適用・検証する。
 - 付随観測: open-handle 版の同 query は `rc=8` NOTSUPPORTED（「open してから query」の workaround は不適）。device-id-as-handle 経路のみ応答する — midir と同じ呼出し形態が正しい。
 
 ### 4.2 driver 機能判定

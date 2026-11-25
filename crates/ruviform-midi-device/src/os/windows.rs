@@ -248,8 +248,8 @@ fn interface_id(index: u32) -> Option<String> {
         let rc = Audio::midiInMessage(
             index as usize as HMIDIIN,
             DRV_QUERYDEVICEINTERFACE,
-            size as usize,
             buf.as_mut_ptr() as usize,
+            size as usize,
         );
         if rc != MMSYSERR_NOERROR {
             return None;
