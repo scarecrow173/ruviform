@@ -33,19 +33,31 @@ worker ホストは `Ruviform Cable Input`/`Ruviform Cable Output`/`Ruviform MID
 
 ## branch-ref provisioned 実走
 
-この節は workflow dispatch artifact の取得後に確定する。判定は run conclusion ではなく、次の artifact を読む。
+pass 条件: 両 leg `result:"pass"`、`level:"ext-l3"`、`environment_kind:"virtual-os-endpoint"`、`repo:"scarecrow173/ruviform"`、SHA が dispatch した branch head と一致し、stage log に対応する `verdict: Pass` 行があること。run conclusion は判定根拠にしない。
 
-- `vaudio-probe-windows-2025.json` の `os-endpoint-wiring` stage record
-- `stage-os-endpoint-wiring-windows-2025.txt`
-- `os-endpoint-run-metadata-windows-2025/run-metadata-rf629-audio-virtual-endpoint-render-capture.json`
-- `os-endpoint-run-metadata-windows-2025/run-metadata-rf629-midi-virtual-endpoint-loopback.json`
+### attempt 1 — run 45554544765 / SHA 50edac47118028c5ab4f45a0bbd9c86451c73998
 
-pass 条件: 両 leg `result:"pass"`、`level:"ext-l3"`、`environment_kind:"virtual-os-endpoint"`、`repo:"scarecrow173/ruviform"`、SHA が dispatch した branch head と一致し、stage log に対応する `verdict: Pass` 行があること。
+- artifact: `attempt1-vaudio-probe-windows-2025.json`、`attempt1-stage-os-endpoint-wiring-windows-2025.txt`、両 `attempt1-run-metadata-*.json`。
+- stage record: `os-endpoint-wiring` は `error`（fail-closed 記録どおり。metadata copy は両方成功）。
+- midi leg: `result:"pass"`、`level:"ext-l3"`、`environment_kind:"virtual-os-endpoint"`、repo/SHA 一致、`verdict: Pass`。
+- audio leg: `result:"fail"`。`output timestamp regressions: 2`（raw 4 / effective 2、regression callback indices `[3,4,77,217]`、restart boundary 302）。idx 3/4 は epoch 1 grace だが、77/217 は mid-epoch なので oracle どおり fatal。marker/RMS・frame/domain/channel・lifecycle・input timestamp は通過。
+- 切り分け: provisioning/pair・MIDI・audio stimulus path は成立。残りは output timestamp oracle または実行環境 timing。同一 run の `stream-roundtrip`（rf#977 verifier）は直前に pass しているため、まず同一 SHA の再実走で変動性を確認する。
+
+### attempt 2 — run 45555696425 / SHA 50edac47118028c5ab4f45a0bbd9c86451c73998
+
+**AC3 実走証拠（pass）**。artifact は `attempt2-vaudio-probe-windows-2025.json`、`attempt2-stage-os-endpoint-wiring-windows-2025.txt`、両 `attempt2-run-metadata-*.json`。
+
+- stage record: `os-endpoint-wiring` `status:"ok"`、`detail:"test_exit=0; audio=pass; midi=pass; verdicts=2; metadata=2; copied=2"`。
+- audio leg: `result:"pass"`、`level:"ext-l3"`、`environment_kind:"virtual-os-endpoint"`、repo/SHA 一致。stage log に `verdict: Pass — render→capture round-trip observed`。timestamp 観測は raw 3 / effective 0・epoch reset 1・indices `[3,4,317]`（idx 3/4 は epoch 1 grace、317 は boundary 302 後の epoch 2 grace）で、rf#977 契約の transient 分類どおり。
+- midi leg: `result:"pass"`、同じく level/environment/repo/SHA 一致。stage log に `verdict: Pass — round-trip observed through real OS ports`。
+- test harness: `test result: ok. 2 passed` / exit 0。RunMetadata JSON 2 件が artifact へ copy された。
+
+attempt 1 の mid-epoch regression は attempt 2 で再現せず、attempt 2 では regression が両 epoch の grace window にだけ分布した。attempt 1 は oracle が mid-epoch regression を fatal に倒す fail-closed 動作の実証として残す。
 
 ## 受入条件メモ
 
 - 未 provisioned fail-closed: ローカルで両 leg NotRun を観測（上表）。
-- provisioned Pass: branch-ref workflow artifact で確定（このファイルに追記）。
+- provisioned Pass: attempt 2 run 45555696425 の artifact で両 leg `result:"pass"` を確認。
 - canonical lane: `mise run test-os-endpoint-wiring` exit 0 を確認。
 
 ## 残課題
