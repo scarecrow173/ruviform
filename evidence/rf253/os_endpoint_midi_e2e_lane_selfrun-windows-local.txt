@@ -45,3 +45,12 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   `environment_kind=virtual-os-endpoint` claim is made anywhere.
 - Real end-to-end Pass remains gated on the provisioned Windows runner
   (scarecrow173/ruviform#762) — not obtained and not claimed in this slice.
+
+## Reader note — 2026-11-25 vertical slice
+
+This file is historical evidence for the original verifier/lane slice. The
+2026-11-25 vertical slice intentionally emits Case Schema v1 `RunMetadata`
+whose case envelope records `environment_kind=virtual-os-endpoint`; that field
+is not by itself an acceptance-grade virtual-endpoint Pass claim. Current
+provenance semantics, local validation, and workflow harvest requirements are
+in `evidence/rf253/verification-2026-11-25.md`.

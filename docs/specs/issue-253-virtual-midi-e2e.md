@@ -252,3 +252,41 @@ compile/lint 収集は変わらず有効で、専用 lint lane は設けない�
 provisioned pair での実走 Pass は引き続き
 `scarecrow173/ruviform#762` の provisioned Windows runner が
 gate する。実行記録は `evidence/rf253/`。
+
+## 追記（2026-11-25）— RF#628 supply・RunMetadata・provisioned RvfMidi stage
+
+本 vertical slice では、上記 verifier の stimulus を RF#628 の
+`MidiScenario`/`run_midi_trace` 供給へ接続した。本 case は Play-at-0・
+commands 空の playthrough のみを使い、`midi_trace_frames_monotonic` と
+`midi_expected_playthrough`/`midi_trace_eq` で供給 trace を独立 oracle と
+照合してから output port へ送る。trace frame 間隔は wall-clock pacing の
+名目入力に使うが、PCM/counter oracle は引き続き観測された OS timestamp
+だけを根拠にし、deterministic clock を実 OS 時刻の証明として扱わない。
+
+Case Schema v1 `RunMetadata` を terminal verdict ごとに emit する。case id は
+`rf253.midi.virtual-endpoint.host-plugin-e2e`、level は `ext-l3`、
+environment kind は `virtual-os-endpoint` である。ただし name match は
+loopback candidate の観測にすぎず、acceptance-grade の Pass 解釈には
+`virtual-audio-driver-probe.yml` の RvfMidi provisioning provenance
+（`midi-endpoint-probe` の candidates・`midi-loopback` Pass・stage detail）を
+必要とする。manual/unverified run は evidence にその weaker provenance を
+記録する。
+
+`virtual-audio-driver-probe.yml` に `os-endpoint-midi-e2e` stage を追加し、
+fixture build → `--nocapture` 補助実行 → verdict/RunMetadata harvest →
+`os-endpoint-midi-e2e-run-metadata-<os>/` artifact copy を行う。stage `ok`
+は harness の honest 完走を意味し、AC 判定は RunMetadata JSON と provenance
+evidence を読んで行う。Issue #253 は close しない。
+
+### stop/seek/overflow oracle ownership mapping
+
+| concern | 本 case での扱い | oracle owner |
+| --- | --- | --- |
+| playthrough supply | 本 case が直接検証する。commands 空の RF#628 trace を `midi_expected_playthrough` + `midi_trace_eq` + monotonic invariant に照合する | `crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs` |
+| seek/loop/pause | OS endpoint stimulus には使わない。RF#628 deterministic trace のコマンド意味論として既存テストが担保する | `crates/ruviform-audio-test/tests/midi.rs` の `seek_skips_intermediate_positions`/`loop_region_repeats_in_loop_events`/`pause_stops_event_delivery` |
+| stop | OS endpoint stimulus には使わない。transport command 適用・budget 意味論は media-core scheduler 契約が担保する | `crates/ruviform-media-core/src/transport_schedule.rs` の scheduler tests |
+| queue overflow/loss | 本 case は overflow を人為注入せず、`InputTx`/pump/`InputStage` counters を観測・記録する。overflow/ledger eviction の決定的再現は bridge 側の既存 oracle が担う | `crates/ruviform-audio-plugin-bridge/tests/midi_wiring.rs` の `overflow_reports_are_observable`/`ledger_eviction_delivers_synthetic_off` |
+
+したがって旧来の「Test Runtime（#628）との結線」は no-command playthrough
+supply について本 slice で解消されたが、stop/seek/loop/pause を OS endpoint
+経由で再現する case や overflow fault injection は本 slice の非目標のままである。
