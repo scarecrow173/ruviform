@@ -16,11 +16,11 @@ CLAP 側も `focus_host_window` は private inherent method だが、Windows 側
 
 ## ローカル検証
 
-実施 OS は Windows x86_64（Orca worker）である。結果はいずれも canonical な mise タスクによる。VST3 側の個別検証は VST3 修正後に実施し、CLAP 側の個別検証と L1 lane 再検証は CLAP 修正後に実施した。
+実施 OS は Windows x86_64（Orca worker）である。結果はいずれも canonical な mise タスクによる。VST3 側の個別検証は VST3 修正後に実施し、CLAP 側の個別検証と L1 lane 再検証は CLAP 修正後に実施した。`fmt-check` と prek は最新 main 取り込み後にも実施した。
 
 | コマンド | exit code | 結果 |
 | --- | ---: | --- |
-| `mise run fmt-check` | 0 | Pass（VST3 修正後、CLAP 修正後のいずれも） |
+| `mise run fmt-check` | 0 | Pass（VST3 修正後、CLAP 修正後、最新 main 取り込み後） |
 | `mise run check ruviform-plugin-vst3 --features host` | 0 | Pass |
 | `mise run lint ruviform-plugin-vst3 --features host` | 0 | Pass |
 | `mise run test ruviform-plugin-vst3 --features host` | 0 | Pass（99 lib tests + 2 runner bin tests。L1 E2E integration tests は通常実行では ignored） |
@@ -29,7 +29,7 @@ CLAP 側も `focus_host_window` は private inherent method だが、Windows 側
 | `mise run test ruviform-plugin-clap --features host` | 0 | Pass（82 lib tests + 2 runner bin tests + 3 doctests。L1 E2E integration tests は通常実行では ignored） |
 | `mise run lint-l1-real-plugin` | 0 | Pass（CLAP 修正後に再実施） |
 | `mise run test-l1-real-plugin` | 0 | Pass（CLAP 修正後に再実施。CLAP/VST3 host feature build、lib/bin tests、real plugin/fault/stateful L1 E2E を含む） |
-| `mise exec -- prek run --all-files` | 0 | Pass（VST3/CLAP 修正後と evidence 更新後に実施） |
+| `mise exec -- prek run --all-files` | 0 | Pass（VST3/CLAP 修正後、最新 main 取り込み後、最終 evidence 更新後） |
 
 ## branch CI
 
@@ -47,25 +47,39 @@ branch は `scarecrow173/rf1011-ubuntu-clippy` である。ruviform の `ci.yml`
 | `l1-real-verify (ubuntu-latest)` | `failure`（job `139261523483`） |
 | 失敗内容 | いずれも `crates/ruviform-plugin-clap/src/host.rs:1260` の `clippy::unused_self`。VST3 側の当初指摘は再発しなかった |
 
-### 反復 2: CLAP 修正を追加
+### 反復 2: CLAP 修正を追加（main 取り込み前）
 
 | 項目 | 値 |
 | --- | --- |
-| コード検証対象 SHA | `156b25c1693701c0a30ac27bcd8459d44dc7c11d` |
+| HEAD SHA | `156b25c1693701c0a30ac27bcd8459d44dc7c11d` |
 | run | `45633428519` — https://github.com/scarecrow173/ruviform/actions/runs/45633428519 |
 | run の `headSha` | `156b25c1693701c0a30ac27bcd8459d44dc7c11d` |
 | 全体 conclusion | `failure` |
 | `verify (ubuntu-latest)` | `success`（job `139272452070`） |
 | `l1-real-verify (ubuntu-latest)` | `success`（job `139272452679`） |
-| ubuntu lane 以外の失敗 | `verify-macos`（job `139272452223`）と `ui-verify-macos`（job `139272452342`）が `cancelled`。GitHub-hosted macOS runner を複数 attempt で acquire できなかったインフラ失敗で、今回のコード差分に起因する compile/test/lint failure ではない。`ci-summary`（job `139282922868`）はこれらを集約して `failure` になった |
+| ubuntu lane 以外の失敗 | `verify-macos`（job `139272452223`）と `ui-verify-macos`（job `139272452342`）が `cancelled`。GitHub-hosted macOS runner を複数 attempt で acquire できなかったインフラ失敗で、今回のコード差分に起因する compile/test/lint failure ではなかった。`ci-summary`（job `139282922868`）はこれらを集約して `failure` になった |
 
-run `45633428519` は SHA `156b25c1693701c0a30ac27bcd8459d44dc7c11d` のコードを検証し、Worker の責務である ubuntu 2 job はいずれも `success` だった。この結果を記録する後続 commit は `evidence/rf1011/verification.md` だけの evidence-only commit であり、Rust コードの振る舞いを変えないため、Coordinator の承認により再 dispatch は行わない。したがって、最終 branch HEAD そのものを指す CI run ではなく、最終コード内容を検証した run として読む必要がある。
+### 反復 3: 最新 main 取り込み後の最終コード検証
+
+取り込んだ `origin/main` は `c71915bc5b98c7da0c9fc87c622f562cbaf0183e` である。main 側の差分は docs/policy/evidence/エージェント skill のみで、Rust コードの差分を含まなかった。
+
+| 項目 | 値 |
+| --- | --- |
+| コード検証対象 SHA | `cc086a4e2f1ae7fdfd6c6e396ed366909a8635e7` |
+| run | `45636938996` — https://github.com/scarecrow173/ruviform/actions/runs/45636938996 |
+| run の `headSha` | `cc086a4e2f1ae7fdfd6c6e396ed366909a8635e7` |
+| 全体 conclusion | `success` |
+| `verify (ubuntu-latest)` | `success`（job `139284839518`） |
+| `l1-real-verify (ubuntu-latest)` | `success`（job `139284839931`） |
+| `ci-summary` | `success`（job `139290184945`） |
+
+run `45636938996` は SHA `cc086a4e2f1ae7fdfd6c6e396ed366909a8635e7` のコードを検証し、全体と ubuntu 2 job が `success` だった。この結果を記録する後続 commit は `evidence/rf1011/verification.md` だけの evidence-only commit であり、Rust コードの振る舞いを変えないため、Coordinator の承認により再 dispatch は行わない。したがって、最終 branch HEAD そのものを指す CI run ではなく、最終コード内容を検証した run として読む必要がある。
 
 ## lease 外の追加 clippy 指摘と Coordinator 確認
 
 lease 外の `crates/ruviform-plugin-clap/src/host.rs` に追加指摘があったため、編集前に Coordinator へファイル名・lint・最小修正方針を確認した。Coordinator は同ファイルを rf#1011 の lease に追加し、両 cfg variant を private associated function に揃える方針を承認した。callsite inline + helper 削除の別案は、cfg が呼び出し側へ移って構造が劣るとして不採用になった。
 
-branch CI の結果を evidence に記録すると、その記録 commit 自体が branch HEAD を進める固定点矛盾についても Coordinator に確認した。Coordinator は run `45633428519` をコード内容の最終検証とし、結果を記録する evidence-only commit では再 dispatch を不要と判断した。ただし、この commit が evidence/docs のみであることを diff で検証し、最終 HEAD の CI pass と誤読されないよう SHA 対応を明記する条件が付いた。
+branch CI の結果を evidence に記録すると、その記録 commit 自体が branch HEAD を進める固定点矛盾についても Coordinator に確認した。Coordinator は最終コード検証 run の結果を記録する evidence-only commit では再 dispatch を不要と判断した。ただし、この commit が evidence/docs のみであることを diff で検証し、最終 HEAD の CI pass と誤読されないよう SHA 対応を明記する条件が付いた。
 
 ## 統合検証の境界
 
