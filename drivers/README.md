@@ -22,15 +22,19 @@ test-signed driver の install 可否を判定するための**最小 WDM null d
 
 ## rvf-virtual-audio/
 
-Issue #977（Slice B stage 1）の仮想オーディオ endpoint driver。Microsoft
+Issue #977（Slice B）の仮想オーディオ endpoint driver + Issue #978
+（Slice C）の仮想 MIDI loopback miniport。Microsoft
 SysVAD サンプル（MS-PL）を render/capture 1 対に最小化した KMDF
-port-class audio driver。render `Ruviform Cable Input` / capture
-`Ruviform Cable Output` の MMDevice endpoint を生成する。
+port-class audio driver に、WDK 8.1 DMusUART 由来（MS-LPL）の DMus
+MIDI miniport を同梱する。render `Ruviform Cable Input` / capture
+`Ruviform Cable Output` の MMDevice endpoint に加え、kernel loopback
+（render→capture の音声経路 — stage 2 で実装）と、WinMM midiIn/midiOut
+双方に同名で列挙される `Ruviform MIDI Loopback` port を生成する。
 
 - 出所・vendoring 対応表・変更点は `rvf-virtual-audio/PROVENANCE.md`、
   build/install 手順の概要は `rvf-virtual-audio/README.md` を参照。
 - ソースのみを保持する（`.sys`/`.cat`/`.cer`・`bin/`/`obj/` は commit
   しない — このディレクトリの `.gitignore` を参照）。
-- build→test-sign→install→endpoint 列挙は手動 workflow
-  `.github/workflows/virtual-audio-driver-probe.yml`（`workflow_dispatch`
-  のみ、windows-2025/x64）が stage 化して実施する。
+- build→test-sign→install→endpoint/port provisioning→probe→lane 実走は
+  手動 workflow `.github/workflows/virtual-audio-driver-probe.yml`
+  （`workflow_dispatch` のみ、windows-2025/x64）が stage 化して実施する。
