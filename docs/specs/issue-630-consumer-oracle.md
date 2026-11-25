@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #630 AC7 consumer-oracle slice — fixture contract manifest + consumer oracle 対応表 + dep 非汚染 evidence spec"
 created: "2026-11-21"
-updated: "2026-11-24"
+updated: "2026-11-25"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -125,9 +125,19 @@ consumer 側実走が要る行は `external-owner`/`NotRun` のまま残す。
 
 ### 4. dep 非汚染 evidence
 
-両 consumer の `Cargo.lock` に `ruviform-plugin-test-{vst3,clap}`・
-`ruviform-plugin-dock-test` が非含有であることの grep 実測を記録
-する（コマンド・両 repo の対象 SHA・exit code・観測結果）。
+両 consumer の `Cargo.lock` に対する
+`ruviform-plugin-test-{vst3,clap}`・`ruviform-plugin-dock-test`
+の grep 実測を記録する（コマンド・両 repo の対象 SHA・exit
+code・観測結果）。現行状態（2026-11-25 再実測）: audio-lens は
+3 crate 名とも非含有（exit 1 — AC7 の AudioLens 節は不変に
+成立）、synvelis は fixture 3 crate を含有するが経路は sv#176
+S1（synvelis PR #640）による `crates/synvelis-app/Cargo.toml`
+`[dev-dependencies]` のみの consumer 自主採用で、
+`[dependencies]`（production DAG）には非含有。「強制しない」
+の証明は ruviform production DAG 非依存（構造半分）と
+consumer lock grep（実測半分）の 2 半分で記録し、dev-dep 経路
+の自主採用は強制の否定にならない（design doc「dep 非汚染の
+証明形」節）。
 
 ## 受入条件（slice 確定版）
 
@@ -144,6 +154,9 @@ consumer 側実走が要る行は `external-owner`/`NotRun` のまま残す。
    （照合不能行・観測不能行を Pass と装っていない）。
 4. 両 consumer `Cargo.lock` の grep 実測（コマンド・両 repo の
    対象 SHA・exit code・結果）が evidence に記録されている。
+   現行の観測結果は audio-lens 非含有・synvelis dev-dep 経路含有
+   （production DAG 非含有）であり、2 半分の分離記録（要件 4）
+   と矛盾しない正直な記述になっている。
 5. doc chain 4 文書 + verification evidence + 両 crate README が
    揃っている。docs index（`docs/**/README.md`）は未同期のまま
    （Coordinator が統合時に整備）。
@@ -160,10 +173,23 @@ consumer 側実走が要る行は `external-owner`/`NotRun` のまま残す。
   `resolved` として追跡記録を残す。
 - editor popup の real-HWND host harness / L1 editor 面 —
   Issue #630 残件。`scarecrow173/ruviform#631` real-dock lane 責務。
-- AC4 の実 Window/DComp gate（`scarecrow173/ruviform#532` 着地待ちの
-  外部 gate・既知 soft）— 本 slice で Pass/Fail を判定しない。
+- ~~AC4 の実 Window/DComp gate（`scarecrow173/ruviform#532` 着地待ちの
+  外部 gate・既知 soft）~~ — **解消済み**: #532 は CLOSED
+  （2026-11-21）。ac-inventory AC4 行は Pass 判定済み（VST3 leg
+  32 case + CLAP leg 14 case 全 pass・class A/B 修正実走 + class C
+  確定機序の `expected_outcome` 記録で再現・解消判定に使用
+  可能）。manifest の residual は `resolved` として追跡記録を
+  残す（`clap-output-event-drain` 先例）。
 - consumer 実走 legs — 各 consumer Issue の責務。consumer repo
   への書き込み・consumer lane の起動・実走の代行はしない。
+  sv#176 S1（synvelis PR #640）で headless real-ABI leg は実走
+  済み（HEADLESS_MATRIX 5 leg pass・product/CLAP legs 実走 —
+  出典は `evidence/sv176/s1-headless-probe.md` ほか、manifest
+  sv#176 行 `consumerRun.note`）が、in-process real-ABI の
+  headless 結果であり Native Dock/実 OS の PD-01..07 受入判定
+  ではない — real-OS legs は引き続き sv#176 + rf#631 責務の
+  external-owner。sv#101/#127/#128 の実走 legs も同様に各 Issue
+  の責務で残る。
 - `.rs`/`tests/`/`Cargo.toml`/`Cargo.lock`/`mise.toml`/`.github/**`
   変更、docs index 更新、新規 mise task/lane 追加 — 一切なし。
 - al#127 の実走 — AL は plugin host 非提供のため NotApplicable
@@ -171,4 +197,6 @@ consumer 側実走が要る行は `external-owner`/`NotRun` のまま残す。
 - 無関係なリファクタリング・既存文書の書き換え — 既存 doc
   chain・evidence は read-only 参照。
 - PR は `Refs #630` — AC7 の確定判定は consumer 実走 evidence
-  待ち + AC4 gate・残件が残るため Issue は開いたまま。
+  待ち（real-OS PD-01..07 legs と sv#101/#127/#128 の実走 legs
+  は external-owner のまま）のため Issue は開いたまま。AC4
+  gate は解消済みで残件ではない。
