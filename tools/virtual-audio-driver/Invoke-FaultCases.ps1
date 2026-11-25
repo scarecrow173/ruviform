@@ -94,7 +94,7 @@ function Invoke-MidiWinmmProbe([string]$label) {
   $out = @(& pwsh -NoProfile -NonInteractive -File tools/testsigned-driver/midi-winmm-probe.ps1 2>&1)
   $probeExit = $LASTEXITCODE
   $out | Out-File -FilePath $file -Encoding utf8
-  $out | Select-Object -First 80 | ForEach-Object { "    midi[$label] $_" | Out-Probe $log }
+  $out | Select-Object -First 80 | ForEach-Object { "    midi[$label] $_" | Out-Probe $log | Out-Null }
   $present = (($out -join "`n") -match 'Ruviform MIDI Loopback')
   Write-FaultLog "midi probe[$label]: exit=$probeExit loopback_present=$present file=$file"
   return [ordered]@{ exit = $probeExit; present = $present; file = $file }
@@ -127,7 +127,7 @@ function Set-MicConsentState([string]$mode) {
       $problems += "$($t.tag)=error"
     }
   }
-  return $problems
+  return ,$problems
 }
 
 function Restart-FaultAudioServices {
@@ -145,7 +145,7 @@ function Restart-FaultAudioServices {
     }
   }
   Start-Sleep -Seconds 2
-  return $problems
+  return ,$problems
 }
 
 function Invoke-TestDeviceState([string]$action, [string]$instanceId) {
@@ -171,6 +171,41 @@ function Invoke-TestDeviceCreate {
   } catch {
     return [ordered]@{ success = $false; output = @(); error = $_.Exception.Message; instance_id = '' }
   }
+}
+
+
+function Invoke-AudioEndpointProbe([string]$label) {
+  $file = "fault-audio-$label-$os.txt"
+  $out = @(& ./tools/virtual-audio-driver/Invoke-EndpointProbe.ps1 -OutFile $file 2>&1)
+  $probeExit = $LASTEXITCODE
+  $pairCount = 0
+  foreach ($line in $out) {
+    if ("$line" -match '^pair_count=(\d+)') {
+      $pairCount = [int]$Matches[1]
+      break
+    }
+  }
+  Write-FaultLog "audio probe[$label]: exit=$probeExit pair_count=$pairCount file=$file"
+  return [ordered]@{ exit = $probeExit; pair_count = $pairCount; file = $file }
+}
+
+function Wait-EndpointSurfaceRecovery([int]$seconds) {
+  $deadline = (Get-Date).AddSeconds($seconds)
+  $poll = 0
+  $midiLast = $null
+  $audioLast = $null
+  while ((Get-Date) -lt $deadline) {
+    $poll += 1
+    $midiLast = Invoke-MidiWinmmProbe "recovery-poll-$poll"
+    $audioLast = Invoke-AudioEndpointProbe "recovery-poll-$poll"
+    if ($midiLast.present -and $audioLast.pair_count -ge 1) {
+      Write-FaultLog "endpoint surfaces recovered on poll=$poll"
+      return [ordered]@{ success = $true; midi = $midiLast; audio = $audioLast; polls = $poll }
+    }
+    Start-Sleep -Seconds 3
+  }
+  Write-FaultLog "endpoint surface recovery timeout after $seconds seconds (midi_present=$($midiLast.present) audio_pair_count=$($audioLast.pair_count))"
+  return [ordered]@{ success = $false; midi = $midiLast; audio = $audioLast; polls = $poll }
 }
 
 function Get-StageDetail([string]$stage) {
@@ -205,6 +240,80 @@ if (-not $canRun) {
     Add-FaultCase ([ordered]@{ case = $case; result = 'NotRun'; expected = 'provisioned-devnode-admin-controller'; observed = "instance_id=$iid admin=$isAdmin"; detail = 'fault-controller-prerequisites-not-satisfied' })
   }
 } else {
+  # ---- microphone permission denial ----
+  $case = 'permission_denial_audio'
+  $observed = "fault-permission-observed-$os.txt"
+  $restore = "fault-permission-restore-$os.txt"
+  $resultFile = "fault-permission-result-$os.txt"
+  Remove-Item $observed, $restore, $resultFile -Force -ErrorAction SilentlyContinue
+  Write-FaultLog "--- case $case ---"
+  $job = $null
+  $jobOutput = @()
+  $permissionControllerProblems = @()
+  try {
+    $denyProblems = Set-MicConsentState 'Deny'
+    $restartProblems = Restart-FaultAudioServices
+    $permissionControllerProblems += $denyProblems + $restartProblems
+    if ($permissionControllerProblems.Count) {
+      Write-FaultLog "permission controller setup problems: $($permissionControllerProblems -join ',')"
+    }
+    $job = Start-FaultTestJob 'virtual_audio_permission_denial_fault' @{
+      RUVIFORM_FAULT_PERMISSION_DENIAL = '1'
+      RUVIFORM_FAULT_OBSERVED_FILE = "$PWD\$observed"
+      RUVIFORM_FAULT_RESTORE_FILE = "$PWD\$restore"
+      RUVIFORM_FAULT_RESULT_FILE = "$PWD\$resultFile"
+    }
+    Write-FaultLog "permission test job id=$($job.Id)"
+    $permissionObserved = Wait-FaultFile "$PWD\$observed" 75
+    Write-FaultLog "permission observed signal: $permissionObserved"
+    if (-not $permissionObserved) { $script:harnessProblems += 'permission-observed-signal-missing' }
+  } finally {
+    Write-FaultLog 'restoring mic consent Allow and audio services'
+    $allowProblems = Set-MicConsentState 'Allow'
+    $restartAllowProblems = Restart-FaultAudioServices
+    $restoreProblems = @($allowProblems + $restartAllowProblems)
+    if ($restoreProblems.Count) {
+      Write-FaultLog "permission restore problems: $($restoreProblems -join ',')"
+      $script:harnessProblems += 'permission-restore-incomplete'
+    } else {
+      "restored $([DateTime]::UtcNow.ToString('o'))" | Set-Content -LiteralPath "$PWD\$restore" -Encoding utf8
+    }
+  }
+  $finished = Wait-Job $job -Timeout 50
+  if (-not $finished) {
+    Write-FaultLog 'permission test job timeout; stopping job'
+    Stop-Job $job -ErrorAction SilentlyContinue
+    $script:harnessProblems += 'permission-test-timeout'
+  }
+  $jobOutput = @(Receive-Job $job -ErrorAction SilentlyContinue)
+  $jobOutput | ForEach-Object { "    test: $_" | Out-Probe $log }
+  if ($job) { Remove-Job $job -Force -ErrorAction SilentlyContinue }
+  $permissionResult = Read-FaultCaseResult $case "$PWD\$resultFile" $jobOutput
+  if ($permissionControllerProblems.Count -or $restoreProblems.Count) {
+    $permissionResult.result = 'Fail'
+    $permissionResult.detail = "permission-controller-failure; original=$($permissionResult.detail)"
+  }
+  Add-FaultCase $permissionResult
+
+  # ---- bounded xrun observation ----
+  $case = 'xrun_probe'
+  $resultFile = "fault-xrun-result-$os.txt"
+  Remove-Item $resultFile -Force -ErrorAction SilentlyContinue
+  Write-FaultLog "--- case $case ---"
+  $env:RUVIFORM_FAULT_XRUN_PROBE = '1'
+  $env:RUVIFORM_FAULT_XRUN_SPIN_THREADS = '2'
+  $env:RUVIFORM_FAULT_RESULT_FILE = "$PWD\$resultFile"
+  try {
+    $xrunOut = @(& mise exec -- cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint virtual_audio_xrun_probe -- --ignored --test-threads=1 --nocapture 2>&1)
+    $xrunExit = $LASTEXITCODE
+  } finally {
+    Remove-Item Env:RUVIFORM_FAULT_XRUN_PROBE, Env:RUVIFORM_FAULT_XRUN_SPIN_THREADS, Env:RUVIFORM_FAULT_RESULT_FILE -ErrorAction SilentlyContinue
+  }
+  $xrunOut | ForEach-Object { "    test: $_" | Out-Probe $log }
+  Write-FaultLog "xrun probe exit=$xrunExit"
+  if ($xrunExit -ne 0) { $script:harnessProblems += 'xrun-probe-nonzero-exit' }
+  $xrunResult = Read-FaultCaseResult $case "$PWD\$resultFile" $xrunOut
+  Add-FaultCase $xrunResult
   # ---- device-loss audio + MIDI disappearance observation ----
   $case = 'device_loss_audio'
   $ready = "fault-device-loss-ready-$os.txt"
@@ -286,8 +395,26 @@ if (-not $canRun) {
       }
       if ($enableOk) {
         "restored stimulus=$stimulus $([DateTime]::UtcNow.ToString('o'))" | Set-Content -LiteralPath "$PWD\$restore" -Encoding utf8
+        if ($stimulus -eq 'remove-recreate') {
+          # Recreation returns after driver binding, before PortCls/WinMM and
+          # the MMDevice endpoint surface necessarily finish re-enumerating.
+          # Restart the user-mode audio services once, then poll both surfaces
+          # instead of mistaking that asynchronous setup window for a negative
+          # recovery measurement.
+          $recoveryServiceProblems = Restart-FaultAudioServices
+          if ($recoveryServiceProblems.Count) {
+            Write-FaultLog "recovery service restart problems: $($recoveryServiceProblems -join ',')"
+            $script:harnessProblems += 'device-loss-recovery-service-restart-failed'
+          }
+        }
+        $surfaceRecovery = Wait-EndpointSurfaceRecovery 45
+        if (-not $surfaceRecovery.success) {
+          Write-FaultLog 'endpoint surfaces did not both re-enumerate within the bounded recovery window'
+        }
+        $midiAfter = $surfaceRecovery.midi
+      } else {
+        $midiAfter = Invoke-MidiWinmmProbe 'after-enable'
       }
-      $midiAfter = Invoke-MidiWinmmProbe 'after-enable'
     } else {
       Write-FaultLog 'ready signal timeout — devnode was not disabled'
       $script:harnessProblems += 'device-loss-ready-timeout'
@@ -361,80 +488,6 @@ if (-not $canRun) {
     detail = $midiDetail
   })
 
-  # ---- microphone permission denial ----
-  $case = 'permission_denial_audio'
-  $observed = "fault-permission-observed-$os.txt"
-  $restore = "fault-permission-restore-$os.txt"
-  $resultFile = "fault-permission-result-$os.txt"
-  Remove-Item $observed, $restore, $resultFile -Force -ErrorAction SilentlyContinue
-  Write-FaultLog "--- case $case ---"
-  $job = $null
-  $jobOutput = @()
-  $permissionControllerProblems = @()
-  try {
-    $denyProblems = Set-MicConsentState 'Deny'
-    $restartProblems = Restart-FaultAudioServices
-    $permissionControllerProblems += $denyProblems + $restartProblems
-    if ($permissionControllerProblems.Count) {
-      Write-FaultLog "permission controller setup problems: $($permissionControllerProblems -join ',')"
-    }
-    $job = Start-FaultTestJob 'virtual_audio_permission_denial_fault' @{
-      RUVIFORM_FAULT_PERMISSION_DENIAL = '1'
-      RUVIFORM_FAULT_OBSERVED_FILE = "$PWD\$observed"
-      RUVIFORM_FAULT_RESTORE_FILE = "$PWD\$restore"
-      RUVIFORM_FAULT_RESULT_FILE = "$PWD\$resultFile"
-    }
-    Write-FaultLog "permission test job id=$($job.Id)"
-    $permissionObserved = Wait-FaultFile "$PWD\$observed" 75
-    Write-FaultLog "permission observed signal: $permissionObserved"
-    if (-not $permissionObserved) { $script:harnessProblems += 'permission-observed-signal-missing' }
-  } finally {
-    Write-FaultLog 'restoring mic consent Allow and audio services'
-    $allowProblems = Set-MicConsentState 'Allow'
-    $restartAllowProblems = Restart-FaultAudioServices
-    $restoreProblems = @($allowProblems + $restartAllowProblems)
-    if ($restoreProblems.Count) {
-      Write-FaultLog "permission restore problems: $($restoreProblems -join ',')"
-      $script:harnessProblems += 'permission-restore-incomplete'
-    } else {
-      "restored $([DateTime]::UtcNow.ToString('o'))" | Set-Content -LiteralPath "$PWD\$restore" -Encoding utf8
-    }
-  }
-  $finished = Wait-Job $job -Timeout 50
-  if (-not $finished) {
-    Write-FaultLog 'permission test job timeout; stopping job'
-    Stop-Job $job -ErrorAction SilentlyContinue
-    $script:harnessProblems += 'permission-test-timeout'
-  }
-  $jobOutput = @(Receive-Job $job -ErrorAction SilentlyContinue)
-  $jobOutput | ForEach-Object { "    test: $_" | Out-Probe $log }
-  if ($job) { Remove-Job $job -Force -ErrorAction SilentlyContinue }
-  $permissionResult = Read-FaultCaseResult $case "$PWD\$resultFile" $jobOutput
-  if ($permissionControllerProblems.Count -or $restoreProblems.Count) {
-    $permissionResult.result = 'Fail'
-    $permissionResult.detail = "permission-controller-failure; original=$($permissionResult.detail)"
-  }
-  Add-FaultCase $permissionResult
-
-  # ---- bounded xrun observation ----
-  $case = 'xrun_probe'
-  $resultFile = "fault-xrun-result-$os.txt"
-  Remove-Item $resultFile -Force -ErrorAction SilentlyContinue
-  Write-FaultLog "--- case $case ---"
-  $env:RUVIFORM_FAULT_XRUN_PROBE = '1'
-  $env:RUVIFORM_FAULT_XRUN_SPIN_THREADS = '2'
-  $env:RUVIFORM_FAULT_RESULT_FILE = "$PWD\$resultFile"
-  try {
-    $xrunOut = @(& mise exec -- cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint virtual_audio_xrun_probe -- --ignored --test-threads=1 --nocapture 2>&1)
-    $xrunExit = $LASTEXITCODE
-  } finally {
-    Remove-Item Env:RUVIFORM_FAULT_XRUN_PROBE, Env:RUVIFORM_FAULT_XRUN_SPIN_THREADS, Env:RUVIFORM_FAULT_RESULT_FILE -ErrorAction SilentlyContinue
-  }
-  $xrunOut | ForEach-Object { "    test: $_" | Out-Probe $log }
-  Write-FaultLog "xrun probe exit=$xrunExit"
-  if ($xrunExit -ne 0) { $script:harnessProblems += 'xrun-probe-nonzero-exit' }
-  $xrunResult = Read-FaultCaseResult $case "$PWD\$resultFile" $xrunOut
-  Add-FaultCase $xrunResult
 }
 
 $enrichedResults = @(foreach ($caseResult in $script:caseResults) {

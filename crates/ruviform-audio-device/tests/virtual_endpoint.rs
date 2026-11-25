@@ -78,7 +78,7 @@ const CAPTURE_SECONDS: u64 = 3;
 const RESTART_SETTLE: Duration = Duration::from_millis(300);
 /// Hard bound on total runtime — the watchdog aborts the process if
 /// any control-path call (enumerate/open/start/stop) hangs.
-const MAX_RUN: Duration = Duration::from_secs(60);
+const MAX_RUN: Duration = Duration::from_secs(120);
 /// Requested fixed buffer size in frames (10 ms at 48 kHz).
 const REQUESTED_FRAMES: usize = 480;
 /// Per-epoch startup grace window for the timestamp-regression
@@ -497,12 +497,12 @@ fn first_virtual_pair(host: &Host) -> Result<Option<Pair>, String> {
 /// recovery oracle is the successful control-path sequence after re-enumeration.
 fn reopen_capture_after_recovery(host: &Host, stem: &str) -> Result<String, String> {
     let mut last_error = "recovery not attempted".to_owned();
-    for _attempt in 0..8 {
+    for _attempt in 0..36 {
         match reopen_capture_once(host, stem) {
             Ok(observation) => return Ok(observation),
             Err(error) => {
                 last_error = error;
-                thread::sleep(Duration::from_millis(500));
+                thread::sleep(Duration::from_millis(750));
             }
         }
     }
@@ -669,12 +669,32 @@ fn virtual_audio_device_loss_fault() {
     let control_error_kind = AtomicUsize::new(0);
     let observation_start = Instant::now();
     let observation_limit = Duration::from_secs(15);
+    let mut control_probe_done = false;
     while observation_start.elapsed() < observation_limit {
         if let Err(error) = in_stream.now() {
             control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
         }
         if let Err(error) = out_stream.now() {
             control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
+        }
+        if !control_probe_done && observation_start.elapsed() >= Duration::from_secs(4) {
+            control_probe_done = true;
+            // `now()` is a local stream-clock query on both the native and
+            // cpal paths; it cannot surface endpoint loss. Exercise real
+            // backend control operations instead. Native input executes
+            // these on its worker and reports a device-invalidated failure
+            // through the error callback; cpal output can return the
+            // control-path error directly.
+            for result in [
+                in_stream.stop(),
+                out_stream.stop(),
+                in_stream.start(),
+                out_stream.start(),
+            ] {
+                if let Err(error) = result {
+                    control_error_kind.store(error_kind_code(error), Ordering::Relaxed);
+                }
+            }
         }
         let invalidated = probe.in_invalidated.load(Ordering::Relaxed)
             + probe.out_invalidated.load(Ordering::Relaxed);
@@ -704,7 +724,7 @@ fn virtual_audio_device_loss_fault() {
             probe.out_errors.load(Ordering::Relaxed),
         ),
     );
-    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(25));
+    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(35));
     let recovery = if restored {
         thread::sleep(Duration::from_millis(700));
         reopen_capture_after_recovery(&host, &capture_stem)
@@ -822,7 +842,7 @@ fn virtual_audio_permission_denial_fault() {
     );
     drop(open_result);
 
-    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(25));
+    let restored = fault_wait_for_file(FAULT_ENV_RESTORE_FILE, Duration::from_secs(35));
     let recovery = if restored {
         thread::sleep(Duration::from_millis(700));
         reopen_capture_after_recovery(&host, &capture_stem)
