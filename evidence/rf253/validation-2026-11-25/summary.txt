@@ -83,3 +83,6 @@ overall=0
 
 test-l1-real-plugin exit=0
 powershell-parse-stage exit=0 (syntax parse; see powershell-parse.log)
+test-ci-daily exit=0 (113 tests pass; see test-ci-daily.txt/.exit)
+test-ci-tracker exit=0 (108 tests pass; see test-ci-tracker.txt/.exit)
+actions-jsonl schema=seq/ts/action/command/exit_code/observed rows=45 valid=1
