@@ -535,7 +535,7 @@ function Set-RvfMicConsent {
     }
     $State.os_state.consent_before = $beforeRecords
     $State.os_state.consent_after = $afterRecords
-    return ,$problems
+    return $problems
 }
 
 function Restart-RvfAudioServices {
@@ -566,7 +566,7 @@ function Restart-RvfAudioServices {
     }
     $State.os_state.service_restart = $records
     Start-Sleep -Seconds 2
-    return ,$problems
+    return $problems
 }
 
 function Initialize-RvfMmDeviceProbeType {
@@ -918,6 +918,10 @@ function Invoke-RvfCleanup {
         }
     }
     $deleteNames = @($deleteNames | Select-Object -Unique)
+    $installedNames = @($enumBefore.entries | ForEach-Object { $_.published_name })
+    $missingNames = @($deleteNames | Where-Object { $installedNames -notcontains $_ })
+    if ($missingNames.Count) { Write-RvfLog "  already absent from driver store: $($missingNames -join ', ')" }
+    $deleteNames = @($deleteNames | Where-Object { $installedNames -contains $_ })
     if (-not $deleteNames.Count) {
         $unowned = @($enumBefore.entries | Where-Object { $_.original_name -ieq 'rvfvirtualaudio.inf' })
         if ($unowned.Count) {
