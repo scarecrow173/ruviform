@@ -838,6 +838,10 @@ struct EndpointProbe {
     in_non_finite: AtomicU64,
     in_expected_domain: AtomicU64,
     in_errors: AtomicU64,
+    in_xruns: AtomicU64,
+    in_discontinuities: AtomicU64,
+    in_invalidated: AtomicU64,
+    in_backend_errors: AtomicU64,
     out_callbacks: AtomicU64,
     out_frames: AtomicU64,
     out_channel_mismatches: AtomicU64,
@@ -851,6 +855,9 @@ struct EndpointProbe {
     out_regression_cbs: [AtomicU64; REGRESSION_INDEX_SLOTS],
     out_fill_errors: AtomicU64,
     out_errors: AtomicU64,
+    out_xruns: AtomicU64,
+    out_invalidated: AtomicU64,
+    out_backend_errors: AtomicU64,
     /// Absolute render-frame cursor for `PcmFixture::fill_view`.
     out_render_cursor: AtomicU64,
     /// Bounded channel-0 capture handoff.
@@ -1558,15 +1565,42 @@ fn observe_output(
 
 fn input_error_callback(probe: &Arc<EndpointProbe>) -> InputErrorCallback {
     let probe = Arc::clone(probe);
-    Box::new(move |_error: DeviceError| {
+    Box::new(move |error: DeviceError| {
         probe.in_errors.fetch_add(1, Ordering::Relaxed);
+        match error {
+            DeviceError::Xrun => {
+                probe.in_xruns.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceError::ClockDiscontinuity => {
+                probe.in_discontinuities.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceError::StreamInvalidated => {
+                probe.in_invalidated.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceError::Backend(_) => {
+                probe.in_backend_errors.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
     })
 }
 
 fn output_error_callback(probe: &Arc<EndpointProbe>) -> OutputErrorCallback {
     let probe = Arc::clone(probe);
-    Box::new(move |_error: DeviceError| {
+    Box::new(move |error: DeviceError| {
         probe.out_errors.fetch_add(1, Ordering::Relaxed);
+        match error {
+            DeviceError::Xrun => {
+                probe.out_xruns.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceError::StreamInvalidated => {
+                probe.out_invalidated.fetch_add(1, Ordering::Relaxed);
+            }
+            DeviceError::Backend(_) => {
+                probe.out_backend_errors.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
     })
 }
 
@@ -1691,6 +1725,16 @@ fn log_endpoint_stats(probe: &EndpointProbe, capture_stored: usize, in_cb: u64, 
         capture_stored,
         capture_overflow(probe),
         probe.capture_lock_failures.load(Ordering::Relaxed),
+    );
+    eprintln!(
+        "  error kinds: in xrun={} discontinuity={} invalidated={} backend={} | out xrun={} invalidated={} backend={}",
+        probe.in_xruns.load(Ordering::Relaxed),
+        probe.in_discontinuities.load(Ordering::Relaxed),
+        probe.in_invalidated.load(Ordering::Relaxed),
+        probe.in_backend_errors.load(Ordering::Relaxed),
+        probe.out_xruns.load(Ordering::Relaxed),
+        probe.out_invalidated.load(Ordering::Relaxed),
+        probe.out_backend_errors.load(Ordering::Relaxed),
     );
     eprintln!(
         "  timestamps: in regressions={} effective={} epoch_resets={} boundary_cb={} first..last={}..{} max_backstep_ns={} idx=[{}] | out regressions={} effective={} epoch_resets={} boundary_cb={} first..last={}..{} max_backstep_ns={} idx=[{}]",

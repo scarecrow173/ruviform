@@ -15,13 +15,18 @@
 #     SetupDiGetClassDevs(DIGCF_ALLCLASSES, Enumerator="ROOT") を走査して
 #     -InstanceId に一致する devinfo を特定し、newdev!DiUninstallDevice で
 #     devnode を削除する。見つからない場合は既に削除済みとして正常終了。
+#   -Action disable / enable:
+#     既存 devnode の PnP 状態だけを切り替える fault-injection 制御面。
+#     devnode 自体は削除せず、workflow の fault-cases stage が endpoint
+#     loss/recovery を同期させる。instance 不在・権限不足・PnP 操作失敗は
+#     例外として fail-closed に返し、成功時のみ disabled=/enabled= 行を出す。
 #
 # 署名・証明書 store 変更・driver install 自体はこの script の責務外
 # （workflow の runner job 内でのみ実行。worker ホストでは構文確認まで）。
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('create', 'remove')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('create', 'remove', 'disable', 'enable')][string]$Action,
     [string]$HardwareId = 'ROOT\RvfTestSigned',
     [string]$ClassName = 'System',
     [string]$ClassGuid = '4d36e97d-e325-11ce-bfc1-08002be10318',
@@ -224,10 +229,27 @@ if ($Action -eq 'create') {
         "reboot_required=$reboot"
         "bound_inf=$resolved"
     }
-} else {
+} elseif ($Action -eq 'remove') {
     if (-not $InstanceId) {
         throw 'remove requires -InstanceId'
     }
     $removed = [RvfTestDevice]::Remove($InstanceId)
     "removed=$removed"
+} else {
+    if (-not $InstanceId) {
+        throw "$Action requires -InstanceId"
+    }
+    $device = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
+    if ($Action -eq 'disable') {
+        Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+        $after = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
+        "disabled=true"
+    } else {
+        Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false -ErrorAction Stop
+        $after = Get-PnpDevice -InstanceId $InstanceId -ErrorAction Stop
+        "enabled=true"
+    }
+    "instance_id=$($after.InstanceId)"
+    "status=$($after.Status)"
+    "class=$($after.Class)"
 }
