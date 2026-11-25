@@ -247,4 +247,11 @@ PENDPOINT_MINIPAIR  g_CaptureEndpoints[] =
 //
 #define g_MaxMiniports  ((g_cRenderEndpoints + g_cCaptureEndpoints) * 2)
 
+//=============================================================================
+//
+// ruviform: MIDI loopback (DMus) filters — endpoint pair 系統とは独立した
+// 単独 filter。RvfMidi.h の CreateMiniportRvfMidi が miniport factory。
+//
+#define g_MaxMidiFilters  (1)
+
 #endif // _SYSVAD_MINIPAIRS_H_

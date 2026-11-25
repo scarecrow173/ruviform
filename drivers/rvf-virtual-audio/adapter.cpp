@@ -24,6 +24,10 @@ Abstract:
 #include <ContosoKeywordDetector.h>
 #include "IHVPrivatePropertySet.h"
 
+// ruviform: MIDI miniport (CLSID_PortDMus) の subdevice 登録用。
+#include <dmusicks.h>
+#include "RvfMidi.h"
+
 #include "simple.h"
 #include "minipairs.h"
 #ifdef SYSVAD_BTH_BYPASS
@@ -656,6 +660,10 @@ Return Value:
 
     maxObjects = g_MaxMiniports;
 
+    // ruviform: DMus MIDI loopback subdevice 分を加算（minipairs.h の
+    // endpoint pair 構成とは独立した単独 filter）。
+    maxObjects += g_MaxMidiFilters;
+
 #ifdef SYSVAD_BTH_BYPASS
     maxObjects += g_MaxBthHfpMiniports;
 #endif // SYSVAD_BTH_BYPASS
@@ -920,6 +928,51 @@ Exit:
     return ntStatus;
 }
 
+#pragma code_seg("PAGE")
+//=============================================================================
+// ruviform: virtual MIDI loopback (DMus port + RvfMidi miniport) を
+// InstallSubdevice で登録する。wave+topology pair 構成の ENDPOINT_MINIPAIR
+// 系統とは独立した単独 filter — 経路は render stream Write() →
+// miniport 内部 FIFO → IPortDMus::Notify → capture stream の software
+// loopback（RvfMidi*.cpp 参照）。subdevice cache には載せない —
+// topology pairing・power interface・後続 lookup が無く、PnP remove での
+// unregister は portcls 側の teardown に任せる（wave/topo と同じ
+// lifecycle — Cleanup() は参照解放のみ）。
+NTSTATUS
+InstallMidiFilter(
+    _In_ PDEVICE_OBJECT _pDeviceObject,
+    _In_ PIRP           _pIrp,
+    _In_ PADAPTERCOMMON _pAdapterCommon,
+    _In_ PRESOURCELIST  _pResourceList
+    )
+{
+    NTSTATUS    ntStatus    = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    UNREFERENCED_PARAMETER(_pDeviceObject);
+
+    ntStatus = _pAdapterCommon->InstallSubdevice(
+        _pIrp,
+        L"MidiLoopback",        // INF の KSNAME_MidiLoopback と一致必須
+        NULL,                   // TemplateName
+        CLSID_PortDMus,
+        CLSID_PortDMus,
+        CreateMiniportRvfMidi,
+        0,
+        NULL,
+        NULL,                   // DeviceContext
+        NULL,                   // MiniportPair — factory では未使用
+        _pResourceList,
+        IID_IPortDMus,
+        NULL,                   // OutPortInterface
+        NULL,                   // OutPortUnknown
+        NULL                    // OutMiniportUnknown
+        );
+
+    return ntStatus;
+}
+
 #ifdef _USE_SingleComponentMultiFxStates
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -1039,8 +1092,6 @@ Return Value:
   NT status code.
 
 --*/
-    UNREFERENCED_PARAMETER(ResourceList);
-
     PAGED_CODE();
 
     ASSERT(DeviceObject);
@@ -1087,6 +1138,14 @@ Return Value:
     // Install wave+topology filters for capture devices
     //
     ntStatus = InstallAllCaptureFilters(DeviceObject, Irp, pAdapterCommon);
+    IF_FAILED_JUMP(ntStatus, Exit);
+
+    //
+    // Install the virtual MIDI loopback filter (DMus port + RvfMidi
+    // miniport).  Issue #978 — WinMM に in/out 同名の MIDI port を
+    // 列挙させ、tests/loopback.rs の pair 検出に供する。
+    //
+    ntStatus = InstallMidiFilter(DeviceObject, Irp, pAdapterCommon, ResourceList);
     IF_FAILED_JUMP(ntStatus, Exit);
 
 #ifdef SYSVAD_BTH_BYPASS
