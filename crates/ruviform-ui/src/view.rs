@@ -20,8 +20,8 @@ use std::ops::Range;
 use serde::{Deserialize, Serialize};
 
 use crate::behavior::{
-    AvailabilityFlags, CommandBinding, CommandId, CommandIntent, CommandParams, CommandPhase,
-    CommandReceipt, ControlId, ControlInput, DetachPolicy, InteractionControlOptions,
+    AvailabilityFlags, CommandBinding, CommandId, CommandIntent, CommandParam, CommandParams,
+    CommandPhase, CommandReceipt, ControlId, ControlInput, DetachPolicy, InteractionControlOptions,
     InteractionDispatcher, InteractionEvent, LogicalTarget, ReceiptStatus, Revision,
     StateProjection, ValueDescriptor, ValuePorts, intent_from_gesture, validate_descriptor,
 };
@@ -87,6 +87,10 @@ pub enum A11yRole {
     Cell,
     /// Value-less command trigger (Button).
     Button,
+    /// Free text entry (text `Input`).
+    TextBox,
+    /// Bounded number entry (integer/decimal `Input`).
+    SpinButton,
 }
 
 /// Accessibility semantics carried by a spec. `value_min`/`value_max`/
@@ -499,6 +503,129 @@ pub struct ButtonSpec {
     pub a11y: A11ySpec,
 }
 
+/// The entered value an [`InputSpec`] accepts — the input kind plus its
+/// bounds. Bounds are inclusive and independently optional; an absent
+/// bound leaves that side unbounded.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum InputValueSpec {
+    /// Free text — submits the entered text verbatim as
+    /// [`crate::behavior::CommandParam::Text`].
+    Text,
+    /// Integer entry — parses the entered text (trimmed) as `i64` and
+    /// submits it as [`crate::behavior::CommandParam::Integer`].
+    Integer {
+        /// Inclusive lower bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<i64>,
+        /// Inclusive upper bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<i64>,
+    },
+    /// Decimal entry — parses the entered text (trimmed) as a finite
+    /// `f64` and submits it as [`crate::behavior::CommandParam::Number`].
+    Number {
+        /// Inclusive lower bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min: Option<f64>,
+        /// Inclusive upper bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max: Option<f64>,
+    },
+}
+
+impl InputValueSpec {
+    /// The a11y role this value kind defaults to.
+    fn a11y_role(&self) -> A11yRole {
+        match self {
+            Self::Text => A11yRole::TextBox,
+            Self::Integer { .. } | Self::Number { .. } => A11yRole::SpinButton,
+        }
+    }
+
+    /// Parses the entered `text` into the [`crate::behavior::CommandParam`]
+    /// this kind accepts — verbatim for `Text`, trimmed for the numeric
+    /// kinds — and enforces `min`/`max`. A text that does not parse, a
+    /// non-finite number, or an out-of-range value is rejected; the
+    /// caller emits nothing on `Err`.
+    fn parse(&self, key: &ComponentKey, text: &str) -> Result<CommandParam, ViewError> {
+        match self {
+            Self::Text => Ok(CommandParam::Text(text.to_string())),
+            Self::Integer { min, max } => {
+                let value: i64 = text
+                    .trim()
+                    .parse()
+                    .map_err(|_| invalid_input(key, format!("{text:?} is not an integer")))?;
+                if let Some(m) = min
+                    && value < *m
+                {
+                    return Err(invalid_input(key, format!("{value} is below {m}")));
+                }
+                if let Some(m) = max
+                    && value > *m
+                {
+                    return Err(invalid_input(key, format!("{value} is above {m}")));
+                }
+                Ok(CommandParam::Integer(value))
+            }
+            Self::Number { min, max } => {
+                let value: f64 = text
+                    .trim()
+                    .parse()
+                    .map_err(|_| invalid_input(key, format!("{text:?} is not a number")))?;
+                if !value.is_finite() {
+                    return Err(invalid_input(
+                        key,
+                        format!("{text:?} is not a finite number"),
+                    ));
+                }
+                if let Some(m) = min
+                    && value < *m
+                {
+                    return Err(invalid_input(key, format!("{value} is below {m}")));
+                }
+                if let Some(m) = max
+                    && value > *m
+                {
+                    return Err(invalid_input(key, format!("{value} is above {m}")));
+                }
+                Ok(CommandParam::Number(value))
+            }
+        }
+    }
+}
+
+/// Free-form text/number input widget (Issue #999). The spec declares
+/// the command (`target`/`action`/`param`) like a [`ButtonSpec`]; the
+/// submitted text is runtime-entered, parsed and bounded per `value`
+/// by [`ViewHost::submit_input`], and carried on the emitted intent as
+/// `params = {"<param>": <value>}` through the typed
+/// [`crate::behavior::CommandParams`] profile.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InputSpec {
+    /// Component key.
+    pub key: ComponentKey,
+    /// Resolved display label.
+    pub label: String,
+    /// Logical command target of the emitted intent.
+    pub target: LogicalTarget,
+    /// Discrete action name of the emitted intent.
+    pub action: String,
+    /// Name of the `params` member carrying the submitted value.
+    pub param: String,
+    /// Accepted input kind and its bounds — mount-validated,
+    /// submit-enforced.
+    pub value: InputValueSpec,
+    /// Visual state.
+    pub visual: ComponentVisualState,
+    /// Accessibility semantics. `role` defaults per `value` kind —
+    /// [`A11yRole::TextBox`] for text, [`A11yRole::SpinButton`] for the
+    /// numeric kinds; `value_min`/`value_max` may mirror `value`'s
+    /// bounds for range-aware a11y.
+    pub a11y: A11ySpec,
+}
+
 /// Backend-neutral accessibility node derived from a spec. The tree is
 /// the single source of truth for `Label`/`Table`/`Button` semantics;
 /// renderers consume it instead of re-deriving table structure.
@@ -613,6 +740,9 @@ pub enum ComponentSpec {
     Table(TableSpec),
     /// Value-less command trigger.
     Button(ButtonSpec),
+    /// Free-form text/number input — submits the entered value as one
+    /// discrete `Action` intent (Issue #999).
+    Input(InputSpec),
 }
 
 impl ComponentSpec {
@@ -631,11 +761,13 @@ impl ComponentSpec {
             Self::Label(s) => &s.key,
             Self::Table(s) => &s.key,
             Self::Button(s) => &s.key,
+            Self::Input(s) => &s.key,
         }
     }
 
     /// Backend-neutral a11y tree for the kinds whose semantics this
-    /// contract defines (`Label`, `Table`, `Button`). `None` for other kinds.
+    /// contract defines (`Label`, `Table`, `Button`, `Input`). `None`
+    /// for other kinds.
     #[must_use]
     pub fn a11y_node(&self) -> Option<A11yNode> {
         match self {
@@ -648,6 +780,12 @@ impl ComponentSpec {
             Self::Table(s) => Some(s.a11y_node()),
             Self::Button(s) => Some(A11yNode::new(
                 s.a11y.role.unwrap_or(A11yRole::Button),
+                Some(s.a11y.label.clone().unwrap_or_else(|| s.label.clone())),
+                None,
+                Vec::new(),
+            )),
+            Self::Input(s) => Some(A11yNode::new(
+                s.a11y.role.unwrap_or_else(|| s.value.a11y_role()),
                 Some(s.a11y.label.clone().unwrap_or_else(|| s.label.clone())),
                 None,
                 Vec::new(),
@@ -674,6 +812,7 @@ impl ComponentSpec {
             Self::Label(_) => "label",
             Self::Table(_) => "table",
             Self::Button(_) => "button",
+            Self::Input(_) => "input",
         }
     }
 
@@ -876,10 +1015,12 @@ impl Mounted {
 }
 
 /// Binding id of a component that issues command intents without a
-/// control: a `Button`, or a `Table`/`Tabs` with a selection. The key is the id.
+/// control: a `Button`, an `Input`, or a `Table`/`Tabs` with a
+/// selection. The key is the id.
 fn action_binding_id(node: &ComponentSpec) -> Option<ControlId> {
     match node {
         ComponentSpec::Button(b) => Some(b.key.0.clone()),
+        ComponentSpec::Input(i) => Some(i.key.0.clone()),
         ComponentSpec::Table(t) if t.selection.is_some() => Some(t.key.0.clone()),
         ComponentSpec::Tabs(t) if t.selection.is_some() => Some(t.key.0.clone()),
         _ => None,
@@ -1349,6 +1490,34 @@ impl ViewHost {
         Ok(())
     }
 
+    /// `Input` structural checks: a non-empty `param` name, and finite,
+    /// ordered `min <= max` bounds — a spec that can never accept a
+    /// value (or carries NaN bounds) is invalid.
+    fn check_input(i: &InputSpec) -> Result<(), ViewError> {
+        if i.param.is_empty() {
+            return Err(ViewError::InvalidSpec {
+                detail: format!("input {} has an empty command param name", i.key),
+            });
+        }
+        let invalid = match i.value {
+            InputValueSpec::Integer { min, max } => {
+                matches!((min, max), (Some(lo), Some(hi)) if lo > hi)
+            }
+            InputValueSpec::Number { min, max } => {
+                min.is_some_and(|m| !m.is_finite())
+                    || max.is_some_and(|m| !m.is_finite())
+                    || matches!((min, max), (Some(lo), Some(hi)) if lo > hi)
+            }
+            InputValueSpec::Text => false,
+        };
+        if invalid {
+            return Err(ViewError::InvalidSpec {
+                detail: format!("input {} value bounds are invalid", i.key),
+            });
+        }
+        Ok(())
+    }
+
     fn push_event(&mut self, e: ViewEvent) {
         if self.events.len() >= MAX_VIEW_EVENTS {
             // Coalescible events evict first; when none remain the
@@ -1454,6 +1623,7 @@ impl ViewHost {
     fn check_command(node: &ComponentSpec) -> Result<(), ViewError> {
         let invalid = match node {
             ComponentSpec::Button(b) => b.target.is_empty() || b.action.is_empty(),
+            ComponentSpec::Input(i) => i.target.is_empty() || i.action.is_empty(),
             ComponentSpec::Table(t) => t.selection.as_ref().is_some_and(|s| s.target.is_empty()),
             ComponentSpec::Tabs(t) => t.selection.as_ref().is_some_and(|s| s.target.is_empty()),
             _ => false,
@@ -1552,6 +1722,7 @@ impl ViewHost {
                     });
                 }
             }
+            ComponentSpec::Input(i) => Self::check_input(i)?,
             _ => {}
         }
         if let Some(c) = node.control() {
@@ -2179,6 +2350,52 @@ impl ViewHost {
             })
             .transpose()?;
         let intent = self.action_intent(key, target, action, params);
+        let owner = self.owner_key_for(key);
+        Ok(self.emit_intent(&owner, intent))
+    }
+
+    /// Submits the entered `text` of the `Input` `key` (Issue #999) —
+    /// the runtime-value counterpart of a `Button` press: the spec
+    /// supplies `target`/`action`/`param`, the caller supplies the
+    /// value. The text is parsed and bounded per the spec's `value`
+    /// contract, then carried as `params = {"<param>": <value>}` on one
+    /// discrete `Action` intent through the typed [`CommandParams`]
+    /// profile. Its phase follows the command receipt. Returns the
+    /// minted [`CommandId`] for correlation.
+    ///
+    /// # Errors
+    /// [`ViewError::StaleGeneration`] for a dead epoch;
+    /// [`ViewError::UnknownComponent`] for an unmounted key;
+    /// [`ViewError::InvalidInput`] when `key` is not an input, when
+    /// `text` does not parse to the spec's value kind, or when the
+    /// parsed value is outside its declared bounds. Rejected inputs
+    /// emit nothing.
+    pub fn submit_input(
+        &mut self,
+        generation: u64,
+        key: &ComponentKey,
+        text: &str,
+    ) -> Result<CommandId, ViewError> {
+        self.check_gen(generation)?;
+        let m = self
+            .mounted
+            .get(key)
+            .ok_or_else(|| ViewError::UnknownComponent { key: key.clone() })?;
+        let ComponentSpec::Input(i) = &m.spec else {
+            return Err(invalid_input(key, "component is not an input"));
+        };
+        let (target, action, param_name, param) = (
+            i.target.clone(),
+            i.action.clone(),
+            i.param.clone(),
+            i.value.parse(key, text)?,
+        );
+        let mut params = CommandParams::new();
+        params.insert(param_name, param);
+        let params = params
+            .to_value()
+            .ok_or_else(|| invalid_input(key, "params contain a non-finite number"))?;
+        let intent = self.action_intent(key, target, &action, Some(params));
         let owner = self.owner_key_for(key);
         Ok(self.emit_intent(&owner, intent))
     }
@@ -3889,6 +4106,347 @@ mod tests {
         for id in ids {
             assert!(!host.apply_receipt(&receipt(id, ReceiptStatus::Applied)));
         }
+    }
+
+    fn input(
+        key: &str,
+        target: &str,
+        action: &str,
+        param: &str,
+        value: InputValueSpec,
+    ) -> ComponentSpec {
+        ComponentSpec::Input(InputSpec {
+            key: ComponentKey::from(key),
+            label: key.into(),
+            target: target.into(),
+            action: action.into(),
+            param: param.into(),
+            value,
+            visual: ComponentVisualState::default(),
+            a11y: A11ySpec::default(),
+        })
+    }
+
+    #[test]
+    fn input_submit_emits_spec_target_action_and_typed_params() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![input(
+            "ppqn",
+            "syn.project",
+            "ppqn",
+            "new_ppqn",
+            InputValueSpec::Integer {
+                min: Some(1),
+                max: Some(32767),
+            },
+        )]))
+        .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("ppqn");
+        host.submit_input(host.generation(), &key, "480")
+            .expect("submit");
+
+        let intents = action_intents(&mut host);
+        assert_eq!(intents.len(), 1);
+        match &intents[0].0 {
+            CommandIntent::Action {
+                target,
+                control_id,
+                action,
+                params,
+                ..
+            } => {
+                assert_eq!(target, "syn.project");
+                assert_eq!(control_id, "ppqn");
+                assert_eq!(action, "ppqn");
+                assert_eq!(
+                    params.as_ref(),
+                    Some(&serde_json::json!({ "new_ppqn": 480 }))
+                );
+            }
+            other => panic!("expected action, got {other:?}"),
+        }
+        let id = intents[0].1.clone();
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Pending
+        );
+        host.apply_receipt(&receipt(id.clone(), ReceiptStatus::Accepted));
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Accepted
+        );
+        host.apply_receipt(&receipt(id, ReceiptStatus::Applied));
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Applied
+        );
+
+        let a11y = host.a11y_node(&key).expect("a11y tree");
+        assert_eq!(a11y.role, A11yRole::SpinButton);
+        assert_eq!(a11y.name.as_deref(), Some("ppqn"));
+    }
+
+    #[test]
+    fn input_submit_number_and_text_kinds_emit_their_typed_params() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            input(
+                "ratio",
+                "mixer.gain",
+                "set",
+                "ratio",
+                InputValueSpec::Number {
+                    min: Some(0.0),
+                    max: Some(1.0),
+                },
+            ),
+            input(
+                "note",
+                "session.meta",
+                "rename",
+                "title",
+                InputValueSpec::Text,
+            ),
+        ]))
+        .expect("mount");
+        host.drain_events();
+        let generation = host.generation();
+
+        host.submit_input(generation, &ComponentKey::from("ratio"), "0.5")
+            .expect("submit number");
+        host.submit_input(generation, &ComponentKey::from("note"), " take 2 ")
+            .expect("submit text");
+        let intents = action_intents(&mut host);
+        assert_eq!(intents.len(), 2);
+        let CommandIntent::Action { params, .. } = &intents[0].0 else {
+            panic!("expected action");
+        };
+        assert_eq!(params.as_ref(), Some(&serde_json::json!({ "ratio": 0.5 })));
+        let CommandIntent::Action { params, .. } = &intents[1].0 else {
+            panic!("expected action");
+        };
+        assert_eq!(
+            params.as_ref(),
+            Some(&serde_json::json!({ "title": " take 2 " })),
+            "text submits verbatim — no trimming"
+        );
+
+        let a11y = host
+            .a11y_node(&ComponentKey::from("note"))
+            .expect("a11y tree");
+        assert_eq!(a11y.role, A11yRole::TextBox);
+    }
+
+    #[test]
+    fn input_submit_rejects_out_of_range_and_unparseable_without_emitting() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![
+            input(
+                "ppqn",
+                "syn.project",
+                "ppqn",
+                "new_ppqn",
+                InputValueSpec::Integer {
+                    min: Some(1),
+                    max: Some(32767),
+                },
+            ),
+            input(
+                "ratio",
+                "mixer.gain",
+                "set",
+                "ratio",
+                InputValueSpec::Number {
+                    min: Some(0.0),
+                    max: Some(1.0),
+                },
+            ),
+            button("run", "run.start", "start", None),
+        ]))
+        .expect("mount");
+        host.drain_events();
+        let key = ComponentKey::from("ppqn");
+        let ratio = ComponentKey::from("ratio");
+        let generation = host.generation();
+
+        // Out-of-range integer bounds.
+        for text in ["0", "32768"] {
+            assert!(
+                matches!(
+                    host.submit_input(generation, &key, text),
+                    Err(ViewError::InvalidInput { .. })
+                ),
+                "{text} must be rejected"
+            );
+        }
+        // Unparseable entries: non-integer text, a decimal on an integer
+        // kind, and the empty string.
+        for text in ["abc", "480.5", ""] {
+            assert!(
+                matches!(
+                    host.submit_input(generation, &key, text),
+                    Err(ViewError::InvalidInput { .. })
+                ),
+                "{text:?} must be rejected"
+            );
+        }
+        // Non-finite numbers have no wire representation.
+        for text in ["NaN", "inf", "1e400"] {
+            assert!(
+                matches!(
+                    host.submit_input(generation, &ratio, text),
+                    Err(ViewError::InvalidInput { .. })
+                ),
+                "{text:?} must be rejected"
+            );
+        }
+        // Out-of-range and wrong-kind targets, stale generation,
+        // unknown key.
+        assert!(matches!(
+            host.submit_input(generation, &ratio, "1.5"),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.submit_input(generation, &ComponentKey::from("run"), "go"),
+            Err(ViewError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            host.submit_input(generation + 1, &key, "480"),
+            Err(ViewError::StaleGeneration { .. })
+        ));
+        assert!(matches!(
+            host.submit_input(generation, &ComponentKey::from("missing"), "1"),
+            Err(ViewError::UnknownComponent { .. })
+        ));
+        assert_eq!(action_intents(&mut host), Vec::new());
+        assert_eq!(
+            host.observe(&key).expect("snapshot").phase,
+            CommandPhase::Idle,
+            "rejected inputs mint no command"
+        );
+    }
+
+    #[test]
+    fn removed_input_drops_its_receipt_routing() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        host.mount(panel(vec![input(
+            "ppqn",
+            "syn.project",
+            "ppqn",
+            "new_ppqn",
+            InputValueSpec::Integer {
+                min: None,
+                max: None,
+            },
+        )]))
+        .expect("mount");
+        host.drain_events();
+        host.submit_input(host.generation(), &ComponentKey::from("ppqn"), "960")
+            .expect("submit");
+        let id = action_intents(&mut host)[0].1.clone();
+
+        let generation = host.generation();
+        host.update(panel(vec![label("status", "idle")]), generation)
+            .expect("remove input");
+        assert!(!host.apply_receipt(&receipt(id, ReceiptStatus::Applied)));
+    }
+
+    #[test]
+    fn input_specs_require_target_action_param_and_ordered_bounds() {
+        let mut host = ViewHost::new(view_id(), AttachEpoch::new(1));
+        let bounded = InputValueSpec::Integer {
+            min: Some(1),
+            max: Some(32767),
+        };
+        for (target, action, param) in [
+            ("", "ppqn", "new_ppqn"),
+            ("syn.project", "", "new_ppqn"),
+            ("syn.project", "ppqn", ""),
+        ] {
+            assert!(
+                matches!(
+                    host.mount(panel(vec![input("ppqn", target, action, param, bounded)])),
+                    Err(ViewError::InvalidSpec { .. })
+                ),
+                "empty field must be rejected"
+            );
+        }
+        for value in [
+            InputValueSpec::Integer {
+                min: Some(2),
+                max: Some(1),
+            },
+            InputValueSpec::Number {
+                min: Some(1.0),
+                max: Some(0.0),
+            },
+            InputValueSpec::Number {
+                min: Some(f64::NAN),
+                max: None,
+            },
+        ] {
+            assert!(
+                matches!(
+                    host.mount(panel(vec![input(
+                        "ppqn",
+                        "syn.project",
+                        "ppqn",
+                        "new_ppqn",
+                        value
+                    )])),
+                    Err(ViewError::InvalidSpec { .. })
+                ),
+                "invalid bounds must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn input_spec_serde_round_trip() {
+        let spec = input(
+            "ppqn",
+            "syn.project",
+            "ppqn",
+            "new_ppqn",
+            InputValueSpec::Integer {
+                min: Some(1),
+                max: Some(32767),
+            },
+        );
+        let json = serde_json::to_value(&spec).expect("serialize");
+        assert_eq!(json["type"], "input");
+        assert_eq!(
+            json["value"],
+            serde_json::json!({ "kind": "integer", "min": 1, "max": 32767 })
+        );
+        assert_eq!(
+            serde_json::from_value::<ComponentSpec>(json).expect("deserialize"),
+            spec
+        );
+
+        // Unbounded numeric kinds omit the bound keys; text carries none.
+        for value in [
+            InputValueSpec::Integer {
+                min: None,
+                max: None,
+            },
+            InputValueSpec::Number {
+                min: Some(0.0),
+                max: None,
+            },
+            InputValueSpec::Text,
+        ] {
+            let spec = input("in", "t", "a", "p", value);
+            let json = serde_json::to_value(&spec).expect("serialize");
+            assert_eq!(
+                serde_json::from_value::<ComponentSpec>(json).expect("deserialize"),
+                spec
+            );
+        }
+        let text_json = serde_json::to_value(input("in", "t", "a", "p", InputValueSpec::Text))
+            .expect("serialize");
+        assert_eq!(text_json["value"], serde_json::json!({ "kind": "text" }));
     }
 
     #[test]
