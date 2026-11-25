@@ -114,13 +114,16 @@ pub trait Plugin: PluginProcessor {
     /// stable order the adapter declares; the bridge maps each
     /// declared bus onto a typed-graph port by index).
     ///
-    /// The default returns an empty slice, meaning "not declared":
-    /// callers that cannot enumerate buses report that capability as
-    /// unavailable rather than inferring a single stereo bus.
+    /// `None` means bus enumeration is unavailable or the plugin is not
+    /// authoritative for its host-visible topology. `Some(&[])` is the
+    /// distinct "declared none" answer, and `Some` with a non-empty
+    /// slice is the declared table. The default is `None`: callers that
+    /// cannot enumerate buses report that capability as unavailable
+    /// rather than inferring a single stereo bus.
     ///
     /// **RT contract:** non-RT only.
-    fn buses(&self) -> &[BusDescriptor] {
-        &[]
+    fn buses(&self) -> Option<&[BusDescriptor]> {
+        None
     }
 
     /// The dyn-safe processing entry point the host invokes per
@@ -454,7 +457,7 @@ pub trait ErasedPlugin {
     /// [`Plugin::params`].
     fn params(&self) -> &[ParamInfo];
     /// [`Plugin::buses`].
-    fn buses(&self) -> &[BusDescriptor];
+    fn buses(&self) -> Option<&[BusDescriptor]>;
     /// [`PluginProcessor::prepare`] — the activation hook.
     fn prepare(
         &mut self,
@@ -557,7 +560,7 @@ impl<P: Plugin> ErasedPlugin for Erased<P> {
     fn params(&self) -> &[ParamInfo] {
         self.0.params()
     }
-    fn buses(&self) -> &[BusDescriptor] {
+    fn buses(&self) -> Option<&[BusDescriptor]> {
         self.0.buses()
     }
     fn process_host(

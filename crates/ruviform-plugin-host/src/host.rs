@@ -160,21 +160,31 @@ fn converge_failed(lifecycle: &mut Lifecycle) -> HostError {
 /// "unavailable" distinction.
 ///
 /// `Reported` carries the plugin's declared [`BusDescriptor`]s in
-/// the adapter's declared order. `Unavailable` means the layer
-/// cannot enumerate buses (an out-of-process L1 instance has no
-/// wire verb for it yet) — callers must not infer a bus layout
-/// from it.
+/// the adapter's declared order. `Unavailable` means the layer or
+/// plugin cannot enumerate buses authoritatively (an out-of-process
+/// L1 instance has no wire verb for it yet) — callers must not infer
+/// a bus layout from it.
 ///
 /// **RT contract:** non-RT only — `Reported` owns a vec.
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
 pub enum BusReport {
     /// The plugin's declared bus table (possibly empty when the
-    /// plugin does not declare one — an empty report is "declared
-    /// none", distinct from `Unavailable`).
+    /// plugin declares none — an empty report is "declared none",
+    /// distinct from `Unavailable`).
     Reported(Vec<BusDescriptor>),
-    /// Bus enumeration is unavailable at this layer.
+    /// Bus enumeration is unavailable at this layer or the plugin is
+    /// not authoritative for its host-visible topology.
     Unavailable,
+}
+
+/// Converts the neutral plugin contract's three-state bus answer into
+/// the host surface's honest reported/unavailable split.
+fn bus_report(plugin: &dyn ErasedPlugin) -> BusReport {
+    match plugin.buses() {
+        Some(table) => BusReport::Reported(table.to_vec()),
+        None => BusReport::Unavailable,
+    }
 }
 
 /// The plugin→host report drain result
@@ -1004,12 +1014,11 @@ impl InProcessHost {
     pub fn buses(&mut self, handle: PluginHandle) -> Result<BusReport, HostError> {
         let instance = self.instance_mut(handle)?;
         match &mut instance.slot {
-            InstanceSlot::Plain { plugin, .. } => Ok(BusReport::Reported(plugin.buses().to_vec())),
+            InstanceSlot::Plain { plugin, .. } => Ok(bus_report(plugin.as_ref())),
             InstanceSlot::Shared(slot) => {
                 Self::shared_verb(slot, &mut instance.lifecycle, |_lifecycle, _slot, core| {
-                    Ok(core.plugin.buses().to_vec())
+                    Ok(bus_report(core.plugin.as_ref()))
                 })
-                .map(BusReport::Reported)
             }
         }
     }
@@ -1811,6 +1820,9 @@ mod tests {
         }
         fn params(&self) -> &[ParamInfo] {
             &[]
+        }
+        fn buses(&self) -> Option<&[BusDescriptor]> {
+            Some(&[])
         }
         fn drain_param_notices(&mut self, out: &mut Vec<ParamNotice>) {
             out.append(&mut self.param_notices);
@@ -2845,6 +2857,46 @@ mod tests {
             }
         });
         assert_eq!(slab, [9.0f32; 16]);
+    }
+
+    /// `Plain` arm: a plugin using the neutral contract's `None`
+    /// default reports enumeration as unavailable, while an explicit
+    /// `Some(&[])` implementation is the distinct declared-none table.
+    #[test]
+    fn buses_distinguish_unavailable_and_declared_empty_plain_slot() {
+        let mut unavailable_host = InProcessHost::new();
+        unavailable_host.register_factory(Box::new(PlainGainFactory));
+        let unavailable = instantiate(&mut unavailable_host, PLAIN_DESCRIPTOR.id);
+        assert_eq!(
+            unavailable_host.buses(unavailable),
+            Ok(BusReport::Unavailable)
+        );
+
+        let mut declared_empty_host = report_host(false);
+        let declared_empty = instantiate(&mut declared_empty_host, REPORT_DESCRIPTOR.id);
+        assert_eq!(
+            declared_empty_host.buses(declared_empty),
+            Ok(BusReport::Reported(Vec::new()))
+        );
+    }
+
+    /// `Shared` arm: the same unavailable/declared-none distinction
+    /// survives the pinned locked observation path.
+    #[test]
+    fn buses_distinguish_unavailable_and_declared_empty_shared_slot() {
+        let mut unavailable_host = send_host();
+        let unavailable = instantiate(&mut unavailable_host, SEND_DESCRIPTOR.id);
+        assert_eq!(
+            unavailable_host.buses(unavailable),
+            Ok(BusReport::Unavailable)
+        );
+
+        let mut declared_empty_host = report_host(true);
+        let declared_empty = instantiate(&mut declared_empty_host, REPORT_DESCRIPTOR.id);
+        assert_eq!(
+            declared_empty_host.buses(declared_empty),
+            Ok(BusReport::Reported(Vec::new()))
+        );
     }
 
     /// Issue #253 slice (b), `Plain` arm: reports queued by `process`

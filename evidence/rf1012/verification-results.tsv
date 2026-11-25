@@ -1,0 +1,26 @@
+lane	command	exit_code
+fmt-check	mise run fmt-check	0
+check-plugin-core	mise run check ruviform-plugin-core	0
+lint-plugin-core	mise run lint ruviform-plugin-core	0
+test-plugin-core	mise run test ruviform-plugin-core	0
+check-plugin-host	mise run check ruviform-plugin-host	0
+lint-plugin-host	mise run lint ruviform-plugin-host	0
+test-plugin-host	mise run test ruviform-plugin-host	101
+test-plugin-host-rerun-after-runner-artifact-build	mise run test ruviform-plugin-host	0
+check-audio-plugin-bridge	mise run check ruviform-audio-plugin-bridge	0
+lint-audio-plugin-bridge	mise run lint ruviform-audio-plugin-bridge	0
+test-audio-plugin-bridge	mise run test ruviform-audio-plugin-bridge	0
+test-plugin-vst3	mise run test ruviform-plugin-vst3	0
+test-plugin-clap	mise run test ruviform-plugin-clap	0
+check-l1-real-plugin	mise run check-l1-real-plugin	0
+lint-l1-real-plugin	mise run lint-l1-real-plugin	101
+lint-l1-real-plugin-rerun-after-clippy-fix	mise run lint-l1-real-plugin	0
+test-plugin-test-vst3	mise run test ruviform-plugin-test-vst3	0
+test-plugin-test-clap	mise run test ruviform-plugin-test-clap	0
+test-l1-real-plugin	mise run test-l1-real-plugin	0
+fmt-check-final	mise run fmt-check	0
+test-plugin-vst3-final	mise run test ruviform-plugin-vst3	0
+test-plugin-clap-final	mise run test ruviform-plugin-clap	0
+check-full-final	mise run check-full	0
+lint-full-final	mise run lint-full	0
+prek-all-files-final	mise exec -- prek run --all-files	0

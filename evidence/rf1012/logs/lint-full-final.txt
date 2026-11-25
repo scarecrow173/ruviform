@@ -1,0 +1,59 @@
+[lint-full] $ cargo clippy --workspace --all-targets -- -D warnings
+    Checking ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-file)
+    Checking ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-exec)
+    Checking ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-observability)
+    Checking ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-math)
+    Checking ruviform-io-symphonia v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-symphonia)
+    Checking ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+    Checking ruviform-io-compression v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-compression)
+    Checking ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-midi-device)
+    Checking ruviform-io-wav v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-wav)
+    Checking ruviform-ui-theme v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-theme)
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-device)
+    Checking ruviform-io-e2e v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-e2e)
+    Checking ruviform-script v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-script)
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+    Checking ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+   Compiling ruviform-script-luau v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-script-luau)
+   Compiling ruviform-plugin-ofx v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-ofx)
+    Checking ruviform-io-avi v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-avi)
+    Checking ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-dsp)
+    Checking ruviform-ui v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui)
+    Checking ruviform-numeric v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-numeric)
+   Compiling ruviform-ffi-poc v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\ffi-poc)
+    Checking ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+    Checking ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+    Checking ruviform-media-reader v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-reader)
+    Checking ruviform-io-archive v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-archive)
+    Checking ruviform-io-structured v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-structured)
+    Checking ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-analysis)
+    Checking ruviform-cli-sample v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-cli-sample)
+    Checking ruviform-viz v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-viz)
+    Checking ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-host)
+    Checking ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio)
+    Checking ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-plugin-bridge)
+    Checking ruviform-ui-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-test)
+    Checking ruviform-ui-gpui v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-gpui)
+    Checking ruviform-ui-webview v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-webview)
+    Checking ruviform-poc-native-dock v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-poc-native-dock)
+    Checking ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-test)
+    Checking ruviform-plugin-dock-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-dock-test)
+mbx[progress]: 15s elapsed; 0 hits, 72 misses, 0 bypassed, 35 not looked up; ~0s compiler work saved
+    Checking ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-rt)
+    Checking ruviform-video v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video)
+    Checking ruviform-graph v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-graph)
+    Checking ruviform-video-proc v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video-proc)
+    Checking ruviform-media-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-core)
+    Checking ruviform-media-io v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-io)
+    Checking ruviform-audio-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-core)
+    Checking ruviform-edit v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-edit)
+    Checking ruviform-video-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video-core)
+mbx[progress]: 30s elapsed; 0 hits, 185 misses, 0 bypassed, 89 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 195 misses, 0 bypassed, 89 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 195 misses, 0 bypassed, 89 not looked up; ~0s compiler work saved
+mbx[warning]: build-script result was not stored: build-script stdout is not UTF-8: invalid utf-8 sequence of 1 bytes from index 7789
+mbx[warning]: rustc cache bypassed: failed to read Cargo's build-script declarations: stream did not contain valid UTF-8
+mbx[warning]: build-script result was not stored: build-script stdout is not UTF-8: invalid utf-8 sequence of 1 bytes from index 6459
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 07s
+mbx[cache]: 0 hits, 195 misses, 89 not looked up, 10 bypassed; 0 B downloaded, 0 B uploaded, 20.2 MiB stored locally
+mbx[savings]: disposed of 15.1 TiB logical without being asked. that is rather the point.

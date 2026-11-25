@@ -166,6 +166,17 @@
 //! - `steady_time` is always `None` — no monotonic counter is
 //!   tracked; `transport` is `None` only when the caller supplies no
 //!   [`TransportInfo`] snapshot (the free-running boundary).
+//! - The public bus table is the faithful audio-ports topology
+//!   projection captured once after successful `init`, not a multi-bus
+//!   processing capability claim. A missing `clap.ext.audio-ports`
+//!   extension is `Some(&[])` ("declared none") because the CLAP
+//!   extension contract defines such a plugin as having no audio ports;
+//!   a present but inconsistent or unrepresentable table is
+//!   `None`/unavailable instead. ABI port names are dynamic and do not
+//!   satisfy `BusDescriptor.name`'s `'static` ownership contract, so
+//!   v1 projects every name as the empty string. CLAP audio ports have
+//!   no host activation flag, so presence in the table means the port
+//!   is available and `enabled` is `true`.
 //! - Plugin-reported enumeration counts (descriptors, params, audio
 //!   ports, per-port channels) are clamped to `MAX_SCAN_*` caps before
 //!   they can size an allocation or a scan loop.
@@ -185,7 +196,9 @@ use clack_common::events::{EventFlags, EventHeader, Match, Pckn, UnknownEvent};
 use clack_common::extensions::{Extension, PluginExtensionSide, RawExtension};
 use clack_common::process::ProcessStatus as ClapProcessStatus;
 use clack_common::utils::{ClapId, FixedPoint};
-use clack_extensions::audio_ports::{AudioPortInfoBuffer, PluginAudioPorts};
+use clack_extensions::audio_ports::{
+    AudioPortFlags, AudioPortInfoBuffer, AudioPortType, PluginAudioPorts,
+};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize as ClapGuiSize, HostGui, HostGuiImpl, PluginGui, Window,
 };
@@ -210,15 +223,16 @@ use clack_host::process::audio_buffers::{
 use clack_host::process::{PluginAudioConfiguration, PluginAudioProcessor};
 use clack_plugin::extensions::prelude::clap_plugin;
 
+use ruviform_audio_core::ChannelLayout;
 use ruviform_media_core::{MidiEvent, MidiKind, MidiValue, TransportStatus};
 use ruviform_plugin_core::wire::{WIRE_MAX_FRAMES, WIRE_MAX_STRING_BYTES};
 use ruviform_plugin_core::{
-    BufferView, BufferViewMut, ClearAspects, DirtyNotice, DirtyNoticeQueue, ErasedPlugin, Event,
-    EventKind, EventList, GuiFocusTarget, GuiHandle, GuiKeyDirection, GuiKeyEvent, GuiPopupKind,
-    GuiRequest, GuiSize, HostError, ParamFlags, ParamId, ParamInfo, ParamNotice, ParamNoticeQueue,
-    ParentLease, Plugin, PluginDescriptor, PluginFactory, PluginProcessor, PrepareError,
-    PresetLocation, ProcessConfig, ProcessContext, ProcessResult, ProcessStatus, RescanAspects,
-    TransportInfo, erase,
+    BufferView, BufferViewMut, BusDescriptor, BusDirection, BusRole, ClearAspects, DirtyNotice,
+    DirtyNoticeQueue, ErasedPlugin, Event, EventKind, EventList, GuiFocusTarget, GuiHandle,
+    GuiKeyDirection, GuiKeyEvent, GuiPopupKind, GuiRequest, GuiSize, HostError, ParamFlags,
+    ParamId, ParamInfo, ParamNotice, ParamNoticeQueue, ParentLease, Plugin, PluginDescriptor,
+    PluginFactory, PluginProcessor, PrepareError, PresetLocation, ProcessConfig, ProcessContext,
+    ProcessResult, ProcessStatus, RescanAspects, TransportInfo, erase,
 };
 
 use crate::adapt::{translate_output_event, translate_output_notice};
@@ -244,6 +258,12 @@ const MAX_SCAN_PARAMS: u32 = 4_096;
 const MAX_SCAN_PORTS: u32 = 64;
 /// See [`MAX_SCAN_DESCRIPTORS`].
 const MAX_SCAN_CHANNELS: u32 = 64;
+
+/// Defensive iteration bound for faithful public bus enumeration. This
+/// is deliberately separate from the `MAX_SCAN_*` clamps used to size
+/// prepare scratch: a plugin exceeding it makes the whole public table
+/// unavailable instead of publishing a truncated topology.
+const MAX_ENUMERATED_AUDIO_PORTS: u32 = 1_024;
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -960,6 +980,66 @@ fn port_channel_counts(handle: PluginMainThreadHandle<'_>, is_input: bool) -> Ve
     channels
 }
 
+/// Projects one CLAP audio port onto the neutral layout vocabulary.
+/// Mono and stereo are the only layouts the base `audio-ports`
+/// extension can honestly determine without consulting type-specific
+/// port details; count-only, custom, surround and ambisonic ports all
+/// decline rather than inventing a layout.
+fn layout_from_audio_port(
+    channel_count: u32,
+    port_type: Option<AudioPortType<'_>>,
+) -> Option<ChannelLayout> {
+    if port_type == Some(AudioPortType::MONO) && channel_count == 1 {
+        Some(ChannelLayout::Mono)
+    } else if port_type == Some(AudioPortType::STEREO) && channel_count == 2 {
+        Some(ChannelLayout::Stereo)
+    } else {
+        None
+    }
+}
+
+/// Queries the complete audio-port table on the deactivated main-thread
+/// path immediately after successful `plugin.init`. Input ports precede
+/// output ports, each in ascending ABI index order. A missing extension
+/// is the CLAP-defined "no audio ports" answer (`Some(vec![])`); every
+/// present-extension inconsistency — excessive counts, failed `get`,
+/// zero channels, type/channel contradiction, or an `IS_MAIN` flag away
+/// from index zero — discards the partial table and returns `None`.
+fn enumerate_bus_table(handle: PluginMainThreadHandle<'_>) -> Option<Vec<BusDescriptor>> {
+    let Some(ports) = handle.get_extension::<PluginAudioPorts>() else {
+        return Some(Vec::new());
+    };
+    let mut buses = Vec::new();
+    for (is_input, direction) in [(true, BusDirection::Input), (false, BusDirection::Output)] {
+        let count = ports.count(&handle, is_input);
+        if count > MAX_ENUMERATED_AUDIO_PORTS {
+            return None;
+        }
+        for index in 0..count {
+            let mut buffer = AudioPortInfoBuffer::new();
+            let info = ports.get(&handle, index, is_input, &mut buffer)?;
+            if info.channel_count == 0
+                || (info.flags.contains(AudioPortFlags::IS_MAIN) && index != 0)
+            {
+                return None;
+            }
+            let layout = layout_from_audio_port(info.channel_count, info.port_type)?;
+            buses.push(BusDescriptor {
+                direction,
+                layout,
+                name: "",
+                role: if info.flags.contains(AudioPortFlags::IS_MAIN) {
+                    BusRole::Main
+                } else {
+                    BusRole::Aux
+                },
+                enabled: true,
+            });
+        }
+    }
+    Some(buses)
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -1014,6 +1094,10 @@ struct ClapPlugin {
     /// `Stopped`/`Started` processor produced by `activate` — `None`
     /// until `prepare`.
     processor: Option<PluginAudioProcessor<BridgeHandlers>>,
+    /// Faithful audio-port topology projected once at successful
+    /// `init` — `None` when a present extension's query/projection is
+    /// inconsistent or unrepresentable.
+    bus_cache: Option<Vec<BusDescriptor>>,
     /// Negotiated block-size bounds — `process` rejects a block whose
     /// declared length falls outside `[min_frames, max_frames]`, the
     /// must-bound the plugin agreed to at `activate`.
@@ -1105,6 +1189,7 @@ impl ClapPlugin {
             plugin_id,
             instance: None,
             processor: None,
+            bus_cache: None,
             min_frames: 0,
             max_frames: 0,
             input_scratch: Vec::new(),
@@ -1944,6 +2029,14 @@ impl Plugin for ClapPlugin {
         self.params
     }
 
+    /// The cached faithful audio-port projection captured at successful
+    /// `init` — input ports then output ports, each in ABI index order.
+    /// `None` before initialization and whenever a present extension's
+    /// query/projection was inconsistent or unrepresentable.
+    fn buses(&self) -> Option<&[BusDescriptor]> {
+        self.bus_cache.as_deref()
+    }
+
     /// `init` → `PluginInstance::new` — the fused CLAP
     /// instantiate+`plugin.init`. `create()` never instantiates.
     ///
@@ -1960,7 +2053,7 @@ impl Plugin for ClapPlugin {
         let gui_requests = Arc::clone(&self.gui_requests);
         let dirty_notices = Arc::clone(&self.dirty_notices);
         let param_notices = Arc::clone(&self.param_notices);
-        let instance = PluginInstance::<BridgeHandlers>::new(
+        let mut instance = PluginInstance::<BridgeHandlers>::new(
             move |()| BridgeShared {
                 gui_requests,
                 dirty_notices,
@@ -1972,7 +2065,9 @@ impl Plugin for ClapPlugin {
             &self.host_info,
         )
         .map_err(|_| HostError::PluginFailed)?;
+        let bus_cache = enumerate_bus_table(instance.plugin_handle());
         self.instance = Some(instance);
+        self.bus_cache = bus_cache;
         Ok(())
     }
 

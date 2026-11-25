@@ -1,0 +1,259 @@
+[check-full] $ cargo check --workspace --all-targets
+    Checking windows-sys v0.61.2
+    Checking log v0.4.35
+   Compiling serde_core v1.0.229
+    Checking memchr v2.8.3
+   Compiling serde_json v1.0.154
+   Compiling autocfg v1.5.1
+   Compiling serde v1.0.229
+   Compiling zerocopy v0.8.63
+   Compiling getrandom v0.4.3
+   Compiling cfg-if v1.0.5
+    Checking regex-syntax v0.8.11
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.15
+    Checking smallvec v1.16.5
+   Compiling syn v3.0.10
+   Compiling syn v2.0.119
+   Compiling num-traits v0.2.19
+    Checking ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-observability)
+    Checking simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.5
+    Checking adler2 v2.0.1
+    Checking core_detect v1.0.0
+    Checking bytemuck v1.25.2
+    Checking lazy_static v1.5.1
+   Compiling zerocopy-derive v0.8.63
+    Checking strength_reduce v0.2.4
+   Compiling serde_derive v1.0.229
+   Compiling fearless_simd_macros v0.1.0
+    Checking regex-lite v0.1.9
+    Checking miniz_oxide v0.9.1
+   Compiling pkg-config v0.3.34
+    Checking audio_thread_priority v0.38.0
+    Checking ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-file)
+    Checking once_cell v1.21.4
+    Checking rand_core v0.10.1
+    Checking anstyle v1.0.14
+    Checking extended v0.1.0
+    Checking ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-exec)
+    Checking fastrand v2.5.0
+    Checking fnv v1.0.7
+    Checking cpufeatures v0.3.1
+    Checking utf8parse v0.2.2
+    Checking once_cell_polyfill v1.70.2
+    Checking quick-error v1.2.3
+    Checking wait-timeout v0.2.1
+    Checking bit-vec v0.10.2
+    Checking chacha20 v0.10.2
+    Checking anstyle-wincon v3.0.11
+    Checking ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-math)
+    Checking anstyle-parse v1.0.0
+    Checking rand_xorshift v0.5.0
+    Checking anstyle-query v1.1.5
+    Checking bit-set v0.11.1
+    Checking colorchoice v1.0.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking unarray v0.1.4
+    Checking either v1.19.0
+    Checking aho-corasick v1.1.5
+   Compiling heck v0.5.0
+    Checking clap_lex v1.1.1
+    Checking ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-dsp)
+   Compiling proc-macro2 v1.0.107
+    Checking strsim v0.11.1
+   Compiling jobserver v0.1.35
+    Checking tempfile v3.27.0
+    Checking rand v0.10.3
+    Checking anstream v1.0.0
+   Compiling zstd-safe v8.2.0
+    Checking unicode-ident v1.0.27
+    Checking regex-automata v0.4.18
+    Checking num-complex v0.4.6
+    Checking flate2 v1.1.11
+    Checking num-integer v0.1.47
+   Compiling cc v1.11.1
+    Checking ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-analysis)
+   Compiling clap_derive v4.6.7
+    Checking rusty-fork v0.3.1
+    Checking scopeguard v1.2.0
+    Checking clap_builder v4.6.7
+    Checking ppv-lite86 v0.2.21
+   Compiling camino v1.2.6
+   Compiling thiserror v2.0.21
+   Compiling quote v1.0.47
+    Checking regex v1.13.1
+    Checking primal-check v0.3.4
+    Checking transpose v0.2.3
+    Checking ruviform-ui v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui)
+   Compiling thiserror-impl v2.0.21
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+    Checking proptest v1.12.0
+    Checking ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio)
+    Checking cargo-platform v0.1.9
+    Checking semver v1.0.28
+    Checking rand_chacha v0.3.1
+    Checking clap v4.6.7
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+   Compiling windows-interface v0.59.3
+    Checking rustfft v6.4.1
+   Compiling windows-implement v0.60.2
+    Checking windows-strings v0.5.1
+    Checking rand v0.8.8
+    Checking windows-result v0.4.1
+    Checking base64 v0.22.1
+   Compiling version_check v0.9.5
+   Compiling winapi v0.3.9
+   Compiling alloca v0.4.0
+    Checking half v2.7.1
+    Checking png v0.18.1
+    Checking symphonia-core v0.6.1
+    Checking winapi-util v0.1.11
+    Checking windows-threading v0.2.1
+    Checking shared_memory v0.12.4
+    Checking ciborium-io v0.2.2
+    Checking itertools v0.13.0
+    Checking windows-core v0.62.2
+    Checking ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-midi-device)
+    Checking cast v0.3.0
+    Checking tinytemplate v1.2.1
+    Checking same-file v1.0.6
+    Checking symphonia-metadata v0.6.1
+    Checking symphonia-codec-pcm v0.6.1
+    Checking symphonia-codec-adpcm v0.6.1
+    Checking cargo_metadata v0.19.2
+    Checking ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-host)
+    Checking ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-export)
+    Checking windows-numerics v0.3.1
+    Checking windows-future v0.3.2
+    Checking windows-collections v0.3.2
+    Checking ciborium-ll v0.2.2
+mbx[progress]: 15s elapsed; 145 hits, 0 misses, 0 bypassed, 0 not looked up; ~2m 16s compiler work saved
+    Checking criterion-plot v0.8.2
+    Checking walkdir v2.5.0
+    Checking ruviform-io-wav v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-wav)
+    Checking symphonia-common v0.6.1
+    Checking symphonia-format-riff v0.6.1
+    Checking oorandom v11.1.5
+    Checking ruviform-ui-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-test)
+    Checking ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-plugin-bridge)
+    Checking anes v0.1.6
+    Checking tinyvec v1.13.3
+   Compiling generic-array v0.14.7
+    Checking windows v0.62.2
+    Checking ciborium v0.2.2
+   Compiling encoding_rs v0.8.44
+    Checking typenum v1.20.1
+    Checking ruviform-io-compression v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-compression)
+    Checking simdutf8 v0.1.5
+    Checking page_size v0.6.0
+    Checking symphonia-format-ogg v0.6.1
+    Checking symphonia-codec-vorbis v0.6.1
+    Checking symphonia-bundle-flac v0.6.1
+    Checking symphonia-format-mkv v0.6.1
+    Checking ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-test)
+    Checking unicode-normalization v0.1.26
+   Compiling cpal v0.18.2
+   Compiling multiversion_no_op v1.0.0
+    Checking ruviform-ui-theme v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-theme)
+    Checking unicode-width v0.2.3
+    Checking dasp_sample v0.11.0
+    Checking arraydeque v0.5.1
+    Checking winnow v1.0.5
+    Checking toml_datetime v1.1.3+spec-1.1.0
+    Checking serde_spanned v1.1.3
+    Checking ruviform-io-archive v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-archive)
+    Checking csv-core v0.1.13
+    Checking nohash-hasher v0.2.0
+    Checking symphonia v0.6.1
+    Checking base64 v0.23.1
+    Checking ryu v1.0.23
+mbx[warning]: build-script result was not stored: build-script stdout is not UTF-8: invalid utf-8 sequence of 1 bytes from index 4815
+    Checking toml_writer v1.2.0+spec-1.1.0
+    Checking granit-parser v2.1.0
+    Checking annotate-snippets v0.12.17
+    Checking quick-xml v0.42.0
+    Checking toml_parser v1.1.5+spec-1.1.0
+    Checking cpufeatures v0.2.17
+    Checking ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-vst3)
+    Checking ruviform-io-e2e v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-e2e)
+   Compiling luau0-src v0.22.0+luau740
+    Checking ruviform-io-symphonia v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-symphonia)
+   Compiling libc v0.2.189
+    Checking csv v1.4.0
+mbx[warning]: rustc cache bypassed: failed to read Cargo's build-script declarations: stream did not contain valid UTF-8
+   Compiling parking_lot_core v0.9.12
+    Checking lock_api v0.4.14
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking bstr v1.13.1
+    Checking rustc-hash v2.1.3
+    Checking toml v1.1.8+spec-1.1.0
+    Checking criterion v0.8.2
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-vst3)
+    Checking encoding_rs_io v0.1.8
+    Checking ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-test-clap)
+   Compiling mlua-sys v0.13.0
+    Checking ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-clap)
+    Checking zstd v0.14.3
+   Compiling ruviform-plugin-ofx v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-ofx)
+    Checking digest v0.10.7
+   Compiling ruviform-script-luau v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-script-luau)
+    Checking ruviform-audio-device v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-device)
+    Checking ruviform-io-avi v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-avi)
+    Checking jiff-core v0.1.4
+    Checking ruviform-numeric v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-numeric)
+   Compiling libm v0.2.16
+    Checking serde-saphyr v2.0.0
+   Compiling paste v1.0.15
+   Compiling pulp v0.22.3
+    Checking ruviform-ui-gpui v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-gpui)
+    Checking env_filter v2.0.0
+    Checking sha2 v0.10.9
+    Checking ctrlc v3.5.2
+   Compiling ruviform-ffi-poc v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\ffi-poc)
+    Checking jiff v0.2.42
+    Checking tracing-core v0.1.36
+    Checking ruviform-io-structured v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-io-structured)
+   Compiling multiversion-macros v0.9.2
+   Compiling pulp-macro v0.1.1
+    Checking raw-cpuid v11.6.0
+    Checking reborrow v0.5.5
+    Checking parking_lot v0.12.5
+    Checking ruviform-script v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-script)
+    Checking ruviform-plugin-dock-test v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-plugin-dock-test)
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking ruviform-cli-sample v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-cli-sample)
+    Checking env_logger v0.11.11
+    Checking multiversion v0.9.2
+    Checking approx v0.5.1
+    Checking ruviform-media-reader v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-reader)
+    Checking tracing-serde v0.2.0
+    Checking tracing-log v0.2.0
+mbx[progress]: 30s elapsed; 263 hits, 3 misses, 1 bypassed, 3 not looked up; ~4m 6s compiler work saved
+    Checking ruviform-viz v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-viz)
+    Checking sharded-slab v0.1.7
+    Checking nu-ansi-term v0.50.3
+    Checking thread_local v1.1.10
+    Checking tracing-subscriber v0.3.23
+    Checking mlua v0.12.2
+    Checking ruviform-poc-native-dock v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-poc-native-dock)
+    Checking ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-rt)
+    Checking ruviform-ui-webview v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-ui-webview)
+    Checking ruviform-graph v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-graph)
+    Checking ruviform-video v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video)
+    Checking ruviform-media-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-core)
+    Checking ruviform-video-proc v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video-proc)
+    Checking ruviform-media-io v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-media-io)
+    Checking ruviform-edit v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-edit)
+    Checking ruviform-audio-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-audio-core)
+    Checking ruviform-video-core v0.1.0 (G:\orca\workspaces\ruviform\rf1012-bus-enumeration\crates\ruviform-video-core)
+mbx[progress]: 45s elapsed; 470 hits, 35 misses, 1 bypassed, 28 not looked up; ~7m 42s compiler work saved
+mbx[progress]: 1m elapsed; 470 hits, 35 misses, 1 bypassed, 28 not looked up; ~7m 42s compiler work saved
+mbx[warning]: build-script result was not stored: build-script stdout is not UTF-8: invalid utf-8 sequence of 1 bytes from index 6511
+mbx[progress]: 1m 15s elapsed; 470 hits, 35 misses, 5 bypassed, 28 not looked up; ~7m 42s compiler work saved
+mbx[warning]: build-script result was not stored: build-script stdout is not UTF-8: invalid utf-8 sequence of 1 bytes from index 7863
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 16s
+mbx[cache]: 470 hits, 35 misses, 28 not looked up, 29 incremental, 11 bypassed; 0 B downloaded, 0 B uploaded, 267.6 KiB stored locally
+mbx[savings]: 263148 compilations dispensed from stock. inventory immaculate.
