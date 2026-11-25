@@ -964,6 +964,20 @@ jobs:
           $dumps = @(Get-ChildItem $dumpDir -Filter '*.dmp' -ErrorAction SilentlyContinue)
           "  crashdumps: $($dumps.Count) file(s) $(($dumps | ForEach-Object { "$($_.Name) $($_.Length)B" }) -join '; ')" | Out-Probe $log
 
+          # cdb 下で test exe を再実行 — probe で全 WinMM call が成功する
+          # のに Rust test だけが落ちるため、faulting module+stack を直接
+          # 採取する（LocalDumps は runner で async write が間に合わない
+          # ことがあるため debugger 直叩きを正本とする）。
+          $cdb = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe","$env:ProgramFiles\Windows Kits\10\Debuggers\x64\cdb.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $testExe = Get-ChildItem "target\debug\deps\loopback-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($cdb -and $testExe) {
+            "  --- cdb re-run: $($testExe.Name) ---" | Out-Probe $log
+            $cdbOut = @(& $cdb.FullName -g -G -c ".ecxr; .exr -1; kL40; lmva `${$ip}; q" $testExe.FullName --ignored --test-threads=1 2>&1)
+            $cdbOut | Select-Object -First 120 | ForEach-Object { "  $_" | Out-Probe $log }
+          } else {
+            "  cdb not found or test exe missing (cdb=$($cdb -ne $null) exe=$($testExe -ne $null))" | Out-Probe $log
+          }
+
           # fail-closed: verdict Pass/NotRun のみ ok。Fail・crash・
           # verdict 未到達・probe crash は error。
           $status = 'ok'
