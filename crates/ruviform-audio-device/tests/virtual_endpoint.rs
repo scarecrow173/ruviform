@@ -27,9 +27,12 @@
 //!   never bit-exact, because virtual cables run an internal
 //!   sample-rate converter (VB-CABLE family: 48 kHz internal + SRC).
 //! - callback contract observations mirror `real_input_e2e.rs`:
-//!   frame counts, timestamp monotonicity, clock-domain agreement,
-//!   `capture <= callback` ordering, `frame_position` continuity,
-//!   non-finite scan, latency records, error counters, and a
+//!   frame counts, timestamp monotonicity within each continuous
+//!   run (the OS legitimately re-anchors its timestamp epoch across
+//!   a stop → restart boundary — counted as `epoch_resets`, not as
+//!   regressions), clock-domain agreement, `capture <= callback`
+//!   ordering, `frame_position` continuity, non-finite scan,
+//!   latency records, error counters, and a
 //!   stop → query → restart → stop lifecycle check.
 //!
 //! Fail-closed contract: with no pair candidate (the common case —
@@ -134,6 +137,7 @@ struct Probe {
     in_channel_mismatches: AtomicUsize,
     in_timestamp_regressions: AtomicUsize,
     in_last_callback_ns: AtomicI64,
+    in_timestamp_epoch_resets: AtomicUsize,
     in_expected_domain: AtomicU64,
     in_domain_mismatches: AtomicUsize,
     in_capture_some: AtomicUsize,
@@ -163,6 +167,7 @@ struct Probe {
     out_channel_mismatches: AtomicUsize,
     out_timestamp_regressions: AtomicUsize,
     out_last_callback_ns: AtomicI64,
+    out_timestamp_epoch_resets: AtomicUsize,
     out_playback_some: AtomicUsize,
     out_playback_none: AtomicUsize,
     out_latency_min_ns: AtomicI64,
@@ -511,7 +516,7 @@ fn run_round_trip(pair: Pair) -> Result<(), Vec<String>> {
         return Err(vec![format!("stream start failed: {error}")]);
     }
     thread::sleep(Duration::from_secs(CAPTURE_SECONDS));
-    let lifecycle = run_lifecycle(&*in_stream, &*out_stream);
+    let lifecycle = run_lifecycle(&probe, &*in_stream, &*out_stream);
     drop(in_stream);
     drop(out_stream);
 
@@ -528,7 +533,11 @@ fn run_round_trip(pair: Pair) -> Result<(), Vec<String>> {
 /// Stop → post-stop queries → restart → re-stop, collecting every
 /// lifecycle violation as a string (recorded, then gated with the
 /// rest of the failure list).
-fn run_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStream) -> Vec<String> {
+fn run_lifecycle(
+    probe: &Probe,
+    in_stream: &dyn InputStream,
+    out_stream: &dyn OutputStream,
+) -> Vec<String> {
     let mut lifecycle = Vec::new();
     for (label, result) in [
         ("input stop", in_stream.stop()),
@@ -548,6 +557,25 @@ fn run_lifecycle(in_stream: &dyn InputStream, out_stream: &dyn OutputStream) -> 
             lifecycle.push(format!("post-stop {label} query failed: {error}"));
         }
     }
+    // Epoch boundary: a stop/start transition legitimately re-anchors the
+    // OS-side timestamp epoch (on shared-mode render streams audiodg
+    // re-derives the position↔QPC correlation from its own packet epoch —
+    // there is no driver-supplied output timestamp to keep it continuous),
+    // so the first callbacks of a restarted run can land below the last
+    // pre-stop timestamp without being a defect. Splitting the baseline
+    // here keeps the regression oracle measuring what it means to —
+    // monotonicity inside one continuous run — while the reset itself is
+    // counted as lifecycle evidence.
+    probe.in_last_callback_ns.store(i64::MIN, Ordering::Relaxed);
+    probe
+        .out_last_callback_ns
+        .store(i64::MIN, Ordering::Relaxed);
+    probe
+        .in_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
+    probe
+        .out_timestamp_epoch_resets
+        .fetch_add(1, Ordering::Relaxed);
     // Restart probe: a stream that cannot restart after stop is a
     // lifecycle contract violation.
     match in_stream.start().and_then(|()| out_stream.start()) {
@@ -1170,10 +1198,12 @@ fn print_callback_stats(probe: &Probe) {
         probe.out_max_frames.load(Ordering::Relaxed),
     );
     eprintln!(
-        "  timestamps: in regressions={} domain mismatches={} | out regressions={}",
+        "  timestamps: in regressions={} epoch_resets={} domain mismatches={} | out regressions={} epoch_resets={}",
         probe.in_timestamp_regressions.load(Ordering::Relaxed),
+        probe.in_timestamp_epoch_resets.load(Ordering::Relaxed),
         probe.in_domain_mismatches.load(Ordering::Relaxed),
         probe.out_timestamp_regressions.load(Ordering::Relaxed),
+        probe.out_timestamp_epoch_resets.load(Ordering::Relaxed),
     );
     eprintln!(
         "  capture stamps: some={} none={} order violations={}",
