@@ -1,0 +1,25 @@
+[check] $ cargo check --locked --all-targets -p ruviform-plugin-test-vst3
+    Checking ruviform-media-core v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-media-core)
+    Checking ruviform-io-file v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-io-file)
+    Checking ruviform-rt v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-rt)
+    Checking ruviform-math v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-math)
+    Checking ruviform-audio-core v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-core)
+    Checking ruviform-video-core v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-video-core)
+    Checking ruviform-observability v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-observability)
+    Checking ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-exec)
+    Checking ruviform-plugin-core v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-core)
+    Checking ruviform-dsp v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-dsp)
+    Checking ruviform-graph v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-graph)
+    Checking ruviform-media-io v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-media-io)
+    Checking ruviform-midi-device v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-midi-device)
+    Checking ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-host)
+    Checking ruviform-plugin-export v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-export)
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-vst3)
+    Checking ruviform-audio-analysis v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-analysis)
+    Checking ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-vst3)
+    Checking ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio)
+    Checking ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-plugin-bridge)
+    Checking ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-test)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.83s
+mbx[cache]: 20 hits, 7 misses; 0 B downloaded, 0 B uploaded, 391.3 KiB stored locally
+mbx[savings]: has quietly disposed of 14.6 TiB logical of build leftovers. nobody saw anything.

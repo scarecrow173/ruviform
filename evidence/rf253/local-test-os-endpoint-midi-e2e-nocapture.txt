@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-5b9c7d50bec2027c.exe)
+
+running 1 test
+test os_endpoint_midi_loopback_drives_test_instrument ... enumerated: 0 input ports, 1 output ports
+run_metadata: {"case_id":"rf253.midi.virtual-endpoint.host-plugin-e2e","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"rf628-trace-supply+ordered-subsequence+stamped-pcm-counter-v1","parameters":{"seed":595,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence supplied by the RF#628 trace; stamped PCM attack/release, counter agreement, and close invalidation","observed":"NOT_PROVISIONED — no bidirectional name match (inputs=0 outputs=1)","evidence":["crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs","workflow stage os-endpoint-midi-e2e in virtual-audio-driver-probe.yml","name match is only a loopback candidate; RvfMidi provisioning provenance in workflow evidence is the basis for the virtual-os-endpoint claim","virtual endpoint provenance: manual-unverified-loopback-candidate"]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf253-midi-e2e\target\tmp\run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json
+verdict: NotRun — NOT_PROVISIONED — no bidirectional name match (inputs=0 outputs=1); provision the RvfMidi virtual loopback pair first
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s

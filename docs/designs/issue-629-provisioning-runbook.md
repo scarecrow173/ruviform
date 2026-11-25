@@ -517,7 +517,7 @@ license・配布・再起動の摩擦から、Slice B で独自 driver 経路に
   install 全 stage（`env-build-surface`〜`devnode-create`）→
   `endpoint-probe`→`midi-endpoint-probe`→`stream-roundtrip`
   （`mise run test-audio-virtual-endpoint` 実走）→ `midi-loopback` →
-  `os-endpoint-wiring` → `fault-cases` → `cleanup` を束ねる。stage 一覧の正本は spec 版
+  `os-endpoint-wiring` → `os-endpoint-midi-e2e` → `fault-cases` → `cleanup` を束ねる。stage 一覧の正本は spec 版
   runbook 追記節（`docs/specs/issue-629-provisioning-runbook.md`）。
 
 ## 4. Provisioning 判定フロー（probe 主導）
@@ -835,3 +835,26 @@ drop/gap/underrun を adapter がどの error kind・timestamp/frame evidence �
 の `StreamFault::Error(DeviceError::Xrun)` は API/backend 契約の evidence として
 再利用できるが、EXT-L3 xrun Pass の代用にはしない。`ClockDiscontinuity` は現行
 native input の discontinuity 表現であり、typed Xrun と等価とはみなさない。
+
+## 13. 追記（2026-11-25）— Issue #253 MIDI Host/Plugin e2e stage と provenance fail-closed
+
+Issue #253 AC1/AC6 vertical slice では、`os-endpoint-wiring` 後・`fault-cases` 前に
+`os-endpoint-midi-e2e` stage を追加する。 canonical lane は
+`mise run test-os-endpoint-midi-e2e` であり、workflow は verdict と RunMetadata を
+artifact へ表面化させるため fixture build 後に `mise exec -- cargo test -p
+ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e --
+--ignored --test-threads=1 --nocapture` を補助証拠として実行する。
+
+この stage の `virtual-os-endpoint` 解釈は name match ではなく workflow provenance を根拠にする。`midi-endpoint-probe` の loopback-candidate/provisioning 行と
+`midi-loopback` の candidate/round-trip Pass 行を stage log へ転記し、両者が同一
+attempt で成立した場合だけ `RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE` を
+`rvfmidi-testsigned-driver-probe` にする。RunMetadata JSON は
+`os-endpoint-midi-e2e-run-metadata-<os>/run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json`
+として artifact に保存し、repo/SHA・`level=ext-l3`・
+`environment_kind=virtual-os-endpoint`・result を検査する。
+
+fail-closed 境界は wiring stage より強い。honest `not-run` は absence-is-data の
+stage `ok` だが、`result=pass` に `rvfmidi-testsigned-driver-probe` provenance 行が
+ない場合、または workflow 側 provenance が未成立のまま pass だった場合は証拠価値が
+ないため stage `error` とする。Fail・crash・verdict/RunMetadata 未到達・artifact copy
+不能も `error` であり、run conclusion や stage `ok` だけを AC1/AC6 Pass と読まない。

@@ -1,0 +1,14 @@
+[check-l1-real-plugin] $ cargo check -p ruviform-plugin-clap -p ruviform-plugin-vst3 -p ruviform-plugin-test-vst3 -p ruviform-plugin-test-clap --all-targets --features ruviform-plugin-clap/host,ruviform-plugin-vst3/host,ruviform-plugin-test-vst3/l1-runner,ruviform-plugin-test-clap/l1-runner
+    Checking clap-sys v0.5.0
+    Checking bitflags v2.13.2
+    Checking ruviform-plugin-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-vst3)
+    Checking ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-vst3)
+    Checking clack-common v0.2.0
+    Checking clack-plugin v0.2.0
+    Checking clack-host v0.2.0
+    Checking clack-extensions v0.2.0
+    Checking ruviform-plugin-clap v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-clap)
+    Checking ruviform-plugin-test-clap v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-clap)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.65s
+mbx[cache]: 11 hits, 21 misses; 0 B downloaded, 0 B uploaded, 2.6 MiB stored locally
+mbx[savings]: rustc believes it compiled everything. it is down 4d 15h across 7035 builds. let it believe.

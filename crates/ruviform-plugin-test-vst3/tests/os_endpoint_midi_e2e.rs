@@ -20,8 +20,11 @@
 //! - Missing/unsupported backend, empty port lists, or zero
 //!   name-matched pairs → `verdict: NotRun`, early return, no asserts.
 //!   A name match is a loopback *candidate* — `MidiPortOrigin::Unknown`
-//!   cannot prove a virtual endpoint, and this test never claims
-//!   `environment_kind=virtual-os-endpoint`.
+//!   cannot prove a virtual endpoint by itself. The
+//!   `environment_kind=virtual-os-endpoint` acceptance claim therefore
+//!   relies on external provisioning provenance — the manual workflow
+//!   supplies the `RvfMidi` evidence; an unverified manual run records
+//!   that weaker provenance explicitly.
 //! - Missing fixture artifacts → `assert!` failure, same as the L1
 //!   suite (distinct from the honest `NotRun` above).
 //! - A matched pair that opens but fails to deliver the scripted
@@ -47,7 +50,9 @@
 
 use std::ffi::OsString;
 use std::io::Write;
-use std::path::PathBuf;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -63,14 +68,24 @@ use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleFormat, SampleRate};
 use ruviform_audio_plugin_bridge::{
     AttachConfig, InputConfig, InputTx, PluginNodeControl, PluginNodeFactory, attach,
 };
+use ruviform_audio_test::clock::{JitterSpec, VirtualClockConfig};
+use ruviform_audio_test::metadata::{
+    CaseRequirement, CaseResult, EnvironmentKind, RunMetadata, RunParameters, VerificationLevel,
+};
+use ruviform_audio_test::midi::{
+    MidiCue, MidiScenario, MidiTraceConfig, MidiTraceEntry, run_midi_trace,
+};
+use ruviform_audio_test::oracle::{
+    midi_expected_playthrough, midi_trace_eq, midi_trace_frames_monotonic,
+};
 use ruviform_graph::{
     Activation, Availability, ConnDef, Direction, EdgeDelay, GraphBuilder, Multiplicity, NodeDef,
     NodeKind, PortDef, PortFormat, PortId, PortRef, Validator,
 };
 use ruviform_media_core::{
-    ClockAnchor, ClockDomainId, ClockEpochId, DeliveryPolicy, EngineFrame, MidiChannel,
-    MidiController, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey, ScheduleBudget, TimeBase,
-    TimestampProvenance,
+    BlockContract, ClockAnchor, ClockDomainId, ClockEpochId, DeliveryPolicy, EngineFrame,
+    InBlockTransportSupport, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+    MidiKind, MidiValue, NoteKey, ScheduleBudget, TimeBase, TimestampProvenance,
 };
 use ruviform_plugin_core::{
     BusDescriptor, BusDirection, BusRole, FailureCause, HostError, PluginDescriptor, ProcessConfig,
@@ -340,6 +355,103 @@ const DELIVERED_LOOKAHEAD: usize = 2;
 /// exceeds this is outside the verifier's envelope and fails honestly.
 const MAX_BLOCKS: u64 = 48;
 
+// ---------------------------------------------------------------------------
+// Case Schema v1 run metadata — rf#1001 semantics, lease-local copy.
+// ---------------------------------------------------------------------------
+
+const RUN_SEED: u64 = 0x253;
+const FIXTURE_VERSION: u32 = 1;
+const CASE_ID: &str = "rf253.midi.virtual-endpoint.host-plugin-e2e";
+const ORACLE_ID: &str = "rf628-trace-supply+ordered-subsequence+stamped-pcm-counter-v1";
+static TERMINAL_RECORD_EMITTED: AtomicBool = AtomicBool::new(false);
+
+const fn run_parameters() -> RunParameters {
+    RunParameters {
+        seed: RUN_SEED,
+        fixture_version: FIXTURE_VERSION,
+        clock_config: VirtualClockConfig {
+            sample_rate: 48_000,
+            epoch: 0,
+            offset_ticks: 0,
+            drift_ppm: 0,
+            jitter: JitterSpec::DISABLED,
+        },
+    }
+}
+
+fn repo_name() -> String {
+    std::env::var("RUVIFORM_RUN_REPO").unwrap_or_else(|_| "unknown".to_owned())
+}
+
+fn repo_sha() -> String {
+    std::env::var("RUVIFORM_RUN_SHA")
+        .or_else(|_| std::env::var("CI_COMMIT_SHA"))
+        .or_else(|_| std::env::var("GITHUB_SHA"))
+        .unwrap_or_else(|_| "unknown".to_owned())
+}
+
+fn endpoint_record() -> RunMetadata {
+    let record = RunMetadata::for_environment(
+        CASE_ID,
+        CaseRequirement::Required,
+        VerificationLevel::ExtL3,
+        EnvironmentKind::VirtualOsEndpoint,
+        ORACLE_ID,
+        run_parameters(),
+        repo_name(),
+        repo_sha(),
+    )
+    .with_platform(std::env::consts::OS, std::env::consts::ARCH)
+    .with_expected(
+        "4-event channel-voice sequence supplied by the RF#628 trace; stamped PCM attack/release, counter agreement, and close invalidation",
+    )
+    .with_evidence("crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs")
+    .with_evidence("workflow stage os-endpoint-midi-e2e in virtual-audio-driver-probe.yml")
+    .with_evidence(
+        "name match is only a loopback candidate; RvfMidi provisioning provenance in workflow evidence is the basis for the virtual-os-endpoint claim",
+    );
+    let provenance = std::env::var("RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE")
+        .unwrap_or_else(|_| "manual-unverified-loopback-candidate".to_owned());
+    record.with_evidence(format!("virtual endpoint provenance: {provenance}"))
+}
+
+fn emit_record(meta: &RunMetadata) {
+    let json = meta
+        .to_json()
+        .unwrap_or_else(|error| format!("{{\"serialize_error\":\"{error}\"}}"));
+    eprintln!("run_metadata: {json}");
+    let dir = std::env::var("CARGO_TARGET_TMPDIR")
+        .ok()
+        .or_else(|| option_env!("CARGO_TARGET_TMPDIR").map(str::to_owned));
+    if let Some(dir) = dir {
+        let file = format!(
+            "run-metadata-{}.json",
+            meta.case_id
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect::<String>()
+        );
+        let path = Path::new(&dir).join(file);
+        match meta.save_json(&path) {
+            Ok(()) => eprintln!("run_metadata_path: {}", path.display()),
+            Err(error) => eprintln!("run_metadata_path_error: {error}"),
+        }
+    }
+    TERMINAL_RECORD_EMITTED.store(true, Ordering::SeqCst);
+}
+
+fn emit_notrun(meta: &RunMetadata, reason: impl Into<String>) {
+    let record = meta.clone().with_result(CaseResult::NotRun, reason.into());
+    emit_record(&record);
+}
+
+fn fail_case(meta: &RunMetadata, reason: impl Into<String>) -> ! {
+    let reason = reason.into();
+    let record = meta.clone().with_result(CaseResult::Fail, reason.clone());
+    emit_record(&record);
+    panic!("verdict: Fail — {reason}");
+}
+
 fn frame_base() -> TimeBase {
     TimeBase::sample_rate(48_000).unwrap()
 }
@@ -557,6 +669,77 @@ fn expected_channel_voice_sequence() -> [MidiEvent; 4] {
     ]
 }
 
+fn cue(base: TimeBase, pos: i64, seq: u64, event: MidiEvent) -> MidiCue {
+    MidiCue {
+        position: MediaTime::new(pos, base),
+        source_sequence: seq,
+        event,
+    }
+}
+
+fn trace_config(total_frames: u64) -> MidiTraceConfig {
+    MidiTraceConfig {
+        block_frames: 480,
+        total_frames,
+        contract: BlockContract::new(1, 4_096, InBlockTransportSupport::Unknown),
+        policy: DeliveryPolicy::Exact,
+        budget: ScheduleBudget::new(64, 1_024, 16, 0),
+        commands: Vec::new(),
+        trace_capacity: 64,
+    }
+}
+
+/// Test Runtime supply: compile the independent literal shape into a
+/// `MidiScenario`, run it through the production scheduler trace, and
+/// send the delivered trace entries. The independent literal remains
+/// the receive-side oracle; this function only proves the supply is a
+/// valid deterministic rendering of that shape.
+fn midi_supply_list() -> (Vec<MidiTraceEntry>, [MidiEvent; 4], String) {
+    const SPACING_FRAMES: i64 = 384; // 8 ms at 48 kHz, matching the stimulus pacing.
+    const TOTAL_FRAMES: u64 = 2_400;
+
+    let expected = expected_channel_voice_sequence();
+    let base = frame_base();
+    let scenario = MidiScenario::new(
+        base,
+        expected
+            .iter()
+            .enumerate()
+            .map(|(index, event)| {
+                cue(
+                    base,
+                    i64::try_from(index).unwrap() * SPACING_FRAMES,
+                    index as u64,
+                    *event,
+                )
+            })
+            .collect(),
+    );
+    let trace = run_midi_trace(&scenario, &trace_config(TOTAL_FRAMES))
+        .expect("scenario trace must compile and run");
+    let oracle_entries = midi_expected_playthrough(base, &scenario.cues, TOTAL_FRAMES);
+    assert!(
+        midi_trace_frames_monotonic(trace.entries()),
+        "RF#628 trace entries must be frame-monotonic"
+    );
+    assert!(
+        midi_trace_eq(trace.entries(), &oracle_entries),
+        "RF#628 trace must match the independent playthrough oracle"
+    );
+    let send_events: Vec<MidiEvent> = trace.entries().iter().map(|entry| entry.event).collect();
+    assert_eq!(
+        send_events.as_slice(),
+        expected.as_slice(),
+        "trace-derived send list must match the independent literal sequence"
+    );
+    let summary = format!(
+        "trace_entries={} blocks_run={} spacing_frames={SPACING_FRAMES} total_frames={TOTAL_FRAMES} block_frames=480",
+        trace.entries().len(),
+        trace.blocks_run()
+    );
+    (trace.entries().to_vec(), expected, summary)
+}
+
 /// Pairs each output port with the first still-unclaimed input port of
 /// the same `info().name` — the same bidirectional-name signature the
 /// loopback verifier uses. Port ids differ per direction, so the name
@@ -580,20 +763,26 @@ fn loopback_pair_candidates(
 /// selects the first loopback pair candidate. Every `NotRun` verdict
 /// is printed here; `None` means the environment cannot run the
 /// verifier (honest skip — never a failure).
-fn select_loopback_pair() -> Option<(Box<dyn MidiInputPort>, Box<dyn MidiOutputPort>)> {
+fn select_loopback_pair(
+    meta: &RunMetadata,
+) -> Option<(Box<dyn MidiInputPort>, Box<dyn MidiOutputPort>)> {
     let backend_in: Box<dyn MidiInputEnumerator> = Box::new(ruviform_midi_device::backend());
     let backend_out: Box<dyn MidiOutputEnumerator> = Box::new(ruviform_midi_device::backend());
     let inputs = match backend_in.input_ports() {
         Ok(ports) => ports,
         Err(error) => {
-            eprintln!("verdict: NotRun — input enumeration unavailable ({error:?})");
+            let reason = format!("input enumeration unavailable ({error:?})");
+            emit_notrun(meta, reason.clone());
+            eprintln!("verdict: NotRun — {reason}");
             return None;
         }
     };
     let outputs = match backend_out.output_ports() {
         Ok(ports) => ports,
         Err(error) => {
-            eprintln!("verdict: NotRun — output enumeration unavailable ({error:?})");
+            let reason = format!("output enumeration unavailable ({error:?})");
+            emit_notrun(meta, reason.clone());
+            eprintln!("verdict: NotRun — {reason}");
             return None;
         }
     };
@@ -603,12 +792,15 @@ fn select_loopback_pair() -> Option<(Box<dyn MidiInputPort>, Box<dyn MidiOutputP
         outputs.len()
     );
 
+    let input_count = inputs.len();
+    let output_count = outputs.len();
     let mut pairs = loopback_pair_candidates(inputs, outputs);
     if pairs.is_empty() {
-        eprintln!(
-            "verdict: NotRun — NOT_PROVISIONED (no bidirectional name match; \
-             provision a loopMIDI/Windows MIDI Services loopback pair first)"
+        let reason = format!(
+            "NOT_PROVISIONED — no bidirectional name match (inputs={input_count} outputs={output_count})"
         );
+        emit_notrun(meta, reason.clone());
+        eprintln!("verdict: NotRun — {reason}; provision the RvfMidi virtual loopback pair first");
         return None;
     }
     for (index, (in_port, out_port)) in pairs.iter().enumerate() {
@@ -627,31 +819,53 @@ fn select_loopback_pair() -> Option<(Box<dyn MidiInputPort>, Box<dyn MidiOutputP
 // Stamp contract, anchor calibration, observed-event tap.
 // ---------------------------------------------------------------------------
 
+/// Classification of the observed stamp contract.
+enum StampContract {
+    Holds { tick_span: Option<u64> },
+    ForeignBase(String),
+    Violation(String),
+}
+
 /// Stamp contract over every observed event — declared clock domain,
 /// `Carried` provenance, non-decreasing ticks, and the `WinMM`
 /// millisecond `base` this verifier's frame math (`×48` ticks→frames)
-/// is written for. Returns `false` on a foreign stamp base — outside
-/// the envelope (caller records `NotRun`), not a path failure; domain,
-/// provenance and monotonicity violations are real `Fail`s.
-fn stamp_contract_holds(observed: &[TimedMidiInput], domain: ClockDomainId) -> bool {
+/// is written for. A foreign stamp base is outside the envelope
+/// (`NotRun`); domain, provenance and monotonicity violations are
+/// contract failures (`Fail`). Measurements are returned rather than
+/// hidden inside assertions so terminal metadata can carry them.
+fn validate_stamp_contract(observed: &[TimedMidiInput], domain: ClockDomainId) -> StampContract {
     let stamp_base = TimeBase::new(1, STAMP_BASE_TICKS).unwrap();
-    if observed.iter().any(|e| e.stamp.base != stamp_base) {
-        return false;
+    let foreign = observed
+        .iter()
+        .filter(|event| event.stamp.base != stamp_base)
+        .count();
+    let domain_mismatches = observed
+        .iter()
+        .filter(|event| event.stamp.domain != domain)
+        .count();
+    let provenance_violations = observed
+        .iter()
+        .filter(|event| event.stamp.provenance != TimestampProvenance::Carried)
+        .count();
+    let monotonicity_violations = observed
+        .windows(2)
+        .filter(|pair| pair[1].stamp.ticks < pair[0].stamp.ticks)
+        .count();
+    let tick_span = match (observed.first(), observed.last()) {
+        (Some(first), Some(last)) => Some(last.stamp.ticks.saturating_sub(first.stamp.ticks)),
+        _ => None,
+    };
+    let measurements = format!(
+        "events={} tick_span={tick_span:?} foreign_base={foreign} domain_mismatches={domain_mismatches} provenance_violations={provenance_violations} monotonicity_violations={monotonicity_violations}",
+        observed.len()
+    );
+    if foreign != 0 {
+        return StampContract::ForeignBase(measurements);
     }
-    let mut prev_ticks = None;
-    for event in observed {
-        let stamp = &event.stamp;
-        assert_eq!(
-            stamp.domain, domain,
-            "events must be stamped in the port's declared domain"
-        );
-        assert_eq!(stamp.provenance, TimestampProvenance::Carried);
-        if let Some(prev) = prev_ticks {
-            assert!(stamp.ticks >= prev, "driver ticks must be non-decreasing");
-        }
-        prev_ticks = Some(stamp.ticks);
+    if domain_mismatches != 0 || provenance_violations != 0 || monotonicity_violations != 0 {
+        return StampContract::Violation(measurements);
     }
-    true
+    StampContract::Holds { tick_span }
 }
 
 /// Ordered subsequence match: returns the observed events corresponding
@@ -711,32 +925,41 @@ struct OpenedPair {
 /// Select → capability-gate → open. `None` means a `NotRun` verdict was
 /// already printed (unsupported backend, no ports, no name-matched
 /// pair, unstamped port); open failures are `verdict: Fail` panics.
-fn open_loopback_pair() -> Option<OpenedPair> {
-    let (in_port, out_port) = select_loopback_pair()?;
+fn open_loopback_pair(meta: &RunMetadata) -> Option<OpenedPair> {
+    let (in_port, out_port) = select_loopback_pair(meta)?;
     let in_info = in_port.info();
     let out_info = out_port.info();
     let Some(domain) = in_info.capabilities.clock_domain else {
-        eprintln!(
-            "verdict: NotRun — matched input port declares no clock domain \
-             (capabilities: {:?})",
+        let reason = format!(
+            "matched input port declares no clock domain (capabilities: {:?})",
             in_info.capabilities
         );
+        emit_notrun(meta, reason.clone());
+        eprintln!("verdict: NotRun — {reason}");
         return None;
     };
     if !in_info.capabilities.provides_timestamps {
-        eprintln!(
-            "verdict: NotRun — matched input port does not provide timestamps \
-             (the stamped-offset oracle requires them)"
+        let reason = format!(
+            "matched input port does not provide timestamps (capabilities: {:?}; stamped-offset oracle requires them)",
+            in_info.capabilities
         );
+        emit_notrun(meta, reason.clone());
+        eprintln!("verdict: NotRun — {reason}");
         return None;
     }
     // Input opens first so nothing sent below can arrive before the
     // subscription exists (loopback.rs precedent).
     let input = in_port.open().unwrap_or_else(|error| {
-        panic!("verdict: Fail — matched input port failed to open: {error:?}")
+        fail_case(
+            meta,
+            format!("matched input port failed to open: {error:?}"),
+        )
     });
     let output = out_port.open().unwrap_or_else(|error| {
-        panic!("verdict: Fail — matched output port failed to open: {error:?}")
+        fail_case(
+            meta,
+            format!("matched output port failed to open: {error:?}"),
+        )
     });
     Some(OpenedPair {
         input,
@@ -764,6 +987,7 @@ fn pump_until_sequence(
     rig: &mut AttachRig,
     observing: &mut ObservingInput<'_>,
     expected: &[MidiEvent],
+    meta: &RunMetadata,
 ) -> PumpOutcome {
     let mut backend_dropped = 0u64;
     let mut backend_unsupported = 0u64;
@@ -784,13 +1008,16 @@ fn pump_until_sequence(
                 backend_unsupported,
             };
         }
-        assert!(
-            Instant::now() < deadline,
-            "verdict: Fail — expected sequence did not arrive through the \
-             matched OS pair (observed {} events: {:?})",
-            observing.observed.len(),
-            observing.observed
-        );
+        if Instant::now() >= deadline {
+            fail_case(
+                meta,
+                format!(
+                    "expected sequence did not arrive through the matched OS pair (observed {} events: {:?})",
+                    observing.observed.len(),
+                    observing.observed
+                ),
+            );
+        }
         thread::sleep(Duration::from_millis(20));
     }
 }
@@ -939,23 +1166,26 @@ fn assert_close_semantics(
     observing: &mut ObservingInput<'_>,
     output: &mut dyn MidiOutput,
     first_event: MidiEvent,
-) {
+) -> (bool, bool) {
     observing.close();
+    let invalidated_in = matches!(
+        rig.input_tx.pump(observing),
+        Err(DeviceError::StreamInvalidated)
+    );
     assert!(
-        matches!(
-            rig.input_tx.pump(observing),
-            Err(DeviceError::StreamInvalidated)
-        ),
+        invalidated_in,
         "pump after input close must report StreamInvalidated"
     );
     output.close();
+    let invalidated_out = matches!(
+        output.send(first_event),
+        Err(DeviceError::StreamInvalidated)
+    );
     assert!(
-        matches!(
-            output.send(first_event),
-            Err(DeviceError::StreamInvalidated)
-        ),
+        invalidated_out,
         "send after output close must report StreamInvalidated"
     );
+    (invalidated_in, invalidated_out)
 }
 
 /// OS-endpoint → attach → L1 `test_instrument` e2e — the Issue #253
@@ -972,94 +1202,168 @@ fn assert_close_semantics(
             and a provisioned loopback-style MIDI port pair; \
             verdict is fail-closed NotRun without a pair"]
 fn os_endpoint_midi_loopback_drives_test_instrument() {
-    assert_fixture_present();
+    TERMINAL_RECORD_EMITTED.store(false, Ordering::SeqCst);
+    let meta = endpoint_record();
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        run_os_endpoint_midi_case(meta.clone());
+    }));
+    if let Err(payload) = outcome {
+        if !TERMINAL_RECORD_EMITTED.load(Ordering::SeqCst) {
+            let detail = panic_payload_text(&*payload);
+            let record = meta.with_result(
+                CaseResult::Fail,
+                format!("harness failure before terminal verdict: {detail}"),
+            );
+            emit_record(&record);
+        }
+        std::panic::resume_unwind(payload);
+    }
+}
 
-    // ---- OS endpoint: fail-closed NotRun without a usable pair -----
-    let Some(mut pair) = open_loopback_pair() else {
-        return;
-    };
+fn panic_payload_text(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        return (*text).to_owned();
+    }
+    if let Some(text) = payload.downcast_ref::<String>() {
+        return text.clone();
+    }
+    "non-string panic payload".to_owned()
+}
 
-    // The expensive leg (child spawn + attach + compile) runs while
-    // the ports are already open but before any scripted traffic —
-    // ambient queue contents are discarded below, never oracled.
-    let mut rig = build_rig();
+fn send_trace_events(output: &mut dyn MidiOutput, entries: &[MidiTraceEntry], meta: &RunMetadata) {
+    let mut previous_frame = entries.first().map_or(0, |entry| entry.frame.frame());
+    for entry in entries {
+        let frame = entry.frame.frame();
+        let delta_frames = frame.saturating_sub(previous_frame);
+        if delta_frames > 0 {
+            thread::sleep(Duration::from_micros(delta_frames * 1_000_000 / 48_000));
+        }
+        if let Err(error) = output.send(entry.event) {
+            fail_case(
+                meta,
+                format!("send through matched output port failed: {error:?}"),
+            );
+        }
+        previous_frame = frame;
+    }
+}
 
-    // Drain stale queue traffic that predates this run — read directly
-    // on the subscription, before the observing tap exists.
+fn drain_stale_input(input: &mut dyn MidiInput) {
     let mut scratch = Vec::new();
     for _ in 0..10 {
-        let _ = pair.input.read(&mut scratch, 256);
+        let _ = input.read(&mut scratch, 256);
         scratch.clear();
         thread::sleep(Duration::from_millis(20));
     }
+}
+
+fn stamped_frame_bounds(outcome: &PumpOutcome, meta: &RunMetadata) -> (u64, u64) {
+    let f_off = ANCHOR_FRAME + (outcome.note_off_stamp - outcome.on_stamp) * FRAMES_PER_STAMP_TICK;
+    let release_end = f_off + RELEASE_FRAMES;
+    let blocks_needed = (release_end / BLOCK as u64 + DELIVERED_LOOKAHEAD as u64 + 5).max(18);
+    if blocks_needed > MAX_BLOCKS {
+        fail_case(
+            meta,
+            format!(
+                "stamped span implies {blocks_needed} blocks, beyond the {MAX_BLOCKS}-block verifier envelope (note-off at engine frame {f_off})"
+            ),
+        );
+    }
+    (f_off, blocks_needed)
+}
+
+fn publish_clock_anchor(
+    rig: &mut AttachRig,
+    domain: ClockDomainId,
+    outcome: &PumpOutcome,
+    meta: &RunMetadata,
+) {
+    if let Err(error) = rig.control.set_clock_anchor(Some(ClockAnchor {
+        domain,
+        stamp_ticks: outcome.on_stamp,
+        stamp_base: TimeBase::new(1, STAMP_BASE_TICKS).unwrap(),
+        frame: EngineFrame::new(ClockEpochId::new(0), ANCHOR_FRAME),
+        calibration: TimestampProvenance::Estimated,
+    })) {
+        fail_case(meta, format!("publish clock anchor failed: {error:?}"));
+    }
+}
+
+fn run_os_endpoint_midi_case(meta: RunMetadata) {
+    assert_fixture_present();
+
+    let Some(mut pair) = open_loopback_pair(&meta) else {
+        return;
+    };
+
+    let mut rig = build_rig();
+
+    drain_stale_input(&mut *pair.input);
 
     let mut observing = ObservingInput {
         inner: &mut *pair.input,
         observed: Vec::new(),
     };
 
-    // ---- Drive the scripted channel-voice sequence through the pair
-    let expected = expected_channel_voice_sequence();
-    for event in &expected {
-        pair.output
-            .send(*event)
-            .expect("send through matched output port");
-        // `WinMM` short messages are queued driver-side; a small gap
-        // keeps the pair's forwarding observable per event (the
-        // loopback precedent uses 30 ms; 8 ms keeps the stamped span
-        // inside one or two engine blocks for a tighter oracle).
-        thread::sleep(Duration::from_millis(8));
-    }
+    // RF#628 trace supplies the send list; the independent literal remains the oracle.
+    let (send_entries, expected, supply_summary) = midi_supply_list();
+    send_trace_events(&mut *pair.output, &send_entries, &meta);
 
-    // ---- Pump until the full expected sequence is observed ---------
-    let outcome = pump_until_sequence(&mut rig, &mut observing, &expected);
+    let outcome = pump_until_sequence(&mut rig, &mut observing, &expected, &meta);
 
-    // Stamp contract over every observed event; the ×48 frame math is
-    // `WinMM`-shaped, so a foreign stamp base is an honest `NotRun`.
-    if !stamp_contract_holds(&observing.observed, pair.domain) {
-        eprintln!(
-            "verdict: NotRun — stamp base is not the `WinMM` 1/1000 s \
-             domain this verifier anchors against"
-        );
-        return;
-    }
+    let stamp_tick_span = match validate_stamp_contract(&observing.observed, pair.domain) {
+        StampContract::Holds { tick_span } => tick_span,
+        StampContract::ForeignBase(measurements) => {
+            let reason = format!(
+                "stamp base is not the `WinMM` 1/1000 s domain this verifier anchors against; {measurements}"
+            );
+            emit_notrun(&meta, reason.clone());
+            eprintln!("verdict: NotRun — {reason}");
+            return;
+        }
+        StampContract::Violation(measurements) => {
+            fail_case(&meta, format!("stamp contract violation: {measurements}"));
+        }
+    };
 
-    // ---- Calibrate the `ClockAnchor` from the *observed* `NoteOn`
-    // stamp. `Estimated`: the anchor asserts a correspondence we
-    // chose, not a synchronous two-clock sample — the honest
-    // provenance.
-    rig.control
-        .set_clock_anchor(Some(ClockAnchor {
-            domain: pair.domain,
-            stamp_ticks: outcome.on_stamp,
-            stamp_base: TimeBase::new(1, STAMP_BASE_TICKS).unwrap(),
-            frame: EngineFrame::new(ClockEpochId::new(0), ANCHOR_FRAME),
-            calibration: TimestampProvenance::Estimated,
-        }))
-        .expect("publish clock anchor");
+    publish_clock_anchor(&mut rig, pair.domain, &outcome, &meta);
 
-    // Expected engine frames: F_i = ANCHOR_FRAME + Δstamp_ms × 48.
-    // `NoteOff` is the last expected event and stamps are
-    // non-decreasing, so it carries the largest mapped frame — the
-    // release tail bound derives from it.
-    let f_off = ANCHOR_FRAME + (outcome.note_off_stamp - outcome.on_stamp) * FRAMES_PER_STAMP_TICK;
-    let release_end = f_off + RELEASE_FRAMES;
-    let blocks_needed = (release_end / BLOCK as u64 + DELIVERED_LOOKAHEAD as u64 + 5).max(18);
-    assert!(
-        blocks_needed <= MAX_BLOCKS,
-        "verdict: Fail — stamped span implies {blocks_needed} blocks, \
-         beyond the {MAX_BLOCKS}-block verifier envelope \
-         (note-off at engine frame {f_off})"
-    );
+    let (f_off, blocks_needed) = stamped_frame_bounds(&outcome, &meta);
 
-    // ---- Run the typed runtime and check both oracles --------------
     let drained = process_blocks(&mut rig, blocks_needed);
     assert_pcm_oracle(&drained, f_off);
     assert_counter_oracle(&rig, &observing.observed, &outcome, expected.len());
-    assert_close_semantics(&mut rig, &mut observing, &mut *pair.output, expected[0]);
+    let (invalidated_in, invalidated_out) =
+        assert_close_semantics(&mut rig, &mut observing, &mut *pair.output, expected[0]);
 
-    // ---- Verdict ------------------------------------------------------
     let input = rig.control.snapshot().input;
+    let note_tick_span = outcome.note_off_stamp - outcome.on_stamp;
+    let capability = format!(
+        "provides_timestamps={} clock_domain={:?} stamp_base=1/{STAMP_BASE_TICKS} provenance=Carried monotonic=true",
+        pair.in_info.capabilities.provides_timestamps, pair.in_info.capabilities.clock_domain,
+    );
+    let observed = format!(
+        "sent={} observed={} matched={} mapped={} delivered={} rejected={} late={} dropped_backend={} unsupported_backend={} backend_dropped={} backend_unsupported={} tick_span={stamp_tick_span:?} note_tick_span={note_tick_span} blocks_needed={blocks_needed} invalidated_in={invalidated_in} invalidated_out={invalidated_out} {capability} {supply_summary}",
+        send_entries.len(),
+        observing.observed.len(),
+        outcome.matched,
+        input.mapped,
+        input.delivered,
+        input.rejected,
+        input.late,
+        input.dropped_backend,
+        input.unsupported_backend,
+        outcome.backend_dropped,
+        outcome.backend_unsupported,
+    );
+    let record = meta
+        .with_result(CaseResult::Pass, observed)
+        .with_evidence(format!(
+            "pair candidate: in={:?} out={:?}; workflow RvfMidi provisioning provenance is required for acceptance",
+            pair.in_info.name, pair.out_info.name
+        ));
+    emit_record(&record);
+
     eprintln!("verdict: Pass — OS endpoint → attach → L1 test_instrument");
     eprintln!(
         "  pair: in id={} name={:?} origin={:?} | out id={} name={:?} origin={:?}",
@@ -1073,7 +1377,7 @@ fn os_endpoint_midi_loopback_drives_test_instrument() {
     eprintln!(
         "  events: sent={} observed={} matched={} | mapped={} delivered={} \
          rejected={} late={} dropped_backend={} unsupported_backend={}",
-        expected.len(),
+        send_entries.len(),
         observing.observed.len(),
         outcome.matched,
         input.mapped,
@@ -1086,8 +1390,8 @@ fn os_endpoint_midi_loopback_drives_test_instrument() {
     eprintln!(
         "  evidence note: the name-matched pair is a loopback candidate, \
          not proof of a virtual endpoint (`MidiPortOrigin` is \
-         backend-reported) — this is real-OS-backend e2e evidence for \
-         the attach path, not `virtual-os-endpoint` Pass; physical-device \
-         specifics are unguaranteed"
+         backend-reported). The `virtual-os-endpoint` acceptance claim \
+         relies on the workflow's RvfMidi provisioning provenance; \
+         physical-device specifics are unguaranteed"
     );
 }

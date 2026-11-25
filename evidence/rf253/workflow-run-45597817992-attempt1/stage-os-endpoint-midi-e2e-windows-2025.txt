@@ -1,0 +1,48 @@
+  prerequisite midi-endpoint-probe: ok / midi-loopback: ok / devnode-create: ok
+  run metadata identity: repo=scarecrow173/ruviform sha=8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6
+  RvfMidi provenance: candidates_observed=True midi_loopback_pass=True
+  run metadata provenance override: rvfmidi-testsigned-driver-probe
+  --- fixture build (canonical lane first step: mise run test-os-endpoint-midi-e2e) ---
+     Compiling windows-sys v0.61.2
+     Compiling com-scrape-types v0.1.1
+     Compiling libloading v0.8.9
+     Compiling vst3 v0.3.0
+     Compiling ruviform-plugin-export v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-export)
+     Compiling ruviform-plugin-vst3 v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-vst3)
+     Compiling ruviform-plugin-test-vst3 v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-test-vst3)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.54s
+  build exit=0
+  --- os_endpoint_midi_e2e (--nocapture auxiliary evidence; canonical lane: mise run test-os-endpoint-midi-e2e) ---
+     Compiling windows-sys v0.61.2
+     Compiling ruviform-plugin-export v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-export)
+     Compiling ruviform-io-file v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-io-file)
+     Compiling ruviform-plugin-host v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-host)
+     Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+     Compiling audio_thread_priority v0.38.0
+     Compiling ruviform-plugin-vst3 v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-vst3)
+     Compiling ruviform-exec v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-exec)
+     Compiling ruviform-audio v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio)
+     Compiling ruviform-plugin-test-vst3 v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-test-vst3)
+     Compiling ruviform-audio-plugin-bridge v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-plugin-bridge)
+     Compiling ruviform-audio-test v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-test)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 13.39s
+       Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-ea8a3fa6540eb4b6.exe)
+
+  running 1 test
+  enumerated: 1 input ports, 2 output ports
+    candidate[0]: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" origin=Unknown | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback" origin=Unknown
+  run_metadata: {"case_id":"rf253.midi.virtual-endpoint.host-plugin-e2e","requirement":"required","result":"pass","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"rf628-trace-supply+ordered-subsequence+stamped-pcm-counter-v1","parameters":{"seed":595,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"8691a81fb7ffe0a176c0e1ded9e6e33a8afabae6","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence supplied by the RF#628 trace; stamped PCM attack/release, counter agreement, and close invalidation","observed":"sent=4 observed=4 matched=4 mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0 backend_dropped=0 backend_unsupported=0 tick_span=Some(25) note_tick_span=25 blocks_needed=18 invalidated_in=true invalidated_out=true provides_timestamps=true clock_domain=Some(ClockDomainId(5932742974072178993)) stamp_base=1/1000 provenance=Carried monotonic=true trace_entries=4 blocks_run=5 spacing_frames=384 total_frames=2400 block_frames=480","evidence":["crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs","workflow stage os-endpoint-midi-e2e in virtual-audio-driver-probe.yml","name match is only a loopback candidate; RvfMidi provisioning provenance in workflow evidence is the basis for the virtual-os-endpoint claim","virtual endpoint provenance: rvfmidi-testsigned-driver-probe","pair candidate: in=\"Ruviform MIDI Loopback\" out=\"Ruviform MIDI Loopback\"; workflow RvfMidi provisioning provenance is required for acceptance"]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json
+  verdict: Pass — OS endpoint → attach → L1 test_instrument
+    pair: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" origin=Unknown | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback" origin=Unknown
+    events: sent=4 observed=4 matched=4 | mapped=4 delivered=4 rejected=0 late=0 dropped_backend=0 unsupported_backend=0
+    evidence note: the name-matched pair is a loopback candidate, not proof of a virtual endpoint (`MidiPortOrigin` is backend-reported). The `virtual-os-endpoint` acceptance claim relies on the workflow's RvfMidi provisioning provenance; physical-device specifics are unguaranteed
+  test os_endpoint_midi_loopback_drives_test_instrument ... ok
+
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+  test exit=0
+  verdict=Pass — OS endpoint → attach → L1 test_instrument lines=1
+  metadata: case=pass records=1
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json -> os-endpoint-midi-e2e-run-metadata-windows-2025
+  collected metadata files: run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json

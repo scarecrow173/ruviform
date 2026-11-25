@@ -1,0 +1,3 @@
+pwsh_original_regex=True
+pwsh_hardened_regex=True
+exit=0

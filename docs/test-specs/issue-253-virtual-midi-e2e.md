@@ -166,3 +166,27 @@ verifier は引き続き `test-l1-real-plugin`（別 `--test` 個名指定）
 結果であり、Fail でも Pass でもない。fixture artifact の欠落は
 引き続き R2 どおり `assert!` Fail であり、lane が先に build step
 を実行するのはこの契約を保つためである。
+
+## 追記（2026-11-25）— RF#628 supply と RunMetadata contract
+
+本 slice の実装では、R4 の独立 oracle 境界を次のように具体化する。send list は
+RF#628 `run_midi_trace` の delivered entries から供給されるが、受信期待列は
+独立 literal のままである。supply 自体は commands 空 playthrough に限定し、
+`midi_trace_frames_monotonic`/`midi_expected_playthrough`/`midi_trace_eq` で
+事前検証する。R8 は「name match だけで acceptance-grade の virtual endpoint
+Pass を主張しない」意味に読む。metadata は case envelope として
+`virtual-os-endpoint`/`ext-l3` を記録するが、Pass の acceptance 解釈には
+workflow の RvfMidi provisioning provenance を必須とし、manual/unverified run
+は evidence に weaker provenance を記録する。
+
+terminal record contract を追加する: capability-gate `NotRun`、pair open 以降の
+`Fail`、全 oracle 通過の `Pass` はいずれも Case Schema v1 `RunMetadata` を emit
+し、panic path でも terminal record を best-effort で残す。fixture artifact 欠落は
+R2 どおり `Fail` である。
+
+order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock の oracle ownership mapping は spec の 2026-11-25 追記を正本
+とする。検証コマンド時系列・exit code・workflow dispatch/artifact harvest の機械可読台帳は
+`evidence/rf253/actions.jsonl` に記録し、markdown ledger は人間向け summary とする。
+本 test は no-command playthrough と overflow counter の honest observation
+だけを保証し、stop/seek/loop/pause stimulus や overflow fault injection を OS
+endpoint 経由で保証しない。

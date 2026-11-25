@@ -1,0 +1,2 @@
+actions_jsonl_valid=1 rows=46 schema=seq/ts/action/command/exit_code/observed exact_keys=true first=2026-11-25T10:42:13Z last=2026-11-25T12:49:14Z
+exit=0

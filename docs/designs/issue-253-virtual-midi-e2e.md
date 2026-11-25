@@ -299,3 +299,32 @@ Non-Functional Constraints の「canonical lane は compile/lint
 `lint-l1-real-plugin` の `--all-targets` compile/lint 収集は
 変わらず有効で、専用 lint lane は設けない。実行記録は
 `evidence/rf253/`。
+
+## 追記（2026-11-25）— RF#628 supply / Case Schema v1 / workflow stage
+
+実装は no-command playthrough に限定して RF#628 `MidiScenario` →
+`run_midi_trace` を stimulus supply に採用した。send list は hand-built literal
+ではなく delivered `MidiTraceEntry` であり、送信前に monotonic invariant と
+`midi_expected_playthrough`/`midi_trace_eq` の独立 oracle を通す。receive-side
+oracle は独立 literal の ordered subsequence、PCM/counter oracle は実測 OS
+timestamp に anchor したままである。つまり deterministic trace は「何を送るか」
+の供給と名目 pacing を担い、「実 OS でいつ観測されたか」の証拠を捏造しない。
+
+terminal verdict は Case Schema v1 `RunMetadata` として emit する。capability
+gate（backend/列挙/pair/timestamp/clock domain/foreign stamp base）は `NotRun`、
+pair open 以降の鎖・oracle・fixture artifact は `Fail`、全 oracle 通過のみ
+`Pass` であり、panic path も catch して terminal record を best-effort で残す。
+metadata evidence は name match が candidate にすぎないこと、acceptance-grade
+解釈には workflow の RvfMidi provisioning provenance が必要なことを明示する。
+
+`virtual-audio-driver-probe.yml` の `os-endpoint-midi-e2e` stage は、
+fixture build と `--nocapture` 補助実行を行い、repo/SHA/level/environment/
+result を検査して metadata JSON を artifact へ集める。`midi-endpoint-probe`
+の `CANDIDATES_OBSERVED` と `midi-loopback` Pass を stage detail に併記するが、
+これらが欠ける未 provisioning 環境での honest `NotRun` は absence-is-data
+として error にしない。
+
+order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock の責務 mapping は spec の 2026-11-25 追記を正本とする。
+本 design の旧 deferred concern「Test Runtime 結線」は no-command playthrough
+supply に限り解消され、transport command stimulus・overflow fault injection は
+引き続き後続 case とする。

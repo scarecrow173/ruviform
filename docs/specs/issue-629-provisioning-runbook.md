@@ -442,7 +442,8 @@ stage 分解で実施する:
     artifact の両 RunMetadata JSON 本体が `result:"pass"`・
     `level:"ext-l3"`・`environment_kind:"virtual-os-endpoint"`・対象
     repo/SHA を示すことで行う。
-14. `fault-cases` — Issue #1002 Slice G。`os-endpoint-wiring` 後・`cleanup`
+14. `os-endpoint-midi-e2e` — Issue #253 AC1/AC6 vertical slice。`os-endpoint-wiring` 後・`fault-cases` 前に置き、fixture build 後に `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` を補助証拠として実行する。canonical lane は `mise run test-os-endpoint-midi-e2e`（`--nocapture` なし）である。stage は `midi-endpoint-probe` の candidate/provisioning 行と `midi-loopback` の candidate/round-trip Pass 行を生ログへ転記し、両者が揃った場合だけ `RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE=rvfmidi-testsigned-driver-probe` を設定する。RunMetadata は `os-endpoint-midi-e2e-run-metadata-<os>/` へ copy し、repo/SHA・`level=ext-l3`・`environment_kind=virtual-os-endpoint`・result を検査する。honest NotRun は absence-is-data の stage `ok` だが、`result=pass` に RvfMidi provenance 行がない場合、または workflow 側 provenance が未成立のまま pass だった場合は証拠価値がないため stage `error` とする。Fail・crash・verdict/RunMetadata 未到達・copy 不能も `error`。
+15. `fault-cases` — Issue #1002 Slice G。`os-endpoint-midi-e2e` 後・`cleanup`
     前に置き、OS 状態制御を workflow/PowerShell 側へ閉じ込めた fault harness
     を実行する。controller 本体は `tools/virtual-audio-driver/Invoke-FaultCases.ps1`
     に置き、workflow step は呼び出しと fail-closed stage record だけを担う。
@@ -468,8 +469,8 @@ stage 分解で実施する:
     controller/復帰/case-level Fail は `error` とする。disable した devnode
     と変更した microphone consent/service 状態は finally/cleanup で必ず
     Allow+Running へ戻す。
-15. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
-16. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
+16. `cleanup` — devnode 削除・`pnputil /delete-driver`・証明書除去。
+17. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
     artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 
 - license: MS-PL（audio 部）/MS-LPL（MIDI miniport 部）派生のため外部 driver
@@ -486,23 +487,27 @@ stage 分解で実施する:
   に記録する判定材料であり job 失敗ではない。生ログは
   `stage-*-windows-2025.txt`、probe 出力は `endpoint-probe-windows-2025.txt` /
   `midi-endpoint-probe-windows-2025.txt`、wiring leg の RunMetadata JSON は
-  `os-endpoint-run-metadata-windows-2025/`、fault case の機械可読結果は
+  `os-endpoint-run-metadata-windows-2025/`、MIDI Host/Plugin e2e の RunMetadata JSON は
+  `os-endpoint-midi-e2e-run-metadata-windows-2025/`、fault case の機械可読結果は
   `fault-cases-results-windows-2025.json`、同期/観測用の fault file は
   `fault-*-windows-2025*` に残り、失敗時も `if: always()` の artifact upload
   で保全される。attempt 固有 artifact 名で全 attempt の evidence が残る。
 - 記録責任分担: stage record・生ログ・probe 出力は artifact として採取され、
   `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/`・`evidence/rf1001/`・
-  `evidence/rf1002/` に attempt 番号対応付きで記録される（install 後の残件は
+  `evidence/rf1002/`・`evidence/rf253/` に attempt 番号対応付きで記録される（install 後の残件は
   cleanup stage が除去）。`os-endpoint-wiring` の AC3 判定では stage record に
   加えて `run-metadata-rf629-audio-virtual-endpoint-render-capture.json` と
   `run-metadata-rf629-midi-virtual-endpoint-loopback.json` を保存する。
+  `os-endpoint-midi-e2e` の AC1/AC6 vertical slice 判定では
+  `run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json`、stage 生ログへ転記された
+  provenance candidate 行、`midi-loopback` round-trip Pass を保存する。
   `fault-cases` の AC5 判定では stage record/conclusion ではなく
   `fault-cases-results-windows-2025.json` の case-level result、
   `stage-fault-cases-windows-2025.txt` の controller action/復帰記録、
   必要に応じて fault test の `fault_case_result:` 生行を保存する。
 - provisioned pair の利用: endpoint 成立後は本書前文どおり
   `mise run test-audio-virtual-endpoint`・`mise run
-  test-midi-virtual-endpoint`・`mise run test-os-endpoint-wiring` の入力として
+  test-midi-virtual-endpoint`・`mise run test-os-endpoint-wiring`・`mise run test-os-endpoint-midi-e2e` の入力として
   使う — 独自 driver が供給する `Ruviform Cable Input` /
   `Ruviform Cable Output` / `Ruviform MIDI Loopback` は wiring leg の
   name-stem pair・bidirectional name match 条件を満たす。本 workflow が両 lane
@@ -521,7 +526,10 @@ stage 分解で実施する:
   state に留まることを区別する。`os-endpoint-wiring` は補助 `--nocapture`
   実行のため pass 時も 2 件の `verdict:` 行と
   `run_metadata:`/`run_metadata_path:` 行が生ログに残り、audio/midi の
-  result は stage record detail と JSON 本体で読む。`fault-cases` は run
+  result は stage record detail と JSON 本体で読む。`os-endpoint-midi-e2e` も補助
+  `--nocapture` 実行のため verdict・`run_metadata:`・provenance candidate 転記行が生ログに残り、
+  `result=pass` は `rvfmidi-testsigned-driver-probe` provenance 付きだけが受入証拠になる。
+  provenance なし pass は stage `error` で fail-closed に落とす。`fault-cases` は run
   conclusion や stage `ok` を case の Pass と混同せず、case ごとの
   `result`・`expected`・`observed`・`detail` を
   `fault-cases-results-<os>.json` で読む。未 provisioning 環境では verifier
