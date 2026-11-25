@@ -14,12 +14,12 @@ $devnodeStatus = Get-StageStatus $json 'devnode-create'
 
 $probeText = ''
 $probeFile = "midi-endpoint-probe-$os.txt"
-if (Test-Path -LiteralPath $probeFile) { $probeText = Get-Content -LiteralPath $probeFile -Raw -ErrorAction SilentlyContinue }
+if (Test-Path -LiteralPath $probeFile) { $probeText = Get-Content -LiteralPath $probeFile -Raw -Encoding UTF8 -ErrorAction SilentlyContinue }
 $provisioningObserved = ($probeText -match 'provisioning:\s*CANDIDATES_OBSERVED') -and ($probeText -match 'Ruviform MIDI Loopback')
 $midiLoopbackText = ''
 $midiLoopbackLog = "stage-midi-loopback-$os.txt"
-if (Test-Path -LiteralPath $midiLoopbackLog) { $midiLoopbackText = Get-Content -LiteralPath $midiLoopbackLog -Raw -ErrorAction SilentlyContinue }
-$midiLoopbackPass = $midiLoopbackText -match 'verdict:\s*Pass\s+—\s+round-trip observed through real OS ports'
+if (Test-Path -LiteralPath $midiLoopbackLog) { $midiLoopbackText = Get-Content -LiteralPath $midiLoopbackLog -Raw -Encoding UTF8 -ErrorAction SilentlyContinue }
+$midiLoopbackPass = $midiLoopbackText -match 'verdict:\s*Pass.*round-trip observed through real OS ports'
 "  RvfMidi provenance: candidates_observed=$provisioningObserved midi_loopback_pass=$midiLoopbackPass" | Out-Probe $log
 "  --- provenance candidate evidence ---" | Out-Probe $log
 $probeEvidenceLines = @($probeText -split "\r?\n" | Where-Object { $_ -match 'loopback-candidate|loopback-style candidates|provisioning:\s*' })
@@ -28,7 +28,7 @@ if ($probeEvidenceLines.Count) {
 } else {
   "  midi-endpoint-probe: no candidate/provisioning evidence lines" | Out-Probe $log
 }
-$midiEvidenceLines = @($midiLoopbackText -split "\r?\n" | Where-Object { $_ -match '^\s*candidate\[|verdict:\s*Pass\s+—\s+round-trip observed through real OS ports' })
+$midiEvidenceLines = @($midiLoopbackText -split "\r?\n" | Where-Object { $_ -match '^\s*candidate\[|verdict:\s*Pass.*round-trip observed through real OS ports' })
 if ($midiEvidenceLines.Count) {
   $midiEvidenceLines | ForEach-Object { "  midi-loopback: $($_.Trim())" | Out-Probe $log }
 } else {

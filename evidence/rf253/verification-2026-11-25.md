@@ -35,11 +35,14 @@
 | `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-nocapture.txt` | auxiliary verdict harvest: `verdict: NotRun — NOT_PROVISIONED`; RunMetadata emitted and written |
 | `mise run test-os-endpoint-wiring` | 0 | `validation-2026-11-25/test-os-endpoint-wiring.txt` / `.exit` | canonical wiring lane completed; passing output captures terminal verdicts |
 | `mise exec -- cargo test -p ruviform-audio-test --test os_endpoint -- --ignored --test-threads=1 --nocapture` | 0 | `validation-2026-11-25/aux-os-endpoint-wiring-nocapture.txt` / `.exit` | auxiliary verdict harvest: audio `NotRun — no input devices on this host`; MIDI `NotRun — NOT_PROVISIONED`; no local Pass claimed |
-| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-final2.txt` | Pass — includes provenance fail-closed workflow edit |
-| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-final2.txt` | Pass — syntax parse only, not execution; includes provenance fail-closed edit |
+| `mise exec -- actionlint .github/workflows/virtual-audio-driver-probe.yml` | 0 | `validation-2026-11-25/actionlint-correction.txt` | Pass — includes provenance fail-closed and UTF-8/ASCII-regex correction |
+| PowerShell parse of extracted `os-endpoint-midi-e2e` run block | 0 | `validation-2026-11-25/powershell-parse-correction.txt` | Pass — syntax parse only, not execution; includes UTF-8/ASCII-regex correction |
 | `mise exec -- prek run --all-files` | 0 | `validation-2026-11-25/prek-all-files-final2.txt` | Pass — all hooks green |
+| `actions.jsonl` schema/JSONL validation | 0 | `validation-2026-11-25/actions-jsonl-validate.txt` | Pass — machine-readable action ledger parses |
+| provenance env override auxiliary run | 0 | `validation-2026-11-25/aux-os-endpoint-midi-e2e-provenance-override.txt` | Pass — override reaches RunMetadata evidence; verdict remains local honest NotRun |
+| provenance regex fixture validation | 0 | `validation-2026-11-25/provenance-regex-fixture.txt` | Pass — positive fixture maps to `endpoint_provenance=rvfmidi-testsigned-driver-probe` and `pass_without_provenance=False` |
 
-The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; the final evidence/docs tree additionally re-ran `prek` successfully (`prek-all-files-final.txt`); other final-tree logs use the `*-rerun.txt` names in the table.
+The compact machine-generated summary is `validation-2026-11-25/summary.txt` (`overall=0`). The machine-readable action ledger is `evidence/rf253/actions.jsonl` (`rf-actions-v1`): it records the command chronology, exit codes, evidence paths, and workflow dispatches. Entries reconstructed after the coordinator review carry `"reconstructed":true`; the final dispatch/watch entries are contemporaneous. After the final provenance-condition edit, `fmt-check`, `lint-l1-real-plugin`, `actionlint`, PowerShell parse, and `prek` were re-run successfully; the final evidence/docs tree additionally re-ran `prek` successfully (`prek-all-files-final.txt`); other final-tree logs use the `*-rerun.txt` names in the table.
 
 ## Terminal RunMetadata observed locally
 

@@ -185,6 +185,8 @@ terminal record contract を追加する: capability-gate `NotRun`、pair open �
 R2 どおり `Fail` である。
 
 order/loss/overflow/stop/seek/RT/disconnect/timestamp-clock の oracle ownership mapping は spec の 2026-11-25 追記を正本
-とする。本 test は no-command playthrough と overflow counter の honest observation
+とする。検証コマンド時系列・exit code・workflow dispatch/artifact harvest の機械可読台帳は
+`evidence/rf253/actions.jsonl` に記録し、markdown ledger は人間向け summary とする。
+本 test は no-command playthrough と overflow counter の honest observation
 だけを保証し、stop/seek/loop/pause stimulus や overflow fault injection を OS
 endpoint 経由で保証しない。

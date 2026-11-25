@@ -253,7 +253,8 @@ provisioned pair での実走 Pass は rf#762 の self-hosted runner 調達で�
 ruviform 独自 test-signed driver を install する GitHub-hosted `windows-2025`
 branch-ref `virtual-audio-driver-probe.yml` が gate する。rf#762 は GUI-L2 等の
 別用途の残余価値はあるが、本 MIDI e2e の必須前提ではない。実行記録は
-`evidence/rf253/`。
+`evidence/rf253/`、コマンド時系列と exit code の機械可読台帳は
+`evidence/rf253/actions.jsonl` とする。
 
 ## 追記（2026-11-25）— RF#628 supply・RunMetadata・provisioned RvfMidi stage
 

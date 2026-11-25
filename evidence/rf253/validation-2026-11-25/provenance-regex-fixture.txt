@@ -1,0 +1,8 @@
+provisioning_observed=True
+midi_loopback_pass=True
+probe_evidence_lines=4
+midi_evidence_lines=2
+metadata_has_rvfmidi_provenance=True
+endpoint_provenance=rvfmidi-testsigned-driver-probe
+pass_without_provenance=False
+exit=0

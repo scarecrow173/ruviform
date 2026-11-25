@@ -1,0 +1,24 @@
+   Compiling ruviform-exec v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-exec)
+   Compiling ruviform-plugin-host v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-host)
+mbx[warning]: result was not restored: cached action is missing blob af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262
+   Compiling ruviform-audio v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio)
+   Compiling ruviform-audio-plugin-bridge v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-plugin-bridge)
+   Compiling ruviform-audio-test v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-audio-test)
+   Compiling ruviform-plugin-test-vst3 v0.1.0 (G:\orca\workspaces\ruviform\rf253-midi-e2e\crates\ruviform-plugin-test-vst3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.06s
+     Running tests\os_endpoint_midi_e2e.rs (target\debug\deps\os_endpoint_midi_e2e-5b9c7d50bec2027c.exe)
+
+running 1 test
+test os_endpoint_midi_loopback_drives_test_instrument ... enumerated: 0 input ports, 1 output ports
+run_metadata: {"case_id":"rf253.midi.virtual-endpoint.host-plugin-e2e","requirement":"required","result":"not-run","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"rf628-trace-supply+ordered-subsequence+stamped-pcm-counter-v1","parameters":{"seed":595,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"unknown","sha":"unknown","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence supplied by the RF#628 trace; stamped PCM attack/release, counter agreement, and close invalidation","observed":"NOT_PROVISIONED — no bidirectional name match (inputs=0 outputs=1)","evidence":["crates/ruviform-plugin-test-vst3/tests/os_endpoint_midi_e2e.rs","workflow stage os-endpoint-midi-e2e in virtual-audio-driver-probe.yml","name match is only a loopback candidate; RvfMidi provisioning provenance in workflow evidence is the basis for the virtual-os-endpoint claim","virtual endpoint provenance: rvfmidi-testsigned-driver-probe"]}
+run_metadata_path: G:\orca\workspaces\ruviform\rf253-midi-e2e\target\tmp\run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json
+verdict: NotRun — NOT_PROVISIONED — no bidirectional name match (inputs=0 outputs=1); provision the RvfMidi virtual loopback pair first
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+mbx[cache]: 2 hits, 4 misses; 0 B downloaded, 0 B uploaded, 53.1 MiB stored locally
+mbx[gc]: removed 5 target directories (102.1 GiB logical, 1 abandoned and 4 live, 1 kept for running commands or builds that started meanwhile); 2.4 GiB logical remain
+mbx[gc]: evicted 15747 objects and 4522 action results (97.9 GiB logical); 253.4 GiB logical remain
+mbx[savings]: found 8.8 TiB logical of target/ whose checkouts left long ago. the estate has been settled.
+exit=0

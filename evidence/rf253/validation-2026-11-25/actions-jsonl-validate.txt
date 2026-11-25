@@ -1,0 +1,3 @@
+actions_jsonl_valid=1 rows=34 first=2026-11-25T10:42:13Z last=2026-11-25T11:58:16Z
+reconstructed_rows=24 contemporaneous_rows=10
+exit=0
