@@ -138,6 +138,10 @@ struct Probe {
     in_timestamp_regressions: AtomicUsize,
     in_last_callback_ns: AtomicI64,
     in_timestamp_epoch_resets: AtomicUsize,
+    in_regression_first_cb: AtomicU64,
+    in_regression_last_cb: AtomicU64,
+    in_regression_max_backstep_ns: AtomicI64,
+    in_epoch_boundary_cb: AtomicU64,
     in_expected_domain: AtomicU64,
     in_domain_mismatches: AtomicUsize,
     in_capture_some: AtomicUsize,
@@ -168,6 +172,10 @@ struct Probe {
     out_timestamp_regressions: AtomicUsize,
     out_last_callback_ns: AtomicI64,
     out_timestamp_epoch_resets: AtomicUsize,
+    out_regression_first_cb: AtomicU64,
+    out_regression_last_cb: AtomicU64,
+    out_regression_max_backstep_ns: AtomicI64,
+    out_epoch_boundary_cb: AtomicU64,
     out_playback_some: AtomicUsize,
     out_playback_none: AtomicUsize,
     out_latency_min_ns: AtomicI64,
@@ -202,12 +210,18 @@ impl Probe {
         Self {
             in_min_frames: AtomicUsize::new(usize::MAX),
             in_last_callback_ns: AtomicI64::new(i64::MIN),
+            in_regression_first_cb: AtomicU64::new(u64::MAX),
+            in_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            in_epoch_boundary_cb: AtomicU64::new(u64::MAX),
             in_latency_min_ns: AtomicI64::new(i64::MAX),
             in_latency_max_ns: AtomicI64::new(i64::MIN),
             in_first_position: AtomicU64::new(u64::MAX),
             in_expected_position: AtomicU64::new(u64::MAX),
             out_min_frames: AtomicUsize::new(usize::MAX),
             out_last_callback_ns: AtomicI64::new(i64::MIN),
+            out_regression_first_cb: AtomicU64::new(u64::MAX),
+            out_regression_max_backstep_ns: AtomicI64::new(i64::MAX),
+            out_epoch_boundary_cb: AtomicU64::new(u64::MAX),
             out_latency_min_ns: AtomicI64::new(i64::MAX),
             out_latency_max_ns: AtomicI64::new(i64::MIN),
             capture: Mutex::new(CaptureBuf::new(capacity)),
@@ -576,6 +590,16 @@ fn run_lifecycle(
     probe
         .out_timestamp_epoch_resets
         .fetch_add(1, Ordering::Relaxed);
+    // Boundary marker: the callback count at the split — regression
+    // indices below it belong to run 1, above it to run 2.
+    probe.in_epoch_boundary_cb.store(
+        probe.in_callbacks.load(Ordering::Relaxed) as u64,
+        Ordering::Relaxed,
+    );
+    probe.out_epoch_boundary_cb.store(
+        probe.out_callbacks.load(Ordering::Relaxed) as u64,
+        Ordering::Relaxed,
+    );
     // Restart probe: a stream that cannot restart after stop is a
     // lifecycle contract violation.
     match in_stream.start().and_then(|()| out_stream.start()) {
@@ -679,7 +703,7 @@ fn input_data_callback(probe: &Arc<Probe>) -> InputDataCallback {
 fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCallbackInfo) {
     let frames = input.frames();
     let channels = input.channels();
-    probe.in_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.in_callbacks.fetch_add(1, Ordering::Relaxed) as u64;
     probe.in_frames.fetch_add(frames as u64, Ordering::Relaxed);
     probe.in_min_frames.fetch_min(frames, Ordering::Relaxed);
     probe.in_max_frames.fetch_max(frames, Ordering::Relaxed);
@@ -695,6 +719,15 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
         probe
             .in_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        probe
+            .in_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .in_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     if info.clock_domain.get() != probe.in_expected_domain.load(Ordering::Relaxed) {
         probe.in_domain_mismatches.fetch_add(1, Ordering::Relaxed);
@@ -794,7 +827,7 @@ fn observe_output(
     rate_hz: u32,
 ) {
     let frames = out.frames();
-    probe.out_callbacks.fetch_add(1, Ordering::Relaxed);
+    let callback_index = probe.out_callbacks.fetch_add(1, Ordering::Relaxed) as u64;
     probe.out_frames.fetch_add(frames as u64, Ordering::Relaxed);
     probe.out_min_frames.fetch_min(frames, Ordering::Relaxed);
     probe.out_max_frames.fetch_max(frames, Ordering::Relaxed);
@@ -810,6 +843,15 @@ fn observe_output(
         probe
             .out_timestamp_regressions
             .fetch_add(1, Ordering::Relaxed);
+        probe
+            .out_regression_first_cb
+            .fetch_min(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_last_cb
+            .fetch_max(callback_index, Ordering::Relaxed);
+        probe
+            .out_regression_max_backstep_ns
+            .fetch_min(callback_ns - previous, Ordering::Relaxed);
     }
     match info.timestamp.playback {
         Some(playback) => {
@@ -1204,6 +1246,17 @@ fn print_callback_stats(probe: &Probe) {
         probe.in_domain_mismatches.load(Ordering::Relaxed),
         probe.out_timestamp_regressions.load(Ordering::Relaxed),
         probe.out_timestamp_epoch_resets.load(Ordering::Relaxed),
+    );
+    eprintln!(
+        "  regression detail: in cb[first..last]={}..{} max_backstep_ns={} boundary_cb={} | out cb[first..last]={}..{} max_backstep_ns={} boundary_cb={}",
+        probe.in_regression_first_cb.load(Ordering::Relaxed),
+        probe.in_regression_last_cb.load(Ordering::Relaxed),
+        probe.in_regression_max_backstep_ns.load(Ordering::Relaxed),
+        probe.in_epoch_boundary_cb.load(Ordering::Relaxed),
+        probe.out_regression_first_cb.load(Ordering::Relaxed),
+        probe.out_regression_last_cb.load(Ordering::Relaxed),
+        probe.out_regression_max_backstep_ns.load(Ordering::Relaxed),
+        probe.out_epoch_boundary_cb.load(Ordering::Relaxed),
     );
     eprintln!(
         "  capture stamps: some={} none={} order violations={}",
