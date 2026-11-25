@@ -4,7 +4,7 @@ type: "design"
 status: "approved"
 title: "Issue #630 AC7 consumer-oracle slice — 設計"
 created: "2026-11-21"
-updated: "2026-11-21"
+updated: "2026-11-25"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -110,16 +110,21 @@ README を整えた（lease 内の README 更新権を使用）:
 
 POLICIES §3 の要求状態（Required/Deferred/NotApplicable）と実行
 結果（Pass/Fail/NotRun/Unsupported）の別軸をそのまま使い、
-manifest の `dispositions` で本 slice 固有の中間語を 3 種だけ
-定義する:
+manifest の `policyVocabulary.dispositions` で本 slice 固有の
+中間語を 4 種だけ定義する:
 
 - `headless-contract-match` — manifest pin と consumer oracle
   anchor の contract-shape 一致を ruviform 側 headless で照合した
   行。consumer 実走の成否とは別の記録軸。
 - `external-owner` — consumer Issue・別 Issue・後続 slice が所有
   する leg。本 manifest は verdict を付けない。
-- `gate` — 外部修正 Issue（`scarecrow173/ruviform#532`）の着地を
-  待つ受入 gate。本 slice は判定しない。
+- `gate` — 外部修正 Issue の着地を待つ受入 gate を表す一般語。
+  本 manifest は当該 leg を判定しない。2026-11-25 時点では
+  ac4-real-window-dcomp は `scarecrow173/ruviform#532` の CLOSED
+  （2026-11-21T11:35:15Z）に伴い `resolved` 相当であり、open
+  gate として残っていない。
+- `resolved` — 後続 slice/PR により manifest の pin 時点で解消
+  済み。open 残件ではないが追跡のため記録を残す。
 
 #631 real-dock lane の語彙・契約語彙は #631 側正本に揃える
 （探索記録 relations[0] の指示どおり、本 slice では語彙を新設
@@ -152,13 +157,22 @@ consumer 側 anchor（関数・型・evidence 表）は read-only 参照で
 - 構造半分: 両 test crate が test-only 宣言済みで production
   crate が test fixture crate に非依存（README の Independence
   boundary・dev-dep のみ）。
-- 実測半分: 両 consumer `Cargo.lock` への fixture crate 名 grep
-  で非含有を実測（exit 1 = 期待値）。コマンド・対象 repo SHA・
-  exit code を evidence に記録。
+- 実測半分: consumer `Cargo.lock` への fixture crate 名 grep
+  と、含有が見つかった場合の依存経路確認。コマンド・対象 repo
+  SHA・exit code・観測結果を evidence に記録する。2026-11-25
+  時点の再実測では、audio-lens `Cargo.lock` は fixture crate 名
+  非含有（grep exit 1）、synvelis `Cargo.lock` は fixture crate
+  名を含有（grep exit 0）だが、経路は sv#176 S1 による
+  `crates/synvelis-app/Cargo.toml` `[dev-dependencies]` のみで、
+  `[dependencies]`（production DAG）には非含有だった。
 
 構造半分だけでは「consumer が今後入れる可能性」を否定できず、
-実測半分だけでは「現状」のみを示す — 両方を記録して現在の
-非汚染と強制でないことの構造的理由を分離する。
+実測半分だけでは「測定時点の状態」のみを示す — 両方を記録して、
+ruviform が新依存を強制しない構造的理由と consumer 側の実際の
+依存経路を分離する。synvelis の dev-dep 採用は consumer の自主的
+な test-only 利用であり、ruviform による強制や production DAG
+汚染ではない。consumer が dev-dep で fixture を採用すること自体は
+非汚染ルールの違反ではない。
 
 ## 代替案と却下理由
 
