@@ -322,75 +322,104 @@ mise run bench-frozen-e2e --write-baseline <path>  # emit an un-promoted baselin
 
 ## Formal
 
-D-layer property + bounded-model-check lanes (Issue #806 — slice 1
-wire codecs `rvf.ipc.v1` / `rvf.uitest.v1`, slice 2 archive parsers
-`ruviform-io-archive`, slice 3 structured document readers
-`ruviform-io-structured`, slice 4 PCM WAV backend `ruviform-io-wav`):
+Existing property-test and bounded-model-check lanes for the individual
+Properties introduced in Issue #806 (wire codecs `rvf.ipc.v1` /
+`rvf.uitest.v1`, archive parsers `ruviform-io-archive`, structured document
+readers `ruviform-io-structured`, and PCM WAV backend `ruviform-io-wav`):
 
 ```sh
 mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
 mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
 ```
 
-- Test files live next to the crates: `crates/ruviform-ui/tests/
-  formal_ipc.rs` (`parse_intent`, `valid_op`, `Event::to_json`),
-  `crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
-  `write_frame`), `crates/ruviform-io-archive/tests/
-  formal_archive.rs` (TAR/ZIP reader `ArchiveReadLimits` gates,
-  `ArchiveErrorKind` stable classification, receipt invariants, and
-  `Pending`/`discard_pending` recovery), and
-  `crates/ruviform-io-structured/tests/formal_structured.rs`
-  (JSON/YAML/TOML `from_reader`/`to_writer` round-trips, pull-based
-  CSV `CsvReader` and XML `XmlEventReader`, the shared
-  `InputLimits`/`BoundedRead` inclusive byte budget, stable
-  `DocumentErrorKind` sets per format, named `DocumentLimit` gates:
-  CSV `max_record_bytes`/`max_field_bytes`/`max_fields`/`max_records`,
-  YAML `max_depth`/`max_aliases`, XML `max_depth`/`max_attributes`/
-  `max_event_bytes`/`max_events`, strict-EOF `TrailingData`, BOM and
-  invalid-encoding handling, poisoned-reader semantics), and
-  `crates/ruviform-io-wav/tests/formal_wav.rs` (RIFF/WAVE header
-  serialization, canonical f32→wire sample conversion, muxer
-  finalize/`WavReceipt` contracts, stable `WavError` kinds). The
-  structured suite is feature-gated per format (`#[cfg(feature = "...")]`) and the
-  lane runs it with `--all-features` because the crate's
-  `default = []`. Kani proofs sit in a `#[cfg(kani)] mod proofs` at
-  the bottom of the same file — plus deliberate exceptions where the
-  type under proof is `pub(crate)`: the `BoundedRead` proof lives in a
-  `#[cfg(kani)] mod proofs` inside `src/input.rs`, and the slice-4
-  `write_sample`/`Wire`/`fmt` proofs live in `ruviform-io-wav/src/
-  convert.rs`/`wav.rs`, because `cargo kani --tests` covers
-  lib-target proofs. All other proofs stay out of product sources. The
-  proofs use a concrete skeleton plus a symbolic gate field (record/field
-  limits, the byte budget); arbitrary byte streams stay concrete-only in
-  proptest.
-- `test-formal` is the always-runnable first layer (pure Rust, MSRV,
-  same entry as CI). `test-formal-kani` resolves an environment in
-  order: native `cargo kani` → a WSL2 distro with `cargo` +
-  `cargo kani` (Windows path mapped to `/mnt/<drive>/`, builds in a
-  WSL-native target dir, never through `/mnt`) → `not_run` +
-  `environment_blocked` + exit 0. A real CBMC counterexample is `fail`
-  + exit 1; environment absence is never reported as `pass`. The Kani
-  lane runs three `cargo kani` invocations — one for the
-  wire/archive crates, a separate `--all-features
-  --no-unwinding-checks` one for `ruviform-io-structured`, and a
-  separate `-j1` one for `ruviform-io-wav` (concurrent WAV CBMC
-  harnesses exhaust the reference WSL2 envelope) — and aggregates:
-  `pass` only when all invocations verify. The structured flag bounds
-  `csv_core`'s `build_dfa` byte-table loop at 128 (skeleton bytes
-  are all < 128, so truncated rows are unreachable); see
-  `docs/specs/formal-verification.md`.
-- Bounds and assumptions (what is proven vs unproven, float 1-ulp
-  semantics, cap-path complementarity between proptest and Kani) are
-  the contract of record: `docs/specs/formal-verification.md`. Keep it
-  in sync when harness bounds change.
-- Proptest regression files (`*.proptest-regressions` next to a test)
-  are committed — they pin historically failing seeds so every run
-  replays them first.
-- Mutation-fail proof is required evidence: temporarily break one codec
-  invariant, run the property suite, record the shrunk failure, revert
-  completely, and re-run green. The mutant / observed failure / revert
-  triple goes into `evidence/<issue>/` — a suite that cannot fail is
-  not a gate.
-- Verdict vocabulary and the local-vs-integration distinction follow
-  the `## Evidence` rules above; `verification.md` records the Kani
-  toolchain (verifier + CBMC versions) alongside OS/arch/repo SHA.
+Responsibilities are split rather than duplicated. `POLICIES.md` §6 is the
+canonical policy for method selection, verification boundaries, required
+assurance, soundness, cost, evidence, and synchronization.
+`docs/specs/formal-verification.md` is the inventory and contract of record
+for the existing individual Properties, bounds, unproven areas, and evidence
+requirements. This skill records target-specific execution and maintenance
+steps only. These lanes are complementary lanes selected for existing
+individual Properties; they are not a universal ladder or a required order
+for new verification work.
+
+Test files live next to the crates: `crates/ruviform-ui/tests/formal_ipc.rs`
+(`parse_intent`, `valid_op`, `Event::to_json`),
+`crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
+`write_frame`), `crates/ruviform-io-archive/tests/formal_archive.rs`
+(TAR/ZIP reader `ArchiveReadLimits` gates, `ArchiveErrorKind` stable
+classification, receipt invariants, and `Pending`/`discard_pending`
+recovery), `crates/ruviform-io-structured/tests/formal_structured.rs`
+(JSON/YAML/TOML `from_reader`/`to_writer` round-trips, pull-based CSV
+`CsvReader` and XML `XmlEventReader`, the shared `InputLimits`/`BoundedRead`
+inclusive byte budget, stable `DocumentErrorKind` sets per format, named
+`DocumentLimit` gates: CSV `max_record_bytes`/`max_field_bytes`/`max_fields`/
+`max_records`, YAML `max_depth`/`max_aliases`, XML `max_depth`/`max_attributes`/
+`max_event_bytes`/`max_events`, strict-EOF `TrailingData`, BOM and
+invalid-encoding handling, poisoned-reader semantics), and
+`crates/ruviform-io-wav/tests/formal_wav.rs` (RIFF/WAVE header
+serialization, canonical f32→wire sample conversion, muxer
+finalize/`WavReceipt` contracts, stable `WavError` kinds). The structured
+suite is feature-gated per format (`#[cfg(feature = "...")]`) and the lane
+runs it with `--all-features` because the crate's `default = []`.
+
+Kani proofs sit in a `#[cfg(kani)] mod proofs` at the bottom of the same
+test file, plus deliberate exceptions where the type under proof is
+`pub(crate)`: the `BoundedRead` proof lives in a `#[cfg(kani)] mod proofs`
+inside `src/input.rs`, and the slice-4 `write_sample`/`Wire`/`fmt` proofs
+live in `ruviform-io-wav/src/convert.rs`/`wav.rs`, because
+`cargo kani --tests` covers lib-target proofs. All other proofs stay out of
+product sources. The proofs use a concrete skeleton plus a symbolic gate
+field (record/field limits, the byte budget); arbitrary byte streams stay
+concrete-only in proptest. Proof placement `#[cfg(kani)]` modules are not the
+same thing as using `cfg(kani)` to replace product behavior.
+
+`test-formal` is the always-runnable pure-Rust lane (MSRV, same entry as
+CI). `test-formal-kani` resolves an environment in order: native
+`cargo kani` → a WSL2 distro with `cargo` + `cargo kani` (Windows path
+mapped to `/mnt/<drive>/`, builds in a WSL-native target dir, never through
+`/mnt`) → `not_run` + `environment_blocked` + exit 0. A real CBMC
+counterexample is `fail` + exit 1; environment absence is never reported as
+`pass`. The Kani lane runs three `cargo kani` invocations — one for the
+wire/archive crates, a separate `--all-features --no-unwinding-checks` one
+for `ruviform-io-structured`, and a separate `-j1` one for
+`ruviform-io-wav` (concurrent WAV CBMC harnesses exhaust the reference WSL2
+envelope) — and aggregates: `pass` only when all invocations verify.
+
+The `--no-unwinding-checks` invocation for `ruviform-io-structured` is a
+currently present legacy exception, not an ordinary lane detail and not a
+pattern to copy. The existing structured invocation bounds `csv_core`'s
+`build_dfa` byte-table loop at 128 (the skeleton bytes are all < 128, so the
+historical harness argument says truncated rows are unreachable); that
+explanation is inventory, not approval. The exception is owned by
+`scarecrow173/ruviform#1015`, which must re-evaluate it with an independent
+validity argument and review. The `cfg(kani)` diagnostic-payload substitution
+in the WAV backend is likewise an unmigrated legacy exception owned by
+`scarecrow173/ruviform#1015`; do not confuse it with proof-placement-only
+`#[cfg(kani)] mod proofs`.
+
+When product code, a model, a harness, or a dependency changes:
+
+1. Identify every Property whose target, boundary, assumption, or oracle is
+   affected.
+2. Re-run the smallest lane or test set that re-verifies those Properties.
+3. Record the result, assurance kind, target, synchronization state, and
+   failure cause in the issue evidence. Timeout, OOM, environment absence,
+   process exit 0, and CI green are not Proof Pass by themselves.
+4. Keep the verified sync commit unchanged until the affected Properties
+   have been re-verified and the evidence has been synchronized.
+
+Bounds and assumptions (what is proven vs unproven, float 1-ulp semantics,
+cap-path complementarity between proptest and Kani) are the contract of
+record: `docs/specs/formal-verification.md`. Keep it in sync when harness
+bounds change. Proptest regression files (`*.proptest-regressions` next to
+a test) are committed — they pin historically failing seeds so every run
+replays them first.
+
+Mutation-fail proof is required evidence: temporarily break one codec
+invariant, run the property suite, record the shrunk failure, revert
+completely, and re-run green. The mutant / observed failure / revert triple
+goes into `evidence/<issue>/` — a suite that cannot fail is not a gate.
+
+Verdict vocabulary and the local-vs-integration distinction follow the
+`## Evidence` rules above; `verification.md` records the Kani toolchain
+(verifier + CBMC versions) alongside OS/arch/repo SHA.
