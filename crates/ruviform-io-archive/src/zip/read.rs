@@ -78,6 +78,28 @@ pub struct ZipArchiveReader<R: Read + Seek> {
     cd_offset: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ZipIndexGateDecision {
+    Accept,
+    EntriesExceeded,
+    MetadataExceeded,
+}
+
+fn zip_index_gate_decision(
+    cd_count: u16,
+    cd_size: u64,
+    max_entries: u32,
+    max_metadata_bytes: u64,
+) -> ZipIndexGateDecision {
+    if u64::from(cd_count) > u64::from(max_entries) {
+        ZipIndexGateDecision::EntriesExceeded
+    } else if cd_size > max_metadata_bytes {
+        ZipIndexGateDecision::MetadataExceeded
+    } else {
+        ZipIndexGateDecision::Accept
+    }
+}
+
 impl<R: Read + Seek> ZipArchiveReader<R> {
     /// Opens a ZIP stream: locates and parses EOCD + central directory
     /// under `limits`. See the module docs for the pipeline.
@@ -124,15 +146,23 @@ impl<R: Read + Seek> ZipArchiveReader<R> {
         }
         // Budget gates BEFORE the CD region is buffered or records are
         // allocated.
-        if u64::from(eocd.cd_count) > u64::from(limits.max_entries) {
-            return Err(limit("max_entries", eocd.cd_count, limits.max_entries));
-        }
-        if cd_size > limits.max_metadata_bytes {
-            return Err(limit_u64(
-                "max_metadata_bytes",
-                cd_size,
-                limits.max_metadata_bytes,
-            ));
+        match zip_index_gate_decision(
+            eocd.cd_count,
+            cd_size,
+            limits.max_entries,
+            limits.max_metadata_bytes,
+        ) {
+            ZipIndexGateDecision::EntriesExceeded => {
+                return Err(limit("max_entries", eocd.cd_count, limits.max_entries));
+            }
+            ZipIndexGateDecision::MetadataExceeded => {
+                return Err(limit_u64(
+                    "max_metadata_bytes",
+                    cd_size,
+                    limits.max_metadata_bytes,
+                ));
+            }
+            ZipIndexGateDecision::Accept => {}
         }
         let entries = parse_central_directory(&mut inner, cd_offset, cd_size, &limits)?;
         if entries.len() != usize::from(eocd.cd_count) {
@@ -912,5 +942,77 @@ fn classify_source_error<R: Read + Seek>(
             EntrySource::Stored(_) => ArchiveErrorKind::Io,
         },
         _ => ArchiveErrorKind::Io,
+    }
+}
+
+#[cfg(kani)]
+mod proofs {
+    use super::{ZipIndexGateDecision, zip_index_gate_decision};
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_idx_limit_decision_exactness() {
+        let cd_count: u16 = kani::any();
+        let cd_size: u64 = kani::any();
+        let max_entries: u32 = kani::any();
+        let max_metadata_bytes: u64 = kani::any();
+
+        let actual = zip_index_gate_decision(cd_count, cd_size, max_entries, max_metadata_bytes);
+        let count = u64::from(cd_count);
+        let entries_max = u64::from(max_entries);
+        let entries_over = count > entries_max;
+        let metadata_over = cd_size > max_metadata_bytes;
+
+        if entries_over {
+            assert!(actual == ZipIndexGateDecision::EntriesExceeded);
+        } else if metadata_over {
+            assert!(actual == ZipIndexGateDecision::MetadataExceeded);
+        } else {
+            assert!(actual == ZipIndexGateDecision::Accept);
+        }
+
+        kani::cover!(
+            entries_max > 0
+                && count + 1 == entries_max
+                && !metadata_over
+                && actual == ZipIndexGateDecision::Accept,
+            "entry count boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            count == entries_max && !metadata_over && actual == ZipIndexGateDecision::Accept,
+            "entry count boundary acceptance is reachable"
+        );
+        kani::cover!(
+            count == entries_max + 1 && actual == ZipIndexGateDecision::EntriesExceeded,
+            "entry count boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            max_metadata_bytes > 0
+                && cd_size == max_metadata_bytes - 1
+                && !entries_over
+                && actual == ZipIndexGateDecision::Accept,
+            "metadata size boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            cd_size == max_metadata_bytes
+                && !entries_over
+                && actual == ZipIndexGateDecision::Accept,
+            "metadata size boundary acceptance is reachable"
+        );
+        kani::cover!(
+            max_metadata_bytes < u64::MAX
+                && cd_size == max_metadata_bytes + 1
+                && !entries_over
+                && actual == ZipIndexGateDecision::MetadataExceeded,
+            "metadata size boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            entries_over && metadata_over && actual == ZipIndexGateDecision::EntriesExceeded,
+            "entries-first priority is reachable"
+        );
+        kani::cover!(
+            !entries_over && !metadata_over && actual == ZipIndexGateDecision::Accept,
+            "in-cap acceptance is reachable"
+        );
     }
 }

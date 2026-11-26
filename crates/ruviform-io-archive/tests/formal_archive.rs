@@ -21,9 +21,10 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries the same contracts
-//! as bounded proofs (run via `mise run test-formal-kani`); the bounds
-//! and assumptions are documented in
+//! The `#[cfg(kani)]` module at the bottom carries the remaining
+//! parser-facing TAR bounded proofs (run via `mise run test-formal-kani`).
+//! The ZIP index gate proof lives beside the production decision core in
+//! `src/zip/read.rs`; bounds and assumptions are documented in
 //! `docs/specs/formal-verification.md`.
 
 mod common;
@@ -1263,15 +1264,16 @@ proptest! {
     }
 }
 
-/// Bounded proofs of the same contracts, verified exhaustively over
-/// symbolic input by Kani (`cargo kani --tests`; run via
-/// `mise run test-formal-kani`). Bounds and assumptions:
+/// Bounded proofs of the parser-facing TAR contracts, verified
+/// exhaustively over symbolic input by Kani (`cargo kani --tests`; run
+/// via `mise run test-formal-kani`). Bounds and assumptions:
 /// `docs/specs/formal-verification.md`.
 ///
 /// Harnesses stay small by design (slice-1 lesson: symbolic byte streams
 /// and `fmt`/`RawVec` growth are CBMC cost bombs): all use a fixed
 /// concrete skeleton plus a symbolic *gate field* — a typeflag byte or
-/// `ArchiveReadLimits` budget — never a symbolic stream.
+/// `ArchiveReadLimits` budget — never a symbolic stream. The ZIP index
+/// gate proof is in `src/zip/read.rs` beside its pure decision core.
 #[cfg(kani)]
 mod proofs {
     use super::*;
@@ -1406,33 +1408,6 @@ mod proofs {
                 assert!(entry.info().uncompressed_size() == Some(declared));
             }
             Ok(None) => unreachable!("a file header must surface or be gated"),
-        }
-    }
-
-    /// The ZIP index gates reject declared `cd_count`/`cd_size` over
-    /// budget before the central directory is buffered, and accept the
-    /// fixed 1-entry fixture when both budgets are in-cap. Symbolic
-    /// budgets against a concrete EOCD+CD; the EOCD scan and CD parse
-    /// unwind over the ~100-byte fixture.
-    #[kani::proof]
-    #[kani::unwind(600)]
-    fn zip_index_gates() {
-        let max_entries: u32 = kani::any();
-        let max_metadata: u64 = kani::any();
-        let mut limits = ArchiveReadLimits::default();
-        limits.max_entries = max_entries;
-        limits.max_metadata_bytes = max_metadata;
-        let bytes = build_simple(&[EntrySpec::stored("f", b"xy")]);
-        const CD_SIZE: u64 = 47; // 46-byte record + 1-byte name
-        match ZipArchiveReader::new(Cursor::new(bytes), limits) {
-            Err(e) => {
-                assert!(e.kind() == ArchiveErrorKind::LimitExceeded);
-                assert!(max_entries < 1 || max_metadata < CD_SIZE);
-            }
-            Ok(archive) => {
-                assert!(max_entries >= 1 && max_metadata >= CD_SIZE);
-                assert!(archive.entry_count() == 1);
-            }
         }
     }
 }
