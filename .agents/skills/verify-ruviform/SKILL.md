@@ -331,6 +331,8 @@ readers `ruviform-io-structured`, and PCM WAV backend `ruviform-io-wav`):
 mise run test-formal                      # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
 mise run test-formal-kani                 # legacy aggregate Kani proofs (native, else WSL2)
 mise run test-formal-kani w-ipc-op        # selective W-IPC-OP byte-core proofs only
+mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
+mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
 ```
 
 Responsibilities are split rather than duplicated. `POLICIES.md` §6 is the
@@ -347,9 +349,10 @@ for new verification work.
 for the rf#1015 redesign. When selecting, re-running, or accounting for these
 lanes, identify the affected Property groups and ledger synchronization state
 rather than treating harness count, process exit 0, or CI green as proof. The
-only selective re-run entry currently implemented is
-`mise run test-formal-kani w-ipc-op` for the rf#1015 `W-IPC-OP` byte-core
-proofs. There is still no generic Property-group runner; record unaffected or
+implemented selective re-run entries are `mise run test-formal-kani w-ipc-op`
+for the rf#1015 `W-IPC-OP` byte-core proofs, `sd-csv-limits` for the CSV
+limit decision-core proofs, and `sd-byte-budget` for the `BoundedRead` proof.
+There is still no generic Property-group runner; record unaffected or
 unimplemented selectors as `not_synced` instead of claiming synchronization.
 Unknown selectors are usage errors (exit 2) before environment detection or
 Kani execution.
@@ -395,30 +398,33 @@ mapped to `/mnt/<drive>/`, builds in a WSL-native target dir, never through
 `/mnt`) → `not_run` + `environment_blocked` + exit 0. A real CBMC
 counterexample is `fail` + exit 1; environment absence is never reported as
 `pass`. With no selector, the Kani lane runs three `cargo kani`
-invocations — one for the wire/archive crates, a separate
-`--all-features --no-unwinding-checks` one
-for `ruviform-io-structured`, and a separate `-j1` one for
+invocations — one for the wire/archive crates, a separate `--all-features` one
+for `ruviform-io-structured` with unwinding checks enabled, and a separate `-j1` one for
 `ruviform-io-wav` (concurrent WAV CBMC harnesses exhaust the reference WSL2
 envelope) — and aggregates: `pass` only when all invocations verify. The
 `w-ipc-op` selector instead runs one `-j1 -p ruviform-ui --harness w_ipc_op`
 invocation against the four in-src byte-core proofs, without
 `--no-unwinding-checks`; the substring filter matches only harness names
 containing `w_ipc_op` and must be re-checked if related harnesses are renamed.
+The structured selectors likewise use exact substring filters:
+`csv_limit_decision` selects the three CSV decision-core exactness proofs and
+`bounded_read_budget_gate` selects the byte-budget proof. Neither disables
+Unwinding Assertions.
 
-The `--no-unwinding-checks` invocation for `ruviform-io-structured` is a
-currently present legacy exception, not an ordinary lane detail and not a
-pattern to copy. The existing structured invocation bounds `csv_core`'s
-`build_dfa` byte-table loop at 128 (the skeleton bytes are all < 128, so the
-historical harness argument says truncated rows are unreachable); that
-explanation is inventory, not approval. The exception is owned by
-`scarecrow173/ruviform#1015`, which must re-evaluate it with an independent
-validity argument and review. The `cfg(kani)` diagnostic-payload substitution
-in the WAV backend is likewise an unmigrated legacy exception owned by
+The former `--no-unwinding-checks` invocation for `ruviform-io-structured`
+was removed in rf#1015 slice 3. The historical invocation bounded `csv_core`'s
+`build_dfa` byte-table loop at 128 and treated truncated rows as unreachable;
+that explanation remains inventory history, not approval, and old results are
+legacy-exception results rather than ordinary Proof Pass. The replacement CSV
+proofs verify a pure decision core that does not include `build_dfa`; the
+parser-to-core connection remains outside Kani and is covered by proptest and
+integration tests. The `cfg(kani)` diagnostic-payload substitution in the WAV
+backend is still an unmigrated legacy exception owned by
 `scarecrow173/ruviform#1015`; do not confuse it with proof-placement-only
-`#[cfg(kani)] mod proofs`. The rf#1015 design direction is to remove both
-exceptions through the structured DFA/reader boundary redesign and the WAV
-lazy/pure diagnostic boundary, but until that implementation is re-verified
-their results remain legacy-exception results and are not ordinary Proof Pass.
+`#[cfg(kani)] mod proofs`. The rf#1015 design direction is to remove the WAV
+exception through the lazy/pure diagnostic boundary, but until that
+implementation is re-verified its results remain legacy-exception results and
+are not ordinary Proof Pass.
 
 When product code, a model, a harness, or a dependency changes:
 
@@ -441,8 +447,9 @@ replays them first.
 Mutation-fail proof is required evidence: temporarily break one codec
 invariant, run the property suite or the selective proof lane that owns the
 mutated invariant, record the failure, revert completely, and re-run green.
-For `W-IPC-OP`, the required mutation evidence is the selective Kani lane
-(`mise run test-formal-kani w-ipc-op`), not only proptest. The mutant /
+For `W-IPC-OP` and the structured slice-3 proofs, the required mutation
+evidence is the selective Kani lane (`w-ipc-op` or `sd-csv-limits`), not only
+proptest. The mutant /
 observed failure / revert triple goes into `evidence/<issue>/` — a suite that
 cannot fail is not a gate.
 

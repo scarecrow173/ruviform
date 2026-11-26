@@ -103,21 +103,21 @@ slice 3 で `ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader
 `ruviform-io-wav` の RIFF/WAVE serialization・canonical planar
 `f32`→wire sample 変換・muxer finalize/`WavReceipt` 契約に適用した。
 
-## rf#1015 — Property ledger、legacy exception、`W-IPC-OP`
+## rf#1015 — Property ledger、legacy exception、`W-IPC-OP`、structured redesign
 
 rf#806 の harness inventory は後続の再設計で Property group 単位へ再編
 された。再編後の group、risk、必要保証、仮定、未証明領域、verdict、予算、
 選択再実行の台帳は `evidence/rf1015/property-ledger.md`、slice 1/2 の作業証跡は
 `evidence/rf1015/verification.md`・`evidence/rf1015/verification-slice2.md`・
-`evidence/rf1015/runs.jsonl` であり、
+`evidence/rf1015/verification-slice3.md`・`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
 場合は、どちらが正しいかを確認して修正し、同期状態を記録する。
 
-slice 1 で確定した設計方向は次のとおり。製品コード・proof harness・
-mise lane は未変更なので、これらは実施済みの結果ではなく後続実装 slice
-の採用方針である。
+slice 1 で確定した設計方向は次のとおり。structured の D-1 は slice 3 で
+実施済みだが、WAV・wire/archive・read_frame・SampleFormat の方向は後続
+実装 slice の採用方針である。
 
 1. structured documents では crate 全体への `--no-unwinding-checks` を
    撤廃する。最終形は CSV limit decision を `csv_core` の DFA/reader
@@ -145,13 +145,14 @@ slice 2 では、代表 important Property のうち `W-IPC-OP` だけを実装�
 `#[cfg(kani)] mod proofs` に置く。これは proof placement のための cfg であり、
 製品挙動を `cfg(kani)` で置き換える例外ではない。
 
-選択再実行は `mise run test-formal-kani w-ipc-op` が最小入口である。selector
-なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
+選択再実行は `mise run test-formal-kani w-ipc-op` に加え、slice 3 の
+`sd-csv-limits` / `sd-byte-budget` が最小入口である。selector なしの
+`test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
-generic runner はまだない。したがって `W-IPC-OP` の選択再実行は `synced`、
-他 group は引き続き `not_synced` または `deferred` と記録する。実装済みの
-bound・実測コスト・mutation 証跡は ledger §6 と
-`evidence/rf1015/verification-slice2.md` を正本とする。
+generic runner はまだない。`W-IPC-OP`, `SD-CSV-LIMITS`, `SD-BYTE-BUDGET`
+の選択再実行は `synced`、他 group は引き続き `not_synced` または
+`deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
+ledger §6 と slice 2/3 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -206,8 +207,10 @@ bound・実測コスト・mutation 証跡は ledger §6 と
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
 | `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | selector なし。`cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` は後述の legacy exception） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal-kani` | selector なし。`cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 | `mise run test-formal-kani w-ipc-op` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op` の 1 invocation。`src/ipc.rs` の `w_ipc_op_exactness_len0_16` と 3 件の `w_ipc_op_boundary_len*` だけを選び、Unwinding Assertions を無効化しない。未知 selector は Kani 実行前に exit 2 | 同上 |
+| `mise run test-formal-kani sd-csv-limits` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision` の 1 invocation。CSV limit decision core の 3 proofだけを選び、Unwinding Assertions を無効化しない | 同上 |
+| `mise run test-formal-kani sd-byte-budget` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate` の 1 invocation。Unwinding Assertions を無効化しない | 同上 |
 
 `test-formal` は常時実行可能な pure Rust lane、`test-formal-kani` は
 環境検出つきの bounded model checking lane であり、どちらも既存 Property
@@ -259,17 +262,19 @@ proptest の concrete coverage に委譲する。
 
 ### slice 3 structured harness（`tests/formal_structured.rs` の `#[cfg(kani)] mod proofs` + `src/input.rs` の in-src proof）
 
-slice 2 と同じ「concrete skeleton + symbolic gate field」型のみ。
-任意 stream は proptest に委譲する。`BoundedRead` は `pub(crate)`
-なので byte-budget の証明だけ `src/input.rs` 内の
+slice 3 以降、CSV limit の形式的証明は parser shell を通さない pure
+decision core exactness とする。任意 stream と parser-core接続は
+proptest/integration test に委譲する。`BoundedRead` は `pub(crate)`
+なので byte-budget の証明は `src/input.rs` 内の
 `#[cfg(kani)] mod proofs` に置く（`cargo kani --tests` は lib target
-の harness も test mode でカバーする）。
+の harness も test mode でカバーする）。旧 parser-facing CSV harnessは
+退役し、保証を二重計上しない。
 
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
-| `bounded_read_budget_gate`（in-src） | concrete 6 byte input + symbolic `max_bytes:u64`（全値）を 2 byte/read の `read` loop で drive。`#[kani::unwind(16)]` | 任意長・任意 backend reader の組合せ・probe 対象 byte の値（`Read` 契約上 0/1 のみ効く） | proptest 各形式の `*_max_bytes_gate`（concrete skeleton + tail/offset）が reader 実経路で担保 |
-| `csv_max_records_gate` | concrete skeleton `h\nr1\nr2\nr3\n` + symbolic `max_records:u64`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 record 内容・他 limit との複合・4 record 超 | proptest `csv_max_records_gate` が任意 `k`/`m`・非 header 経路も担保 |
-| `csv_max_field_bytes_gate` | concrete skeleton `a,bb\n` + symbolic `max_field_bytes:usize`。`#[kani::unwind(128)]` + `--no-unwinding-checks`（後述） | 任意 field 内容・複数 field 超過パターン・buffer 成長境界（`max_record_bytes` は concrete） | proptest `csv_max_field_bytes_gate` / `csv_max_record_bytes_gate` が `s`/`r`/`m` 全組合せで担保 |
+| `bounded_read_budget_gate`（in-src） | concrete 6 byte input + symbolic `max_bytes:u64`（全値）を 2 byte/read の `read` loop で drive。proof loopは static最大4回で `#[kani::unwind(8)]` | 任意長・任意 backend reader の組合せ・probe 対象 byte の値（`Read` 契約上 0/1 のみ効く） | proptest 各形式の `*_max_bytes_gate`（concrete skeleton + tail/offset）が reader 実経路で担保 |
+| `csv_limit_decision_record_count_exactness`（in-src） | symbolic `record_no`/`max_records` の u64 exactness。allocation・I/O・`csv_core`/DFA依存なし | parserが coreを毎回呼ぶ接続条件、任意record内容、複合limit交互作用、`csv_core` correctness | 既存 `csv_max_records_gate` proptestと integration testが接続と実経路を担保 |
+| `csv_limit_decision_field_bytes_exactness` / `csv_limit_decision_buffer_growth_exactness`（in-src） | symbolic limit・span/fill/count。field bytesと capacity成長の exactness。boundary-1/boundary/boundary+1は explicit coverで確認 | parserが coreを毎回呼ぶ接続条件、任意field/record内容、複合limit交互作用、`csv_core` correctness | 既存 `csv_max_field_bytes_gate` / `csv_max_record_bytes_gate` / `csv_max_fields_gate` proptestが接続と実経路を担保 |
 
 ### slice 4 WAV harness（`src/convert.rs` + `src/wav.rs` の in-src proofs + `tests/formal_wav.rs` の `#[cfg(kani)] mod proofs`）
 
@@ -352,21 +357,15 @@ boundary matrix として設計した。
   `String` 生成の RawVec unwind コストを回避できる。`Ok` 以外を
   early return するのは入力型の制約であって契約弱化の `assume`
   ではない（`&str` 引数に invalid UTF-8 は型上到達不能）。
-- CSV harness 固有の legacy exception（`scarecrow173/ruviform#1015`
-  の再評価対象）: `CsvReader::new` が呼ぶ `csv_core` の
-  `build_dfa` は `for c in 0..256` が dominant loop（完全証明には
-  unwind >= 257 が必要）。skeleton の byte は全て < 128 であり、
-  c >= 128 の DFA row は concrete 入力から到達不能なので、
+- CSV harness 固有の legacy exception は slice 3 で解消した。旧実装では
+  `CsvReader::new` が呼ぶ `csv_core` の `build_dfa` が proof boundaryに入り、
   io-structured invocation は `#[kani::unwind(128)]` +
-  `--no-unwinding-checks` で当該 loop を意図的に truncate する
-  （全 256 row の unwind は式をほぼ 2 倍に膨らませ、参照 WSL2
-  環境を枯渇させることを実測）。truncate 領域が到達不能である
-  保証は harness の assert 自体が検査する — table が byte < 128
-  で現実と乖離していれば concrete 期待値（field 内容・error
-  kind）の assert が落ちる。それ以外の全 loop（NFA_STATES・
-  `for _ in 0..4`・reader 内部）は bound 内で完全に網羅される。
-  この検査無効化に依存する結果は 通常の Proof Pass に含めず、
-  新規 proof にコピーしてよい pattern としない。
+  `--no-unwinding-checks` で当該 loop を意図的に truncate していた。
+  この検査無効化に依存する旧結果は通常の Proof Passに含めない履歴として残す。
+  slice 3 は `build_dfa` を proof boundaryに含めず、pure decision coreを
+  Unwinding Assertions 有効で検証する。c >= 128 rowの到達不能性は例外根拠に
+  使わない。parser-core接続条件は Kani未証明であり、proptest依存の保証差を
+  ledgerへ残す。
 - serde_json の float 復号精度: `float_roundtrip` feature は無効の
   ため、最短表現 decimal が parse 時に 1 ulp ずれる場合がある。
   proptest 側は `json_value_eq`（整数は厳密・float は 1 ulp 以内）
@@ -375,13 +374,14 @@ boundary matrix として設計した。
 
 ## Legacy exception（`scarecrow173/ruviform#1015` の再評価対象）
 
-次の 2 件は `POLICIES.md` §6.4 が原則回避または原則禁止とする例外で
-あり、独立した妥当性根拠と review を伴う再評価が完了するまで未移行の
-legacy exception として扱う。
+次の例外は `POLICIES.md` §6.4 が原則回避または原則禁止とする例外で
+あり、独立した妥当性根拠と review を伴う再評価の対象である。
 
 - `ruviform-io-structured` に対するクレート単位の
-  `--no-unwinding-checks` invocation。
-- WAV backend の `cfg(kani)` による診断 payload 置換。
+  `--no-unwinding-checks` invocation — slice 3 で撤廃済み。旧結果は
+  legacy-exception result として履歴に残し、通常の Proof Passに数えない。
+- WAV backend の `cfg(kani)` による診断 payload 置換 — 未移行の
+  legacy exception。
 
 これらを 通常の Proof Pass の根拠や新規 proof にコピー可能な
 pattern として扱わない。本文書内の関連記述は、当時の境界と未証明領域を
@@ -389,7 +389,8 @@ pattern として扱わない。本文書内の関連記述は、当時の境界
 `#[cfg(kani)] mod proofs` とは区別する。rf#1015 slice 1 の再評価では、
 structured は DFA/reader 境界再設計と crate 単位 invocation 撤廃、WAV は
 lazy/pure diagnostic boundary への移行と `cfg(kani)` 置換撤廃を採用した。
-実装が完了するまでは legacy exception のまま会計し、新 verdict だけを
+structured は slice 3 で実施済みであり、WAVは実施完了まで legacy exception
+のまま会計する。新 verdict だけを
 Proof Pass に計上する（decision matrix: `evidence/rf1015/property-ledger.md`
 §4 D-1/D-2）。
 
@@ -429,13 +430,11 @@ manual/opt-in）。
 revert 後の再検証結果を残す。slice 2 では例として TAR reader の
 limit gate または ZIP reader の CRC/size 整合チェックを 1 箇所だけ
 破り、`formal_archive` の該当 property が shrink つき fail する
-ことを記録する。slice 3 では `BoundedRead` の probe 比較
-（`remaining == 0`）を 1 箇所だけ破り、`formal_structured` の
-max_bytes gate property が shrink つき fail することを記録する
-（観測上の注意: probe 比較を早めに効かせる変異は、read 粒度が
-細かい backend（serde_json の逐 byte trailing check）でのみ発火
-する — 大量 fill する backend は `remaining` を 1 跨いで 0 まで
-一読みで落とすため変異がマスクされる。ledger にこの観察を残す）。
+ことを記録する。rf#1015 slice 3 では CSV decision coreの `max_field_bytes` 比較を
+`>` から `>=` へ 1 箇所だけ変え、`mise run test-formal-kani sd-csv-limits`
+が semantic assertion failureで exit 1 を返すことを記録した。検出は
+unwinding assertion failureではなく boundary equality の反例である。
+mutantは完全に revertし、同じ selective laneで緑へ戻した。
 slice 4 では `convert.rs` の S16 全範囲 scaling の `f32::round`
 を `trunc` に 1 箇所だけ変え、`formal_wav` の
 `sample_conversion_matches_documented_policy` が shrink つき
@@ -460,6 +459,13 @@ proptest、crate regression の検証対象である。`8cb8a6d58933d04415cfe47f
 PR #1027 の head と本文で追跡する。`runs.jsonl` では proof/regression 系 record
 が `5024268f` を、evidence本文を検査する prek recordだけが exact runのある
 evidence sync commitを `target_sha` に使う。
+
+slice 3 の structured redesign では、verified Sync Commitを
+`f6517d639a66b3f2301f92473a70ba7d84e4abf0` とする。これは最新mainを取り込み、
+CSV decision core、BoundedRead proof/実装、selective lane、mise laneの最終変更
+`01b369a452c69521149de762c5278b5ac331e8ea` を含むmerge commitであり、selective Kani・mutation・proptest・crate regressionの検証
+対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを
+動かさない。製品/proof/mise差分が加わった場合は再検証なしに進めない。
 
 ## 判定語彙と fail-closed
 

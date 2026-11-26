@@ -3,26 +3,12 @@
 //! `InputLimits::max_bytes` hard limit.
 //!
 //! Semantics: a document of *exactly* `max_bytes` may succeed; the
-//! first byte beyond the limit trips [`BudgetExceeded`]. The trip is
+//! first byte beyond the limit returns an `io::Error`. The trip is
 //! recorded on `was_limit_exceeded` so the caller can reclassify a
 //! backend-wrapped `io::Error` into
 //! [`DocumentErrorKind::LimitExceeded`](crate::DocumentErrorKind::LimitExceeded).
 
 use std::io::{self, Read};
-
-/// Marker error produced when the input byte budget is exceeded.
-/// Surfaced to the parser as an `io::Error`; the owning `BoundedRead`
-/// is the source of truth (`was_limit_exceeded`).
-#[derive(Debug)]
-struct BudgetExceeded;
-
-impl std::fmt::Display for BudgetExceeded {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("input byte budget exceeded")
-    }
-}
-
-impl std::error::Error for BudgetExceeded {}
 
 /// A `Read` wrapper that counts bytes and hard-fails past `max_bytes`.
 ///
@@ -60,7 +46,7 @@ impl<R: Read> BoundedRead<R> {
 impl<R: Read> Read for BoundedRead<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.exceeded {
-            return Err(io::Error::other(BudgetExceeded));
+            return Err(io::ErrorKind::Other.into());
         }
         if buf.is_empty() || self.eof {
             return Ok(0);
@@ -76,7 +62,7 @@ impl<R: Read> Read for BoundedRead<R> {
                 }
                 Ok(_) => {
                     self.exceeded = true;
-                    Err(io::Error::other(BudgetExceeded))
+                    Err(io::ErrorKind::Other.into())
                 }
                 Err(e) => Err(e),
             };
@@ -159,7 +145,7 @@ mod proofs {
     /// set iff the stream held a byte beyond the budget; and both the
     /// honest EOF and the budget error are sticky across reads.
     #[kani::proof]
-    #[kani::unwind(16)]
+    #[kani::unwind(8)]
     fn bounded_read_budget_gate() {
         const INPUT: &[u8] = b"abcdef"; // 6 bytes
         let max_bytes: u64 = kani::any();
@@ -168,7 +154,7 @@ mod proofs {
         let mut buf = [0u8; 2];
         let mut delivered = 0usize;
         let mut terminal = false;
-        for _ in 0..8 {
+        for _ in 0..4 {
             match bounded.read(&mut buf) {
                 Ok(0) => {
                     // Honest EOF: all `want` bytes were delivered, the
@@ -198,7 +184,9 @@ mod proofs {
             }
         }
         // The stream always terminates: `want <= 6` bytes at 2 per read
-        // plus one probe is well inside the loop bound.
+        // plus one terminal read fit the four-iteration bound. The Kani
+        // unwind bound 8 leaves margin over that static maximum rather
+        // than hiding a truncate behind disabled unwinding assertions.
         assert!(terminal);
         assert!(delivered == want);
         assert!(bounded.was_limit_exceeded() == ((INPUT.len() as u64) > max_bytes));
