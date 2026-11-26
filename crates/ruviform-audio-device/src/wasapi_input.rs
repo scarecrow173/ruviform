@@ -40,12 +40,16 @@
 //! `Some(device_position)` — the `GetBuffer` device position of the
 //! packet's first frame, a backend-reported capture-clock fact on the
 //! same stream that carries the PCM (never synthesized from callback
-//! counts). [`PositionTracker`] verifies per-packet contiguity
-//! (`next == prev + frames`) and the `AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY`
-//! flag; either violation — or a stop/start position epoch reset —
-//! surfaces as [`DeviceError::ClockDiscontinuity`] on the error
-//! callback while the packet itself is still delivered at its real
-//! position (the consumer decides where the epoch boundary is).
+//! counts). [`PositionTracker`] classifies per-packet contiguity
+//! (`next == prev + frames`) as contiguous, forward gap, backward
+//! jump-or-reset, or first-packet anchor. A forward gap inside the
+//! same capture epoch is input capture loss: it surfaces as
+//! [`DeviceError::Xrun`] followed by [`DeviceError::ClockDiscontinuity`]
+//! on the error callback. A backward jump, stop/start position epoch
+//! reset, or a flag-only `AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY`
+//! report surfaces as [`DeviceError::ClockDiscontinuity`] only. The
+//! packet itself is still delivered at its real position (the consumer
+//! decides where the epoch boundary is).
 //!
 //! RT contract: the packet loop is allocation-free and lock-free —
 //! the planar scratch, callbacks and tracker are all preallocated at
@@ -675,19 +679,24 @@ impl Audio::IMMNotificationClient_Impl for DefaultDeviceNotificationImpl_Impl {
     }
 }
 
+/// Per-packet capture-clock position transition. Direction separates
+/// capture loss from epoch re-anchoring.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum PositionTransition {
+    FirstPacketAnchor,
+    Contiguous,
+    ForwardGap,
+    BackwardJumpOrReset,
+}
+
 /// Per-packet capture-clock position tracker — verifies that each
 /// packet's `device_position` continues the previous packet's
 /// `device_position + frames` expectation.
 ///
-/// The first packet after open anchors the epoch unconditionally
-/// (`expected == None` — a first-packet `device_position == 0` is a
-/// normal value, and the discontinuity *flag* is undefined there per
-/// cpal's guard). Every later packet must match `expected` exactly;
-/// a mismatch is an unverifiable jump — reported as
-/// [`DeviceError::ClockDiscontinuity`] — after which the tracker
+/// The first packet after open anchors the epoch unconditionally.
+/// Every later packet is classified by direction; a mismatch
 /// re-anchors to the observed position so subsequent packets are
-/// judged against the new epoch. A stop/start position reset surfaces
-/// here honestly rather than being hidden.
+/// judged against the new epoch.
 #[derive(Default)]
 struct PositionTracker {
     /// The `device_position` expected for the next packet's first
@@ -697,15 +706,15 @@ struct PositionTracker {
 }
 
 impl PositionTracker {
-    /// Checks `device_position` against the running expectation and
-    /// re-anchors to `device_position + frames`. Returns `true` when
-    /// the position broke contiguity.
-    fn check(&mut self, device_position: u64, frames: u64) -> bool {
-        let discontinuity = self
-            .expected
-            .is_some_and(|expected| expected != device_position);
+    fn classify_and_reanchor(&mut self, device_position: u64, frames: u64) -> PositionTransition {
+        let transition = match self.expected {
+            None => PositionTransition::FirstPacketAnchor,
+            Some(expected) if device_position > expected => PositionTransition::ForwardGap,
+            Some(expected) if device_position < expected => PositionTransition::BackwardJumpOrReset,
+            Some(_) => PositionTransition::Contiguous,
+        };
         self.expected = Some(device_position.saturating_add(frames));
-        discontinuity
+        transition
     }
 }
 
@@ -882,13 +891,16 @@ fn wait_for_handle_signal(handles: &[Foundation::HANDLE]) -> Result<usize, Devic
 
 /// One captured packet → [`InputCallbackInfo`] + planar delivery.
 ///
-/// Discontinuity is evaluated *before* delivery (cpal parity): the
-/// backend `DATA_DISCONTINUITY` flag — guarded by
-/// `device_position != 0` because the flag is undefined on the first
-/// packet after `Start` — or a [`PositionTracker`] contiguity break
-/// emits [`DeviceError::ClockDiscontinuity`] on the error callback,
-/// then the packet is still delivered at its real position so the
-/// consumer sees the boundary in-order.
+/// Discontinuity is evaluated *before* delivery (cpal parity). A
+/// forward [`PositionTracker`] gap emits [`DeviceError::Xrun`] and then
+/// [`DeviceError::ClockDiscontinuity`]; a backward jump-or-reset emits
+/// [`DeviceError::ClockDiscontinuity`] only. The backend
+/// `DATA_DISCONTINUITY` flag — guarded by `device_position != 0`
+/// because the flag is undefined on the first packet after `Start` —
+/// emits [`DeviceError::ClockDiscontinuity`] only when the tracker did
+/// not already report a position boundary. The packet is still
+/// delivered at its real position so the consumer sees the boundary
+/// in-order.
 ///
 /// **RT contract:** RT-suitable — integer math and one `Copy` metadata
 /// build; no allocation, no locks.
@@ -908,9 +920,19 @@ fn handle_packet(
     buffer_flags: u32,
 ) {
     let flagged = device_position != 0 && buffer_flags & DISCONTINUITY_FLAG != 0;
-    let jumped = tracker.check(device_position, packet_frames);
-    if flagged || jumped {
-        error_callback(DeviceError::ClockDiscontinuity);
+    match tracker.classify_and_reanchor(device_position, packet_frames) {
+        PositionTransition::ForwardGap => {
+            error_callback(DeviceError::Xrun);
+            error_callback(DeviceError::ClockDiscontinuity);
+        }
+        PositionTransition::BackwardJumpOrReset => {
+            error_callback(DeviceError::ClockDiscontinuity);
+        }
+        PositionTransition::FirstPacketAnchor | PositionTransition::Contiguous => {
+            if flagged {
+                error_callback(DeviceError::ClockDiscontinuity);
+            }
+        }
     }
     let info = CpalInputCallbackInfo::new(InputStreamTimestamp {
         callback,
@@ -1328,51 +1350,146 @@ mod tests {
         Box::new(|_e: DeviceError| {})
     }
 
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum PacketEvent {
+        Error(DeviceError),
+        Delivered(usize, Option<u64>),
+    }
+
+    struct PacketHarness {
+        events: Arc<Mutex<Vec<PacketEvent>>>,
+        state: InputCallbackState,
+        tracker: PositionTracker,
+        error_callback: InputErrorCallback,
+    }
+
+    impl PacketHarness {
+        fn new() -> Self {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let input_events = events.clone();
+            let error_events = events.clone();
+            let state = InputCallbackState::new(
+                Box::new(
+                    move |view: ruviform_audio_core::AudioBufferView<'_, f32>,
+                          info: InputCallbackInfo| {
+                        input_events
+                            .lock()
+                            .unwrap()
+                            .push(PacketEvent::Delivered(view.frames(), info.frame_position));
+                    },
+                ),
+                vec![0.0; 32],
+                2,
+                8,
+                48_000,
+                ClockDomainId::MONOTONIC,
+                TimestampProvenance::Carried,
+            );
+            let error_callback: InputErrorCallback = Box::new(move |error: DeviceError| {
+                error_events.lock().unwrap().push(PacketEvent::Error(error));
+            });
+            Self {
+                events,
+                state,
+                tracker: PositionTracker::default(),
+                error_callback,
+            }
+        }
+
+        fn packet(&mut self, data: &[f32], frames: u64, device_position: u64, flags: u32) {
+            handle_packet(
+                &mut self.state,
+                &mut self.tracker,
+                &mut self.error_callback,
+                data,
+                frames,
+                device_position,
+                0,
+                StreamInstant::new(1, 0),
+                flags,
+            );
+        }
+
+        fn events(&self) -> Vec<PacketEvent> {
+            self.events.lock().unwrap().clone()
+        }
+    }
+
     #[test]
     fn position_tracker_first_packet_anchors_unconditionally() {
         let mut tracker = PositionTracker::default();
-        // First packet — even at position 0 — anchors without a
-        // discontinuity report.
-        assert!(!tracker.check(0, 480));
+        assert_eq!(
+            tracker.classify_and_reanchor(0, 480),
+            PositionTransition::FirstPacketAnchor
+        );
         assert_eq!(tracker.expected, Some(480));
     }
 
     #[test]
     fn position_tracker_contiguous_packets_do_not_flag() {
         let mut tracker = PositionTracker::default();
-        assert!(!tracker.check(0, 480));
-        assert!(!tracker.check(480, 480));
-        assert!(!tracker.check(960, 240));
+        assert_eq!(
+            tracker.classify_and_reanchor(0, 480),
+            PositionTransition::FirstPacketAnchor
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(480, 480),
+            PositionTransition::Contiguous
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(960, 240),
+            PositionTransition::Contiguous
+        );
         assert_eq!(tracker.expected, Some(1200));
     }
 
     #[test]
-    fn position_tracker_detects_jump_and_resyncs() {
+    fn position_tracker_detects_forward_gap_and_resyncs() {
         let mut tracker = PositionTracker::default();
-        assert!(!tracker.check(0, 480));
-        // 480 frames lost — position jumped ahead.
-        assert!(tracker.check(960, 480));
-        // Re-anchored: the following contiguous packet is clean.
-        assert!(!tracker.check(1440, 480));
+        assert_eq!(
+            tracker.classify_and_reanchor(0, 480),
+            PositionTransition::FirstPacketAnchor
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(960, 480),
+            PositionTransition::ForwardGap
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(1440, 480),
+            PositionTransition::Contiguous
+        );
     }
 
     #[test]
     fn position_tracker_detects_position_reset() {
         let mut tracker = PositionTracker::default();
-        assert!(!tracker.check(100_000, 480));
-        // A stop/start that resets the device epoch reports as a
-        // discontinuity — the honest epoch boundary.
-        assert!(tracker.check(0, 480));
-        assert!(!tracker.check(480, 480));
+        assert_eq!(
+            tracker.classify_and_reanchor(100_000, 480),
+            PositionTransition::FirstPacketAnchor
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(0, 480),
+            PositionTransition::BackwardJumpOrReset
+        );
+        assert_eq!(
+            tracker.classify_and_reanchor(480, 480),
+            PositionTransition::Contiguous
+        );
     }
 
     #[test]
     fn position_tracker_saturates_at_u64_max() {
         let mut tracker = PositionTracker::default();
-        assert!(!tracker.check(u64::MAX - 10, 20));
+        assert_eq!(
+            tracker.classify_and_reanchor(u64::MAX - 10, 20),
+            PositionTransition::FirstPacketAnchor
+        );
         // expected saturates at u64::MAX; a real device never reaches
         // this, but the arithmetic must not wrap.
-        assert!(tracker.check(0, 1));
+        assert_eq!(
+            tracker.classify_and_reanchor(0, 1),
+            PositionTransition::BackwardJumpOrReset
+        );
     }
 
     #[test]
@@ -1588,68 +1705,180 @@ mod tests {
         );
     }
 
-    /// Discontinuity reporting: the backend flag (guarded) or a
-    /// tracker jump emits `ClockDiscontinuity` *before* the packet is
-    /// still delivered at its real position.
     #[test]
-    fn handle_packet_reports_discontinuity_and_still_delivers() {
-        let infos = Arc::new(Mutex::new(Vec::new()));
-        let infos_cb = infos.clone();
-        let mut state = InputCallbackState::new(
-            Box::new(
-                move |_view: ruviform_audio_core::AudioBufferView<'_, f32>,
-                      info: InputCallbackInfo| {
-                    infos_cb.lock().unwrap().push(info);
-                },
-            ),
-            vec![0.0; 32],
-            2,
-            8,
-            48_000,
-            ClockDomainId::MONOTONIC,
-            TimestampProvenance::Carried,
-        );
-        let mut tracker = PositionTracker::default();
-        let errors = Arc::new(Mutex::new(Vec::new()));
-        let errors_cb = errors.clone();
-        let mut error_callback: InputErrorCallback =
-            Box::new(move |e: DeviceError| errors_cb.lock().unwrap().push(e));
+    fn handle_packet_first_packet_anchors_without_tracker_errors() {
+        let mut harness = PacketHarness::new();
         let data = [0.0_f32; 16];
-        let callback = StreamInstant::new(1, 0);
 
-        // Packet 1 anchors at position 0 (first packet — flag guard
-        // suppresses even a set flag).
-        handle_packet(
-            &mut state,
-            &mut tracker,
-            &mut error_callback,
-            &data,
-            8,
-            0,
-            0,
-            callback,
-            DISCONTINUITY_FLAG,
-        );
-        // Packet 2 jumps: expected 8, got 64 — tracker discontinuity.
-        handle_packet(
-            &mut state,
-            &mut tracker,
-            &mut error_callback,
-            &data,
-            8,
-            64,
-            0,
-            callback,
-            0,
-        );
+        harness.packet(&data, 8, 4096, 0);
 
-        let reported = errors.lock().unwrap();
-        assert_eq!(reported.as_slice(), &[DeviceError::ClockDiscontinuity]);
-        // Both packets were still delivered with their real positions.
-        let captured = infos.lock().unwrap();
-        assert_eq!(captured.len(), 2);
-        assert_eq!(captured[0].frame_position, Some(0));
-        assert_eq!(captured[1].frame_position, Some(64));
+        let events = harness.events();
+        assert_eq!(events.as_slice(), &[PacketEvent::Delivered(8, Some(4096))]);
+    }
+
+    #[test]
+    fn handle_packet_first_packet_zero_position_suppresses_undefined_flag() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 0, DISCONTINUITY_FLAG);
+
+        let events = harness.events();
+        assert_eq!(events.as_slice(), &[PacketEvent::Delivered(8, Some(0))]);
+    }
+
+    #[test]
+    fn handle_packet_first_packet_nonzero_flag_reports_clock_without_xrun() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 4096, DISCONTINUITY_FLAG);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(4096)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_contiguous_packets_emit_no_errors() {
+        let mut harness = PacketHarness::new();
+        let data = [0.25_f32; 16];
+
+        harness.packet(&data, 8, 0, 0);
+        harness.packet(&data, 8, 8, 0);
+        harness.packet(&data, 8, 16, 0);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(0)),
+                PacketEvent::Delivered(8, Some(8)),
+                PacketEvent::Delivered(8, Some(16)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_forward_gap_reports_xrun_then_clock_and_resyncs() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 0, 0);
+        harness.packet(&data, 8, 64, 0);
+        harness.packet(&data, 8, 72, 0);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(0)),
+                PacketEvent::Error(DeviceError::Xrun),
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(64)),
+                PacketEvent::Delivered(8, Some(72)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_forward_gap_with_flag_does_not_duplicate_clock_discontinuity() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 0, 0);
+        harness.packet(&data, 8, 64, DISCONTINUITY_FLAG);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(0)),
+                PacketEvent::Error(DeviceError::Xrun),
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(64)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_flag_only_discontinuity_reports_clock_without_xrun() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 8, 0);
+        harness.packet(&data, 8, 16, DISCONTINUITY_FLAG);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(8)),
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(16)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_backward_jump_with_flag_reports_one_clock_without_xrun() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 1000, 0);
+        harness.packet(&data, 8, 500, DISCONTINUITY_FLAG);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(1000)),
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(500)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_position_reset_reports_clock_without_xrun() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 1000, 0);
+        harness.packet(&data, 8, 0, 0);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(1000)),
+                PacketEvent::Error(DeviceError::ClockDiscontinuity),
+                PacketEvent::Delivered(8, Some(0)),
+            ]
+        );
+    }
+
+    #[test]
+    fn handle_packet_zero_pcm_with_contiguous_positions_emits_no_errors() {
+        let mut harness = PacketHarness::new();
+        let data = [0.0_f32; 16];
+
+        harness.packet(&data, 8, 0, 0);
+        harness.packet(&data, 8, 8, 0);
+
+        let events = harness.events();
+        assert_eq!(
+            events.as_slice(),
+            &[
+                PacketEvent::Delivered(8, Some(0)),
+                PacketEvent::Delivered(8, Some(8)),
+            ]
+        );
     }
 
     /// `qpc_position == 0` surfaces as `capture: None` — the backend's
@@ -1693,15 +1922,17 @@ mod tests {
     }
 
     /// RT-lane check: the whole packet→info→`read_interleaved` path —
-    /// tracker check, timestamp build, `InputCallbackInfo` construction
-    /// and planar delivery — must not allocate. Mirrors the `rt_`
-    /// prefix convention selected by `mise run test-rt`; this module
-    /// only compiles on Windows so the lane evidence is a local
-    /// Windows `cargo test` run.
+    /// tracker classification, forward-gap error emission, timestamp build,
+    /// `InputCallbackInfo` construction and planar delivery — must not
+    /// allocate. Mirrors the `rt_` prefix convention selected by
+    /// `mise run test-rt`; this module only compiles on Windows so the
+    /// lane evidence is a local Windows `cargo test` run.
     #[test]
     fn rt_wasapi_packet_path_allocates_nothing() {
         let frames_seen = Arc::new(AtomicU64::new(0));
         let frames_cb = frames_seen.clone();
+        let errors_seen = Arc::new(AtomicU64::new(0));
+        let errors_cb = errors_seen.clone();
         let mut state = InputCallbackState::new(
             Box::new(
                 move |view: ruviform_audio_core::AudioBufferView<'_, f32>,
@@ -1717,7 +1948,9 @@ mod tests {
             TimestampProvenance::Carried,
         );
         let mut tracker = PositionTracker::default();
-        let mut errors = test_error_callback();
+        let mut errors: InputErrorCallback = Box::new(move |_error: DeviceError| {
+            errors_cb.fetch_add(1, Ordering::Relaxed);
+        });
         let data = vec![0.1_f32; 32]; // 16 frames × 2ch
         let callback = StreamInstant::new(42, 0);
 
@@ -1733,9 +1966,21 @@ mod tests {
                 callback,
                 0,
             );
+            handle_packet(
+                &mut state,
+                &mut tracker,
+                &mut errors,
+                &data,
+                16,
+                4096,
+                10_000_000,
+                callback,
+                0,
+            );
         });
-        assert_eq!(frames_seen.load(Ordering::Relaxed), 16);
-        assert_eq!(tracker.expected, Some(1040));
+        assert_eq!(frames_seen.load(Ordering::Relaxed), 32);
+        assert_eq!(errors_seen.load(Ordering::Relaxed), 2);
+        assert_eq!(tracker.expected, Some(4112));
     }
 
     /// Sanity: `InputTimestamp`/`MediaTimestamp` imports used above
