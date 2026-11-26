@@ -174,6 +174,12 @@ struct Probe {
     in_latency_count: AtomicU64,
     in_position_some: AtomicUsize,
     in_position_gaps: AtomicUsize,
+    in_forward_position_gaps: AtomicUsize,
+    in_backward_position_jumps: AtomicUsize,
+    in_max_forward_gap_frames: AtomicU64,
+    in_first_forward_gap_cb: AtomicU64,
+    in_stall_last_callback_ns: AtomicI64,
+    in_max_callback_stall_ms: AtomicU64,
     in_first_position: AtomicU64,
     in_last_position: AtomicU64,
     in_expected_position: AtomicU64,
@@ -183,6 +189,10 @@ struct Probe {
     in_xruns: AtomicUsize,
     in_discontinuities: AtomicUsize,
     in_invalidated: AtomicUsize,
+    in_backend_errors: AtomicUsize,
+    in_zero_run_current: AtomicUsize,
+    in_nonzero_sample_seen: AtomicUsize,
+    in_sample_gap_detected: AtomicUsize,
     in_last_error_kind: AtomicUsize,
     // output direction
     out_callbacks: AtomicUsize,
@@ -207,6 +217,7 @@ struct Probe {
     out_errors: AtomicUsize,
     out_xruns: AtomicUsize,
     out_invalidated: AtomicUsize,
+    out_backend_errors: AtomicUsize,
     out_last_error_kind: AtomicUsize,
     /// Absolute render-frame cursor — advanced once per callback by
     /// the delivered frame count so [`signal_sample`] sees a
@@ -239,6 +250,8 @@ impl Probe {
             in_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             in_latency_min_ns: AtomicI64::new(i64::MAX),
             in_latency_max_ns: AtomicI64::new(i64::MIN),
+            in_first_forward_gap_cb: AtomicU64::new(u64::MAX),
+            in_stall_last_callback_ns: AtomicI64::new(i64::MIN),
             in_first_position: AtomicU64::new(u64::MAX),
             in_expected_position: AtomicU64::new(u64::MAX),
             out_min_frames: AtomicUsize::new(usize::MAX),
@@ -888,6 +901,985 @@ fn virtual_audio_permission_denial_fault() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// rf#1009 deterministic xrun harness
+//
+// The controller owns registry mutation. These tests only select the Ruviform
+// cable pair, open streams after the static-registry snapshot boundary,
+// observe adapter-visible facts, and emit machine-readable JSON. The oracle
+// evaluation is factored into pure functions so the schema and verdict rules
+// are executable on hosts with no provisioned endpoint.
+// ---------------------------------------------------------------------------
+
+const XRUN_ENV_CASE: &str = "RUVIFORM_RF1009_XRUN_CASE";
+const XRUN_ENV_RESULT_FILE: &str = "RUVIFORM_RF1009_XRUN_RESULT_FILE";
+const XRUN_ENV_SCENARIO: &str = "RUVIFORM_RF1009_INJECTION_SCENARIO";
+const XRUN_ENV_START_PACKET: &str = "RUVIFORM_RF1009_INJECTION_START_PACKET";
+const XRUN_ENV_PACKET_COUNT: &str = "RUVIFORM_RF1009_INJECTION_PACKET_COUNT";
+const XRUN_POSITIVE_CASE: &str = "capture-overflow-drop-input";
+const XRUN_NEGATIVE_CASE: &str = "capture-content-gap-input-negative";
+const XRUN_OBSERVATION_SCHEMA: &str = "rf1009-xrun-observation/v1";
+const XRUN_CONTROL_SURFACE: &str = "static-registry-stream-snapshot";
+const XRUN_NOTIFICATION_MS: u64 = 10;
+const XRUN_MIN_MEASUREMENT_MS: u64 = 3_000;
+const XRUN_POST_INJECTION_MS: u64 = 1_500;
+const XRUN_ZERO_RUN_MIN_FRAMES: usize = 64;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum XrunCaseVerdict {
+    Pass,
+    Fail,
+    NotRun,
+}
+
+impl XrunCaseVerdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "Pass",
+            Self::Fail => "Fail",
+            Self::NotRun => "NotRun",
+        }
+    }
+}
+
+/// Setup failures are prerequisites for measurement, never oracle failures.
+/// Keeping the classification in one place prevents an absent endpoint or an
+/// unapplied registry scenario from being promoted to Pass/Fail evidence.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum XrunSetupFailure {
+    HostBackendUnavailable,
+    EndpointMissing,
+    EndpointAmbiguous,
+    RegistryNotApplied,
+    StreamOpenOrStartFailed,
+}
+
+fn xrun_setup_failure_verdict(_failure: XrunSetupFailure) -> XrunCaseVerdict {
+    XrunCaseVerdict::NotRun
+}
+
+struct XrunSetupError {
+    failure: XrunSetupFailure,
+    detail: String,
+}
+
+impl XrunSetupError {
+    fn new(failure: XrunSetupFailure, detail: impl Into<String>) -> Self {
+        Self {
+            failure,
+            detail: detail.into(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct XrunInjectionConfig {
+    scenario_name: &'static str,
+    start_packet: u32,
+    packet_count: u32,
+}
+
+fn xrun_scenario_metadata(case: &str) -> Option<(u32, &'static str)> {
+    match case {
+        XRUN_POSITIVE_CASE => Some((1, "capture-overflow-drop")),
+        XRUN_NEGATIVE_CASE => Some((2, "capture-content-gap")),
+        _ => None,
+    }
+}
+
+fn xrun_armed_case() -> Option<String> {
+    std::env::var(XRUN_ENV_CASE)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+fn xrun_parse_injection(case: &str) -> Result<XrunInjectionConfig, String> {
+    let Some((expected_scenario, scenario_name)) = xrun_scenario_metadata(case) else {
+        return Err(format!("unknown-case:{case}"));
+    };
+    let scenario = std::env::var(XRUN_ENV_SCENARIO)
+        .map_err(|_| format!("missing-env:{XRUN_ENV_SCENARIO}"))?
+        .parse::<u32>()
+        .map_err(|_| "invalid-scenario-value".to_owned())?;
+    let start_packet = std::env::var(XRUN_ENV_START_PACKET)
+        .map_err(|_| format!("missing-env:{XRUN_ENV_START_PACKET}"))?
+        .parse::<u32>()
+        .map_err(|_| "invalid-start-packet-value".to_owned())?;
+    let packet_count = std::env::var(XRUN_ENV_PACKET_COUNT)
+        .map_err(|_| format!("missing-env:{XRUN_ENV_PACKET_COUNT}"))?
+        .parse::<u32>()
+        .map_err(|_| "invalid-packet-count-value".to_owned())?;
+    if scenario != expected_scenario {
+        return Err(format!(
+            "scenario-mismatch:case={case} expected={expected_scenario} actual={scenario}"
+        ));
+    }
+    if start_packet > 4_096 {
+        return Err(format!("start-packet-out-of-range:{start_packet}"));
+    }
+    if !(1..=16).contains(&packet_count) {
+        return Err(format!("packet-count-out-of-range:{packet_count}"));
+    }
+    Ok(XrunInjectionConfig {
+        scenario_name,
+        start_packet,
+        packet_count,
+    })
+}
+
+/// Oracle counters plus the control-thread continuity facts needed by the
+/// positive/negative verdicts. Only the schema counters are serialized;
+/// continuity bits remain harness-internal inputs to the oracle.
+const XRUN_INPUT_BEFORE_INJECTION: u8 = 1 << 0;
+const XRUN_INPUT_RESUMED_AFTER_INJECTION: u8 = 1 << 1;
+const XRUN_INPUT_CALLBACKS_CONTINUED: u8 = 1 << 2;
+const XRUN_OUTPUT_CALLBACKS_CONTINUED: u8 = 1 << 3;
+const XRUN_CONTINUITY_ALL: u8 = XRUN_INPUT_BEFORE_INJECTION
+    | XRUN_INPUT_RESUMED_AFTER_INJECTION
+    | XRUN_INPUT_CALLBACKS_CONTINUED
+    | XRUN_OUTPUT_CALLBACKS_CONTINUED;
+
+#[derive(Clone, Debug, Default)]
+struct XrunOracleObservation {
+    typed_xruns: usize,
+    clock_discontinuities: usize,
+    stream_invalidated: usize,
+    backend_errors: usize,
+    input_callbacks: usize,
+    output_callbacks: usize,
+    forward_frame_position_gaps: usize,
+    max_forward_gap_frames: u64,
+    sample_gap_detected: bool,
+    max_callback_stall_ms: u64,
+    continuity_mask: u8,
+}
+
+fn continuity_bit(enabled: bool, bit: u8) -> u8 {
+    if enabled { bit } else { 0 }
+}
+
+impl XrunOracleObservation {
+    fn from_probe(
+        probe: &Probe,
+        midpoint_input_callbacks: usize,
+        midpoint_output_callbacks: usize,
+    ) -> Self {
+        let input_callbacks = probe.in_callbacks.load(Ordering::Relaxed);
+        let output_callbacks = probe.out_callbacks.load(Ordering::Relaxed);
+        let first_forward_gap = match probe.in_first_forward_gap_cb.load(Ordering::Relaxed) {
+            u64::MAX => None,
+            index => Some(index),
+        };
+        let final_input_callback_index = input_callbacks as u64;
+        let sample_gap_detected = probe.in_sample_gap_detected.load(Ordering::Relaxed) != 0;
+        Self {
+            typed_xruns: probe.in_xruns.load(Ordering::Relaxed),
+            clock_discontinuities: probe.in_discontinuities.load(Ordering::Relaxed),
+            stream_invalidated: probe.in_invalidated.load(Ordering::Relaxed)
+                + probe.out_invalidated.load(Ordering::Relaxed),
+            backend_errors: probe.in_backend_errors.load(Ordering::Relaxed)
+                + probe.out_backend_errors.load(Ordering::Relaxed),
+            input_callbacks,
+            output_callbacks,
+            forward_frame_position_gaps: probe.in_forward_position_gaps.load(Ordering::Relaxed),
+            max_forward_gap_frames: probe.in_max_forward_gap_frames.load(Ordering::Relaxed),
+            sample_gap_detected,
+            max_callback_stall_ms: probe.in_max_callback_stall_ms.load(Ordering::Relaxed),
+            continuity_mask: continuity_bit(
+                first_forward_gap.is_some_and(|index| index > 0),
+                XRUN_INPUT_BEFORE_INJECTION,
+            ) | continuity_bit(
+                first_forward_gap.is_some_and(|index| final_input_callback_index > index + 1),
+                XRUN_INPUT_RESUMED_AFTER_INJECTION,
+            ) | continuity_bit(
+                input_callbacks > midpoint_input_callbacks,
+                XRUN_INPUT_CALLBACKS_CONTINUED,
+            ) | continuity_bit(
+                output_callbacks > midpoint_output_callbacks,
+                XRUN_OUTPUT_CALLBACKS_CONTINUED,
+            ),
+        }
+    }
+}
+
+fn evaluate_positive_xrun(observation: &XrunOracleObservation) -> (XrunCaseVerdict, String) {
+    let mut failures = Vec::new();
+    if observation.typed_xruns == 0 {
+        failures.push("typed-xrun-missing");
+    }
+    if observation.clock_discontinuities == 0 {
+        failures.push("clock-discontinuity-missing");
+    }
+    if observation.forward_frame_position_gaps == 0 {
+        failures.push("forward-frame-position-gap-missing");
+    }
+    if observation.max_forward_gap_frames == 0 {
+        failures.push("max-forward-gap-zero");
+    }
+    if observation.stream_invalidated > 0 {
+        failures.push("stream-invalidated");
+    }
+    if observation.backend_errors > 0 {
+        failures.push("unexpected-backend-error");
+    }
+    if observation.input_callbacks == 0 {
+        failures.push("input-callbacks-missing");
+    }
+    if observation.output_callbacks == 0 {
+        failures.push("output-callbacks-missing");
+    }
+    if observation.continuity_mask & XRUN_INPUT_BEFORE_INJECTION == 0 {
+        failures.push("input-callbacks-did-not-progress-before-injection");
+    }
+    if observation.continuity_mask & XRUN_INPUT_RESUMED_AFTER_INJECTION == 0 {
+        failures.push("input-callbacks-did-not-resume-after-injection");
+    }
+    if observation.continuity_mask & XRUN_OUTPUT_CALLBACKS_CONTINUED == 0 {
+        failures.push("output-callbacks-did-not-continue");
+    }
+    if failures.is_empty() {
+        (
+            XrunCaseVerdict::Pass,
+            "typed-xrun+clock-discontinuity+forward-gap+callback-resume".to_owned(),
+        )
+    } else {
+        (
+            XrunCaseVerdict::Fail,
+            format!("positive-oracle-not-met:{}", failures.join(";")),
+        )
+    }
+}
+
+fn evaluate_negative_xrun(observation: &XrunOracleObservation) -> (XrunCaseVerdict, String) {
+    let mut failures = Vec::new();
+    if !observation.sample_gap_detected {
+        failures.push("sample-gap-missing");
+    }
+    if observation.typed_xruns > 0 {
+        failures.push("typed-xrun-false-positive");
+    }
+    if observation.clock_discontinuities > 0 {
+        failures.push("clock-discontinuity-false-positive");
+    }
+    if observation.forward_frame_position_gaps > 0 {
+        failures.push("forward-frame-position-gap-false-positive");
+    }
+    if observation.stream_invalidated > 0 {
+        failures.push("stream-invalidated");
+    }
+    if observation.backend_errors > 0 {
+        failures.push("unexpected-backend-error");
+    }
+    if observation.input_callbacks == 0
+        || observation.continuity_mask & XRUN_INPUT_CALLBACKS_CONTINUED == 0
+    {
+        failures.push("input-callbacks-did-not-continue");
+    }
+    if observation.output_callbacks == 0
+        || observation.continuity_mask & XRUN_OUTPUT_CALLBACKS_CONTINUED == 0
+    {
+        failures.push("output-callbacks-did-not-continue");
+    }
+    if failures.is_empty() {
+        (
+            XrunCaseVerdict::Pass,
+            "sample-gap-without-typed-xrun-or-discontinuity".to_owned(),
+        )
+    } else {
+        (
+            XrunCaseVerdict::Fail,
+            format!("negative-control-oracle-not-met:{}", failures.join(";")),
+        )
+    }
+}
+
+fn detect_interior_zero_run(samples: &[f32], minimum_run: usize) -> bool {
+    let mut run_start = 0_usize;
+    let mut run_len = 0_usize;
+    for (index, &sample) in samples.iter().enumerate() {
+        if sample == 0.0 {
+            if run_len == 0 {
+                run_start = index;
+            }
+            run_len += 1;
+        } else {
+            if run_len >= minimum_run && run_start > 0 {
+                return true;
+            }
+            run_len = 0;
+        }
+    }
+    false
+}
+
+fn xrun_measurement_duration_ms(config: XrunInjectionConfig) -> u64 {
+    let injection_end_ms =
+        (u64::from(config.start_packet) + u64::from(config.packet_count)) * XRUN_NOTIFICATION_MS;
+    injection_end_ms
+        .saturating_add(XRUN_POST_INJECTION_MS)
+        .max(XRUN_MIN_MEASUREMENT_MS)
+}
+
+fn json_escape_into(input: &str, output: &mut String) {
+    use std::fmt::Write as _;
+
+    for character in input.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            '\u{08}' => output.push_str("\\b"),
+            '\u{0c}' => output.push_str("\\f"),
+            c if c < '\u{20}' => {
+                let _ = write!(output, "\\u{:04x}", u32::from(c));
+            }
+            c => output.push(c),
+        }
+    }
+}
+
+fn json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    json_escape_into(value, &mut escaped);
+    escaped.push('"');
+    escaped
+}
+
+fn json_field_string(key: &str, value: &str) -> String {
+    format!("{}:{}", json_string(key), json_string(value))
+}
+
+fn json_field_bool(key: &str, value: bool) -> String {
+    format!(
+        "{}:{}",
+        json_string(key),
+        if value { "true" } else { "false" }
+    )
+}
+
+fn json_field_number<T: std::fmt::Display>(key: &str, value: T) -> String {
+    format!("{}:{}", json_string(key), value)
+}
+
+fn json_object(fields: &[String]) -> String {
+    format!("{{{}}}", fields.join(","))
+}
+
+struct XrunHarnessOutput {
+    case: String,
+    verdict: XrunCaseVerdict,
+    detail: String,
+    render_name: String,
+    capture_name: String,
+    capture_instance_id: String,
+    injection_scenario: String,
+    injection_start_packet: u32,
+    injection_packet_count: u32,
+    injection_armed: bool,
+    oracle: XrunOracleObservation,
+}
+
+fn xrun_injection_output_values(case: &str) -> (String, u32, u32) {
+    let scenario_name = xrun_scenario_metadata(case)
+        .map_or("unknown", |(_, scenario_name)| scenario_name)
+        .to_owned();
+    let start_packet = std::env::var(XRUN_ENV_START_PACKET)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(0);
+    let packet_count = std::env::var(XRUN_ENV_PACKET_COUNT)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(0);
+    (scenario_name, start_packet, packet_count)
+}
+
+fn xrun_output_shell(
+    case: &str,
+    verdict: XrunCaseVerdict,
+    detail: impl Into<String>,
+) -> XrunHarnessOutput {
+    let (scenario, start_packet, packet_count) = xrun_injection_output_values(case);
+    XrunHarnessOutput {
+        case: case.to_owned(),
+        verdict,
+        detail: detail.into(),
+        render_name: String::new(),
+        capture_name: String::new(),
+        capture_instance_id: String::new(),
+        injection_scenario: scenario,
+        injection_start_packet: start_packet,
+        injection_packet_count: packet_count,
+        injection_armed: xrun_armed_case().is_some(),
+        oracle: XrunOracleObservation::default(),
+    }
+}
+
+fn xrun_observation_json(output: &XrunHarnessOutput) -> String {
+    let case = json_object(&[
+        json_field_string("name", &output.case),
+        json_field_string("direction", "input"),
+        json_field_string("result", output.verdict.as_str()),
+        json_field_string("detail", &output.detail),
+    ]);
+    let endpoint = json_object(&[
+        json_field_string("render_name", &output.render_name),
+        json_field_string("capture_name", &output.capture_name),
+        json_field_string("capture_instance_id", &output.capture_instance_id),
+        json_field_string("target_pin", "loopback-capture"),
+    ]);
+    let injection = json_object(&[
+        json_field_string("control_surface", XRUN_CONTROL_SURFACE),
+        json_field_string("scenario", &output.injection_scenario),
+        json_field_number("start_packet", output.injection_start_packet),
+        json_field_number("packet_count", output.injection_packet_count),
+        json_field_bool("armed", output.injection_armed),
+    ]);
+    let oracle = json_object(&[
+        json_field_number("typed_xruns", output.oracle.typed_xruns),
+        json_field_number("clock_discontinuities", output.oracle.clock_discontinuities),
+        json_field_number("stream_invalidated", output.oracle.stream_invalidated),
+        json_field_number("backend_errors", output.oracle.backend_errors),
+        json_field_number("input_callbacks", output.oracle.input_callbacks),
+        json_field_number("output_callbacks", output.oracle.output_callbacks),
+        json_field_number(
+            "forward_frame_position_gaps",
+            output.oracle.forward_frame_position_gaps,
+        ),
+        json_field_number(
+            "max_forward_gap_frames",
+            output.oracle.max_forward_gap_frames,
+        ),
+        json_field_bool("sample_gap_detected", output.oracle.sample_gap_detected),
+        json_field_number("max_callback_stall_ms", output.oracle.max_callback_stall_ms),
+    ]);
+    json_object(&[
+        json_field_string("schema", XRUN_OBSERVATION_SCHEMA),
+        format!("{}:{}", json_string("case"), case),
+        format!("{}:{}", json_string("endpoint"), endpoint),
+        format!("{}:{}", json_string("injection"), injection),
+        format!("{}:{}", json_string("oracle"), oracle),
+    ])
+}
+
+fn emit_xrun_observation(output: &XrunHarnessOutput) {
+    let json = xrun_observation_json(output);
+    println!("rf1009_xrun_observation: {json}");
+    if let Ok(path) = std::env::var(XRUN_ENV_RESULT_FILE)
+        && let Err(error) = fs::write(&path, format!("{json}\n"))
+    {
+        eprintln!("rf1009_xrun_result_write_error: path={path} error={error}");
+    }
+}
+
+fn finish_xrun_setup_failure(
+    mut output: XrunHarnessOutput,
+    failure: XrunSetupFailure,
+    detail: impl Into<String>,
+) {
+    output.verdict = xrun_setup_failure_verdict(failure);
+    output.detail = detail.into();
+    emit_xrun_observation(&output);
+}
+
+const XRUN_RENDER_ENDPOINT_NAME: &str = "Ruviform Cable Input (Ruviform Virtual Audio Device)";
+const XRUN_CAPTURE_ENDPOINT_NAME: &str = "Ruviform Cable Output (Ruviform Virtual Audio Device)";
+const XRUN_ENDPOINT_STEM: &str = "ruviform cable ruviform virtual audio device";
+
+fn matches_ruviform_endpoint(name: &str, stem: Option<&str>, expected_name: &str) -> bool {
+    name.eq_ignore_ascii_case(expected_name) && stem == Some(XRUN_ENDPOINT_STEM)
+}
+
+fn is_ruviform_render_candidate(candidate: &EndpointCandidate) -> bool {
+    matches_ruviform_endpoint(
+        &candidate.name,
+        candidate.stem.as_deref(),
+        XRUN_RENDER_ENDPOINT_NAME,
+    )
+}
+
+fn is_ruviform_capture_candidate(candidate: &EndpointCandidate) -> bool {
+    matches_ruviform_endpoint(
+        &candidate.name,
+        candidate.stem.as_deref(),
+        XRUN_CAPTURE_ENDPOINT_NAME,
+    )
+}
+
+fn select_xrun_pair(host: &Host) -> Result<Pair, XrunSetupError> {
+    let renders = enumerate_devices(host, Direction::Render).map_err(|reason| {
+        XrunSetupError::new(
+            XrunSetupFailure::HostBackendUnavailable,
+            format!("render-enumeration-failed:{reason}"),
+        )
+    })?;
+    let captures = enumerate_devices(host, Direction::Capture).map_err(|reason| {
+        XrunSetupError::new(
+            XrunSetupFailure::HostBackendUnavailable,
+            format!("capture-enumeration-failed:{reason}"),
+        )
+    })?;
+    let mut render_matches: Vec<_> = renders
+        .into_iter()
+        .filter(is_ruviform_render_candidate)
+        .collect();
+    let mut capture_matches: Vec<_> = captures
+        .into_iter()
+        .filter(is_ruviform_capture_candidate)
+        .collect();
+    if capture_matches.is_empty() {
+        return Err(XrunSetupError::new(
+            XrunSetupFailure::EndpointMissing,
+            "ruviform-cable-output-capture-candidate-missing",
+        ));
+    }
+    if capture_matches.len() > 1 {
+        return Err(XrunSetupError::new(
+            XrunSetupFailure::EndpointAmbiguous,
+            format!(
+                "ruviform-cable-output-capture-candidates={}",
+                capture_matches.len()
+            ),
+        ));
+    }
+    if render_matches.is_empty() {
+        return Err(XrunSetupError::new(
+            XrunSetupFailure::EndpointMissing,
+            "ruviform-cable-input-render-candidate-missing",
+        ));
+    }
+    if render_matches.len() > 1 {
+        return Err(XrunSetupError::new(
+            XrunSetupFailure::EndpointAmbiguous,
+            format!(
+                "ruviform-cable-input-render-candidates={}",
+                render_matches.len()
+            ),
+        ));
+    }
+    let capture = capture_matches.pop().expect("capture match count checked");
+    let render = render_matches.pop().expect("render match count checked");
+    Ok(Pair { render, capture })
+}
+
+#[expect(clippy::too_many_lines)]
+fn run_rf1009_xrun_case(case: &str) {
+    spawn_watchdog();
+    let armed_case = xrun_armed_case();
+    if armed_case.as_deref() != Some(case) {
+        let detail = if armed_case.is_none() {
+            "inactive-controller-not-armed"
+        } else {
+            "inactive-case-not-selected"
+        };
+        emit_xrun_observation(&xrun_output_shell(case, XrunCaseVerdict::NotRun, detail));
+        return;
+    }
+
+    let config = match xrun_parse_injection(case) {
+        Ok(config) => config,
+        Err(detail) => {
+            finish_xrun_setup_failure(
+                xrun_output_shell(case, XrunCaseVerdict::NotRun, "registry-not-applied"),
+                XrunSetupFailure::RegistryNotApplied,
+                format!("registry-not-applied:{detail}"),
+            );
+            return;
+        }
+    };
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            finish_xrun_setup_failure(
+                xrun_output_shell(case, XrunCaseVerdict::NotRun, "host-unavailable"),
+                XrunSetupFailure::HostBackendUnavailable,
+                format!("host-unavailable:{error}"),
+            );
+            return;
+        }
+    };
+    let pair = match select_xrun_pair(&host) {
+        Ok(pair) => pair,
+        Err(error) => {
+            finish_xrun_setup_failure(
+                xrun_output_shell(case, XrunCaseVerdict::NotRun, "endpoint-selection-notrun"),
+                error.failure,
+                error.detail,
+            );
+            return;
+        }
+    };
+
+    let mut output = xrun_output_shell(case, XrunCaseVerdict::NotRun, "measurement-not-complete");
+    config
+        .scenario_name
+        .clone_into(&mut output.injection_scenario);
+    output.injection_start_packet = config.start_packet;
+    output.injection_packet_count = config.packet_count;
+    output.render_name.clone_from(&pair.render.name);
+    output.capture_name.clone_from(&pair.capture.name);
+    output.capture_instance_id.clone_from(&pair.capture.id);
+
+    let Some(in_format) = pair.capture.format else {
+        finish_xrun_setup_failure(
+            output,
+            XrunSetupFailure::EndpointMissing,
+            "capture-endpoint-has-no-f32-input-format",
+        );
+        return;
+    };
+    let Some(out_format) = pair.render.format else {
+        finish_xrun_setup_failure(
+            output,
+            XrunSetupFailure::EndpointMissing,
+            "render-endpoint-has-no-f32-output-format",
+        );
+        return;
+    };
+
+    let probe = Arc::new(Probe::new(&in_format, &out_format));
+    let in_stream = match open_input_with_fallback(pair.capture.device.as_ref(), in_format, &probe)
+    {
+        Ok(stream) => stream,
+        Err(error) => {
+            finish_xrun_setup_failure(
+                output,
+                XrunSetupFailure::StreamOpenOrStartFailed,
+                format!("input-open-failed:{error}"),
+            );
+            return;
+        }
+    };
+    let out_stream = match open_output_with_fallback(
+        pair.render.device.as_ref(),
+        out_format,
+        &probe,
+        out_format.sample_rate.get(),
+    ) {
+        Ok(stream) => stream,
+        Err(error) => {
+            drop(in_stream);
+            finish_xrun_setup_failure(
+                output,
+                XrunSetupFailure::StreamOpenOrStartFailed,
+                format!("output-open-failed:{error}"),
+            );
+            return;
+        }
+    };
+    if let Err(error) = in_stream.start() {
+        drop(in_stream);
+        drop(out_stream);
+        finish_xrun_setup_failure(
+            output,
+            XrunSetupFailure::StreamOpenOrStartFailed,
+            format!("input-start-failed:{error}"),
+        );
+        return;
+    }
+    if let Err(error) = out_stream.start() {
+        let _ = in_stream.stop();
+        drop(in_stream);
+        drop(out_stream);
+        finish_xrun_setup_failure(
+            output,
+            XrunSetupFailure::StreamOpenOrStartFailed,
+            format!("output-start-failed:{error}"),
+        );
+        return;
+    }
+
+    let measurement_ms = xrun_measurement_duration_ms(config);
+    let first_half_ms = measurement_ms / 2;
+    thread::sleep(Duration::from_millis(first_half_ms));
+    let midpoint_input_callbacks = probe.in_callbacks.load(Ordering::Relaxed);
+    let midpoint_output_callbacks = probe.out_callbacks.load(Ordering::Relaxed);
+    thread::sleep(Duration::from_millis(measurement_ms - first_half_ms));
+
+    let mut control_errors = Vec::new();
+    if let Err(error) = in_stream.stop() {
+        control_errors.push(format!("input-stop:{error}"));
+    }
+    if let Err(error) = out_stream.stop() {
+        control_errors.push(format!("output-stop:{error}"));
+    }
+    drop(in_stream);
+    drop(out_stream);
+
+    output.oracle = XrunOracleObservation::from_probe(
+        &probe,
+        midpoint_input_callbacks,
+        midpoint_output_callbacks,
+    );
+    let (verdict, detail) = if case == XRUN_POSITIVE_CASE {
+        evaluate_positive_xrun(&output.oracle)
+    } else {
+        evaluate_negative_xrun(&output.oracle)
+    };
+    output.verdict = verdict;
+    output.detail = detail;
+    if !control_errors.is_empty() {
+        output.verdict = XrunCaseVerdict::Fail;
+        output.detail = format!(
+            "stream-close-control-error:{}; original={}",
+            control_errors.join(";"),
+            output.detail
+        );
+    }
+    emit_xrun_observation(&output);
+}
+
+/// Deterministic positive case for rf#1009. The controller writes registry
+/// scenario 1 before launching this process; this test never writes registry
+/// state itself.
+#[test]
+#[ignore = "requires the rf1009 xrun controller and a provisioned Ruviform cable endpoint"]
+fn virtual_audio_xrun_capture_overflow_drop_input() {
+    run_rf1009_xrun_case(XRUN_POSITIVE_CASE);
+}
+
+/// Negative control: capture PCM is zero-filled without packet/position loss.
+/// A typed xrun or discontinuity here is adapter/harness false-positive evidence.
+#[test]
+#[ignore = "requires the rf1009 xrun controller and a provisioned Ruviform cable endpoint"]
+fn virtual_audio_xrun_capture_content_gap_input_negative() {
+    run_rf1009_xrun_case(XRUN_NEGATIVE_CASE);
+}
+
+fn xrun_positive_observation() -> XrunOracleObservation {
+    XrunOracleObservation {
+        typed_xruns: 1,
+        clock_discontinuities: 1,
+        stream_invalidated: 0,
+        backend_errors: 0,
+        input_callbacks: 200,
+        output_callbacks: 200,
+        forward_frame_position_gaps: 1,
+        max_forward_gap_frames: 960,
+        sample_gap_detected: false,
+        max_callback_stall_ms: 40,
+        continuity_mask: XRUN_CONTINUITY_ALL,
+    }
+}
+
+fn xrun_negative_observation() -> XrunOracleObservation {
+    XrunOracleObservation {
+        sample_gap_detected: true,
+        input_callbacks: 200,
+        output_callbacks: 200,
+        continuity_mask: XRUN_INPUT_CALLBACKS_CONTINUED | XRUN_OUTPUT_CALLBACKS_CONTINUED,
+        ..XrunOracleObservation::default()
+    }
+}
+
+#[test]
+fn xrun_positive_oracle_accepts_required_synthesis() {
+    let (verdict, _) = evaluate_positive_xrun(&xrun_positive_observation());
+    assert_eq!(verdict, XrunCaseVerdict::Pass);
+}
+
+#[test]
+fn xrun_positive_oracle_rejects_missing_required_counters() {
+    for mutate in [
+        (|observation: &mut XrunOracleObservation| observation.typed_xruns = 0)
+            as fn(&mut XrunOracleObservation),
+        (|observation: &mut XrunOracleObservation| observation.forward_frame_position_gaps = 0)
+            as fn(&mut XrunOracleObservation),
+        (|observation: &mut XrunOracleObservation| {
+            observation.continuity_mask &= !XRUN_INPUT_RESUMED_AFTER_INJECTION;
+        }) as fn(&mut XrunOracleObservation),
+    ] {
+        let mut observation = xrun_positive_observation();
+        mutate(&mut observation);
+        let (verdict, _) = evaluate_positive_xrun(&observation);
+        assert_ne!(verdict, XrunCaseVerdict::Pass);
+    }
+    let zero = XrunOracleObservation::default();
+    let (zero_verdict, _) = evaluate_positive_xrun(&zero);
+    assert_ne!(zero_verdict, XrunCaseVerdict::Pass);
+}
+
+#[test]
+fn xrun_positive_oracle_rejects_invalidation_and_unexpected_backend_error() {
+    for mutate in [
+        (|observation: &mut XrunOracleObservation| observation.stream_invalidated = 1)
+            as fn(&mut XrunOracleObservation),
+        (|observation: &mut XrunOracleObservation| observation.backend_errors = 1)
+            as fn(&mut XrunOracleObservation),
+    ] {
+        let mut observation = xrun_positive_observation();
+        mutate(&mut observation);
+        let (verdict, _) = evaluate_positive_xrun(&observation);
+        assert_eq!(verdict, XrunCaseVerdict::Fail);
+    }
+}
+
+#[test]
+fn xrun_negative_oracle_accepts_content_gap_only() {
+    let (verdict, _) = evaluate_negative_xrun(&xrun_negative_observation());
+    assert_eq!(verdict, XrunCaseVerdict::Pass);
+}
+
+#[test]
+fn xrun_negative_oracle_rejects_typed_xrun_or_clock_discontinuity() {
+    for mutate in [
+        (|observation: &mut XrunOracleObservation| observation.typed_xruns = 1)
+            as fn(&mut XrunOracleObservation),
+        (|observation: &mut XrunOracleObservation| observation.clock_discontinuities = 1)
+            as fn(&mut XrunOracleObservation),
+    ] {
+        let mut observation = xrun_negative_observation();
+        mutate(&mut observation);
+        let (verdict, _) = evaluate_negative_xrun(&observation);
+        assert_eq!(verdict, XrunCaseVerdict::Fail);
+    }
+}
+
+#[test]
+fn xrun_setup_failures_are_notrun() {
+    for failure in [
+        XrunSetupFailure::EndpointMissing,
+        XrunSetupFailure::RegistryNotApplied,
+        XrunSetupFailure::StreamOpenOrStartFailed,
+    ] {
+        assert_eq!(xrun_setup_failure_verdict(failure), XrunCaseVerdict::NotRun);
+    }
+}
+
+#[test]
+fn xrun_endpoint_selection_matches_suffix_contract_and_rejects_lookalikes() {
+    assert_eq!(
+        virtual_stem(XRUN_RENDER_ENDPOINT_NAME).as_deref(),
+        Some(XRUN_ENDPOINT_STEM)
+    );
+    assert_eq!(
+        virtual_stem(XRUN_CAPTURE_ENDPOINT_NAME).as_deref(),
+        Some(XRUN_ENDPOINT_STEM)
+    );
+    assert!(matches_ruviform_endpoint(
+        XRUN_RENDER_ENDPOINT_NAME,
+        Some(XRUN_ENDPOINT_STEM),
+        XRUN_RENDER_ENDPOINT_NAME,
+    ));
+    assert!(matches_ruviform_endpoint(
+        XRUN_CAPTURE_ENDPOINT_NAME,
+        Some(XRUN_ENDPOINT_STEM),
+        XRUN_CAPTURE_ENDPOINT_NAME,
+    ));
+
+    for (name, stem) in [
+        ("Ruviform Cable Input", Some("ruviform cable")),
+        (XRUN_RENDER_ENDPOINT_NAME, Some("ruviform cable")),
+        (
+            "Ruviform Cable Input (Ruviform Virtual Audio Device) 2",
+            Some(XRUN_ENDPOINT_STEM),
+        ),
+        (
+            "Other Ruviform Cable Input (Ruviform Virtual Audio Device)",
+            Some(XRUN_ENDPOINT_STEM),
+        ),
+        (XRUN_CAPTURE_ENDPOINT_NAME, Some(XRUN_ENDPOINT_STEM)),
+    ] {
+        assert!(
+            !matches_ruviform_endpoint(name, stem, XRUN_RENDER_ENDPOINT_NAME),
+            "render matcher accepted lookalike: {name} / {stem:?}"
+        );
+    }
+}
+
+#[test]
+fn xrun_json_writer_preserves_schema_types_and_escapes_strings() {
+    let mut output = xrun_output_shell(XRUN_POSITIVE_CASE, XrunCaseVerdict::Pass, "detail");
+    output.detail = "detail with \"quote\" \\ and\nnewline".to_owned();
+    output.render_name = XRUN_RENDER_ENDPOINT_NAME.to_owned();
+    output.capture_name = XRUN_CAPTURE_ENDPOINT_NAME.to_owned();
+    output.capture_instance_id = "instance with spaces\\and\"quotes\"".to_owned();
+    output.injection_start_packet = 20;
+    output.injection_packet_count = 3;
+    output.oracle = xrun_positive_observation();
+    let json = xrun_observation_json(&output);
+    for required in [
+        "\"schema\":\"rf1009-xrun-observation/v1\"",
+        "\"case\":{",
+        "\"name\":\"capture-overflow-drop-input\"",
+        "\"endpoint\":{",
+        "\"target_pin\":\"loopback-capture\"",
+        "\"injection\":{",
+        "\"control_surface\":\"static-registry-stream-snapshot\"",
+        "\"oracle\":{",
+        "\"max_callback_stall_ms\":40",
+    ] {
+        assert!(json.contains(required), "missing {required}: {json}");
+    }
+    assert!(json.contains("\\\"quote\\\""), "quote not escaped: {json}");
+    assert!(json.contains("\\nnewline"), "newline not escaped: {json}");
+    assert!(
+        json.contains("spaces\\\\and\\\"quotes\\\""),
+        "backslash/quote not escaped: {json}"
+    );
+    assert!(
+        json.contains("\"typed_xruns\":1"),
+        "numeric counter was not numeric: {json}"
+    );
+    assert!(
+        !json.contains("\"typed_xruns\":\"1\""),
+        "numeric counter was stringified: {json}"
+    );
+    assert!(
+        json.contains("\"sample_gap_detected\":false"),
+        "boolean was not a JSON boolean: {json}"
+    );
+}
+
+#[test]
+fn xrun_gap_stall_and_sample_gap_helpers_classify_units() {
+    assert_eq!(
+        classify_frame_position(100, 130),
+        Some(FramePositionGap::Forward(30))
+    );
+    assert_eq!(
+        classify_frame_position(100, 20),
+        Some(FramePositionGap::BackwardOrReset)
+    );
+    assert_eq!(classify_frame_position(100, 100), None);
+
+    let mut forward_count = 0_usize;
+    let mut max_forward = 0_u64;
+    for (expected, observed) in [(100, 130), (160, 20), (20, 20)] {
+        if let Some(FramePositionGap::Forward(gap)) = classify_frame_position(expected, observed) {
+            forward_count += 1;
+            max_forward = max_forward.max(gap);
+        }
+    }
+    assert_eq!(forward_count, 1);
+    assert_eq!(max_forward, 30);
+
+    assert_eq!(callback_stall_ms(1_000_000, 251_000_000), Some(250));
+    assert_eq!(callback_stall_ms(251_000_000, 1_000_000), None);
+
+    let mut gapped = vec![0.2_f32; 100];
+    gapped.extend(std::iter::repeat_n(0.0, XRUN_ZERO_RUN_MIN_FRAMES));
+    gapped.extend(vec![0.2_f32; 100]);
+    assert!(detect_interior_zero_run(&gapped, XRUN_ZERO_RUN_MIN_FRAMES));
+    let mut trailing = vec![0.2_f32; 100];
+    trailing.extend(std::iter::repeat_n(0.0, XRUN_ZERO_RUN_MIN_FRAMES));
+    assert!(!detect_interior_zero_run(
+        &trailing,
+        XRUN_ZERO_RUN_MIN_FRAMES
+    ));
+    let mut leading = vec![0.0_f32; XRUN_ZERO_RUN_MIN_FRAMES];
+    leading.extend(vec![0.2_f32; 100]);
+    assert!(!detect_interior_zero_run(
+        &leading,
+        XRUN_ZERO_RUN_MIN_FRAMES
+    ));
+}
+
 /// Bounded xrun observation probe. This is not a deterministic xrun injector:
 /// it records whether bounded user-mode CPU starvation surfaces as
 /// `DeviceError::Xrun`, as another error kind, or not at all through the
@@ -1399,6 +2391,110 @@ fn input_data_callback(probe: &Arc<Probe>) -> InputDataCallback {
     Box::new(move |input, info| observe_input(&probe, input, info))
 }
 
+/// Directional capture-position discontinuity. Equality is not a
+/// discontinuity; forward distance is returned in frames so the xrun
+/// harness can keep a maximum without treating backward/reset jumps as
+/// capture loss.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum FramePositionGap {
+    Forward(u64),
+    BackwardOrReset,
+}
+
+fn classify_frame_position(expected: u64, observed: u64) -> Option<FramePositionGap> {
+    match observed.cmp(&expected) {
+        std::cmp::Ordering::Greater => Some(FramePositionGap::Forward(observed - expected)),
+        std::cmp::Ordering::Less => Some(FramePositionGap::BackwardOrReset),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
+/// Positive callback-timestamp delta in whole milliseconds. Timestamp
+/// regressions stay governed by the regression oracle and produce no
+/// stall sample here.
+fn callback_stall_ms(previous_ns: i64, current_ns: i64) -> Option<u64> {
+    if current_ns <= previous_ns {
+        return None;
+    }
+    u64::try_from((current_ns - previous_ns) / 1_000_000).ok()
+}
+
+fn observe_input_stall(probe: &Probe, callback_ns: i64) {
+    let stall_previous = probe
+        .in_stall_last_callback_ns
+        .fetch_max(callback_ns, Ordering::Relaxed);
+    if stall_previous != i64::MIN
+        && let Some(stall_ms) = callback_stall_ms(stall_previous, callback_ns)
+    {
+        probe
+            .in_max_callback_stall_ms
+            .fetch_max(stall_ms, Ordering::Relaxed);
+    }
+}
+
+fn observe_input_frame_position(probe: &Probe, position: u64, frames: usize, callback_index: u64) {
+    probe.in_position_some.fetch_add(1, Ordering::Relaxed);
+    // The next callback's first-frame position must equal this packet's
+    // `position + frames` — contiguous capture-clock spans unless a
+    // discontinuity was reported. Callbacks are serial per stream.
+    let expected = probe.in_expected_position.load(Ordering::Relaxed);
+    if expected != u64::MAX
+        && let Some(gap) = classify_frame_position(expected, position)
+    {
+        probe.in_position_gaps.fetch_add(1, Ordering::Relaxed);
+        match gap {
+            FramePositionGap::Forward(gap_frames) => {
+                probe
+                    .in_forward_position_gaps
+                    .fetch_add(1, Ordering::Relaxed);
+                probe
+                    .in_max_forward_gap_frames
+                    .fetch_max(gap_frames, Ordering::Relaxed);
+                probe
+                    .in_first_forward_gap_cb
+                    .fetch_min(callback_index, Ordering::Relaxed);
+            }
+            FramePositionGap::BackwardOrReset => {
+                probe
+                    .in_backward_position_jumps
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+    probe
+        .in_expected_position
+        .store(position.wrapping_add(frames as u64), Ordering::Relaxed);
+    if probe.in_first_position.load(Ordering::Relaxed) == u64::MAX {
+        probe.in_first_position.store(position, Ordering::Relaxed);
+    }
+    probe
+        .in_last_position
+        .fetch_max(position, Ordering::Relaxed);
+}
+
+/// Streaming interior-zero-run detector over channel 0. A run is counted
+/// only after a non-zero sample terminates it, and only when non-zero PCM
+/// was already observed; leading silence and the trailing tail after stream
+/// stop are therefore not mistaken for injected capture-content gaps.
+fn observe_input_zero_run(probe: &Probe, input: &AudioBufferView<'_, f32>) {
+    let Some(samples) = input.channel(0) else {
+        return;
+    };
+    for &sample in samples {
+        if sample == 0.0 {
+            probe.in_zero_run_current.fetch_add(1, Ordering::Relaxed);
+        } else {
+            let zero_run = probe.in_zero_run_current.swap(0, Ordering::Relaxed);
+            if zero_run >= XRUN_ZERO_RUN_MIN_FRAMES
+                && probe.in_nonzero_sample_seen.load(Ordering::Relaxed) != 0
+            {
+                probe.in_sample_gap_detected.store(1, Ordering::Relaxed);
+            }
+            probe.in_nonzero_sample_seen.store(1, Ordering::Relaxed);
+        }
+    }
+}
+
 /// Input-callback observation body — mirrors
 /// `real_input_e2e.rs`'s discipline (relaxed atomics, one bounded
 /// slab pass) plus the bounded channel-0 handoff copy.
@@ -1414,6 +2510,7 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
     }
 
     let callback_ns = info.timestamp.callback.value();
+    observe_input_stall(probe, callback_ns);
     let previous = probe
         .in_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
@@ -1468,24 +2565,7 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
         }
     }
     if let Some(position) = info.frame_position {
-        probe.in_position_some.fetch_add(1, Ordering::Relaxed);
-        // The next callback's first-frame position must equal this
-        // packet's `position + frames` — contiguous capture-clock
-        // spans unless a discontinuity was reported. Callbacks are
-        // serial per stream.
-        let expected = probe.in_expected_position.load(Ordering::Relaxed);
-        if expected != u64::MAX && position != expected {
-            probe.in_position_gaps.fetch_add(1, Ordering::Relaxed);
-        }
-        probe
-            .in_expected_position
-            .store(position.wrapping_add(frames as u64), Ordering::Relaxed);
-        if probe.in_first_position.load(Ordering::Relaxed) == u64::MAX {
-            probe.in_first_position.store(position, Ordering::Relaxed);
-        }
-        probe
-            .in_last_position
-            .fetch_max(position, Ordering::Relaxed);
+        observe_input_frame_position(probe, position, frames, callback_index);
     }
 
     // One bounded pass over the slab: non-finite scan + peak.
@@ -1504,6 +2584,7 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
     probe
         .in_peak_bits
         .fetch_max(peak.to_bits(), Ordering::Relaxed);
+    observe_input_zero_run(probe, &input);
 
     // Bounded handoff copy — `try_lock` never blocks; a contended or
     // full buffer is counted, not silently lost.
@@ -1620,6 +2701,12 @@ fn input_error_callback(probe: &Arc<Probe>) -> InputErrorCallback {
         if error == DeviceError::StreamInvalidated {
             probe.in_invalidated.fetch_add(1, Ordering::Relaxed);
         }
+        if !matches!(
+            error,
+            DeviceError::Xrun | DeviceError::ClockDiscontinuity | DeviceError::StreamInvalidated
+        ) {
+            probe.in_backend_errors.fetch_add(1, Ordering::Relaxed);
+        }
     })
 }
 
@@ -1636,6 +2723,12 @@ fn output_error_callback(probe: &Arc<Probe>) -> OutputErrorCallback {
         }
         if error == DeviceError::StreamInvalidated {
             probe.out_invalidated.fetch_add(1, Ordering::Relaxed);
+        }
+        if !matches!(
+            error,
+            DeviceError::Xrun | DeviceError::ClockDiscontinuity | DeviceError::StreamInvalidated
+        ) {
+            probe.out_backend_errors.fetch_add(1, Ordering::Relaxed);
         }
     })
 }
