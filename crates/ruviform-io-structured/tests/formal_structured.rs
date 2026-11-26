@@ -1,6 +1,6 @@
 //! Issue #806 slice 3 (D-layer formal verification) — structured
-//! document parser property suite plus `#[cfg(kani)]` bounded proof
-//! harnesses.
+//! document parser property suite. Kani proofs for crate-private
+//! decision gates live in-source beside the production implementation.
 //!
 //! Target contracts (product source of truth:
 //! `crates/ruviform-io-structured/src/{json,yaml,toml,csv,xml}.rs`,
@@ -1556,116 +1556,6 @@ mod xml_props {
             // read pops its scope and reports end-of-document.
             prop_assert!(reader.read_event(&mut buffer).expect("eof").is_none());
             prop_assert_eq!(reader.depth(), 0);
-        }
-    }
-}
-
-/// Bounded proofs of the same contracts, verified exhaustively over
-/// symbolic input by Kani (`cargo kani --tests`; run via
-/// `mise run test-formal-kani`). Bounds and assumptions:
-/// `docs/specs/formal-verification.md`.
-///
-/// Harnesses stay small by design (slice-1 lesson: symbolic byte
-/// streams and `fmt`/`RawVec` growth are CBMC cost bombs): each uses a
-/// fixed concrete skeleton plus a symbolic *gate field* — a CSV limit
-/// option — never a symbolic stream. The shared `BoundedRead`
-/// byte-budget gate is proven in-src (`src/input.rs` `mod proofs`)
-/// because the type is `pub(crate)` and the probe-EOF semantics are
-/// the authoritative contract.
-#[cfg(kani)]
-mod proofs {
-    /// The `max_records` count gate on a concrete 3-record skeleton:
-    /// the first `min(3, max_records)` records yield, then
-    /// `LimitExceeded` naming `max_records`. Buffer-affecting options
-    /// stay concrete and small so `Vec` growth unwinds trivially;
-    /// `max_records` is a pure comparison.
-    ///
-    /// Unwind bound: `CsvReader::new` calls `csv_core`'s `build_dfa`,
-    /// whose dominant loop iterates `for c in 0..256`. The lane runs
-    /// this invocation with `--no-unwinding-checks` and bound 128:
-    /// the skeleton's bytes are all < 128, so truncated DFA rows
-    /// (c >= 128) are unreachable from concrete input; covering all
-    /// 256 rows roughly doubles the formula beyond the reference
-    /// WSL2 environment. Every other loop (NFA_STATES, our
-    /// `for _ in 0..4`) is far smaller and fully covered.
-    #[cfg(feature = "csv")]
-    #[kani::proof]
-    #[kani::unwind(128)]
-    fn csv_max_records_gate() {
-        use ruviform_io_structured::DocumentErrorKind;
-        use ruviform_io_structured::csv::{CsvReadOptions, CsvReader, CsvRecord};
-
-        let max_records: u64 = kani::any();
-        let input = b"h\nr1\nr2\nr3\n".as_slice(); // headers + 3 records
-        let options = CsvReadOptions::new()
-            .with_max_records(max_records)
-            .with_max_record_bytes(16)
-            .with_max_field_bytes(8)
-            .with_max_fields(4);
-        let mut cur = input;
-        let mut reader = match CsvReader::new(&mut cur, &options) {
-            Ok(reader) => reader,
-            Err(_) => return, // construction can only fail on dialect/budget — neither is symbolic
-        };
-        let mut record = CsvRecord::new();
-        let mut yielded = 0_u64;
-        for _ in 0..4 {
-            match reader.read_record(&mut record) {
-                Ok(true) => yielded += 1,
-                Ok(false) => break,
-                Err(e) => {
-                    assert!(e.kind() == DocumentErrorKind::LimitExceeded);
-                    assert!(e.limit().map(|l| l.name) == Some("max_records"));
-                    assert!(yielded == max_records);
-                    assert!(max_records < 3);
-                    return;
-                }
-            }
-        }
-        assert!(yielded == 3);
-        assert!(max_records >= 3);
-    }
-
-    /// The `max_field_bytes` audit on a concrete 2-field skeleton
-    /// (fields of 1 and 2 bytes): the record parses iff
-    /// `max_field_bytes >= 2`, else `LimitExceeded` naming
-    /// `max_field_bytes`. `max_field_bytes` is a pure comparison — no
-    /// symbolic-length allocation.
-    /// Unwind bound: as in `csv_max_records_gate` — `build_dfa`'s
-    /// byte-table loop is truncated at 128 rows (skeleton bytes are
-    /// all < 128); the lane passes `--no-unwinding-checks`.
-    #[cfg(feature = "csv")]
-    #[kani::proof]
-    #[kani::unwind(128)]
-    fn csv_max_field_bytes_gate() {
-        use ruviform_io_structured::DocumentErrorKind;
-        use ruviform_io_structured::csv::{CsvReadOptions, CsvReader, CsvRecord};
-
-        let max_field_bytes: usize = kani::any();
-        let input = b"a,bb\n".as_slice(); // fields of 1 and 2 bytes
-        let options = CsvReadOptions::new()
-            .with_has_headers(false)
-            .with_max_field_bytes(max_field_bytes)
-            .with_max_record_bytes(16)
-            .with_max_fields(4)
-            .with_max_records(4);
-        let mut cur = input;
-        let mut reader = match CsvReader::new(&mut cur, &options) {
-            Ok(reader) => reader,
-            Err(_) => return,
-        };
-        let mut record = CsvRecord::new();
-        match reader.read_record(&mut record) {
-            Ok(true) => {
-                assert!(max_field_bytes >= 2);
-                assert!(record.field_bytes(1) == Some(b"bb".as_slice()));
-            }
-            Ok(false) => unreachable!("a record must surface or be gated"),
-            Err(e) => {
-                assert!(max_field_bytes < 2);
-                assert!(e.kind() == DocumentErrorKind::LimitExceeded);
-                assert!(e.limit().map(|l| l.name) == Some("max_field_bytes"));
-            }
         }
     }
 }

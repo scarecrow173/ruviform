@@ -69,6 +69,59 @@ const DEFAULT_MAX_FIELDS: usize = 4096;
 /// Default ceiling on the number of data records per input.
 const DEFAULT_MAX_RECORDS: u64 = 1_000_000;
 
+/// Pure CSV limit decisions. The parser owns I/O, allocation and
+/// diagnostics; these functions decide only whether already-established
+/// offsets, counts and buffer capacities cross the configured limits.
+mod limit_decision {
+    /// How a full output buffer may proceed under its configured cap.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum BufferDecision {
+        /// Grow to this capacity and continue parsing.
+        Grow(usize),
+        /// The current capacity already reaches or exceeds the cap.
+        LimitExceeded,
+    }
+
+    /// A field spanning `start..end` exceeds `max_field_bytes` exactly
+    /// when its byte length is strictly greater than the configured cap.
+    /// `start <= end` is a parser invariant established by `csv_core`.
+    pub(crate) const fn field_bytes_exceeded(
+        start: usize,
+        end: usize,
+        max_field_bytes: usize,
+    ) -> bool {
+        end - start > max_field_bytes
+    }
+
+    /// A full output buffer is over its cap when the parser-established
+    /// fill count reaches the cap. Growth doubles the current capacity
+    /// with saturation, then clamps to the cap. `filled_units` is the
+    /// cumulative output-byte or field-end count reported through the
+    /// parser loop; capacity is used only to compute the next allocation
+    /// size, not to decide whether the limit was crossed.
+    pub(crate) const fn buffer_growth(
+        filled_units: usize,
+        current_capacity: usize,
+        max: usize,
+    ) -> BufferDecision {
+        if filled_units >= max {
+            BufferDecision::LimitExceeded
+        } else {
+            BufferDecision::Grow({
+                let doubled = current_capacity.saturating_mul(2);
+                if doubled < max { doubled } else { max }
+            })
+        }
+    }
+
+    /// Data records are counted before being yielded: when `record_no`
+    /// already equals the cap, the next record is over budget. This is
+    /// the documented `k > m` rejection rule for `k` input records.
+    pub(crate) const fn record_count_exceeded(record_no: u64, max_records: u64) -> bool {
+        record_no >= max_records
+    }
+}
+
 /// Record terminator convention for CSV dialects.
 ///
 /// `CrLf` is the RFC 4180 terminator: on read it accepts `\r`, `\n` and
@@ -1036,7 +1089,7 @@ impl<'a, R: Read> CsvReader<'a, R> {
                 csv_core::ReadRecordResult::InputEmpty => {}
                 csv_core::ReadRecordResult::OutputFull
                 | csv_core::ReadRecordResult::OutputEndsFull => {
-                    grow_record_buffers(record, &result, &self.options, position)?;
+                    grow_record_buffers(record, &result, outlen, endlen, &self.options, position)?;
                 }
                 csv_core::ReadRecordResult::Record => {
                     if !self.options.flexible {
@@ -1054,7 +1107,10 @@ impl<'a, R: Read> CsvReader<'a, R> {
                         }
                     }
                     if count_record {
-                        if self.record_no >= self.options.max_records {
+                        if limit_decision::record_count_exceeded(
+                            self.record_no,
+                            self.options.max_records,
+                        ) {
                             return Err(limit_error(
                                 "max_records",
                                 self.options.max_records,
@@ -1127,7 +1183,7 @@ fn check_field_sizes(
         } else {
             record.ends[*checked_endlen - 1]
         };
-        if end - start > max_field_bytes {
+        if limit_decision::field_bytes_exceeded(start, end, max_field_bytes) {
             return Err(limit_error(
                 "max_field_bytes",
                 u64::try_from(max_field_bytes).unwrap_or(u64::MAX),
@@ -1141,7 +1197,7 @@ fn check_field_sizes(
     } else {
         record.ends[endlen - 1]
     };
-    if outlen - last_end > max_field_bytes {
+    if limit_decision::field_bytes_exceeded(last_end, outlen, max_field_bytes) {
         return Err(limit_error(
             "max_field_bytes",
             u64::try_from(max_field_bytes).unwrap_or(u64::MAX),
@@ -1157,35 +1213,36 @@ fn check_field_sizes(
 fn grow_record_buffers(
     record: &mut CsvRecord,
     result: &csv_core::ReadRecordResult,
+    outlen: usize,
+    endlen: usize,
     options: &CsvReadOptions,
     position: DocumentPosition,
 ) -> Result<(), DocumentError> {
     match result {
         csv_core::ReadRecordResult::OutputFull => {
-            if record.data.len() >= options.max_record_bytes {
-                return Err(limit_error(
-                    "max_record_bytes",
-                    u64::try_from(options.max_record_bytes).unwrap_or(u64::MAX),
-                    Some(position),
-                ));
+            match limit_decision::buffer_growth(outlen, record.data.len(), options.max_record_bytes)
+            {
+                limit_decision::BufferDecision::Grow(cap) => record.data.resize(cap, 0),
+                limit_decision::BufferDecision::LimitExceeded => {
+                    return Err(limit_error(
+                        "max_record_bytes",
+                        u64::try_from(options.max_record_bytes).unwrap_or(u64::MAX),
+                        Some(position),
+                    ));
+                }
             }
-            let cap = record
-                .data
-                .len()
-                .saturating_mul(2)
-                .min(options.max_record_bytes);
-            record.data.resize(cap, 0);
         }
         csv_core::ReadRecordResult::OutputEndsFull => {
-            if record.ends.len() >= options.max_fields {
-                return Err(limit_error(
-                    "max_fields",
-                    u64::try_from(options.max_fields).unwrap_or(u64::MAX),
-                    Some(position),
-                ));
+            match limit_decision::buffer_growth(endlen, record.ends.len(), options.max_fields) {
+                limit_decision::BufferDecision::Grow(cap) => record.ends.resize(cap, 0),
+                limit_decision::BufferDecision::LimitExceeded => {
+                    return Err(limit_error(
+                        "max_fields",
+                        u64::try_from(options.max_fields).unwrap_or(u64::MAX),
+                        Some(position),
+                    ));
+                }
             }
-            let cap = record.ends.len().saturating_mul(2).min(options.max_fields);
-            record.ends.resize(cap, 0);
         }
         _ => {}
     }
@@ -1664,3 +1721,105 @@ impl std::fmt::Display for BackendMessage {
 }
 
 impl std::error::Error for BackendMessage {}
+
+/// Kani proofs for the pure CSV limit decision core. These proofs verify
+/// production predicates, not parser skeletons or test doubles. Parser-core
+/// connection remains outside the Kani boundary and is covered by proptest.
+#[cfg(kani)]
+mod proofs {
+    use super::limit_decision::{self, BufferDecision};
+
+    fn buffer_growth_spec(
+        filled_units: usize,
+        current_capacity: usize,
+        max: usize,
+    ) -> BufferDecision {
+        if filled_units >= max {
+            BufferDecision::LimitExceeded
+        } else {
+            let doubled = if current_capacity > usize::MAX / 2 {
+                usize::MAX
+            } else {
+                current_capacity * 2
+            };
+            if doubled < max {
+                BufferDecision::Grow(doubled)
+            } else {
+                BufferDecision::Grow(max)
+            }
+        }
+    }
+
+    /// Exactness of `max_field_bytes` over every valid field span and
+    /// limit. `start <= end` is the parser invariant, not an input-domain
+    /// restriction; the boundary covers witness span lengths one below,
+    /// at, and one above the symbolic cap.
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn csv_limit_decision_field_bytes_exactness() {
+        let start: usize = kani::any();
+        let end: usize = kani::any();
+        let max: usize = kani::any();
+        kani::assume(start <= end);
+        let len = end - start;
+        let actual = limit_decision::field_bytes_exceeded(start, end, max);
+        kani::cover!(max > 0 && len == max - 1, "length boundary-1 is reachable");
+        kani::cover!(len == max, "length boundary is reachable");
+        kani::cover!(
+            max < usize::MAX && len == max + 1,
+            "length boundary+1 is reachable"
+        );
+        assert!(actual == (len > max));
+    }
+
+    /// Exactness of the shared full-buffer growth decision used by both
+    /// `max_record_bytes` and `max_fields`. The limit decision uses the
+    /// parser-established fill count; capacity affects only the next
+    /// allocation size. Covers below-cap growth, at-cap rejection,
+    /// above-cap rejection, and multiplication saturation without
+    /// excluding any concrete fill/capacity/limit triple.
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn csv_limit_decision_buffer_growth_exactness() {
+        let filled_units: usize = kani::any();
+        let current_capacity: usize = kani::any();
+        let max: usize = kani::any();
+        let actual = limit_decision::buffer_growth(filled_units, current_capacity, max);
+        let expected = buffer_growth_spec(filled_units, current_capacity, max);
+        kani::cover!(
+            max > 0 && filled_units == max - 1,
+            "filled boundary-1 is reachable"
+        );
+        kani::cover!(filled_units == max, "filled boundary is reachable");
+        kani::cover!(
+            max < usize::MAX && filled_units == max + 1,
+            "filled boundary+1 is reachable"
+        );
+        kani::cover!(
+            current_capacity > usize::MAX / 2 && current_capacity < max,
+            "saturating growth is reachable"
+        );
+        assert!(actual == expected);
+    }
+
+    /// Exactness of `max_records`: the already-counted data-record index
+    /// rejects the next record exactly when it reaches the symbolic cap.
+    /// Boundary covers witness `m-1`, `m`, and `m+1` counts.
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn csv_limit_decision_record_count_exactness() {
+        let record_no: u64 = kani::any();
+        let max_records: u64 = kani::any();
+        let actual = limit_decision::record_count_exceeded(record_no, max_records);
+        kani::cover!(
+            max_records > 0 && record_no == max_records - 1,
+            "count boundary-1 is reachable"
+        );
+        kani::cover!(record_no == max_records, "count boundary is reachable");
+        kani::cover!(
+            max_records < u64::MAX && record_no == max_records + 1,
+            "count boundary+1 is reachable"
+        );
+        assert!(actual == (record_no >= max_records));
+    }
+}
