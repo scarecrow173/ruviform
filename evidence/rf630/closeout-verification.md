@@ -49,13 +49,14 @@ disposition 確定は `docs/specs/issue-630-ac-inventory.md` を参照。
 | 4 | **Pass**（`HostWindow` focus は qualified pass） | VST3 32/32・CLAP 14/14 全 pass @`2dfd2e0f`。caveat は上表のとおり |
 | 5 | **Pass** | ledger の sha/digest/seed/environment tuple + watchdog kill + deadline policy + exactly-once |
 | 6 | **Pass**（CI 構造として充足） | `test-full`/`test-l1-real-plugin` の 3OS 収載・GUI-L2/EXT-L3 は opt-in。merge 後 CI 証拠は Coordinator gate |
-| 7 | **部分 Pass**（ruviform 側 done・consumer 実走 external-owner） | contract match・al#127 NotApplicable・dep 非汚染は提供済み。false Pass にしない — `[ ]` 維持が整合 |
+| 7 | **Pass**（consumer 実走は external-owner follow-up — 未実走を Pass と偽装しない） | AC7 の字面は「照合」と「非強制」の充足であり consumer 側の実走完了を要求しない（2026-11-26 Coordinator/user 確定解釈）。contract match・al#127 NotApplicable・dep 非汚染の実測で充足 |
 
 ## external-owner / residual 一覧
 
-- consumer 実走 legs（sv#101/#127/#128/#176・al#127）— external-owner。各
-  consumer Issue が AC/lane 責務。sv#176 S1 の headless legs は実走済みだが
-  Native Dock/PD 受入は未実走。
+- consumer 実走 legs（sv#101/#127/#128/#176・al#127）— external-owner の後続
+  責務。各 consumer Issue が AC/lane 責務。sv#176 S1 の headless legs は実走済み
+  だが Native Dock/PD 受入は未実走。AC7 自体は照合と非強制で充足済み（Pass）
+  であり、これらは AC7 verdict に影響しない後続責務である。
 - `test-os-endpoint-midi-e2e`（rf#629 scope）— provisioned runner 不在で
   NotRun。runner は rf#762 gate（#630 直接対象外）。
 - clap-validator upstream release — param-fuzz panic 修正と pin-47e2424 の
@@ -96,8 +97,9 @@ parse は検証ではなく read-only の集計手法。）
 - docs index（`docs/**/README.md`）の統合時整備 — 本 slice は一切編集して
   いない。
 - merge 後の対象 SHA に対する CI 実走証拠の収集（AC6 の統合検証ゲート）。
-- AC7 の consumer 実走 legs は external-owner のまま残るため、close 判断時は
-  本ファイルと `docs/specs/issue-630-ac-inventory.md` の部分 Pass 記述を参照。
+- AC7 は Pass 確定（consumer 実走 legs は external-owner の後続責務として残る）
+  — close 判断時は本ファイルと `docs/specs/issue-630-ac-inventory.md` の AC7
+  記述を参照。
 
 ## 補足: 範囲外で観測した不整合（報告事項）
 

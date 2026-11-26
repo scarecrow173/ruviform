@@ -121,11 +121,12 @@ reeval）・consumer oracle・fault modes・output drain・editor verbs
   `daily-ci.yml` が main 検証を担う（2026-11-26 ユーザー指定どおり手動
   dispatch はゲートにしない）。merge 後 CI 実走証拠は Coordinator gate。
 - **AC7（sv#101/#127/#128/#176・al#127 の独立 Consumer Oracle 照合・AudioLens
-  新依存を強制しない）**: manifest `rf630-fixture-contract/1` が contract
-  face pin + 5 行 map + dep 非汚染 grep を提供 — ruviform 側 done。
-  consumer 実走 legs は external-owner。sv#176 S1 の headless legs は
-  synvelis PR #640 で実走済みだが Native Dock/PD 受入は未実走であり、
-  false Pass にしない。
+  新依存を強制しない）**: AC7 の字面は照合と非強制の充足であり、consumer 側の
+  実走完了を要求しない。manifest `rf630-fixture-contract/1` が contract
+  face pin + 5 行 map + dep 非汚染 grep を提供し、rf#630 側の AC7 は充足 —
+  verdict は Pass。consumer 実走 legs は external-owner の後続責務として残る。
+  sv#176 S1 の headless legs は synvelis PR #640 で実走済みだが Native Dock/PD
+  受入は未実走であり、未実走を Pass と偽装しない。
 
 ## 制約・限界
 

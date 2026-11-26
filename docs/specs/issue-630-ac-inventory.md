@@ -56,8 +56,9 @@ census に基づく改訂である。2026-11-24 版からの主要な変化: CLA
 editor verbs（`ruviform.editor-ops` seam）と fault-carrier の実装により
 14 case 全 pass となり、implementable 残件は解消した。ABI validator は
 pin-47e2424 へ更新され preset-discovery の宣言的除外は解消、VST3 は
-282 passed/0 failed。Issue 本文の checkbox は AC1〜AC6 が `[x]`、AC7 が
-`[ ]`（2026-11-26 確認）であり、本 spec の disposition と矛盾しない。
+282 passed/0 failed。Issue 本文の checkbox は census 時点で AC1〜AC6 が
+`[x]`、AC7 が `[ ]`（2026-11-26 確認）。本 spec の disposition は AC7 についても
+`[x]` 適用と整合する（適用判断は Coordinator）。
 
 ## AC 行別 disposition
 
@@ -69,7 +70,7 @@ pin-47e2424 へ更新され preset-discovery の宣言的除外は解消、VST3 
 | 4 | Native Editor 実 Window/child HWND/画素/Input/…・DComp Fail 再現・Fake/Floating 非 Pass | **Pass** — VST3 leg 32 case・CLAP leg 14 case ともに全 pass（`2dfd2e0f`）。CLAP の input/focus/popup は `ruviform.editor-ops` seam 経由の effect-verified、crash/hang は fault-carrier で実走。**qualified pass 注記**: `set_focus_target(HostWindow)` leg は両 ABI で `accepted-declared`・`effect_verified:false` — container への OS focus move は lane-topology 依存で未検証と正直に記録し、同-queue `host_path` lane が真の oracle。この caveat は ledger verdict を fail に倒すものではないが、effect-verified Pass とも区別する | `[x]`（適用済み）と整合（caveat は closeout 証拠に明記） |
 | 5 | version/digest/RT/OS/SHA 再現・安全な Timeout/kill | **Pass** — ledger field + watchdog kill + deadline policy + exactly-once が実走済み | `[x]`（適用済み）と整合 |
 | 6 | 3OS OS-L1 既存 CI 統合・Windows GUI-L2/EXT-L3 opt-in 分離 | **Pass**（CI 構造として充足）— `test-full`/`test-l1-real-plugin` が 3OS で fixture を実走、GUI-L2/EXT-L3 は manual/opt-in。`ci.yml` は workflow_dispatch のみで `daily-ci.yml` が main 検証を集約。merge 後対象 SHA の CI 実走証拠は Coordinator gate | `[x]`（適用済み）と整合（CI 実走証拠の収集確認は Coordinator） |
-| 7 | sv#101/#127/#128/#176・al#127 の独立 Consumer Oracle 照合・AudioLens 新依存非強制 | **部分 Pass** — manifest が contract match・al#127 NotApplicable・dep 非汚染を提供済み（ruviform 側 done）。consumer 実走 legs は external-owner のまま — sv#176 S1 の headless real-ABI legs は synvelis 側実走済みだが Native Dock/PD 受入は未実走。false Pass にしない | `[ ]` 維持が整合（行が consumer 側照合を含むため — ruviform 側 done の記録で部分適用・close するかの判断は Coordinator） |
+| 7 | sv#101/#127/#128/#176・al#127 の独立 Consumer Oracle 照合・AudioLens 新依存非強制 | **Pass** — AC7 の字面は「独立 Consumer Oracle を照合し、AudioLens への新依存を強制しない」であり、consumer 側の実走完了を要求しない。manifest が sv#101/#127/#128/#176 の contract match・al#127 NotApplicable・dep 非汚染を提供し rf#630 側の AC7 は充足。consumer 実走 legs は external-owner の後続責務として残る（sv#176 S1 の headless legs は synvelis 側実走済みだが Native Dock/PD 受入は未実走）が、未実走を Pass と偽装しない | `[x]` 適用が整合（checkbox 適用と Issue close の判断は Coordinator） |
 
 ## 残件の 3 類分類
 
@@ -101,8 +102,8 @@ pin-47e2424 へ更新され preset-discovery の宣言的除外は解消、VST3 
   `test_instrument` e2e は provisioned runner 不在で `NotRun`。runner は
   `rf#762` 待ち（Issue #630 直接対象外だが AC1/AC2 の完全経路に関わる）。
 - consumer 実走 legs — sv#101/#127/#128/#176・al#127 の consumer repo 側
-  実走は external-owner（AC7 の残り）。ruviform 側は contract match・
-  dep 非汚染を提供済み。
+  実走は external-owner の後続責務（AC7 verdict とは独立 — AC7 は照合と
+  非強制の充足で Pass 確定）。ruviform 側は contract match・dep 非汚染を提供済み。
 - clap-validator upstream release — `param-fuzz` panic（informational
   unfiltered leg・exit 101）の修正は upstream fix 含む release 待ち
   （再評価 Issue: `scarecrow173/ruviform#867` OPEN）。preset-discovery の
