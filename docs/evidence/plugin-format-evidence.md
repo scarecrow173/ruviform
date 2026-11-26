@@ -5,7 +5,7 @@ status: "draft"
 lifecycle: "draft"
 title: "CLAP・VST3・OFX 規格アダプタの検証記録"
 created: "2026-11-20"
-updated: "2026-11-20"
+updated: "2026-11-26"
 owners: []
 relations:
   source: ["https://github.com/scarecrow173/ruviform/issues/19", "https://github.com/scarecrow173/ruviform/issues/23", "https://github.com/scarecrow173/ruviform/issues/28", "https://github.com/scarecrow173/ruviform/issues/29", "https://github.com/scarecrow173/ruviform/issues/30", "https://github.com/scarecrow173/ruviform/issues/31", "https://github.com/scarecrow173/ruviform/issues/32", "https://github.com/scarecrow173/ruviform/issues/34", "https://github.com/scarecrow173/ruviform/issues/41", "https://github.com/scarecrow173/ruviform/issues/52", "https://github.com/scarecrow173/ruviform/issues/56", "https://github.com/scarecrow173/ruviform/issues/57", "https://github.com/scarecrow173/ruviform/issues/98", "https://github.com/scarecrow173/ruviform/issues/104", "https://github.com/scarecrow173/ruviform/issues/124", "https://github.com/scarecrow173/ruviform/issues/131", "https://github.com/scarecrow173/ruviform/issues/184", "https://github.com/scarecrow173/ruviform/issues/186", "https://github.com/scarecrow173/ruviform/issues/630", "https://github.com/scarecrow173/ruviform/issues/631", "https://github.com/scarecrow173/ruviform/issues/726", "https://github.com/scarecrow173/ruviform/issues/732", "https://github.com/scarecrow173/ruviform/issues/759"]
@@ -126,6 +126,8 @@ L1 runner の検証では、mise run test-l1-real-plugin exit 0 で adapter e2e 
 
 test-l1-real-plugin の instrument 系 e2e（l1_real_test_plugin_e2e の note_off_releases_to_silence/transport_clicks）が高負荷時に frame-exact assertion で断続的 fail を観測した。失敗 test は実行ごとに変わり最終実行は両 crate e2e 10/10 全緑で、crates/ は当該 slice で zero-diff のため既存 lane の flaky として正直に記録した (Issue #630)。
 
+closeout（2026-11-26）時点の最終状態として、fixture 面では後続 slice が次を追加した。state blob は 20-byte v2 codec `[u32 LE "RFST"][u32 LE version=2][f64 LE][u32 LE FNV-1a-32 checksum]` に進化し、16-byte v1 blob の migration（次回 save で v2 出力）と checksum valid な未知 extension tail の degraded 受入を両 format で実装した — 上記の 16 byte v1 記述は初期設計の記録であり、現行の正は v2 である (Issue #630)。CLAP editor の input/focus/popup verb は `clap.ext.gui` に対応 verb がないため、fixture-private の `ruviform.editor-ops` extension（`#[repr(C)]` vtable: deliver_key/apply_focus/popup・wire v8 の discriminant 共有）を seam として実装し、host adapter の `send_gui_key`/`set_gui_focus_target`/`set_gui_popup` がそこを通る。`HostWindow` focus target は adapter が consume し plugin へは届かない設計で、real lane では `accepted-declared`・`effect_verified:false` の qualified pass として記録される（OS focus move は lane-topology 依存・同-queue host_path lane が真の oracle）(Issue #630)。CLAP の crash/hang oracle は `test_editor` が共有 `Fault` param を担う fault-carrier（VST3 #885 の mirror・`TestEditorProcessor(TestFaultProcessor)` delegation）で解決し、real lane の `real-clap-session-{crash,hang}` は in-band arm で pass した。最終的に canonical real-window ledger は VST3 32 case・CLAP 14 case ともに全 pass（repo sha `2dfd2e0fc0e3928669ccd51dad330b0b2795903b`）であり、旧 `a0e34564` 時点の CLAP 9 pass + 5 unsupported は解消済みである (Issue #630)。
+
 ## 外部 ABI validator の実行記録
 
 外部 validator として clap-validator 0.4.1（release binary・sha256 を release page 記載値と照合）と VST3 SDK validator（SDK commit 3cdf9ca を CMake+MSVC で build）を ci/plugin-abi-validator/run.mjs（fail-closed・verdict は canonical leg のみ集約）で実走した (Issue #630)。初回で CLAP の param module path/fractional rate/MAX_EVENTS/instrument note/stateful rescan と VST3 の terminate 非終端/setupProcessing state/bus info の違反を検出し、fixture crate 内で TDD 修正した（production adapter zero-diff）。clap-validator 自体が param-fuzz-sample-accurate で panic（exit 0xc0000409）する tool 側 bug を特定し、宣言的除外+informational leg で対処した。最終 verdict Passed・VST3 235 passed/0 failed・CLAP 5 plugin 全 leg 0 failed・contract test 18 pass である (Issue #630)。
@@ -140,6 +142,8 @@ clap-validator 0.4.1 の preset-discovery crawl/load は45秒 timeout+JSON 無�
 
 clap-validator の param-fuzz panic の根因は連鎖として特定された (Issue #726)。param-fuzz-basic/param-fuzz-modulation が単独 panic、param-fuzz-sample-accurate は clean crashed 記録と確定した（--include/--exclude filter で絞り込み）。根因連鎖は、fixture exit(0) mode（stepped 2.0）→ sandboxed child success+無出力 → sandbox.rs:98 .expect() panic → cli.rs:55 scoped thread panic → exit 101・JSON 未出力である。upstream checkout master 5bc2ef3 で未修正を確認し、issue list に同件なし・#41/#42 は master 修正済みだが 0.4.1 未収録と整合した。報告ドラフトを記録し、実起票は Coordinator hand-off とした (Issue #726)。
 
+closeout（2026-11-26）時点の最終 canonical 状態を集約すると、`evidence/rf630/abi-validator/run.json`（schema `rf630-abi-validator-run/2`・実走 HEAD `5099cbe5`）は evaluation verdict Passed・canonical 7/7 leg Passed であり、clap-validator は pin-47e2424（upstream commit `47e2424`・`0.4.1-5-g47e2424`・license は upstream `Cargo.toml`/`LICENSE` の MIT・binary sha256 `b4bd6458…`）、VST3 SDK validator は 3.8.1（`v3.8.1_build_84`・license は `vst3sdk/LICENSE.txt` の MIT License・binary sha256 `5889a896…`）で 282 passed/0 failed である。上記の 0.4.1 release binary・235 passed・「MIT OR Apache-2.0」「Steinberg VST3 License」の記述は初回/rerun slice 時点の歴史的記録であり、現行の version/license 記録の正は pin-47e2424 = MIT・VST3 SDK = MIT License である（preset-discovery-reeval の調査で確定）。残る非 Pass 記録は、`test_fault` の `param-(set|fuzz)` 宣言的除外（fixture が意図的 crash を arm する設計由来・fatal surface は L1 out-of-process fault lane が担う）と、informational unfiltered fault leg の Unsupported（exit 101・param-fuzz tool panic）であり、upstream release 後の再評価は `scarecrow173/ruviform#867` が追う (Issue #630)。
+
 ## 記録の範囲と限界
 
 以下は記録上 NotRun・deferred・未検証とされた項目である。
@@ -148,7 +152,7 @@ clap-validator の param-fuzz panic の根因は連鎖として特定された (
 - plugin 基盤の総合検証で mise run bench はベンチ未実装で実質 no-op であり、性能回帰検出は当該検証に含まれなかった (Issue #29)。
 - OFX は mac/Linux/CI matrix を実施せず pass も主張しない。MSVC/非 Windows host は未検証である (Issue #98, #131)。
 - catalog handle の token 化と catalog_identifier/descriptor_string の post-reclaim lifetime は scope 外として Deferred 記録とした (Issue #131)。
-- 実親 HWND+メッセージポンプ経由の open_gui 成功パスは NotRun のまま Issue #631 へ deferred された。Windows パスでの実 WS_CHILD HWND 生成/破棄までは検証済みである (Issue #630)。
+- 実親 HWND+メッセージポンプ経由の open_gui 成功パスは NotRun のまま Issue #631 へ deferred された。Windows パスでの実 WS_CHILD HWND 生成/破棄までは検証済みである (Issue #630)。（closeout 注記: これは fixture slice 時点の記録であり、その後 #631 の real-dock lane が実装され、real-window ledger で VST3 32 case・CLAP 14 case 全 pass の実走証拠がある — repo sha `2dfd2e0f`。ただし ledger の `HostWindow` focus leg は `accepted-declared`・`effect_verified:false` の qualified pass であり、同-queue host_path lane が真の oracle という caveat は残る）
 - L1 OpenGui/CloseGui は HostError::Unsupported by design、非 Windows runtime 未検証、set_transient/suggest_title は #389 D7 deferred である (Issue #630)。
 - adapter-state-bridge は real stateful round-trip の実証が test_stateful fixture slice まで NotRun であり、in-process COM double の成功は real-ABI oracle ではないと明記された (Issue #630)。
 - CLAP test_gain は L0 in-process 検証のみで、L1 out-of-process runner・外部 SDK validator・非 Windows lane は後続 slice まで NotRun だった。test_stateful は production host bridge の save_state/restore_state 欠如で blocked であり adapter-state-bridge slice で解消された (Issue #630)。

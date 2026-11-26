@@ -4,7 +4,7 @@ type: "spec"
 status: "approved"
 title: "Issue #630 AC disposition census — VST3/CLAP Test Plugin Suite AC の行別 disposition と残件分類"
 created: "2026-11-24"
-updated: "2026-11-24"
+updated: "2026-11-26"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -13,6 +13,9 @@ relations:
   changes:
     added:
       - type: "doc"
+        path: "evidence/rf630/closeout-verification.md"
+    modified:
+      - type: "doc"
         path: "docs/specs/issue-630-ac-inventory.md"
       - type: "doc"
         path: "docs/discovery/issue-630-ac-inventory.md"
@@ -20,15 +23,10 @@ relations:
         path: "docs/test-specs/issue-630-ac-inventory.md"
       - type: "doc"
         path: "evidence/rf630/ac-inventory.md"
-    modified:
-      - type: "file"
-        path: "evidence/rf631/plugin-dock-scenario.jsonl"
-      - type: "file"
-        path: "evidence/rf631/plugin-dock-console.jsonl"
-      - type: "file"
-        path: "evidence/rf631/plugin-dock-console-list.jsonl"
-      - type: "file"
-        path: "evidence/rf631/plugin-dock-console-list-include-real.jsonl"
+      - type: "doc"
+        path: "docs/evidence/plugin-format-evidence.md"
+      - type: "doc"
+        path: "docs/knowledge/plugin-format-adapters.md"
   depends-on:
     - "docs/discovery/issue-630-ac-inventory.md"
     - "docs/specs/issue-630-test-plugin-suite.md"
@@ -47,22 +45,32 @@ metadata:
 Issue #630 の受入条件 7 行に対し、canonical ledger との突合結果をもとに行別
 disposition（現行 verdict の確定）を記録し、残件を 3 類に分類する。本 spec は
 Issue 本文・verdict 意味・実装を変更しない close-out 判定材料であり、
-checkbox の `[x]` 適用は Coordinator の判定に委ねる。証拠の生データ表は
-`evidence/rf630/ac-inventory.md`、突合手順と正直性チェックは
+checkbox の `[x]` 適用と Issue close は Coordinator の判定に委ねる。証拠の
+生データ表は `evidence/rf630/ac-inventory.md`、突合手順と正直性チェックは
 `docs/test-specs/issue-630-ac-inventory.md`、証拠対応の論理は
-`docs/discovery/issue-630-ac-inventory.md` を参照。
+`docs/discovery/issue-630-ac-inventory.md`、closeout の census 記録は
+`evidence/rf630/closeout-verification.md` を参照。
+
+本版は closeout docs-only slice（2026-11-26・base SHA `ab6dc99f`）での再
+census に基づく改訂である。2026-11-24 版からの主要な変化: CLAP real lane は
+editor verbs（`ruviform.editor-ops` seam）と fault-carrier の実装により
+14 case 全 pass となり、implementable 残件は解消した。ABI validator は
+pin-47e2424 へ更新され preset-discovery の宣言的除外は解消、VST3 は
+282 passed/0 failed。Issue 本文の checkbox は census 時点で AC1〜AC6 が
+`[x]`、AC7 が `[ ]`（2026-11-26 確認）。本 spec の disposition は AC7 についても
+`[x]` 適用と整合する（適用判断は Coordinator）。
 
 ## AC 行別 disposition
 
-| # | AC 行（要約） | disposition | Issue checkbox 更新提案 |
+| # | AC 行（要約） | disposition | Issue checkbox との整合 |
 | --- | --- | --- | --- |
-| 1 | VST3/CLAP 実ファイルを本番 Host Path で lifecycle・Fake 非経由 | **Pass** — 両 format で production bridge 経由の host_path tests・headless `host-lifecycle`・L1 e2e・real attach が実測 pass | `[x]` 提案 |
-| 2 | 既知 PCM/…/Crash/Hang/Timeout/Isolation を独立 Oracle で検証 | **Pass** — 4 fixture + spawn/pre-Hello fault + L1 fan-out/isolation + real-session legs で対象語彙を両 format で実走。残件は CLAP leg crash/hang（implementable）と OS-API MIDI 経路（rf#762 gate）であり、行の判定語彙自体は Pass | `[x]` 提案（残件は下表で分離記録） |
-| 3 | Host 独立 Validator/Reference Host・バイアス排除・SDK/License 記録 | **Pass** — clap-validator 0.4.1 + VST3 SDK validator 3.8.1 の全 canonical leg Passed。宣言的除外は non-pass 記録で upstream 再評価は #867 | `[x]` 提案 |
-| 4 | Native Editor 実 Window/child HWND/画素/Input/…・DComp Fail 再現・Fake/Floating 非 Pass | **部分 Pass** — VST3 leg（`test_editor`）は全判定語彙 pass。CLAP leg は 9 pass + 5 unsupported（implementable 残件） | `[ ]` 維持提案（CLAP leg 残件が行内にあるため — 分割判定する場合の選択肢は Coordinator） |
-| 5 | version/digest/RT/OS/SHA 再現・安全な Timeout/kill | **Pass** — ledger field + watchdog kill + deadline policy + exactly-once が実走済み | `[x]` 提案 |
-| 6 | 3OS OS-L1 既存 CI 統合・Windows GUI-L2/EXT-L3 opt-in 分離 | **Pass**（CI 構造として充足）— `test-full`/`test-l1-real-plugin` が 3OS で fixture を実走、GUI-L2/EXT-L3 は manual/opt-in。merge 後対象 SHA の CI 実走証拠は Coordinator gate | `[x]` 提案（CI 実走証拠の収集確認後） |
-| 7 | sv#101/#127/#128/#176・al#127 の独立 Consumer Oracle 照合・AudioLens 新依存非強制 | **部分 Pass** — manifest が contract match・al#127 NotApplicable・dep 非汚染を提供済み。consumer 実走 legs は external-owner | `[ ]` 維持提案（行が consumer 側照合を含むため — ruviform 側 done の記録で部分適用する選択肢は Coordinator） |
+| 1 | VST3/CLAP 実ファイルを本番 Host Path で lifecycle・Fake 非経由 | **Pass** — 両 format で production bridge 経由の host_path tests・headless `host-lifecycle`・L1 e2e・real attach が実測 pass | `[x]`（適用済み）と整合 |
+| 2 | 既知 PCM/…/Crash/Hang/Timeout/Isolation を独立 Oracle で検証 | **Pass** — 4 fixture + spawn/pre-Hello fault + L1 fan-out/isolation + real-session legs で対象語彙を両 format で実走。CLAP leg の crash/hang は fault-carrier（`test_editor` の共有 `Fault` param）で pass 化済み。残件は OS-API MIDI 経路（rf#762 gate）のみで、行の判定語彙自体は Pass | `[x]`（適用済み）と整合（残件は下表で分離記録） |
+| 3 | Host 独立 Validator/Reference Host・バイアス排除・SDK/License 記録 | **Pass** — clap-validator pin-47e2424（`0.4.1-5-g47e2424`・MIT）+ VST3 SDK validator 3.8.1（`v3.8.1_build_84`・MIT License per `vst3sdk/LICENSE.txt`）の canonical 7/7 leg Passed・VST3 282 passed/0 failed。`test_fault` の `param-(set\|fuzz)` 宣言的除外と informational unfiltered leg の Unsupported は non-pass 記録として残り、upstream 再評価は #867 | `[x]`（適用済み）と整合 |
+| 4 | Native Editor 実 Window/child HWND/画素/Input/…・DComp Fail 再現・Fake/Floating 非 Pass | **Pass** — VST3 leg 32 case・CLAP leg 14 case ともに全 pass（`2dfd2e0f`）。CLAP の input/focus/popup は `ruviform.editor-ops` seam 経由の effect-verified、crash/hang は fault-carrier で実走。**qualified pass 注記**: `set_focus_target(HostWindow)` leg は両 ABI で `accepted-declared`・`effect_verified:false` — container への OS focus move は lane-topology 依存で未検証と正直に記録し、同-queue `host_path` lane が真の oracle。この caveat は ledger verdict を fail に倒すものではないが、effect-verified Pass とも区別する | `[x]`（適用済み）と整合（caveat は closeout 証拠に明記） |
+| 5 | version/digest/RT/OS/SHA 再現・安全な Timeout/kill | **Pass** — ledger field + watchdog kill + deadline policy + exactly-once が実走済み | `[x]`（適用済み）と整合 |
+| 6 | 3OS OS-L1 既存 CI 統合・Windows GUI-L2/EXT-L3 opt-in 分離 | **Pass**（CI 構造として充足）— `test-full`/`test-l1-real-plugin` が 3OS で fixture を実走、GUI-L2/EXT-L3 は manual/opt-in。`ci.yml` は workflow_dispatch のみで `daily-ci.yml` が main 検証を集約。merge 後対象 SHA の CI 実走証拠は Coordinator gate | `[x]`（適用済み）と整合（CI 実走証拠の収集確認は Coordinator） |
+| 7 | sv#101/#127/#128/#176・al#127 の独立 Consumer Oracle 照合・AudioLens 新依存非強制 | **Pass** — AC7 の字面は「独立 Consumer Oracle を照合し、AudioLens への新依存を強制しない」であり、consumer 側の実走完了を要求しない。manifest が sv#101/#127/#128/#176 の contract match・al#127 NotApplicable・dep 非汚染を提供し rf#630 側の AC7 は充足。consumer 実走 legs は external-owner の後続責務として残る（sv#176 S1 の headless legs は synvelis 側実走済みだが Native Dock/PD 受入は未実走）が、未実走を Pass と偽装しない | `[x]` 適用が整合（checkbox 適用と Issue close の判断は Coordinator） |
 
 ## 残件の 3 類分類
 
@@ -76,15 +84,14 @@ checkbox の `[x]` 適用は Coordinator の判定に委ねる。証拠の生デ
 
 **implementable**（ruviform 側で実装可能な残件）
 
-- CLAP `SendGuiKey`/`SetGuiFocus`/popup verb — `real-clap-editor-input`/
-  `-focus`/`-popup` が CLAP L0 ops surface の trait-default `Unsupported`。
-  fixture 側に event log・observable channel を実装して ops surface を拡張する
-  作業（#912 の param reporting と同系の拡張点）。
-- CLAP fault arm — `real-clap-session-crash`/`-hang`。`test_editor` が
-  parameterless fixture で VST3 側の in-band `Fault` param carrier を持たず、
-  `plugin_id` keyed route が co-resident `test_fault` arm を許さない。
-  CLAP 側 param carrier の実装、または route/Bundled pool API 変更で解く
-  余地がある。
+- closeout 時点では **解消済み（残件なし）**。2026-11-24 版で implementable と
+  分類していた 2 件はいずれも実装・実走 pass 済みである:
+  - CLAP `SendGuiKey`/`SetGuiFocus`/popup verb — `ruviform.editor-ops` private
+    extension seam（wire v8・fixture-private vtable）として実装され、
+    `real-clap-editor-{input,focus,popup}` は effect-verified pass。
+  - CLAP fault arm — `test_editor` が共有 `Fault` param を担う fault-carrier
+    （VST3 #885 の CLAP mirror）として実装され、`real-clap-session-{crash,hang}`
+    は in-band arm で pass。
 - `real-session-rt-boundary` — 現 ledger では pass（rt-boundary の判定語彙が
   解消済み）。かつての `!Send` fixture 境界による Unsupported は Issue #920
   （CLOSED）で re-scope 済みであり、残件ではない。
@@ -95,24 +102,22 @@ checkbox の `[x]` 適用は Coordinator の判定に委ねる。証拠の生デ
   `test_instrument` e2e は provisioned runner 不在で `NotRun`。runner は
   `rf#762` 待ち（Issue #630 直接対象外だが AC1/AC2 の完全経路に関わる）。
 - consumer 実走 legs — sv#101/#127/#128/#176・al#127 の consumer repo 側
-  実走は external-owner（AC7 の残り）。ruviform 側は contract match・
-  dep 非汚染を提供済み。
-- clap-validator upstream release — `preset-discovery-crawl`/`-load` の
-  宣言的除外解除と `param-fuzz` panic 修正は upstream fix 含む release 待ち
-  （再評価 Issue: `scarecrow173/ruviform#867` OPEN）。
-- `mise.toml` lane comment の「editor-pixel dock acceptance stays deferred」—
-  `real-dcomp-pixel` は editor の screen-composited 画素を実測しており、
-  comment 由来の deferred 表現に対応する open tracker は現時点でない（#532
-  CLOSED・residual disposition 確定）。深堀りの dock acceptance 拡張が必要に
-  なった場合のみ再 scope する。
+  実走は external-owner の後続責務（AC7 verdict とは独立 — AC7 は照合と
+  非強制の充足で Pass 確定）。ruviform 側は contract match・dep 非汚染を提供済み。
+- clap-validator upstream release — `param-fuzz` panic（informational
+  unfiltered leg・exit 101）の修正は upstream fix 含む release 待ち
+  （再評価 Issue: `scarecrow173/ruviform#867` OPEN）。preset-discovery の
+  除外は pin-47e2424 で解消済みだが、pin は release binary ではなく upstream
+  commit build のため、release 版への切替えも #867 で再評価する。
 - macOS/Linux GUI lane — POLICIES §2 の Deferred。
 
 ## scope out
 
 - 本 spec は AC disposition の確定と分類のみ。以下は行わない: Issue 本文の
-  checkbox 編集（Coordinator 判定）、real-window ledger の再生成（read-only
-  正本）、fixture/route/catalog の意味変更、新規 slice、docs index
+  checkbox 編集・Issue close（Coordinator 判定）、real-window ledger の再生成
+  （read-only 正本 — closeout では `2dfd2e0f` の ledger をそのまま証拠採用）、
+  fixture/route/catalog の意味変更、新規 slice、docs index
   （`docs/**/README.md`）の更新（Coordinator が統合時に整備）。
-- `evidence/rf631/plugin-dock-{scenario,console,console-list,
-  console-list-include-real}.jsonl` の再生成は占有範囲内で実施済み
-  （`ff7013dc` → `06a5a9e0`）。
+- computer-use による実 GUI 受入と real lane の再実行は行わない
+  （2026-11-26 ユーザー決定 — 既存 real lane ledger の pass 記録を closeout
+  証拠として採用）。
