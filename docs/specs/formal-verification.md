@@ -450,6 +450,17 @@ exit 1 を返した。mutant は完全に revert し、同じ selective lane と
 `mise run test-formal` の再実行で緑へ戻した。実行記録は
 `evidence/rf1015/verification-slice2.md` と `runs.jsonl` を参照する。
 
+slice 2 の `W-IPC-OP` では、verified Sync Commit を
+`5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
+harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
+proptest、crate regression の検証対象である。`8cb8a6d58933d04415cfe47f92381a913c547d52`
+以降の本 slice の sync commit chainは docs/skill/evidence-onlyでなければならず、
+製品/proof/mise 差分を追加する場合は再検証なしに verified Sync Commitを進めない。evidenceは
+自分自身を含む commit hashを固定点として書けないため、最終 head SHAは
+PR #1027 の head と本文で追跡する。`runs.jsonl` では proof/regression 系 record
+が `5024268f` を、evidence本文を検査する prek recordだけが exact runのある
+evidence sync commitを `target_sha` に使う。
+
 ## 判定語彙と fail-closed
 
 `pass` / `fail` / `not_run` / `unsupported` / `blocked` — verify-

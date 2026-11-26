@@ -6,7 +6,10 @@
 - 対象 Issue: `scarecrow173/ruviform#1015`（slice 2。Issue は close しない）。
 - branch: `test/1015-valid-op-proof-core`。
 - 作業開始時 base SHA: `87a7ba8ff3fbe6d4502bea27d152d7f74c105899`。
-- 最終検証前に取り込んだ `origin/main`: `0fb97d1ba89e1fee154cdbbb72ceb2db15fdcd8c`。差分は `crates/ruviform-audio-device/src/wasapi_input.rs` のみで、本 slice の編集範囲と重ならなかった。最終検証はこの SHA へ fast-forward した branch 上の working tree diff に対するローカル検証であり、merge 後 main SHA の統合検証ではない。
+- 最終検証前に取り込んだ `origin/main`: `0fb97d1ba89e1fee154cdbbb72ceb2db15fdcd8c`。差分は `crates/ruviform-audio-device/src/wasapi_input.rs` のみで、本 slice の編集範囲と重ならなかった。最終検証はこの SHA へ fast-forward した branch 上の branch diff に対するローカル検証であり、merge 後 main SHA の統合検証ではない。
+- 検証対象 SHA / verified Sync Commit: `5024268f56339c91ba0487fe8d87198a8d529cab`。selective Kani、proptest、crate regression を実行した working tree の製品/proof/mise 内容は、この commit で固定したものと一致する。mutation run は同じ内容へ長さ上限 `+1` の transient mutant を載せて実行し、revert 済みである。`15a9273a04120aa144b21802d5ddecc767aefb46` はその親実装 commitである。
+- 初期 evidence sync commit: `8cb8a6d58933d04415cfe47f92381a913c547d52`。この commit以降は docs/skill/evidence-only 差分でなければならず、製品/proof/mise 差分が加わった場合は再検証なしに verified Sync Commitを進めない。
+- 最終 head SHA: evidence は自分自身を含む commit hashを固定点として書けないため、PR #1027 の head と本文で追跡する。最終 headと `5024268f` の差分が docs/skill/evidence-onlyであることが、本記録の検証を最終 headへ適用する条件である。
 - OS/Arch: Windows 11 x86_64（MSYS2/MinGW shell）+ WSL2 Ubuntu 24.04.4 LTS x86_64、kernel `6.6.87.2-microsoft-standard-WSL2`。
 - tool version: Windows 側 `rustc 1.99.1 (58cf8f9c3 2026-10-13)`、`cargo 1.99.1 (5f94df478 2026-08-27)`、`mise 2026.11.2 windows-x64`。WSL2 側 `rustc 1.99.0 (b940084d7 2026-09-28)`、Kani Rust Verifier 0.68.0、CBMC 6.11.0、solver は Kani default の CaDiCaL。
 - 変更区分: `valid_op` の内部 refactor、byte-core proof、selective Kani entry、doc/evidence sync。公開 signature、`MAX_OP_LEN`、accepted language、`parse_intent` の error code と優先順位は変えていない。
@@ -41,7 +44,7 @@ canonical command は mise/prek 経由。すべてローカル検証であり、
 | `mise run lint ruviform-ui` | 2026-11-26T06:02:29Z | 2026-11-26T06:02:32Z | 0 | Pass | clippy `-D warnings` passed |
 | `mise run test ruviform-ui` | 2026-11-26T06:02:32Z | 2026-11-26T06:02:36Z | 0 | Pass | unit/integration/doc tests passed。lib 105、integration test 群を含む全 test result ok |
 | `mise run test-formal` | 2026-11-26T06:02:36Z | 2026-11-26T06:02:45Z | 0 | Pass | post-revert run。`formal_ipc` 7、`formal_transport` 4、`formal_archive` 18、`formal_structured` 35、`formal_wav` 9、計 73/73 passed |
-| `mise exec -- prek run --all-files` | 2026-11-26T06:08:08Z | 2026-11-26T06:08:12Z | 0 | Pass | 全 configured hook passed。auto-fix 差分は残っていない |
+| `mise exec -- prek run --all-files` | 2026-11-26T07:09:02Z | 2026-11-26T07:09:06Z | 0 | Pass | 初期 evidence sync commit `8cb8a6d` での exact run。全 configured hook passed。auto-fix 差分は残っていない |
 
 補助証拠（canonical = mise）として、作業中に direct `cargo kani` を実行して harness ごとの完了時間と filter 選択を確認した。direct run は canonical verdict には使っていない。
 

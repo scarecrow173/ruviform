@@ -150,6 +150,17 @@ slice 2の `W-IPC-OP` 実測は次のとおり。verification time は Kaniが�
 
 slice 1の sync stateは次のとおり。対象 SHAは `ab6dc99fe8935ac09082d05e2176b10e729ba263`。設計・evidence編集 SHAはこの branchの commitで確定する。検証済み SHAは slice 1では製品検証の sync commitを進めず、docs-onlyの baseline実行 SHAとして記録する。製品実装・proof harness・mise laneが変わる後続 sliceで、対象 groupの再検証と evidence同期が完了した時点だけ verified sync commitを進める。
 
+slice 2の `W-IPC-OP` では、再検証と evidence同期が完了したため verified sync commitを次のとおり進める。SHA の役割を混同しない。
+
+| 役割 | SHA / 参照場所 | 意味 |
+| --- | --- | --- |
+| base SHA | `0fb97d1ba89e1fee154cdbbb72ceb2db15fdcd8c` | slice 2 branchが最終検証前に取り込んだ `origin/main` |
+| 検証対象 SHA / verified Sync Commit | `5024268f56339c91ba0487fe8d87198a8d529cab` | `valid_op` byte core、in-src proof、selective laneを含む最後の製品/proof/mise 変更 commit。selective Kani、mutation、proptest、crate regression の `runs.jsonl` `target_sha` はこの commitを指す |
+| 初期 evidence sync commit | `8cb8a6d58933d04415cfe47f92381a913c547d52` | ledger/spec/skill/evidenceを同期した最初の commit。製品/proof/mise 差分を持たないため verified Sync Commitを移動しない |
+| 最終 head SHA | PR #1027 の head と本文 | evidence は自分自身を含む commit hashを固定点として書けない。最終 headは `5024268f` 以降の docs/skill/evidence-only descendantでなければならず、製品/proof/mise 差分が加わった場合は再検証なしに sync commitを進めない |
+
+`runs.jsonl` の prek recordだけは evidence本文そのものを検査するため、exact runが存在する初期 evidence sync commit `8cb8a6d` を `target_sha` に使う。selective Kani、mutation、proptest、crate regression、consumer impact recordは製品/proof/mise の検証対象である `5024268f` を `target_sha` に使う。mutation recordの `target_sha` は transient mutantではなく revert後の unmutated base commitを指す。最終 headとの対応は PR 本文へ記録し、evidence-only差分であることを diffで確認する。
+
 後続 sliceへ分離する作業:
 
 1. CSV limit decision core抽出、structured lane分割、`--no-unwinding-checks` crate全体指定の除去。
