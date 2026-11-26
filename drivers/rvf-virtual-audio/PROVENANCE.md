@@ -80,7 +80,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 | `NewDelete.cpp/.h` | 同名 | ＝ |
 | `mintopo.cpp/.h` | 同名 | ＝ |
 | `minwavert.cpp/.h` | 同名 | ＝ |
-| `minwavertstream.cpp/.h` | 同名 | ≠ capture 充填を ToneGenerator → loopback 経路へ置換 + render stream の register/unregister/run-state/play-cursor publish + STOP 時の時間基準・carry-forward リセット |
+| `minwavertstream.cpp/.h` | 同名 | ≠ capture 充填を ToneGenerator → loopback 経路へ置換 + render stream の register/unregister/run-state/play-cursor publish + STOP 時の時間基準・carry-forward リセット + Issue #1009 static registry xrun scenario injection |
 | `simple.h` | 同名 | ＝ |
 | `speakertopo.cpp/.h` | 同名 | ＝ |
 | `speakertoptable.h` | `speakertoptable.h` | ≠ pin-name GUID を独自 GUID へ + Category を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` |
@@ -116,6 +116,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
   - `SetState(KSSTATE_STOP)` で `m_ullDmaTimeStamp`/`m_ullLastDPCTimeStamp`/3 種の carry-forward（`m_hnsElapsedTimeCarryForward`/`m_hnsDPCTimeCarryForward`/`m_byteDisplacementCarryForward`）をリセット — upstream はこれらを残すため restart 時に前回 run の残渣が position/notification 計算へ混入する。`SetState(KSSTATE_RUN)` の DMA time base stamp を `m_PositionSpinLock` 下へ移動し reader との atomicity を確保。
   - `SetState(KSSTATE_STOP)` の position reset を render stream では省略し、全 position clock（`m_ullPlayPosition`/`m_ullWritePosition`/`m_ullLinearPosition`/`m_ullPresentationPosition`）と `m_llPacketCounter` を STOP 跨ぎ monotonic に維持 — attempt-13 `output timestamp regressions: 2` の driver 側対応として逐次追加（attempt-16/17/18）。**効果は無かった**（regressions は常にちょうど 2 で不変 — 発生源は audiodg の epoch bookkeeping で driver 不可制御と確定）が、実 HW clock と同じく position が逆流しない方が整合的なため維持する。capture stream は `GetReadPacket` の packet-position 計算が buffer epoch 依存のため従来どおり reset。OS 供給値（`m_ulCurrentWritePosition`/`m_ulLastOsWritePacket`/`m_ulLastOsReadPacket`）は protocol 契約として常に reset。
   - `ToneGenerator.cpp/.h` は vendored 資産として保持（`Init` も既存どおり実行 — capture 経路から呼ばなくなったのみで削除はしない）。
+  - Issue #1009 driver injection implementation: driver service `Parameters` key の `RvfXrunScenario`/`RvfXrunStartPacket`/`RvfXrunPacketCount` を stream 作成時に snapshot し、`eMicInDevice` + `KSPIN_WAVEIN_HOST` の Ruviform Cable Output capture stream に限定する。capture-overflow-drop は notification completion の `KeSetEvent` だけを抑止し、capture-content-gap は指定 packet 区間に対応する DMA byte spanだけを零 fill する。registry の再読や stream 中の書き換え経路は持たない。
 
 ## endpoint 名の根拠
 

@@ -8,6 +8,12 @@
 #include "AudioModuleHelper.h"
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
 
+#define RVF_XRUN_SCENARIO_DISABLED              0
+#define RVF_XRUN_SCENARIO_CAPTURE_OVERFLOW_DROP 1
+#define RVF_XRUN_SCENARIO_CAPTURE_CONTENT_GAP   2
+#define RVF_XRUN_START_PACKET_MAX               4096
+#define RVF_XRUN_PACKET_COUNT_MAX               16
+
 #pragma warning (disable : 4127)
 
 //=============================================================================
@@ -145,6 +151,9 @@ NTSTATUS CMiniportWaveRTStream::ReadRegistrySettings()
         { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"LoopbackCaptureToneDCOffset",     &m_dwLoopbackCaptureToneDCOffset,       (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_dwLoopbackCaptureToneDCOffset,           sizeof(DWORD) },
         { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"HostCaptureToneInitialPhase",     &m_dwHostCaptureToneInitialPhase,       (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_dwHostCaptureToneInitialPhase,           sizeof(DWORD) },
         { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"LoopbackCaptureToneInitialPhase", &m_dwLoopbackCaptureToneInitialPhase,   (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_dwLoopbackCaptureToneInitialPhase,       sizeof(DWORD) },
+        { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"RvfXrunScenario",                 &m_ulXrunScenario,                       (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_ulXrunScenario,                           sizeof(DWORD) },
+        { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"RvfXrunStartPacket",              &m_ulXrunStartPacket,                    (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_ulXrunStartPacket,                        sizeof(DWORD) },
+        { NULL,   RTL_QUERY_REGISTRY_DIRECT | RTL_QUERY_REGISTRY_TYPECHECK, L"RvfXrunPacketCount",              &m_ulXrunPacketCount,                    (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT) | REG_DWORD,  &m_ulXrunPacketCount,                        sizeof(DWORD) },
         { NULL,   0,                                                        NULL,                               NULL,                                   0,                                                              NULL,                                       0 }
     };
 
@@ -173,6 +182,40 @@ NTSTATUS CMiniportWaveRTStream::ReadRegistrySettings()
         //
         // Don't return error because we will operate with default values.
         //
+    }
+
+    //
+    // The injection target is the virtual-cable capture streaming pin:
+    // in this driver that is the WaveMicIn system capture pin exposed as
+    // "Ruviform Cable Output". It is not the speaker filter's OS loopback
+    // pin, and the scenario must not leak to unrelated capture pins.
+    //
+    m_bXrunInjectionTarget =
+        (m_pMiniport != NULL &&
+         m_pMiniport->m_DeviceType == eMicInDevice &&
+         m_ulPin == KSPIN_WAVEIN_HOST &&
+         m_pMiniport->IsSystemCapturePin(m_ulPin)) ? TRUE : FALSE;
+
+    if (m_ulXrunScenario == RVF_XRUN_SCENARIO_DISABLED)
+    {
+        m_ulXrunStartPacket = 0;
+        m_ulXrunPacketCount = 0;
+    }
+    else if (!m_bXrunInjectionTarget ||
+             (m_ulXrunScenario != RVF_XRUN_SCENARIO_CAPTURE_OVERFLOW_DROP &&
+              m_ulXrunScenario != RVF_XRUN_SCENARIO_CAPTURE_CONTENT_GAP) ||
+             m_ulXrunStartPacket > RVF_XRUN_START_PACKET_MAX ||
+             m_ulXrunPacketCount == 0 ||
+             m_ulXrunPacketCount > RVF_XRUN_PACKET_COUNT_MAX)
+    {
+        //
+        // Fail closed: malformed, unreadable, out-of-range, or non-target
+        // configuration never causes partial injection and never fails
+        // stream creation.
+        //
+        m_ulXrunScenario = RVF_XRUN_SCENARIO_DISABLED;
+        m_ulXrunStartPacket = 0;
+        m_ulXrunPacketCount = 0;
     }
 
     if (DriverKey)
@@ -271,6 +314,14 @@ Return Value:
     m_dwHostCaptureToneInitialPhase = 0;
     m_dwLoopbackCaptureToneInitialPhase = 0;
 
+    m_ulXrunScenario = RVF_XRUN_SCENARIO_DISABLED;
+    m_ulXrunStartPacket = ULONG_MAX;
+    m_ulXrunPacketCount = 0;
+    m_bXrunInjectionTarget = FALSE;
+    m_ullXrunCompletionIndex = 0;
+    m_ullXrunWriteBytePosition = 0;
+    m_ullXrunZeroStartByte = 0;
+    m_ullXrunZeroEndByte = 0;
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
     m_SidebandOpen = FALSE;
@@ -605,6 +656,16 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     m_pDmaBuffer = (BYTE*)m_pPortStream->MapAllocatedPages(pBufferMdl, MmCached);
     m_ulNotificationsPerBuffer = NotificationCount_;
     m_ulDmaBufferSize = RequestedSize_;
+
+    {
+        ULONG packetBytes = RequestedSize_ / NotificationCount_;
+        m_ullXrunZeroStartByte = (ULONGLONG)m_ulXrunStartPacket * packetBytes;
+        m_ullXrunZeroEndByte =
+            (ULONGLONG)(m_ulXrunStartPacket + m_ulXrunPacketCount) * packetBytes;
+    }
+    m_ullXrunCompletionIndex = 0;
+    m_ullXrunWriteBytePosition = 0;
+
     ulBufferDurationMs = (RequestedSize_ * 1000) / m_ulDmaMovementRate;
     m_ulNotificationIntervalMs = ulBufferDurationMs / NotificationCount_;
 
@@ -641,6 +702,9 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
 
     m_ulDmaBufferSize = 0;
     m_ulNotificationsPerBuffer = 0;
+    m_ullXrunWriteBytePosition = 0;
+    m_ullXrunZeroStartByte = 0;
+    m_ullXrunZeroEndByte = 0;
 
     return;
 }
@@ -800,6 +864,9 @@ _In_        ULONG       Size_
 
     m_ulDmaBufferSize = 0;
     m_ulNotificationsPerBuffer = 0;
+    m_ullXrunWriteBytePosition = 0;
+    m_ullXrunZeroStartByte = 0;
+    m_ullXrunZeroEndByte = 0;
 }
 
 //=============================================================================
@@ -1238,6 +1305,8 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 m_ullWritePosition = 0;
                 m_ullLinearPosition = 0;
                 m_ullPresentationPosition = 0;
+                m_ullXrunCompletionIndex = 0;
+                m_ullXrunWriteBytePosition = 0;
             }
             else
             {
@@ -1604,13 +1673,74 @@ ByteDisplacement - # of bytes to process.
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
     PADAPTERCOMMON pAdapterComm = m_pMiniport->GetAdapterCommObj();
 
+    BOOLEAN contentGap =
+        (m_bXrunInjectionTarget &&
+         m_ulXrunScenario == RVF_XRUN_SCENARIO_CAPTURE_CONTENT_GAP &&
+         m_ullXrunZeroEndByte > m_ullXrunZeroStartByte) ? TRUE : FALSE;
+
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-        pAdapterComm->RvfLoopbackCaptureWrite(
-            m_pDmaBuffer + bufferOffset, runWrite, &m_pWfExt->Format);
+
+        if (!contentGap)
+        {
+            pAdapterComm->RvfLoopbackCaptureWrite(
+                m_pDmaBuffer + bufferOffset, runWrite, &m_pWfExt->Format);
+        }
+        else
+        {
+            ULONG runOffset = 0;
+
+            //
+            // Split only when this position update crosses the precomputed
+            // injection byte boundaries. Outside the boundary crossings the
+            // copy remains one contiguous call; total written bytes are
+            // unchanged, and no copied span is scanned again to erase it.
+            //
+            while (runOffset < runWrite)
+            {
+                ULONG remaining = runWrite - runOffset;
+                ULONG chunk = remaining;
+                BOOLEAN zeroChunk = FALSE;
+                ULONGLONG position = m_ullXrunWriteBytePosition;
+
+                if (position < m_ullXrunZeroStartByte)
+                {
+                    ULONGLONG bytesUntilStart = m_ullXrunZeroStartByte - position;
+                    if (bytesUntilStart < remaining)
+                    {
+                        chunk = (ULONG)bytesUntilStart;
+                    }
+                }
+                else if (position < m_ullXrunZeroEndByte)
+                {
+                    ULONGLONG bytesUntilEnd = m_ullXrunZeroEndByte - position;
+                    zeroChunk = TRUE;
+                    if (bytesUntilEnd < remaining)
+                    {
+                        chunk = (ULONG)bytesUntilEnd;
+                    }
+                }
+
+                if (zeroChunk)
+                {
+                    RtlZeroMemory(m_pDmaBuffer + bufferOffset + runOffset, chunk);
+                }
+                else
+                {
+                    pAdapterComm->RvfLoopbackCaptureWrite(
+                        m_pDmaBuffer + bufferOffset + runOffset,
+                        chunk,
+                        &m_pWfExt->Format);
+                }
+
+                runOffset += chunk;
+                m_ullXrunWriteBytePosition += chunk;
+            }
+        }
+
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }
@@ -1830,6 +1960,7 @@ TimerNotifyRT
     LARGE_INTEGER qpc;
     LARGE_INTEGER qpcFrequency;
     BOOL bufferCompleted = FALSE;
+    BOOL suppressNotification = FALSE;
 
     UNREFERENCED_PARAMETER(Timer);
 
@@ -1870,6 +2001,24 @@ TimerNotifyRT
     }
 
     _this->UpdatePosition(qpc);
+
+    if (_this->m_bXrunInjectionTarget &&
+        bufferCompleted &&
+        _this->m_KsState == KSSTATE_RUN)
+    {
+        ULONGLONG completionIndex = _this->m_ullXrunCompletionIndex;
+        ULONGLONG suppressionEndPacket =
+            (ULONGLONG)_this->m_ulXrunStartPacket + _this->m_ulXrunPacketCount;
+
+        if (_this->m_ulXrunScenario == RVF_XRUN_SCENARIO_CAPTURE_OVERFLOW_DROP &&
+            completionIndex >= _this->m_ulXrunStartPacket &&
+            completionIndex < suppressionEndPacket)
+        {
+            suppressNotification = TRUE;
+        }
+
+        _this->m_ullXrunCompletionIndex++;
+    }
 
     if (!_this->m_bEoSReceived)
     {
@@ -1931,7 +2080,10 @@ TimerNotifyRT
                                         _this->GetCurrentWaveRTWritePosition(),
                                         _this->m_ulDmaBufferSize/_this->m_ulNotificationsPerBuffer, // replace with the correct "Data length completed"
                                         0); // always zero
-            KeSetEvent(nleCurrent->NotificationEvent, 0, 0);
+            if (!suppressNotification)
+            {
+                KeSetEvent(nleCurrent->NotificationEvent, 0, 0);
+            }
 
             leCurrent = leCurrent->Flink;
         }
