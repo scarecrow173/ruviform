@@ -44,7 +44,7 @@
 
 canonical command は `mise run test-formal-kani arc-idx-limit` であり、WSL2 内では `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit` を実行した。出力では `zip::read::proofs::arc_idx_limit_decision_exactness` だけが checking 対象になり、他 proof を巻き込まなかった。post-revert run は `SUCCESSFUL`、0/19 failed、cover 8/8 satisfied であり、Unwinding Assertions を無効化していない。
 
-補助計測（canonical = mise）では、同じ filter の direct `cargo kani` が verification time 0.15054883 s、wall clock 3.63 s、user CPU 0.52 s + system CPU 0.39 s、`/usr/bin/time` max RSS 105,228 KiB だった。canonical lane wall clock は約 6–7 s。事前予算 5 CPU-min / 1 GiB に対し、verification time・CPU 時間・観測メモリのいずれも十分以内である。完了時間や exit 0 を Proof Pass の根拠にはせず、`SUCCESSFUL` verdict、失敗数、cover 到達を証拠にした。
+canonical lane は pre-mutation run が verification time 0.17472197 s / wall 約6 s、post-revert run が verification time 0.23537865 s / wall 約7 sだった。補助計測（canonical = mise）では、mutation前の同じ filter の direct `cargo kani` が verification time 0.15054883 s、wall clock 3.63 s、user CPU 0.52 s + system CPU 0.39 s、`/usr/bin/time` max RSS 105,228 KiBだった。post-revert後の補助 `/usr/bin/time` run（2026-11-26T13:15:21Z–13:15:37Z、compileを含む）は exit 0、wall clock 16.20 s、user CPU 3.21 s + system CPU 2.45 s、max RSS 152,908 KiBだった。compileを含む補助 wall clock と Kaniの verification timeは混同しない。事前予算 5 CPU-min / 1 GiB に対し、verification time・CPU 時間・観測メモリのいずれも十分以内である。完了時間や exit 0 を Proof Pass の根拠にはせず、`SUCCESSFUL` verdict、失敗数、cover 到達を証拠にした。
 
 ## Mutation-fail と revert
 
