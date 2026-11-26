@@ -12,7 +12,7 @@ name: virtual-audio-driver-probe
 # endpoint_probe pair 候補検出 → midi_endpoint_probe
 # loopback 候補検出 → virtual_endpoint streaming round-trip →
 # tests/loopback.rs MIDI round-trip → os_endpoint wiring →
-# os-endpoint-midi-e2e → fault-cases → cleanup まで stage 分解で
+# os-endpoint-midi-e2e → fault-cases → xrun-cases → cleanup まで stage 分解で
 # 実測し、どの stage まで成立するかを判定材料として記録する。判定は
 # evidence の解釈に委ね、workflow 自体は測定の完走のみを成功条件とする。
 #
@@ -810,6 +810,42 @@ jobs:
           }
           exit 0
 
+      # xrun-cases: Issue #1009 harness/tool/workflow slice — virtual audio
+      # capture streaming pin への deterministic xrun 注入 case を additive に
+      # 実行する。controller だけが static registry stream snapshot を write /
+      # restore し、harness は Ruviform Cable pair の adapter observation と
+      # rf1009-xrun-case/v1 schema を担当する。未 provisioned・前提不足は
+      # case-level NotRun、oracle 不成立や controller/schema 不備は case-level
+      # Fail / stage error に写し、required gate や既存 fault contract には
+      # 接続しない。output render underrun case は本 slice の対象外。
+      - name: Stage xrun-cases
+        if: always()
+        shell: pwsh
+        env:
+          RUVIFORM_RUN_REPO: ${{ github.repository }}
+          RUVIFORM_RUN_SHA: ${{ github.sha }}
+        run: |
+          . ./tools/testsigned-driver/probe-stage.ps1
+          $os = '${{ matrix.os }}'
+          $json = "vaudio-probe-$os.json"
+          $log = "stage-xrun-cases-$os.txt"
+          $outputDir = "xrun-cases-$os"
+          New-Item -ItemType File -Force $log | Out-Null
+          try {
+            $out = @(& ./tools/virtual-audio-driver/Invoke-XrunCases.ps1 -Os $os -OutputDir $outputDir 2>&1)
+            $controllerExit = $LASTEXITCODE
+            foreach ($line in $out) { "  $line" | Out-Probe $log }
+            "  xrun controller exit=$controllerExit output=$outputDir" | Out-Probe $log
+            $recorded = Get-StageStatus $json 'xrun-cases'
+            if ($controllerExit -ne 0 -and -not $recorded) {
+              Add-StageRecord -JsonPath $json -Stage xrun-cases -Status error -Detail "controller-exit-$controllerExit" -ExitCode $controllerExit
+            }
+          } catch {
+            "  xrun controller invocation error: $($_.Exception.Message)" | Out-Probe $log | Out-Null
+            Add-StageRecord -JsonPath $json -Stage xrun-cases -Status error -Detail "controller-invocation-error: $($_.Exception.Message)"
+          }
+          exit 0
+
       # cleanup: test/probe/artifact upload の成否に関係なく、primitive の
       # unprovision を partial state に対して実行する。exit 1（residue/error を
       # 含む観測結果）は stage evidence として記録して workflow は継続し、
@@ -894,6 +930,7 @@ jobs:
             os-endpoint-run-metadata-${{ matrix.os }}/
             os-endpoint-midi-e2e-run-metadata-${{ matrix.os }}/
             fault-*-${{ matrix.os }}*
+            xrun-cases-${{ matrix.os }}/
             crashdumps/
             vaudio-pkg/
             vaudio-cert.cer
