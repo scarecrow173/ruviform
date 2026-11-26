@@ -318,6 +318,8 @@ Directory: `docs/designs`
 | DES-034ZaaChildInventory001 | Issue #532 child-inventory probe — 設計 | approved | [issue-532-child-inventory.md](./issue-532-child-inventory.md) |
 | DES-034ZaaRasterfix0000001 | Issue #532 raster-fix oracle + treatment arms — 設計 | approved | [issue-532-rasterfix.md](./issue-532-rasterfix.md) |
 
+| DESIGN-034QqV7xR1009ZkLmNu | 仮想 endpoint の決定的 xrun 注入と adapter 観測契約（Issue #1009） | draft | [issue-1009-virtual-xrun-injection.md](./issue-1009-virtual-xrun-injection.md) |
+
 ## Settled <!-- doc-suite:settled-index -->
 
 | ID | Title | Status | File |
