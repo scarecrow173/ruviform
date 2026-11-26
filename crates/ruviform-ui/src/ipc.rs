@@ -387,13 +387,25 @@ impl Event {
 /// non-empty, `[a-z0-9_.-]` only, within [`MAX_OP_LEN`]).
 #[must_use]
 pub fn valid_op(op: &str) -> bool {
-    !op.is_empty()
-        && op.len() <= MAX_OP_LEN
-        && op.contains('.')
-        && op
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'))
-        && op.split('.').all(|seg| !seg.is_empty())
+    valid_op_bytes(op.as_bytes())
+}
+
+fn valid_op_bytes(op: &[u8]) -> bool {
+    if op.is_empty() || op.len() > MAX_OP_LEN {
+        return false;
+    }
+    let mut valid = true;
+    let mut saw_dot = false;
+    let mut segment_nonempty = false;
+    for &b in op {
+        let allowed =
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-');
+        let is_dot = b == b'.';
+        valid &= allowed && (!is_dot || segment_nonempty);
+        saw_dot |= is_dot;
+        segment_nonempty = !is_dot;
+    }
+    valid && saw_dot && segment_nonempty
 }
 
 /// Parses a raw IPC body into an [`Intent`], enforcing the envelope
@@ -434,4 +446,82 @@ pub fn parse_intent(body: &str) -> Result<Intent, ErrorBody> {
         ));
     }
     Ok(intent)
+}
+
+#[cfg(kani)]
+mod proofs {
+    use super::{MAX_OP_LEN, valid_op_bytes};
+
+    fn valid_op_spec(op: &[u8]) -> bool {
+        if op.is_empty() || op.len() > MAX_OP_LEN {
+            return false;
+        }
+        let mut dot_count = 0usize;
+        for i in 0..op.len() {
+            let b = op[i];
+            if !(b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-')) {
+                return false;
+            }
+            if b == b'.' {
+                if i == 0 || i + 1 == op.len() || op[i - 1] == b'.' {
+                    return false;
+                }
+                dot_count += 1;
+            }
+        }
+        dot_count > 0
+    }
+
+    /// Exactness and totalness of the production byte predicate over every
+    /// byte string of length 0..=16. The length assumption is a domain
+    /// partition, not a type-level reachability constraint; the cover
+    /// properties witness both ends of the partition and both outcomes.
+    #[kani::proof]
+    #[kani::unwind(20)]
+    fn w_ipc_op_exactness_len0_16() {
+        let bytes: [u8; 16] = kani::any();
+        let len: usize = kani::any();
+        kani::assume(len <= 16);
+        let op = &bytes[..len];
+        let actual = valid_op_bytes(op);
+        let expected = valid_op_spec(op);
+        kani::cover!(len == 0, "length 0 is reachable");
+        kani::cover!(len == 16, "length 16 is reachable");
+        kani::cover!(len == 16 && actual, "valid length-16 input is reachable");
+        kani::cover!(len == 16 && !actual, "invalid length-16 input is reachable");
+        assert!(actual == expected);
+    }
+
+    const fn boundary_op<const N: usize>() -> [u8; N] {
+        let mut bytes = [b'a'; N];
+        bytes[1] = b'.';
+        bytes
+    }
+
+    const OP_127: [u8; 127] = boundary_op();
+    const OP_128: [u8; 128] = boundary_op();
+    const OP_129: [u8; 129] = boundary_op();
+
+    /// Concrete boundary matrix around MAX_OP_LEN, split by length so one
+    /// solver invocation cannot couple the largest unrolls. Lengths 127 and
+    /// 128 have valid witnesses; length 129 is rejected even when every other
+    /// grammar condition holds. Finer grammar partitions are covered
+    /// exhaustively by the length 0..=16 proof.
+    #[kani::proof]
+    #[kani::unwind(131)]
+    fn w_ipc_op_boundary_len127_valid() {
+        assert!(valid_op_bytes(&OP_127));
+    }
+
+    #[kani::proof]
+    #[kani::unwind(132)]
+    fn w_ipc_op_boundary_len128_valid() {
+        assert!(valid_op_bytes(&OP_128));
+    }
+
+    #[kani::proof]
+    #[kani::unwind(132)]
+    fn w_ipc_op_boundary_len129_over_cap() {
+        assert!(!valid_op_bytes(&OP_129));
+    }
 }
