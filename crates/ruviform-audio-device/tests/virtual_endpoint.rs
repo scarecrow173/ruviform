@@ -1386,14 +1386,28 @@ fn finish_xrun_setup_failure(
     emit_xrun_observation(&output);
 }
 
+const XRUN_RENDER_ENDPOINT_NAME: &str = "Ruviform Cable Input (Ruviform Virtual Audio Device)";
+const XRUN_CAPTURE_ENDPOINT_NAME: &str = "Ruviform Cable Output (Ruviform Virtual Audio Device)";
+const XRUN_ENDPOINT_STEM: &str = "ruviform cable ruviform virtual audio device";
+
+fn matches_ruviform_endpoint(name: &str, stem: Option<&str>, expected_name: &str) -> bool {
+    name.eq_ignore_ascii_case(expected_name) && stem == Some(XRUN_ENDPOINT_STEM)
+}
+
 fn is_ruviform_render_candidate(candidate: &EndpointCandidate) -> bool {
-    candidate.name.eq_ignore_ascii_case("Ruviform Cable Input")
-        && candidate.stem.as_deref() == Some("ruviform cable")
+    matches_ruviform_endpoint(
+        &candidate.name,
+        candidate.stem.as_deref(),
+        XRUN_RENDER_ENDPOINT_NAME,
+    )
 }
 
 fn is_ruviform_capture_candidate(candidate: &EndpointCandidate) -> bool {
-    candidate.name.eq_ignore_ascii_case("Ruviform Cable Output")
-        && candidate.stem.as_deref() == Some("ruviform cable")
+    matches_ruviform_endpoint(
+        &candidate.name,
+        candidate.stem.as_deref(),
+        XRUN_CAPTURE_ENDPOINT_NAME,
+    )
 }
 
 fn select_xrun_pair(host: &Host) -> Result<Pair, XrunSetupError> {
@@ -1738,11 +1752,52 @@ fn xrun_setup_failures_are_notrun() {
 }
 
 #[test]
+fn xrun_endpoint_selection_matches_suffix_contract_and_rejects_lookalikes() {
+    assert_eq!(
+        virtual_stem(XRUN_RENDER_ENDPOINT_NAME).as_deref(),
+        Some(XRUN_ENDPOINT_STEM)
+    );
+    assert_eq!(
+        virtual_stem(XRUN_CAPTURE_ENDPOINT_NAME).as_deref(),
+        Some(XRUN_ENDPOINT_STEM)
+    );
+    assert!(matches_ruviform_endpoint(
+        XRUN_RENDER_ENDPOINT_NAME,
+        Some(XRUN_ENDPOINT_STEM),
+        XRUN_RENDER_ENDPOINT_NAME,
+    ));
+    assert!(matches_ruviform_endpoint(
+        XRUN_CAPTURE_ENDPOINT_NAME,
+        Some(XRUN_ENDPOINT_STEM),
+        XRUN_CAPTURE_ENDPOINT_NAME,
+    ));
+
+    for (name, stem) in [
+        ("Ruviform Cable Input", Some("ruviform cable")),
+        (XRUN_RENDER_ENDPOINT_NAME, Some("ruviform cable")),
+        (
+            "Ruviform Cable Input (Ruviform Virtual Audio Device) 2",
+            Some(XRUN_ENDPOINT_STEM),
+        ),
+        (
+            "Other Ruviform Cable Input (Ruviform Virtual Audio Device)",
+            Some(XRUN_ENDPOINT_STEM),
+        ),
+        (XRUN_CAPTURE_ENDPOINT_NAME, Some(XRUN_ENDPOINT_STEM)),
+    ] {
+        assert!(
+            !matches_ruviform_endpoint(name, stem, XRUN_RENDER_ENDPOINT_NAME),
+            "render matcher accepted lookalike: {name} / {stem:?}"
+        );
+    }
+}
+
+#[test]
 fn xrun_json_writer_preserves_schema_types_and_escapes_strings() {
     let mut output = xrun_output_shell(XRUN_POSITIVE_CASE, XrunCaseVerdict::Pass, "detail");
     output.detail = "detail with \"quote\" \\ and\nnewline".to_owned();
-    output.render_name = "Ruviform Cable Input".to_owned();
-    output.capture_name = "Ruviform Cable Output".to_owned();
+    output.render_name = XRUN_RENDER_ENDPOINT_NAME.to_owned();
+    output.capture_name = XRUN_CAPTURE_ENDPOINT_NAME.to_owned();
     output.capture_instance_id = "instance with spaces\\and\"quotes\"".to_owned();
     output.injection_start_packet = 20;
     output.injection_packet_count = 3;

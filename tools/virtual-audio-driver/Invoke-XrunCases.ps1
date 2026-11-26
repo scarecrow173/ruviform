@@ -169,7 +169,7 @@ function Test-XrunPreflight {
   $probeText = (($probeOut | ForEach-Object { "$_" }) -join "`n")
   if (Test-Path -LiteralPath $probeFile) { $probeText += "`n" + (Get-Content -LiteralPath $probeFile -Raw -Encoding UTF8) }
   Write-XrunLog "preflight endpoint probe exit=$probeExit file=$probeFile"
-  $exactPair = $probeText -match 'render "Ruviform Cable Input"[^\r\n]*capture "Ruviform Cable Output"'
+  $exactPair = $probeText -match 'render "Ruviform Cable Input \(Ruviform Virtual Audio Device\)"[^\r\n]*capture "Ruviform Cable Output \(Ruviform Virtual Audio Device\)"[^\r\n]*stem="ruviform cable ruviform virtual audio device"'
   if ($probeExit -ne 0) { $problems += 'endpoint-probe-failed' }
   if (-not $exactPair) { $problems += 'ruviform-cable-endpoint-pair-missing' }
   return [ordered]@{ ok = ($problems.Count -eq 0); problems = $problems; admin = $isAdmin; probe_file = $probeFile }
