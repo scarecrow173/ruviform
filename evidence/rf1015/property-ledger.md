@@ -32,7 +32,7 @@
 | ID / group / risk | 既存資産と契約参照 | 必要保証・現保証・保証差 | subject・領域・境界・仮定 | verdict・コスト・requirement・sync | 新検証と選択再実行 |
 | --- | --- | --- | --- | --- | --- |
 | `W-IPC-ENVELOPE` intent envelope parse and size gate。誤受理は未認可 op 実行、誤分類は UI 制御不能につながる。 | `pt:parse_intent_arbitrary_error_set`, `pt:parse_intent_oversize_is_too_large`; `kp:parse_intent_error_contract`。契約: `crates/ruviform-ui/src/ipc.rs` `parse_intent`, `MAX_INTENT_BYTES`, spec slice 1。 | 必要: 安定 error code、cap 優先、受理時の `v/kind/op` gate を implementation に対し Property Tested + 重要境界で Bounded Exhaustive。現: proptest は Pass、Kani は verdict 未発行。差: bounded exhaustive が欠ける。 | 任意 UTF-8 文字列、cap 前後、固定 JSON skeleton 上の `v/kind/id/op/params`。依存: serde_json、String/JSON parser。除外: JSON 全構文の証明、float 厳密性。assume なし。UTF-8 は型制約。 | 現 verdict: proptest `Pass`、Kani `NotRun/Resource Limit`（約45 CPU-min・3.7 GiBで未 verdict、rf806）。requirement: `Required`。sync: `design_only`。 | pure decision core 抽出を第一候補: JSON parse を shell、envelope gate を allocation-free predicate に分離。予算: 10 CPU-min/2 GiB/選択 group。成功判定: unwinding assertion 有効で CBMC `SUCCESSFUL`。超過時は gate 分岐ごとに分割し、serde_json parse 全体は proptest に留める。 |
-| `W-IPC-OP` op grammar。誤受理は routing 混入、誤拒否は全 op 不能。 | `pt:valid_op_total_and_sound`, `pt:valid_op_accepts_generated`, `pt:broken_op_rejected_everywhere`; `kp:valid_op_soundness`。契約: `valid_op` rustdoc と実装、spec slice 1。 | 必要: totalness と受理形状の soundness を implementation に対し Bounded Exhaustive（有限 byte 窓）+ 大域境界を Property Tested。現: proptest Pass、Kani 未 verdict。差: 8 byte 超と 128 byte 境界の形式的保護がない。 | `&str`、ASCII 限定 grammar、長さ 0..128。入力型により invalid UTF-8 は到達不能。Kani 現 bound は 8 byte。 | 現 verdict: proptest `Pass`、Kani `NotRun/Resource Limit`（約27 CPU-minで約22 GiB、rf806）。requirement: `Required`。sync: `design_only`。 | 代表 important Property。byte ベース pure predicate を製品側に置き、`&str` wrapper は型変換のみにする設計を検討する。予算: 5 CPU-min/1 GiB。成功判定: 0..16 byte exhaustive + boundary 127/128/129 の concrete matrix が unwinding assertion 有効で verify。超過時は grammar を長さ帯で分割。 |
+| `W-IPC-OP` op grammar。誤受理は routing 混入、誤拒否は全 op 不能。 | `pt:valid_op_total_and_sound`, `pt:valid_op_accepts_generated`, `pt:broken_op_rejected_everywhere`; `kp:w_ipc_op_exactness_len0_16`, `kp:w_ipc_op_boundary_len127_valid`, `kp:w_ipc_op_boundary_len128_valid`, `kp:w_ipc_op_boundary_len129_over_cap`（`src/ipc.rs` in-src）。旧 `kp:valid_op_soundness` は退役。契約: `valid_op` rustdoc と実装、spec slice 1。 | 必要: totalness と受理/拒否形状の exactness を implementation に対し Bounded Exhaustive（有限 byte 窓）+ `MAX_OP_LEN` boundary concrete matrix + 大域境界を Property Tested。現: proptest Pass、Kani Pass。差: 17..126 byte interior、129 byte 超任意長、arbitrary Unicode 入力、`&str` wrapper 接続は proof 対象外で proptest に残る。旧 8 byte soundness と比べ、小入力では受理だけでなく拒否を含む exactness へ強化し、boundary matrix を新規に得た。 | byte slice、ASCII 限定 grammar、長さ 0..129。public `&str` wrapper では invalid UTF-8 は型上到達不能。core は byte レベルで判定する。`len <= 16` の assume は入力域分割であり、cover は len 0/16 と valid/invalid witness の 4/4 satisfied。boundary 127/128/129 は長さごとに分割した concrete matrix。stub、test double、製品 cfg 置換なし。 | verdict: proptest `Pass`、Kani `Pass`（canonical `mise run test-formal-kani w-ipc-op`、Unwinding Assertions 有効。post-revert runで len129 0.112 s・len128 21.240 s・len127 24.873 s・exactness 24.537 s、計70.762 s）。requirement: `Required`。sync: `synced`。failure cause: `None`。 | 実装済み: `valid_op(&str)` は `valid_op_bytes(&[u8])` の thin wrapper、core は allocation・UTF-8/`char` 走査・I/O・診断構築を持たない。選択再実行: `mise run test-formal-kani w-ipc-op`。未知 selector は exit 2。mutation: 長さ上限を +1 へ緩める mutant を boundary proofが検出し、revert 後に再検証 Pass。実測コストと環境は §6.2 と `verification-slice2.md`。 |
 | `W-IPC-SERDE` typed Intent/Event serialization。不整合は producer/consumer の相互運用不能。 | `pt:intent_serialize_parse_roundtrip`, `pt:event_to_json_versioned_envelope`; `kp:event_to_json_wellformed`。契約: `Intent::new`, `Event::to_json`, serde schema、spec slice 1。 | 必要: versioned envelope、kind/field 保存、round-trip の Property Tested。 Bounded Exhaustive は代表 variant に限定すれば足りる。現: proptest Pass、Kani は `result_ok(Null)` のみ未 verdict。差: variant 網羅の証明ではない。 | typed enum、bounded arbitrary JSON value、id。依存: serde_json。除外: serde_json 内部 correctness、1 ulp float は codec 契約外の既知限界。 | 現 verdict: proptest `Pass`、Kani `NotRun/Resource Limit`（約42 CPU-min・3.9 GiB、rf806）。requirement: `Deferred`（代表 proof のみ）、sync: `design_only`。 | Kani は Event serializer の pure tag/kind 決定部に限定し、JSON payload は proptestに残す。予算: 8 CPU-min/2 GiB。mutation: kind tag 書換えを検出できること。 |
 | `W-FRM-CODEC` frame write/read roundtrip and write cap。喪失・重複は制御 channel の破壊。 | `pt:write_read_roundtrip`, `pt:write_frame_over_cap_refused`; `kp:write_read_roundtrip`。契約: `crates/ruviform-ui-test/src/transport.rs` `write_frame` / `read_frame`、spec slice 1。 | 必要: in-cap identity、over-cap pre-write rejection。現: proptest Pass、Kani 未 verdict。差: bounded exhaustive がない。 | body 0..1 MiB、u32le prefix、UTF-8 body。依存: Vec、Read/Write。除外: 実 OS pipe/TCP。 | 現 verdict: proptest `Pass`、Kani `NotRun/Resource Limit`（約90 CPU-min・5.4 GiB、rf806）。requirement: `Required`。sync: `design_only`。 | Vec I/Oを介さない pure frame encoder/decoder decision core を抽出し、I/O shell は proptestと統合テストに残す。予算: 10 CPU-min/2 GiB。成功判定: symbolic 16 byte に加え len 0/1/15/16/17 の境界で verify。 |
 | `W-FRM-READCLASS` frame read classification and EOF/UTF-8 errors。誤分類は切断を正常終了に見せる。 | `pt:read_frame_arbitrary_stream`; `kp:read_frame_contract`。契約: `read_frame` rustdoc と transport module docs。契約矛盾は §5 audit example A-3。 | 必要: `Frame/Eof/TooLarge/UnexpectedEof/InvalidData` の一意分類。特に partial length prefix は製品 rustdoc 上 `UnexpectedEof` と読める。現 proptestは short prefix→`Eof` を pin しており、implementation と同じ誤り候補を oracle 化している。 | 任意 byte stream、prefix 0..3 byte、declared 0..u32 max、body truncation/UTF-8。除外: 非同期 I/O、実 socket。 | 現 verdict: proptest `Pass`、Kani `NotRun/Resource Limit`（約44 CPU-min・5.9 GiB、rf806）。requirement: `Required`。sync: `oracle_mismatch`（本 ledger では独立軸に合わせ `not_synced`）。 | 代表 important Property。先に oracle を製品 rustdocへ確定し、partial prefix をUnexpectedEofへ直す製品 sliceへ分離する。proofは byte window ≤32 の pure classifierで再設計。予算: 12 CPU-min/3 GiB。成功判定: 0..3 byte prefix、body short/exact/over、invalid UTF-8 の全 class が unwinding assertion 有効で verify。 |
@@ -88,6 +88,8 @@
 | D-4 | read_frame EOF。製品 rustdocは frame boundaryでのみ clean EOFと読めるが、実装は length prefix 1-3 byteでも `FrameRead::Eof`、formal oracleもそれを前提にする。 | truncationを正常終了に誤認し、切断した制御 sessionを clean closeと誤報する危険。 | 製品 docを正 / 現実装を正 / formal oracleを正 | 製品 docを正とする。partial length prefix（1-3 byte）は `UnexpectedEof` とする契約差分を後続製品 sliceへ分離する。 | rustdocは「clean EOF at a frame boundary」と明記し、1-3 byte prefixは frame boundaryではない。`# Errors`の truncated frameとも一致する。test module commentと現 proptestは実装に合わせて作られたoracleであり、製品契約の上位根拠ではない。よって現実装を正に選ぶ理由はない。 | 現行 proptestは契約候補と矛盾するため、修正 sliceでは `pt:read_frame_arbitrary_stream` と `kp:read_frame_contract`を更新する。現在の Passは旧oracleに対する Passであり、新契約の保証に転用しない。 | 製品実装変更と公開挙動の承認が必要。slice 1では変更しない。影響: stdio/TCP driverの EOF処理、docs、proptest/Kani oracle。 |
 | D-5 | SampleFormat `#[non_exhaustive]` に対する手動 `%10`列挙。variant追加時に `_ => S32`へ吸収され silent gapになる。 | 新variantが unsupported/wire setのどちらにも検査されず、membership proofが偽の exhaustiveになる。 | 手動列挙維持 / 外部derive追加 / canonical variant array + exhaustive probe | canonical variant array + exhaustive probeを採用する。 | `ruviform-audio-core`内部で exhaustive matchを持つ compile-time probeを置き、variant追加時は compile errorで止める。`SampleFormat::ALL` のような public associated constant を canonical inventoryとして公開し、WAV proof/proptestは `%10`ではなくその配列を使う。crate-privateなinventoryでは downstream crateから参照できず、外部derive依存は dependency costに見合わない。 | 検出地点は compile error。配列更新後に wire対応を忘れた場合は `wire_gate` proptestまたは ledger sync checkが Failになる設計にする。 | 実装 slice: audio-coreに variant inventoryを追加し、WAV harnessを移行。公開API追加の承認と命名は実装 sliceで確定する。 |
 
+slice 2時点の適用: `W-IPC-OP` では pure decision core 抽出、in-src exactness/boundary proof、selective canonical lane、mutation実走が完了し、事前予算内で verdict を得た。`W-FRM-READCLASS`、`ARC-IDX-LIMIT`、`ARC-PAYLOAD-LIMIT` を含む他 wire/archive harness は引き続き `NotRun/Resource Limit` であり、この slice の成果として昇格しない。
+
 ## 5. 健全性 audit と保証差の判定手順
 
 各 groupについて、次の順で監査する。
@@ -112,7 +114,7 @@
 
 | group | 代表 mutant / fault | 期待 verdict | 補完 proof/test | 既知結果 |
 | --- | --- | --- | --- | --- |
-| `W-IPC-OP` | 非空segment check除去 | proptest `Fail`（shrink付き） | redesigned pure predicate proof | rf806で検出済み（`op=".0.-"`）。 |
+| `W-IPC-OP` | 長さ上限 `MAX_OP_LEN`→`MAX_OP_LEN + 1` | selective Kani `Fail`（boundary matrixのlen 129反例） | `w_ipc_op_boundary_len129_over_cap` | slice 2で検出済み（exit 1、revert後 Pass）。rf806でも非空segment check除去を proptest で検出済み（`op=".0.-"`）。 |
 | `W-FRM-READCLASS` | partial prefixをEOF扱いする分岐のまま固定 | 新oracleで `Fail` | read_frame classifier proof | 現行は逆に旧oracleへ Passするため、D-4修正後に再評価。 |
 | `W-FRM-OVERSIZE` | drain省略 | `too_large_drains_and_stays_aligned` `Fail` | drain decision proof | 未実走。後続 slice。 |
 | `ARC-PAYLOAD-LIMIT` | declared-size gate `>`→`>=` | boundary dense proptestまたはpure proof `Fail` | tar declared pure proof | rf806では未検出。boundary density gapとして必須改善。 |
@@ -125,7 +127,7 @@
 
 ### 6.2 選択再実行と予算記録
 
-選択再実行の単位は crateや invocationではなく Property groupとする。変更影響判定では、対象実装・oracle・assumption・test doubleが変わった groupだけを選ぶ。現行 `mise.toml`にはこの入口がない。したがって sync stateは `not_synced`であり、後続 sliceで `mise run test-formal -- <group-id>` のような入口か、groupごとの cargo test filterを生成する薄い runnerを設計する。runner実装は本 sliceの範囲外である。
+選択再実行の単位は crateや invocationではなく Property groupとする。変更影響判定では、対象実装・oracle・assumption・test doubleが変わった groupだけを選ぶ。slice 2で `mise run test-formal-kani w-ipc-op` が `W-IPC-OP` の最小入口として実装された。未知 selectorは Kani実行前の exit 2 で止まり、selectorなしは従来の aggregate 挙動を維持する。Property group全件の generic runnerはまだない。したがって `W-IPC-OP` は `synced`、他 groupの選択再実行は `not_synced` または `deferred` と記録する。
 
 予算記録は `runs.jsonl`の 1 runに加えて、group単位の `budget`、実測 `cpu_time`、終了理由、verdictを ledgerへ転記する。旧検証とのコスト差は rf806の envelopeを baselineとする。wire/archiveの旧値は verdict未発行の測定なので「予算達成コスト」ではなく「現行形が実用でない下限証拠」として扱う。
 
@@ -138,15 +140,32 @@
 | `SD-CSV-LIMITS` | 約16-18sで successfulだが unwinding checks off | 8 CPU-min/2 GiB | `build_dfa`全row、Vec growth | decision core化が前提。超過時は proofをlimit別分割。 |
 | `WAV-DECL-GATE` | 既存 proof Pass（cfg例外あり） | 合計20 CPU-min/4 GiB | diagnostic構築、TimeBase GCD | diagnostic pure boundary化後も超過ならalign subset分割を維持。 |
 
+slice 2の `W-IPC-OP` 実測は次のとおり。verification time は Kaniが報告する harness 単位の値であり、compile時間を含まない。wall clock は canonical mise lane全体である。memory は補助 monitorが `/proc/<pid>/status` の `VmHWM` から観測した CBMC peakで、canonical verdictとは別の補助証拠である。
+
+| 対象 | canonical command | verdict | verification time | wall clock | peak memory | 事前予算との関係 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `W-IPC-OP`（post-revert） | `mise run test-formal-kani w-ipc-op` | Pass（4/4 harness） | len129 0.112 s + len128 21.240 s + len127 24.873 s + exactness 24.537 s = 70.762 s | 約96 s | lane observed max 231,740 KiB（len129は短命で個別sample未取得） | 5 CPU-min / 1 GiB 以内 |
+
 ## 7. Sync Commit と後続 slice
 
 slice 1の sync stateは次のとおり。対象 SHAは `ab6dc99fe8935ac09082d05e2176b10e729ba263`。設計・evidence編集 SHAはこの branchの commitで確定する。検証済み SHAは slice 1では製品検証の sync commitを進めず、docs-onlyの baseline実行 SHAとして記録する。製品実装・proof harness・mise laneが変わる後続 sliceで、対象 groupの再検証と evidence同期が完了した時点だけ verified sync commitを進める。
+
+slice 2の `W-IPC-OP` では、再検証と evidence同期が完了したため verified sync commitを次のとおり進める。SHA の役割を混同しない。
+
+| 役割 | SHA / 参照場所 | 意味 |
+| --- | --- | --- |
+| base SHA | `0fb97d1ba89e1fee154cdbbb72ceb2db15fdcd8c` | slice 2 branchが最終検証前に取り込んだ `origin/main` |
+| 検証対象 SHA / verified Sync Commit | `5024268f56339c91ba0487fe8d87198a8d529cab` | `valid_op` byte core、in-src proof、selective laneを含む最後の製品/proof/mise 変更 commit。selective Kani、mutation、proptest、crate regression の `runs.jsonl` `target_sha` はこの commitを指す |
+| 初期 evidence sync commit | `8cb8a6d58933d04415cfe47f92381a913c547d52` | ledger/spec/skill/evidenceを同期した最初の commit。製品/proof/mise 差分を持たないため verified Sync Commitを移動しない |
+| 最終 head SHA | PR #1027 の head と本文 | evidence は自分自身を含む commit hashを固定点として書けない。最終 headは `5024268f` 以降の docs/skill/evidence-only descendantでなければならず、製品/proof/mise 差分が加わった場合は再検証なしに sync commitを進めない |
+
+`runs.jsonl` の prek recordだけは evidence本文そのものを検査するため、exact runが存在する初期 evidence sync commit `8cb8a6d` を `target_sha` に使う。selective Kani、mutation、proptest、crate regression、consumer impact recordは製品/proof/mise の検証対象である `5024268f` を `target_sha` に使う。mutation recordの `target_sha` は transient mutantではなく revert後の unmutated base commitを指す。最終 headとの対応は PR 本文へ記録し、evidence-only差分であることを diffで確認する。
 
 後続 sliceへ分離する作業:
 
 1. CSV limit decision core抽出、structured lane分割、`--no-unwinding-checks` crate全体指定の除去。
 2. WAV diagnostic boundary refactor、`cfg(kani)`置換の撤廃。
-3. wire/archive pure decision core抽出と代表 proof再実装。
+3. `W-IPC-OP` 以外の wire/archive pure decision core抽出と代表 proof再実装。
 4. read_frame partial-prefix EOFの製品契約承認、実装、oracle更新。
 5. SampleFormat canonical variant inventoryの導入。
-6. 選択再実行入口、mutation実走、必要なconsumer独立回帰。
+6. `W-IPC-OP` 以外の選択再実行入口、mutation実走、必要なconsumer独立回帰。

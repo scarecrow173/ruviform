@@ -103,12 +103,13 @@ slice 3 で `ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader
 `ruviform-io-wav` の RIFF/WAVE serialization・canonical planar
 `f32`→wire sample 変換・muxer finalize/`WavReceipt` 契約に適用した。
 
-## rf#1015 slice 1 — Property ledger と legacy exception 処置
+## rf#1015 — Property ledger、legacy exception、`W-IPC-OP`
 
 rf#806 の harness inventory は後続の再設計で Property group 単位へ再編
 された。再編後の group、risk、必要保証、仮定、未証明領域、verdict、予算、
-選択再実行の台帳は `evidence/rf1015/property-ledger.md`、slice 1 の作業証跡は
-`evidence/rf1015/verification.md` と `evidence/rf1015/runs.jsonl` であり、
+選択再実行の台帳は `evidence/rf1015/property-ledger.md`、slice 1/2 の作業証跡は
+`evidence/rf1015/verification.md`・`evidence/rf1015/verification-slice2.md`・
+`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
@@ -137,9 +138,20 @@ mise lane は未変更なので、これらは実施済みの結果ではなく�
    置き換え、variant 追加時に compile error で検出する方向を採用する。
    公開 API 追加の承認と命名は後続 slice で確定する。
 
-現行 `mise.toml` には Property group 単位の選択再実行入口がない。したがっ
-て選択再実行の sync state は `not_synced` であり、未実装を `synced` と
-記録しない。実装前の予算・支配要因・downgrade 条件は ledger §6 に従う。
+slice 2 では、代表 important Property のうち `W-IPC-OP` だけを実装した。
+`valid_op(&str)` は crate-private な `valid_op_bytes(&[u8])` へ処理を委ねる
+薄い wrapper になり、grammar 判定は allocation・UTF-8/`char` 走査・I/O を
+持たない byte predicate に閉じる。proof は製品実装と同じ `src/ipc.rs` の
+`#[cfg(kani)] mod proofs` に置く。これは proof placement のための cfg であり、
+製品挙動を `cfg(kani)` で置き換える例外ではない。
+
+選択再実行は `mise run test-formal-kani w-ipc-op` が最小入口である。selector
+なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
+Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
+generic runner はまだない。したがって `W-IPC-OP` の選択再実行は `synced`、
+他 group は引き続き `not_synced` または `deferred` と記録する。実装済みの
+bound・実測コスト・mutation 証跡は ledger §6 と
+`evidence/rf1015/verification-slice2.md` を正本とする。
 
 ## 対象と検証する契約
 
@@ -194,7 +206,8 @@ mise lane は未変更なので、これらは実施済みの結果ではなく�
 | Lane | 実行 | 環境要件 |
 | --- | --- | --- |
 | `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
-| `mise run test-formal-kani` | `cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` は後述の legacy exception） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal-kani` | selector なし。`cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features --no-unwinding-checks -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割。`--no-unwinding-checks` は後述の legacy exception） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
+| `mise run test-formal-kani w-ipc-op` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op` の 1 invocation。`src/ipc.rs` の `w_ipc_op_exactness_len0_16` と 3 件の `w_ipc_op_boundary_len*` だけを選び、Unwinding Assertions を無効化しない。未知 selector は Kani 実行前に exit 2 | 同上 |
 
 `test-formal` は常時実行可能な pure Rust lane、`test-formal-kani` は
 環境検出つきの bounded model checking lane であり、どちらも既存 Property
@@ -219,10 +232,17 @@ mise lane は未変更なので、これらは実施済みの結果ではなく�
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
 | `parse_intent_error_contract` | envelope field（`v:u8`・`kind` 5 択・`id`/`op` 各 6 byte valid UTF-8・`params` 7 択 fragment）を固定 JSON skeleton 上で symbolic に全網羅。`#[kani::unwind(80)]` | 任意 malformed byte 列・1 MiB cap 経路（bound 内では構造的に到達不可） | malformed 入力は proptest `parse_intent_arbitrary_error_set`、cap 経路は `parse_intent_oversize_is_too_large`（1 MiB 実測）で担保 |
-| `valid_op_soundness` | op = 8 byte 任意列のうち valid UTF-8。`#[kani::unwind(16)]` | 8 文字超の入力・`MAX_OP_LEN=128` をまたぐ受理/拒否 | proptest `valid_op_total_and_sound` / `valid_op_accepts_generated` で担保 |
+| `w_ipc_op_exactness_len0_16`（in-src `src/ipc.rs`） | byte slice 長 0〜16 を symbolic に全網羅し、製品 `valid_op_bytes` を独立 reference predicate と比較。`len <= 16` は入力域分割の `assume`。`#[kani::unwind(20)]` | 17〜126 byte の interior、`MAX_OP_LEN` 境界、128 byte 超 | boundary matrix と proptest `valid_op_total_and_sound` / `valid_op_accepts_generated` で担保 |
+| `w_ipc_op_boundary_len{127_valid,128_valid,129_over_cap}`（in-src `src/ipc.rs`） | concrete 長 127/128/129。127・128 は valid witness、129 は他条件を満たす入力で cap 拒否を検査。`#[kani::unwind(131)]`・`#[kani::unwind(132)]`・`#[kani::unwind(132)]` | 17〜126 byte の interior、129 byte を超える任意長、grammar 個別条件の大入力変種 | grammar 個別条件は長 0〜16 の exactness proof、大入力と arbitrary Unicode は proptest で担保 |
 | `event_to_json_wellformed` | id = 6 byte 任意列のうち valid UTF-8・`result_ok`・`params=Null`。`#[kani::unwind(80)]` | 他 variant・大きな params | proptest `event_to_json_versioned_envelope` が全 variant・任意 `Value` で担保 |
 | `read_frame_contract` | stream = ≤32 byte 任意 byte 列。`#[kani::unwind(48)]` | 32 byte 超の stream・1 MiB 超 `declared` の drain 実走（symbolic u32 で `TooLarge` 判定自体は到達可） | proptest `read_frame_arbitrary_stream` / `too_large_drains_and_stays_aligned` で担保 |
 | `write_read_roundtrip` | body = 16 byte 任意列のうち valid UTF-8。`#[kani::unwind(40)]` | in-cap だが 16 byte 超または無効 UTF-8 の body（`&str` 引数のため構造上到達不可） | proptest `write_read_roundtrip`（in-cap 任意・exact-cap 境界含む）で担保 |
+
+旧 `valid_op_soundness`（8 byte の valid UTF-8 `&str` を対象とする soundness
+harness）は rf#1015 slice 2 で退役した。新保証は byte 長 0〜16 の exactness と
+127/128/129 の concrete boundary matrix（長さごとに分割）に分かれる。旧保証より小さい入力域では
+受理だけでなく拒否の exactness まで検査するが、17〜126 byte と 129 byte 超の
+任意長は引き続き未証明領域である。
 
 ### slice 2 archive harness（`tests/formal_archive.rs` の `#[cfg(kani)] mod proofs`）
 
@@ -421,6 +441,25 @@ slice 4 では `convert.rs` の S16 全範囲 scaling の `f32::round`
 `sample_conversion_matches_documented_policy` が shrink つき
 fail することを記録する（round-half-away-from-zero 契約の検出
 能力を実証 — `.trunc()` は正の内部値で 1 LSB ずれる）。
+
+rf#1015 slice 2 の `W-IPC-OP` では、mutation 対象を proptest だけでなく
+selective Kani lane にも対応づける。実施した mutant は `valid_op_bytes` の
+長さ上限を `MAX_OP_LEN` から `MAX_OP_LEN + 1` へ緩める 1 箇所であり、
+`mise run test-formal-kani w-ipc-op` が boundary matrix の反例で `fail` と
+exit 1 を返した。mutant は完全に revert し、同じ selective lane と
+`mise run test-formal` の再実行で緑へ戻した。実行記録は
+`evidence/rf1015/verification-slice2.md` と `runs.jsonl` を参照する。
+
+slice 2 の `W-IPC-OP` では、verified Sync Commit を
+`5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
+harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
+proptest、crate regression の検証対象である。`8cb8a6d58933d04415cfe47f92381a913c547d52`
+以降の本 slice の sync commit chainは docs/skill/evidence-onlyでなければならず、
+製品/proof/mise 差分を追加する場合は再検証なしに verified Sync Commitを進めない。evidenceは
+自分自身を含む commit hashを固定点として書けないため、最終 head SHAは
+PR #1027 の head と本文で追跡する。`runs.jsonl` では proof/regression 系 record
+が `5024268f` を、evidence本文を検査する prek recordだけが exact runのある
+evidence sync commitを `target_sha` に使う。
 
 ## 判定語彙と fail-closed
 

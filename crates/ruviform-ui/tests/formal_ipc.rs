@@ -16,9 +16,10 @@
 //! - `Event::to_json` always emits a parseable versioned envelope
 //!   (`v == SCHEMA_VERSION`) preserving the variant kind and fields.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries the same contracts
-//! as bounded proofs (run via `mise run test-formal-kani`); the
-//! bounds and assumptions are documented in
+//! The `#[cfg(kani)]` module at the bottom carries bounded proofs for
+//! the envelope and event contracts (run via `mise run test-formal-kani`).
+//! The `valid_op` byte-core proofs live beside the production predicate in
+//! `crates/ruviform-ui/src/ipc.rs`; bounds and assumptions are documented in
 //! `docs/specs/formal-verification.md`.
 
 use proptest::prelude::*;
@@ -401,28 +402,6 @@ mod proofs {
                 assert!(intent.v == SCHEMA_VERSION);
                 assert!(intent.kind == "intent");
                 assert!(valid_op(&intent.op));
-            }
-        }
-    }
-
-    /// `valid_op` never panics and only accepts the documented shape,
-    /// for symbolic ops of ≤8 valid UTF-8 bytes. The `MAX_OP_LEN`
-    /// boundary region is covered concretely by
-    /// `valid_op_total_and_sound` (proptest). The unwind bound caps
-    /// library loops over the ≤8-byte input.
-    #[kani::proof]
-    #[kani::unwind(16)]
-    fn valid_op_soundness() {
-        let bytes: [u8; 8] = kani::any();
-        // `core::str::from_utf8` — allocation-free symbolic &str;
-        // invalid-UTF-8 bytes can never reach `valid_op(&str)` anyway.
-        if let Ok(op) = core::str::from_utf8(&bytes) {
-            if valid_op(&op) {
-                assert!(!op.is_empty() && op.len() <= MAX_OP_LEN && op.contains('.'));
-                assert!(op.chars().all(|c| c.is_ascii_lowercase()
-                    || c.is_ascii_digit()
-                    || matches!(c, '.' | '_' | '-')));
-                assert!(op.split('.').all(|seg| !seg.is_empty()));
             }
         }
     }

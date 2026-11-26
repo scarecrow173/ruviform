@@ -394,7 +394,11 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # `#[cfg(kani)]` proof harnesses co-located with the proptest
 # suites. Kani needs a Linux CBMC toolchain, so the lane
 # env-detects: a native `cargo kani` first, then a WSL2 distro
-# (Kani cannot run on native Windows). In WSL the repository is
+# (Kani cannot run on native Windows). With no selector it keeps the
+# legacy aggregate behavior. The only selective Property-group entry is
+# `w-ipc-op`, which runs just the valid_op byte-core proofs. Unknown
+# selectors are usage errors and exit before environment detection. In
+# WSL the repository is
 # reached via /mnt/<drive> but the target dir is forced onto the
 # WSL native filesystem (/mnt builds are too slow; the Windows-side
 # cargo output dir is untouched). Slice 3 (structured documents) is
@@ -423,10 +427,28 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806 D-layer Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): env-detect (native cargo kani → WSL2 distro) → `cargo kani --tests` on the #[cfg(kani)] harnesses in tests/formal_ipc.rs + tests/formal_transport.rs + tests/formal_archive.rs, plus a separate `--all-features` invocation for tests/formal_structured.rs + the in-src BoundedRead proof, plus a separate `-j1 -p ruviform-io-wav` invocation for tests/formal_wav.rs + the in-src write_sample/Wire/fmt proofs (WSL target dir on the native FS, never /mnt; -j1 because concurrent WAV CBMC harnesses exhaust the reference WSL2 service); verdict aggregates all invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the legacy aggregate invocations; `w-ipc-op` runs only the valid_op byte-core proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+raw_args = true
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
+
+usage() {
+  echo "usage: mise run test-formal-kani [w-ipc-op]" >&2
+}
+
+if [ "$#" -gt 1 ]; then
+  usage
+  exit 2
+fi
+SELECTOR="${1:-}"
+case "$SELECTOR" in
+  ""|w-ipc-op) ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
 
 verdict() {
   printf '{"lane":"test-formal-kani","verdict":"%s","reason":"%s"}\n' "$1" "$2"
@@ -436,9 +458,13 @@ verdict() {
 #    already runs kani natively)
 if cargo kani --version >/dev/null 2>&1; then
   rc=0
-  cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive || rc=1
-  cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured || rc=1
-  cargo kani --tests -j1 --output-format terse -p ruviform-io-wav || rc=1
+  if [ "$SELECTOR" = "w-ipc-op" ]; then
+    cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op || rc=1
+  else
+    cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive || rc=1
+    cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured || rc=1
+    cargo kani --tests -j1 --output-format terse -p ruviform-io-wav || rc=1
+  fi
   if [ "$rc" -eq 0 ]; then
     verdict pass "native cargo kani verification succeeded"
     exit 0
@@ -467,9 +493,13 @@ if command -v wsl.exe >/dev/null 2>&1; then
       exit 0
     fi
     rc=0
-    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive" || rc=1
-    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured" || rc=1
-    wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j1 --output-format terse -p ruviform-io-wav" || rc=1
+    if [ "$SELECTOR" = "w-ipc-op" ]; then
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op" || rc=1
+    else
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive" || rc=1
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured" || rc=1
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j1 --output-format terse -p ruviform-io-wav" || rc=1
+    fi
     if [ "$rc" -eq 0 ]; then
       verdict pass "WSL2 ($DISTRO) cargo kani verification succeeded"
       exit 0
