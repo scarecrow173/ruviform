@@ -57,9 +57,24 @@
 
 ## provisioned Windows workflow evidence
 
-状態: **Pending**（branch push 後に既存 manual workflow `virtual-audio-driver-probe.yml` を `fix/1029-stereo-capture` ref で workflow_dispatch する。workflow file は変更しない）。
+状態: **Pass**（stereo preserve runtime evidence あり）。
 
-記録予定項目: run id/attempt/URL/head SHA、driver package hash、endpoint names/ids、negotiated input/output format、channel count、terminal verdict、artifact upload、cleanup/unprovision、artifact 欠損有無。
+- workflow: `virtual-audio-driver-probe.yml`（既存 manual lane。workflow file は未変更）
+- run id / attempt: `45817964602` / `1`
+- URL: https://github.com/scarecrow173/ruviform/actions/runs/45817964602
+- head SHA: `65572966ed0ca301ba3a76dbbe35977ea856f9c2`（実装 SHA `53ebccd3419d823ecf5ef89806e6b667e3655e6e` + evidence 記録 commit。code/driver/harness は実装 SHA と同一）
+- runner OS: windows-2025 / Microsoft Windows 10.0.26100.33828
+- artifact: `virtual-audio-driver-probe-windows-2025-attempt-1`、upload 成功、download/検収済み。欠損なし。
+- driver build: workflow 内 `driver-build` stage `ok`、exit 0、`x64\Release\RvfVirtualAudio.sys`
+- package hash: `RvfVirtualAudio.sys` sha256 `50cf5844109c16573e280374fd4ca1cdd68bf803a3208a0adf3840847d915deb`、`rvfvirtualaudio.cat` sha256 `25aa67221e880a8542eadb6ae6418f7d33a0b898a79e407ad7a01deb608b930c`、INF/cert hash は `provisioned-artifact-hashes.json`
+- endpoint: render `Ruviform Cable Input (Ruviform Virtual Audio Device)` id `{0.0.0.00000000}.{d582bf43-fd3f-460e-b55f-e3cc68381c43}`、capture `Ruviform Cable Output (Ruviform Virtual Audio Device)` id `{0.0.1.00000000}.{cc912312-fed6-4655-96b2-6ed4ee361273}`
+- endpoint probe mix format: render/capture とも `ch=2 rate=48000Hz bits=32`。`IsFormatSupported(shared)` は stereo f32/s16 も supported だが、Pass 判定には使用していない。
+- channel-width runtime negotiation: render/capture とも実 opened stream format `F32/Stereo/48000Hz`。
+- terminal verdict: `rf1029_channel_width_observation` `result=Pass`、`mode=stereo-preserve`、`detail=independent-left-right-content-preserved`。captured frames 157920。tone ratio は left 440Hz `0.9571676121756445` / left 880Hz `0.0001237105073796443` / right 440Hz `0.000000026314477805968456` / right 880Hz `0.9962726418908657` で、downmix・mono copy・channel swap ではない。machine-readable copy: `provisioned-channel-width-pass.json`。
+- stream lane summary: `test-audio-virtual-endpoint` exit 0、7 passed。workflow stage detail が `verdict=no-verdict-line` なのは cargo test capture と既存 verdict 行抽出の制限であり、raw stderr に残した上記 JSON を直接証拠として使う。
+- cleanup/unprovision: stage `cleanup` `ok`、`leftovers=0 errors=0`、driver store/cert/consent/service cleanup 成功。
+
+Adjacent observations（stereo preserve の判定材料にはしない）: `os-endpoint-wiring` audio metadata は `output timestamp regressions: 2` で fail（PROVENANCE に記録済みの audiodg epoch bookkeeping 由来の既知観測であり、channel-width oracle とは別契約）。rf#1009 xrun cases は endpoint pair missing preflight で NotRun。これらは本 Issue の stereo channel-width Pass evidence へ転用しない。
 
 ## evidence の意味境界
 
@@ -69,18 +84,18 @@
 | static driver source diff | capture capability/default format/topology metadata が stereo を公開する構成であること。compile/runtime ではない。 | 间接（実装構成のみ） |
 | local `test-audio-virtual-endpoint` | endpoint 不存在 host で NotRun を正直に出すこと。 | 否 |
 | local `build-vaudio-driver` | この host では WDK toolset 不足で NotRun。 | 否 |
-| provisioned workflow runtime | provisioned Windows endpoint で stereo format negotiation と独立 left/right content を観測する主証拠。 | **直接**（実走できた場合） |
+| provisioned workflow runtime | provisioned Windows endpoint で stereo format negotiation と独立 left/right content を観測する主証拠。run `45817964602` で Pass。 | **直接** |
 
 ## Synvelis#115 再評価判断
 
-Synvelis run `45797309944` attempt `1` の `multi-track stereo split requires >=2 channels (in=1 out=2)` は、変更前 Ruviform capture endpoint の mono capability と一致する正当な consumer Fail である。本変更は capture endpoint が stereo format を公開し、stereo→stereo loopback copy で独立内容を保持する契約へ修正するため、provisioned evidence が Pass なら Synvelis#115 を再 run する意味がある。Synvelis 側 consumer oracle/harness/workflow は変更していない。Synvelis Pass は本 Issue の成果ではなく、default branch 対象 SHA での canonical EXT-L3 consumer run は後続 gate とする。
+Synvelis run `45797309944` attempt `1` の `multi-track stereo split requires >=2 channels (in=1 out=2)` は、変更前 Ruviform capture endpoint の mono capability と一致する正当な consumer Fail である。本変更は capture endpoint が stereo format を公開し、stereo→stereo loopback copy で独立内容を保持する契約へ修正するため、provisioned evidence は Pass になったため、Synvelis#115 を再 run する意味がある。Synvelis 側 consumer oracle/harness/workflow は変更していない。Synvelis Pass は本 Issue の成果ではなく、default branch 対象 SHA での canonical EXT-L3 consumer run は後続 gate とする。
 
-## 受入条件対応表（現時点）
+## 受入条件対応表
 
 | 受入条件 | verdict | 根拠 |
 | --- | --- | --- |
 | mono の直接原因を層別に記録 | Pass | 上記 layer matrix と ADR。driver format range が direct cause。 |
 | channel-width contract を ADR に記録 | Pass | `docs/adr/issue-1029-virtual-audio-channel-width-contract.md`。stereo preserve/mono downmix/Unsupported-NotRun を区別。 |
-| stereo preserve の provisioned Windows evidence | Pending | manual workflow 実走前。未実施なら NotRun へ確定する。 |
+| stereo preserve の provisioned Windows evidence | Pass | run `45817964602` attempt 1。stereo opened format + independent left/right tone separation を観測。 |
 | mono/downmix formal contract の場合の oracle | NotApplicable | stereo preserve を選択した。ただし mono capture が silent Pass にならない deterministic oracle は追加済み。 |
-| Synvelis#115 再評価判断 evidence | Pass（判断材料） / runtime Pending | consumer Fail 原因と再評価条件を記録。Synvelis 再 run は成果にしない。 |
+| Synvelis#115 再評価判断 evidence | Pass（判断材料） | consumer Fail 原因と再評価条件を記録。Synvelis 再 run は成果にしない。 |

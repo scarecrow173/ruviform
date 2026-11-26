@@ -1,0 +1,13 @@
+{
+  "run_id": "45817964602",
+  "attempt": "1",
+  "url": "https://github.com/scarecrow173/ruviform/actions/runs/45817964602",
+  "head_sha": "65572966ed0ca301ba3a76dbbe35977ea856f9c2",
+  "artifact": "virtual-audio-driver-probe-windows-2025-attempt-1",
+  "sha256": {
+    "vaudio-pkg/RvfVirtualAudio.sys": "50cf5844109c16573e280374fd4ca1cdd68bf803a3208a0adf3840847d915deb",
+    "vaudio-pkg/rvfvirtualaudio.cat": "25aa67221e880a8542eadb6ae6418f7d33a0b898a79e407ad7a01deb608b930c",
+    "vaudio-pkg/RvfVirtualAudio.inf": "5da93e51d9c7d772286df3287efe2f8e79b0385cbe558382597a1699f85c31b3",
+    "vaudio-cert.cer": "56a05722d675e739b8554c737647ec4111e1afbb18e14125274a19d5b9dba98d"
+  }
+}
