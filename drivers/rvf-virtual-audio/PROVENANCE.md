@@ -58,8 +58,8 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 | `ContosoKeywordDetector.h` | 同名 | ＝ |
 | `TabletAudioSample/minipairs.h` | `minipairs.h` | ≠ speaker+mic in のみ登録 + `g_MaxMidiFilters` 追加 |
 | `TabletAudioSample/micintopo.cpp/.h` | 同名 | ＝ |
-| `TabletAudioSample/micintoptable.h` | `micintoptable.h` | ≠ pin-name GUID を独自 GUID へ + Category を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` |
-| `TabletAudioSample/micinwavtable.h` | 同名 | ＝ |
+| `TabletAudioSample/micintoptable.h` | `micintoptable.h` | ≠ pin-name GUID を独自 GUID へ + Category を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` + jack channel mask stereo 化 |
+| `TabletAudioSample/micinwavtable.h` | 同名 | ≠ stereo capture format/range 追加 + default mode stereo 化 |
 
 ### `DirectMusic UART Driver Sample/C++/` → 直下（Issue #978 Slice C）
 
@@ -106,6 +106,7 @@ upstream パス → `drivers/rvf-virtual-audio/` 配下。`＝` は upstream と
 - `minipairs.h`: 登録 endpoint を `SpeakerMiniports` + `MicInMiniports` のみに削減（render: `TopologySpeaker`/`WaveSpeaker`、capture: `TopologyMicIn`/`WaveMicIn`）。
 - `EndpointsCommon/speakertoptable.h`: `KSPIN_TOPO_LINEOUT_DEST` bridge pin の `Name` に独自 GUID `RVF_CABLE_INPUT_NAME = {131373ee-e400-4a68-ab5e-9ded0544f2b4}` を設定し、`Category` を `KSNODETYPE_SPEAKER`→`KSNODETYPE_LINE_CONNECTOR` に変更（2026-11-24 attempt-8 実測: KSNODETYPE_SPEAKER 系 Category の endpoint では Windows が pin-name を無視して "Speakers" をハードコードする — OSR/実測。LINE_CONNECTOR 化で `MediaCategories` 経由の "Ruviform Cable Input" が表示される）。仮想 cable の形態としても speaker より line-connector が自然。
 - `micintoptable.h`: `MICIN_CUSTOM_NAME` を独自 GUID `RVF_CABLE_OUTPUT_NAME = {46eab9d5-1e22-45f8-a744-1cf7561dc20a}` に置換し（INF `MediaCategories` で "Ruviform Cable Output" に結び付く）、capture bridge pin の `Category` を `KSNODETYPE_MICROPHONE`→`KSNODETYPE_LINE_CONNECTOR` に変更（仮想 cable の形態として正しい — VB-CABLE 等と同型。2026-11-24 attempt-10 実測: capture `IAudioClient::Initialize` が `E_ACCESSDENIED`=`permission_denied` — mic device capability の consent gate による拒否。attempt-11 実測で LINE_CONNECTOR 化は同 gate を解除しないことが確定したため、gate 対策は workflow 側の DeviceAccess consent provisioning に分離 — driver 側の変更は semantic 正当性のみを根拠とする）。
+- `micinwavtable.h` / `micintoptable.h`（Issue #1029 stereo capture 変更）: capture endpoint の max channels を 1→2 へ引き上げ、既存 mono 16-bit PCM format 群を保持したまま 8 kHz–48 kHz の stereo 16-bit PCM format 群を追加。`RAW`/`DEFAULT` mode の default format は stereo 48 kHz、speech/communications/far-field mode の default も対応する stereo rate へ変更し、streaming pin data range は channel count exact-match を前提に mono/stereo の 2 range へ分離。topology jack channel mask も `KSAUDIO_SPEAKER_STEREO` へ変更。loopback copy は既存の channel-mapped conversion を使い、mono capture 明示時だけ arithmetic mean downmix になる従来契約を維持する。
 - `EndpointsCommon/MiniportAudioEngineNode.cpp`（2026-11-24 attempt-1 実測修正）: upstream は `EndpointsCommon` を `SYSVAD_BTH_BYPASS;SYSVAD_USB_SIDEBAND` 定義の StaticLibrary として build するため本ファイル内の sideband 呼出（`IsSidebandDevice()`/`m_pSidebandDevice`）が未ガードのまま compile する。本ツリーは macro 未定義で単一 vcxproj build するため、他 upstream ファイル（`mintopo.cpp` 等）と同じ `#if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)` guard を `if (...) {...} else` 8 箇所に適用 — sideband 無効時は else 側（非 sideband path）のみ compile される upstream 互換構造。
 
 - `common.cpp/.h`（2026-11-24 Slice B stage-2 変更）: `IAdapterCommon` に `RvfLoopbackRegisterRender`/`RvfLoopbackUnregisterRender`/`RvfLoopbackRenderRunning`/`RvfLoopbackRenderPosition`/`RvfLoopbackCaptureWrite` を追加。`CAdapterCommon` は両 wave miniport に共有される adapter 単位オブジェクトで、render stream の DMA buffer 参照・format・RUN 状態・play cursor を保持する registry（`m_LoopbackRender` + `m_LoopbackLock`）の置き場所として選定。
