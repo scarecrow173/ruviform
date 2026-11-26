@@ -328,8 +328,9 @@ Properties introduced in Issue #806 (wire codecs `rvf.ipc.v1` /
 readers `ruviform-io-structured`, and PCM WAV backend `ruviform-io-wav`):
 
 ```sh
-mise run test-formal        # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
-mise run test-formal-kani   # Kani bounded proofs (native, else WSL2)
+mise run test-formal                      # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
+mise run test-formal-kani                 # legacy aggregate Kani proofs (native, else WSL2)
+mise run test-formal-kani w-ipc-op        # selective W-IPC-OP byte-core proofs only
 ```
 
 Responsibilities are split rather than duplicated. `POLICIES.md` §6 is the
@@ -345,9 +346,13 @@ for new verification work.
 `evidence/rf1015/property-ledger.md` is the Property-group ledger of record
 for the rf#1015 redesign. When selecting, re-running, or accounting for these
 lanes, identify the affected Property groups and ledger synchronization state
-rather than treating harness count, process exit 0, or CI green as proof. A
-selective re-run entry point keyed by Property group is not implemented yet;
-record that as `not_synced` instead of claiming synchronization.
+rather than treating harness count, process exit 0, or CI green as proof. The
+only selective re-run entry currently implemented is
+`mise run test-formal-kani w-ipc-op` for the rf#1015 `W-IPC-OP` byte-core
+proofs. There is still no generic Property-group runner; record unaffected or
+unimplemented selectors as `not_synced` instead of claiming synchronization.
+Unknown selectors are usage errors (exit 2) before environment detection or
+Kani execution.
 
 Test files live next to the crates: `crates/ruviform-ui/tests/formal_ipc.rs`
 (`parse_intent`, `valid_op`, `Event::to_json`),
@@ -371,10 +376,13 @@ runs it with `--all-features` because the crate's `default = []`.
 
 Kani proofs sit in a `#[cfg(kani)] mod proofs` at the bottom of the same
 test file, plus deliberate exceptions where the type under proof is
-`pub(crate)`: the `BoundedRead` proof lives in a `#[cfg(kani)] mod proofs`
-inside `src/input.rs`, and the slice-4 `write_sample`/`Wire`/`fmt` proofs
-live in `ruviform-io-wav/src/convert.rs`/`wav.rs`, because
-`cargo kani --tests` covers lib-target proofs. All other proofs stay out of
+`pub(crate)` or private: the `BoundedRead` proof lives in a
+`#[cfg(kani)] mod proofs` inside `src/input.rs`, the slice-4
+`write_sample`/`Wire`/`fmt` proofs live in
+`ruviform-io-wav/src/convert.rs`/`wav.rs`, and the rf#1015 `W-IPC-OP`
+exactness/boundary proofs live beside the private `valid_op_bytes` in
+`ruviform-ui/src/ipc.rs`, because `cargo kani --tests` covers lib-target
+proofs. All other proofs stay out of
 product sources. The proofs use a concrete skeleton plus a symbolic gate
 field (record/field limits, the byte budget); arbitrary byte streams stay
 concrete-only in proptest. Proof placement `#[cfg(kani)]` modules are not the
@@ -386,11 +394,16 @@ CI). `test-formal-kani` resolves an environment in order: native
 mapped to `/mnt/<drive>/`, builds in a WSL-native target dir, never through
 `/mnt`) → `not_run` + `environment_blocked` + exit 0. A real CBMC
 counterexample is `fail` + exit 1; environment absence is never reported as
-`pass`. The Kani lane runs three `cargo kani` invocations — one for the
-wire/archive crates, a separate `--all-features --no-unwinding-checks` one
+`pass`. With no selector, the Kani lane runs three `cargo kani`
+invocations — one for the wire/archive crates, a separate
+`--all-features --no-unwinding-checks` one
 for `ruviform-io-structured`, and a separate `-j1` one for
 `ruviform-io-wav` (concurrent WAV CBMC harnesses exhaust the reference WSL2
-envelope) — and aggregates: `pass` only when all invocations verify.
+envelope) — and aggregates: `pass` only when all invocations verify. The
+`w-ipc-op` selector instead runs one `-j1 -p ruviform-ui --harness w_ipc_op`
+invocation against the four in-src byte-core proofs, without
+`--no-unwinding-checks`; the substring filter matches only harness names
+containing `w_ipc_op` and must be re-checked if related harnesses are renamed.
 
 The `--no-unwinding-checks` invocation for `ruviform-io-structured` is a
 currently present legacy exception, not an ordinary lane detail and not a
@@ -426,9 +439,12 @@ a test) are committed — they pin historically failing seeds so every run
 replays them first.
 
 Mutation-fail proof is required evidence: temporarily break one codec
-invariant, run the property suite, record the shrunk failure, revert
-completely, and re-run green. The mutant / observed failure / revert triple
-goes into `evidence/<issue>/` — a suite that cannot fail is not a gate.
+invariant, run the property suite or the selective proof lane that owns the
+mutated invariant, record the failure, revert completely, and re-run green.
+For `W-IPC-OP`, the required mutation evidence is the selective Kani lane
+(`mise run test-formal-kani w-ipc-op`), not only proptest. The mutant /
+observed failure / revert triple goes into `evidence/<issue>/` — a suite that
+cannot fail is not a gate.
 
 Verdict vocabulary and the local-vs-integration distinction follow the
 `## Evidence` rules above; `verification.md` records the Kani toolchain

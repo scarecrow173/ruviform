@@ -95,3 +95,7 @@ canonical command は mise/prek経由。実行記録の機械可読版は `runs.
 - 選択再実行 runnerは未実装。group単位の予算記録・選択実行は ledger設計どおり後続 sliceで実装する。
 - `origin/main` `ab6dc99f` の必須 CI証跡は統合 gateであり、このローカル証拠で代替しない。rf#1021 trackerはこの sliceの作業停止理由にしなかったが、merge判断では Coordinatorが確認する。
 - 探索 JSONが Open Issue全件の逐語精読ではないことは前提どおり。別 Issueの hard dependencyはこの sliceの作業中には発見しなかった。
+
+## slice 2 verification
+
+`W-IPC-OP` pure decision core sliceの検証記録は companion文書 `evidence/rf1015/verification-slice2.md` にある。本書の slice 1 記録は変更していない。
