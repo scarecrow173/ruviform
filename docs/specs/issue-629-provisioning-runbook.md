@@ -446,8 +446,25 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
     artifact の両 RunMetadata JSON 本体が `result:"pass"`・
     `level:"ext-l3"`・`environment_kind:"virtual-os-endpoint"`・対象
     repo/SHA を示すことで行う。
-14. `os-endpoint-midi-e2e` — Issue #253 AC1/AC6 vertical slice。`os-endpoint-wiring` 後・`fault-cases` 前に置き、fixture build 後に `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` を補助証拠として実行する。canonical lane は `mise run test-os-endpoint-midi-e2e`（`--nocapture` なし）である。stage は `midi-endpoint-probe` の candidate/provisioning 行と `midi-loopback` の candidate/round-trip Pass 行を生ログへ転記し、両者が揃った場合だけ `RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE=rvfmidi-testsigned-driver-probe` を設定する。RunMetadata は `os-endpoint-midi-e2e-run-metadata-<os>/` へ copy し、repo/SHA・`level=ext-l3`・`environment_kind=virtual-os-endpoint`・result を検査する。honest NotRun は absence-is-data の stage `ok` だが、`result=pass` に RvfMidi provenance 行がない場合、または workflow 側 provenance が未成立のまま pass だった場合は証拠価値がないため stage `error` とする。Fail・crash・verdict/RunMetadata 未到達・copy 不能も `error`。
-15. `fault-cases` — Issue #1002 Slice G。`os-endpoint-midi-e2e` 後・`cleanup`
+14. `os-endpoint-midi-e2e` — Issue #253 AC1/AC6 vertical slice。`os-endpoint-wiring` 後・`xrun-cases` 前に置き、fixture build 後に `mise exec -- cargo test -p ruviform-plugin-test-vst3 --features l1-runner --test os_endpoint_midi_e2e -- --ignored --test-threads=1 --nocapture` を補助証拠として実行する。canonical lane は `mise run test-os-endpoint-midi-e2e`（`--nocapture` なし）である。stage は `midi-endpoint-probe` の candidate/provisioning 行と `midi-loopback` の candidate/round-trip Pass 行を生ログへ転記し、両者が揃った場合だけ `RUVIFORM_VIRTUAL_ENDPOINT_PROVENANCE=rvfmidi-testsigned-driver-probe` を設定する。RunMetadata は `os-endpoint-midi-e2e-run-metadata-<os>/` へ copy し、repo/SHA・`level=ext-l3`・`environment_kind=virtual-os-endpoint`・result を検査する。honest NotRun は absence-is-data の stage `ok` だが、`result=pass` に RvfMidi provenance 行がない場合、または workflow 側 provenance が未成立のまま pass だった場合は証拠価値がないため stage `error` とする。Fail・crash・verdict/RunMetadata 未到達・copy 不能も `error`。
+15. `xrun-cases` — Issue #1009。`os-endpoint-midi-e2e` 後・`fault-cases` 前に置き、
+    Ruviform Cable Output の capture streaming pin に対する deterministic xrun
+    注入 case を実行する。controller 本体は
+    `tools/virtual-audio-driver/Invoke-XrunCases.ps1` に置き、scenario/start/
+    packet count validation、endpoint exact pair preflight、driver service
+    `Parameters` key への `RvfXrunScenario` / `RvfXrunStartPacket` /
+    `RvfXrunPacketCount` の write/restore、harness process 境界、raw stdout/
+    stderr 分離、`rf1009-xrun-case/v1` 集約を担当する。destructive な devnode
+    remove/recreate を行い得る `fault-cases` が endpoint surface を bounded
+    window に戻さない観測があるため、endpoint pair と mic consent が成立した
+    後であって destructive fault injection より前に配置する。case key は
+    `capture-overflow-drop-input`（positive）と
+    `capture-content-gap-input-negative`（negative control）。正規判定は
+    `xrun-cases-<os>/rf1009-xrun-case-<case>-<os>.json` の case-level result、
+    oracle counter、injection applied/cleanup、raw log で行い、stage `ok` や
+    workflow conclusion を Pass と混同しない。前提不足は NotRun、oracle
+    不成立・schema/provenance/cleanup 破損は Fail/error として扱う。
+16. `fault-cases` — Issue #1002 Slice G。`xrun-cases` 後・`cleanup`
     前に置き、OS 状態制御を workflow/PowerShell 側へ閉じ込めた fault harness
     を実行する。controller 本体は `tools/virtual-audio-driver/Invoke-FaultCases.ps1`
     に置き、workflow step は呼び出しと fail-closed stage record だけを担う。
@@ -473,8 +490,8 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
     controller/復帰/case-level Fail は `error` とする。disable した devnode
     と変更した microphone consent/service 状態は finally/cleanup で必ず
     Allow+Running へ戻す。
-16. `cleanup` — `Unprovision-RvfVirtualAudioEndpoint.ps1` による devnode 削除・`pnputil /delete-driver`・証明書除去・consent before-value 復元・audio service restart と residue 観測。
-17. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
+17. `cleanup` — `Unprovision-RvfVirtualAudioEndpoint.ps1` による devnode 削除・`pnputil /delete-driver`・証明書除去・consent before-value 復元・audio service restart と residue 観測。
+18. `Upload probe evidence` — 上記全 stage の記録を attempt 固有名の
     artifact（`virtual-audio-driver-probe-<os>-attempt-<n>`）として upload。
 
 - license: MS-PL（audio 部）/MS-LPL（MIDI miniport 部）派生のため外部 driver
@@ -494,8 +511,10 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
   `os-endpoint-run-metadata-windows-2025/`、MIDI Host/Plugin e2e の RunMetadata JSON は
   `os-endpoint-midi-e2e-run-metadata-windows-2025/`、fault case の機械可読結果は
   `fault-cases-results-windows-2025.json`、同期/観測用の fault file は
-  `fault-*-windows-2025*` に残り、失敗時も `if: always()` の artifact upload
-  で保全される。attempt 固有 artifact 名で全 attempt の evidence が残る。
+  `fault-*-windows-2025*`、xrun case の機械可読結果・raw stdout/stderr・
+  controller log・preflight endpoint probe は `xrun-cases-windows-2025/` に残り、
+  失敗時も `if: always()` の artifact upload で保全される。attempt 固有 artifact
+  名で全 attempt の evidence が残る。
 - 記録責任分担: stage record・生ログ・probe 出力は artifact として採取され、
   `evidence/rf977/`・`evidence/rf978/`・`evidence/rf979/`・`evidence/rf1001/`・
   `evidence/rf1002/`・`evidence/rf253/` に attempt 番号対応付きで記録される（install 後の残件は
@@ -509,6 +528,10 @@ state JSON を従来 stage 名・state key・stage log 名へ投影する:
   `fault-cases-results-windows-2025.json` の case-level result、
   `stage-fault-cases-windows-2025.txt` の controller action/復帰記録、
   必要に応じて fault test の `fault_case_result:` 生行を保存する。
+  `xrun-cases` の rf#1009 判定では `rf1009-xrun-case-<case>-windows-2025.json`
+  の schema/provenance/result/oracle/injection cleanup、raw stdout/stderr、
+  controller log、preflight endpoint probe output を保存し、stage record だけを
+  capability evidence に使わない。
 - provisioned pair の利用: endpoint 成立後は本書前文どおり
   `mise run test-audio-virtual-endpoint`・`mise run
   test-midi-virtual-endpoint`・`mise run test-os-endpoint-wiring`・`mise run test-os-endpoint-midi-e2e` の入力として

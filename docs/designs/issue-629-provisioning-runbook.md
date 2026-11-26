@@ -517,7 +517,8 @@ license・配布・再起動の摩擦から、Slice B で独自 driver 経路に
   install 全 stage（`env-build-surface`〜`devnode-create`）→
   `endpoint-probe`→`midi-endpoint-probe`→`stream-roundtrip`
   （`mise run test-audio-virtual-endpoint` 実走）→ `midi-loopback` →
-  `os-endpoint-wiring` → `os-endpoint-midi-e2e` → `fault-cases` → `cleanup` を束ねる。stage 一覧の正本は spec 版
+  `os-endpoint-wiring` → `os-endpoint-midi-e2e` → `xrun-cases` →
+  `fault-cases` → `cleanup` を束ねる。stage 一覧の正本は spec 版
   runbook 追記節（`docs/specs/issue-629-provisioning-runbook.md`）。
 
 ## 4. Provisioning 判定フロー（probe 主導）
