@@ -1,0 +1,51 @@
+{
+  "schema": "rf1009-xrun-case/v1",
+  "run": {
+    "id": "45837299116",
+    "attempt": "1",
+    "repo": "scarecrow173/ruviform",
+    "sha": "ad188873144e93a3fd384fca0a64b2fe0f49ce16",
+    "os": "windows-2025",
+    "recorded_utc": "2026-11-26T14:21:29Z"
+  },
+  "case": {
+    "name": "capture-overflow-drop-input",
+    "direction": "input",
+    "result": "Fail",
+    "detail": "positive-oracle-not-met:typed-xrun-missing;clock-discontinuity-missing;forward-frame-position-gap-missing;max-forward-gap-zero;input-callbacks-did-not-progress-before-injection;input-callbacks-did-not-resume-after-injection"
+  },
+  "endpoint": {
+    "render_name": "Ruviform Cable Input (Ruviform Virtual Audio Device)",
+    "capture_name": "Ruviform Cable Output (Ruviform Virtual Audio Device)",
+    "capture_instance_id": "DeviceId(\"wasapi:{0.0.1.00000000}.{4d2bdac2-c69d-4d6e-856e-948ddc4b6d06}\")",
+    "target_pin": "loopback-capture"
+  },
+  "injection": {
+    "control_surface": "static-registry-stream-snapshot",
+    "scenario": "capture-overflow-drop",
+    "start_packet": 20,
+    "packet_count": 3,
+    "applied": true,
+    "cleanup": "cleared",
+    "reload_boundary": "stream-open"
+  },
+  "oracle": {
+    "typed_xruns": 0,
+    "clock_discontinuities": 0,
+    "stream_invalidated": 0,
+    "backend_errors": 0,
+    "input_callbacks": 299,
+    "output_callbacks": 302,
+    "forward_frame_position_gaps": 0,
+    "max_forward_gap_frames": 0,
+    "sample_gap_detected": false,
+    "max_callback_stall_ms": 20
+  },
+  "artifacts": {
+    "raw_stdout": "xrun-capture-overflow-drop-input-windows-2025.stdout.txt",
+    "raw_stderr": "xrun-capture-overflow-drop-input-windows-2025.stderr.txt",
+    "controller_log": "xrun-controller-windows-2025.txt",
+    "driver_trace": null,
+    "pcm_capture": null
+  }
+}
