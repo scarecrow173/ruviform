@@ -2,7 +2,7 @@
 id: "SPEC-Rf1034Timestamp01"
 type: "spec"
 status: "approved"
-title: "Issue #1034 render callback timestamp contract and baseline observation"
+title: "Issue #1034 render callback timestamp contract, baseline observation, and layer isolation"
 created: "2026-11-26"
 updated: "2026-11-26"
 owners:
@@ -49,15 +49,15 @@ relations:
   deferred-by: []
 ---
 
-# Issue #1034 render callback timestamp contract and baseline observation
+# Issue #1034 render callback timestamp contract, baseline observation, and layer isolation
 
 ## What Should Be Built
 
-Issue #1034 の最初の切り分け slice として、仮想 audio endpoint の
+Issue #1034 の切り分け slice として、仮想 audio endpoint の
 render callback timestamp に対する期待契約、責務境界、正式 oracle、
-baseline 観測方法を確定する。本 spec は closeout 仕様ではなく、
-後続の driver / adapter / consumer 修正 slice が同じ語彙と判定境界を
-使うための契約である。
+baseline 観測方法、layer isolation evidence の読み方を確定する。
+本 spec は closeout 仕様ではなく、後続の driver / adapter / consumer
+修正 slice が同じ語彙と判定境界を使うための契約である。
 
 本 slice の実装側では、`crates/ruviform-audio-test/tests/os_endpoint.rs`
 に render-only baseline case を追加し、capture loopback や xrun fault
@@ -156,11 +156,15 @@ epoch-delta fallback は表現域の変換規則であり、時刻を平滑化�
 
 `crates/ruviform-audio-test/tests/os_endpoint.rs` は consumer 側の
 oracle と evidence 収集を所有する。RT callback 内では allocation
-せず、bounded slots に callback index、epoch、frame 数、
-`callback`、`playback` presence/value、callback interval、regression
-backstep を記録する。分類は単一の timestamp epoch classifier に
-集約し、render-only baseline と render/capture round-trip で別の
-regression 判定系を作らない。
+せず、bounded slots に callback index、epoch、frame 数、供給 frame
+cursor、`callback`、`playback` presence/value、callback interval、
+regression backstep を記録する。layer isolation のために、同一
+bounded event に host monotonic callback instant/interval、
+`playback - callback` lead、`playback` interval、callback 重なり
+検出用の active callback depth も記録する。分類は単一の timestamp
+epoch classifier に集約し、render-only baseline と render/capture
+round-trip で別の regression 判定系を作らない。host monotonic と
+callback 重なりは診断値であり、Pass/Fail oracle ではない。
 
 ### runner / provisioning environment
 
@@ -208,6 +212,64 @@ instrumentation は bounded 512 slots に記録する。overflow は隠さず
 カウントし、overflow 自体は timestamp 単調性 Pass を意味しない。
 regression index log は従来どおり 32 slots に bounded し、log 外の
 regression は分類不能として Fail 側に倒す。
+
+各 event は次の診断入力を保持する。`supply_frame_cursor` は consumer
+が backend へ供給した deterministic fixture の frame cursor、
+`host_monotonic_ns`/`host_interval_ns` は harness が同一 host clock で
+測った callback 到着間隔、`playback_interval_ns` と
+`playback_lead_ns` は backend 報告 timestamp 内部の関係、
+`max_active_callbacks`/`overlap_events` は harness 側で regression
+series を重畳させていないかの健全性値である。epoch split では
+callback/playback/host の interval baseline をともに reset し、跨
+epoch の interval を startup transient と混同しない。
+
+control thread では regression event ごとに bounded log 内の値から
+`render_timestamp_regression_diag` を発行する。そこには epoch 内
+offset、startup grace 分類、直前の epoch 内最大 callback（reference）、
+backstep、regression 前後 2 callback に跨る backend callback interval、
+host interval、供給 frame 数、`playback` lead/interval を含める。
+この診断行は authoritative classifier ではない。既存 classifier の
+観測入力を説明する evidence であり、別系統の Pass/Fail を作らない。
+
+## layer isolation の確定範囲と未確定範囲
+
+確定できる責務分担は次のとおりである。
+
+1. consumer harness は backend から受け取った `callback` を補正せず、
+   regression index と backstep を観測するだけである。したがって
+   `callback` regression を harness が生成したとは読めない。harness
+   の誤判定説は、重複 callback や供給 cursor 不整合が診断値に現れた
+   場合に限り再検討する。
+2. cpal 0.18.2 WASAPI output path では、`callback` は
+   `IAudioClock::GetPosition` が返す QPC position から直接変換され、
+   cpal の monotonic wrapper は `playback` のみを clamp し `callback`
+   を clamp しない。したがって観測された `callback` regression は
+   cpal の playback monotonic wrapper が隠した/作ったものではない。
+   cpal conversion 説が残るのは QPC→nanos conversion または cpal の
+   API 使用そのものに不具合がある場合に限定される。
+3. driver position bookkeeping 説は、既存の rf977/rf952 evidence により
+   弱められている。render stream の driver-reported position/counter を
+   STOP 跨ぎで monotonic 化しても regression 件数が変わらなかった
+   ため、少なくとも startup/restart regression については driver が
+   報告しうる position bookkeeping 単独の原因ではない。ただしこの
+   evidence は mid-epoch regression を完全には説明しない。
+4. `playback` が前進しながら `callback` が逆行し、直後に大きな正の
+   interval で追い付く sawtooth 形は、OS/WASAPI/audiodg 側の
+   position↔QPC correlation bookkeeping が再 anchor された説と
+   整合する。idx 3/4 の epoch-start regression はこの説で説明可能
+   だが、baseline idx 250 の mid-epoch regression は startup grace
+   では説明できない。
+
+未確定のまま残す事項は次のとおりである。
+
+- idx 250 の mid-epoch regression が runner scheduling/負荷、
+  audiodg の mid-stream correlation 更新、cpal conversion、driver と
+  OS の interaction のどれで最初に発生するか。host interval と backend
+  two-step interval の比較、playback lead/interval、供給 cursor、
+  callback overlap の provisioned evidence がそろうまでは最終帰属
+  しない。
+- regression-count-zero の修正検証。本 spec は oracle 緩和や修正済み
+  宣言をしない。
 
 ## 非目標
 
