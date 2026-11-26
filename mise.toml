@@ -395,9 +395,11 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # suites. Kani needs a Linux CBMC toolchain, so the lane
 # env-detects: a native `cargo kani` first, then a WSL2 distro
 # (Kani cannot run on native Windows). With no selector it keeps the
-# legacy aggregate behavior. The only selective Property-group entry is
-# `w-ipc-op`, which runs just the valid_op byte-core proofs. Unknown
-# selectors are usage errors and exit before environment detection. In
+# legacy aggregate behavior. Selective Property-group entries are
+# `w-ipc-op` for the valid_op byte-core proofs, `sd-csv-limits` for the
+# structured CSV limit decision-core proofs, and `sd-byte-budget` for
+# the structured BoundedRead proof. Unknown selectors are usage errors
+# and exit before environment detection. In
 # WSL the repository is
 # reached via /mnt/<drive> but the target dir is forced onto the
 # WSL native filesystem (/mnt builds are too slow; the Windows-side
@@ -405,12 +407,10 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # a separate `cargo kani` invocation with `--all-features`: the
 # crate's `default = []` feature set means the JSON/YAML/TOML/CSV/XML
 # proofs only compile with features on — including the in-src
-# `BoundedRead` proof in `src/input.rs`. The structured invocation
-# passes `--no-unwinding-checks`: the CSV harnesses unwind
-# `csv_core`'s `build_dfa` byte-table loop to 128 (skeleton bytes are
-# all < 128, so truncated rows are unreachable); full 256-row
-# coverage roughly doubles the formula beyond the reference WSL2
-# environment. Slice 4 (PCM WAV) is a third, separate invocation —
+# `BoundedRead` proof in `src/input.rs`. Structured limit decisions
+# are proven against pure in-src decision cores, so the invocation no
+# longer disables unwinding assertions. Slice 4 (PCM WAV) is a third,
+# separate invocation —
 # `-p ruviform-io-wav` covers the `open_muxer` harness in
 # tests/formal_wav.rs plus the in-src `write_sample`/`Wire`/`fmt`
 # proofs in src/convert.rs and src/wav.rs. Unlike the other
@@ -427,14 +427,14 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the legacy aggregate invocations; `w-ipc-op` runs only the valid_op byte-core proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the aggregate invocations; `w-ipc-op`, `sd-csv-limits`, and `sd-byte-budget` run only their selective proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
 raw_args = true
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 
 usage() {
-  echo "usage: mise run test-formal-kani [w-ipc-op]" >&2
+  echo "usage: mise run test-formal-kani [w-ipc-op|sd-csv-limits|sd-byte-budget]" >&2
 }
 
 if [ "$#" -gt 1 ]; then
@@ -443,7 +443,7 @@ if [ "$#" -gt 1 ]; then
 fi
 SELECTOR="${1:-}"
 case "$SELECTOR" in
-  ""|w-ipc-op) ;;
+  ""|w-ipc-op|sd-csv-limits|sd-byte-budget) ;;
   *)
     usage
     exit 2
@@ -460,9 +460,13 @@ if cargo kani --version >/dev/null 2>&1; then
   rc=0
   if [ "$SELECTOR" = "w-ipc-op" ]; then
     cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op || rc=1
+  elif [ "$SELECTOR" = "sd-csv-limits" ]; then
+    cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision || rc=1
+  elif [ "$SELECTOR" = "sd-byte-budget" ]; then
+    cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate || rc=1
   else
     cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive || rc=1
-    cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured || rc=1
+    cargo kani --tests -j4 --output-format terse --all-features -p ruviform-io-structured || rc=1
     cargo kani --tests -j1 --output-format terse -p ruviform-io-wav || rc=1
   fi
   if [ "$rc" -eq 0 ]; then
@@ -495,9 +499,13 @@ if command -v wsl.exe >/dev/null 2>&1; then
     rc=0
     if [ "$SELECTOR" = "w-ipc-op" ]; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op" || rc=1
+    elif [ "$SELECTOR" = "sd-csv-limits" ]; then
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision" || rc=1
+    elif [ "$SELECTOR" = "sd-byte-budget" ]; then
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate" || rc=1
     else
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive" || rc=1
-      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features --no-unwinding-checks -p ruviform-io-structured" || rc=1
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j4 --output-format terse --all-features -p ruviform-io-structured" || rc=1
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani --tests -j1 --output-format terse -p ruviform-io-wav" || rc=1
     fi
     if [ "$rc" -eq 0 ]; then
