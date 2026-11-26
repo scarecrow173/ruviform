@@ -331,6 +331,7 @@ readers `ruviform-io-structured`, and PCM WAV backend `ruviform-io-wav`):
 mise run test-formal                      # proptest: formal_ipc + formal_transport + formal_archive + formal_structured + formal_wav
 mise run test-formal-kani                 # legacy aggregate Kani proofs (native, else WSL2)
 mise run test-formal-kani w-ipc-op        # selective W-IPC-OP byte-core proofs only
+mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
 mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
 mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
 ```
@@ -350,8 +351,9 @@ for the rf#1015 redesign. When selecting, re-running, or accounting for these
 lanes, identify the affected Property groups and ledger synchronization state
 rather than treating harness count, process exit 0, or CI green as proof. The
 implemented selective re-run entries are `mise run test-formal-kani w-ipc-op`
-for the rf#1015 `W-IPC-OP` byte-core proofs, `sd-csv-limits` for the CSV
-limit decision-core proofs, and `sd-byte-budget` for the `BoundedRead` proof.
+for the rf#1015 `W-IPC-OP` byte-core proofs, `arc-idx-limit` for the ZIP
+index decision-core proof, `sd-csv-limits` for the CSV limit decision-core
+proofs, and `sd-byte-budget` for the `BoundedRead` proof.
 There is still no generic Property-group runner; record unaffected or
 unimplemented selectors as `not_synced` instead of claiming synchronization.
 Unknown selectors are usage errors (exit 2) before environment detection or
@@ -384,8 +386,10 @@ test file, plus deliberate exceptions where the type under proof is
 `write_sample`/`Wire`/`fmt` proofs live in
 `ruviform-io-wav/src/convert.rs`/`wav.rs`, and the rf#1015 `W-IPC-OP`
 exactness/boundary proofs live beside the private `valid_op_bytes` in
-`ruviform-ui/src/ipc.rs`, because `cargo kani --tests` covers lib-target
-proofs. All other proofs stay out of
+`ruviform-ui/src/ipc.rs`, and the rf#1015 `ARC-IDX-LIMIT` exactness proof
+lives beside the private ZIP index decision core in
+`ruviform-io-archive/src/zip/read.rs`, because `cargo kani --tests` covers
+lib-target proofs. All other proofs stay out of
 product sources. The proofs use a concrete skeleton plus a symbolic gate
 field (record/field limits, the byte budget); arbitrary byte streams stay
 concrete-only in proptest. Proof placement `#[cfg(kani)]` modules are not the
@@ -406,10 +410,12 @@ envelope) — and aggregates: `pass` only when all invocations verify. The
 invocation against the four in-src byte-core proofs, without
 `--no-unwinding-checks`; the substring filter matches only harness names
 containing `w_ipc_op` and must be re-checked if related harnesses are renamed.
-The structured selectors likewise use exact substring filters:
+The archive selector uses the `arc_idx_limit` substring filter, which
+selects only `zip::read::proofs::arc_idx_limit_decision_exactness`. The
+structured selectors likewise use exact substring filters:
 `csv_limit_decision` selects the three CSV decision-core exactness proofs and
-`bounded_read_budget_gate` selects the byte-budget proof. Neither disables
-Unwinding Assertions.
+`bounded_read_budget_gate` selects the byte-budget proof. None of these
+selective entries disables Unwinding Assertions.
 
 The former `--no-unwinding-checks` invocation for `ruviform-io-structured`
 was removed in rf#1015 slice 3. The historical invocation bounded `csv_core`'s
@@ -447,9 +453,9 @@ replays them first.
 Mutation-fail proof is required evidence: temporarily break one codec
 invariant, run the property suite or the selective proof lane that owns the
 mutated invariant, record the failure, revert completely, and re-run green.
-For `W-IPC-OP` and the structured slice-3 proofs, the required mutation
-evidence is the selective Kani lane (`w-ipc-op` or `sd-csv-limits`), not only
-proptest. The mutant /
+For `W-IPC-OP`, `ARC-IDX-LIMIT`, and the structured slice-3 proofs, the
+required mutation evidence is the selective Kani lane (`w-ipc-op`,
+`arc-idx-limit`, or `sd-csv-limits`), not only proptest. The mutant /
 observed failure / revert triple goes into `evidence/<issue>/` — a suite that
 cannot fail is not a gate.
 
