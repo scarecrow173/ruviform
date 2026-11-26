@@ -18,7 +18,7 @@ Abstract:
 //
 // Mic in (external: headphone) range.
 //
-#define MICIN_DEVICE_MAX_CHANNELS           1       // Max Channels.
+#define MICIN_DEVICE_MAX_CHANNELS           2       // Max Channels.
 #define MICIN_MIN_BITS_PER_SAMPLE_PCM       16      // Min Bits Per Sample
 #define MICIN_MAX_BITS_PER_SAMPLE_PCM       16      // Max Bits Per Sample
 #define MICIN_MIN_SAMPLE_RATE               8000    // Min Sample Rate
@@ -232,6 +232,206 @@ KSDATAFORMAT_WAVEFORMATEXTENSIBLE MicInPinSupportedDeviceFormats[] =
             KSAUDIO_SPEAKER_MONO,
             STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
         }
+    },
+    { // 8 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                8000,
+                32000,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 9 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                11025,
+                44100,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 10 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                16000,
+                64000,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 11 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                22050,
+                88200,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 12 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                24000,
+                96000,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 13 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                32000,
+                128000,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 14 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                44100,
+                176400,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
+    },
+    { // 15 — stereo
+        {
+            sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+            0,
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        {
+            {
+                WAVE_FORMAT_EXTENSIBLE,
+                2,
+                48000,
+                192000,
+                4,
+                16,
+                sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+            },
+            16,
+            KSAUDIO_SPEAKER_STEREO,
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM)
+        }
     }
 };
 
@@ -251,15 +451,15 @@ MODE_AND_DEFAULT_FORMAT MicInPinSupportedDeviceModes[] =
     },
     {
         STATIC_AUDIO_SIGNALPROCESSINGMODE_SPEECH,
-        &MicInPinSupportedDeviceFormats[2].DataFormat, // 16KHz
+        &MicInPinSupportedDeviceFormats[10].DataFormat, // stereo 16KHz
     },
     {
         STATIC_AUDIO_SIGNALPROCESSINGMODE_COMMUNICATIONS,
-        &MicInPinSupportedDeviceFormats[4].DataFormat, // 24KHz
+        &MicInPinSupportedDeviceFormats[12].DataFormat, // stereo 24KHz
     },
     {
         STATIC_AUDIO_SIGNALPROCESSINGMODE_FAR_FIELD_SPEECH,
-        &MicInPinSupportedDeviceFormats[2].DataFormat, // 16KHz
+        &MicInPinSupportedDeviceFormats[10].DataFormat, // stereo 16KHz
     },
 };
 
@@ -320,7 +520,23 @@ KSDATARANGE_AUDIO MicInPinDataRangesStream[] =
             STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
             STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
         },
-        MICIN_DEVICE_MAX_CHANNELS,
+        1,
+        MICIN_MIN_BITS_PER_SAMPLE_PCM,
+        MICIN_MAX_BITS_PER_SAMPLE_PCM,
+        MICIN_MIN_SAMPLE_RATE,
+        MICIN_MAX_SAMPLE_RATE
+    },
+    {
+        {
+            sizeof(KSDATARANGE_AUDIO),
+            KSDATARANGE_ATTRIBUTES,         // An attributes list follows this data range
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        2,
         MICIN_MIN_BITS_PER_SAMPLE_PCM,
         MICIN_MAX_BITS_PER_SAMPLE_PCM,
         MICIN_MIN_SAMPLE_RATE,
@@ -332,6 +548,8 @@ static
 PKSDATARANGE MicInPinDataRangePointersStream[] =
 {
     PKSDATARANGE(&MicInPinDataRangesStream[0]),
+    PKSDATARANGE(&PinDataRangeAttributeList),
+    PKSDATARANGE(&MicInPinDataRangesStream[1]),
     PKSDATARANGE(&PinDataRangeAttributeList),
 };
 

@@ -223,13 +223,14 @@ struct Probe {
     /// the delivered frame count so [`signal_sample`] sees a
     /// continuous stimulus index across variable-size callbacks.
     out_render_cursor: AtomicU64,
-    // capture handoff (bounded copy target — channel 0 only; every
-    // channel is already scanned for non-finite/peak inside the
-    // callback, and the oracle needs one channel).
+    // capture handoff (bounded planar copy target — every negotiated
+    // channel; every channel is already scanned for non-finite/peak
+    // inside the callback).
     capture: Mutex<CaptureBuf>,
     capture_lock_failures: AtomicU64,
     in_expected_channels: usize,
     out_expected_channels: usize,
+    out_independent_channel_stimulus: bool,
 }
 
 impl Probe {
@@ -262,7 +263,10 @@ impl Probe {
             out_regression_cbs: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             out_latency_min_ns: AtomicI64::new(i64::MAX),
             out_latency_max_ns: AtomicI64::new(i64::MIN),
-            capture: Mutex::new(CaptureBuf::new(capacity)),
+            capture: Mutex::new(CaptureBuf::new(
+                capacity,
+                usize::try_from(input_format.layout.channels()).unwrap_or(usize::MAX),
+            )),
             in_expected_channels: usize::try_from(input_format.layout.channels())
                 .unwrap_or(usize::MAX),
             out_expected_channels: usize::try_from(output_format.layout.channels())
@@ -272,39 +276,59 @@ impl Probe {
     }
 }
 
-/// Bounded channel-0 capture buffer — the "pre-allocated handoff
-/// block" the input-callback contract asks for. Overflow is counted
-/// on the buffer itself; lock failures on [`Probe`].
+/// Bounded planar capture buffer — the "pre-allocated handoff block"
+/// the input-callback contract asks for. `data` is channel-major with
+/// `capacity` frames per channel, allocated once before streaming;
+/// callbacks only copy bounded slices. Overflow is counted on the
+/// buffer itself; lock failures on [`Probe`].
 #[derive(Default)]
 struct CaptureBuf {
     capacity: usize,
+    channels: usize,
     data: Vec<f32>,
     len: usize,
     overflow_frames: u64,
 }
 
 impl CaptureBuf {
-    fn new(capacity: usize) -> Self {
+    fn new(capacity: usize, channels: usize) -> Self {
         Self {
             capacity,
-            data: vec![0.0; capacity],
+            channels,
+            data: vec![0.0; capacity.saturating_mul(channels)],
             len: 0,
             overflow_frames: 0,
         }
     }
 
-    /// Appends channel 0 of `input`, bounded by remaining capacity.
-    /// A callback delivering zero channels leaves `len` untouched —
-    /// the channel-mismatch counter already flags that case.
+    /// Appends every negotiated channel of `input`, bounded by
+    /// remaining capacity. A callback delivering fewer channels leaves
+    /// the missing channel tail zero-filled — the channel-mismatch
+    /// counter already flags that case.
     fn push(&mut self, input: &AudioBufferView<'_, f32>) {
         let frames = input.frames();
         let room = self.capacity.saturating_sub(self.len);
         let n = frames.min(room);
-        if let Some(src) = input.channel(0) {
-            self.data[self.len..self.len + n].copy_from_slice(&src[..n]);
+        if n > 0 {
+            for channel in 0..self.channels {
+                if let Some(src) = input.channel(channel) {
+                    let base = channel * self.capacity;
+                    self.data[base + self.len..base + self.len + n].copy_from_slice(&src[..n]);
+                }
+            }
             self.len += n;
         }
         self.overflow_frames += (frames - n) as u64;
+    }
+
+    /// Borrow one captured channel as a frame-major slice.
+    fn channel(&self, channel: usize) -> &[f32] {
+        if channel >= self.channels {
+            return &[];
+        }
+        let base = channel * self.capacity;
+        let end = base + self.len.min(self.capacity);
+        &self.data[base..end]
     }
 }
 
@@ -1464,6 +1488,642 @@ fn select_xrun_pair(host: &Host) -> Result<Pair, XrunSetupError> {
     let capture = capture_matches.pop().expect("capture match count checked");
     let render = render_matches.pop().expect("render match count checked");
     Ok(Pair { render, capture })
+}
+
+// ---------------------------------------------------------------------------
+// rf#1029 channel-width contract harness
+//
+// The Ruviform cable contract is stereo preserve. This lane selects the exact
+// Ruviform endpoint pair (never the first generic virtual cable), requests
+// stereo on both directions, renders independently identifiable left/right
+// content, and judges the captured channels. The oracle evaluation is pure so
+// mono capture, mono copy, downmix and unsupported widths are executable
+// without a provisioned endpoint.
+// ---------------------------------------------------------------------------
+
+const CHANNEL_WIDTH_SCHEMA: &str = "rf1029-channel-width-observation/v1";
+const CHANNEL_WIDTH_CASE: &str = "ruviform-cable-stereo-preserve";
+const CHANNEL_WIDTH_RIGHT_TONE_HZ: f64 = 880.0;
+const CHANNEL_WIDTH_RIGHT_AMPLITUDE: f64 = 0.30;
+const CHANNEL_WIDTH_MIN_TARGET_RATIO: f64 = 0.25;
+const CHANNEL_WIDTH_MIN_SEPARATION_RATIO: f64 = 4.0;
+const CHANNEL_WIDTH_DOWNMIX_MIN_COMPONENT_RATIO: f64 = 0.15;
+const CHANNEL_WIDTH_MONO_COPY_MAX_COMPONENT_RATIO: f64 = 0.05;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ChannelWidthVerdict {
+    Pass,
+    Fail,
+    NotRun,
+    Unsupported,
+}
+
+impl ChannelWidthVerdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pass => "Pass",
+            Self::Fail => "Fail",
+            Self::NotRun => "NotRun",
+            Self::Unsupported => "Unsupported",
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ChannelWidthMode {
+    StereoPreserve,
+    MonoCapture,
+    MonoCopy,
+    Downmix,
+    ChannelSwap,
+    UnsupportedWidth,
+    Indeterminate,
+}
+
+impl ChannelWidthMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::StereoPreserve => "stereo-preserve",
+            Self::MonoCapture => "mono-capture",
+            Self::MonoCopy => "mono-copy",
+            Self::Downmix => "downmix",
+            Self::ChannelSwap => "channel-swap",
+            Self::UnsupportedWidth => "unsupported-width",
+            Self::Indeterminate => "indeterminate",
+        }
+    }
+}
+
+/// Tone-energy ratios measured on the captured left/right channels. Each
+/// field is the Goertzel power at the named tone divided by that channel's
+/// total power, so mono copy/downmix/channel swap have distinct shapes.
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct StereoToneMeasurement {
+    left_440: f64,
+    left_880: f64,
+    right_440: f64,
+    right_880: f64,
+}
+
+impl StereoToneMeasurement {
+    fn finite(self) -> bool {
+        self.left_440.is_finite()
+            && self.left_880.is_finite()
+            && self.right_440.is_finite()
+            && self.right_880.is_finite()
+    }
+}
+
+struct ChannelWidthEvaluation {
+    verdict: ChannelWidthVerdict,
+    mode: ChannelWidthMode,
+    reason: &'static str,
+}
+
+fn tone_dominance(target: f64, cross: f64) -> f64 {
+    if cross <= 1e-12 {
+        f64::INFINITY
+    } else {
+        target / cross
+    }
+}
+
+fn stereo_measurement_preserves_channels(measurement: StereoToneMeasurement) -> bool {
+    measurement.left_440 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && measurement.right_880 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && tone_dominance(measurement.left_440, measurement.left_880)
+            >= CHANNEL_WIDTH_MIN_SEPARATION_RATIO
+        && tone_dominance(measurement.right_880, measurement.right_440)
+            >= CHANNEL_WIDTH_MIN_SEPARATION_RATIO
+}
+
+fn classify_channel_width(
+    capture_channels: usize,
+    measurement: Option<StereoToneMeasurement>,
+) -> ChannelWidthMode {
+    if capture_channels == 1 {
+        return ChannelWidthMode::MonoCapture;
+    }
+    if capture_channels != 2 {
+        return ChannelWidthMode::UnsupportedWidth;
+    }
+    let Some(measurement) = measurement else {
+        return ChannelWidthMode::Indeterminate;
+    };
+    if stereo_measurement_preserves_channels(measurement) {
+        return ChannelWidthMode::StereoPreserve;
+    }
+    let downmix_shape = measurement.left_440 >= CHANNEL_WIDTH_DOWNMIX_MIN_COMPONENT_RATIO
+        && measurement.left_880 >= CHANNEL_WIDTH_DOWNMIX_MIN_COMPONENT_RATIO
+        && measurement.right_440 >= CHANNEL_WIDTH_DOWNMIX_MIN_COMPONENT_RATIO
+        && measurement.right_880 >= CHANNEL_WIDTH_DOWNMIX_MIN_COMPONENT_RATIO;
+    if downmix_shape {
+        return ChannelWidthMode::Downmix;
+    }
+    let mono_copy_shape = measurement.left_440 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && measurement.right_440 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && measurement.left_880 < CHANNEL_WIDTH_MONO_COPY_MAX_COMPONENT_RATIO
+        && measurement.right_880 < CHANNEL_WIDTH_MONO_COPY_MAX_COMPONENT_RATIO;
+    if mono_copy_shape {
+        return ChannelWidthMode::MonoCopy;
+    }
+    let swap_shape = measurement.left_880 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && measurement.right_440 >= CHANNEL_WIDTH_MIN_TARGET_RATIO
+        && tone_dominance(measurement.left_880, measurement.left_440)
+            >= CHANNEL_WIDTH_MIN_SEPARATION_RATIO
+        && tone_dominance(measurement.right_440, measurement.right_880)
+            >= CHANNEL_WIDTH_MIN_SEPARATION_RATIO;
+    if swap_shape {
+        return ChannelWidthMode::ChannelSwap;
+    }
+    ChannelWidthMode::Indeterminate
+}
+
+/// Contract oracle for stereo preserve. Mono capture is a contract Fail even
+/// when the legacy mono round-trip oracle would pass; `Unsupported` is kept
+/// for observation shapes this oracle cannot meaningfully classify, never for
+/// a missing stereo capability on the Ruviform pair.
+fn evaluate_channel_width_contract(
+    render_channels: usize,
+    capture_channels: usize,
+    measurement: Option<StereoToneMeasurement>,
+) -> ChannelWidthEvaluation {
+    let mode = classify_channel_width(capture_channels, measurement);
+    if render_channels != 2 {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Fail,
+            mode,
+            reason: "render-format-not-stereo",
+        };
+    }
+    if capture_channels == 1 {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Fail,
+            mode,
+            reason: "capture-format-mono-under-stereo-preserve-contract",
+        };
+    }
+    if capture_channels != 2 {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Unsupported,
+            mode,
+            reason: "capture-channel-width-outside-stereo-contract-oracle",
+        };
+    }
+    let Some(measurement) = measurement else {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Fail,
+            mode,
+            reason: "stereo-content-observation-missing",
+        };
+    };
+    if !measurement.finite() {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Unsupported,
+            mode,
+            reason: "tone-measurement-non-finite",
+        };
+    }
+    if stereo_measurement_preserves_channels(measurement) {
+        return ChannelWidthEvaluation {
+            verdict: ChannelWidthVerdict::Pass,
+            mode: ChannelWidthMode::StereoPreserve,
+            reason: "independent-left-right-content-preserved",
+        };
+    }
+    ChannelWidthEvaluation {
+        verdict: ChannelWidthVerdict::Fail,
+        mode,
+        reason: "stereo-content-not-preserved",
+    }
+}
+
+struct ChannelWidthObservationOutput {
+    verdict: ChannelWidthVerdict,
+    detail: String,
+    render_name: String,
+    capture_name: String,
+    capture_instance_id: String,
+    render_format: Option<AudioFormat>,
+    capture_format: Option<AudioFormat>,
+    mode: ChannelWidthMode,
+    measurement: Option<StereoToneMeasurement>,
+    captured_frames: usize,
+}
+
+fn channel_width_output_shell(
+    verdict: ChannelWidthVerdict,
+    detail: impl Into<String>,
+) -> ChannelWidthObservationOutput {
+    ChannelWidthObservationOutput {
+        verdict,
+        detail: detail.into(),
+        render_name: String::new(),
+        capture_name: String::new(),
+        capture_instance_id: String::new(),
+        render_format: None,
+        capture_format: None,
+        mode: ChannelWidthMode::Indeterminate,
+        measurement: None,
+        captured_frames: 0,
+    }
+}
+
+fn channel_width_format_json(format: Option<AudioFormat>) -> String {
+    let present = format.is_some();
+    let rate = format.map_or(0, |format| format.sample_rate.get());
+    let channels = format.map_or(0, |format| format.layout.channels());
+    let layout = format.map_or_else(
+        || "none".to_owned(),
+        |format| format!("{:?}", format.layout),
+    );
+    let sample_format = format.map_or_else(
+        || "none".to_owned(),
+        |format| format!("{:?}", format.sample_format),
+    );
+    json_object(&[
+        json_field_bool("present", present),
+        json_field_number("sample_rate", rate),
+        json_field_number("channels", channels),
+        json_field_string("layout", &layout),
+        json_field_string("sample_format", &sample_format),
+    ])
+}
+
+fn json_field_finite_number(key: &str, value: f64) -> String {
+    if value.is_finite() {
+        json_field_number(key, value)
+    } else {
+        format!("{}:null", json_string(key))
+    }
+}
+
+fn channel_width_measurement_json(measurement: Option<StereoToneMeasurement>) -> String {
+    let present = measurement.is_some();
+    let measurement = measurement.unwrap_or(StereoToneMeasurement {
+        left_440: 0.0,
+        left_880: 0.0,
+        right_440: 0.0,
+        right_880: 0.0,
+    });
+    json_object(&[
+        json_field_bool("present", present),
+        json_field_finite_number("left_440_ratio", measurement.left_440),
+        json_field_finite_number("left_880_ratio", measurement.left_880),
+        json_field_finite_number("right_440_ratio", measurement.right_440),
+        json_field_finite_number("right_880_ratio", measurement.right_880),
+        json_field_number("min_target_ratio", CHANNEL_WIDTH_MIN_TARGET_RATIO),
+        json_field_number("min_separation_ratio", CHANNEL_WIDTH_MIN_SEPARATION_RATIO),
+    ])
+}
+
+fn channel_width_observation_json(output: &ChannelWidthObservationOutput) -> String {
+    let case = json_object(&[
+        json_field_string("name", CHANNEL_WIDTH_CASE),
+        json_field_string("contract", "stereo-preserve"),
+        json_field_string("result", output.verdict.as_str()),
+        json_field_string("detail", &output.detail),
+    ]);
+    let endpoint = json_object(&[
+        json_field_string("render_name", &output.render_name),
+        json_field_string("capture_name", &output.capture_name),
+        json_field_string("capture_instance_id", &output.capture_instance_id),
+    ]);
+    let negotiation = json_object(&[
+        format!(
+            "{}:{}",
+            json_string("render"),
+            channel_width_format_json(output.render_format)
+        ),
+        format!(
+            "{}:{}",
+            json_string("capture"),
+            channel_width_format_json(output.capture_format)
+        ),
+    ]);
+    let oracle = json_object(&[
+        json_field_string("mode", output.mode.as_str()),
+        json_field_number("captured_frames", output.captured_frames),
+        format!(
+            "{}:{}",
+            json_string("tone_measurement"),
+            channel_width_measurement_json(output.measurement)
+        ),
+    ]);
+    json_object(&[
+        json_field_string("schema", CHANNEL_WIDTH_SCHEMA),
+        format!("{}:{}", json_string("case"), case),
+        format!("{}:{}", json_string("endpoint"), endpoint),
+        format!("{}:{}", json_string("negotiation"), negotiation),
+        format!("{}:{}", json_string("oracle"), oracle),
+    ])
+}
+
+fn emit_channel_width_observation(output: &ChannelWidthObservationOutput) {
+    let line = format!(
+        "rf1029_channel_width_observation: {}",
+        channel_width_observation_json(output)
+    );
+    println!("{line}");
+    // `cargo test` captures print-macro output for passing tests. The manual
+    // provisioned lane archives process output, so write the machine-readable
+    // observation through the raw stderr handle as well; locally this is the
+    // same line, in CI it keeps a Pass observable without weakening the test.
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
+fn stereo_input_format(device: &dyn Device) -> Option<AudioFormat> {
+    let supported = device.supported_input_formats().ok()?;
+    select_f32_input_format(&supported).filter(|format| format.layout.channels() == 2)
+}
+
+fn stereo_output_format(device: &dyn Device) -> Option<AudioFormat> {
+    let supported = device.supported_output_formats().ok()?;
+    select_f32_output_format(&supported).filter(|format| format.layout.channels() == 2)
+}
+
+fn measure_captured_stereo_tones(
+    probe: &Probe,
+    rate_hz: u32,
+) -> (Option<StereoToneMeasurement>, usize) {
+    let buf = capture_buffer(probe);
+    let left = buf.channel(0);
+    let right = buf.channel(1);
+    let frames = buf.len.min(left.len()).min(right.len());
+    if frames < min_oracle_samples(rate_hz) {
+        return (None, frames);
+    }
+    let left = &left[..frames];
+    let right = &right[..frames];
+    (
+        Some(StereoToneMeasurement {
+            left_440: tone_ratio(left, rate_hz, SINE_HZ),
+            left_880: tone_ratio(left, rate_hz, CHANNEL_WIDTH_RIGHT_TONE_HZ),
+            right_440: tone_ratio(right, rate_hz, SINE_HZ),
+            right_880: tone_ratio(right, rate_hz, CHANNEL_WIDTH_RIGHT_TONE_HZ),
+        }),
+        frames,
+    )
+}
+
+fn channel_width_fail(output: &ChannelWidthObservationOutput) -> ! {
+    emit_channel_width_observation(output);
+    panic!("verdict: {} — {}", output.verdict.as_str(), output.detail);
+}
+
+/// Explicit Ruviform-pair stereo-preserve contract case. Unlike the generic
+/// legacy round-trip, this test never accepts the first virtual cable and
+/// never treats a mono capture round-trip as channel-width evidence.
+#[test]
+#[ignore = "requires a provisioned Ruviform virtual audio endpoint pair; manual opt-in check"]
+#[expect(clippy::too_many_lines)]
+fn ruviform_channel_width_contract() {
+    spawn_watchdog();
+    let mut output = channel_width_output_shell(
+        ChannelWidthVerdict::NotRun,
+        "endpoint-or-host-not-provisioned",
+    );
+
+    let host = match default_host() {
+        Ok(host) => host,
+        Err(error) => {
+            output.detail = format!("host-unavailable:{error}");
+            emit_channel_width_observation(&output);
+            eprintln!("verdict: NotRun — default_host() failed: {error}");
+            return;
+        }
+    };
+    let pair = match select_xrun_pair(&host) {
+        Ok(pair) => pair,
+        Err(error) => {
+            output.detail = format!("endpoint-selection-notrun:{}", error.detail);
+            emit_channel_width_observation(&output);
+            eprintln!("verdict: NotRun — {}", error.detail);
+            return;
+        }
+    };
+    output.render_name.clone_from(&pair.render.name);
+    output.capture_name.clone_from(&pair.capture.name);
+    output.capture_instance_id.clone_from(&pair.capture.id);
+
+    let Some(in_format) = stereo_input_format(pair.capture.device.as_ref()) else {
+        output.verdict = ChannelWidthVerdict::Fail;
+        output.detail = "stereo-input-format-unavailable".to_owned();
+        channel_width_fail(&output);
+    };
+    let Some(out_format) = stereo_output_format(pair.render.device.as_ref()) else {
+        output.verdict = ChannelWidthVerdict::Fail;
+        output.detail = "stereo-output-format-unavailable".to_owned();
+        channel_width_fail(&output);
+    };
+    output.capture_format = Some(in_format);
+    output.render_format = Some(out_format);
+    eprintln!("  channel-width negotiated in={in_format:?} out={out_format:?}");
+
+    let mut probe_value = Probe::new(&in_format, &out_format);
+    probe_value.out_independent_channel_stimulus = true;
+    let probe = Arc::new(probe_value);
+    let in_stream = match open_input_with_fallback(pair.capture.device.as_ref(), in_format, &probe)
+    {
+        Ok(stream) => stream,
+        Err(error) => {
+            output.verdict = ChannelWidthVerdict::Fail;
+            output.detail = format!("stereo-input-open-failed:{error}");
+            channel_width_fail(&output);
+        }
+    };
+    let out_stream = match open_output_with_fallback(
+        pair.render.device.as_ref(),
+        out_format,
+        &probe,
+        out_format.sample_rate.get(),
+    ) {
+        Ok(stream) => stream,
+        Err(error) => {
+            drop(in_stream);
+            output.verdict = ChannelWidthVerdict::Fail;
+            output.detail = format!("stereo-output-open-failed:{error}");
+            channel_width_fail(&output);
+        }
+    };
+
+    let opened_in_format = in_stream.format();
+    let opened_out_format = out_stream.format();
+    output.capture_format = Some(opened_in_format);
+    output.render_format = Some(opened_out_format);
+    if opened_in_format.layout.channels() != 2 || opened_out_format.layout.channels() != 2 {
+        output.verdict = ChannelWidthVerdict::Fail;
+        output.detail = format!(
+            "opened-stream-not-stereo:in={}ch,out={}ch",
+            opened_in_format.layout.channels(),
+            opened_out_format.layout.channels()
+        );
+        drop(in_stream);
+        drop(out_stream);
+        channel_width_fail(&output);
+    }
+
+    let in_domain = in_stream.clock_domain();
+    let out_domain = out_stream.clock_domain();
+    probe
+        .in_expected_domain
+        .store(in_domain.get(), Ordering::Relaxed);
+    if let Err(error) = in_stream.start().and_then(|()| out_stream.start()) {
+        output.verdict = ChannelWidthVerdict::Fail;
+        output.detail = format!("stereo-stream-start-failed:{error}");
+        drop(in_stream);
+        drop(out_stream);
+        channel_width_fail(&output);
+    }
+
+    thread::sleep(Duration::from_secs(CAPTURE_SECONDS));
+    let lifecycle = run_lifecycle(&probe, &*in_stream, &*out_stream);
+    drop(in_stream);
+    drop(out_stream);
+
+    let mut failures = analyze(&probe, &in_format, in_domain, out_domain);
+    failures.extend(lifecycle);
+    let (measurement, captured_frames) =
+        measure_captured_stereo_tones(&probe, opened_in_format.sample_rate.get());
+    let evaluation = evaluate_channel_width_contract(
+        usize::try_from(opened_out_format.layout.channels()).unwrap_or(usize::MAX),
+        usize::try_from(opened_in_format.layout.channels()).unwrap_or(usize::MAX),
+        measurement,
+    );
+    output.mode = evaluation.mode;
+    output.measurement = measurement;
+    output.captured_frames = captured_frames;
+    if failures.is_empty() {
+        output.verdict = evaluation.verdict;
+        output.detail = evaluation.reason.to_owned();
+    } else {
+        output.verdict = ChannelWidthVerdict::Fail;
+        output.detail = format!(
+            "stream-contract-failures:{}; channel_width={}",
+            failures.join(";"),
+            evaluation.reason
+        );
+    }
+    print_pair_evidence(&probe);
+    if output.verdict == ChannelWidthVerdict::Pass {
+        emit_channel_width_observation(&output);
+        eprintln!(
+            "verdict: Pass — Ruviform stereo render→capture channel width and independent left/right content preserved"
+        );
+    } else {
+        channel_width_fail(&output);
+    }
+}
+
+#[test]
+fn channel_width_oracle_accepts_independent_stereo() {
+    let measurement = StereoToneMeasurement {
+        left_440: 0.70,
+        left_880: 0.02,
+        right_440: 0.02,
+        right_880: 0.80,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 2, Some(measurement));
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Pass));
+    assert!(matches!(evaluation.mode, ChannelWidthMode::StereoPreserve));
+}
+
+#[test]
+fn channel_width_oracle_rejects_downmix_mono_copy_and_swap() {
+    let downmix = StereoToneMeasurement {
+        left_440: 0.40,
+        left_880: 0.40,
+        right_440: 0.40,
+        right_880: 0.40,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 2, Some(downmix));
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Fail));
+    assert!(matches!(evaluation.mode, ChannelWidthMode::Downmix));
+
+    let mono_copy = StereoToneMeasurement {
+        left_440: 0.70,
+        left_880: 0.01,
+        right_440: 0.70,
+        right_880: 0.01,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 2, Some(mono_copy));
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Fail));
+    assert!(matches!(evaluation.mode, ChannelWidthMode::MonoCopy));
+
+    let swapped = StereoToneMeasurement {
+        left_440: 0.02,
+        left_880: 0.80,
+        right_440: 0.70,
+        right_880: 0.02,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 2, Some(swapped));
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Fail));
+    assert!(matches!(evaluation.mode, ChannelWidthMode::ChannelSwap));
+}
+
+#[test]
+fn channel_width_oracle_mono_capture_is_not_silent_pass() {
+    let measurement = StereoToneMeasurement {
+        left_440: 0.70,
+        left_880: 0.02,
+        right_440: 0.02,
+        right_880: 0.80,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 1, Some(measurement));
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Fail));
+    assert!(matches!(evaluation.mode, ChannelWidthMode::MonoCapture));
+    assert_eq!(
+        evaluation.reason,
+        "capture-format-mono-under-stereo-preserve-contract"
+    );
+}
+
+#[test]
+fn channel_width_oracle_distinguishes_unsupported_width_and_missing_observation() {
+    let measurement = StereoToneMeasurement {
+        left_440: 0.70,
+        left_880: 0.02,
+        right_440: 0.02,
+        right_880: 0.80,
+    };
+    let evaluation = evaluate_channel_width_contract(2, 4, Some(measurement));
+    assert!(matches!(
+        evaluation.verdict,
+        ChannelWidthVerdict::Unsupported
+    ));
+    assert!(matches!(
+        evaluation.mode,
+        ChannelWidthMode::UnsupportedWidth
+    ));
+
+    let evaluation = evaluate_channel_width_contract(2, 2, None);
+    assert!(matches!(evaluation.verdict, ChannelWidthVerdict::Fail));
+    assert_eq!(evaluation.reason, "stereo-content-observation-missing");
+}
+
+#[test]
+fn channel_width_observation_json_records_format_layout_and_schema() {
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).expect("48 kHz is valid"),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+    let mut output = channel_width_output_shell(ChannelWidthVerdict::Pass, "ok");
+    output.render_format = Some(format);
+    output.capture_format = Some(format);
+    output.mode = ChannelWidthMode::StereoPreserve;
+    output.measurement = Some(StereoToneMeasurement {
+        left_440: 0.70,
+        left_880: 0.02,
+        right_440: 0.02,
+        right_880: 0.80,
+    });
+    let json = channel_width_observation_json(&output);
+    assert!(json.contains("\"schema\":\"rf1029-channel-width-observation/v1\""));
+    assert!(json.contains("\"result\":\"Pass\""));
+    assert!(json.contains("\"channels\":2"));
+    assert!(json.contains("\"layout\":\"Stereo\""));
+    assert!(json.contains("\"mode\":\"stereo-preserve\""));
 }
 
 #[expect(clippy::too_many_lines)]
@@ -2665,10 +3325,12 @@ fn observe_output(
         }
     }
 
-    // Same signal on every channel: the absolute frame index keeps
-    // marker positions rate-true across variable-size callbacks.
-    // `fetch_add` reserves this callback's range — callbacks are
-    // serial per stream, so the returned base is exact.
+    // The legacy round-trip writes the same signal on every channel.
+    // The channel-width contract case instead makes left/right
+    // independently identifiable: channel 0 keeps the marker+440 Hz
+    // stimulus, channel 1 carries a marker-free 880 Hz tone, and any
+    // wider channel is silence. `fetch_add` reserves this callback's
+    // range — callbacks are serial per stream, so the base is exact.
     let base = probe
         .out_render_cursor
         .fetch_add(frames as u64, Ordering::Relaxed);
@@ -2676,7 +3338,16 @@ fn observe_output(
     for channel in 0..out.channels() {
         if let Some(samples) = out.channel_mut(channel) {
             for (offset, sample) in samples.iter_mut().enumerate() {
-                *sample = signal_sample(base + offset as u64, rate_hz, marker_period);
+                let frame = base + offset as u64;
+                *sample = if probe.out_independent_channel_stimulus {
+                    match channel {
+                        0 => signal_sample(frame, rate_hz, marker_period),
+                        1 => stereo_right_tone_sample(frame, rate_hz),
+                        _ => 0.0,
+                    }
+                } else {
+                    signal_sample(frame, rate_hz, marker_period)
+                };
             }
         }
     }
@@ -2771,6 +3442,15 @@ fn signal_sample(frame: u64, rate_hz: u32, marker_period: u64) -> f32 {
         0.0
     };
     (sine + marker) as f32
+}
+
+/// Marker-free right-channel tone for the channel-width contract case. The
+/// frequency differs from the left channel's 440 Hz tone so downmix, mono
+/// copy and channel swap have distinct spectral shapes.
+#[expect(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+fn stereo_right_tone_sample(frame: u64, rate_hz: u32) -> f32 {
+    let phase = frame as f64 / f64::from(rate_hz);
+    (CHANNEL_WIDTH_RIGHT_AMPLITUDE * (TAU * CHANNEL_WIDTH_RIGHT_TONE_HZ * phase).sin()) as f32
 }
 
 /// `u64 → f64` for oracle math — the precision loss is immaterial at
@@ -2879,7 +3559,7 @@ fn analyze(
     // Independent oracle on the captured channel-0 PCM.
     let rate = in_format.sample_rate.get();
     let buf = capture_buffer(probe);
-    let samples = &buf.data[..buf.len.min(buf.data.len())];
+    let samples = buf.channel(0);
     if samples.len() < min_oracle_samples(rate) {
         failures.push(format!(
             "insufficient captured audio for oracle: {} frames at {rate} Hz",
