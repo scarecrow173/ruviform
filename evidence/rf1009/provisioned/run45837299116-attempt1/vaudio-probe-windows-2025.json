@@ -1,0 +1,135 @@
+[
+  {
+    "stage": "env-build-surface",
+    "status": "ok",
+    "detail": "msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:18Z"
+  },
+  {
+    "stage": "driver-build",
+    "status": "ok",
+    "detail": "arch=x64; sys=D:\\a\\ruviform\\ruviform\\drivers\\rvf-virtual-audio\\x64\\Release\\RvfVirtualAudio.sys",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "catalog-create",
+    "status": "ok",
+    "detail": "cat=D:\\a\\ruviform\\ruviform\\vaudio-pkg\\rvfvirtualaudio.cat",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "cert-create",
+    "status": "ok",
+    "detail": "thumbprint=13C88590E8D0540F6ECE92AAC9B6292693A32AF5",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "store-register",
+    "status": "ok",
+    "detail": "thumbprint=13C88590E8D0540F6ECE92AAC9B6292693A32AF5; stores=Root+TrustedPublisher",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "sign",
+    "status": "ok",
+    "detail": "signtool=C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe; targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "sign-verify",
+    "status": "ok",
+    "detail": "targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "pnputil-add-driver",
+    "status": "ok",
+    "detail": "published=oem12.inf",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "enum-verify",
+    "status": "ok",
+    "detail": "inf_in_store=True; matching_devnodes=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "devnode-create",
+    "status": "ok",
+    "detail": "instance_id=ROOT\\MEDIA\\0000; status=OK; problem_code=0; service=RvfVirtualAudio",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:19:19Z"
+  },
+  {
+    "stage": "endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=ok; probe_exit=0; probe_exit=0; endpoints_enumerated=2; virtual_candidates=2; pair_count=1; pairs=Ruviform Cable Input (Ruviform Virtual Audio Device) <-> Ruviform Cable Output (Ruviform Virtual Audio Device)",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:52Z"
+  },
+  {
+    "stage": "midi-endpoint-probe",
+    "status": "ok",
+    "detail": "devnode=ok; probe_exit=0; probe_exit=0; midi_in_ports=1; midi_out_ports=2; loopback_candidates=2; provisioning=CANDIDATES_OBSERVED; candidate_ports=Ruviform MIDI Loopback",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:19:59Z"
+  },
+  {
+    "stage": "stream-roundtrip",
+    "status": "ok",
+    "detail": "test_exit=0; verdict=no-verdict-line; consent=hklm-devacc=Allow,hkcu-devacc=Allow,hklm-cam=Allow,hkcu-cam=Allow,policy=1,AudioEndpointBuilder=Running,Audiosrv=Running",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:20:09Z"
+  },
+  {
+    "stage": "midi-loopback",
+    "status": "ok",
+    "detail": "test_exit=0; verdict=Pass — silent messages accepted by real WinMM output port; probe_exit=0",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:20:15Z"
+  },
+  {
+    "stage": "os-endpoint-wiring",
+    "status": "ok",
+    "detail": "test_exit=0; audio=pass; midi=pass; verdicts=2; metadata=2; copied=2",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:21:03Z"
+  },
+  {
+    "stage": "os-endpoint-midi-e2e",
+    "status": "ok",
+    "detail": "build_exit=0; test_exit=0; verdict=Pass — OS endpoint → attach → L1 test_instrument; case=pass; metadata=1; copied=1; provisioning_observed=True; midi_loopback_pass=True; endpoint_provenance=rvfmidi-testsigned-driver-probe; pass_without_provenance=False",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:21:23Z"
+  },
+  {
+    "stage": "xrun-cases",
+    "status": "error",
+    "detail": "cases=capture-overflow-drop-input=Fail,capture-content-gap-input-negative=Fail; harness_problems=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:21:33Z"
+  },
+  {
+    "stage": "fault-cases",
+    "status": "ok",
+    "detail": "cases=permission_denial_audio=Pass,xrun_probe=Unsupported,device_loss_audio=Unsupported,midi_device_loss_observation=Pass; harness_problems=0",
+    "exit_code": null,
+    "recorded_utc": "2026-11-26T14:22:54Z"
+  },
+  {
+    "stage": "cleanup",
+    "status": "ok",
+    "detail": "primitive_status=ok; detail=OK; leftovers=0; errors=0",
+    "exit_code": 0,
+    "recorded_utc": "2026-11-26T14:23:07Z"
+  }
+]
