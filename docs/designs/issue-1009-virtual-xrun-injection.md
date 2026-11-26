@@ -169,6 +169,8 @@ registry値は driver service `Parameters` keyに置き、対象 capture stream 
 
 第一実装の適用対象は Ruviform Cable Output側の loopback capture pinに限定する。host capture pinや render pinへ無差別に適用しない。ここでいう stream単位とは、stream objectが生成時に独立した immutable snapshotを持つ意味である。provisioned laneが同時に開く対象 capture streamを1本に限定するため、endpoint instanceの一意な識別までは第一実装の要件にしない。この制限は evidence schemaの `endpoint.target_pin` に明記する。
 
+実装メモ: 現行 driver では、Ruviform Cable Output を構成する capture streaming pin は WaveMicIn filter の `KSPIN_WAVEIN_HOST`（`eMicInDevice`、PinType `SystemCapturePin`）である。この設計でいう loopback capture pin は、speaker filter の `RenderLoopbackPin` ではなく、この virtual-cable capture pin を指す。したがって driver injection implementation は `eMicInDevice` かつ `KSPIN_WAVEIN_HOST` の streamにだけ適用し、PinType `SystemCapturePin` 全般や将来の host capture pinへ拡張しない。
+
 controller は streamを開く前に値を書き、case終了後に `finally` 相当で値を消す。再読込境界は driver service再起動ではなく stream close/openである。workflowは scenario write、stream open、observation、cleanupの順序を raw logへ残す。
 
 ## WaveRT packet/notification semantics 上の注入方法

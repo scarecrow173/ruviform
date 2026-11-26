@@ -141,6 +141,18 @@ protected:
     DWORD                       m_dwLoopbackCaptureToneInitialPhase; // must be between -31416 to 31416
     // Member variable as config params for tone generator
 
+    // Static xrun scenario snapshot. The scenario fields are written once
+    // during passive stream initialization and have no mid-stream rewrite
+    // path; the packet state is monotonic within a run and reset at STOP.
+    ULONG                       m_ulXrunScenario;
+    ULONG                       m_ulXrunStartPacket;
+    ULONG                       m_ulXrunPacketCount;
+    BOOLEAN                     m_bXrunInjectionTarget;
+    ULONGLONG                   m_ullXrunCompletionIndex;
+    ULONGLONG                   m_ullXrunWriteBytePosition;
+    ULONGLONG                   m_ullXrunZeroStartByte;
+    ULONGLONG                   m_ullXrunZeroEndByte;
+
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
     BOOL                        m_SidebandOpen;
     BOOL                        m_SidebandStarted;
