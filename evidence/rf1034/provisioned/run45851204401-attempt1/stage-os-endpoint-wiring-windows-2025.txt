@@ -1,0 +1,448 @@
+  prerequisite stream-roundtrip: ok / midi-loopback: ok
+  run metadata identity: repo=scarecrow173/ruviform sha=193b52e3348e2540f16f9ecfa290f75298226de5
+  --- os_endpoint wiring legs (--nocapture auxiliary evidence; canonical lane: mise run test-os-endpoint-wiring) ---
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling cfg-if v1.0.5
+     Compiling zerocopy v0.8.63
+     Compiling windows-sys v0.61.2
+     Compiling windows_x86_64_msvc v0.34.0
+     Compiling getrandom v0.2.17
+     Compiling rand_core v0.6.4
+     Compiling ruviform-video-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-video-core)
+     Compiling fearless_simd v1.2.0
+     Compiling syn v3.0.10
+     Compiling syn v2.0.119
+     Compiling ppv-lite86 v0.2.21
+     Compiling rand_chacha v0.3.1
+     Compiling windows v0.34.0
+     Compiling fearless_simd_macros v0.1.0
+     Compiling serde_core v1.0.229
+     Compiling log v0.4.35
+     Compiling audio_thread_priority v0.38.0
+     Compiling rand v0.8.8
+     Compiling ruviform-observability v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-observability)
+     Compiling windows-implement v0.60.2
+     Compiling windows-interface v0.59.3
+     Compiling windows-core v0.62.2
+     Compiling win-sys v0.3.1
+     Compiling zmij v1.0.23
+     Compiling ruviform-math v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-math)
+     Compiling ruviform-dsp v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-dsp)
+     Compiling ruviform-audio-analysis v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-analysis)
+     Compiling windows-future v0.3.2
+     Compiling shared_memory v0.12.4
+     Compiling windows-collections v0.3.2
+     Compiling windows-numerics v0.3.1
+     Compiling ruviform-exec v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-exec)
+     Compiling ruviform-io-file v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-io-file)
+     Compiling ruviform-media-io v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-media-io)
+     Compiling ruviform-plugin-core v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-core)
+     Compiling ruviform-graph v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-graph)
+     Compiling serde v1.0.229
+     Compiling serde_json v1.0.154
+     Compiling ruviform-plugin-host v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-plugin-host)
+     Compiling ruviform-audio v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio)
+     Compiling windows v0.62.2
+     Compiling serde_derive v1.0.229
+     Compiling itoa v1.0.19
+     Compiling memchr v2.8.3
+     Compiling ruviform-audio-plugin-bridge v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-plugin-bridge)
+     Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+     Compiling ruviform-audio-test v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-test)
+     Compiling cpal v0.18.2
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 28.81s
+       Running tests\os_endpoint.rs (target\debug\deps\os_endpoint-3d246563a972734a.exe)
+
+  running 3 tests
+  os_endpoint: render-only timestamp baseline verifier
+    host: WASAPI
+    render candidates: 1
+  render[0]: "Ruviform Cable Input (Ruviform Virtual Audio Device)" (candidate, unconfirmed)
+    render: "Ruviform Cable Input (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.0.00000000}.{80d67c85-6881-4cc9-859a-d07757ff4763}")
+    negotiated out=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 }
+    out stream: format=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } domain=ClockDomainId(2)
+    render baseline stats: callbacks=331 frames=158496 raw_regressions=3 effective_regressions=1 playback_some=331 playback_none=0 log_overflow=0
+    render baseline timestamps: out_cb=331 epoch_resets=1 boundary_cb=302 first..last=3..250 max_backstep_ns=-10116700 idx=[3,4,250]
+  render_timestamp_event: index=0 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=607976523500 playback_present=1 playback_ns=607976523500 interval_ns=none regression_backstep_ns=none
+  render_timestamp_event: index=1 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=607986523500 playback_present=1 playback_ns=607986523500 interval_ns=10000000 regression_backstep_ns=none
+  render_timestamp_event: index=2 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=96 callback_ns=607996523500 playback_present=1 playback_ns=607996523500 interval_ns=10000000 regression_backstep_ns=none
+  render_timestamp_event: index=3 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=607986406800 playback_present=1 playback_ns=608008406800 interval_ns=-10116700 regression_backstep_ns=-10116700
+  render_timestamp_event: index=4 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=607996436500 playback_present=1 playback_ns=608028415667 interval_ns=10029700 regression_backstep_ns=-87000
+  render_timestamp_event: index=5 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608006432400 playback_present=1 playback_ns=608038411567 interval_ns=9995900 regression_backstep_ns=none
+  render_timestamp_event: index=6 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608016471900 playback_present=1 playback_ns=608048451067 interval_ns=10039500 regression_backstep_ns=none
+  render_timestamp_event: index=7 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608026486100 playback_present=1 playback_ns=608058465267 interval_ns=10014200 regression_backstep_ns=none
+  render_timestamp_event: index=8 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608035989600 playback_present=1 playback_ns=608068968767 interval_ns=9503500 regression_backstep_ns=none
+  render_timestamp_event: index=9 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608046054800 playback_present=1 playback_ns=608079033967 interval_ns=10065200 regression_backstep_ns=none
+  render_timestamp_event: index=10 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608056067800 playback_present=1 playback_ns=608089046967 interval_ns=10013000 regression_backstep_ns=none
+  render_timestamp_event: index=11 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608066109500 playback_present=1 playback_ns=608099088667 interval_ns=10041700 regression_backstep_ns=none
+  render_timestamp_event: index=12 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608076125000 playback_present=1 playback_ns=608109104167 interval_ns=10015500 regression_backstep_ns=none
+  render_timestamp_event: index=13 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608086143600 playback_present=1 playback_ns=608119122767 interval_ns=10018600 regression_backstep_ns=none
+  render_timestamp_event: index=14 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608096163900 playback_present=1 playback_ns=608129143067 interval_ns=10020300 regression_backstep_ns=none
+  render_timestamp_event: index=15 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608106187900 playback_present=1 playback_ns=608139167067 interval_ns=10024000 regression_backstep_ns=none
+  render_timestamp_event: index=16 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608116247400 playback_present=1 playback_ns=608148226567 interval_ns=10059500 regression_backstep_ns=none
+  render_timestamp_event: index=17 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608126280100 playback_present=1 playback_ns=608158259267 interval_ns=10032700 regression_backstep_ns=none
+  render_timestamp_event: index=18 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608136292300 playback_present=1 playback_ns=608168271467 interval_ns=10012200 regression_backstep_ns=none
+  render_timestamp_event: index=19 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608146330400 playback_present=1 playback_ns=608178309567 interval_ns=10038100 regression_backstep_ns=none
+  render_timestamp_event: index=20 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608156338800 playback_present=1 playback_ns=608188317967 interval_ns=10008400 regression_backstep_ns=none
+  render_timestamp_event: index=21 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608166666600 playback_present=1 playback_ns=608198645767 interval_ns=10327800 regression_backstep_ns=none
+  render_timestamp_event: index=22 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608176668600 playback_present=1 playback_ns=608208647767 interval_ns=10002000 regression_backstep_ns=none
+  render_timestamp_event: index=23 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608186301000 playback_present=1 playback_ns=608218280167 interval_ns=9632400 regression_backstep_ns=none
+  render_timestamp_event: index=24 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608196345800 playback_present=1 playback_ns=608228324967 interval_ns=10044800 regression_backstep_ns=none
+  render_timestamp_event: index=25 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608206336400 playback_present=1 playback_ns=608238315567 interval_ns=9990600 regression_backstep_ns=none
+  render_timestamp_event: index=26 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608216354200 playback_present=1 playback_ns=608248333367 interval_ns=10017800 regression_backstep_ns=none
+  render_timestamp_event: index=27 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608226393900 playback_present=1 playback_ns=608258373067 interval_ns=10039700 regression_backstep_ns=none
+  render_timestamp_event: index=28 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608236430600 playback_present=1 playback_ns=608268409767 interval_ns=10036700 regression_backstep_ns=none
+  render_timestamp_event: index=29 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608246422200 playback_present=1 playback_ns=608278401367 interval_ns=9991600 regression_backstep_ns=none
+  render_timestamp_event: index=30 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608255931500 playback_present=1 playback_ns=608288910667 interval_ns=9509300 regression_backstep_ns=none
+  render_timestamp_event: index=31 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608266491900 playback_present=1 playback_ns=608298471067 interval_ns=10560400 regression_backstep_ns=none
+  render_timestamp_event: index=32 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608276517100 playback_present=1 playback_ns=608308496267 interval_ns=10025200 regression_backstep_ns=none
+  render_timestamp_event: index=33 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608286070000 playback_present=1 playback_ns=608319049167 interval_ns=9552900 regression_backstep_ns=none
+  render_timestamp_event: index=34 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608296058000 playback_present=1 playback_ns=608329037167 interval_ns=9988000 regression_backstep_ns=none
+  render_timestamp_event: index=35 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608306637700 playback_present=1 playback_ns=608338616867 interval_ns=10579700 regression_backstep_ns=none
+  render_timestamp_event: index=36 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608316170800 playback_present=1 playback_ns=608349149967 interval_ns=9533100 regression_backstep_ns=none
+  render_timestamp_event: index=37 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608326249200 playback_present=1 playback_ns=608358228367 interval_ns=10078400 regression_backstep_ns=none
+  render_timestamp_event: index=38 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608336279400 playback_present=1 playback_ns=608368258567 interval_ns=10030200 regression_backstep_ns=none
+  render_timestamp_event: index=39 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608346290600 playback_present=1 playback_ns=608378269767 interval_ns=10011200 regression_backstep_ns=none
+  render_timestamp_event: index=40 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608356328900 playback_present=1 playback_ns=608388308067 interval_ns=10038300 regression_backstep_ns=none
+  render_timestamp_event: index=41 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608366361600 playback_present=1 playback_ns=608398340767 interval_ns=10032700 regression_backstep_ns=none
+  render_timestamp_event: index=42 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608376391100 playback_present=1 playback_ns=608408370267 interval_ns=10029500 regression_backstep_ns=none
+  render_timestamp_event: index=43 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608385905900 playback_present=1 playback_ns=608418885067 interval_ns=9514800 regression_backstep_ns=none
+  render_timestamp_event: index=44 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608395905000 playback_present=1 playback_ns=608428905000 interval_ns=9999100 regression_backstep_ns=none
+  render_timestamp_event: index=45 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608406513700 playback_present=1 playback_ns=608438492867 interval_ns=10608700 regression_backstep_ns=none
+  render_timestamp_event: index=46 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608416523900 playback_present=1 playback_ns=608448503067 interval_ns=10010200 regression_backstep_ns=none
+  render_timestamp_event: index=47 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608426568200 playback_present=1 playback_ns=608458547367 interval_ns=10044300 regression_backstep_ns=none
+  render_timestamp_event: index=48 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608436580600 playback_present=1 playback_ns=608468559767 interval_ns=10012400 regression_backstep_ns=none
+  render_timestamp_event: index=49 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608446627200 playback_present=1 playback_ns=608478606367 interval_ns=10046600 regression_backstep_ns=none
+  render_timestamp_event: index=50 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608456636500 playback_present=1 playback_ns=608488615667 interval_ns=10009300 regression_backstep_ns=none
+  render_timestamp_event: index=51 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608466681400 playback_present=1 playback_ns=608498660567 interval_ns=10044900 regression_backstep_ns=none
+  render_timestamp_event: index=52 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608476670500 playback_present=1 playback_ns=608508649667 interval_ns=9989100 regression_backstep_ns=none
+  render_timestamp_event: index=53 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608486681800 playback_present=1 playback_ns=608518660967 interval_ns=10011300 regression_backstep_ns=none
+  render_timestamp_event: index=54 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608496737000 playback_present=1 playback_ns=608528716167 interval_ns=10055200 regression_backstep_ns=none
+  render_timestamp_event: index=55 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608506761800 playback_present=1 playback_ns=608538740967 interval_ns=10024800 regression_backstep_ns=none
+  render_timestamp_event: index=56 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608516790900 playback_present=1 playback_ns=608548770067 interval_ns=10029100 regression_backstep_ns=none
+  render_timestamp_event: index=57 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608526827500 playback_present=1 playback_ns=608558806667 interval_ns=10036600 regression_backstep_ns=none
+  render_timestamp_event: index=58 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608536837100 playback_present=1 playback_ns=608568816267 interval_ns=10009600 regression_backstep_ns=none
+  render_timestamp_event: index=59 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608546862500 playback_present=1 playback_ns=608578841667 interval_ns=10025400 regression_backstep_ns=none
+  render_timestamp_event: index=60 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608556893900 playback_present=1 playback_ns=608588873067 interval_ns=10031400 regression_backstep_ns=none
+  render_timestamp_event: index=61 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608565947500 playback_present=1 playback_ns=608598926667 interval_ns=9053600 regression_backstep_ns=none
+  render_timestamp_event: index=62 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608576449600 playback_present=1 playback_ns=608608428767 interval_ns=10502100 regression_backstep_ns=none
+  render_timestamp_event: index=63 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608586470600 playback_present=1 playback_ns=608618449767 interval_ns=10021000 regression_backstep_ns=none
+  render_timestamp_event: index=64 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608596505700 playback_present=1 playback_ns=608628484867 interval_ns=10035100 regression_backstep_ns=none
+  render_timestamp_event: index=65 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608606525800 playback_present=1 playback_ns=608638504967 interval_ns=10020100 regression_backstep_ns=none
+  render_timestamp_event: index=66 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608616554600 playback_present=1 playback_ns=608648533767 interval_ns=10028800 regression_backstep_ns=none
+  render_timestamp_event: index=67 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608626567400 playback_present=1 playback_ns=608658546567 interval_ns=10012800 regression_backstep_ns=none
+  render_timestamp_event: index=68 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608636598800 playback_present=1 playback_ns=608668577967 interval_ns=10031400 regression_backstep_ns=none
+  render_timestamp_event: index=69 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608646598100 playback_present=1 playback_ns=608678577267 interval_ns=9999300 regression_backstep_ns=none
+  render_timestamp_event: index=70 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608656114700 playback_present=1 playback_ns=608689093867 interval_ns=9516600 regression_backstep_ns=none
+  render_timestamp_event: index=71 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608666675900 playback_present=1 playback_ns=608698655067 interval_ns=10561200 regression_backstep_ns=none
+  render_timestamp_event: index=72 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608676705100 playback_present=1 playback_ns=608708684267 interval_ns=10029200 regression_backstep_ns=none
+  render_timestamp_event: index=73 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608686713500 playback_present=1 playback_ns=608718692667 interval_ns=10008400 regression_backstep_ns=none
+  render_timestamp_event: index=74 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608696765300 playback_present=1 playback_ns=608728744467 interval_ns=10051800 regression_backstep_ns=none
+  render_timestamp_event: index=75 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608706783300 playback_present=1 playback_ns=608738762467 interval_ns=10018000 regression_backstep_ns=none
+  render_timestamp_event: index=76 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608716811200 playback_present=1 playback_ns=608748790367 interval_ns=10027900 regression_backstep_ns=none
+  render_timestamp_event: index=77 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608726815800 playback_present=1 playback_ns=608758794967 interval_ns=10004600 regression_backstep_ns=none
+  render_timestamp_event: index=78 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608736339700 playback_present=1 playback_ns=608768318867 interval_ns=9523900 regression_backstep_ns=none
+  render_timestamp_event: index=79 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608745984400 playback_present=1 playback_ns=608778963567 interval_ns=9644700 regression_backstep_ns=none
+  render_timestamp_event: index=80 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608756583300 playback_present=1 playback_ns=608788562467 interval_ns=10598900 regression_backstep_ns=none
+  render_timestamp_event: index=81 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608766583900 playback_present=1 playback_ns=608798563067 interval_ns=10000600 regression_backstep_ns=none
+  render_timestamp_event: index=82 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608776628400 playback_present=1 playback_ns=608808607567 interval_ns=10044500 regression_backstep_ns=none
+  render_timestamp_event: index=83 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608786176600 playback_present=1 playback_ns=608819155767 interval_ns=9548200 regression_backstep_ns=none
+  render_timestamp_event: index=84 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608796763000 playback_present=1 playback_ns=608828742167 interval_ns=10586400 regression_backstep_ns=none
+  render_timestamp_event: index=85 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608806765100 playback_present=1 playback_ns=608838744267 interval_ns=10002100 regression_backstep_ns=none
+  render_timestamp_event: index=86 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608816800600 playback_present=1 playback_ns=608848779767 interval_ns=10035500 regression_backstep_ns=none
+  render_timestamp_event: index=87 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608826800500 playback_present=1 playback_ns=608858779667 interval_ns=9999900 regression_backstep_ns=none
+  render_timestamp_event: index=88 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608836319500 playback_present=1 playback_ns=608868298667 interval_ns=9519000 regression_backstep_ns=none
+  render_timestamp_event: index=89 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608846894000 playback_present=1 playback_ns=608878873167 interval_ns=10574500 regression_backstep_ns=none
+  render_timestamp_event: index=90 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608856922100 playback_present=1 playback_ns=608888901267 interval_ns=10028100 regression_backstep_ns=none
+  render_timestamp_event: index=91 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608865939200 playback_present=1 playback_ns=608898918367 interval_ns=9017100 regression_backstep_ns=none
+  render_timestamp_event: index=92 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608875965000 playback_present=1 playback_ns=608908944167 interval_ns=10025800 regression_backstep_ns=none
+  render_timestamp_event: index=93 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608885965300 playback_present=1 playback_ns=608918944467 interval_ns=10000300 regression_backstep_ns=none
+  render_timestamp_event: index=94 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608896497600 playback_present=1 playback_ns=608928476767 interval_ns=10532300 regression_backstep_ns=none
+  render_timestamp_event: index=95 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608906517500 playback_present=1 playback_ns=608938517500 interval_ns=10019900 regression_backstep_ns=none
+  render_timestamp_event: index=96 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608916524800 playback_present=1 playback_ns=608948503967 interval_ns=10007300 regression_backstep_ns=none
+  render_timestamp_event: index=97 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608926588100 playback_present=1 playback_ns=608958567267 interval_ns=10063300 regression_backstep_ns=none
+  render_timestamp_event: index=98 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608936599500 playback_present=1 playback_ns=608968578667 interval_ns=10011400 regression_backstep_ns=none
+  render_timestamp_event: index=99 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608946643700 playback_present=1 playback_ns=608978622867 interval_ns=10044200 regression_backstep_ns=none
+  render_timestamp_event: index=100 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608956651400 playback_present=1 playback_ns=608988630567 interval_ns=10007700 regression_backstep_ns=none
+  render_timestamp_event: index=101 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608966679100 playback_present=1 playback_ns=608998658267 interval_ns=10027700 regression_backstep_ns=none
+  render_timestamp_event: index=102 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608976673600 playback_present=1 playback_ns=609008652767 interval_ns=9994500 regression_backstep_ns=none
+  render_timestamp_event: index=103 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608986189200 playback_present=1 playback_ns=609019168367 interval_ns=9515600 regression_backstep_ns=none
+  render_timestamp_event: index=104 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=608996780300 playback_present=1 playback_ns=609028759467 interval_ns=10591100 regression_backstep_ns=none
+  render_timestamp_event: index=105 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609006788000 playback_present=1 playback_ns=609038767167 interval_ns=10007700 regression_backstep_ns=none
+  render_timestamp_event: index=106 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609016821700 playback_present=1 playback_ns=609048800867 interval_ns=10033700 regression_backstep_ns=none
+  render_timestamp_event: index=107 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609026059200 playback_present=1 playback_ns=609059038367 interval_ns=9237500 regression_backstep_ns=none
+  render_timestamp_event: index=108 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609036650800 playback_present=1 playback_ns=609068629967 interval_ns=10591600 regression_backstep_ns=none
+  render_timestamp_event: index=109 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609046666800 playback_present=1 playback_ns=609078666800 interval_ns=10016000 regression_backstep_ns=none
+  render_timestamp_event: index=110 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609056702600 playback_present=1 playback_ns=609088681767 interval_ns=10035800 regression_backstep_ns=none
+  render_timestamp_event: index=111 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609066732200 playback_present=1 playback_ns=609098711367 interval_ns=10029600 regression_backstep_ns=none
+  render_timestamp_event: index=112 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609076740500 playback_present=1 playback_ns=609108719667 interval_ns=10008300 regression_backstep_ns=none
+  render_timestamp_event: index=113 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609086767700 playback_present=1 playback_ns=609118746867 interval_ns=10027200 regression_backstep_ns=none
+  render_timestamp_event: index=114 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609096276300 playback_present=1 playback_ns=609128255467 interval_ns=9508600 regression_backstep_ns=none
+  render_timestamp_event: index=115 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609106875300 playback_present=1 playback_ns=609138854467 interval_ns=10599000 regression_backstep_ns=none
+  render_timestamp_event: index=116 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609116900800 playback_present=1 playback_ns=609148879967 interval_ns=10025500 regression_backstep_ns=none
+  render_timestamp_event: index=117 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609125928800 playback_present=1 playback_ns=609158907967 interval_ns=9028000 regression_backstep_ns=none
+  render_timestamp_event: index=118 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609135969200 playback_present=1 playback_ns=609168948367 interval_ns=10040400 regression_backstep_ns=none
+  render_timestamp_event: index=119 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609145960700 playback_present=1 playback_ns=609178939867 interval_ns=9991500 regression_backstep_ns=none
+  render_timestamp_event: index=120 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609156497700 playback_present=1 playback_ns=609188476867 interval_ns=10537000 regression_backstep_ns=none
+  render_timestamp_event: index=121 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609166523700 playback_present=1 playback_ns=609198502867 interval_ns=10026000 regression_backstep_ns=none
+  render_timestamp_event: index=122 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609176523300 playback_present=1 playback_ns=609208502467 interval_ns=9999600 regression_backstep_ns=none
+  render_timestamp_event: index=123 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609186032100 playback_present=1 playback_ns=609219011267 interval_ns=9508800 regression_backstep_ns=none
+  render_timestamp_event: index=124 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609196610900 playback_present=1 playback_ns=609228590067 interval_ns=10578800 regression_backstep_ns=none
+  render_timestamp_event: index=125 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609206618900 playback_present=1 playback_ns=609238598067 interval_ns=10008000 regression_backstep_ns=none
+  render_timestamp_event: index=126 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609216670900 playback_present=1 playback_ns=609248650067 interval_ns=10052000 regression_backstep_ns=none
+  render_timestamp_event: index=127 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609226685500 playback_present=1 playback_ns=609258664667 interval_ns=10014600 regression_backstep_ns=none
+  render_timestamp_event: index=128 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609236718500 playback_present=1 playback_ns=609268697667 interval_ns=10033000 regression_backstep_ns=none
+  render_timestamp_event: index=129 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609246729200 playback_present=1 playback_ns=609278708367 interval_ns=10010700 regression_backstep_ns=none
+  render_timestamp_event: index=130 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609256802000 playback_present=1 playback_ns=609288781167 interval_ns=10072800 regression_backstep_ns=none
+  render_timestamp_event: index=131 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609266801300 playback_present=1 playback_ns=609298780467 interval_ns=9999300 regression_backstep_ns=none
+  render_timestamp_event: index=132 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609276357100 playback_present=1 playback_ns=609308336267 interval_ns=9555800 regression_backstep_ns=none
+  render_timestamp_event: index=133 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609285980900 playback_present=1 playback_ns=609318960067 interval_ns=9623800 regression_backstep_ns=none
+  render_timestamp_event: index=134 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609296514100 playback_present=1 playback_ns=609328493267 interval_ns=10533200 regression_backstep_ns=none
+  render_timestamp_event: index=135 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609306525000 playback_present=1 playback_ns=609338504167 interval_ns=10010900 regression_backstep_ns=none
+  render_timestamp_event: index=136 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609316040800 playback_present=1 playback_ns=609349019967 interval_ns=9515800 regression_backstep_ns=none
+  render_timestamp_event: index=137 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609326598800 playback_present=1 playback_ns=609358577967 interval_ns=10558000 regression_backstep_ns=none
+  render_timestamp_event: index=138 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609336626000 playback_present=1 playback_ns=609368605167 interval_ns=10027200 regression_backstep_ns=none
+  render_timestamp_event: index=139 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609346652400 playback_present=1 playback_ns=609378631567 interval_ns=10026400 regression_backstep_ns=none
+  render_timestamp_event: index=140 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609356161900 playback_present=1 playback_ns=609389141067 interval_ns=9509500 regression_backstep_ns=none
+  render_timestamp_event: index=141 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609366720500 playback_present=1 playback_ns=609398699667 interval_ns=10558600 regression_backstep_ns=none
+  render_timestamp_event: index=142 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609376752700 playback_present=1 playback_ns=609408731867 interval_ns=10032200 regression_backstep_ns=none
+  render_timestamp_event: index=143 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609386777400 playback_present=1 playback_ns=609418756567 interval_ns=10024700 regression_backstep_ns=none
+  render_timestamp_event: index=144 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609396842600 playback_present=1 playback_ns=609428821767 interval_ns=10065200 regression_backstep_ns=none
+  render_timestamp_event: index=145 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609406855200 playback_present=1 playback_ns=609438834367 interval_ns=10012600 regression_backstep_ns=none
+  render_timestamp_event: index=146 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609416906200 playback_present=1 playback_ns=609448864534 interval_ns=10051000 regression_backstep_ns=none
+  render_timestamp_event: index=147 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609426906800 playback_present=1 playback_ns=609458885967 interval_ns=10000600 regression_backstep_ns=none
+  render_timestamp_event: index=148 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609436902300 playback_present=1 playback_ns=609468881467 interval_ns=9995500 regression_backstep_ns=none
+  render_timestamp_event: index=149 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609446406500 playback_present=1 playback_ns=609478385667 interval_ns=9504200 regression_backstep_ns=none
+  render_timestamp_event: index=150 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609455944800 playback_present=1 playback_ns=609488923967 interval_ns=9538300 regression_backstep_ns=none
+  render_timestamp_event: index=151 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609465983900 playback_present=1 playback_ns=609498963067 interval_ns=10039100 regression_backstep_ns=none
+  render_timestamp_event: index=152 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609476515200 playback_present=1 playback_ns=609508494367 interval_ns=10531300 regression_backstep_ns=none
+  render_timestamp_event: index=153 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609486531000 playback_present=1 playback_ns=609518510167 interval_ns=10015800 regression_backstep_ns=none
+  render_timestamp_event: index=154 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609496549600 playback_present=1 playback_ns=609528528767 interval_ns=10018600 regression_backstep_ns=none
+  render_timestamp_event: index=155 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609506552400 playback_present=1 playback_ns=609538531567 interval_ns=10002800 regression_backstep_ns=none
+  render_timestamp_event: index=156 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609516061200 playback_present=1 playback_ns=609549040367 interval_ns=9508800 regression_backstep_ns=none
+  render_timestamp_event: index=157 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609526613300 playback_present=1 playback_ns=609558592467 interval_ns=10552100 regression_backstep_ns=none
+  render_timestamp_event: index=158 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609536641000 playback_present=1 playback_ns=609568620167 interval_ns=10027700 regression_backstep_ns=none
+  render_timestamp_event: index=159 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609546646900 playback_present=1 playback_ns=609578646900 interval_ns=10005900 regression_backstep_ns=none
+  render_timestamp_event: index=160 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609556692900 playback_present=1 playback_ns=609588672067 interval_ns=10046000 regression_backstep_ns=none
+  render_timestamp_event: index=161 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609566692900 playback_present=1 playback_ns=609598672067 interval_ns=10000000 regression_backstep_ns=none
+  render_timestamp_event: index=162 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609576219300 playback_present=1 playback_ns=609609198467 interval_ns=9526400 regression_backstep_ns=none
+  render_timestamp_event: index=163 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609586771900 playback_present=1 playback_ns=609618751067 interval_ns=10552600 regression_backstep_ns=none
+  render_timestamp_event: index=164 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609596809200 playback_present=1 playback_ns=609628788367 interval_ns=10037300 regression_backstep_ns=none
+  render_timestamp_event: index=165 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609606803600 playback_present=1 playback_ns=609638782767 interval_ns=9994400 regression_backstep_ns=none
+  render_timestamp_event: index=166 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609616311600 playback_present=1 playback_ns=609648290767 interval_ns=9508000 regression_backstep_ns=none
+  render_timestamp_event: index=167 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609626857000 playback_present=1 playback_ns=609658836167 interval_ns=10545400 regression_backstep_ns=none
+  render_timestamp_event: index=168 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609636891000 playback_present=1 playback_ns=609668870167 interval_ns=10034000 regression_backstep_ns=none
+  render_timestamp_event: index=169 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609646889800 playback_present=1 playback_ns=609678868967 interval_ns=9998800 regression_backstep_ns=none
+  render_timestamp_event: index=170 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609656399800 playback_present=1 playback_ns=609688378967 interval_ns=9510000 regression_backstep_ns=none
+  render_timestamp_event: index=171 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609665961500 playback_present=1 playback_ns=609698940667 interval_ns=9561700 regression_backstep_ns=none
+  render_timestamp_event: index=172 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609676485700 playback_present=1 playback_ns=609708464867 interval_ns=10524200 regression_backstep_ns=none
+  render_timestamp_event: index=173 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609686530100 playback_present=1 playback_ns=609718509267 interval_ns=10044400 regression_backstep_ns=none
+  render_timestamp_event: index=174 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609696025600 playback_present=1 playback_ns=609729004767 interval_ns=9495500 regression_backstep_ns=none
+  render_timestamp_event: index=175 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609706569700 playback_present=1 playback_ns=609738548867 interval_ns=10544100 regression_backstep_ns=none
+  render_timestamp_event: index=176 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609716599200 playback_present=1 playback_ns=609748578367 interval_ns=10029500 regression_backstep_ns=none
+  render_timestamp_event: index=177 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609726600800 playback_present=1 playback_ns=609758579967 interval_ns=10001600 regression_backstep_ns=none
+  render_timestamp_event: index=178 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609736111200 playback_present=1 playback_ns=609769090367 interval_ns=9510400 regression_backstep_ns=none
+  render_timestamp_event: index=179 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609746667300 playback_present=1 playback_ns=609778646467 interval_ns=10556100 regression_backstep_ns=none
+  render_timestamp_event: index=180 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609756723400 playback_present=1 playback_ns=609788702567 interval_ns=10056100 regression_backstep_ns=none
+  render_timestamp_event: index=181 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609766719600 playback_present=1 playback_ns=609798698767 interval_ns=9996200 regression_backstep_ns=none
+  render_timestamp_event: index=182 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609776753900 playback_present=1 playback_ns=609808733067 interval_ns=10034300 regression_backstep_ns=none
+  render_timestamp_event: index=183 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609786272600 playback_present=1 playback_ns=609818251767 interval_ns=9518700 regression_backstep_ns=none
+  render_timestamp_event: index=184 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609797235100 playback_present=1 playback_ns=609829047600 interval_ns=10962500 regression_backstep_ns=none
+  render_timestamp_event: index=185 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609806535300 playback_present=1 playback_ns=609838514467 interval_ns=9300200 regression_backstep_ns=none
+  render_timestamp_event: index=186 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609815914300 playback_present=1 playback_ns=609848893467 interval_ns=9379000 regression_backstep_ns=none
+  render_timestamp_event: index=187 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609826928300 playback_present=1 playback_ns=609858907467 interval_ns=11014000 regression_backstep_ns=none
+  render_timestamp_event: index=188 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609836950300 playback_present=1 playback_ns=609868929467 interval_ns=10022000 regression_backstep_ns=none
+  render_timestamp_event: index=189 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609846951800 playback_present=1 playback_ns=609878930967 interval_ns=10001500 regression_backstep_ns=none
+  render_timestamp_event: index=190 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609856972100 playback_present=1 playback_ns=609888951267 interval_ns=10020300 regression_backstep_ns=none
+  render_timestamp_event: index=191 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609866982400 playback_present=1 playback_ns=609898961567 interval_ns=10010300 regression_backstep_ns=none
+  render_timestamp_event: index=192 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609877005000 playback_present=1 playback_ns=609908984167 interval_ns=10022600 regression_backstep_ns=none
+  render_timestamp_event: index=193 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609887015800 playback_present=1 playback_ns=609918994967 interval_ns=10010800 regression_backstep_ns=none
+  render_timestamp_event: index=194 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609897035800 playback_present=1 playback_ns=609929014967 interval_ns=10020000 regression_backstep_ns=none
+  render_timestamp_event: index=195 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609907058400 playback_present=1 playback_ns=609939037567 interval_ns=10022600 regression_backstep_ns=none
+  render_timestamp_event: index=196 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609917072600 playback_present=1 playback_ns=609949051767 interval_ns=10014200 regression_backstep_ns=none
+  render_timestamp_event: index=197 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609926093600 playback_present=1 playback_ns=609959072767 interval_ns=9021000 regression_backstep_ns=none
+  render_timestamp_event: index=198 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609936103200 playback_present=1 playback_ns=609969082367 interval_ns=10009600 regression_backstep_ns=none
+  render_timestamp_event: index=199 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609946126300 playback_present=1 playback_ns=609979105467 interval_ns=10023100 regression_backstep_ns=none
+  render_timestamp_event: index=200 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609956140900 playback_present=1 playback_ns=609989120067 interval_ns=10014600 regression_backstep_ns=none
+  render_timestamp_event: index=201 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609966657900 playback_present=1 playback_ns=609998637067 interval_ns=10517000 regression_backstep_ns=none
+  render_timestamp_event: index=202 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609976684400 playback_present=1 playback_ns=610008663567 interval_ns=10026500 regression_backstep_ns=none
+  render_timestamp_event: index=203 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609986686600 playback_present=1 playback_ns=610018665767 interval_ns=10002200 regression_backstep_ns=none
+  render_timestamp_event: index=204 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=609996717400 playback_present=1 playback_ns=610028696567 interval_ns=10030800 regression_backstep_ns=none
+  render_timestamp_event: index=205 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610006744100 playback_present=1 playback_ns=610038723267 interval_ns=10026700 regression_backstep_ns=none
+  render_timestamp_event: index=206 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610016744400 playback_present=1 playback_ns=610048723567 interval_ns=10000300 regression_backstep_ns=none
+  render_timestamp_event: index=207 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610026742700 playback_present=1 playback_ns=610058721867 interval_ns=9998300 regression_backstep_ns=none
+  render_timestamp_event: index=208 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610036749100 playback_present=1 playback_ns=610068728267 interval_ns=10006400 regression_backstep_ns=none
+  render_timestamp_event: index=209 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610046774000 playback_present=1 playback_ns=610078753167 interval_ns=10024900 regression_backstep_ns=none
+  render_timestamp_event: index=210 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610056779700 playback_present=1 playback_ns=610088758867 interval_ns=10005700 regression_backstep_ns=none
+  render_timestamp_event: index=211 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610066814700 playback_present=1 playback_ns=610098793867 interval_ns=10035000 regression_backstep_ns=none
+  render_timestamp_event: index=212 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610076811800 playback_present=1 playback_ns=610108790967 interval_ns=9997100 regression_backstep_ns=none
+  render_timestamp_event: index=213 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610086839900 playback_present=1 playback_ns=610118819067 interval_ns=10028100 regression_backstep_ns=none
+  render_timestamp_event: index=214 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610096873800 playback_present=1 playback_ns=610128852967 interval_ns=10033900 regression_backstep_ns=none
+  render_timestamp_event: index=215 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610106880800 playback_present=1 playback_ns=610138859967 interval_ns=10007000 regression_backstep_ns=none
+  render_timestamp_event: index=216 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610116912500 playback_present=1 playback_ns=610148891667 interval_ns=10031700 regression_backstep_ns=none
+  render_timestamp_event: index=217 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610126076500 playback_present=1 playback_ns=610159055667 interval_ns=9164000 regression_backstep_ns=none
+  render_timestamp_event: index=218 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610136075200 playback_present=1 playback_ns=610169054367 interval_ns=9998700 regression_backstep_ns=none
+  render_timestamp_event: index=219 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610146119500 playback_present=1 playback_ns=610179098667 interval_ns=10044300 regression_backstep_ns=none
+  render_timestamp_event: index=220 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610156632400 playback_present=1 playback_ns=610188611567 interval_ns=10512900 regression_backstep_ns=none
+  render_timestamp_event: index=221 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610166662400 playback_present=1 playback_ns=610198641567 interval_ns=10030000 regression_backstep_ns=none
+  render_timestamp_event: index=222 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610176666200 playback_present=1 playback_ns=610208645367 interval_ns=10003800 regression_backstep_ns=none
+  render_timestamp_event: index=223 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610186183000 playback_present=1 playback_ns=610219162167 interval_ns=9516800 regression_backstep_ns=none
+  render_timestamp_event: index=224 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610196774400 playback_present=1 playback_ns=610228753567 interval_ns=10591400 regression_backstep_ns=none
+  render_timestamp_event: index=225 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610206783500 playback_present=1 playback_ns=610238762667 interval_ns=10009100 regression_backstep_ns=none
+  render_timestamp_event: index=226 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610216811100 playback_present=1 playback_ns=610248811100 interval_ns=10027600 regression_backstep_ns=none
+  render_timestamp_event: index=227 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610226825000 playback_present=1 playback_ns=610258804167 interval_ns=10013900 regression_backstep_ns=none
+  render_timestamp_event: index=228 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610236842600 playback_present=1 playback_ns=610268842600 interval_ns=10017600 regression_backstep_ns=none
+  render_timestamp_event: index=229 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610246885500 playback_present=1 playback_ns=610278864667 interval_ns=10042900 regression_backstep_ns=none
+  render_timestamp_event: index=230 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610256916300 playback_present=1 playback_ns=610288895467 interval_ns=10030800 regression_backstep_ns=none
+  render_timestamp_event: index=231 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610265929300 playback_present=1 playback_ns=610298908467 interval_ns=9013000 regression_backstep_ns=none
+  render_timestamp_event: index=232 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610275950000 playback_present=1 playback_ns=610308929167 interval_ns=10020700 regression_backstep_ns=none
+  render_timestamp_event: index=233 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610285996000 playback_present=1 playback_ns=610318975167 interval_ns=10046000 regression_backstep_ns=none
+  render_timestamp_event: index=234 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610296540800 playback_present=1 playback_ns=610328519967 interval_ns=10544800 regression_backstep_ns=none
+  render_timestamp_event: index=235 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610306803000 playback_present=1 playback_ns=610338803000 interval_ns=10262200 regression_backstep_ns=none
+  render_timestamp_event: index=236 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610316847700 playback_present=1 playback_ns=610348826867 interval_ns=10044700 regression_backstep_ns=none
+  render_timestamp_event: index=237 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610326316000 playback_present=1 playback_ns=610359086834 interval_ns=9468300 regression_backstep_ns=none
+  render_timestamp_event: index=238 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610336104600 playback_present=1 playback_ns=610369042100 interval_ns=9788600 regression_backstep_ns=none
+  render_timestamp_event: index=239 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610347079100 playback_present=1 playback_ns=610378933267 interval_ns=10974500 regression_backstep_ns=none
+  render_timestamp_event: index=240 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610356033300 playback_present=1 playback_ns=610389012467 interval_ns=8954200 regression_backstep_ns=none
+  render_timestamp_event: index=241 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610366048700 playback_present=1 playback_ns=610399027867 interval_ns=10015400 regression_backstep_ns=none
+  render_timestamp_event: index=242 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610377123000 playback_present=1 playback_ns=610409102167 interval_ns=11074300 regression_backstep_ns=none
+  render_timestamp_event: index=243 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610386793900 playback_present=1 playback_ns=610418773067 interval_ns=9670900 regression_backstep_ns=none
+  render_timestamp_event: index=244 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610396112200 playback_present=1 playback_ns=610429091367 interval_ns=9318300 regression_backstep_ns=none
+  render_timestamp_event: index=245 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610407483100 playback_present=1 playback_ns=610439149767 interval_ns=11370900 regression_backstep_ns=none
+  render_timestamp_event: index=246 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610416110100 playback_present=1 playback_ns=610448964267 interval_ns=8627000 regression_backstep_ns=none
+  render_timestamp_event: index=247 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610427444800 playback_present=1 playback_ns=610459007300 interval_ns=11334700 regression_backstep_ns=none
+  render_timestamp_event: index=248 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610437610500 playback_present=1 playback_ns=610468318834 interval_ns=10165700 regression_backstep_ns=none
+  render_timestamp_event: index=249 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610447610500 playback_present=1 playback_ns=610478318834 interval_ns=10000000 regression_backstep_ns=none
+  render_timestamp_event: index=250 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610446155500 playback_present=1 playback_ns=610489093000 interval_ns=-1455000 regression_backstep_ns=-1455000
+  render_timestamp_event: index=251 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610466291100 playback_present=1 playback_ns=610498270267 interval_ns=20135600 regression_backstep_ns=none
+  render_timestamp_event: index=252 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610476874200 playback_present=1 playback_ns=610508853367 interval_ns=10583100 regression_backstep_ns=none
+  render_timestamp_event: index=253 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610486929600 playback_present=1 playback_ns=610518908767 interval_ns=10055400 regression_backstep_ns=none
+  render_timestamp_event: index=254 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610496453300 playback_present=1 playback_ns=610528432467 interval_ns=9523700 regression_backstep_ns=none
+  render_timestamp_event: index=255 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610506488500 playback_present=1 playback_ns=610538467667 interval_ns=10035200 regression_backstep_ns=none
+  render_timestamp_event: index=256 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610516520000 playback_present=1 playback_ns=610548499167 interval_ns=10031500 regression_backstep_ns=none
+  render_timestamp_event: index=257 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610526554100 playback_present=1 playback_ns=610558533267 interval_ns=10034100 regression_backstep_ns=none
+  render_timestamp_event: index=258 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610536586700 playback_present=1 playback_ns=610568565867 interval_ns=10032600 regression_backstep_ns=none
+  render_timestamp_event: index=259 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610546626500 playback_present=1 playback_ns=610578605667 interval_ns=10039800 regression_backstep_ns=none
+  render_timestamp_event: index=260 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610556656200 playback_present=1 playback_ns=610588635367 interval_ns=10029700 regression_backstep_ns=none
+  render_timestamp_event: index=261 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610566689800 playback_present=1 playback_ns=610598668967 interval_ns=10033600 regression_backstep_ns=none
+  render_timestamp_event: index=262 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610576725600 playback_present=1 playback_ns=610608704767 interval_ns=10035800 regression_backstep_ns=none
+  render_timestamp_event: index=263 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610586761800 playback_present=1 playback_ns=610618740967 interval_ns=10036200 regression_backstep_ns=none
+  render_timestamp_event: index=264 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610596317200 playback_present=1 playback_ns=610628296367 interval_ns=9555400 regression_backstep_ns=none
+  render_timestamp_event: index=265 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610606414200 playback_present=1 playback_ns=610638393367 interval_ns=10097000 regression_backstep_ns=none
+  render_timestamp_event: index=266 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610616504600 playback_present=1 playback_ns=610648483767 interval_ns=10090400 regression_backstep_ns=none
+  render_timestamp_event: index=267 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610626596300 playback_present=1 playback_ns=610658575467 interval_ns=10091700 regression_backstep_ns=none
+  render_timestamp_event: index=268 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610636696700 playback_present=1 playback_ns=610668675867 interval_ns=10100400 regression_backstep_ns=none
+  render_timestamp_event: index=269 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610646773500 playback_present=1 playback_ns=610678752667 interval_ns=10076800 regression_backstep_ns=none
+  render_timestamp_event: index=270 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610656821400 playback_present=1 playback_ns=610688800567 interval_ns=10047900 regression_backstep_ns=none
+  render_timestamp_event: index=271 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610666864900 playback_present=1 playback_ns=610698844067 interval_ns=10043500 regression_backstep_ns=none
+  render_timestamp_event: index=272 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610676905100 playback_present=1 playback_ns=610708884267 interval_ns=10040200 regression_backstep_ns=none
+  render_timestamp_event: index=273 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610686956500 playback_present=1 playback_ns=610718935667 interval_ns=10051400 regression_backstep_ns=none
+  render_timestamp_event: index=274 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610695995600 playback_present=1 playback_ns=610728974767 interval_ns=9039100 regression_backstep_ns=none
+  render_timestamp_event: index=275 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610706070800 playback_present=1 playback_ns=610739049967 interval_ns=10075200 regression_backstep_ns=none
+  render_timestamp_event: index=276 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610716086000 playback_present=1 playback_ns=610749065167 interval_ns=10015200 regression_backstep_ns=none
+  render_timestamp_event: index=277 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610726115700 playback_present=1 playback_ns=610759094867 interval_ns=10029700 regression_backstep_ns=none
+  render_timestamp_event: index=278 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610736143100 playback_present=1 playback_ns=610769122267 interval_ns=10027400 regression_backstep_ns=none
+  render_timestamp_event: index=279 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610746179200 playback_present=1 playback_ns=610779158367 interval_ns=10036100 regression_backstep_ns=none
+  render_timestamp_event: index=280 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610756216200 playback_present=1 playback_ns=610789195367 interval_ns=10037000 regression_backstep_ns=none
+  render_timestamp_event: index=281 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610766257300 playback_present=1 playback_ns=610798236467 interval_ns=10041100 regression_backstep_ns=none
+  render_timestamp_event: index=282 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610776284500 playback_present=1 playback_ns=610808263667 interval_ns=10027200 regression_backstep_ns=none
+  render_timestamp_event: index=283 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610786824400 playback_present=1 playback_ns=610818803567 interval_ns=10539900 regression_backstep_ns=none
+  render_timestamp_event: index=284 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610796394700 playback_present=1 playback_ns=610828373867 interval_ns=9570300 regression_backstep_ns=none
+  render_timestamp_event: index=285 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610806498500 playback_present=1 playback_ns=610838477667 interval_ns=10103800 regression_backstep_ns=none
+  render_timestamp_event: index=286 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610816558400 playback_present=1 playback_ns=610848537567 interval_ns=10059900 regression_backstep_ns=none
+  render_timestamp_event: index=287 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610826604900 playback_present=1 playback_ns=610858584067 interval_ns=10046500 regression_backstep_ns=none
+  render_timestamp_event: index=288 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610836109000 playback_present=1 playback_ns=610869088167 interval_ns=9504100 regression_backstep_ns=none
+  render_timestamp_event: index=289 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610846148100 playback_present=1 playback_ns=610879127267 interval_ns=10039100 regression_backstep_ns=none
+  render_timestamp_event: index=290 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610856188600 playback_present=1 playback_ns=610889167767 interval_ns=10040500 regression_backstep_ns=none
+  render_timestamp_event: index=291 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610866228700 playback_present=1 playback_ns=610899187034 interval_ns=10040100 regression_backstep_ns=none
+  render_timestamp_event: index=292 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610876259800 playback_present=1 playback_ns=610908238967 interval_ns=10031100 regression_backstep_ns=none
+  render_timestamp_event: index=293 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610886287600 playback_present=1 playback_ns=610918266767 interval_ns=10027800 regression_backstep_ns=none
+  render_timestamp_event: index=294 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610896355500 playback_present=1 playback_ns=610928334667 interval_ns=10067900 regression_backstep_ns=none
+  render_timestamp_event: index=295 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610906886200 playback_present=1 playback_ns=610938865367 interval_ns=10530700 regression_backstep_ns=none
+  render_timestamp_event: index=296 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610916911600 playback_present=1 playback_ns=610948890767 interval_ns=10025400 regression_backstep_ns=none
+  render_timestamp_event: index=297 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610926942900 playback_present=1 playback_ns=610958922067 interval_ns=10031300 regression_backstep_ns=none
+  render_timestamp_event: index=298 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610935966100 playback_present=1 playback_ns=610968945267 interval_ns=9023200 regression_backstep_ns=none
+  render_timestamp_event: index=299 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610946487900 playback_present=1 playback_ns=610978467067 interval_ns=10521800 regression_backstep_ns=none
+  render_timestamp_event: index=300 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610957046100 playback_present=1 playback_ns=610989025267 interval_ns=10558200 regression_backstep_ns=none
+  render_timestamp_event: index=301 epoch=0 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610966564100 playback_present=1 playback_ns=610998543267 interval_ns=9518000 regression_backstep_ns=none
+  render_timestamp_event: index=302 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=1 frames=480 callback_ns=610986156100 playback_present=1 playback_ns=611008156100 interval_ns=none regression_backstep_ns=none
+  render_timestamp_event: index=303 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=610996185500 playback_present=1 playback_ns=611028185500 interval_ns=10029400 regression_backstep_ns=none
+  render_timestamp_event: index=304 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611006230800 playback_present=1 playback_ns=611039209967 interval_ns=10045300 regression_backstep_ns=none
+  render_timestamp_event: index=305 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611016260000 playback_present=1 playback_ns=611048239167 interval_ns=10029200 regression_backstep_ns=none
+  render_timestamp_event: index=306 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611026302600 playback_present=1 playback_ns=611058281767 interval_ns=10042600 regression_backstep_ns=none
+  render_timestamp_event: index=307 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611036337700 playback_present=1 playback_ns=611068316867 interval_ns=10035100 regression_backstep_ns=none
+  render_timestamp_event: index=308 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611046392000 playback_present=1 playback_ns=611078371167 interval_ns=10054300 regression_backstep_ns=none
+  render_timestamp_event: index=309 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611056434700 playback_present=1 playback_ns=611088393034 interval_ns=10042700 regression_backstep_ns=none
+  render_timestamp_event: index=310 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611066957000 playback_present=1 playback_ns=611098936167 interval_ns=10522300 regression_backstep_ns=none
+  render_timestamp_event: index=311 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611076986800 playback_present=1 playback_ns=611108965967 interval_ns=10029800 regression_backstep_ns=none
+  render_timestamp_event: index=312 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611087030400 playback_present=1 playback_ns=611119009567 interval_ns=10043600 regression_backstep_ns=none
+  render_timestamp_event: index=313 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611096151300 playback_present=1 playback_ns=611129130467 interval_ns=9120900 regression_backstep_ns=none
+  render_timestamp_event: index=314 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611106687000 playback_present=1 playback_ns=611138666167 interval_ns=10535700 regression_backstep_ns=none
+  render_timestamp_event: index=315 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611116181300 playback_present=1 playback_ns=611149160467 interval_ns=9494300 regression_backstep_ns=none
+  render_timestamp_event: index=316 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611126715300 playback_present=1 playback_ns=611158694467 interval_ns=10534000 regression_backstep_ns=none
+  render_timestamp_event: index=317 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611136232500 playback_present=1 playback_ns=611169211667 interval_ns=9517200 regression_backstep_ns=none
+  render_timestamp_event: index=318 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611146765300 playback_present=1 playback_ns=611178744467 interval_ns=10532800 regression_backstep_ns=none
+  render_timestamp_event: index=319 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611156281300 playback_present=1 playback_ns=611188260467 interval_ns=9516000 regression_backstep_ns=none
+  render_timestamp_event: index=320 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611166823600 playback_present=1 playback_ns=611198802767 interval_ns=10542300 regression_backstep_ns=none
+  render_timestamp_event: index=321 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611176336800 playback_present=1 playback_ns=611208315967 interval_ns=9513200 regression_backstep_ns=none
+  render_timestamp_event: index=322 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611186865900 playback_present=1 playback_ns=611218845067 interval_ns=10529100 regression_backstep_ns=none
+  render_timestamp_event: index=323 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611196885100 playback_present=1 playback_ns=611228864267 interval_ns=10019200 regression_backstep_ns=none
+  render_timestamp_event: index=324 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611206437600 playback_present=1 playback_ns=611238395934 interval_ns=9552500 regression_backstep_ns=none
+  render_timestamp_event: index=325 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611216951700 playback_present=1 playback_ns=611248930867 interval_ns=10514100 regression_backstep_ns=none
+  render_timestamp_event: index=326 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611226487000 playback_present=1 playback_ns=611258466167 interval_ns=9535300 regression_backstep_ns=none
+  render_timestamp_event: index=327 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611237008700 playback_present=1 playback_ns=611268987867 interval_ns=10521700 regression_backstep_ns=none
+  render_timestamp_event: index=328 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611246517800 playback_present=1 playback_ns=611278496967 interval_ns=9509100 regression_backstep_ns=none
+  render_timestamp_event: index=329 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611257035400 playback_present=1 playback_ns=611289014567 interval_ns=10517600 regression_backstep_ns=none
+  render_timestamp_event: index=330 epoch=1 epoch_boundary_cb=302 is_epoch_boundary=0 frames=480 callback_ns=611266580300 playback_present=1 playback_ns=611298559467 interval_ns=9544900 regression_backstep_ns=none
+  render_timestamp_log: events=331 overflow=0 bounded_slots=512
+    render[0] failed:
+      - output timestamp regressions: 1
+  run_metadata: {"case_id":"rf1034.audio.virtual-endpoint.render-timestamp-baseline","requirement":"required","result":"fail","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"render-callback-timestamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"193b52e3348e2540f16f9ecfa290f75298226de5","os":"windows","arch":"x86_64","expected":"","observed":"no render candidate completed the timestamp baseline: render[0]: output timestamp regressions: 1","evidence":[]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json
+
+  thread 'audio_render_timestamp_baseline' (9376) panicked at crates\ruviform-audio-test\tests\os_endpoint.rs:1606:5:
+  verdict: Fail — no render candidate completed the timestamp baseline:
+  render[0]: output timestamp regressions: 1
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  test audio_render_timestamp_baseline ... FAILED
+  os_endpoint: audio render→capture wiring verifier
+    host: WASAPI
+    pair candidates: 1
+  pair[0]: render="Ruviform Cable Input (Ruviform Virtual Audio Device)" capture="Ruviform Cable Output (Ruviform Virtual Audio Device)" (candidate, unconfirmed)
+    render: "Ruviform Cable Input (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.0.00000000}.{80d67c85-6881-4cc9-859a-d07757ff4763}") | capture: "Ruviform Cable Output (Ruviform Virtual Audio Device)" id=DeviceId("wasapi:{0.0.1.00000000}.{6fe8e99f-60ad-42b1-a7d9-f4fa82cf7498}")
+    negotiated in=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } out=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 }
+    in stream: format=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } domain=ClockDomainId(2) | out stream: format=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } domain=ClockDomainId(2)
+    oracle level: observed_rms=0.01158 expected_rms≈0.01155 ratio=1.003
+    stats: in_cb=328 out_cb=332 in_frames=157440 out_frames=158976 in_err=2 out_err=0 capture_stored=157440 overflow=0 lock_failures=0
+    error kinds: in xrun=1 discontinuity=1 invalidated=0 backend=0 | out xrun=0 invalidated=0 backend=0
+    timestamps: in regressions=0 effective=0 epoch_resets=1 boundary_cb=298 first..last=18446744073709551615..0 max_backstep_ns=9223372036854775807 idx=[] | out regressions=1 effective=0 epoch_resets=1 boundary_cb=303 first..last=3..3 max_backstep_ns=-9910100 idx=[3]
+  run_metadata: {"case_id":"rf629.audio.virtual-endpoint.render-capture","requirement":"required","result":"pass","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"marker-rms-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"193b52e3348e2540f16f9ecfa290f75298226de5","os":"windows","arch":"x86_64","expected":"impulse train 0.8/100ms via PcmFixture::fill_view; marker spacing + RMS band + callback contract","observed":"pair[0] round-trip observed through real OS streams (negotiated in=48000 Hz out=48000 Hz)","evidence":["crates/ruviform-audio-test/tests/os_endpoint.rs","name match is a candidate, not proof of a virtual endpoint"]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json
+  verdict: Pass — render→capture round-trip observed
+  test audio_virtual_endpoint_round_trip ... ok
+  enumerated: 1 input ports, 2 output ports
+    pair candidates: 1
+    pair: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback" (candidate, unconfirmed)
+  run_metadata: {"case_id":"rf629.midi.virtual-endpoint.loopback","requirement":"required","result":"pass","level":"ext-l3","environment_kind":"virtual-os-endpoint","oracle":"ordered-subsequence+stamp-contract-v1","parameters":{"seed":1577,"fixture_version":1,"clock_config":{"sample_rate":48000,"epoch":0,"offset_ticks":0,"drift_ppm":0,"jitter":{"seed":0,"period_frames":0,"amplitude_ticks":0}}},"repo":"scarecrow173/ruviform","sha":"193b52e3348e2540f16f9ecfa290f75298226de5","os":"windows","arch":"x86_64","expected":"4-event channel-voice sequence round-trip (ordered subsequence)","observed":"sent=4 observed=4 dropped=0 unsupported=0 elapsed=122.5664ms tick_span=Some(92) invalidated_in=true invalidated_out=true","evidence":["crates/ruviform-audio-test/tests/os_endpoint.rs","name match is a candidate, not proof of a virtual endpoint"]}
+  run_metadata_path: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json
+  verdict: Pass — round-trip observed through real OS ports
+    evidence note: name match is a candidate, not proof of a virtual endpoint — this is OS-L1 round-trip evidence at best, recorded under virtual-os-endpoint pending human-confirmed provisioning
+  test midi_virtual_endpoint_loopback ... ok
+
+  failures:
+
+  failures:
+      audio_render_timestamp_baseline
+
+  test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 6.80s
+
+  error: test failed, to rerun pass `-p ruviform-audio-test --test os_endpoint`
+  test exit=101
+  verdict lines=3
+  metadata: audio=pass midi=pass records=3
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json -> os-endpoint-run-metadata-windows-2025
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-audio-virtual-endpoint-render-capture.json -> os-endpoint-run-metadata-windows-2025
+  copied run metadata: D:\a\ruviform\ruviform\target\tmp\run-metadata-rf629-midi-virtual-endpoint-loopback.json -> os-endpoint-run-metadata-windows-2025
+  collected metadata files: run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json, run-metadata-rf629-audio-virtual-endpoint-render-capture.json, run-metadata-rf629-midi-virtual-endpoint-loopback.json
