@@ -342,6 +342,13 @@ steps only. These lanes are complementary lanes selected for existing
 individual Properties; they are not a universal ladder or a required order
 for new verification work.
 
+`evidence/rf1015/property-ledger.md` is the Property-group ledger of record
+for the rf#1015 redesign. When selecting, re-running, or accounting for these
+lanes, identify the affected Property groups and ledger synchronization state
+rather than treating harness count, process exit 0, or CI green as proof. A
+selective re-run entry point keyed by Property group is not implemented yet;
+record that as `not_synced` instead of claiming synchronization.
+
 Test files live next to the crates: `crates/ruviform-ui/tests/formal_ipc.rs`
 (`parse_intent`, `valid_op`, `Event::to_json`),
 `crates/ruviform-ui-test/tests/formal_transport.rs` (`read_frame` /
@@ -395,7 +402,10 @@ explanation is inventory, not approval. The exception is owned by
 validity argument and review. The `cfg(kani)` diagnostic-payload substitution
 in the WAV backend is likewise an unmigrated legacy exception owned by
 `scarecrow173/ruviform#1015`; do not confuse it with proof-placement-only
-`#[cfg(kani)] mod proofs`.
+`#[cfg(kani)] mod proofs`. The rf#1015 design direction is to remove both
+exceptions through the structured DFA/reader boundary redesign and the WAV
+lazy/pure diagnostic boundary, but until that implementation is re-verified
+their results remain legacy-exception results and are not ordinary Proof Pass.
 
 When product code, a model, a harness, or a dependency changes:
 

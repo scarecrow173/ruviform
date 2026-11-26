@@ -4,7 +4,7 @@ type: "spec"
 status: "proposed"
 title: "Issue #806 Formal Verification D 層 — proptest + Kani 検証基盤（slice 1: wire codec / slice 2: archive parser / slice 3: structured documents / slice 4: PCM WAV backend）"
 created: "2026-11-20"
-updated: "2026-11-25"
+updated: "2026-11-26"
 owners: ["scarecrow173"]
 relations:
   source:
@@ -102,6 +102,44 @@ slice 3 で `ruviform-io-structured` の JSON/YAML/TOML/CSV/XML reader
 と共有 `InputLimits`/`BoundedRead` byte budget に、slice 4 で
 `ruviform-io-wav` の RIFF/WAVE serialization・canonical planar
 `f32`→wire sample 変換・muxer finalize/`WavReceipt` 契約に適用した。
+
+## rf#1015 slice 1 — Property ledger と legacy exception 処置
+
+rf#806 の harness inventory は後続の再設計で Property group 単位へ再編
+された。再編後の group、risk、必要保証、仮定、未証明領域、verdict、予算、
+選択再実行の台帳は `evidence/rf1015/property-ledger.md`、slice 1 の作業証跡は
+`evidence/rf1015/verification.md` と `evidence/rf1015/runs.jsonl` であり、
+以降の本書は rf#806 当時の Bound・unproven-area・complement table・
+resource-caused `not_run` の inventory として残す。Property group と
+legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
+場合は、どちらが正しいかを確認して修正し、同期状態を記録する。
+
+slice 1 で確定した設計方向は次のとおり。製品コード・proof harness・
+mise lane は未変更なので、これらは実施済みの結果ではなく後続実装 slice
+の採用方針である。
+
+1. structured documents では crate 全体への `--no-unwinding-checks` を
+   撤廃する。最終形は CSV limit decision を `csv_core` の DFA/reader
+   shell から分離した pure decision core で証明する。移行中の proof 単位
+   限定は許容するが、crate 単位例外の存続は採らない。
+2. WAV の `cfg(kani)` 診断置換は撤廃し、kind 判定の pure core と診断付与
+   shell を分離する lazy/pure diagnostic boundary を採用する。診断文面は
+   wire 契約に含めず、未証明領域として明示する。
+3. verdict を返せない wire/archive 8 harness は、現行形の予算拡大ではなく
+   pure decision core 抽出と Property 単位分割で再設計する。複合 parser
+   shell の証明が依然として支配的な場合は、その部分だけ proptest への
+   downgrade または引退を ledger へ記録する。
+4. `read_frame` EOF は製品 rustdoc を正とする。length prefix の 1〜3 byte
+   部分 EOF は clean EOF ではなく `UnexpectedEof` とする契約差分を後続
+   製品 slice へ分離する。この slice では実装・テスト oracle を変更しない。
+5. `SampleFormat` の手動 `%10` 列挙は、audio-core 側の public canonical
+   variant inventory（`SampleFormat::ALL` 相当）と exhaustive probe に
+   置き換え、variant 追加時に compile error で検出する方向を採用する。
+   公開 API 追加の承認と命名は後続 slice で確定する。
+
+現行 `mise.toml` には Property group 単位の選択再実行入口がない。したがっ
+て選択再実行の sync state は `not_synced` であり、未実装を `synced` と
+記録しない。実装前の予算・支配要因・downgrade 条件は ledger §6 に従う。
 
 ## 対象と検証する契約
 
@@ -328,7 +366,12 @@ legacy exception として扱う。
 これらを 通常の Proof Pass の根拠や新規 proof にコピー可能な
 pattern として扱わない。本文書内の関連記述は、当時の境界と未証明領域を
 示す inventory であり、例外の承認ではない。proof placement のための
-`#[cfg(kani)] mod proofs` とは区別する。
+`#[cfg(kani)] mod proofs` とは区別する。rf#1015 slice 1 の再評価では、
+structured は DFA/reader 境界再設計と crate 単位 invocation 撤廃、WAV は
+lazy/pure diagnostic boundary への移行と `cfg(kani)` 置換撤廃を採用した。
+実装が完了するまでは legacy exception のまま会計し、新 verdict だけを
+Proof Pass に計上する（decision matrix: `evidence/rf1015/property-ledger.md`
+§4 D-1/D-2）。
 
 ## Kani 環境のプロビジョニング
 
