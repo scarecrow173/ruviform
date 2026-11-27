@@ -2853,6 +2853,8 @@ fn analyze_backend_trace_event_chunk_for_session(
     let audio_guid = MICROSOFT_WINDOWS_AUDIO_GUID.to_ascii_lowercase();
     let kernel_guid = MICROSOFT_WINDOWS_KERNELSTREAMING_GUID.to_ascii_lowercase();
     let audio_engine_guid = MICROSOFT_WINDOWS_AUDIOENGINEVERBOSE_GUID.to_ascii_lowercase();
+    let provider_guid = extract_xml_attribute(chunk, "Provider", "Guid");
+    let event_guid = extract_xml_element_text(chunk, "EventGuid").map(str::to_owned);
     let is_portcls = [
         PORTCLS_AUDIOENGINE_CONTROL_GUID,
         PORTCLS_AUDIOENGINE_EVENT_GUID,
@@ -2860,7 +2862,7 @@ fn analyze_backend_trace_event_chunk_for_session(
         PORTCLS_ROOT_EVENT_GUID,
     ]
     .iter()
-    .any(|guid| lower.contains(&guid.to_ascii_lowercase()));
+    .any(|guid| guid_eq(provider_guid.as_deref(), guid) || guid_eq(event_guid.as_deref(), guid));
     if is_portcls {
         inventory.portcls_provider_events = inventory.portcls_provider_events.saturating_add(1);
     } else if lower.contains(&audio_engine_guid) || lower.contains("audioengine") {
@@ -6396,6 +6398,7 @@ fn kernel_eventtracing_witness_requires_session_and_guid_fields() {
     assert_eq!(inventory.kernel_witness_matched_session_enable_events, 1);
     assert_eq!(inventory.kernel_witness_portcls_control_enable_events, 1);
     assert_eq!(inventory.kernel_witness_portcls_event_enable_events, 0);
+    assert_eq!(inventory.portcls_provider_events, 0);
     assert_eq!(
         control_witness_status(&inventory),
         "control-request-witnessed"
