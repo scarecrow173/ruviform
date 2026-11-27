@@ -336,6 +336,7 @@ mise run test-formal-kani w-frm-codec     # selective frame length decision-core
 mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
 mise run test-formal-kani arc-payload-limit # selective TAR declared-size decision-core proof only
 mise run test-formal-kani arc-zip-entry-size # selective ZIP declared entry-size decision-core proof only
+mise run test-formal-kani arc-zip-output-cap # selective ZIP entry output-cap decision-core proof only
 mise run test-formal-kani arc-tar-struct  # selective TAR typeflag decision-core proof only
 mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
 mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
@@ -361,9 +362,10 @@ envelope size/field decision-core proofs, `w-frm-codec` for the frame
 length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
 index decision-core proof, `arc-payload-limit` for the TAR declared-size
 decision-core proof, `arc-zip-entry-size` for the ZIP declared entry-size
-decision-core proof, `arc-tar-struct` for the TAR typeflag decision-core
-proof, `sd-csv-limits` for the CSV limit decision-core proofs, and
-`sd-byte-budget` for the `BoundedRead` proof.
+decision-core proof, `arc-zip-output-cap` for the ZIP entry output
+hard-cap/overflow decision-core proof, `arc-tar-struct` for the TAR typeflag
+decision-core proof, `sd-csv-limits` for the CSV limit decision-core proofs,
+and `sd-byte-budget` for the `BoundedRead` proof.
 There is still no generic Property-group runner; record unaffected or
 unimplemented selectors as `not_synced` instead of claiming synchronization.
 Unknown selectors are usage errors (exit 2) before environment detection or
@@ -402,10 +404,10 @@ lives beside the private ZIP index decision core in
 `ruviform-io-archive/src/zip/read.rs`, the rf#1015 `ARC-PAYLOAD-LIMIT`
 TAR exactness proof lives beside the private TAR declared-size decision core in
 `ruviform-io-archive/src/tar/read.rs`, the ZIP declared entry-size exactness
-proof lives beside the private ZIP decision core in
-`ruviform-io-archive/src/zip/read.rs`, and the rf#1015 `W-FRM-CODEC`
-length-prefix/write-cap proofs live beside the private frame decision core in
-`ruviform-ui-test/src/transport.rs`. These proofs live in product sources
+proof and ZIP entry output hard-cap/overflow exactness proof live beside the
+private ZIP decision cores in `ruviform-io-archive/src/zip/read.rs`, and the
+rf#1015 `W-FRM-CODEC` length-prefix/write-cap proofs live beside the private
+frame decision core in `ruviform-ui-test/src/transport.rs`. These proofs live in product sources
 because `cargo kani --tests` covers lib-target proofs. All other proofs stay out of
 product sources. The proofs use a concrete skeleton plus a symbolic gate
 field (record/field limits, the byte budget); arbitrary byte streams stay
@@ -437,7 +439,11 @@ proofs. Its filter selects only harness names containing `w_frm_codec`; the
 legacy `read_frame_contract` shell harness is not selected. The archive selectors use exact substring filters: `arc_idx_limit` selects
 only `zip::read::proofs::arc_idx_limit_decision_exactness`,
 `arc_payload_limit` selects only
-`tar::read::proofs::arc_payload_limit_declared_exactness`, and
+`tar::read::proofs::arc_payload_limit_declared_exactness`,
+`arc_zip_entry_size` selects only
+`zip::read::proofs::arc_zip_entry_size_declared_gate_exactness`,
+`arc_zip_output_cap` selects only
+`zip::read::proofs::arc_zip_output_cap_decision_exactness`, and
 `arc_tar_struct` selects only
 `tar::read::proofs::arc_tar_struct_typeflag_exactness`. The
 structured selectors likewise use exact substring filters:
@@ -485,7 +491,8 @@ For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
 `w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`,
-`arc-zip-entry-size`, `arc-tar-struct`, or `sd-csv-limits`),
+`arc-zip-entry-size`, `arc-zip-output-cap`, `arc-tar-struct`, or
+`sd-csv-limits`),
 not only proptest. The mutant /
 observed failure / revert triple goes into `evidence/<issue>/` — a suite that
 cannot fail is not a gate.
