@@ -70,8 +70,138 @@
       "sha256": "99bf4f9a46a01559d0a0c402c635f248cce86d20a100bd1f403e5dbae8eabb2b"
     }
   ],
-  "missing_or_mismatch_count": 0,
+  "missing_or_mismatch_count": 25,
   "missing_or_mismatch_notes": [
+    "correction: backend ETL/XML/event-split and the rest of the backend trace artifact set are absent because the run stopped at the os_endpoint watchdog before backend trace completion/artifact preservation; whether trace setup started is unknown from the preserved artifacts. Absence is artifact loss/technical blocker evidence, not a successful zero-event observation",
+    "missing_or_mismatch_count is the number of entries in missing_or_mismatch; backend entries are path patterns rather than claims of exact existing filenames",
+    "the backend trace filename suffix is the os_endpoint process id in successful runs; because run 46011572850 did not reach trace completion/artifact preservation, <pid-not-recorded> is a placeholder for an unknowable path component and is not a claim that such a file existed",
     "prek end-of-file normalization applied after extraction; inventory hashes were refreshed to match committed normalized files"
+  ],
+  "missing_or_mismatch": [
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-delete-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-driver-position-correlation.json"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-driver-position-events.json"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-event-split.json"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-precheck-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-discovery.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-list.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-microsoft-windows-audio.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-microsoft-windows-audioengineverbose.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-microsoft-windows-kernel-eventtracing.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-microsoft-windows-kernelstreaming.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-portcls-audioengine-wmievent.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-portcls-audioenginewmitracecontrol.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-portcls-position-wmievent.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-portcls-root-wmievent.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-provider-rvf1034-classicselftest-control.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-session-query-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-start-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-stop-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-summary.json"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>-tracerpt-log.txt"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>.etl"
+    },
+    {
+      "status": "missing",
+      "detail": "os_endpoint watchdog timeout after 60s aborted the round-trip before backend ETW trace completion/artifact preservation; whether trace setup started is not evidenced by the preserved artifacts, and the process-id suffix was never recorded, so the exact filename is represented with <pid-not-recorded> rather than invented",
+      "path_pattern": "backend-os-trace-pair0-<pid-not-recorded>.xml"
+    },
+    {
+      "path": "run-metadata-rf629-audio-virtual-endpoint-render-capture.json",
+      "status": "missing",
+      "detail": "recorded in stage-os-endpoint-wiring-windows-2025.txt as missing copied metadata after the watchdog abort"
+    },
+    {
+      "path": "run-metadata-rf629-midi-virtual-endpoint-loopback.json",
+      "status": "missing",
+      "detail": "recorded in stage-os-endpoint-wiring-windows-2025.txt as missing copied metadata after the watchdog abort"
+    }
   ]
 }
