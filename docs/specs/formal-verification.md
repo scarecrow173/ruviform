@@ -113,7 +113,9 @@ rf#806 の harness inventory は後続の再設計で Property group 単位へ�
 `evidence/rf1015/verification.md`・`evidence/rf1015/verification-slice2.md`・
 `evidence/rf1015/verification-slice3.md`・`evidence/rf1015/verification-slice4-archive.md`・
 `evidence/rf1015/verification-slice5-archive-payload.md`・
-`evidence/rf1015/verification-slice6-archive-typeflag.md`・`evidence/rf1015/runs.jsonl` であり、
+`evidence/rf1015/verification-slice6-archive-typeflag.md`・
+`evidence/rf1015/verification-slice7-frame-codec.md`・
+`evidence/rf1015/verification-slice8-ipc-envelope.md`・`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
@@ -198,15 +200,31 @@ body byte transport、UTF-8 validation、EOF/truncation 分類、oversize drain�
 Vec/Read/Write shell、実 OS pipe/TCP、shell-core接続は Kani 未証明領域として残り、
 既存 proptest と deterministic boundary regression が接続 coverageを担う。
 
-選択再実行は `mise run test-formal-kani w-ipc-op` に加え、slice 3 の
+rf#1015 slice 8 では、Wire 側代表 Property のうち `W-IPC-ENVELOPE` の
+body size cap と post-parse envelope field gate の decision subboundaryを実装した。
+`parse_intent` は raw body byte length だけを受け取る crate-private な
+`intent_body_size_decision` で JSON parse 前の cap accept/rejectを導き、serde_jsonで
+parse済みの `v`、`kind`、`op` だけを受け取る crate-private な
+`intent_envelope_gate_decision` から Accept / unsupported version / unsupported kind /
+invalid op を現行優先順位で導く。core は allocation・I/O・serde_json・JSON parse・
+`String`/`Value` 構築・Vec growth・UTF-8 validation・environment access・診断構築を
+持たない。proof は製品実装と同じ `src/ipc.rs` の `#[cfg(kani)] mod proofs` に置き、
+symbolic body length/version、len 0〜8に分割した kind/op byte window、fixed length 6の
+kind content、concrete 127/128/129 byte op boundary、version→kind→op priorityを検証する。
+serde_json parser correctness、任意 malformed input、JSON object typing、missing/extra/
+duplicate fields、`id`/`params` payload identity、float 厳密性、ErrorBody message構築、
+shell-core接続は Kani 未証明領域として残り、既存 proptestと deterministic regressionが
+接続 coverageを担う。旧 shell 向け `parse_intent_error_contract` harnessは退役した。
+
+選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
-`arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec` が最小入口である。
+`arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
-generic runner はまだない。`W-IPC-OP`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
+generic runner はまだない。`W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
 `SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5/6/7 の evidence を正本とする。
+ledger §6 と slice 2/3/4/5/6/7/8 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -263,6 +281,7 @@ ledger §6 と slice 2/3/4/5/6/7 の evidence を正本とする。
 | `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
 | `mise run test-formal-kani` | selector なし。`cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 | `mise run test-formal-kani w-ipc-op` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op` の 1 invocation。`src/ipc.rs` の `w_ipc_op_exactness_len0_16` と 3 件の `w_ipc_op_boundary_len*` だけを選び、Unwinding Assertions を無効化しない。未知 selector は Kani 実行前に exit 2 | 同上 |
+| `mise run test-formal-kani w-ipc-envelope` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_envelope` の 1 invocation。`src/ipc.rs` の 10 件の `w_ipc_envelope_*` decision-core proof だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani w-frm-codec` | `cargo kani -j1 --output-format terse -p ruviform-ui-test --harness w_frm_codec` の 1 invocation。`src/transport.rs` の 3 件の frame length decision proof だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-idx-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit` の 1 invocation。`src/zip/read.rs` の `arc_idx_limit_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-payload-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit` の 1 invocation。`src/tar/read.rs` の `arc_payload_limit_declared_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
@@ -292,7 +311,11 @@ ledger §6 と slice 2/3/4/5/6/7 の evidence を正本とする。
 
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
-| `parse_intent_error_contract` | envelope field（`v:u8`・`kind` 5 択・`id`/`op` 各 6 byte valid UTF-8・`params` 7 択 fragment）を固定 JSON skeleton 上で symbolic に全網羅。`#[kani::unwind(80)]` | 任意 malformed byte 列・1 MiB cap 経路（bound 内では構造的に到達不可） | malformed 入力は proptest `parse_intent_arbitrary_error_set`、cap 経路は `parse_intent_oversize_is_too_large`（1 MiB 実測）で担保 |
+| `w_ipc_envelope_size_exactness`（in-src `src/ipc.rs`） | body length `usize` を全て symbolic。cap accept/reject exactness。`#[kani::unwind(2)]`。assumeなし | serde_json parse、body bytes、shell-core接続 | deterministic `envelope_gate_connection_regression` と proptest `parse_intent_oversize_is_too_large` |
+| `w_ipc_envelope_version_exactness`（in-src `src/ipc.rs`） | version `u32` を全て symbolicし、valid kind/op固定で version gate exactness。`#[kani::unwind(10)]` | 他 fieldとの複合違反、JSON typing | priority proof、deterministic regression、proptest |
+| `w_ipc_envelope_kind_*`（in-src `src/ipc.rs`） | length precheckは symbolic `usize`、fixed length 6 contentは symbolic `[u8; 6]`、full kind exactnessは symbolic len 0〜8。len 0〜8 は入力域分割の `assume`。`#[kani::unwind(10)]` | len 9以上の任意長 content、JSON string typing | length precheck proof、deterministic regression、proptest |
+| `w_ipc_envelope_op_exactness_len0_8` / boundary proofs（in-src `src/ipc.rs`） | len 0〜8 は入力域分割の `assume`付き exactness。127/128/129は concrete boundary matrix。`#[kani::unwind(10)]` / 131 / 132 | 17〜126 byte interior、129 byte超任意長、grammar大入力変種 | `W-IPC-OP` proof、proptest `valid_op_*`、deterministic regression |
+| `w_ipc_envelope_gate_priority`（in-src `src/ipc.rs`） | symbolic versionと len 0〜8 kind/opで version→kind→op priority exactness。`#[kani::unwind(12)]` | len 9以上の field、serde_json parse、ErrorBody message構築、shell-core接続 | deterministic regression、proptest |
 | `w_ipc_op_exactness_len0_16`（in-src `src/ipc.rs`） | byte slice 長 0〜16 を symbolic に全網羅し、製品 `valid_op_bytes` を独立 reference predicate と比較。`len <= 16` は入力域分割の `assume`。`#[kani::unwind(20)]` | 17〜126 byte の interior、`MAX_OP_LEN` 境界、128 byte 超 | boundary matrix と proptest `valid_op_total_and_sound` / `valid_op_accepts_generated` で担保 |
 | `w_ipc_op_boundary_len{127_valid,128_valid,129_over_cap}`（in-src `src/ipc.rs`） | concrete 長 127/128/129。127・128 は valid witness、129 は他条件を満たす入力で cap 拒否を検査。`#[kani::unwind(131)]`・`#[kani::unwind(132)]`・`#[kani::unwind(132)]` | 17〜126 byte の interior、129 byte を超える任意長、grammar 個別条件の大入力変種 | grammar 個別条件は長 0〜16 の exactness proof、大入力と arbitrary Unicode は proptest で担保 |
 | `event_to_json_wellformed` | id = 6 byte 任意列のうち valid UTF-8・`result_ok`・`params=Null`。`#[kani::unwind(80)]` | 他 variant・大きな params | proptest `event_to_json_versioned_envelope` が全 variant・任意 `Value` で担保 |
@@ -306,6 +329,15 @@ harness）は rf#1015 slice 2 で退役した。新保証は byte 長 0〜16 の
 127/128/129 の concrete boundary matrix（長さごとに分割）に分かれる。旧保証より小さい入力域では
 受理だけでなく拒否の exactness まで検査するが、17〜126 byte と 129 byte 超の
 任意長は引き続き未証明領域である。
+
+旧 shell 向け `parse_intent_error_contract` harness は rf#1015 slice 8 で退役した。
+旧保証は固定 JSON skeleton上の envelope fieldを serde_json parser shellごと検査しようとする
+attempted proofであり、rf806では約45 CPU-min・3.7 GiBで verdictを返せなかった。新保証は
+size cap と post-parse envelope field gateの allocation-free decision coreに限定される。
+serde_json parser correctness、任意 malformed input、object typing、payload identity、float厳密性、
+ErrorBody message構築、shell-core接続はこの proofの保証に含めず、proptest・deterministic
+regression・統合テストと未証明領域に残す。`event_to_json_wellformed` は `W-IPC-SERDE` の
+legacy 状態を表す harnessなので、この sliceでは退役も証明済み扱いもしない。
 
 旧 shell 向け `write_read_roundtrip` harness は rf#1015 slice 7 で退役した。
 旧保証は 16 byte bodyを Vec/Cursor/UTF-8 shellごと検査しようとする attempted proofであり、
@@ -588,6 +620,13 @@ failureで exit 1 を返した。検出は unwinding assertion failureではな�
 acceptanceを期待する write/prefix/roundtrip assertionの反例である。mutantは完全に
 revertし、同じ selective laneと `mise run test-formal` の再実行で緑へ戻した。実行記録は
 `evidence/rf1015/verification-slice7-frame-codec.md` と `runs.jsonl` を参照する。
+
+rf#1015 slice 8 の `W-IPC-ENVELOPE` では、decision coreの body size cap 判定を `<=` から `<`
+へ 1 箇所だけ変え、`mise run test-formal-kani w-ipc-envelope` が semantic assertion failureで
+exit 1 を返した。検出は unwinding assertion failureではなく、exact-cap acceptanceを期待する
+size exactness assertionの反例である。mutantは完全に revertし、同じ selective laneと
+`mise run test-formal` の再実行で緑へ戻した。実行記録は
+`evidence/rf1015/verification-slice8-ipc-envelope.md` と `runs.jsonl` を参照する。
 
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
