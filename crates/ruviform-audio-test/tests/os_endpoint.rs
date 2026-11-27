@@ -2598,6 +2598,8 @@ struct BackendTraceXmlInventory {
     driver_wmi_probe_write_mirror_events: u64,
     driver_wmi_probe_event_overflow: u64,
     driver_wmi_probe_mirror_ordinal_counts: [u64; 16],
+    driver_wmi_probe_control_enable_snapshot: Option<DriverWmiProbeEvent>,
+    driver_wmi_probe_control_disable_snapshot: Option<DriverWmiProbeEvent>,
     driver_wmi_probe_stored_events: Vec<DriverWmiProbeEvent>,
     ae_position_events: u64,
     set_current_timestamp_events: u64,
@@ -3067,11 +3069,15 @@ fn analyze_driver_wmi_probe_chunk(
             inventory.driver_wmi_probe_control_enable_events = inventory
                 .driver_wmi_probe_control_enable_events
                 .saturating_add(1);
+            if inventory.driver_wmi_probe_control_enable_snapshot.is_none() {
+                inventory.driver_wmi_probe_control_enable_snapshot = Some(event.clone());
+            }
         }
         2 => {
             inventory.driver_wmi_probe_control_disable_events = inventory
                 .driver_wmi_probe_control_disable_events
                 .saturating_add(1);
+            inventory.driver_wmi_probe_control_disable_snapshot = Some(event.clone());
         }
         3 => {
             inventory.driver_wmi_probe_write_mirror_events = inventory
@@ -3252,9 +3258,30 @@ fn classic_selftest_status(
     "classic-selftest-missing"
 }
 
+fn driver_wmi_probe_control_window_write_delta(
+    inventory: &BackendTraceXmlInventory,
+) -> Option<u64> {
+    let enable = inventory
+        .driver_wmi_probe_control_enable_snapshot
+        .as_ref()?;
+    let disable = inventory
+        .driver_wmi_probe_control_disable_snapshot
+        .as_ref()?;
+    Some(
+        disable
+            .write_etw_event_calls
+            .saturating_sub(enable.write_etw_event_calls),
+    )
+}
+
+fn driver_wmi_probe_callsite_evidence_present(inventory: &BackendTraceXmlInventory) -> bool {
+    inventory.driver_wmi_probe_write_mirror_events != 0
+        || driver_wmi_probe_control_window_write_delta(inventory).is_some_and(|delta| delta != 0)
+}
+
 fn driver_wmi_probe_status(inventory: &BackendTraceXmlInventory) -> &'static str {
     if inventory.driver_wmi_probe_control_enable_events != 0
-        && inventory.driver_wmi_probe_write_mirror_events != 0
+        && driver_wmi_probe_callsite_evidence_present(inventory)
     {
         "driver-wmi-control-and-callsite-decoded"
     } else if inventory.driver_wmi_probe_control_enable_events != 0 {
@@ -3674,6 +3701,35 @@ fn backend_trace_xml_inventory_json(inventory: &BackendTraceXmlInventory) -> ser
     })
 }
 
+fn driver_wmi_probe_control_window_json(inventory: &BackendTraceXmlInventory) -> serde_json::Value {
+    let enable = inventory.driver_wmi_probe_control_enable_snapshot.as_ref();
+    let disable = inventory.driver_wmi_probe_control_disable_snapshot.as_ref();
+    let status = match (enable, disable) {
+        (Some(_), Some(_)) => "enable-disable-snapshot-pair",
+        (Some(_), None) => "enable-without-disable",
+        (None, Some(_)) => "disable-without-enable",
+        (None, None) => "no-control-snapshot",
+    };
+    let counter = |select: fn(&DriverWmiProbeEvent) -> u64| {
+        let enable_value = enable.map(select);
+        let disable_value = disable.map(select);
+        serde_json::json!({
+            "enable": enable_value,
+            "disable": disable_value,
+            "delta": enable_value.zip(disable_value).map(|(start, end)| end.saturating_sub(start)),
+        })
+    };
+    serde_json::json!({
+        "status": status,
+        "write_etw_event_calls": counter(|event| event.write_etw_event_calls),
+        "helper_null_calls": counter(|event| event.helper_null_calls),
+        "forward_error_calls": counter(|event| event.forward_error_calls),
+        "mirror_suppressed_calls": counter(|event| event.mirror_suppressed_calls),
+        "mirror_key_calls": counter(|event| event.mirror_key_calls),
+        "mirror_key_emit_calls": counter(|event| event.mirror_key_emit_calls),
+    })
+}
+
 fn driver_wmi_probe_decode_json(inventory: &BackendTraceXmlInventory) -> serde_json::Value {
     serde_json::json!({
         "identity_event_count": inventory.driver_wmi_probe_events,
@@ -3684,6 +3740,8 @@ fn driver_wmi_probe_decode_json(inventory: &BackendTraceXmlInventory) -> serde_j
         "control_enable_count": inventory.driver_wmi_probe_control_enable_events,
         "control_disable_count": inventory.driver_wmi_probe_control_disable_events,
         "write_mirror_count": inventory.driver_wmi_probe_write_mirror_events,
+        "callsite_evidence": driver_wmi_probe_callsite_evidence_present(inventory),
+        "control_window": driver_wmi_probe_control_window_json(inventory),
         "mirror_ordinal_counts": inventory.driver_wmi_probe_mirror_ordinal_counts,
         "stored_events": inventory.driver_wmi_probe_stored_events.len(),
         "storage_overflow": inventory.driver_wmi_probe_event_overflow,
@@ -6841,6 +6899,20 @@ fn driver_wmi_probe_payload_hex(kind: u32, ordinal: u32, schema: u32) -> String 
     hex_encode(&bytes)
 }
 
+fn driver_wmi_probe_payload_hex_with_counters(
+    kind: u32,
+    write_calls: u64,
+    mirror_key_calls: u64,
+    mirror_key_emit_calls: u64,
+) -> String {
+    let mut bytes = decode_hex_bytes(&driver_wmi_probe_payload_hex(kind, 0xffff_ffff, 0))
+        .expect("base driver WMI probe payload");
+    bytes[72..80].copy_from_slice(&write_calls.to_le_bytes());
+    bytes[104..112].copy_from_slice(&mirror_key_calls.to_le_bytes());
+    bytes[112..120].copy_from_slice(&mirror_key_emit_calls.to_le_bytes());
+    hex_encode(&bytes)
+}
+
 fn driver_wmi_probe_event_chunk(payload_hex: &str) -> String {
     format!(
         r#"<Event><System><Provider /><EventID>0</EventID><TimeCreated SystemTime="2026-01-01T00:00:00.000000000+00:00" /></System><BinaryEventData>{payload_hex}</BinaryEventData><ExtendedTracingInfo><EventGuid>{DRIVER_WMI_PROBE_EVENT_GUID}</EventGuid></ExtendedTracingInfo></Event>"#
@@ -6904,6 +6976,43 @@ fn driver_wmi_probe_binary_decode_is_strict_and_counts_kinds() {
     assert_eq!(missing.driver_wmi_probe_events, 1);
     assert_eq!(missing.driver_wmi_probe_missing_payload_events, 1);
     assert_eq!(missing.driver_wmi_probe_payload_match_events, 0);
+}
+
+#[test]
+fn driver_wmi_probe_control_window_counters_classify_callsite_without_mirror() {
+    let mut inventory = BackendTraceXmlInventory::default();
+    for payload in [
+        driver_wmi_probe_payload_hex_with_counters(1, 100, 0, 0),
+        driver_wmi_probe_payload_hex_with_counters(2, 113, 11, 4),
+    ] {
+        analyze_backend_trace_event_chunk(&driver_wmi_probe_event_chunk(&payload), &mut inventory);
+    }
+    assert_eq!(inventory.driver_wmi_probe_write_mirror_events, 0);
+    assert_eq!(
+        driver_wmi_probe_control_window_write_delta(&inventory),
+        Some(13)
+    );
+    assert!(driver_wmi_probe_callsite_evidence_present(&inventory));
+    assert_eq!(
+        driver_wmi_probe_status(&inventory),
+        "driver-wmi-control-and-callsite-decoded"
+    );
+    let window = driver_wmi_probe_control_window_json(&inventory);
+    assert_eq!(window["write_etw_event_calls"]["delta"], 13);
+    assert_eq!(window["mirror_key_emit_calls"]["delta"], 4);
+
+    let mut unchanged = BackendTraceXmlInventory::default();
+    for payload in [
+        driver_wmi_probe_payload_hex_with_counters(1, 100, 0, 0),
+        driver_wmi_probe_payload_hex_with_counters(2, 100, 0, 0),
+    ] {
+        analyze_backend_trace_event_chunk(&driver_wmi_probe_event_chunk(&payload), &mut unchanged);
+    }
+    assert!(!driver_wmi_probe_callsite_evidence_present(&unchanged));
+    assert_eq!(
+        driver_wmi_probe_status(&unchanged),
+        "driver-wmi-control-decoded-callsite-absent"
+    );
 }
 
 #[test]
