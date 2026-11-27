@@ -1,0 +1,215 @@
+{
+  "artifact_dir": "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025",
+  "artifact_dir_source": "github-workspace-os-endpoint-run-metadata",
+  "calibration": {
+    "conversion": "unresolved unless ETW perf clock and host Instant relationship is independently established",
+    "etw_header_perf_freq": 10000000,
+    "etw_header_start_time": 134402423860746261,
+    "host_clock": "std::time::Instant elapsed since probe host_origin",
+    "start": {
+      "host_monotonic_ns": 14667721500,
+      "system_time_unix_ns": 1795768786055955800
+    },
+    "stop_after": {
+      "host_monotonic_ns": 21416864400,
+      "system_time_unix_ns": 1795768792805119200
+    },
+    "stop_before": {
+      "host_monotonic_ns": 18041126800,
+      "system_time_unix_ns": 1795768789429360900
+    },
+    "system_time_unit": "unix epoch nanoseconds (UTC timescale)"
+  },
+  "case": "rf629.audio.virtual-endpoint.render-capture",
+  "commands": [
+    {
+      "args": [
+        "query",
+        "providers"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "provider_discovery",
+      "log_file": "backend-os-trace-pair0-9036-provider-discovery.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "gp",
+        "Microsoft-Windows-Audio"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-9036-provider-microsoft-windows-audio.txt",
+      "program": "wevtutil.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "gp",
+        "Microsoft-Windows-KernelStreaming"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-9036-provider-microsoft-windows-kernelstreaming.txt",
+      "program": "wevtutil.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "query",
+        "rvf1034_bt_9036_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": -2144337918,
+      "label": "precheck_query",
+      "log_file": "backend-os-trace-pair0-9036-precheck-log.txt",
+      "program": "logman.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "start",
+        "rvf1034_bt_9036_0",
+        "-o",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-9036.etl",
+        "-pf",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-9036-provider-list.txt",
+        "-max",
+        "64",
+        "-ct",
+        "perf",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "logman_start",
+      "log_file": "backend-os-trace-pair0-9036-start-log.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "stop",
+        "rvf1034_bt_9036_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "logman_stop",
+      "log_file": "backend-os-trace-pair0-9036-stop-log.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "delete",
+        "rvf1034_bt_9036_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": -2144337918,
+      "label": "logman_delete",
+      "log_file": "backend-os-trace-pair0-9036-delete-log.txt",
+      "program": "logman.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-9036.etl",
+        "-o",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-9036.xml",
+        "-of",
+        "XML"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "tracerpt_xml",
+      "log_file": "backend-os-trace-pair0-9036-tracerpt-log.txt",
+      "program": "tracerpt.exe",
+      "success": true
+    }
+  ],
+  "coverage_note": "coverage absence is incomplete observation, never driver innocence evidence",
+  "diagnostic_artifact": true,
+  "driver_event_coverage": "driver-diagnostic-event-present",
+  "files": {
+    "convert_log": {
+      "bytes": 982,
+      "file": "backend-os-trace-pair0-9036-tracerpt-log.txt"
+    },
+    "delete_log": {
+      "bytes": 147,
+      "file": "backend-os-trace-pair0-9036-delete-log.txt"
+    },
+    "etl": {
+      "bytes": 5177344,
+      "file": "backend-os-trace-pair0-9036.etl"
+    },
+    "precheck_log": {
+      "bytes": 146,
+      "file": "backend-os-trace-pair0-9036-precheck-log.txt"
+    },
+    "provider_discovery": {
+      "bytes": 97624,
+      "file": "backend-os-trace-pair0-9036-provider-discovery.txt"
+    },
+    "provider_list": {
+      "bytes": 120,
+      "file": "backend-os-trace-pair0-9036-provider-list.txt"
+    },
+    "start_log": {
+      "bytes": 368,
+      "file": "backend-os-trace-pair0-9036-start-log.txt"
+    },
+    "stop_log": {
+      "bytes": 127,
+      "file": "backend-os-trace-pair0-9036-stop-log.txt"
+    },
+    "xml": {
+      "bytes": 50312453,
+      "file": "backend-os-trace-pair0-9036.xml"
+    }
+  },
+  "max_etl_mb": "64",
+  "not_run_metadata_schema": true,
+  "notes": [],
+  "pair": 0,
+  "path": "roundtrip_output",
+  "providers": [
+    {
+      "guid": "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "5",
+      "name": "Microsoft-Windows-Audio",
+      "selection_reason": "baseline OS audio engine/audiodg event inventory"
+    },
+    {
+      "guid": "{548C4417-CE45-41FF-99DD-528F01CE0FE1}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "5",
+      "name": "Microsoft-Windows-KernelStreaming",
+      "selection_reason": "registered audio/KernelStreaming provider candidate for PortCls miniport events"
+    }
+  ],
+  "schema": "rf1034-backend-os-trace/v1",
+  "session": "rvf1034_bt_9036_0",
+  "status": "captured",
+  "trace_clock_type": "perf",
+  "xml_inventory": {
+    "ae_position_events": 659,
+    "audio_provider_events": 44389,
+    "decode_error": null,
+    "events_total": 44391,
+    "glitch_events": 1,
+    "kernel_streaming_provider_events": 0,
+    "other_provider_events": 2,
+    "rvf_position_events": 12,
+    "set_current_timestamp_events": 659,
+    "standard_presentation_position_events": 0
+  }
+}

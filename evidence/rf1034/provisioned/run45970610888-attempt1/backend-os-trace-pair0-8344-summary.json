@@ -1,0 +1,258 @@
+{
+  "artifact_dir": "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025",
+  "artifact_dir_source": "github-workspace-os-endpoint-run-metadata",
+  "calibration": {
+    "conversion": "unresolved unless ETW perf clock and host Instant relationship is independently established",
+    "etw_header_perf_freq": 10000000,
+    "etw_header_start_time": 134402441503999861,
+    "host_clock": "std::time::Instant elapsed since probe host_origin",
+    "start": {
+      "host_monotonic_ns": 11493303800,
+      "system_time_unix_ns": 1795770550387007000
+    },
+    "stop_after": {
+      "host_monotonic_ns": 18744323900,
+      "system_time_unix_ns": 1795770557638181800
+    },
+    "stop_before": {
+      "host_monotonic_ns": 14842658700,
+      "system_time_unix_ns": 1795770553736412300
+    },
+    "system_time_unit": "unix epoch nanoseconds (UTC timescale)"
+  },
+  "case": "rf629.audio.virtual-endpoint.render-capture",
+  "commands": [
+    {
+      "args": [
+        "query",
+        "providers"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "provider_discovery",
+      "log_file": "backend-os-trace-pair0-8344-provider-discovery.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "gp",
+        "Microsoft-Windows-Audio"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-8344-provider-microsoft-windows-audio.txt",
+      "program": "wevtutil.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "gp",
+        "Microsoft-Windows-KernelStreaming"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-8344-provider-microsoft-windows-kernelstreaming.txt",
+      "program": "wevtutil.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "gp",
+        "Microsoft-Windows-AudioEngineVerbose"
+      ],
+      "error": null,
+      "exit_code": 2,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-8344-provider-microsoft-windows-audioengineverbose.txt",
+      "program": "wevtutil.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "gp",
+        "PortCls-AudioEngineWMI"
+      ],
+      "error": null,
+      "exit_code": 2,
+      "label": "wevtutil_gp",
+      "log_file": "backend-os-trace-pair0-8344-provider-portcls-audioenginewmi.txt",
+      "program": "wevtutil.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "query",
+        "rvf1034_bt_8344_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": -2144337918,
+      "label": "precheck_query",
+      "log_file": "backend-os-trace-pair0-8344-precheck-log.txt",
+      "program": "logman.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "start",
+        "rvf1034_bt_8344_0",
+        "-o",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-8344.etl",
+        "-pf",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-8344-provider-list.txt",
+        "-max",
+        "64",
+        "-ct",
+        "perf",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "logman_start",
+      "log_file": "backend-os-trace-pair0-8344-start-log.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "stop",
+        "rvf1034_bt_8344_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "logman_stop",
+      "log_file": "backend-os-trace-pair0-8344-stop-log.txt",
+      "program": "logman.exe",
+      "success": true
+    },
+    {
+      "args": [
+        "delete",
+        "rvf1034_bt_8344_0",
+        "-ets"
+      ],
+      "error": null,
+      "exit_code": -2144337918,
+      "label": "logman_delete",
+      "log_file": "backend-os-trace-pair0-8344-delete-log.txt",
+      "program": "logman.exe",
+      "success": false
+    },
+    {
+      "args": [
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-8344.etl",
+        "-o",
+        "D:\\a\\ruviform\\ruviform\\os-endpoint-run-metadata-windows-2025\\backend-os-trace-pair0-8344.xml",
+        "-of",
+        "XML"
+      ],
+      "error": null,
+      "exit_code": 0,
+      "label": "tracerpt_xml",
+      "log_file": "backend-os-trace-pair0-8344-tracerpt-log.txt",
+      "program": "tracerpt.exe",
+      "success": true
+    }
+  ],
+  "coverage_note": "coverage absence is incomplete observation, never driver innocence evidence",
+  "diagnostic_artifact": true,
+  "driver_event_coverage": "incomplete-no-driver-event-decoded",
+  "files": {
+    "convert_log": {
+      "bytes": 982,
+      "file": "backend-os-trace-pair0-8344-tracerpt-log.txt"
+    },
+    "delete_log": {
+      "bytes": 147,
+      "file": "backend-os-trace-pair0-8344-delete-log.txt"
+    },
+    "etl": {
+      "bytes": 5177344,
+      "file": "backend-os-trace-pair0-8344.etl"
+    },
+    "precheck_log": {
+      "bytes": 146,
+      "file": "backend-os-trace-pair0-8344-precheck-log.txt"
+    },
+    "provider_discovery": {
+      "bytes": 97952,
+      "file": "backend-os-trace-pair0-8344-provider-discovery.txt"
+    },
+    "provider_list": {
+      "bytes": 192,
+      "file": "backend-os-trace-pair0-8344-provider-list.txt"
+    },
+    "start_log": {
+      "bytes": 368,
+      "file": "backend-os-trace-pair0-8344-start-log.txt"
+    },
+    "stop_log": {
+      "bytes": 127,
+      "file": "backend-os-trace-pair0-8344-stop-log.txt"
+    },
+    "xml": {
+      "bytes": 50326824,
+      "file": "backend-os-trace-pair0-8344.xml"
+    }
+  },
+  "max_etl_mb": "64",
+  "not_run_metadata_schema": true,
+  "notes": [
+    "wevtutil gp failed for Microsoft-Windows-AudioEngineVerbose exit=Some(2)",
+    "wevtutil gp failed for PortCls-AudioEngineWMI exit=Some(2)"
+  ],
+  "pair": 0,
+  "path": "roundtrip_output",
+  "providers": [
+    {
+      "guid": "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
+      "keyword_mask": "0x0",
+      "level": "0xff",
+      "name": "Microsoft-Windows-Audio",
+      "selection_reason": "baseline OS audio engine/audiodg event inventory"
+    },
+    {
+      "guid": "{548C4417-CE45-41FF-99DD-528F01CE0FE1}",
+      "keyword_mask": "0x0",
+      "level": "0xff",
+      "name": "Microsoft-Windows-KernelStreaming",
+      "selection_reason": "registered audio/KernelStreaming provider candidate for PortCls miniport events"
+    },
+    {
+      "guid": "{A6A00EFD-21F2-4A99-807E-9B3BF1D90285}",
+      "keyword_mask": "0x0",
+      "level": "0xff",
+      "name": "Microsoft-Windows-AudioEngineVerbose",
+      "selection_reason": "audio engine provider used by multimedia trace profiles; OS audio-engine correlation candidate even when not manifest-registered"
+    },
+    {
+      "guid": "{10EB6007-818C-4DB6-A694-B518E589D07A}",
+      "keyword_mask": "0x0",
+      "level": "0xff",
+      "name": "PortCls-AudioEngineWMI",
+      "selection_reason": "GUID embedded in portcls.sys and used by core-audio trace guidance; primary PortCls miniport engine event candidate"
+    }
+  ],
+  "schema": "rf1034-backend-os-trace/v1",
+  "session": "rvf1034_bt_8344_0",
+  "status": "captured",
+  "trace_clock_type": "perf",
+  "xml_inventory": {
+    "ae_position_events": 660,
+    "audio_engine_provider_events": 0,
+    "audio_provider_events": 44372,
+    "decode_error": null,
+    "events_total": 44393,
+    "glitch_events": 1,
+    "kernel_streaming_provider_events": 0,
+    "other_provider_events": 21,
+    "portcls_provider_events": 0,
+    "rvf_position_events": 0,
+    "set_current_timestamp_events": 660,
+    "standard_presentation_position_events": 0
+  }
+}

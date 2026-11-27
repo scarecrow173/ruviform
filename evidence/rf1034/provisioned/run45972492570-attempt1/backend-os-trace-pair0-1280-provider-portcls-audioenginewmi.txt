@@ -1,0 +1,7 @@
+$ wevtutil.exe "gp" "PortCls-AudioEngineWMI"
+exit_code=2
+--- stdout ---
+
+--- stderr ---
+Failed to open metadata for publisher PortCls-AudioEngineWMI.
+The system cannot find the file specified.

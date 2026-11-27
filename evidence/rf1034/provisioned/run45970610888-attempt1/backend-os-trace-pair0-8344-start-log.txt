@@ -1,0 +1,6 @@
+$ logman.exe "start" "rvf1034_bt_8344_0" "-o" "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-8344.etl" "-pf" "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-8344-provider-list.txt" "-max" "64" "-ct" "perf" "-ets"
+exit_code=0
+--- stdout ---
+The command completed successfully.
+
+--- stderr ---

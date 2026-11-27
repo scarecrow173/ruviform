@@ -1,0 +1,61 @@
+$ tracerpt.exe "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-1280.etl" "-o" "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-1280.xml" "-of" "XML"
+exit_code=0
+--- stdout ---
+
+Input
+----------------
+File(s):
+     D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-1280.etl
+
+0.00%2.54%5.07%7.61%10.14%12.68%15.21%17.75%20.29%22.82%25.36%27.89%30.43%32.96%35.50%38.03%40.57%43.11%45.64%48.18%50.71%53.25%55.78%58.32%60.86%63.39%65.93%68.46%71.00%73.53%76.07%78.61%81.14%83.68%86.21%88.75%91.28%93.82%96.35%98.89%100.00%
+
+Output
+----------------
+DumpFile:           D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-1280.xml
+
+Warning:
+Some events do not match the schema.
+Please rerun the command with -lr to get less restricted XML dump
+The command completed successfully.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--- stderr ---
