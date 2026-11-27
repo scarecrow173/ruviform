@@ -335,6 +335,7 @@ mise run test-formal-kani w-ipc-envelope  # selective W-IPC-ENVELOPE size/field 
 mise run test-formal-kani w-frm-codec     # selective frame length decision-core proofs only
 mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
 mise run test-formal-kani arc-tar-metadata-budget # selective TAR extension metadata pre-buffer proof only
+mise run test-formal-kani arc-tar-block-budget # selective TAR fixed metadata block proof only
 mise run test-formal-kani arc-payload-limit # selective TAR declared-size decision-core proof only
 mise run test-formal-kani arc-zip-entry-size # selective ZIP declared entry-size decision-core proof only
 mise run test-formal-kani arc-zip-output-cap # selective ZIP entry output-cap decision-core proof only
@@ -365,7 +366,8 @@ for the rf#1015 `W-IPC-OP` byte-core proofs, `w-ipc-envelope` for the intent
 envelope size/field decision-core proofs, `w-frm-codec` for the frame
 length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
 index decision-core proof, `arc-tar-metadata-budget` for the TAR extension
-metadata pre-buffer decision-core proof, `arc-payload-limit` for the TAR declared-size
+metadata pre-buffer decision-core proof, `arc-tar-block-budget` for the TAR
+fixed metadata block decision-core proof, `arc-payload-limit` for the TAR declared-size
 decision-core proof, `arc-zip-entry-size` for the ZIP declared entry-size
 decision-core proof, `arc-zip-output-cap` for the ZIP entry output
 hard-cap/overflow decision-core proof, `arc-zip-measured-total` for the ZIP
@@ -511,7 +513,8 @@ mutated invariant, record the failure, revert completely, and re-run green.
 For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
-`w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-tar-metadata-budget`, `arc-payload-limit`,
+`w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-tar-metadata-budget`,
+`arc-tar-block-budget`, `arc-payload-limit`,
 `arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`,
 `arc-tar-measured-total`, `arc-tar-entry-progress`, `arc-tar-struct`, or `sd-csv-limits`),
 not only proptest. The mutant /
