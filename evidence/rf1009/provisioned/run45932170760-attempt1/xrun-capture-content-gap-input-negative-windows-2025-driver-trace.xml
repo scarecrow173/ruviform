@@ -1,0 +1,79 @@
+<Events>
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+	<System>
+		<Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<EventID>0</EventID>
+		<Version>2</Version>
+		<Level>0</Level>
+		<Task>0</Task>
+		<Opcode>0</Opcode>
+		<Keywords>0x0</Keywords>
+		<TimeCreated SystemTime="2026-11-27T03:10:30.976039900+00:00" />
+		<Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<Execution ProcessID="1596" ThreadID="6168" ProcessorID="0" KernelTime="15" UserTime="0" />
+		<Channel />
+		<Computer />
+	</System>
+	<EventData>
+		<Data Name="BufferSize">    8192</Data>
+		<Data Name="Version">83951626</Data>
+		<Data Name="ProviderVersion">   26100</Data>
+		<Data Name="NumberOfProcessors">       4</Data>
+		<Data Name="EndTime">134402226343214689</Data>
+		<Data Name="TimerResolution">  156250</Data>
+		<Data Name="MaxFileSize">      64</Data>
+		<Data Name="LogFileMode">0x0</Data>
+		<Data Name="BuffersWritten">       1</Data>
+		<Data Name="StartBuffers">       1</Data>
+		<Data Name="PointerSize">       8</Data>
+		<Data Name="EventsLost">       0</Data>
+		<Data Name="CPUSpeed">    2596</Data>
+		<Data Name="LoggerName">0xA</Data>
+		<Data Name="LogFileName">0x7</Data>
+		<Data Name="BootTime">134402217425000000</Data>
+		<Data Name="PerfFreq">10000000</Data>
+		<Data Name="StartTime">134402226309760399</Data>
+		<Data Name="ReservedFlags">0x1</Data>
+		<Data Name="BuffersLost">       0</Data>
+		<Data Name="SessionNameString">RvfXrun-capture-content-gap-input-negative-7072</Data>
+		<Data Name="LogFileNameString">D:\a\ruviform\ruviform\xrun-cases-windows-2025\xrun-capture-content-gap-input-negative-windows-2025-driver-trace.etl</Data>
+	</EventData>
+	<RenderingInfo Culture="en-US">
+		<Opcode>Header</Opcode>
+		<Provider>MSNT_SystemTrace</Provider>
+		<EventName xmlns="http://schemas.microsoft.com/win/2004/08/events/trace">EventTrace</EventName>
+	</RenderingInfo>
+	<ExtendedTracingInfo xmlns="http://schemas.microsoft.com/win/2004/08/events/trace">
+		<EventGuid>{68fdd900-4a3e-11d1-84f4-0000f80464e3}</EventGuid>
+	</ExtendedTracingInfo>
+</Event>
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+	<System>
+		<Provider Guid="{9e814aad-3204-11d2-9a82-006008a86939}" />
+		<EventID>0</EventID>
+		<Version>2</Version>
+		<Level>0</Level>
+		<Task>0</Task>
+		<Opcode>80</Opcode>
+		<Keywords>0x0</Keywords>
+		<TimeCreated SystemTime="2026-11-27T03:10:30.976039900+00:00" />
+		<Correlation ActivityID="{00000000-0000-0000-0000-000000000000}" />
+		<Execution ProcessID="1596" ThreadID="6168" ProcessorID="0" KernelTime="15" UserTime="0" />
+		<Channel />
+		<Computer />
+	</System>
+	<ProcessingErrorData>
+		<ErrorCode>15005</ErrorCode>
+		<DataItemName />
+		<EventPayload>000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000</EventPayload>
+	</ProcessingErrorData>
+	<RenderingInfo Culture="en-US">
+		<Opcode>PartitionInfoExtensionV2</Opcode>
+		<Provider>MSNT_SystemTrace</Provider>
+		<EventName xmlns="http://schemas.microsoft.com/win/2004/08/events/trace">EventTrace</EventName>
+	</RenderingInfo>
+	<ExtendedTracingInfo xmlns="http://schemas.microsoft.com/win/2004/08/events/trace">
+		<EventGuid>{68fdd900-4a3e-11d1-84f4-0000f80464e3}</EventGuid>
+	</ExtendedTracingInfo>
+</Event>
+</Events>

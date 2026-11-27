@@ -1,0 +1,812 @@
+wevtutil gp Microsoft-Windows-Audio
+name: Microsoft-Windows-Audio
+guid: ae4bd3be-f36f-45b6-8d21-bdd6fb832853
+helpLink:
+resourceFileName: %SystemRoot%\System32\audioses.dll
+messageFileName: %SystemRoot%\System32\audioses.dll
+message: 2415919105
+channels:
+  channel:
+    name: Application
+    id: 9
+    flags: 1
+    message: 2415919106
+  channel:
+    name: Microsoft-Windows-Audio/Operational
+    id: 16
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-Audio/CaptureMonitor
+    id: 17
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-Audio/Performance
+    id: 18
+    flags: 0
+    message: 2415919107
+  channel:
+    name: Microsoft-Windows-Audio/PlaybackManager
+    id: 19
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-Audio/GlitchDetection
+    id: 20
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-Audio/Informational
+    id: 21
+    flags: 0
+    message:
+levels:
+  level:
+    name: win:Error
+    value: 2
+    message: 1342177282
+  level:
+    name: win:Warning
+    value: 3
+    message: 1342177283
+  level:
+    name: win:Informational
+    value: 4
+    message: 1342177284
+  level:
+    name: win:Verbose
+    value: 5
+    message: 1342177285
+opcodes:
+  opcode:
+    name: win:Info
+    value: 0
+      task: 0
+      opcode: 0
+    message: 805306368
+  opcode:
+    name: win:Start
+    value: 65536
+      task: 0
+      opcode: 1
+    message: 805306369
+  opcode:
+    name: win:Stop
+    value: 131072
+      task: 0
+      opcode: 2
+    message: 805306370
+  opcode:
+    name: op_EVT_GLITCH_CM_RENDER
+    value: 983040
+      task: 0
+      opcode: 15
+    message: 805306383
+  opcode:
+    name: op_EVT_GLITCH_CM_CAPTURE
+    value: 1048576
+      task: 0
+      opcode: 16
+    message: 805306384
+  opcode:
+    name: op_EVT_GLITCH_APO_FORMAT_CONVERT
+    value: 1114112
+      task: 0
+      opcode: 17
+    message: 805306385
+  opcode:
+    name: op_EVT_GLITCH_CP_CLIENT_INPUT_NO_MESSAGES
+    value: 1179648
+      task: 0
+      opcode: 18
+    message: 805306386
+  opcode:
+    name: op_EVT_GLITCH_CP_CLIENT_INPUT_SIZE_MISMATCH
+    value: 1245184
+      task: 0
+      opcode: 19
+    message: 805306387
+  opcode:
+    name: op_EVT_GLITCH_CP_CLIENT_OUTPUT_SERVER_OVERREAD
+    value: 1310720
+      task: 0
+      opcode: 20
+    message: 805306388
+  opcode:
+    name: op_EVT_GLITCH_CP_CLIENT_OUTPUT_READ_POINTER_OVERWRITE
+    value: 1376256
+      task: 0
+      opcode: 21
+    message: 805306389
+  opcode:
+    name: op_EVT_GLITCH_CP_SERVER_INPUT_STARVATION
+    value: 1441792
+      task: 0
+      opcode: 22
+    message: 805306390
+  opcode:
+    name: op_EVT_GLITCH_CP_SERVER_OUTPUT_QUEUE_FULL_PACKET_DROP
+    value: 1507328
+      task: 0
+      opcode: 23
+    message: 805306391
+  opcode:
+    name: op_EVT_GLITCH_CP_SERVER_OUTPUT_READ_POINTER_OVERWRITE
+    value: 1572864
+      task: 0
+      opcode: 24
+    message: 805306392
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_IOMGR_NO_OUTSTANDING_PACKETS
+    value: 1638400
+      task: 0
+      opcode: 25
+    message: 805306393
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_IOMGR_MAX_IOCTL_TIME
+    value: 1703936
+      task: 0
+      opcode: 26
+    message: 805306394
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_BASE_OUTPUT_UNEXPECTED_BUFFER_COMPLETED
+    value: 1769472
+      task: 0
+      opcode: 27
+    message: 805306395
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_BASE_INPUT_LAST_BUFFER_NULL_BAD_LOCKED_DATA
+    value: 1835008
+      task: 0
+      opcode: 28
+    message: 805306396
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_BASE_INPUT_BUFFER_INDEX
+    value: 1900544
+      task: 0
+      opcode: 29
+    message: 805306397
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_BASE_END_GLITCH
+    value: 1966080
+      task: 0
+      opcode: 30
+    message: 805306398
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_RTCAP_STREAM_POS_AHEAD_OF_HW_POS
+    value: 2031616
+      task: 0
+      opcode: 31
+    message: 805306399
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_RTCAP_STREAM_POS_TOO_FAR_BEHIND
+    value: 2097152
+      task: 0
+      opcode: 32
+    message: 805306400
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_RTREN_WRITE_POS_EXCEEDS_TOTAL_POS
+    value: 2162688
+      task: 0
+      opcode: 33
+    message: 805306401
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_STCAP_CAPTURE_AHEAD
+    value: 2228224
+      task: 0
+      opcode: 34
+    message: 805306402
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_STCAP_CAPTURE_BEHIND
+    value: 2293760
+      task: 0
+      opcode: 35
+    message: 805306403
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_STCAP_DEVICE_STARVED
+    value: 2359296
+      task: 0
+      opcode: 36
+    message: 805306404
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_STREN_DEVICE_STARVED
+    value: 2424832
+      task: 0
+      opcode: 37
+    message: 805306405
+  opcode:
+    name: op_EVT_GLITCH_KSENDPOINT_STREN_EXCL_PULL_INVALID_BUFFER_COUNT
+    value: 2490368
+      task: 0
+      opcode: 38
+    message: 805306406
+  opcode:
+    name: op_EVT_MMDEVAPI_TRIGGER_DEFAULT_DEVICE_CHANGED
+    value: 2555904
+      task: 0
+      opcode: 39
+    message: 805306407
+  opcode:
+    name: op_EVT_MMDEVAPI_ON_MEDIA_NOTIFICATION_DeviceStateChanged
+    value: 2621440
+      task: 0
+      opcode: 40
+    message: 805306408
+  opcode:
+    name: op_EVT_MMDEVAPI_ON_MEDIA_NOTIFICATION_DeviceAdded
+    value: 2686976
+      task: 0
+      opcode: 41
+    message: 805306409
+  opcode:
+    name: op_EVT_MMDEVAPI_ON_MEDIA_NOTIFICATION_DeviceRemoved
+    value: 2752512
+      task: 0
+      opcode: 42
+    message: 805306410
+  opcode:
+    name: op_EVT_MMDEVAPI_ON_MEDIA_NOTIFICATION_DefaultDeviceChanged
+    value: 2818048
+      task: 0
+      opcode: 43
+    message: 805306411
+  opcode:
+    name: op_EVT_MIDIRT_ON_SUSPEND
+    value: 2883584
+      task: 0
+      opcode: 44
+    message: 805306412
+  opcode:
+    name: op_EVT_MIDIRT_ON_RESUME
+    value: 2949120
+      task: 0
+      opcode: 45
+    message: 805306413
+  opcode:
+    name: op_EVT_MIDIRT_ON_ENTER_CS
+    value: 3014656
+      task: 0
+      opcode: 46
+    message: 805306414
+  opcode:
+    name: op_EVT_MIDIRT_ON_EXIT_CS
+    value: 3080192
+      task: 0
+      opcode: 47
+    message: 805306415
+  opcode:
+    name: op_EVT_MIDIRT_ON_DEVICE_REMOVE
+    value: 3145728
+      task: 0
+      opcode: 48
+    message: 805306416
+  opcode:
+    name: op_EVT_MIDIRT_DEL_MidiDeviceIoControl
+    value: 3211264
+      task: 0
+      opcode: 49
+    message: 805306417
+  opcode:
+    name: op_EVT_MIDIRT_DeviceHandleClosed
+    value: 3276800
+      task: 0
+      opcode: 50
+    message: 805306418
+  opcode:
+    name: op_EVT_MIDIRT_CreateMidiPortDeviceAccessInstance
+    value: 3342336
+      task: 0
+      opcode: 51
+    message: 805306419
+  opcode:
+    name: op_AudioResourceManager_StreamSettings_Derived
+    value: 3407872
+      task: 0
+      opcode: 52
+    message: 805306420
+  opcode:
+    name: op_AudioResourceManager_Stream_Created
+    value: 3473408
+      task: 0
+      opcode: 53
+    message: 805306421
+  opcode:
+    name: op_AudioResourceManager_SaDevice_Created
+    value: 3538944
+      task: 0
+      opcode: 54
+    message: 805306422
+  opcode:
+    name: op_AudioResourceManager_SaDevice_Connected
+    value: 3604480
+      task: 0
+      opcode: 55
+    message: 805306423
+  opcode:
+    name: op_EVT_MMDEVAPI_DEVICE_STATE_CHANGED
+    value: 3670016
+      task: 0
+      opcode: 56
+    message: 805306424
+tasks:
+  task:
+    name: AudioPerf_Task_LaunchAudioDG
+    value: 100
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioPerf_Task_EndpointVolume
+    value: 101
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioPerf_Task_SessionAPI
+    value: 102
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioPerf_Task_GlitchCounter
+    value: 107
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_Service_Device
+    value: 108
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_Device_Event_Worker
+    value: 109
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_Set_Service_Status
+    value: 110
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_Subsystem_Startup
+    value: 111
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_AudioDG_Crashed
+    value: 112
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Fail_AudioDG_Failed_Startup
+    value: 113
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: CaptureMonitor_Monitor_Restart_Limit_Hit
+    value: 114
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Stream_Flags
+    value: 115
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSession_Stream_Resource_Type
+    value: 116
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioServer_Sound_Level_Changed
+    value: 117
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSession_Client_Suspended
+    value: 118
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSession_Release_Client_Resource
+    value: 119
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: PBM_StreamStarted
+    value: 120
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioDG_Glitch_Threshold_Exceeded
+    value: 121
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: PBM_StreamStopped
+    value: 122
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: Audio_Glitch_Detection
+    value: 123
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: System_Effect_APO_Initialized
+    value: 124
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSrv_EVT_VOLUME_LIMIT_CHANGED_ENTER
+    value: 125
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSrv_EVT_VOLUME_LIMIT_CHANGED_EXIT
+    value: 126
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioSrv_EVT_VOLUME_LIMIT_PUBLISH_WNF_AVLC_STATE
+    value: 127
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioCore_EVT_MMDevAPI
+    value: 129
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioCore_EVT_MidiRT
+    value: 130
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: AudioCore_EVT_MIDIRT_BindToDeviceInterfacePath_Task
+    value: 131
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048323
+  task:
+    name: AudioCore_EVT_MIDIRT_DeviceIoControlSync_Task
+    value: 132
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048324
+  task:
+    name: AudioCore_EVT_MIDIRT_DeviceIoControlAsync_Task
+    value: 133
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048325
+  task:
+    name: AudioCore_CPCapture_Add_Packet_Task
+    value: 134
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048326
+  task:
+    name: AudioCore_Pump_SetDeadline_Task
+    value: 135
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048327
+  task:
+    name: AudioCore_Pump_CancelDeadline_Task
+    value: 136
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048328
+  task:
+    name: AudioCore_Pump_MissedDeadline_Task
+    value: 137
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048329
+  task:
+    name: AudioCore_Pump_MMBuffering_Task
+    value: 138
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048330
+  task:
+    name: EndpointCharacteristics_CreateInstance_Task
+    value: 139
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048331
+  task:
+    name: AudioSrv_GetMixFormat_Task
+    value: 140
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048332
+  task:
+    name: AudioSrv_IsFormatSupported_Task
+    value: 141
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048333
+  task:
+    name: VadServer_CreateStream_Task
+    value: 142
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048334
+  task:
+    name: CreateDeviceEndpointInstance_Task
+    value: 143
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048335
+  task:
+    name: AudioCore_Pump_CorrectPosition_Task
+    value: 144
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048336
+  task:
+    name: AudioCore_Pump_Yield_Task
+    value: 145
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048337
+  task:
+    name: AudioCore_Pump_Process_Task
+    value: 146
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048338
+  task:
+    name: AudioCore_Pump_ProcPassDuration_Task
+    value: 147
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048339
+  task:
+    name: AudioCore_AEObject_Task
+    value: 148
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048340
+  task:
+    name: AudioCore_AEGlitch_Task
+    value: 149
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048341
+  task:
+    name: AudioCore_AEDrop_Task
+    value: 150
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048342
+  task:
+    name: AudioCore_Pump_MMBufferingSkipped_Task
+    value: 151
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048343
+  task:
+    name: AudioCore_AEControl_Task
+    value: 152
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048344
+  task:
+    name: AudioCore_AEPosition_Task
+    value: 153
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048345
+  task:
+    name: AudioCore_AESecurity_Task
+    value: 154
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048346
+  task:
+    name: AudioCore_AEData_Task
+    value: 155
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048347
+  task:
+    name: AudioCore_AEIRP_Task
+    value: 156
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048348
+  task:
+    name: AudioCore_AEEndpoint_Task
+    value: 157
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048349
+  task:
+    name: AudioCore_AEInterpolator_Task
+    value: 158
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048350
+  task:
+    name: AudioCore_AETimestamp_Task
+    value: 159
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048351
+  task:
+    name: AudioCore_AEPerformance_Task
+    value: 160
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048352
+  task:
+    name: AudioCore_AEGeneric_Task
+    value: 161
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048353
+  task:
+    name: AudioCore_AEMemory_Task
+    value: 162
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048354
+  task:
+    name: AudioCore_AEWaveRT_Task
+    value: 163
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048355
+  task:
+    name: AudioCore_AESyncIO_Task
+    value: 164
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048356
+  task:
+    name: AudioCore_CrossProcess_SetCurrentTimeStamp_Task
+    value: 165
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048357
+  task:
+    name: AudioCore_CrossProcessHistoryBuffer_WriteHistoryPacket_Task
+    value: 166
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048358
+  task:
+    name: AudioCore_CrossProcess_SignalPumpPassCompletion_Task
+    value: 167
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048359
+  task:
+    name: AudioCore_Pump_ProcPassSkip_Task
+    value: 168
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048360
+  task:
+    name: AudioCore_Pump_GetCurrentPadding_Task
+    value: 169
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048361
+  task:
+    name: AudioCore_APO_Process_Task
+    value: 170
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048362
+  task:
+    name: AudioCore_APO_CalcInputFrames_Task
+    value: 171
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048363
+  task:
+    name: AudioCore_Pump_TimedSpin_Task
+    value: 172
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048364
+  task:
+    name: AudioCore_Pump_AttachToMMCSS_Task
+    value: 173
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048365
+  task:
+    name: AudioCore_Pump_InitRTMode_Task
+    value: 174
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048366
+  task:
+    name: AudioCore_Pump_CreateLocalWorkQueue_Task
+    value: 175
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048367
+  task:
+    name: AudioCore_Pump_GetAPOWorkqueue_Task
+    value: 176
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048368
+  task:
+    name: EVT_Console_Locked_task
+    value: 177
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: EVT_GlobalUser_Presence_task
+    value: 178
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: EVT_Session_Display_State_task
+    value: 179
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: EVT_Po_AudioStandby_Request_task
+    value: 180
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+keywords:
+  keyword:
+    name: win:ResponseTime
+    mask: 1000000000000
+    message: 268435505
+
+
+wevtutil gp Microsoft-Windows-KernelStreaming
+name: Microsoft-Windows-KernelStreaming
+guid: 548c4417-ce45-41ff-99dd-528f01ce0fe1
+helpLink:
+resourceFileName: %SystemRoot%\system32\drivers\ks.sys
+messageFileName: %SystemRoot%\system32\drivers\ks.sys
+message: 2415919105
+channels:
+  channel:
+    name: Microsoft-Windows-KernelStreaming/Operational
+    id: 16
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-KernelStreaming/Analytic
+    id: 17
+    flags: 0
+    message:
+levels:
+  level:
+    name: win:Informational
+    value: 4
+    message: 1342177284
+  level:
+    name: win:Verbose
+    value: 5
+    message: 1342177285
+opcodes:
+  opcode:
+    name: win:Info
+    value: 0
+      task: 0
+      opcode: 0
+    message: 805306368
+  opcode:
+    name: win:Start
+    value: 65536
+      task: 0
+      opcode: 1
+    message: 805306369
+  opcode:
+    name: win:Stop
+    value: 131072
+      task: 0
+      opcode: 2
+    message: 805306370
+tasks:
+  task:
+    name: KS_PnpAddDevice
+    value: 101
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048293
+  task:
+    name: KS_StreamingRequest
+    value: 102
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048294
+  task:
+    name: KS_CameraGrab
+    value: 103
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048295
+  task:
+    name: KS_WNF
+    value: 104
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048296
+  task:
+    name: KS_WNFNotification
+    value: 105
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048297
+  task:
+    name: KS_DisplayOff
+    value: 106
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048298
+  task:
+    name: KS_WNFPinState
+    value: 107
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048299
+  task:
+    name: KS_IoProbeandLock
+    value: 108
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048300
+  task:
+    name: KS_QueryInterface
+    value: 109
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048301
+keywords:

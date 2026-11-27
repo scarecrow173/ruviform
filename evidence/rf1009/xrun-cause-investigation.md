@@ -80,9 +80,11 @@ RT path では per-packet 無制限 event は追加していない。suppression
 - raw stdout に埋め込まれた harness diagnostics
 - final case JSON の `diagnostics.driver_trace`
 
+run `45932170760` の追加 artifact copy は `evidence/rf1009/provisioned/run45932170760-attempt1/` にある。ETL binary は既存方針どおり commit せず、XML/provider log/case JSON/controller log/result JSON を commit する。run `45930911311` は driver compile failure の検証 runであり、xrun runtime evidence は無い。
+
 ## provisioned run serialization
 
-調査時点で `virtual-audio-driver-probe` の workflow_dispatch run `45865926990` が `in_progress` であった（head SHA `5843719861fa8ca6da5c963a3f63c3b32047c4ff`）。同一 provisioned workflow はシリアル利用が必要なため、本 worker からは並行 dispatch していない。したがって、ここに記録するのは local validation と既存 provisioned artifact の分析であり、post-merge CI/provisioned acceptance ではない。
+同一 provisioned workflow は branch 単位の concurrency group で直列化される。最初の検証 run `45930911311`（SHA `56f6bbdd`）は driver build lane で `minwavertstream.cpp(2105)` の `BOOL`→`BOOLEAN` warning-as-error を検出し、endpoint provisioning 前に停止した。これを `BOOL` 統一で修正し、直列化を確認して run `45932170760`（SHA `f7b2029a`）を実行した。
 
 ## ローカル検証
 
@@ -101,9 +103,17 @@ RT path では per-packet 無制限 event は追加していない。suppression
 
 これらは local validation であり、provisioned/CI acceptance ではない。最終 validation は merge 後 commit に対して再実行する。
 
+## run 45932170760 の追加事実
+
+- driver build、endpoint provisioning、registry write/readback/cleanup、per-case trace capture は成立した。
+- positive/negative とも injection applied=true で harness は完走したが、oracle は従前どおり Fail だった。positive detail は `typed-xrun-missing;clock-discontinuity-missing;forward-frame-position-gap-missing;max-forward-gap-zero` に限定され、gap 不在時の before/after-injection 誤記は消えた。
+- input callbacks は 300/299、output callbacks は 303/302、position transitions はすべて contiguous（forward/backward/reset 0）だった。error trace は空で typed xrun も backend error もなかった。
+- zero-run diagnostics は leading zero（positive 529 frames、negative 961 frames）のみ大きく、interior zero-run は最大 14 frames、trailing は 0 だった。注入 3 packet（約1440 frames）に相当する interior zero span は観測されなかった。
+- driver trace ETL/XML は capture されたが、XML には session header のみで `0x1001`-`0x1005` の IHV event は一件も無かった。`EventsLost=0` であり、provider log は `Microsoft-Windows-Audio` GUID `ae4bd3be-f36f-45b6-8d21-bdd6fb832853` が `audioses.dll` の user-mode provider であることを示す。したがって本 slice の driver ETW collection は provider 選定不一致により成立しなかった（H7の具体因）。
+
 ## 結論
 
-現時点で確実に排除できるのは H5（adapter mapping defect）である。H1/H2 は静的には否定寄りだが runtime snapshot 未証明、H3/H4/H6 は従来 artifact だけでは決定不能であり、本 slice の instrumentation により次回 provisioned run で次のように判定できる。
+確実に排除できるのは H5（adapter mapping defect）である。run `45932170760` の harness diagnostics は、WASAPI `frame_position` が全 contiguous で error callback が空であり、adapter へ forward gap が入力されていないことを強く支持する。ただし driver 内部イベントが provider 選定不一致で採取できなかったため、H1-H4/H6 の runtime 判定は未完了である。次の修正対象は oracle ではなく、kernel driver が実際に emit する ETW provider GUID/manifest の同定と controller の provider 指定である。
 
 1. `0x1001` が無い/値が disabled → H1 または registry snapshot/load timing。
 2. `0x1001` はあるが target flag が 0 → H2。
