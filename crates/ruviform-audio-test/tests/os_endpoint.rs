@@ -1622,11 +1622,11 @@ const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 7] = [
     BackendTraceProviderSpec {
         name: "PortCls-AudioEngine-WMIEvent",
         guid: PORTCLS_AUDIOENGINE_EVENT_GUID,
-        keyword_mask: "not-enabled-event-class",
-        level: "not-enabled-event-class",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
+        level: BACKEND_TRACE_LEVEL,
         role: BackendTraceProviderRole::WmiEventClass,
-        enabled_in_session: false,
-        selection_reason: "WMI event-class GUID for PortCls_AudioEngine / Miniport_AudioEngine_Event; decoded event identity, not a session control GUID",
+        enabled_in_session: true,
+        selection_reason: "WMI event-class GUID for PortCls_AudioEngine / Miniport_AudioEngine_Event; enabled as a classic WMI control candidate because WMI trace-control registration may use a registered event GUID, while decode still treats it as event identity rather than a manifest provider",
         require_registered: false,
     },
     BackendTraceProviderSpec {
@@ -5188,7 +5188,7 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
         .iter()
         .filter(|provider| provider.enabled_in_session)
         .collect::<Vec<_>>();
-    assert_eq!(enabled.len(), 4);
+    assert_eq!(enabled.len(), 5);
     assert!(
         enabled
             .iter()
@@ -5202,7 +5202,7 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
     assert!(
         enabled
             .iter()
-            .all(|provider| provider.guid != PORTCLS_AUDIOENGINE_EVENT_GUID)
+            .any(|provider| provider.guid == PORTCLS_AUDIOENGINE_EVENT_GUID)
     );
     let event_class = BACKEND_TRACE_PROVIDERS
         .iter()
@@ -5216,9 +5216,9 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
     assert_eq!(control.role, BackendTraceProviderRole::ClassicOrWmiControl);
 
     let provider_file = backend_trace_provider_file_text();
-    assert_eq!(provider_file.lines().count(), 4);
+    assert_eq!(provider_file.lines().count(), 5);
     assert!(provider_file.contains(PORTCLS_AUDIOENGINE_CONTROL_GUID));
-    assert!(!provider_file.contains(PORTCLS_AUDIOENGINE_EVENT_GUID));
+    assert!(provider_file.contains(PORTCLS_AUDIOENGINE_EVENT_GUID));
     assert!(
         provider_file
             .lines()
