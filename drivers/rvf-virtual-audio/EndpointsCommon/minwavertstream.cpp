@@ -969,12 +969,6 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
-    m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
-        eMINIPORT_IHV_DEFINED,
-        RVF_XRUN_ETW_ZERO_RANGE,
-        0,
-        0,
-        0);
 
     //
     // Publish the render DMA buffer to the adapter loopback registry so
@@ -2091,8 +2085,6 @@ TimerNotifyRT
 
     _this->UpdatePosition(qpc);
 
-    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
-
     if (_this->m_bXrunInjectionTarget &&
         bufferCompleted &&
         _this->m_KsState == KSSTATE_RUN)
@@ -2111,7 +2103,7 @@ TimerNotifyRT
         if ((suppressNotification != FALSE) != (_this->m_bXrunNotificationSuppressed != FALSE))
         {
             _this->m_bXrunNotificationSuppressed = suppressNotification;
-            pAdapterComm->WriteEtwEvent(
+            _this->m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
                 eMINIPORT_IHV_DEFINED,
                 RVF_XRUN_ETW_SUPPRESSION_TRANSITION,
                 completionIndex,
@@ -2143,6 +2135,8 @@ TimerNotifyRT
     {
         goto End;
     }
+
+    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
 
     // Simple buffer underrun detection.
     if (!_this->IsCurrentWaveRTWritePositionUpdated() && !_this->m_bEoSReceived)
