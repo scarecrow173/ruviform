@@ -1536,8 +1536,8 @@ impl Drop for RenderCallbackActivity<'_> {
 // rf#1034 backend OS/driver diagnostic trace control.
 
 const BACKEND_TRACE_MAX_LOG_MB: &str = "64";
-const BACKEND_TRACE_KEYWORD_MASK: &str = "0xffffffffffffffff";
-const BACKEND_TRACE_LEVEL: &str = "5";
+const BACKEND_TRACE_KEYWORD_MASK: &str = "0x0";
+const BACKEND_TRACE_LEVEL: &str = "0xff";
 const RVF_POSITION_ETW_PRESENTATION_POSITION_V1: u64 = 0x2001;
 const RVF_POSITION_ETW_FREQUENCY_SHIFT: u32 = 16;
 
@@ -1571,7 +1571,7 @@ const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 4] = [
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-AudioEngineVerbose",
         guid: "{A6A00EFD-21F2-4A99-807E-9B3BF1D90285}",
-        keyword_mask: "0xffff",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
         level: BACKEND_TRACE_LEVEL,
         selection_reason: "audio engine provider used by multimedia trace profiles; OS audio-engine correlation candidate even when not manifest-registered",
         require_registered: false,
