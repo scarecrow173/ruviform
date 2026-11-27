@@ -102,3 +102,4 @@ Directory: `docs/adr`
 | ADR-2iNuZm3ymoyzRUmpgnKr0x | 音楽時間モデル（PPQN 960 tick 中核・piecewise-constant テンポマップ） | superseded | [musical-time-model.md](./musical-time-model.md) |
 | ADR-034IO01BpGWCl1DcEbcTQI | UIアーキテクチャ方針（WebViewファースト・ハイブリッド） | superseded | [ui-architecture-webview-hybrid.md](./ui-architecture-webview-hybrid.md) |
 | ADR-034Jc9Cguud7nZ2Tt88Ptu | UI 技術選定（wry・描画バックエンド・フロントエンド FW・配布）— PoC 採否 | superseded | [ui-tech-selection-poc.md](./ui-tech-selection-poc.md) |
+| ADR-20261127-plan-owned-musical-transport | Issue #1040 plan-owned musical transport source | accepted | [issue-1040-plan-owned-musical-transport.md](./issue-1040-plan-owned-musical-transport.md) |

@@ -15,8 +15,9 @@ use ruviform_graph::{
     NodeKind, PortDef, PortFormat, PortId, PortRef, Validator,
 };
 use ruviform_media_core::{
-    DeliveryPolicy, MediaDuration, MediaRange, MediaTime, PlanGeneration, ScheduleBudget, TimeBase,
-    TransportCommand, TransportPlanBuilder,
+    BeatPosition, DeliveryPolicy, MediaDuration, MediaRange, MediaTime, PlanGeneration, Ppqn,
+    ScheduleBudget, TempoEvent, TempoMapBuilder, TempoMapRevision, TimeBase, TransportCommand,
+    TransportPlanBuilder, TransportStatus,
 };
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, BusDescriptor, BusDirection, BusRole, ErasedPlugin, Event,
@@ -73,6 +74,7 @@ const BUSES: [BusDescriptor; 4] = [
 struct CallRec {
     frames: usize,
     offsets: Vec<u32>,
+    transport: Option<TransportInfo>,
 }
 
 struct RecPlugin {
@@ -93,7 +95,7 @@ impl PluginProcessor for RecPlugin {
         inputs: &[I],
         outputs: &mut [O],
         events: EventList<'_>,
-        _transport: Option<TransportInfo>,
+        transport: Option<TransportInfo>,
         _context: &mut ProcessContext,
     ) -> ProcessResult
     where
@@ -103,6 +105,7 @@ impl PluginProcessor for RecPlugin {
         self.calls.lock().unwrap().push(CallRec {
             frames: outputs.first().map_or(0, BufferView::frames),
             offsets: events.iter().map(Event::frame_offset).collect(),
+            transport,
         });
         for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
             for ch in 0..output.channels() {
@@ -482,6 +485,161 @@ fn event_offsets_are_process_start_relative() {
         vec![72],
         "200 - call2 start 128 = 72, not the engine offset"
     );
+}
+
+fn tempo_map_150bpm() -> Arc<ruviform_media_core::TempoMap> {
+    let mut b = TempoMapBuilder::new();
+    b.add_tempo_event(TempoEvent::at(BeatPosition::from_int(0), 150_000));
+    Arc::new(b.build().unwrap())
+}
+
+/// rf#1040 typed-graph oracle — a plan-owned non-default PPQN and a
+/// non-120 BPM tempo reach the plugin process snapshot unchanged.
+/// 150 BPM / 48 kHz / PPQN 480 is exactly 40 frames per tick, so the
+/// 40-frame physical calls at positions 0/40/80 must observe ticks
+/// 0/1/2 without invoking any fixed-960 fallback.
+#[test]
+fn musical_transport_reaches_plugin_with_plan_ppqn_and_tempo() {
+    let mut rig = build_rig(1, 40);
+    let ctx = RtContext::mint();
+    let base = TimeBase::sample_rate(48_000).unwrap();
+    let builder = TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+        .with_musical_transport(
+            tempo_map_150bpm(),
+            TempoMapRevision::new(1),
+            Ppqn::new(480).unwrap(),
+        );
+    rig.control
+        .install_plan(Arc::new(builder.build()), 0)
+        .unwrap();
+    rig.control.request(TransportCommand::Play, 0).unwrap();
+    rig.rt.process(120, &ctx).expect("process");
+
+    let calls = rig.calls.lock().unwrap();
+    assert_eq!(calls.len(), 3, "120 split as 40+40+40: {calls:?}");
+    for (idx, call) in calls.iter().enumerate() {
+        let transport = call.transport.expect("transport snapshot");
+        assert_eq!(transport.status(), TransportStatus::Playing);
+        assert_eq!(
+            transport.position().value(),
+            i64::try_from(idx * 40).unwrap()
+        );
+        let musical = transport.musical().expect("plan-complete musical source");
+        assert_eq!(musical.position_ticks, i64::try_from(idx).unwrap());
+        assert_eq!(musical.bpm_milli, 150_000);
+        assert_eq!(musical.ppqn, 480);
+    }
+}
+
+/// rf#1040 negative controls — tempo map alone, PPQN alone, and a
+/// stopped/paused transport never cause the production graph route to
+/// invent musical timing.
+#[test]
+fn musical_transport_negative_controls_do_not_invent_musical_time() {
+    let base = TimeBase::sample_rate(48_000).unwrap();
+    let ppqn = Ppqn::new(480).unwrap();
+
+    // Zero/out-of-range tempo is not a producible tempo map at all:
+    // the host must reject it at the tempo-map boundary rather than
+    // inventing a fallback musical clock downstream.
+    for bpm_milli in [0, 1_000_000_000] {
+        let mut invalid = TempoMapBuilder::new();
+        invalid.add_tempo_event(TempoEvent::at(BeatPosition::from_int(0), bpm_milli));
+        assert!(invalid.build().is_err(), "invalid tempo {bpm_milli}");
+    }
+
+    for (name, builder, command) in [
+        (
+            "tempo map without PPQN",
+            TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+                .with_tempo_map(tempo_map_150bpm(), TempoMapRevision::new(1)),
+            Some(TransportCommand::Play),
+        ),
+        (
+            "PPQN without tempo map",
+            TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+                .with_musical_ppqn(ppqn),
+            Some(TransportCommand::Play),
+        ),
+        (
+            "stopped transport",
+            TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+                .with_musical_transport(tempo_map_150bpm(), TempoMapRevision::new(1), ppqn),
+            None,
+        ),
+        (
+            "paused transport",
+            TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+                .with_musical_transport(tempo_map_150bpm(), TempoMapRevision::new(1), ppqn),
+            Some(TransportCommand::Pause),
+        ),
+    ] {
+        let mut rig = build_rig(1, 40);
+        let ctx = RtContext::mint();
+        rig.control
+            .install_plan(Arc::new(builder.build()), 0)
+            .unwrap();
+        if let Some(command) = command {
+            rig.control.request(command, 0).unwrap();
+        }
+        rig.rt.process(40, &ctx).expect("process");
+        let calls = rig.calls.lock().unwrap();
+        assert!(!calls.is_empty(), "{name}: no physical call observed");
+        assert!(
+            calls
+                .iter()
+                .all(|c| c.transport.and_then(TransportInfo::musical).is_none()),
+            "{name}: musical timing must stay absent"
+        );
+    }
+}
+
+/// rf#1040 loop oracle — after a loop wrap the production graph route
+/// derives each physical call from that span's block-start snapshot,
+/// not from musical state carried across the previous block.
+#[test]
+fn musical_transport_loop_wrap_is_rederived_per_span() {
+    let mut rig = build_rig(1, 40);
+    let ctx = RtContext::mint();
+    let base = TimeBase::sample_rate(48_000).unwrap();
+    rig.control
+        .request(
+            TransportCommand::SetLoop(MediaRange::new(
+                MediaTime::new(0, base),
+                MediaDuration::new(80, base),
+            )),
+            0,
+        )
+        .unwrap();
+    let builder = TransportPlanBuilder::<EventKind>::new(base, PlanGeneration::new(1))
+        .with_musical_transport(
+            tempo_map_150bpm(),
+            TempoMapRevision::new(1),
+            Ppqn::new(480).unwrap(),
+        );
+    rig.control
+        .install_plan(Arc::new(builder.build()), 0)
+        .unwrap();
+    rig.control.request(TransportCommand::Play, 0).unwrap();
+    rig.rt.process(160, &ctx).expect("process");
+
+    let calls = rig.calls.lock().unwrap();
+    let positions: Vec<i64> = calls
+        .iter()
+        .map(|c| c.transport.expect("transport").position().value())
+        .collect();
+    let ticks: Vec<i64> = calls
+        .iter()
+        .map(|c| {
+            c.transport
+                .expect("transport")
+                .musical()
+                .expect("musical")
+                .position_ticks
+        })
+        .collect();
+    assert_eq!(positions, vec![0, 40, 0, 40]);
+    assert_eq!(ticks, vec![0, 1, 0, 1]);
 }
 
 /// M4-01 — the capability matrix states honest per-backend levels;

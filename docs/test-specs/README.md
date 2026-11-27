@@ -340,3 +340,4 @@ Directory: `docs/test-specs`
 | TSPEC-rf874rtOracle | Issue #874 実 Window RT 非干渉 oracle テスト仕様 | approved | [issue-874-rt-oracle.md](./issue-874-rt-oracle.md) |
 | TSPEC-891dirtyNoteVerifyQ2x | Issue #891 plugin→host state dirty 通知経路 — 検証仕様 | approved | [issue-891-dirty-notification.md](./issue-891-dirty-notification.md) |
 | TSPEC-Rf895DrpSbtCse9wQ4xKm5Y3 | Issue #895 dropped_submits 条件別分離 — 原因別 counter の検証仕様 | approved | [issue-895-dropped-submits.md](./issue-895-dropped-submits.md) |
+| TSPEC-Rf1040Musical01 | Issue #1040 musical transport handoff — test specification | approved | [issue-1040-musical-transport-handoff.md](./issue-1040-musical-transport-handoff.md) |

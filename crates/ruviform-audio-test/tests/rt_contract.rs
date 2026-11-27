@@ -15,10 +15,10 @@ use ruviform_audio_test::midi::TraceSink;
 use ruviform_audio_test::pcm::{PcmFixture, PcmPattern};
 use ruviform_media_core::{
     BlockContract, ClockEpochId, DeliveryPolicy, EngineFrame, InBlockTransportSupport,
-    LoopOccurrence, MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey,
-    PlanGeneration, ScheduleBudget, ScheduledEvent, SpanContext, SpanSink, TempoMapRevision,
-    TimeBase, TransportCommand, TransportGeneration, TransportPlanBuilder, TransportScheduler,
-    TransportSpan, TransportStatus,
+    LoopOccurrence, MediaTime, MidiChannel, MidiEvent, MidiGroup, MidiKind, MidiValue,
+    MusicalTimeSource, NoteKey, PlanGeneration, ScheduleBudget, ScheduledEvent, SpanContext,
+    SpanSink, TempoMapRevision, TimeBase, TransportCommand, TransportGeneration,
+    TransportPlanBuilder, TransportScheduler, TransportSpan, TransportStatus,
 };
 
 /// `assert_no_alloc` disabler for this test binary — any (de)allocation
@@ -159,7 +159,7 @@ fn rt_trace_sink_span_direct_does_not_alloc() {
     let events = [event];
     let mut sink = TraceSink::with_capacity(8);
     assert_no_alloc::assert_no_alloc(|| {
-        SpanSink::span(&mut sink, &span, &events);
+        SpanSink::span(&mut sink, &span, &events, MusicalTimeSource::default());
     });
     assert_eq!(sink.entries.len(), 1);
     assert_eq!(sink.entries[0].frame.frame(), 0);

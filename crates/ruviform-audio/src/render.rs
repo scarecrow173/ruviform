@@ -58,8 +58,8 @@ use ruviform_io_file::{
 };
 use ruviform_media_core::{
     ApplyStatus, BlockContract, EngineFrame, FaultKind, MediaDuration, MediaTime, MediaTimestamp,
-    RejectReason, ScheduledEvent, SpanSink, TransportCommand, TransportPlan, TransportScheduler,
-    TransportSpan, TransportStatus, event_engine_frame,
+    MusicalTimeSource, RejectReason, ScheduledEvent, SpanSink, TransportCommand, TransportPlan,
+    TransportScheduler, TransportSpan, TransportStatus, event_engine_frame,
 };
 use ruviform_media_io::{AudioFrame, Encoder, Error as MediaError, ErrorKind, Frame, Muxer};
 use ruviform_rt::RtContext;
@@ -867,7 +867,12 @@ impl<P, F: InputFeeder> RenderSink<'_, P, F> {
 }
 
 impl<P, F: InputFeeder> SpanSink<P> for RenderSink<'_, P, F> {
-    fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<P>]) {
+    fn span(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<P>],
+        _musical: MusicalTimeSource<'_>,
+    ) {
         if self.error.is_some() {
             return;
         }

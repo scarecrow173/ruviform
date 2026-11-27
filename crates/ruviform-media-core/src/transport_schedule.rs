@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use crate::{MediaRange, MediaTime, TempoMap, TimeBase, TransportStatus};
+use crate::{MediaRange, MediaTime, Ppqn, TempoMap, TimeBase, TransportStatus};
 
 /// Identity of a device-clock epoch: a frame series restarted on device
 /// restart. `EngineFrame`s from different epochs are never equal and must
@@ -645,7 +645,15 @@ pub struct TransportPlan<P> {
     /// Tempo-map revision this plan was compiled from.
     pub tempo_revision: TempoMapRevision,
     /// Tempo map used for `musical` transport info (optional).
+    ///
+    /// Musical transport is available only when this map and
+    /// [`Self::musical_ppqn`] are both present. A missing half is an
+    /// honest negative state — the scheduler never substitutes a
+    /// fallback tempo map or the conventional 960 PPQN.
     pub tempo_map: Option<Arc<TempoMap>>,
+    /// Plugin-facing tick resolution for `musical` transport info
+    /// (optional, independent of [`Self::tempo_map`]).
+    pub musical_ppqn: Option<Ppqn>,
     /// Events sorted by `(position_ticks, source_sequence)`.
     pub events: Box<[ScheduledEvent<P>]>,
     /// Time base the event `position_ticks` are expressed in.
@@ -660,6 +668,7 @@ pub struct TransportPlanBuilder<P> {
     generation: PlanGeneration,
     tempo_revision: TempoMapRevision,
     tempo_map: Option<Arc<TempoMap>>,
+    musical_ppqn: Option<Ppqn>,
     events: Vec<ScheduledEvent<P>>,
 }
 
@@ -675,17 +684,52 @@ impl<P> TransportPlanBuilder<P> {
             generation,
             tempo_revision: TempoMapRevision::new(0),
             tempo_map: None,
+            musical_ppqn: None,
             events: Vec::new(),
         }
     }
 
-    /// Attaches a tempo map + revision for `musical` transport info.
+    /// Attaches a tempo map + revision without selecting a plugin-facing
+    /// PPQN. This is an honest negative musical state: the compiled plan
+    /// carries the tempo source, but musical transport remains unavailable
+    /// until a PPQN is also supplied.
     ///
     /// **RT contract:** non-RT.
     #[must_use]
     pub fn with_tempo_map(mut self, map: Arc<TempoMap>, revision: TempoMapRevision) -> Self {
         self.tempo_map = Some(map);
         self.tempo_revision = revision;
+        self
+    }
+
+    /// Selects the plugin-facing PPQN without attaching a tempo map.
+    /// This is also an honest negative musical state when no map is
+    /// present; the value is never treated as a fallback resolution.
+    ///
+    /// **RT contract:** non-RT.
+    #[must_use]
+    pub fn with_musical_ppqn(mut self, ppqn: Ppqn) -> Self {
+        self.musical_ppqn = Some(ppqn);
+        self
+    }
+
+    /// Supplies the complete plan-owned musical transport source in one
+    /// builder call: tempo map, its revision, and the consumer-selected
+    /// plugin-facing PPQN. Both halves then share the plan's generation
+    /// and apply boundary, so spans never mix a new tempo map with an
+    /// older PPQN policy.
+    ///
+    /// **RT contract:** non-RT.
+    #[must_use]
+    pub fn with_musical_transport(
+        mut self,
+        map: Arc<TempoMap>,
+        revision: TempoMapRevision,
+        ppqn: Ppqn,
+    ) -> Self {
+        self.tempo_map = Some(map);
+        self.tempo_revision = revision;
+        self.musical_ppqn = Some(ppqn);
         self
     }
 
@@ -753,6 +797,7 @@ impl<P> TransportPlanBuilder<P> {
             generation: self.generation,
             tempo_revision: self.tempo_revision,
             tempo_map: self.tempo_map,
+            musical_ppqn: self.musical_ppqn,
             events: self.events.into_boxed_slice(),
             frame_base: self.frame_base,
         }
@@ -929,15 +974,44 @@ pub fn span_event_window<'a, P>(
     &plan.events[start..end.max(start)]
 }
 
+/// The plan-owned musical transport source for one emitted span.
+///
+/// `tempo_map` is borrowed from the active plan only for the duration
+/// of the sink call; `ppqn` is the consumer-selected projection
+/// resolution carried by the same plan. Both are independent optional
+/// inputs. Musical transport is defined only when both are `Some`;
+/// neither the scheduler nor downstream nodes may invent the missing
+/// half or fall back to fixed PPQN 960.
+///
+/// **RT contract:** RT-suitable — `Copy` value type holding references
+/// the scheduler already owns through the active plan.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct MusicalTimeSource<'a> {
+    /// Tempo map of the active plan, when the plan carries one.
+    pub tempo_map: Option<&'a TempoMap>,
+    /// Plugin-facing tick resolution of the active plan, when supplied.
+    pub ppqn: Option<Ppqn>,
+}
+
 /// Sink receiving each emitted logical span plus its scheduled events
 /// (the position-windowed slice of the active plan; per-event
-/// deliverability is decided by [`event_engine_frame`]).
+/// deliverability is decided by [`event_engine_frame`]) and the musical
+/// source of the plan active for that span.
 pub trait SpanSink<P> {
     /// Called once per emitted span, in frame order.
     ///
+    /// `musical` always describes the plan active for this specific
+    /// span. After a mid-callback plan install, earlier spans keep the
+    /// previous plan's source and later spans use the new plan's source.
+    ///
     /// **RT contract:** RT-suitable — the implementation must not
     /// allocate, block or do I/O.
-    fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<P>]);
+    fn span(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<P>],
+        musical: MusicalTimeSource<'_>,
+    );
 }
 
 /// Command payload after validation, with positions converted to
@@ -1849,6 +1923,12 @@ impl<P> TransportScheduler<P> {
         let events: &[ScheduledEvent<P>] = plan
             .as_ref()
             .map_or(&[], |p| span_event_window(p.as_ref(), &span));
+        let musical =
+            plan.as_ref()
+                .map_or_else(MusicalTimeSource::default, |p| MusicalTimeSource {
+                    tempo_map: p.tempo_map.as_deref(),
+                    ppqn: p.musical_ppqn,
+                });
         // Bounded observable faults: stale generation tags and the
         // per-span event budget. The sink receives the position-matched
         // window; per-event deliverability is `event_engine_frame`.
@@ -1872,7 +1952,7 @@ impl<P> TransportScheduler<P> {
                 }
             }
         }
-        sink.span(&span, events);
+        sink.span(&span, events, musical);
     }
 }
 
@@ -1964,7 +2044,7 @@ pub fn media_time_ticks(t: MediaTime, base: TimeBase) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MediaDuration;
+    use crate::{BeatPosition, MediaDuration, TempoEvent, TempoMapBuilder};
     use std::sync::Arc;
 
     fn base() -> TimeBase {
@@ -1998,7 +2078,12 @@ mod tests {
     }
 
     impl SpanSink<u32> for Collect {
-        fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<u32>]) {
+        fn span(
+            &mut self,
+            span: &TransportSpan,
+            events: &[ScheduledEvent<u32>],
+            _musical: MusicalTimeSource<'_>,
+        ) {
             self.spans.push(*span);
             self.events.push(
                 events
@@ -2024,11 +2109,43 @@ mod tests {
     }
 
     impl SpanSink<u32> for CountSink {
-        fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<u32>]) {
+        fn span(
+            &mut self,
+            span: &TransportSpan,
+            events: &[ScheduledEvent<u32>],
+            _musical: MusicalTimeSource<'_>,
+        ) {
             self.spans += 1;
             self.events += u32::try_from(events.len()).unwrap_or(u32::MAX);
             let _ = span;
         }
+    }
+
+    /// Records the musical source identity each span receives.
+    struct MusicalSink {
+        rows: Vec<(Option<usize>, Option<u16>)>,
+    }
+
+    impl SpanSink<u32> for MusicalSink {
+        fn span(
+            &mut self,
+            _span: &TransportSpan,
+            _events: &[ScheduledEvent<u32>],
+            musical: MusicalTimeSource<'_>,
+        ) {
+            self.rows.push((
+                musical
+                    .tempo_map
+                    .map(|m| std::ptr::from_ref::<TempoMap>(m) as usize),
+                musical.ppqn.map(Ppqn::ticks_per_quarter),
+            ));
+        }
+    }
+
+    fn tempo_map(bpm_milli: u32) -> Arc<TempoMap> {
+        let mut b = TempoMapBuilder::new();
+        b.add_tempo_event(TempoEvent::at(BeatPosition::from_int(0), bpm_milli));
+        Arc::new(b.build().unwrap())
     }
 
     fn receipts_for(r: &[AppliedReceipt], id: CommandId) -> Vec<ApplyStatus> {
@@ -2399,7 +2516,11 @@ mod tests {
         .unwrap();
         s.request(TransportCommand::Seek(t(0)), EngineFrame::new(e0, 300))
             .unwrap();
-        let mut b = s.plan_builder();
+        let mut b = s.plan_builder().with_musical_transport(
+            tempo_map(150_000),
+            TempoMapRevision::new(1),
+            Ppqn::new(960).unwrap(),
+        );
         for i in 0..8i64 {
             b.event(
                 t(50 + i * 10),
@@ -2423,6 +2544,55 @@ mod tests {
         });
         assert!(sink.spans > 0);
         let _ = s.drain_receipts();
+    }
+
+    #[test]
+    fn plan_builder_carries_musical_halves_independently() {
+        let ppqn = Ppqn::new(480).unwrap();
+        let map_only = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1))
+            .with_tempo_map(tempo_map(150_000), TempoMapRevision::new(2))
+            .build();
+        assert!(map_only.tempo_map.is_some());
+        assert_eq!(map_only.musical_ppqn, None);
+
+        let ppqn_only = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1))
+            .with_musical_ppqn(ppqn)
+            .build();
+        assert!(ppqn_only.tempo_map.is_none());
+        assert_eq!(ppqn_only.musical_ppqn, Some(ppqn));
+
+        let complete = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1))
+            .with_musical_transport(tempo_map(150_000), TempoMapRevision::new(3), ppqn)
+            .build();
+        assert!(complete.tempo_map.is_some());
+        assert_eq!(complete.musical_ppqn, Some(ppqn));
+    }
+
+    #[test]
+    fn spans_receive_their_own_active_plan_musical_source() {
+        let mut s: TransportScheduler<u32> = scheduler(1, 512, DeliveryPolicy::Exact);
+        let e0 = s.epoch();
+        s.request(TransportCommand::Play, EngineFrame::new(e0, 0))
+            .unwrap();
+        let map_a = tempo_map(120_000);
+        let map_b = tempo_map(150_000);
+        let ptr_a = Arc::as_ptr(&map_a) as usize;
+        let ptr_b = Arc::as_ptr(&map_b) as usize;
+        let plan_a = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(1))
+            .with_musical_transport(map_a, TempoMapRevision::new(1), Ppqn::new(480).unwrap())
+            .build();
+        let plan_b = TransportPlanBuilder::<u32>::new(base(), PlanGeneration::new(2))
+            .with_musical_transport(map_b, TempoMapRevision::new(2), Ppqn::new(1000).unwrap())
+            .build();
+        s.install_plan(Arc::new(plan_a), EngineFrame::new(e0, 0))
+            .unwrap();
+        s.install_plan(Arc::new(plan_b), EngineFrame::new(e0, 128))
+            .unwrap();
+        let mut sink = MusicalSink { rows: Vec::new() };
+        s.run_callback(EngineFrame::new(e0, 0), 256, &mut sink);
+        assert_eq!(sink.rows.len(), 2);
+        assert_eq!(sink.rows[0], (Some(ptr_a), Some(480)));
+        assert_eq!(sink.rows[1], (Some(ptr_b), Some(1000)));
     }
 
     #[test]

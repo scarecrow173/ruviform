@@ -22,9 +22,9 @@ use std::sync::Arc;
 
 use ruviform_media_core::{
     AppliedReceipt, BlockContract, ClockEpochId, DeliveryPolicy, EngineFrame, Error,
-    LoopOccurrence, MediaTime, MidiEvent, PlanGeneration, Result, ScheduleBudget, ScheduleFault,
-    ScheduledEvent, SpanSink, TimeBase, TransportCommand, TransportPlan, TransportPlanBuilder,
-    TransportScheduler, TransportSpan, event_engine_frame,
+    LoopOccurrence, MediaTime, MidiEvent, MusicalTimeSource, PlanGeneration, Result,
+    ScheduleBudget, ScheduleFault, ScheduledEvent, SpanSink, TimeBase, TransportCommand,
+    TransportPlan, TransportPlanBuilder, TransportScheduler, TransportSpan, event_engine_frame,
 };
 
 /// One timestamped MIDI event in a scenario: canonical absolute
@@ -129,7 +129,12 @@ impl TraceSink {
 }
 
 impl SpanSink<MidiEvent> for TraceSink {
-    fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<MidiEvent>]) {
+    fn span(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<MidiEvent>],
+        _musical: MusicalTimeSource<'_>,
+    ) {
         if !span.deliverable {
             self.undeliverable_spans += 1;
             return;
