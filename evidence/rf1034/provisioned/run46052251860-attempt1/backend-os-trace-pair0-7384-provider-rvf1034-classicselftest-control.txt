@@ -1,0 +1,7 @@
+$ wevtutil.exe "gp" "Rvf1034-ClassicSelftest-Control"
+exit_code=2
+--- stdout ---
+
+--- stderr ---
+Failed to open metadata for publisher Rvf1034-ClassicSelftest-Control.
+The system cannot find the file specified.
