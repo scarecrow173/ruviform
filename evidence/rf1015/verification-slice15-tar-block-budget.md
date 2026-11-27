@@ -39,6 +39,34 @@ Windows 11 x86_64（10.0.26300.9974）、rustc/cargo 1.99.1、mise 2026.11.2 で
 予算エラーより先に `Io` を返し、元のエラーを `source()` に保持する。
 `read_extension` の実装、公開 API、依存関係、RT 契約は変更していない。
 
+### I/O E2E
+
+Windows 11 x86_64（10.0.26300.9974）、rustc/cargo 1.99.1、mise 2026.11.2 で、PR の
+`1b024afa74710462adab090ba8497866bf7b5154` を検証した。この SHA と verified Sync Commit の差分は
+docs/skill/evidence のみ。追加の feature 引数は指定せず、`ruviform-io-e2e` が定義する組み合わせを使った
+（TAR の合成に関係する `ruviform-io-compression` の `gzip` / `zstd` を含む）。
+
+| コマンド | UTC（2026-11-27） | wall | exit | 結果 |
+| --- | --- | ---: | ---: | --- |
+| `mise run check-io-e2e` | 19:12:11–19:12:32 | 20.961 s | 0 | Pass。全 test target の型検査のみ |
+| `mise run test-io-e2e` | 19:12:32–19:12:54 | 21.670 s | 0 | Pass。88 passed、0 failed、2 ignored |
+
+`test-io-e2e` のログで `ok` を確認した TAR 関連ケースを次に示す。
+
+| test target | `TarArchiveReader` を通したケース |
+| --- | --- |
+| `archive_compression_staged` | `tar_gzip_staged_round_trip_with_layered_completion_proofs`, `tar_zstd_staged_round_trip`, `declared_size_hint_does_not_relax_streamed_budget` |
+| `extraction` | `tar_round_trip_extracts_verified_tree`, `traversal_entry_is_refused_and_nothing_escapes`, `nested_traversal_is_refused`, `absolute_path_entry_is_refused`, `symlink_and_special_entries_are_refused`, `case_fold_collision_is_refused_and_tree_removed`, `extraction_budget_binds_total_output_bytes`, `failed_extraction_cleans_or_hands_out_recovery` |
+| `fault_boundary` | `composite_publish_conflict_keeps_first_writer_and_recovers_temp` |
+| `negative_fuzz` | `corrupted_tar_fixtures_fail_with_typed_archive_errors`, `mutation_sweep_never_publishes_unverified_composite` |
+| `rooted_boundary` | `rooted_dir_reads_extraction_tree` |
+
+`archive_compression_staged` の `dropped_encoder_without_finish_yields_unverifiable_bytes` と
+`truncated_gzip_member_fails_finish_before_publish` も通過した。両ケースは TAR を書き込むが、
+読み取り側の判定は gzip の完了検証までで、TAR Reader の検証には数えない。
+`corpus_replay_bounded` と `large_staged_4gib_boundary` は明示的に ignored であり `NotRun`。
+この実行は固定 fixture を用いた Ruviform 内部の合成回帰であり、consumer アプリの独立回帰や追加の形式証明ではない。
+
 ## Formal Verification
 
 Windows 11 x86_64（10.0.26300.9974）から WSL2 Ubuntu 24.04.4 LTS x86_64（kernel
@@ -83,6 +111,33 @@ wall 6.95 s、CPU 1.21 s（user 0.62 s、sys 0.59 s）、最大 RSS 105,004 KiB�
 この固定 block 判定には対応する旧 Kani 実測がない。slice 14 の拡張判定や旧 ZIP parser-facing proof と
 保証境界が異なるため、これらとの改善率は算出しない。
 
+## Consumer 影響分類
+
+[Consumer 影響分類の運用](../../docs/development-environment.md#consumer-影響分類の運用issue-219) に従い、
+両 Consumer の `main` を別々に確認した。ここでの `no impact` は確認したリビジョンに対する
+本 PR の TAR Reader 差分の静的判定であり、アプリを実行した結果ではない。
+
+| Consumer | 確認した `main` SHA | 分類 | 根拠 | アプリ独立回帰 |
+| --- | --- | --- | --- | --- |
+| AudioLens | `b14746b7a34f790572ec1bb64f596b571c624559` | `no impact` | Rust ソース、Cargo manifest / lockfile、設定・スクリプトに archive クレートまたは TAR Reader の参照なし。全追跡テキストでも一致なし | `NotRun`。候補 Ruviform SHA に切り替えたアプリのビルド・精度回帰は未実施 |
+| Synvelis | `141679277a9eb76e1de99ba20736daf4b2604544` | `no impact` | 同じ実装・依存範囲で一致なし。全追跡テキストの一致は `docs/` と `evidence/` に限られ、[Backup/Import の採用 ADR](https://github.com/scarecrow173/synvelis/blob/141679277a9eb76e1de99ba20736daf4b2604544/docs/adr/syn-io-01-backup-import-archive-zip-limits-path-link.md#decision-outcome) は ZIP のみを初期対象とし TAR を除外 | `NotRun`。候補 Ruviform SHA に切り替えたアプリのビルド・DAW/RT 回帰は未実施 |
+
+各 Consumer のローカル clone を読み取り専用で検索した。`repo` は `G:/repositry/audio-products/` 配下の
+`audio-lens` または `synvelis`、`sha` は上表の値、`pattern` は次のとおり。
+
+```bash
+pattern='ruviform[-_]io[-_]archive|TarArchiveReader|ArchiveReadLimits|tar_metadata_block_decision'
+git -C "$repo" ls-remote origin refs/heads/main
+git -C "$repo" grep -n -I -E "$pattern" "$sha" -- '*.rs' '*Cargo.toml' '*Cargo.lock' '*.toml' '*.yaml' '*.yml' '*.json' '*.sh' '*.ps1'
+git -C "$repo" grep -n -I -E "$pattern" "$sha" --
+```
+
+`ls-remote` は両リポジトリで上表の SHA を返した。範囲を指定した `grep` は両方で exit 1（該当なし）。
+全追跡テキストの `grep` は AudioLens で exit 1、Synvelis で exit 0（設計・証跡のみ）だった。
+Ruviform 側でも `git grep -n -E 'ruviform-io-archive' 1b024afa74710462adab090ba8497866bf7b5154 -- '*Cargo.toml'`
+で依存宣言を確認し、クレート自身と Workspace メンバー登録を除いた参照はテスト専用 `ruviform-io-e2e` のみだった。
+この PR は manifest / lockfile を変更していない。未追跡の構成、将来の依存追加、消費側での候補 SHA の再解決は確認範囲に含まない。
+
 ## 未証明領域と未実施の検証
 
 単一 block の算術と判定だけが proof の対象である。複数 entry にまたがる計上、拡張 payload 計上との合成、
@@ -95,7 +150,7 @@ shell-core 接続の全域証明ではない。既存の Property Test や proof
 | native Kani 分岐 | NotRun | Kani は WSL2 で実行。両分岐の selector と filter は差分で確認 |
 | Workspace full / Feature Matrix / MSRV / 3 OS | NotRun | ローカル受入の対象外。統合検証は Daily CI の担当 |
 | GUI-L2 / EXT-L3 | NotApplicable | GUI・外部接続の変更なし |
-| AudioLens / Synvelis 独立回帰 | NotRun | 今回は両 repository を操作しない。独立した影響確認・統合受入は Coordinator が担当 |
+| AudioLens / Synvelis 独立回帰 | NotRun | 上記の静的影響分類のみ実施。候補 SHA を使うアプリの独立回帰と統合受入は未実施 |
 | 手動 CI dispatch | NotRun | Daily CI の方針に従い、手動起動しない |
 
 本記録は変更範囲のローカル証拠であり、merge 後 main の対象 SHA に対する CI の代替ではない。
