@@ -3882,29 +3882,32 @@ impl BackendOsTraceControl {
             &["query", "providers"],
             Some(&paths.provider_discovery),
         );
-        if !discovery.success {
+        let discovery_success = discovery.success;
+        if !discovery_success {
             self.notes.push(format!(
-                "provider discovery failed exit={:?} error={:?}",
+                "provider discovery failed exit={:?} error={:?}; continuing with explicit provider list",
                 discovery.exit_code, discovery.error
             ));
-            self.commands.push(discovery);
-            return false;
         }
         let discovery_text = fs::read(&paths.provider_discovery)
             .map(|bytes| String::from_utf8_lossy(&bytes).to_ascii_lowercase())
             .unwrap_or_default();
-        let missing = BACKEND_TRACE_PROVIDERS
-            .iter()
-            .filter(|provider| {
-                if !provider.require_registered {
-                    return false;
-                }
-                let name = provider.name.to_ascii_lowercase();
-                let guid = provider.guid.to_ascii_lowercase();
-                !discovery_text.contains(&name) && !discovery_text.contains(&guid)
-            })
-            .map(|provider| provider.name)
-            .collect::<Vec<_>>();
+        let missing = if discovery_success {
+            BACKEND_TRACE_PROVIDERS
+                .iter()
+                .filter(|provider| {
+                    if !provider.require_registered {
+                        return false;
+                    }
+                    let name = provider.name.to_ascii_lowercase();
+                    let guid = provider.guid.to_ascii_lowercase();
+                    !discovery_text.contains(&name) && !discovery_text.contains(&guid)
+                })
+                .map(|provider| provider.name)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
         self.commands.push(discovery);
         if !missing.is_empty() {
             self.notes.push(format!(
@@ -3914,20 +3917,26 @@ impl BackendOsTraceControl {
             return false;
         }
 
-        for (provider, log_path) in &paths.provider_logs {
-            let observation = run_backend_trace_command(
-                "wevtutil_gp",
-                "wevtutil.exe",
-                &["gp", provider],
-                Some(log_path),
-            );
-            if !observation.success {
-                self.notes.push(format!(
-                    "wevtutil gp failed for {provider} exit={:?}",
-                    observation.exit_code
-                ));
+        if discovery_success {
+            for (provider, log_path) in &paths.provider_logs {
+                let observation = run_backend_trace_command(
+                    "wevtutil_gp",
+                    "wevtutil.exe",
+                    &["gp", provider],
+                    Some(log_path),
+                );
+                if !observation.success {
+                    self.notes.push(format!(
+                        "wevtutil gp failed for {provider} exit={:?}",
+                        observation.exit_code
+                    ));
+                }
+                self.commands.push(observation);
             }
-            self.commands.push(observation);
+        } else {
+            self.notes.push(
+                "wevtutil provider metadata skipped after provider discovery failure".to_owned(),
+            );
         }
 
         let provider_list = backend_trace_provider_file_text();
