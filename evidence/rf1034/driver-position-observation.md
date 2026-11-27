@@ -56,7 +56,14 @@ driver emitは`MiniportStreamAudioEngineNode.cpp`の既存codeがschemaどおり
 | `45992928206` | 1 | `3809df8122171c7266bf0363d10a0a0ecfdc4e8c` | `15195266601` / `b1e40a566624771b8dc38bf640ecbc364911559743443dab6bb9c81b4dc1a7b6` | exit 0 | pass | pass（raw 2/effective 0、idx `[3,4]`はepoch boundary側） | `incomplete-no-driver-event-decoded` | rf 0 / standard 0 / miniport 0 |
 | `45994869878` | 1 | `9a9d36fb7f999e2a6ce27b75ad9d85d4ecbb931a` | `15194914790` / `d3b16703ee3d2c68c3cd775d922a428801efc92adb555da79364880b41a1a697` | exit 0 | pass | pass（raw 2/effective 0） | `incomplete-no-driver-event-decoded` | rf 0 / standard 0 / miniport 0 |
 
-詳細なbyte sizeとSHA-256は各`artifact-inventory.json`にある。run `45992928206`ではETL 5,545,984 bytes、XML 58,272,104 bytes、session query log 3,573 bytesを保持した。raw ETLはbyte-exact、text/XML/JSONはrepository hygieneのためLF/行末空白を正規化し、inventoryは抽出ファイルhashとartifact zip hashを分けて記録する。
+詳細なbyte sizeとSHA-256は各`artifact-inventory.json`にある。runner OS laneは両runともworkflow matrix/artifact名どおり`windows-2025`であり、個別runner machine名はraw evidenceにないためunknownである。driver-build stageは両runとも`vaudio-probe-windows-2025.json`で`status=ok` / exit 0だった。rf1034 caseは両runとも`pass`だった。
+
+raw trace artifact summaryは次のとおりである。hashは抽出後inventoryファイルのSHA-256であり、ETLのみbyte-exact、text/XML/JSONはrepository hygieneのためLF/行末空白を正規化したものである。
+
+| run | raw ETL bytes / SHA-256 prefix | tracerpt XML bytes / SHA-256 prefix | trace summary bytes / SHA-256 prefix | driver-position sidecars bytes / SHA-256 prefix |
+| --- | --- | --- | --- | --- |
+| `45992928206` | 5,545,984 / `0051cc0ced5434fb` | 56,729,616 / `8078098235e19545` | 11,462 / `7fbfaeecebc63973` | events 951 / `e0d4465494d4e64b`; correlation 4,091 / `e5400da5b44a80c7` |
+| `45994869878` | 5,545,984 / `a34ea3de22dc7421` | 56,750,785 / `fca4294747b777f7` | 11,580 / `6234ca229fc56302` | events 951 / `f7d4b5d4c45ffe96`; correlation 4,091 / `d44c68af80a1ac9e` |
 
 ## 7. 現時点の判定語彙
 
@@ -64,9 +71,23 @@ driver emitは`MiniportStreamAudioEngineNode.cpp`の既存codeがschemaどおり
 
 run `45992928206`はbounded non-reproduction（effective regression 0）であり、過去run `45968714712`/`45970610888`/`45972492570`のstartup grace外regressionを否定しない。同runではsession enablementとXML conversionは成立したが、PortCls/miniport event decode positive proofは得られなかった。event absenceをdriver innocenceの証拠にしない。cpal conversion、adapter passthrough、test oracle/consumer harnessはdirect evidenceが排除しない限りpossible/unresolvedのまま残す。
 
-## 8. local verification
+## 8. verification record
 
-canonical = mise。`mise run fmt-check` exit 0、`mise run check ruviform-audio-test` exit 0、`mise run lint ruviform-audio-test` exit 0、`mise run test ruviform-audio-test` exit 0、`mise exec -- prek run --all-files` exit 0だった。`mise run build-vaudio-driver`はlocal hostにWindowsKernelModeDriver10.0 toolsetがなくexit 1であり、driver build PassではなくNotRun/Unsupported相当として扱う。`mise run test-os-endpoint-wiring`はprocess exit 0だが、補助`--nocapture`実行で3 caseとも`NOT_PROVISIONED` / verdict NotRunを確認したためruntime Passではない。cargo直接実行は補助証拠でありcanonicalではない。
+canonical = mise。local verificationのOS/environmentは、Orca worker worktree上の`Microsoft Windows 11 Pro build 26300`である。provisioned verificationのOS/environmentはGitHub Actions `virtual-audio-driver-probe.yml` matrix lane `windows-2025`である。
+
+| verification | OS/environment | exit/result | 解釈 |
+| --- | --- | --- | --- |
+| `mise run fmt-check` | local Windows 11 Pro build 26300 | exit 0 | Pass |
+| `mise run check ruviform-audio-test` | local Windows 11 Pro build 26300 | exit 0 | Pass |
+| `mise run lint ruviform-audio-test` | local Windows 11 Pro build 26300 | exit 0 | Pass |
+| `mise run test ruviform-audio-test` | local Windows 11 Pro build 26300 | exit 0 | Pass。unit/pure helperと非ignored test。ignored OS endpoint runtimeをPassとは読まない |
+| `mise run build-vaudio-driver` | local Windows 11 Pro build 26300 | exit 1 | NotRun/Unsupported相当。local hostにWindowsKernelModeDriver10.0 toolsetがなく、driver build Passではない |
+| `mise run test-os-endpoint-wiring` | local Windows 11 Pro build 26300 | process exit 0 / case verdict NotRun | runtime Passではない。補助`--nocapture`で3 caseとも`NOT_PROVISIONED`を確認 |
+| `mise exec -- prek run --all-files` | local Windows 11 Pro build 26300 | 修正後再実行 exit 0 | Pass |
+| provisioned run `45992928206` | GitHub Actions `windows-2025` | watch exit 0 / rf1034 pass / driver-build ok exit 0 | EXT-L3 runtime evidence。rf629 audio pass raw2/effective0だがdriver observation incomplete |
+| provisioned run `45994869878` | GitHub Actions `windows-2025` | watch exit 0 / rf1034 pass / driver-build ok exit 0 | EXT-L3 runtime evidence。rf629 audio pass raw2/effective0だがdriver observation incomplete |
+
+pstack Verification record: Runtime Verificationは上記のmise laneと2本のserialized provisioned workflow runとして実施した。Formal VerificationはNotRunである。本sliceはformal model/proof artifactや契約検証対象のproduct semanticsを変更しておらず、classic/WMI ETW decode harnessを対象とするformal verification laneも存在しないため、実行しなかった。NotRunをPassとは読まない。cargo直接実行は補助証拠でありcanonicalではない。
 
 ## 9. observer effectと残存作業
 
