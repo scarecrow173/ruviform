@@ -1,0 +1,97 @@
+$ wevtutil.exe "gp" "Microsoft-Windows-KernelStreaming"
+exit_code=0
+--- stdout ---
+name: Microsoft-Windows-KernelStreaming
+guid: 548c4417-ce45-41ff-99dd-528f01ce0fe1
+helpLink:
+resourceFileName: %SystemRoot%\system32\drivers\ks.sys
+messageFileName: %SystemRoot%\system32\drivers\ks.sys
+message: 2415919105
+channels:
+  channel:
+    name: Microsoft-Windows-KernelStreaming/Operational
+    id: 16
+    flags: 0
+    message:
+  channel:
+    name: Microsoft-Windows-KernelStreaming/Analytic
+    id: 17
+    flags: 0
+    message:
+levels:
+  level:
+    name: win:Informational
+    value: 4
+    message: 1342177284
+  level:
+    name: win:Verbose
+    value: 5
+    message: 1342177285
+opcodes:
+  opcode:
+    name: win:Info
+    value: 0
+      task: 0
+      opcode: 0
+    message: 805306368
+  opcode:
+    name: win:Start
+    value: 65536
+      task: 0
+      opcode: 1
+    message: 805306369
+  opcode:
+    name: win:Stop
+    value: 131072
+      task: 0
+      opcode: 2
+    message: 805306370
+tasks:
+  task:
+    name: KS_PnpAddDevice
+    value: 101
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048293
+  task:
+    name: KS_StreamingRequest
+    value: 102
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048294
+  task:
+    name: KS_CameraGrab
+    value: 103
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048295
+  task:
+    name: KS_WNF
+    value: 104
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048296
+  task:
+    name: KS_WNFNotification
+    value: 105
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048297
+  task:
+    name: KS_DisplayOff
+    value: 106
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048298
+  task:
+    name: KS_WNFPinState
+    value: 107
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048299
+  task:
+    name: KS_IoProbeandLock
+    value: 108
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048300
+  task:
+    name: KS_QueryInterface
+    value: 109
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 1879048301
+keywords:
+
+--- stderr ---
