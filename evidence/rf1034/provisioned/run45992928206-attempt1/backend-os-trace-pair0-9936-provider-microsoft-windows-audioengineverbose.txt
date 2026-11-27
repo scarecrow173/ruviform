@@ -1,0 +1,7 @@
+$ wevtutil.exe "gp" "Microsoft-Windows-AudioEngineVerbose"
+exit_code=2
+--- stdout ---
+
+--- stderr ---
+Failed to open metadata for publisher Microsoft-Windows-AudioEngineVerbose.
+The system cannot find the file specified.

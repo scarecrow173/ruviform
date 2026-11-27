@@ -1,0 +1,5 @@
+projected from primitive stage 'cert-create' (rvf-virtual-audio-provisioning/v1)
+  subject: CN=RvfVirtualAudio Probe (rf977)
+  thumbprint: B76A4101868F96C2BA3D26E44504DC0D3FBF038F
+  cer: D:\a\_temp\rvf-virtual-audio-primitive\provision-evidence\vaudio-cert.cer
+stage=cert-create status=ok detail=thumbprint=B76A4101868F96C2BA3D26E44504DC0D3FBF038F

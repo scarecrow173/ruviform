@@ -1,0 +1,52 @@
+projected from primitive stage 'sign-verify' (rvf-virtual-audio-provisioning/v1)
+
+
+  Verifying: D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+
+  Signature Index: 0 (Primary Signature)
+  Hash of file (sha256): 6967B0204B5BD51ACB58734C1DA17D80A5F9A04F5B5FB9B21F26A7DC4F2270E7
+  Signing Certificate Chain:
+      Issued to: RvfVirtualAudio Probe (rf977)
+
+      Issued by: RvfVirtualAudio Probe (rf977)
+
+      Expires:   Sun Nov 29 11:47:34 2026
+
+      SHA1 hash: B76A4101868F96C2BA3D26E44504DC0D3FBF038F
+
+  File is not timestamped.
+  Successfully verified: D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+
+  Number of files successfully Verified: 1
+
+  Number of warnings: 0
+
+  Number of errors: 0
+
+  verify exit=0 file=RvfVirtualAudio.sys
+
+
+  Verifying: D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.cat
+
+  Signature Index: 0 (Primary Signature)
+  Hash of file (sha256): F271A17C0D0FC032E133E0F3D8C4C9F16C55C34B2640A890131A0A7F646BDF75
+  Signing Certificate Chain:
+      Issued to: RvfVirtualAudio Probe (rf977)
+
+      Issued by: RvfVirtualAudio Probe (rf977)
+
+      Expires:   Sun Nov 29 11:47:34 2026
+
+      SHA1 hash: B76A4101868F96C2BA3D26E44504DC0D3FBF038F
+
+  File is not timestamped.
+  Successfully verified: D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.cat
+
+  Number of files successfully Verified: 1
+
+  Number of warnings: 0
+
+  Number of errors: 0
+
+  verify exit=0 file=rvfvirtualaudio.cat
+stage=sign-verify status=ok detail=targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat

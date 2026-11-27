@@ -1,0 +1,269 @@
+{
+  "schema": "rf1034-provisioned-artifact-inventory/v1",
+  "run": {
+    "id": "45994869878",
+    "attempt": "1",
+    "url": "https://github.com/scarecrow173/ruviform/actions/runs/45994869878",
+    "artifact": "virtual-audio-driver-probe-windows-2025-attempt-1",
+    "artifact_id": "15194914790",
+    "artifact_zip_sha256": "d3b16703ee3d2c68c3cd775d922a428801efc92adb555da79364880b41a1a697",
+    "artifact_size_in_bytes": 2811687,
+    "artifact_digest": "sha256:d3b16703ee3d2c68c3cd775d922a428801efc92adb555da79364880b41a1a697",
+    "head_branch": "feat/1034-driver-position-observation",
+    "head_sha": "9a9d36fb7f999e2a6ce27b75ad9d85d4ecbb931a",
+    "run_status": "completed",
+    "run_conclusion": "success",
+    "created_at": "2026-11-27T11:59:09Z",
+    "started_at": "2026-11-27T11:59:09Z",
+    "updated_at": "2026-11-27T12:08:14Z"
+  },
+  "note": "rf#1034/rf629 判定に必要な stage/log/RunMetadata/backend trace artifact のみを抽出。text/xml/json は repository hygiene のため LF/行末空白を正規化し、ETL は byte-exact のまま保持。hash は抽出ファイルに対するもの。原本 artifact zip SHA-256 も記録。",
+  "files": [
+    {
+      "path": "artifact-inventory.json",
+      "bytes": 10233,
+      "sha256": "0c7229d31034c747c0118761ce14ca9d85376760f7b9157772b455f543a7933f"
+    },
+    {
+      "path": "backend-os-observation.json",
+      "bytes": 13326,
+      "sha256": "97a9c257a2c968fcf16e3824dc109c36e4414c1916a4246ebd067006d08e0e95"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-delete-log.txt",
+      "bytes": 144,
+      "sha256": "a749c4e6b62811ae66890589b7adf243e8012b115e9d4532fb88c6bafe63a34c"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-driver-position-correlation.json",
+      "bytes": 4091,
+      "sha256": "d44c68af80a1ac9eb785354ec0210351a97100fea3d6cfa01641f9d46a00adc8"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-driver-position-events.json",
+      "bytes": 951,
+      "sha256": "f7d4b5d4c45ffe9627ff6b5aa31929d1ad45ce6839eb1e915d0b5c30f11a51ec"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-precheck-log.txt",
+      "bytes": 143,
+      "sha256": "ad9a13d4e517553dd5dda45c3a845a93361f9e43b5ccdba3c30deb0e32e979ae"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-discovery.txt",
+      "bytes": 96440,
+      "sha256": "44cd79eb9d17e18c691e4a7a5c13e639c14b752617a27ccce8730c4a4c4979c3"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-list.txt",
+      "bytes": 315,
+      "sha256": "f3c60419b8e48880f3b14b7a4371f11803a08fb02593c1ca956f2ad5703b9094"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-microsoft-windows-audio.txt",
+      "bytes": 17857,
+      "sha256": "bb4c368d72c94d58a04217f12db068b53a4525372e7ee76865a2f3f121b50a31"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-microsoft-windows-audioengineverbose.txt",
+      "bytes": 221,
+      "sha256": "06d421a201aca9b84ef63dedcfa355ca617722f6bc143432117ac2e51d4b7c6d"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-microsoft-windows-kernelstreaming.txt",
+      "bytes": 2129,
+      "sha256": "566d9cbe7f6331f4bc34202fdcd3dac29bba704d54d125fbad00eaf67d4abc1d"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-portcls-audioengine-wmievent.txt",
+      "bytes": 205,
+      "sha256": "87941fea601e71547e79dbde45207e5ec473a506a42dd68b4b92518d6e01965d"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-portcls-audioenginewmitracecontrol.txt",
+      "bytes": 217,
+      "sha256": "e107e1433c4c5796c62f2ce999625dcb2e4c3714beb3359426696c6b3e870895"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-portcls-position-wmievent.txt",
+      "bytes": 199,
+      "sha256": "ec1a6fdcc971a330c5258400b296ed33970c8c353b9f6d567aa511f64ced5c75"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-provider-portcls-root-wmievent.txt",
+      "bytes": 191,
+      "sha256": "2857406429dd5022d97813cfb8d199d54a3b8772515a9ef1f3f32208bfb4e80d"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-session-query-log.txt",
+      "bytes": 3790,
+      "sha256": "c66d6deb7c6a3be121982cfa01dc38adf3b95bfe8833d46caa4e73294da937f9"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-start-log.txt",
+      "bytes": 367,
+      "sha256": "19c9fdd94b24e7b8916707f798b21a298ced5a5701f378d0bc7067f25c896123"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-stop-log.txt",
+      "bytes": 126,
+      "sha256": "49b6edb4d62a5514a89bdc19d934c865ae02f21a837cedba9cb16d077eb725c9"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-summary.json",
+      "bytes": 11580,
+      "sha256": "6234ca229fc5630279c8437f809a84a2cfc81fe22c3c5ee94a0e8fba8ea6804a"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256-tracerpt-log.txt",
+      "bytes": 882,
+      "sha256": "0cd6a9f98da59eb842da53c4fd2d86f7ea0fd493ec9bbd554adb4a439216e86c"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256.etl",
+      "bytes": 5545984,
+      "sha256": "a34ea3de22dc7421d434733449093c2cd66241a6da63ec0b4702cb8f4a87eef7"
+    },
+    {
+      "path": "backend-os-trace-pair0-1256.xml",
+      "bytes": 56750785,
+      "sha256": "fca4294747b777f72b5bb3ca714e0b6da2c347ad8383e39d83d46f84256b79d0"
+    },
+    {
+      "path": "endpoint-probe-windows-2025.txt",
+      "bytes": 5372,
+      "sha256": "c42f0df4f87fee0909690f82e5c99e7a7f9682d567589078917e1538666c53d3"
+    },
+    {
+      "path": "regression-correlation.json",
+      "bytes": 5557,
+      "sha256": "be3e2c261951a6bda60e93a2d95355c285f777fa6a4233157d56d847c2a7381e"
+    },
+    {
+      "path": "roundtrip-analysis.json",
+      "bytes": 118349,
+      "sha256": "3f800922732aef7a811521dfa93ca31bcfdb82fdba20b7a90397efec5a997322"
+    },
+    {
+      "path": "run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json",
+      "bytes": 1024,
+      "sha256": "dd9e182cd01615ff105868f82af545468fa5697386672499e14c886460411d1d"
+    },
+    {
+      "path": "run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json",
+      "bytes": 1640,
+      "sha256": "11d330e9430fae6e21d148ab8bb256d319e6bfc1f068328972cfcdc51ebdd1c6"
+    },
+    {
+      "path": "run-metadata-rf629-audio-virtual-endpoint-render-capture.json",
+      "bytes": 822,
+      "sha256": "279f76a1756921e318dfbbfd07038e8d0eea796b4d6e8fd4911007833d6f294f"
+    },
+    {
+      "path": "run-metadata-rf629-midi-virtual-endpoint-loopback.json",
+      "bytes": 827,
+      "sha256": "1e0b588f1d47299b9bd88f84bb7a30a6e9002b5b3e5cf55b12e2d129471cd25f"
+    },
+    {
+      "path": "stage-catalog-create-windows-2025.txt",
+      "bytes": 3342,
+      "sha256": "cdf0d202a1b96cb6aa058f4a0a6f0fd0e01242f1642ca266540394e43984bbdc"
+    },
+    {
+      "path": "stage-cert-create-windows-2025.txt",
+      "bytes": 348,
+      "sha256": "27119c09fa006591efb23568ac973cf4e9eaca97910bd13040ce02c7fc503d9b"
+    },
+    {
+      "path": "stage-cleanup-windows-2025.txt",
+      "bytes": 12022,
+      "sha256": "4480754135dc4c7e3bdb6610e69ac3a9c947a782d50e12b7b93bd8ca347a7b5e"
+    },
+    {
+      "path": "stage-devnode-create-windows-2025.txt",
+      "bytes": 819,
+      "sha256": "751a113c1ade458fb14cef304d3b9bbc9132a7f63daa9b8ce5a83fa9e6389b0d"
+    },
+    {
+      "path": "stage-driver-build-windows-2025.txt",
+      "bytes": 7879,
+      "sha256": "7f4cc7acae7dd2a5a2899244749be19f7f2b9bf84b5704ec7666e9d330313095"
+    },
+    {
+      "path": "stage-endpoint-probe-windows-2025.txt",
+      "bytes": 278,
+      "sha256": "22303ccacf212e8701aecab60d899e2516aad8550f85b4f39a376d82a7c2ea1d"
+    },
+    {
+      "path": "stage-enum-verify-windows-2025.txt",
+      "bytes": 6552,
+      "sha256": "c74e5d819a7309095bf899a6b112bb397d33f2c5659efdf25d38d3c84f00310e"
+    },
+    {
+      "path": "stage-env-build-surface-windows-2025.txt",
+      "bytes": 3823,
+      "sha256": "834b001ba85ca19ec17543b798647318f4d12620eadfd5eb9b74b0fd5dbcc71d"
+    },
+    {
+      "path": "stage-fault-cases-windows-2025.txt",
+      "bytes": 16206,
+      "sha256": "95f974d7f0f9444578b729df0f5037d0dc7ea80a15afe851f43384fae9f3a591"
+    },
+    {
+      "path": "stage-midi-endpoint-probe-windows-2025.txt",
+      "bytes": 263,
+      "sha256": "e86e9761e687e925a4992233d14d7b5502b2f82b48ba64675fe724b63d9e356c"
+    },
+    {
+      "path": "stage-midi-loopback-windows-2025.txt",
+      "bytes": 10155,
+      "sha256": "2645b7ec209ab7a48546e1b6d6e5fcd0ae215c60d2539bfcecc12bb1f0c4e3fb"
+    },
+    {
+      "path": "stage-os-endpoint-midi-e2e-windows-2025.txt",
+      "bytes": 6373,
+      "sha256": "a773c4b07f1d9d32e0eb56c256e7a0467eb865ad7a287866a1e56a79f51e1f83"
+    },
+    {
+      "path": "stage-os-endpoint-wiring-windows-2025.txt",
+      "bytes": 278973,
+      "sha256": "6afa4643fb045cb9e52c8974a8d5477d11e32271023c2441c7bd2ca1fd4817e9"
+    },
+    {
+      "path": "stage-pnputil-add-driver-windows-2025.txt",
+      "bytes": 5775,
+      "sha256": "a1ae9baf24a0a7282dddfd339f0911c636e479fb8bd7ffc733ed5546ae4493c7"
+    },
+    {
+      "path": "stage-sign-verify-windows-2025.txt",
+      "bytes": 1606,
+      "sha256": "2b0289bf477616e0df40c9cc9bb81b00d60df61f96ac06120ef8098375a69b08"
+    },
+    {
+      "path": "stage-sign-windows-2025.txt",
+      "bytes": 1605,
+      "sha256": "cabd9575d92235ca582cd230af3ec0f0a3dd9166964f3ce7cf60ebd2df25dbf1"
+    },
+    {
+      "path": "stage-store-register-windows-2025.txt",
+      "bytes": 260,
+      "sha256": "9f2f3daf7041f3b16b7980e1b9f29e8dcd359989eaa76a4db4c0f9c6fb79eaaa"
+    },
+    {
+      "path": "stage-stream-roundtrip-windows-2025.txt",
+      "bytes": 5483,
+      "sha256": "15736e04fff9a0169a397d2490eaa864741a1168e58def1dea400bc1e7f145e3"
+    },
+    {
+      "path": "stage-xrun-cases-windows-2025.txt",
+      "bytes": 56,
+      "sha256": "0a68e6c70e0817e290528400861c66a2ad4831275cd065da62cc02e4e2422380"
+    },
+    {
+      "path": "vaudio-probe-windows-2025.json",
+      "bytes": 4789,
+      "sha256": "a66f0d96402d9ca53f0d3d74b86df8b0369ae7f6641372a62e570517738ad2c4"
+    }
+  ],
+  "missing": []
+}
