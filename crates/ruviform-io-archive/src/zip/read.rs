@@ -142,6 +142,14 @@ fn zip_entry_output_cap_decision(
     ZipEntryOutputCapDecision { hard_cap, overflow }
 }
 
+fn zip_measured_total_remaining(max_total_uncompressed_bytes: u64, accumulated_before: u64) -> u64 {
+    max_total_uncompressed_bytes.saturating_sub(accumulated_before)
+}
+
+fn zip_measured_total_accumulate(accumulated_before: u64, measured_entry_bytes: u64) -> u64 {
+    accumulated_before.saturating_add(measured_entry_bytes)
+}
+
 impl<R: Read + Seek> ZipArchiveReader<R> {
     /// Opens a ZIP stream: locates and parses EOCD + central directory
     /// under `limits`. See the module docs for the pipeline.
@@ -295,14 +303,15 @@ impl<R: Read + Seek> ZipArchiveReader<R> {
         let mut payload_bytes = 0_u64;
         let mut regions: Vec<(u64, u64)> = Vec::with_capacity(self.entries.len());
         for index in 0..self.entries.len() {
-            let remaining = self
-                .limits
-                .max_total_uncompressed_bytes
-                .saturating_sub(payload_bytes);
+            let remaining = zip_measured_total_remaining(
+                self.limits.max_total_uncompressed_bytes,
+                payload_bytes,
+            );
             let entry = self.open_entry_inner(index, Some(remaining))?;
             regions.push(entry.data_range());
             let receipt = entry.finish()?;
-            payload_bytes = payload_bytes.saturating_add(receipt.uncompressed_bytes());
+            payload_bytes =
+                zip_measured_total_accumulate(payload_bytes, receipt.uncompressed_bytes());
         }
         // With every local header now parsed, audit the real data
         // regions pairwise (the open-time audit only had lower bounds).
@@ -997,7 +1006,7 @@ mod proofs {
     use super::{
         ZipDeclaredEntrySizeDecision, ZipEntryOutputOverflowDecision, ZipIndexGateDecision,
         zip_declared_entry_size_gate_decision, zip_entry_output_cap_decision,
-        zip_index_gate_decision,
+        zip_index_gate_decision, zip_measured_total_accumulate, zip_measured_total_remaining,
     };
 
     #[kani::proof]
@@ -1159,6 +1168,66 @@ mod proofs {
                 && actual.hard_cap == declared
                 && actual.overflow == ZipEntryOutputOverflowDecision::DeclaredOverproduction,
             "no-budget overflow classification is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_zip_measured_total_decision_exactness() {
+        let max_total_uncompressed_bytes: u64 = kani::any();
+        let accumulated_before: u64 = kani::any();
+        let measured_entry_bytes: u64 = kani::any();
+
+        let remaining =
+            zip_measured_total_remaining(max_total_uncompressed_bytes, accumulated_before);
+        if accumulated_before < max_total_uncompressed_bytes {
+            assert!(remaining == max_total_uncompressed_bytes - accumulated_before);
+        } else {
+            assert!(remaining == 0);
+        }
+
+        let accumulated_after =
+            zip_measured_total_accumulate(accumulated_before, measured_entry_bytes);
+        let headroom = u64::MAX - accumulated_before;
+        if measured_entry_bytes <= headroom {
+            assert!(accumulated_after == accumulated_before + measured_entry_bytes);
+        } else {
+            assert!(accumulated_after == u64::MAX);
+        }
+
+        kani::cover!(
+            accumulated_before < max_total_uncompressed_bytes
+                && max_total_uncompressed_bytes - accumulated_before == 1
+                && remaining == 1,
+            "remaining budget boundary-1 is reachable"
+        );
+        kani::cover!(
+            accumulated_before == max_total_uncompressed_bytes && remaining == 0,
+            "remaining budget boundary equality is reachable"
+        );
+        kani::cover!(
+            max_total_uncompressed_bytes < u64::MAX
+                && accumulated_before == max_total_uncompressed_bytes + 1
+                && remaining == 0,
+            "remaining budget boundary+1 saturation is reachable"
+        );
+        kani::cover!(
+            measured_entry_bytes == 0 && accumulated_after == accumulated_before,
+            "zero-measured accumulation identity is reachable"
+        );
+        kani::cover!(
+            measured_entry_bytes > 0
+                && measured_entry_bytes < headroom
+                && accumulated_after == accumulated_before + measured_entry_bytes,
+            "non-overflow accumulation sum is reachable"
+        );
+        kani::cover!(
+            measured_entry_bytes == headroom && accumulated_after == u64::MAX,
+            "accumulation exact u64::MAX boundary is reachable"
+        );
+        kani::cover!(
+            measured_entry_bytes > headroom && accumulated_after == u64::MAX,
+            "accumulation overflow saturation is reachable"
         );
     }
 }

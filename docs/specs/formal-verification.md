@@ -117,7 +117,8 @@ rf#806 の harness inventory は後続の再設計で Property group 単位へ�
 `evidence/rf1015/verification-slice7-frame-codec.md`・
 `evidence/rf1015/verification-slice8-ipc-envelope.md`・
 `evidence/rf1015/verification-slice9-zip-entry-size.md`・
-`evidence/rf1015/verification-slice10-zip-output-cap.md`・`evidence/rf1015/runs.jsonl` であり、
+`evidence/rf1015/verification-slice10-zip-output-cap.md`・
+`evidence/rf1015/verification-slice11-zip-measured-total.md`・`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
@@ -127,7 +128,7 @@ slice 1 で確定した設計方向は次のとおり。structured の D-1 は s
 Archive 側代表 Property `ARC-IDX-LIMIT` は slice 4 で、`ARC-PAYLOAD-LIMIT`
 の TAR declared size gate は slice 5 で、`ARC-TAR-STRUCT` の typeflag
 classification は slice 6 で、`ARC-PAYLOAD-LIMIT` の ZIP declared entry-size gateは slice 9 で、
-ZIP entry output hard-cap / cap-overflow classification は slice 10 で実施済みだが、WAV・他の wire/archive Property・
+ZIP entry output hard-cap / cap-overflow classification は slice 10 で、ZIP measured total budget accumulation は slice 11 で実施済みだが、WAV・他の wire/archive Property・
 read_frame・SampleFormat の方向は後続実装 slice の採用方針である。
 
 1. structured documents では crate 全体への `--no-unwinding-checks` を
@@ -250,16 +251,29 @@ measured total budget accumulation、decompression、CRC、local/central consist
 Kani 未証明領域として残り、deterministic regressionと既存 proptestが接続 coverageを担う。退役すべき旧 ZIP output cap
 shell harnessはない。
 
+rf#1015 slice 11 では、Archive 側代表 Property のうち `ARC-PAYLOAD-LIMIT` の
+ZIP measured total budget accumulation decision subboundary を実装した。`ZipArchiveReader::verify_all`
+は `max_total_uncompressed_bytes` と accumulated totalだけから remaining total budgetを導く
+`zip_measured_total_remaining`、および accumulated totalと measured entry bytesだけから次の accumulated
+totalを導く `zip_measured_total_accumulate` を使う。core は allocation・I/O・`Read`/`Seek`・EOCD/CD/local-header parser・
+Deflate/zlib・Vec buffering・CRC・environment access・診断/error message構築を持たない。proof は製品実装と同じ
+`src/zip/read.rs` の `#[cfg(kani)] mod proofs` に置き、3 つの symbolic `u64` の全 domainに対して zero saturationと
+`u64::MAX` saturationを含む exactnessを assumeなしで検証する。production invariant `accumulated_before <=
+max_total_uncompressed_bytes` は assumeせず、全 domain proofは production reachable subsetを含む stronger proofである。
+shell-core接続、ZIP EOCD/CD/local-header parse、decompression、CRC、local/central consistency、overlap、任意 malformed stream、
+複数 entry composition、error priorityは Kani 未証明領域として残り、deterministic regressionと既存 proptestが接続 coverageを担う。
+退役すべき旧 ZIP measured total shell harnessはない。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
 `arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope`、
-slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap` が最小入口である。
+slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
 generic runner はまだない。`W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
 `SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5/6/7/8/9/10 の evidence を正本とする。
+ledger §6 と slice 2/3/4/5/6/7/8/9/10/11 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -322,6 +336,7 @@ ledger §6 と slice 2/3/4/5/6/7/8/9/10 の evidence を正本とする。
 | `mise run test-formal-kani arc-payload-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit` の 1 invocation。`src/tar/read.rs` の `arc_payload_limit_declared_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-zip-entry-size` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_entry_size` の 1 invocation。`src/zip/read.rs` の `arc_zip_entry_size_declared_gate_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-zip-output-cap` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_output_cap` の 1 invocation。`src/zip/read.rs` の `arc_zip_output_cap_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
+| `mise run test-formal-kani arc-zip-measured-total` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_measured_total` の 1 invocation。`src/zip/read.rs` の `arc_zip_measured_total_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-struct` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct` の 1 invocation。`src/tar/read.rs` の `arc_tar_struct_typeflag_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-csv-limits` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision` の 1 invocation。CSV limit decision core の 3 proofだけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-byte-budget` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate` の 1 invocation。Unwinding Assertions を無効化しない | 同上 |
@@ -442,6 +457,16 @@ stream、shell-core接続条件はこの proofの保証に含めない。shell-c
 parser shellと roundtrip保証は既存 `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip`
 系に委譲する。
 
+rf#1015 slice 11 の ZIP measured total budget accumulationでは、退役する旧 shell harnessはない。
+新保証は `arc_zip_measured_total_decision_exactness` が production decision coreの symbolic scalar exactnessを
+Unwinding Assertions 有効で示すことである。remaining budgetは accumulated-beforeが budget未満なら正確な差、
+equalityまたは超過なら zeroへ saturationし、accumulationは数学和が `u64::MAX` 以下なら正確な和、超えるなら
+`u64::MAX` へ saturationすることだけを保証する。proof inputは production invariantで縮めない全 `u64` domainである。
+EOCD/CD/local-header parse、decompression、CRC、local/central consistency、overlap audit、ZIP64、multi-disk、任意 malformed
+stream、shell-core接続条件、複数 entry composition、error priorityはこの proofの保証に含めない。shell-core接続は
+`zip_measured_total_connection_regression`、parser shellと roundtrip保証は既存 `zip_total_measured_gate` /
+`zip_writer_roundtrip` 系に委譲する。
+
 旧 parser-facing `tar_typeflag_classification` harness は rf#1015 slice 6 で退役した。
 旧保証は concrete TAR skeleton と header parser shell を含む attempted proofであり、
 rf806では約15 CPU-min・約21.8 GiBまで膨張して verdictを返せなかった。新保証は
@@ -458,6 +483,7 @@ stream、数値 field 全体、parser-core接続条件はこの proofの保証�
 | `arc_idx_limit_decision_exactness`（in-src `src/zip/read.rs`） | declared count `u16`、declared central-directory size `u64`、`max_entries:u32`、`max_metadata_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、EOCD scan、実 CD parse、複数 entry、ZIP64、deflate payload、local/central 不整合、overlap audit | proptest `zip_index_limit_gates` / `zip_metadata_limit_gate` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_entry_size_declared_gate_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64` と `max_entry_uncompressed_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、measured total budget、entry output hard cap、cap overflow classification、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_declared_entry_size_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_output_cap_decision_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64`、remaining budget `u64`、`None`/`Some` 選択を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし。symbolic bool + `u64` は full-domain encoding | shell-core接続条件、EOCD/CD/local-header parse、measured total budget accumulation、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_output_cap_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
+| `arc_zip_measured_total_decision_exactness`（in-src `src/zip/read.rs`） | total budget `u64`、accumulated-before `u64`、measured entry bytes `u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream、複数 entry composition、error priority | connection regression `zip_measured_total_connection_regression` と proptest `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_payload_limit_declared_exactness`（in-src `src/tar/read.rs`） | effective declared size `u64` と `max_entry_uncompressed_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、TAR header parse、PAX/GNU override、任意 malformed stream、payload streaming、measured total uncompressed budget、ZIP entry size gate、decompression | proptest `tar_declared_size_gate` / `tar_total_measured_gate` / `tar_arbitrary_stream_error_set` / roundtrip 系で担保 |
 | `arc_tar_struct_typeflag_exactness`（in-src `src/tar/read.rs`） | typeflag `u8` 全 256 値を symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、TAR header parse、checksum、PAX/GNU extension folding、複数 header、任意 malformed stream、数値 field 全体 | connection regression `tar_typeflag_connection_regression` と proptest `tar_pax_gnu_extensions` / `tar_arbitrary_stream_error_set` / roundtrip 系で担保 |
 
@@ -702,6 +728,13 @@ failureではなく、remaining equalityと budgetなしで declared-overproduct
 mutantは完全に revertし、同じ selective laneと `mise run test-formal` の再実行で緑へ戻した。実行記録は
 `evidence/rf1015/verification-slice10-zip-output-cap.md` と `runs.jsonl` を参照する。
 
+rf#1015 slice 11 の `ARC-PAYLOAD-LIMIT` ZIP measured total budget accumulationでは、decision coreの
+accumulationを measured bytesを加えず accumulated-beforeをそのまま返す identityへ 1 箇所だけ変え、`mise run test-formal-kani
+arc-zip-measured-total` が semantic assertion failureで exit 1 を返した。検出は unwinding assertion
+failureではなく、non-overflow sumと exact `u64::MAX` boundaryを期待する assertionの反例である。mutantは完全に
+revertし、同じ selective laneと `mise run test-formal` の再実行で緑へ戻した。実行記録は
+`evidence/rf1015/verification-slice11-zip-measured-total.md` と `runs.jsonl` を参照する。
+
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
 harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
@@ -765,6 +798,12 @@ docs/skill/evidence-only commitも verified Sync Commitを動かさない。製�
 
 slice 10 の `ARC-PAYLOAD-LIMIT` ZIP entry output hard-cap / cap-overflow classificationでは、verified Sync Commitを
 `93df62a7b49a6f57e4fb2a27d68cb64b9079e416` とする。これは ZIP entry output cap decision core、in-src proof、
+deterministic regression、selective laneを含む最後の製品/proof/mise変更 commitであり、selective Kani・mutation・
+proptest・crate regressionの検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
+製品/proof/mise差分が加わった場合は再検証なしに進めない。
+
+slice 11 の `ARC-PAYLOAD-LIMIT` ZIP measured total budget accumulationでは、verified Sync Commitを
+`1ffa93a90c11849778bd22c391c33d986ecaabd1` とする。これは ZIP measured total budget accumulation decision core、in-src proof、
 deterministic regression、selective laneを含む最後の製品/proof/mise変更 commitであり、selective Kani・mutation・
 proptest・crate regressionの検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
 製品/proof/mise差分が加わった場合は再検証なしに進めない。
