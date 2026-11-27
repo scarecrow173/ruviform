@@ -474,6 +474,34 @@ mod tests {
         assert_eq!(mapped.playback.unwrap().value(), 10_005_000_000);
     }
 
+    #[test]
+    fn map_output_timestamp_preserves_backend_order_without_correction() {
+        // A backend-reported backward step must remain backward after
+        // adapter conversion: the pass-through contract forbids
+        // clamping, smoothing, or synthesis in this layer.
+        let inputs = [
+            instant(10, 0),
+            instant(9, 900_000_000),
+            instant(10, 100_000_000),
+        ];
+        let mapped = inputs
+            .iter()
+            .map(|callback| {
+                map_output_timestamp(
+                    &OutputStreamTimestamp {
+                        callback: *callback,
+                        playback: *callback,
+                    },
+                    StreamInstant::ZERO,
+                )
+                .callback
+                .value()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(mapped, vec![10_000_000_000, 9_900_000_000, 10_100_000_000]);
+        assert!(mapped[1] < mapped[0]);
+    }
+
     /// RT-lane check: the whole callback path — view construction +
     /// `copy_to_interleaved` pack + a representative user callback +
     /// timestamp mapping — must not allocate.
