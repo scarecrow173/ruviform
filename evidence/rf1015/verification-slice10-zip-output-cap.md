@@ -6,9 +6,9 @@
 - 検証対象 SHA / verified Sync Commit: `93df62a7b49a6f57e4fb2a27d68cb64b9079e416`。
   ZIP entry output cap decision core、in-src proof、deterministic regression、
   `arc-zip-output-cap` selective lane を含む最後の製品/proof/mise 変更 commit である。
-- evidence sync commit: 本書・ledger・spec・skill・`runs.jsonl` を含む後続の
-  docs/evidence-only commit。evidence は自分自身を含む commit hash を固定点として
-  書けないため、最終 head SHA は PR 本文で追跡する。
+- evidence sync commit: `1836626c34c03aba0b97e06008e7895d1dd3a2b7`（`docs(formal): sync zip output cap proof evidence`）。
+  evidence は自分自身を含む commit hash を固定点として書けないため、最終 head SHA は
+  PR 本文で追跡する。
 
 ## 実装した再設計
 
