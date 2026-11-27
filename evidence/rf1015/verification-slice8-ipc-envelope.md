@@ -10,7 +10,7 @@
 | canonical proof command | `mise run test-formal-kani w-ipc-envelope` |
 | canonical verdict | `pass`、exit 0、10/10 harness `SUCCESSFUL`、Unwinding Assertions 有効 |
 | mutation verdict | `detected`、exit 1。semantic assertion failure。revert後に proof/proptest緑 |
-| consumer regression | `NotApplicable`（直接利用なし・public behavior unchanged。Issue 全体の consumer ACは未完了） |
+| consumer regression | `NotApplicable`（`ruviform_ui::ipc` crate参照はあるが、変更した exact symbolへの直接利用なし・public behavior unchanged。Issue 全体の consumer ACは未完了） |
 
 ## 2. SHA の役割
 
@@ -128,7 +128,12 @@ mutationの failは lane regressionではなく検出成功として記録する
 
 ## 9. consumer impact
 
-2026-11-27T07:54:47Z–07:54:48Zに audio-lens/synvelis の `crates/` で `parse_intent` / `valid_op` / `MAX_INTENT_BYTES` / `ruviform_ui::ipc` を検索し、直接利用は見つからなかった。本 sliceは crate-private refactorであり、public API、schema、error code/message、size cap、accepted language、gate priority、serde_json parse挙動を変えないため、consumer independent regressionは `NotApplicable` と判断する。consumer repoのコード変更、Issue起票、pin更新、独立回帰は実施していない。この判断は Issue 全体の consumer regression ACを完了扱いにしない。
+2026-11-27T08:18:50Z–08:18:56Zに crate参照と exact symbol利用を分けて再確認した。
+
+- crate参照: `rg -l 'ruviform_ui::ipc' <repo>/crates` は audio-lens 5 files、synvelis 49 files。代表例は audio-lens `crates/al-gui/src/desktop.rs:39`（`ErrorBody, JobState, codes`）、`crates/al-gui/src/service.rs:13`（`ErrorBody, codes`）、synvelis `crates/synvelis-app/src/app.rs:32`（`ErrorBody, codes`）、`crates/synvelis-app/src/binding.rs:37`（`ErrorBody, Event, Intent, JobState, LifecycleState, codes`）。
+- exact symbol: `rg -n '(parse_intent|valid_op|MAX_INTENT_BYTES|intent_body_size_decision|intent_envelope_gate_decision)' <repo>/crates` は両 consumerとも 0件。`intent_body_size_decision` / `intent_envelope_gate_decision` は crate-privateで外部到達不能であり、`parse_intent` / `valid_op` / `MAX_INTENT_BYTES` の direct useもない。
+
+したがって consumer側には `ruviform_ui::ipc` の型・定数・Event/Intentを使う crate参照がある一方、今回内部再配置した exact symbolや decision coreへの直接到達はない。runtime経由の間接利用はあり得るが、本 sliceは crate-private refactorであり、public API、schema、error code/message、size cap、accepted language、gate priority、serde_json parse挙動を変えないため、consumer independent regressionは `NotApplicable` と判断する。consumer repoのコード変更、Issue起票、pin更新、独立回帰は実施していない。この判断は Issue 全体の consumer regression ACを完了扱いにしない。
 
 ## 10. NotRun / Unsupported
 
