@@ -2198,6 +2198,7 @@ struct BackendTracePaths {
     driver_position_events_json: PathBuf,
     driver_position_correlation_json: PathBuf,
     event_split_json: PathBuf,
+    wmi_control_probe_json: PathBuf,
     provider_logs: Vec<(String, PathBuf)>,
 }
 
@@ -2232,6 +2233,7 @@ impl BackendTracePaths {
             driver_position_events_json: path("-driver-position-events.json"),
             driver_position_correlation_json: path("-driver-position-correlation.json"),
             event_split_json: path("-event-split.json"),
+            wmi_control_probe_json: path("-wmi-control-probe.json"),
             provider_logs,
         }
     }
@@ -3749,6 +3751,53 @@ fn driver_wmi_probe_decode_json(inventory: &BackendTraceXmlInventory) -> serde_j
     })
 }
 
+fn driver_wmi_probe_position_frequency_json(
+    inventory: &BackendTraceXmlInventory,
+    input_callback_count: u64,
+    output_callback_count: u64,
+) -> serde_json::Value {
+    let mirror_events = inventory
+        .driver_wmi_probe_stored_events
+        .iter()
+        .filter(|event| event.kind == 3);
+    let ordinal4 = mirror_events
+        .clone()
+        .filter(|event| event.miniport_event_ordinal == 4)
+        .count() as u64;
+    let ordinal5 = mirror_events
+        .clone()
+        .filter(|event| event.miniport_event_ordinal == 5)
+        .count() as u64;
+    let schema2001 = mirror_events
+        .filter(|event| event.miniport_schema_id == 0x2001)
+        .count() as u64;
+    let window = driver_wmi_probe_control_window_json(inventory);
+    serde_json::json!({
+        "driver_source_side": {
+            "ordinal4_set_wavert_buffer_write_position_mirror_events": ordinal4,
+            "ordinal5_get_presentation_position_mirror_events": ordinal5,
+            "schema_2001_position_mirror_events": schema2001,
+            "all_mirror_key_calls_control_window_delta": window["mirror_key_calls"]["delta"],
+            "all_mirror_key_emit_calls_control_window_delta": window["mirror_key_emit_calls"]["delta"],
+            "count_semantics": "emitted mirror counts are exact observations of sampled source-side calls because the first four calls per ordinal/schema key are emitted; absence means no sampled source-side call was observed, not proof that the OS never queried position outside the control window",
+        },
+        "stream_callbacks": {
+            "input_callback_count": input_callback_count,
+            "output_callback_count": output_callback_count,
+        },
+        "os_event_counts": {
+            "microsoft_windows_audio_ae_position_events": inventory.ae_position_events,
+            "set_current_timestamp_events": inventory.set_current_timestamp_events,
+            "portcls_standard_presentation_position_events": inventory.standard_presentation_position_events,
+            "portcls_rvf_schema_2001_position_events": inventory.rvf_position_events,
+        },
+        "cpal_iaudioclock_getposition_lower_bound": {
+            "status": "unresolved-no-direct-polling-or-call-count-surface",
+            "stream_now_note": "stream.now() timestamp reads in this harness are not IAudioClock::GetPosition call evidence; cpal timestamp conversion may use device position internally depending on the backend path, but this slice has no direct polling or API call counter surface",
+        }
+    })
+}
+
 fn event_split_details_json(
     inventory: &BackendTraceXmlInventory,
     paths: &BackendTracePaths,
@@ -4104,6 +4153,7 @@ impl BackendOsTraceControl {
         }
         self.stop_after_calibration = Some(backend_trace_calibration(self.host_origin));
         self.write_event_split_sidecar();
+        self.write_wmi_control_probe_sidecar();
         self.write_driver_position_sidecars();
         self.write_summary();
         for line in self.diagnostic_lines() {
@@ -4311,6 +4361,56 @@ impl BackendOsTraceControl {
         }
     }
 
+    fn write_wmi_control_probe_sidecar(&mut self) {
+        let Some(paths) = self.paths.clone() else {
+            return;
+        };
+        let Some(probe) = self.probe.clone() else {
+            self.notes
+                .push("wmi-control-probe sidecar skipped: probe unavailable".to_owned());
+            return;
+        };
+        let input_callback_count = probe.in_callbacks.load(Ordering::Relaxed);
+        let output_callback_count = probe.out_callbacks.load(Ordering::Relaxed);
+        let sidecar = serde_json::json!({
+            "schema": "rf1034-portcls-wmi-control-probe/v1",
+            "diagnostic_artifact": true,
+            "not_run_metadata_schema": true,
+            "case": ROUNDTRIP_AUDIO_CASE_ID,
+            "path": ROUNDTRIP_OUTPUT_PATH,
+            "pair": self.pair_index,
+            "session": self.session_name,
+            "trace_status": self.status,
+            "stream_success_observed": self.stream_success(),
+            "driver_event_coverage": self.driver_coverage(),
+            "driver_wmi_probe": driver_wmi_probe_status(&self.xml_inventory),
+            "driver_wmi_probe_identity": {
+                "control_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2101}",
+                "event_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2102}",
+                "payload_bytes": 120,
+                "payload_schema_version": 1,
+                "payload_signature": "RVF1034W",
+                "sampling": "first 4 calls per ordinal/schema key, then every 32nd call while the probe control is enabled",
+            },
+            "driver_wmi_probe_decode": driver_wmi_probe_decode_json(&self.xml_inventory),
+            "position_frequency_comparison": driver_wmi_probe_position_frequency_json(
+                &self.xml_inventory,
+                input_callback_count,
+                output_callback_count,
+            ),
+        });
+        match serde_json::to_vec_pretty(&sidecar) {
+            Ok(bytes) => {
+                if let Err(error) = write_artifact_bytes(&paths.wmi_control_probe_json, &bytes) {
+                    self.notes.push(error);
+                }
+            }
+            Err(error) => self.notes.push(format!(
+                "wmi-control-probe json serialization failed: {error}"
+            )),
+        }
+    }
+
     fn write_driver_position_sidecars(&mut self) {
         let Some(paths) = self.paths.clone() else {
             return;
@@ -4435,6 +4535,7 @@ impl BackendOsTraceControl {
                 "driver_position_events_json": file_entry(&paths.driver_position_events_json),
                 "driver_position_correlation_json": file_entry(&paths.driver_position_correlation_json),
                 "event_split_json": file_entry(&paths.event_split_json),
+                "wmi_control_probe_json": file_entry(&paths.wmi_control_probe_json),
             },
             "commands": commands,
             "calibration": {
@@ -6985,6 +7086,38 @@ fn driver_wmi_probe_binary_decode_is_strict_and_counts_kinds() {
     assert_eq!(missing.driver_wmi_probe_events, 1);
     assert_eq!(missing.driver_wmi_probe_missing_payload_events, 1);
     assert_eq!(missing.driver_wmi_probe_payload_match_events, 0);
+}
+
+#[test]
+fn driver_wmi_probe_position_frequency_sidecar_counts_are_explicit() {
+    let mirror_payload = driver_wmi_probe_payload_hex(3, 5, 0x2001);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(
+        &driver_wmi_probe_event_chunk(&mirror_payload),
+        &mut inventory,
+    );
+    inventory.ae_position_events = 9;
+    inventory.standard_presentation_position_events = 0;
+    inventory.rvf_position_events = 0;
+    let comparison = driver_wmi_probe_position_frequency_json(&inventory, 3, 4);
+    assert_eq!(
+        comparison["driver_source_side"]["ordinal5_get_presentation_position_mirror_events"],
+        1
+    );
+    assert_eq!(
+        comparison["driver_source_side"]["schema_2001_position_mirror_events"],
+        1
+    );
+    assert_eq!(comparison["stream_callbacks"]["input_callback_count"], 3);
+    assert_eq!(comparison["stream_callbacks"]["output_callback_count"], 4);
+    assert_eq!(
+        comparison["os_event_counts"]["microsoft_windows_audio_ae_position_events"],
+        9
+    );
+    assert_eq!(
+        comparison["cpal_iaudioclock_getposition_lower_bound"]["status"],
+        "unresolved-no-direct-polling-or-call-count-surface"
+    );
 }
 
 #[test]
