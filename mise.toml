@@ -405,7 +405,9 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # entry output hard-cap/overflow decision-core proof,
 # `arc-zip-measured-total` for the ZIP measured total budget accumulation
 # decision-core proof, `arc-tar-measured-total` for the TAR measured total
-# read-window/accumulation decision-core proof, `arc-tar-struct` for the TAR typeflag decision-core
+# read-window/accumulation decision-core proof, `arc-tar-entry-progress`
+# for the TAR entry progress/read-demand composition decision-core proof,
+# `arc-tar-struct` for the TAR typeflag decision-core
 # proof, `sd-csv-limits` for the structured CSV limit decision-core proofs,
 # and `sd-byte-budget` for the structured BoundedRead proof. Unknown selectors
 # are usage errors and exit before
@@ -437,14 +439,14 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the aggregate invocations; `w-ipc-op`, `w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`, `arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`, `arc-tar-measured-total`, `arc-tar-struct`, `sd-csv-limits`, and `sd-byte-budget` run only their selective proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the aggregate invocations; `w-ipc-op`, `w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`, `arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`, `arc-tar-measured-total`, `arc-tar-entry-progress`, `arc-tar-struct`, `sd-csv-limits`, and `sd-byte-budget` run only their selective proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
 raw_args = true
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 
 usage() {
-  echo "usage: mise run test-formal-kani [w-ipc-op|w-ipc-envelope|w-frm-codec|arc-idx-limit|arc-payload-limit|arc-zip-entry-size|arc-zip-output-cap|arc-zip-measured-total|arc-tar-measured-total|arc-tar-struct|sd-csv-limits|sd-byte-budget]" >&2
+  echo "usage: mise run test-formal-kani [w-ipc-op|w-ipc-envelope|w-frm-codec|arc-idx-limit|arc-payload-limit|arc-zip-entry-size|arc-zip-output-cap|arc-zip-measured-total|arc-tar-measured-total|arc-tar-entry-progress|arc-tar-struct|sd-csv-limits|sd-byte-budget]" >&2
 }
 
 if [ "$#" -gt 1 ]; then
@@ -453,7 +455,7 @@ if [ "$#" -gt 1 ]; then
 fi
 SELECTOR="${1:-}"
 case "$SELECTOR" in
-  ""|w-ipc-op|w-ipc-envelope|w-frm-codec|arc-idx-limit|arc-payload-limit|arc-zip-entry-size|arc-zip-output-cap|arc-zip-measured-total|arc-tar-measured-total|arc-tar-struct|sd-csv-limits|sd-byte-budget) ;;
+  ""|w-ipc-op|w-ipc-envelope|w-frm-codec|arc-idx-limit|arc-payload-limit|arc-zip-entry-size|arc-zip-output-cap|arc-zip-measured-total|arc-tar-measured-total|arc-tar-entry-progress|arc-tar-struct|sd-csv-limits|sd-byte-budget) ;;
   *)
     usage
     exit 2
@@ -486,6 +488,8 @@ if cargo kani --version >/dev/null 2>&1; then
     cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_measured_total || rc=1
   elif [ "$SELECTOR" = "arc-tar-measured-total" ]; then
     cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_measured_total || rc=1
+  elif [ "$SELECTOR" = "arc-tar-entry-progress" ]; then
+    cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_entry_progress || rc=1
   elif [ "$SELECTOR" = "arc-tar-struct" ]; then
     cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct || rc=1
   elif [ "$SELECTOR" = "sd-csv-limits" ]; then
@@ -543,6 +547,8 @@ if command -v wsl.exe >/dev/null 2>&1; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_measured_total" || rc=1
     elif [ "$SELECTOR" = "arc-tar-measured-total" ]; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_measured_total" || rc=1
+    elif [ "$SELECTOR" = "arc-tar-entry-progress" ]; then
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_entry_progress" || rc=1
     elif [ "$SELECTOR" = "arc-tar-struct" ]; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct" || rc=1
     elif [ "$SELECTOR" = "sd-csv-limits" ]; then

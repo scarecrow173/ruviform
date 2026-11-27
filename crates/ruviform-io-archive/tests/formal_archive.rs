@@ -1472,6 +1472,161 @@ fn tar_measured_total_connection_regression() {
     }
 }
 
+/// Shell-core connection regression for TAR entry progress and read-demand
+/// composition: a read is bounded by the entry remainder even when the caller
+/// buffer and total budget are larger, chunked reads accumulate exactly to the
+/// declared end, partial reads produce the correct pending skip and discard
+/// drain, and unfinished payload cannot be finished as read-to-end.
+fn tar_entry_progress_read_window_cases() {
+    // (a) Capacity and budget are both larger than the entry remainder, so
+    // one read stops at the declared size rather than filling the caller buffer.
+    let bytes = writer_tar(&[("alpha", b"abcde")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let mut entry = archive
+        .next_entry()
+        .expect("entry walk succeeds")
+        .expect("file entry");
+    let mut buf = [0_u8; 16];
+    let n = entry.read(&mut buf).expect("first read");
+    assert_eq!(n, 5);
+    assert_eq!(&buf[..n], b"abcde");
+    let n = entry.read(&mut buf).expect("exhaustion read");
+    assert_eq!(n, 0);
+    let receipt = entry.finish().expect("fully read entry finishes");
+    assert_eq!(receipt.uncompressed_bytes(), 5);
+    assert_eq!(receipt.disposition(), EntryDisposition::ReadToEnd);
+    let (_inner, receipt) = archive.finish().expect("archive finishes");
+    assert_eq!(receipt.payload_bytes(), 5);
+
+    // (b) A small caller buffer chunks the same declared payload exactly:
+    // 2 + 2 + 1 bytes, then exhaustion at the declared boundary.
+    let bytes = writer_tar(&[("alpha", b"abcde")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let mut entry = archive
+        .next_entry()
+        .expect("entry walk succeeds")
+        .expect("file entry");
+    let mut buf = [0_u8; 2];
+    let mut produced = Vec::new();
+    for expected in [2_usize, 2, 1, 0] {
+        let n = entry.read(&mut buf).expect("chunked read");
+        assert_eq!(n, expected);
+        produced.extend_from_slice(&buf[..n]);
+    }
+    assert_eq!(produced, b"abcde");
+    entry
+        .finish()
+        .expect("chunked entry finishes at declared end");
+    let (_inner, receipt) = archive.finish().expect("archive finishes");
+    assert_eq!(receipt.payload_bytes(), 5);
+}
+
+fn tar_entry_progress_pending_recovery_case() {
+    // (c) Dropping after a partial read records exactly the remaining payload
+    // for pending recovery; draining it realigns the stream for the next entry.
+    let bytes = writer_tar(&[("first", b"abcde"), ("second", b"xyz")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let mut entry = archive
+        .next_entry()
+        .expect("first entry walk succeeds")
+        .expect("first file entry");
+    entry
+        .read_exact(&mut [0_u8; 2])
+        .expect("partial first-entry read");
+    drop(entry);
+    assert!(archive.has_pending_entry());
+    archive
+        .discard_pending()
+        .expect("pending drain skips remaining payload and padding");
+    assert!(!archive.has_pending_entry());
+    let mut second = archive
+        .next_entry()
+        .expect("second entry walk succeeds after recovery")
+        .expect("second file entry");
+    let mut out = Vec::new();
+    second
+        .read_to_end(&mut out)
+        .expect("second entry reads after recovery");
+    assert_eq!(out, b"xyz");
+    second.finish().expect("second entry finishes");
+    let (_inner, receipt) = archive.finish().expect("archive finishes");
+    assert_eq!(receipt.payload_bytes(), 8);
+    assert_eq!(receipt.entries_total(), 2);
+    assert_eq!(receipt.entries_verified(), 1);
+    assert_eq!(receipt.entries_unverified(), 1);
+}
+
+fn tar_entry_progress_discard_remaining_case() {
+    // (d) `discard_remaining` after a partial read drains exactly the rest of
+    // the declared payload, reports the declared bytes as discarded, and leaves
+    // the archive positioned at the next entry.
+    let bytes = writer_tar(&[("first", b"abcde"), ("second", b"xyz")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let mut entry = archive
+        .next_entry()
+        .expect("first entry walk succeeds")
+        .expect("first file entry");
+    entry
+        .read_exact(&mut [0_u8; 2])
+        .expect("partial first-entry read");
+    let receipt = entry
+        .discard_remaining()
+        .expect("discard remaining drains within budget");
+    assert_eq!(receipt.uncompressed_bytes(), 5);
+    assert_eq!(receipt.disposition(), EntryDisposition::Discarded);
+    let mut second = archive
+        .next_entry()
+        .expect("second entry walk succeeds")
+        .expect("second file entry");
+    let mut out = Vec::new();
+    second
+        .read_to_end(&mut out)
+        .expect("second entry reads after discard");
+    assert_eq!(out, b"xyz");
+    second.finish().expect("second entry finishes");
+    let (_inner, receipt) = archive.finish().expect("archive finishes");
+    assert_eq!(receipt.payload_bytes(), 8);
+}
+
+fn tar_entry_progress_invalid_finish_recovery_case() {
+    // (e) Calling entry finish before the declared end is `InvalidState` and
+    // leaves the archive pending; `discard_pending` is the recovery path.
+    let bytes = writer_tar(&[("first", b"abcde"), ("second", b"xyz")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let mut entry = archive
+        .next_entry()
+        .expect("first entry walk succeeds")
+        .expect("first file entry");
+    entry
+        .read_exact(&mut [0_u8; 2])
+        .expect("partial first-entry read");
+    let error = entry
+        .finish()
+        .expect_err("unfinished payload must not finish as read-to-end");
+    assert_eq!(error.kind(), ArchiveErrorKind::InvalidState);
+    assert!(archive.has_pending_entry());
+    archive
+        .discard_pending()
+        .expect("pending recovery after invalid finish");
+    let second = archive
+        .next_entry()
+        .expect("second entry walk succeeds after recovery")
+        .expect("second file entry");
+    second
+        .discard_remaining()
+        .expect("second entry can be discarded after recovery");
+    let (_inner, receipt) = archive.finish().expect("archive finishes");
+    assert_eq!(receipt.payload_bytes(), 8);
+}
+
+#[test]
+fn tar_entry_progress_connection_regression() {
+    tar_entry_progress_read_window_cases();
+    tar_entry_progress_pending_recovery_case();
+    tar_entry_progress_discard_remaining_case();
+    tar_entry_progress_invalid_finish_recovery_case();
+}
+
 /// Parser-core connection regression for the ZIP declared entry-size
 /// decision: boundary-1 and boundary values are accepted, boundary+1 is
 /// rejected with the entry-size budget before the local header or payload
