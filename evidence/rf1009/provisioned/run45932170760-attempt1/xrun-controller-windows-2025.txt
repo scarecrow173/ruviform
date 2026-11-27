@@ -1,0 +1,42 @@
+  xrun controller start os=windows-2025 output=D:\a\ruviform\ruviform\xrun-cases-windows-2025 start_packet=20 packet_count=3
+  preflight cargo: cargo 1.99.0 (5f94df478 2026-08-27) exit=0
+  preflight endpoint probe exit=0 file=D:\a\ruviform\ruviform\xrun-cases-windows-2025\endpoint-probe-xrun-windows-2025.txt
+  preflight ok=True problems=
+  --- case capture-overflow-drop-input scenario=1 start=20 count=3 ---
+  registry before RvfXrunScenario=absent
+  registry before RvfXrunStartPacket=absent
+  registry before RvfXrunPacketCount=absent
+  registry after-write RvfXrunScenario=present kind=DWord value=1
+  registry after-write RvfXrunStartPacket=present kind=DWord value=20
+  registry after-write RvfXrunPacketCount=present kind=DWord value=3
+  registry write scenario=1 start=20 count=3 applied=True error=
+  case capture-overflow-drop-input driver trace started session=RvfXrun-capture-overflow-drop-input-7072 etl=D:\a\ruviform\ruviform\xrun-cases-windows-2025\xrun-capture-overflow-drop-input-windows-2025-driver-trace.etl
+  case capture-overflow-drop-input harness process id=2100 started after registry write
+  case capture-overflow-drop-input process exited=True exit_code=0
+  case capture-overflow-drop-input driver trace status=captured detail=etl-and-xml-captured etl=xrun-capture-overflow-drop-input-windows-2025-driver-trace.etl xml=xrun-capture-overflow-drop-input-windows-2025-driver-trace.xml
+  stream close/open boundary: harness process ended before registry cleanup; reload boundary=stream-open
+  registry after-cleanup RvfXrunScenario=absent
+  registry after-cleanup RvfXrunStartPacket=absent
+  registry after-cleanup RvfXrunPacketCount=absent
+  registry cleanup cleared
+  --- case capture-content-gap-input-negative scenario=2 start=20 count=3 ---
+  registry before RvfXrunScenario=absent
+  registry before RvfXrunStartPacket=absent
+  registry before RvfXrunPacketCount=absent
+  registry after-write RvfXrunScenario=present kind=DWord value=2
+  registry after-write RvfXrunStartPacket=present kind=DWord value=20
+  registry after-write RvfXrunPacketCount=present kind=DWord value=3
+  registry write scenario=2 start=20 count=3 applied=True error=
+  case capture-content-gap-input-negative driver trace started session=RvfXrun-capture-content-gap-input-negative-7072 etl=D:\a\ruviform\ruviform\xrun-cases-windows-2025\xrun-capture-content-gap-input-negative-windows-2025-driver-trace.etl
+  case capture-content-gap-input-negative harness process id=7144 started after registry write
+  case capture-content-gap-input-negative process exited=True exit_code=0
+  case capture-content-gap-input-negative driver trace status=captured detail=etl-and-xml-captured etl=xrun-capture-content-gap-input-negative-windows-2025-driver-trace.etl xml=xrun-capture-content-gap-input-negative-windows-2025-driver-trace.xml
+  stream close/open boundary: harness process ended before registry cleanup; reload boundary=stream-open
+  registry after-cleanup RvfXrunScenario=absent
+  registry after-cleanup RvfXrunStartPacket=absent
+  registry after-cleanup RvfXrunPacketCount=absent
+  registry cleanup cleared
+  case json: D:\a\ruviform\ruviform\xrun-cases-windows-2025\rf1009-xrun-case-capture-overflow-drop-input-windows-2025.json result=Fail schema_problems=0
+  case json: D:\a\ruviform\ruviform\xrun-cases-windows-2025\rf1009-xrun-case-capture-content-gap-input-negative-windows-2025.json result=Fail schema_problems=0
+  aggregate case json: D:\a\ruviform\ruviform\xrun-cases-windows-2025\rf1009-xrun-cases-windows-2025.json harness_problems=0
+  stage xrun-cases status=error detail=cases=capture-overflow-drop-input=Fail,capture-content-gap-input-negative=Fail; harness_problems=0

@@ -227,7 +227,7 @@ function Test-XrunFinalSchema($caseObject) {
   return ,$problems
 }
 
-function New-XrunFinalCase([string]$caseName, [string]$scenarioName, [string]$result, [string]$detail, [bool]$applied, [string]$cleanup, $observation, [string]$stdoutName, [string]$stderrName, [string]$controllerName) {
+function New-XrunFinalCase([string]$caseName, [string]$scenarioName, [string]$result, [string]$detail, [bool]$applied, [string]$cleanup, $observation, [string]$stdoutName, [string]$stderrName, [string]$controllerName, [object]$trace = $null) {
   $runId = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { 'not-applicable-local' }
   $attempt = if ($env:GITHUB_RUN_ATTEMPT) { $env:GITHUB_RUN_ATTEMPT } else { 'not-applicable-local' }
   $repo = if ($env:RUVIFORM_RUN_REPO) { $env:RUVIFORM_RUN_REPO } elseif ($env:GITHUB_REPOSITORY) { $env:GITHUB_REPOSITORY } else { 'unknown-local' }
@@ -264,9 +264,103 @@ function New-XrunFinalCase([string]$caseName, [string]$scenarioName, [string]$re
     }
     artifacts = [ordered]@{
       raw_stdout = $stdoutName; raw_stderr = $stderrName; controller_log = $controllerName
-      driver_trace = $null; pcm_capture = $null
+      driver_trace = if ($trace) { $trace.etl_name } else { $null }; pcm_capture = $null
+    }
+    diagnostics = [ordered]@{
+      driver_trace = if ($trace) {
+        [ordered]@{ status = $trace.status; detail = $trace.detail; etl = $trace.etl_name; xml = $trace.xml_name; provider_log = $trace.provider_log_name; provider = 'Microsoft-Windows-Audio/ae4bd3be-f36f-45b6-8d21-bdd6fb832853' }
+      } else {
+        [ordered]@{ status = 'not_started'; detail = 'case-ended-before-trace-start'; etl = $null; xml = $null; provider_log = $null; provider = 'Microsoft-Windows-Audio/ae4bd3be-f36f-45b6-8d21-bdd6fb832853' }
+      }
     }
   }
+}
+
+
+function Start-XrunDriverTrace([string]$caseName) {
+  $session = "RvfXrun-$caseName-$PID"
+  $base = Join-Path $script:OutputRoot "xrun-$caseName-$Os-driver-trace"
+  $etl = "$base.etl"
+  $xml = "$base.xml"
+  $providerLog = "$base-providers.txt"
+  Remove-Item $etl, $xml, $providerLog -Force -ErrorAction SilentlyContinue
+  $state = [ordered]@{
+    status = 'unsupported'; session = $session; etl = $null; xml = $null; detail = 'not-started'
+    etl_name = $null; xml_name = $null; provider_log_name = $null
+  }
+  try {
+    "wevtutil gp Microsoft-Windows-Audio" | Set-Content -LiteralPath $providerLog -Encoding utf8
+    & wevtutil.exe gp Microsoft-Windows-Audio 2>&1 | Out-String | Add-Content -LiteralPath $providerLog -Encoding utf8
+    "`nwevtutil gp Microsoft-Windows-KernelStreaming" | Add-Content -LiteralPath $providerLog -Encoding utf8
+    & wevtutil.exe gp Microsoft-Windows-KernelStreaming 2>&1 | Out-String | Add-Content -LiteralPath $providerLog -Encoding utf8
+    if (Test-Path -LiteralPath $providerLog) { $state.provider_log_name = [IO.Path]::GetFileName($providerLog) }
+  } catch {
+    Write-XrunLog "case $caseName provider probe failed: $($_.Exception.Message)"
+  }
+  $logman = Get-Command logman.exe -ErrorAction SilentlyContinue
+  if (-not $logman) {
+    $state.detail = 'logman-unavailable'
+    Write-XrunLog "case $caseName driver trace unsupported: logman unavailable"
+    return $state
+  }
+  try {
+    & logman.exe delete $session -ets 2>$null | Out-Null
+    # AudioSes/PortCls miniport events are surfaced through the Audio provider
+    # on supported Windows versions. Capture is diagnostic only; absence of
+    # decoded IHV events must not fail a case.
+    & logman.exe create trace $session -o $etl -p '{ae4bd3be-f36f-45b6-8d21-bdd6fb832853}' 0xffffffff 5 -max 64 -ets 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      & logman.exe stop $session -ets 2>$null | Out-Null
+      & logman.exe delete $session -ets 2>$null | Out-Null
+      $state.detail = "logman-create-exit-$LASTEXITCODE"
+      Write-XrunLog "case $caseName driver trace unsupported: $($state.detail)"
+      return $state
+    }
+    $state.status = 'started'
+    $state.detail = 'capture-started'
+    Write-XrunLog "case $caseName driver trace started session=$session etl=$etl"
+  } catch {
+    $state.detail = "logman-create-exception:$($_.Exception.Message)"
+    Write-XrunLog "case $caseName driver trace unsupported: $($state.detail)"
+  }
+  return $state
+}
+
+function Stop-XrunDriverTrace([object]$trace, [string]$caseName) {
+  if ($null -eq $trace -or $trace.status -ne 'started') { return $trace }
+  $base = Join-Path $script:OutputRoot "xrun-$caseName-$Os-driver-trace"
+  $etl = "$base.etl"
+  $xml = "$base.xml"
+  try {
+    & logman.exe stop $trace.session -ets 2>$null | Out-Null
+    & logman.exe delete $trace.session -ets 2>$null | Out-Null
+    if (Test-Path -LiteralPath $etl) {
+      $trace.etl = $etl
+      $trace.etl_name = [IO.Path]::GetFileName($etl)
+      if (Get-Command tracerpt.exe -ErrorAction SilentlyContinue) {
+        & tracerpt.exe $etl -o $xml -of XML 2>$null | Out-Null
+      } else {
+        $LASTEXITCODE = 1
+      }
+      if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $xml)) {
+        $trace.xml = $xml
+        $trace.xml_name = [IO.Path]::GetFileName($xml)
+        $trace.status = 'captured'
+        $trace.detail = 'etl-and-xml-captured'
+      } else {
+        $trace.status = 'captured'
+        $trace.detail = 'etl-captured-xml-conversion-unavailable'
+      }
+    } else {
+      $trace.status = 'unsupported'
+      $trace.detail = 'trace-started-but-etl-missing'
+    }
+  } catch {
+    $trace.status = 'unsupported'
+    $trace.detail = "trace-stop-exception:$($_.Exception.Message)"
+  }
+  Write-XrunLog "case $caseName driver trace status=$($trace.status) detail=$($trace.detail) etl=$($trace.etl_name) xml=$($trace.xml_name)"
+  return $trace
 }
 
 function Stop-XrunProcessTree([int]$processId) {
@@ -300,6 +394,7 @@ function Invoke-XrunHarnessCase([object]$definition) {
   $cleanup = [ordered]@{ state = 'not_applicable'; errors = @() }
   $process = $null
   $measurementStarted = $false
+  $trace = [ordered]@{ status = 'not_started'; detail = 'trace-not-attempted'; etl_name = $null; xml_name = $null }
   try {
     $write = Write-XrunScenarioRegistry ([int]$definition.scenario) $StartPacket $PacketCount
     if (-not $write.applied) {
@@ -315,6 +410,7 @@ function Invoke-XrunHarnessCase([object]$definition) {
       try {
         $mise = (Get-Command mise -ErrorAction Stop).Source
         $args = @('exec', '--', 'cargo', 'test', '-p', 'ruviform-audio-device', '--features', 'real-device', '--test', 'virtual_endpoint', $definition.test, '--', '--ignored', '--test-threads=1', '--nocapture')
+        $trace = Start-XrunDriverTrace $caseName
         $process = Start-Process -FilePath $mise -ArgumentList $args -WorkingDirectory "$PWD" -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -NoNewWindow -PassThru
         $measurementStarted = $true
         Write-XrunLog "case $caseName harness process id=$($process.Id) started after registry write"
@@ -341,6 +437,7 @@ function Invoke-XrunHarnessCase([object]$definition) {
     if ($process -and -not $process.HasExited) {
       Stop-XrunProcessTree ([int]$process.Id)
     }
+    $trace = Stop-XrunDriverTrace $trace $caseName
     if ($measurementStarted) {
       Write-XrunLog "stream close/open boundary: harness process ended before registry cleanup; reload boundary=stream-open"
     }
@@ -354,14 +451,14 @@ function Invoke-XrunHarnessCase([object]$definition) {
     return New-XrunFinalCase $caseName $definition.scenario_name 'NotRun' "registry-write-not-applied:$($write.error)" $false $cleanup.state $null $stdoutName $stderrName $controllerName
   }
   if (-not $measurementStarted) {
-    return New-XrunFinalCase $caseName $definition.scenario_name 'NotRun' 'harness-process-did-not-start' $true $cleanup.state $null $stdoutName $stderrName $controllerName
+    return New-XrunFinalCase $caseName $definition.scenario_name 'NotRun' 'harness-process-did-not-start' $true $cleanup.state $null $stdoutName $stderrName $controllerName $trace
   }
 
   $read = Read-XrunHarnessObservation $resultFile
   $observation = $read.observation
   if (-not $read.ok) {
     $script:HarnessProblems += "$caseName-$($read.problem)"
-    return New-XrunFinalCase $caseName $definition.scenario_name 'Fail' "controller-harness-problem:$($read.problem)" $true $cleanup.state $observation $stdoutName $stderrName $controllerName
+    return New-XrunFinalCase $caseName $definition.scenario_name 'Fail' "controller-harness-problem:$($read.problem)" $true $cleanup.state $observation $stdoutName $stderrName $controllerName $trace
   }
   $result = "$(Get-ObservationValue $observation 'case.result' '')"
   if ($result -notin @('Pass', 'Fail', 'NotRun', 'Unsupported')) {
@@ -381,7 +478,7 @@ function Invoke-XrunHarnessCase([object]$definition) {
     $result = 'Fail'
     $detail = "registry-cleanup-failed; original=$detail"
   }
-  return New-XrunFinalCase $caseName $definition.scenario_name $result $detail $true $cleanup.state $observation $stdoutName $stderrName $controllerName
+  return New-XrunFinalCase $caseName $definition.scenario_name $result $detail $true $cleanup.state $observation $stdoutName $stderrName $controllerName $trace
 }
 
 function Invoke-XrunValidateOnly {
