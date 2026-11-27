@@ -32,7 +32,8 @@
 
 mod common;
 
-use std::io::{Cursor, Read};
+use std::error::Error;
+use std::io::{self, Cursor, Read};
 
 use common::tar::{
     BLOCK, HeaderSpec, entry_with, ext_entry, file_entry, pax_record, tar, writer_tar,
@@ -102,7 +103,7 @@ fn zip_kind_is_stable(kind: ArchiveErrorKind) -> bool {
 
 /// Extracts the `ArchiveErrorKind` wrapped inside an entry-reader
 /// `io::Error` (`From<ArchiveError>` keeps it as the inner error).
-fn io_kind(error: &std::io::Error) -> Option<ArchiveErrorKind> {
+fn io_kind(error: &io::Error) -> Option<ArchiveErrorKind> {
     error
         .get_ref()
         .and_then(|e| e.downcast_ref::<ArchiveError>())
@@ -1470,6 +1471,68 @@ fn tar_measured_total_connection_regression() {
         Err(error) => assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded),
         Ok(_) => panic!("finish drain one byte over the budget must be rejected"),
     }
+}
+
+#[test]
+fn tar_metadata_block_connection_regression() {
+    struct FailingHeader;
+    impl Read for FailingHeader {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "header read failure",
+            ))
+        }
+    }
+
+    let limits = |max_metadata_bytes| {
+        let mut limits = ArchiveReadLimits::default();
+        limits.max_metadata_bytes = max_metadata_bytes;
+        limits
+    };
+    let bytes = tar(&[file_entry("empty.txt", &[])]);
+    let zero = [0; BLOCK];
+
+    let mut archive = TarArchiveReader::new(Cursor::new(&bytes), limits(512));
+    let entry = archive
+        .next_entry()
+        .expect("a header at the exact limit is accepted")
+        .expect("the file entry is surfaced");
+    assert_eq!(entry.info().name().as_bytes(), b"empty.txt");
+
+    let mut archive = TarArchiveReader::new(Cursor::new(zero), limits(512));
+    assert!(
+        archive
+            .next_entry()
+            .expect("zero block at the limit")
+            .is_none()
+    );
+
+    for input in [bytes.as_slice(), zero.as_slice()] {
+        let mut archive = TarArchiveReader::new(Cursor::new(input), limits(511));
+        let Err(error) = archive.next_entry() else {
+            panic!("a complete metadata block must exceed the 511-byte limit");
+        };
+        assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded);
+        assert_eq!(
+            error.message(),
+            "max_metadata_bytes: declared 512 exceeds limit 511"
+        );
+    }
+
+    let input = Cursor::new(&bytes[..1]).chain(FailingHeader);
+    let mut archive = TarArchiveReader::new(input, limits(511));
+    let Err(error) = archive.next_entry() else {
+        panic!("the underlying read fails before the metadata limit check");
+    };
+    assert_eq!(error.kind(), ArchiveErrorKind::Io);
+    assert_eq!(
+        error
+            .source()
+            .and_then(|source| source.downcast_ref::<io::Error>())
+            .map(io::Error::kind),
+        Some(io::ErrorKind::BrokenPipe)
+    );
 }
 
 #[test]

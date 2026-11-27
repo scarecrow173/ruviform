@@ -302,16 +302,24 @@ proof は `src/tar/read.rs` の製品 core を、設定上限・計上済みバ�
 加算と非オーバーフロー、拒否時の値の保持を確認する。allocation、I/O、parser、
 診断の生成、reader 状態は proof に含まない。旧 harness の退役はない。
 
+rf#1015 slice 15 は、`ARC-IDX-LIMIT` のうち `TarArchiveReader::advance` による
+1 回の metadata block 計上を対象とする。`tar_metadata_block_decision` は計上済みの値に
+512 バイトを加え、合計が `u64` で表現でき、かつ設定上限以下の場合だけ更新を許す。
+表現できる超過では加算後の正確な値を既存の `LimitExceeded` 診断に渡す。
+表現できない合計は wrap や saturation をせず `LimitExceeded` とする。
+判定は block 読み取りの成功後、ゼロ終端 block やヘッダーを解釈する前に実行する。
+`read_extension` の確保前判定は変更せず、従来の `tar_metadata_gate` も維持する。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
 `arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope`、
-slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress`、slice 14 の `arc-tar-metadata-budget` が最小入口である。
+slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress`、slice 14 の `arc-tar-metadata-budget`、slice 15 の `arc-tar-block-budget` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
 generic runner はまだない。`W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
 `SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5/6/7/8/9/10/11/12/13/14 の evidence を正本とする。
+ledger §6 と各 slice の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -378,6 +386,7 @@ ledger §6 と slice 2/3/4/5/6/7/8/9/10/11/12/13/14 の evidence を正本とす
 | `mise run test-formal-kani arc-tar-measured-total` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_measured_total` の 1 invocation。`src/tar/read.rs` の `arc_tar_measured_total_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-entry-progress` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_entry_progress` の 1 invocation。`src/tar/read.rs` の `arc_tar_entry_progress_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-metadata-budget` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_metadata_budget` の 1 invocation。`src/tar/read.rs` の `arc_tar_metadata_budget_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
+| `mise run test-formal-kani arc-tar-block-budget` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_block_budget` の 1 invocation。`src/tar/read.rs` の `arc_tar_block_budget_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-struct` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct` の 1 invocation。`src/tar/read.rs` の `arc_tar_struct_typeflag_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-csv-limits` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision` の 1 invocation。CSV limit decision core の 3 proofだけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-byte-budget` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate` の 1 invocation。Unwinding Assertions を無効化しない | 同上 |
@@ -448,7 +457,8 @@ slice 1 の教訓（任意 symbolic byte 列 × parser は CBMC unwind が非実
 symbolic gate field」のみを対象にする。任意 malformed stream は
 proptest の concrete coverage に委譲する。`ARC-IDX-LIMIT` の ZIP index gate は
 rf#1015 slice 4 で `src/zip/read.rs` の pure decision core exactnessへ移った。
-slice 14 で追加した TAR 拡張の確保前判定と合わせても、`ARC-IDX-LIMIT` 全体を証明したことにはならない。
+slice 14 の TAR 拡張の確保前判定と slice 15 の固定 block 計上を合わせても、
+`ARC-IDX-LIMIT` 全体を証明したことにはならない。
 `ARC-PAYLOAD-LIMIT` の TAR declared size gate は slice 5 で、
 `ARC-TAR-STRUCT` の typeflag classification は slice 6 でそれぞれ
 `src/tar/read.rs` の pure decision core exactnessへ移り、`ARC-PAYLOAD-LIMIT` の
@@ -526,6 +536,7 @@ stream、数値 field 全体、parser-core接続条件はこの proofの保証�
 | --- | --- | --- | --- |
 | `arc_idx_limit_decision_exactness`（in-src `src/zip/read.rs`） | declared count `u16`、declared central-directory size `u64`、`max_entries:u32`、`max_metadata_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、EOCD scan、実 CD parse、複数 entry、ZIP64、deflate payload、local/central 不整合、overlap audit | proptest `zip_index_limit_gates` / `zip_metadata_limit_gate` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
 | `arc_tar_metadata_budget_decision_exactness`（in-src `src/tar/read.rs`） | 設定上限、計上済みバイト数、拡張 payload 宣言長の全 `u64` を symbolic とする。loop なし、`#[kani::unwind(2)]`、assume なし | `advance` の BLOCK 計上、TAR metadata のストリーム全体での計上、複数 entry、shell-core/parser-core 接続、ヘッダー解析、PAX/GNU folding、path/link gate、padding 方針、decompression、CRC | `tar_metadata_extension_gate_connection_regression` は等号、1 バイト超過、残量 0 での 0 バイト要求を実 reader で確認する。既存 `tar_metadata_gate` はヘッダー計上の proptest |
+| `arc_tar_block_budget_decision_exactness`（in-src `src/tar/read.rs`） | 計上済みバイト数と設定上限の全 `u64`。製品 core を独立した `u128` の数学和 `before + 512` と比較し、更新値・超過時の値・表現不能を検査する。loop なし、`#[kani::unwind(2)]`、assume・stub・製品実装置換なし | I/O とそのエラー優先順位、結果の反映と診断生成、複数 entry と拡張 payload を含む累積計上、TAR/ZIP parser | `tar_metadata_block_connection_regression` は通常ヘッダーとゼロ終端 block での 512/511 境界、部分読み取り後の I/O エラー優先を確認する。既存 `tar_metadata_gate` は変更しない |
 | `arc_zip_entry_size_declared_gate_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64` と `max_entry_uncompressed_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、measured total budget、entry output hard cap、cap overflow classification、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_declared_entry_size_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_output_cap_decision_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64`、remaining budget `u64`、`None`/`Some` 選択を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし。symbolic bool + `u64` は full-domain encoding | shell-core接続条件、EOCD/CD/local-header parse、measured total budget accumulation、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_output_cap_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_measured_total_decision_exactness`（in-src `src/zip/read.rs`） | total budget `u64`、accumulated-before `u64`、measured entry bytes `u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream、複数 entry composition、error priority | connection regression `zip_measured_total_connection_regression` と proptest `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
@@ -795,6 +806,11 @@ rf#1015 slice 14 の `ARC-IDX-LIMIT` TAR 拡張の確保前判定では、受理
 検出後に変異を戻し、同じ selective lane と `mise run test-formal` を再実行した。
 実行記録は [slice 14 の証跡](../../evidence/rf1015/verification-slice14-tar-metadata-budget.md) を参照する。
 
+rf#1015 slice 15 では、固定 block の受理条件だけを `<=` から `<` に変えると、
+`arc-tar-block-budget` が等号を含む更新の assertion で反例を検出した。
+変異を完全に戻し、同じ selector と `mise run test-formal` を再実行した。
+[slice 15 の証跡](../../evidence/rf1015/verification-slice15-tar-block-budget.md) に結果を記録する。
+
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
 harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
@@ -880,6 +896,10 @@ slice 14 の `ARC-IDX-LIMIT` TAR 拡張の確保前判定では、verified Sync 
 `1b0f492efeb12bc0de39347ebef3c5ec6ffc9aea` とする。これは製品 core、in-src proof、
 接続回帰テスト、selective lane を含む検証対象である。後続の docs/skill/evidence-only commit
 は verified Sync Commit を動かさない。
+
+slice 15 の `ARC-IDX-LIMIT` TAR 固定 block 計上では、製品 core、in-src proof、
+接続回帰と selective lane を含む `fca426594c7294547d19e3af65f44f6726d59ef0`
+を verified Sync Commit とする。後続の docs/skill/evidence-only commit はこの SHA を更新しない。
 
 ## 判定語彙と fail-closed
 
