@@ -1,0 +1,4 @@
+projected from primitive stage 'cert-install' (rvf-virtual-audio-provisioning/v1)
+  Root: registered=True
+  TrustedPublisher: registered=True
+stage=cert-install status=ok detail=thumbprint=B9FA3BCA368E2A79F7857FABBA5919EE3280FDC5; stores=Root+TrustedPublisher

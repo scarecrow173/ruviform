@@ -1,0 +1,172 @@
+  prerequisite endpoint-probe: ok / devnode-create: ok
+  --- winmm-probe (child pwsh) ---
+  step: midiOutGetNumDevs
+    midiOutGetNumDevs=2
+  step: midiOutGetDevCapsW[0]
+    midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+  step: midiOutGetDevCapsW[1]
+    midiOut[1] rc=0 name='Ruviform MIDI Loopback' tech=0x0001 support=0x00000000
+  step: midiInGetNumDevs
+    midiInGetNumDevs=1
+  step: midiInGetDevCapsW[0]
+    midiIn[0] rc=0 name='Ruviform MIDI Loopback' support=0x00000000
+    loopbackOut=[1] loopbackIn=[0]
+  step: midiOutOpen[1]
+    midiOutOpen rc=0 hmo=0x250953d9760
+  step: midiOutShortMsg[1] note-on
+    midiOutShortMsg rc=0
+  step: midiOutReset[1]
+  step: midiOutClose[1]
+    midiOutClose rc=0
+  step: midiInOpen[0] (CALLBACK_FUNCTION|MIDI_IO_STATUS)
+    midiInOpen rc=0 hmi=0x250953d9760
+  step: midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)
+    open-handle ifsize rc=8 size=0
+  step: midiInPrepareHeader+AddBuffer[0]
+    prepare rc=0
+    addbuf rc=0
+  step: midiInPrepareHeader+AddBuffer[1]
+    prepare rc=0
+    addbuf rc=0
+  step: midiInStart[0]
+    midiInStart rc=0
+  step: loopback send note-on via midiOut[1]
+    loopback send done
+    callback count=3 lastMsg=0x3c3 lastP1=0x3c80 lastP2=0x133
+  step: midiInStop[0]
+  step: midiInReset[0]
+  step: midiInUnprepareHeader
+  step: midiInUnprepareHeader
+  step: midiInClose[0]
+    midiInClose rc=0
+    callback count(final)=6 lastMsg=0x3c2
+  step: midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle 0] (correct arg order)
+    dev-index ifsize rc=0 size=144
+    dev-index if rc=0 if='\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback'
+  probe: done
+  winmm-probe exit=0
+  LocalDumps enabled -> D:\a\ruviform\ruviform\crashdumps
+  --- loopback test ---
+     Compiling ruviform-midi-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-midi-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+       Running tests\loopback.rs (target\debug\deps\loopback-aca75d615475415d.exe)
+
+  running 2 tests
+  enumerated: 1 input ports, 2 output ports
+    candidate[0]: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback"
+  verdict: Pass — round-trip observed through real OS ports
+    pair: in id=\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback name="Ruviform MIDI Loopback" | out id=winmm-out:1:Ruviform MIDI Loopback name="Ruviform MIDI Loopback"
+    sent=4 observed=4 matched=4 dropped=0 unsupported=0 elapsed=122.3372ms tick_span=Some(92)
+    evidence note: name match is a candidate, not proof of a virtual endpoint (`MidiPortOrigin::Unknown`) — this is OS-L1 round-trip evidence, not `virtual-os-endpoint`
+  test loopback_round_trip ... ok
+  port: id=winmm-out:0:Microsoft GS Wavetable Synth name="Microsoft GS Wavetable Synth" origin=Unknown
+  verdict: Pass — silent messages accepted by real WinMM output port
+  test real_device_silent_output_smoke ... ok
+
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+  test exit=0 verdict=Pass — silent messages accepted by real WinMM output port
+  --- application error / WER events (last 15 min) ---
+  (no error events)
+  crashdumps: 0 file(s)
+  --- cdb re-run: loopback-aca75d615475415d.exe ---
+
+  ************* Preparing the environment for Debugger Extensions Gallery repositories **************
+     ExtensionRepository : Implicit
+     UseExperimentalFeatureForNugetShare : true
+     AllowNugetExeUpdate : true
+     NonInteractiveNuget : true
+     AllowNugetMSCredentialProviderInstall : true
+     AllowParallelInitializationOfLocalRepositories : true
+
+     EnableRedirectToV8JsProvider : false
+
+     -- Configuring repositories
+        ----> Repository : LocalInstalled, Enabled: true
+        ----> Repository : UserExtensions, Enabled: true
+
+  >>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.016 seconds
+
+  ************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+  >>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.078 seconds
+     ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+     ----> Repository : LocalInstalled, Enabled: true, Packages count: 29
+
+  Microsoft (R) Windows Debugger Version 10.0.26100.9457 AMD64
+  Copyright (c) Microsoft Corporation. All rights reserved.
+
+  CommandLine: D:\a\ruviform\ruviform\target\debug\deps\loopback-aca75d615475415d.exe --ignored --test-threads=1
+
+  ************* Path validation summary **************
+  Response                         Time (ms)     Location
+  Deferred                                       srv*
+  Symbol search path is: srv*
+  Executable search path is:
+
+  +------------------------------------------------------------------------+
+  | This target supports Hardware-enforced Stack Protection. A HW based    |
+  | "Shadow Stack" may be available to assist in debugging and analysis.   |
+  | See aka.ms/userhsp for more info.                                      |
+  |                                                                        |
+  | dps @ssp                                                               |
+  |                                                                        |
+  +------------------------------------------------------------------------+
+
+  ModLoad: 00007ff7`11800000 00007ff7`118e4000   loopback-aca75d615475415d.exe
+  ModLoad: 00007fff`a4680000 00007fff`a48e4000   ntdll.dll
+  ModLoad: 00007fff`a3680000 00007fff`a3749000   C:\Windows\System32\KERNEL32.DLL
+  ModLoad: 00007fff`a1780000 00007fff`a1b6c000   C:\Windows\System32\KERNELBASE.dll
+  ModLoad: 00007fff`a2050000 00007fff`a20fc000   C:\Windows\System32\bcryptprimitives.dll
+  ModLoad: 00007fff`88770000 00007fff`887a5000   C:\Windows\SYSTEM32\winmm.dll
+  ModLoad: 00007fff`a2110000 00007fff`a225b000   C:\Windows\System32\ucrtbase.dll
+  ModLoad: 00007fff`a0a90000 00007fff`a0abb000   C:\Windows\SYSTEM32\USERENV.dll
+  ModLoad: 00007fff`94d20000 00007fff`94d4b000   C:\Windows\SYSTEM32\VCRUNTIME140.dll
+  ModLoad: 00007fff`a3ef0000 00007fff`a4008000   C:\Windows\System32\RPCRT4.dll
+
+  running 2 tests
+  test loopback_round_trip ... ModLoad: 00007fff`6c3e0000 00007fff`6c416000   C:\Windows\SYSTEM32\winmmbase.dll
+  ModLoad: 00007fff`a28e0000 00007fff`a29d3000   C:\Windows\System32\shcore.dll
+  ModLoad: 00007fff`a32a0000 00007fff`a3347000   C:\Windows\System32\sechost.dll
+  ModLoad: 00007fff`98850000 00007fff`988e8000   C:\Windows\SYSTEM32\MMDevAPI.DLL
+  ModLoad: 00007fff`a1ee0000 00007fff`a1f83000   C:\Windows\System32\msvcp_win.dll
+  ModLoad: 00007fff`6b760000 00007fff`6b7a7000   C:\Windows\SYSTEM32\wdmaud.drv
+  ModLoad: 00007fff`a2400000 00007fff`a2787000   C:\Windows\System32\combase.dll
+  ModLoad: 00007fff`a12c0000 00007fff`a12ed000   C:\Windows\SYSTEM32\DEVOBJ.dll
+  ModLoad: 00007fff`a1300000 00007fff`a1357000   C:\Windows\SYSTEM32\cfgmgr32.dll
+  ModLoad: 0000014b`ffe70000 0000014b`ffec7000   C:\Windows\SYSTEM32\cfgmgr32.dll
+  ModLoad: 0000014b`ffed0000 0000014b`fff27000   C:\Windows\SYSTEM32\CFGMGR32.dll
+  ModLoad: 00007fff`87200000 00007fff`873b4000   C:\Windows\SYSTEM32\AUDIOSES.DLL
+  ModLoad: 00007fff`6cf00000 00007fff`6cf0f000   C:\Windows\SYSTEM32\msacm32.drv
+  ModLoad: 00007fff`6c250000 00007fff`6c271000   C:\Windows\SYSTEM32\MSACM32.dll
+  ModLoad: 00007fff`6c840000 00007fff`6c84c000   C:\Windows\SYSTEM32\midimap.dll
+  ModLoad: 00007fff`80010000 00007fff`8001a000   C:\Windows\SYSTEM32\ksuser.dll
+  ok
+  test real_device_silent_output_smoke ... ModLoad: 00007fff`9f980000 00007fff`9f99b000   C:\Windows\SYSTEM32\kernel.appcore.dll
+  ModLoad: 00007fff`a3900000 00007fff`a39a9000   C:\Windows\System32\msvcrt.dll
+  ModLoad: 00007fff`a2a80000 00007fff`a2b31000   C:\Windows\System32\clbcatq.dll
+  ModLoad: 00007fff`a15f0000 00007fff`a164e000   C:\Windows\SYSTEM32\powrprof.dll
+  ModLoad: 00007fff`a15d0000 00007fff`a15e4000   C:\Windows\SYSTEM32\UMPDC.dll
+  ModLoad: 00007fff`9f860000 00007fff`9f874000   C:\Windows\SYSTEM32\resourcepolicyclient.dll
+  ModLoad: 00007fff`7c510000 00007fff`7c662000   C:\Windows\System32\Windows.UI.dll
+  ModLoad: 00007fff`a39b0000 00007fff`a3b75000   C:\Windows\System32\user32.dll
+  ModLoad: 00007fff`a23d0000 00007fff`a23f7000   C:\Windows\System32\win32u.dll
+  ModLoad: 00007fff`a3870000 00007fff`a389b000   C:\Windows\System32\GDI32.dll
+  ModLoad: 00007fff`a1b80000 00007fff`a1cad000   C:\Windows\System32\gdi32full.dll
+  ModLoad: 00007fff`a4600000 00007fff`a4631000   C:\Windows\System32\IMM32.DLL
+  ModLoad: 00007fff`987b0000 00007fff`987bb000   C:\Windows\SYSTEM32\AVRT.dll
+  ok
+
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\ObjectiveC.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+  NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'

@@ -1,0 +1,66 @@
+projected from primitive stage 'catalog' (rvf-virtual-audio-provisioning/v1)
+  pkg: RvfVirtualAudio.inf 10047B
+  pkg: RvfVirtualAudio.sys 91648B
+  inf2cat hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\Inf2Cat.exe
+  inf2cat(no-args): Version 1.0.0.0
+  inf2cat(no-args): Runs driver signability tests and creates the catalog(s).
+  inf2cat(no-args): INF2CAT /driver:path /os:operatingSystem1[,os2]...
+  inf2cat(no-args):         [/nocat] [/verbose]
+  inf2cat(no-args):         [/drm[:file1[,file2]...]]
+  inf2cat(no-args):         [/pe[:file1[,file2]...]]
+  inf2cat(no-args):         [/pageHashes[:file1][,file2]...]]
+  inf2cat(no-args):   /driver (/drv)    Indicates the path to the driver package follows.
+  inf2cat(no-args):   path              Specifies the path to the driver package.
+  inf2cat(no-args):   /os               Indicates the operating system(s) targeted by the driver
+  inf2cat(no-args):                     package follows. The targeted operating system(s) is a
+  inf2cat(no-args):                     comma separated list of the following values:
+  inf2cat(no-args):   operatingSystem1  2000
+  inf2cat(no-args):                     XP_X86           Server2003_X86
+  inf2cat(no-args):                     XP_X64           Server2003_X64
+  inf2cat(no-args):                                      Server2003_IA64
+  inf2cat(no-args):                     Vista_X86        Server2008_X86
+  inf2cat(no-args):                     Vista_X64        Server2008_X64
+  inf2cat(no-args):                                      Server2008_IA64
+  inf2cat(no-args):                     7_X86
+  inf2cat(no-args):                     7_X64            Server2008R2_X64
+  inf2cat(no-args):                                      Server2008R2_IA64
+  inf2cat(no-args):                     8_X86
+  inf2cat(no-args):                     8_X64            Server8_X64
+  inf2cat(no-args):                     8_ARM
+  --- Inf2Cat /os:10_0_X64 ---
+  Operating systems parameter invalid.
+  Inf2Cat exit=-1 os=10_0_X64
+  --- Inf2Cat /os:10_X64 ---
+  Processing directory (D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\) file (rvfvirtualaudio.inf)
+  Processing directory (D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\) file (rvfvirtualaudio.sys)
+  Parsing INF: D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.inf
+  Finished parsing INFs
+  Processing INF: D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.inf
+  Finished processing INFs
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Testing driver package...
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.cat
+  Inf2Cat exit=0 os=10_X64
+stage=catalog status=ok detail=cat=D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.cat

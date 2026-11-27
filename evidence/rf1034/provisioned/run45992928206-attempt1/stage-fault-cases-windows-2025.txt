@@ -1,0 +1,238 @@
+  prerequisite devnode-create: ok
+  prerequisite endpoint-probe: ok
+  prerequisite midi-endpoint-probe: ok
+  prerequisite stream-roundtrip: ok
+  prerequisite midi-loopback: ok
+  prerequisite os-endpoint-wiring: ok
+  controller context: instance_id=ROOT\MEDIA\0000 admin=True
+  provisioning details: audio_pair=True midi_candidates=True
+  --- case permission_denial_audio ---
+  mic-consent-Deny [hklm-devacc] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hkcu-devacc] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hklm-cam] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [hkcu-cam] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Allow' -> 'Deny'
+  mic-consent-Deny [policy] HKLM:SOFTWARE\Policies\Microsoft\Windows\AppPrivacy\LetAppsAccessMicrophone : '1' -> '2'
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+  permission test job id=1
+  permission observed signal: True
+  restoring mic consent Allow and audio services
+  mic-consent-Allow [hklm-devacc] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hkcu-devacc] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\DeviceAccess\Global\{E5323777-F976-4f5b-9B55-B94699C46E44}\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hklm-cam] HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [hkcu-cam] HKCU:SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone\Value : 'Deny' -> 'Allow'
+  mic-consent-Allow [policy] HKLM:SOFTWARE\Policies\Microsoft\Windows\AppPrivacy\LetAppsAccessMicrophone : '2' -> '1'
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: microphone privacy denial/recovery
+    test: fault_case_result: case=permission_denial_audio result=pass expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_39 detail=os-consent-deny-mapped-exactly-and-allow-restored
+    test: test virtual_audio_permission_denial_fault ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 4.60s
+    test:
+  case result: case=permission_denial_audio result=Pass expected=backend-permission-denied+post-restore-reopen observed=capture-open-error_permission_denied;-recovery_re-enumerated-device__Ruviform-Cable-Output-(Ruviform-Virtual-Audio-Device)_;-clean-open-start-stop;-callbacks_39 detail=os-consent-deny-mapped-exactly-and-allow-restored
+  --- case xrun_probe ---
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: bounded xrun observation probe
+    test: xrun_probe spinner[0] done
+    test: xrun_probe spinner[1] done
+    test:   errors: in total=0 xrun=0 discontinuity=0 invalidated=0 last_kind=0 | out total=0 xrun=0 last_kind=0
+    test: fault_case_result: case=xrun_probe result=unsupported expected=deviceerror-xrun-under-bounded-user-mode-starvation observed=xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_423 detail=bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation
+    test: test virtual_audio_xrun_probe ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 2.15s
+    test:
+  xrun probe exit=0
+  case result: case=xrun_probe result=Unsupported expected=deviceerror-xrun-under-bounded-user-mode-starvation observed=xruns_0;-discontinuities_0;-invalidated_0;-errors_0;-callbacks_423 detail=bounded-starvation-produced-no-xrun;-current-adapter-contract-limits-observation
+  --- case device_loss_audio ---
+    midi[before-disable] step: midiOutGetNumDevs
+    midi[before-disable]   midiOutGetNumDevs=2
+    midi[before-disable] step: midiOutGetDevCapsW[0]
+    midi[before-disable]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[before-disable] step: midiOutGetDevCapsW[1]
+    midi[before-disable]   midiOut[1] rc=0 name='Ruviform MIDI Loopback' tech=0x0001 support=0x00000000
+    midi[before-disable] step: midiInGetNumDevs
+    midi[before-disable]   midiInGetNumDevs=1
+    midi[before-disable] step: midiInGetDevCapsW[0]
+    midi[before-disable]   midiIn[0] rc=0 name='Ruviform MIDI Loopback' support=0x00000000
+    midi[before-disable]   loopbackOut=[1] loopbackIn=[0]
+    midi[before-disable] step: midiOutOpen[1]
+    midi[before-disable]   midiOutOpen rc=0 hmo=0x1f91551c2d0
+    midi[before-disable] step: midiOutShortMsg[1] note-on
+    midi[before-disable]   midiOutShortMsg rc=0
+    midi[before-disable] step: midiOutReset[1]
+    midi[before-disable] step: midiOutClose[1]
+    midi[before-disable]   midiOutClose rc=0
+    midi[before-disable] step: midiInOpen[0] (CALLBACK_FUNCTION|MIDI_IO_STATUS)
+    midi[before-disable]   midiInOpen rc=0 hmi=0x1f91551d0e0
+    midi[before-disable] step: midiInMessage DRV_QUERYDEVICEINTERFACE (open handle)
+    midi[before-disable]   open-handle ifsize rc=8 size=0
+    midi[before-disable] step: midiInPrepareHeader+AddBuffer[0]
+    midi[before-disable]   prepare rc=0
+    midi[before-disable]   addbuf rc=0
+    midi[before-disable] step: midiInPrepareHeader+AddBuffer[1]
+    midi[before-disable]   prepare rc=0
+    midi[before-disable]   addbuf rc=0
+    midi[before-disable] step: midiInStart[0]
+    midi[before-disable]   midiInStart rc=0
+    midi[before-disable] step: loopback send note-on via midiOut[1]
+    midi[before-disable]   loopback send done
+    midi[before-disable]   callback count=3 lastMsg=0x3c3 lastP1=0x3c80 lastP2=0x13c
+    midi[before-disable] step: midiInStop[0]
+    midi[before-disable] step: midiInReset[0]
+    midi[before-disable] step: midiInUnprepareHeader
+    midi[before-disable] step: midiInUnprepareHeader
+    midi[before-disable] step: midiInClose[0]
+    midi[before-disable]   midiInClose rc=0
+    midi[before-disable]   callback count(final)=6 lastMsg=0x3c2
+    midi[before-disable] step: midiInMessage DRV_QUERYDEVICEINTERFACE[device-index-as-handle 0] (correct arg order)
+    midi[before-disable]   dev-index ifsize rc=0 size=144
+    midi[before-disable]   dev-index if rc=0 if='\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\midiloopback'
+    midi[before-disable] probe: done
+  midi probe[before-disable]: exit=0 loopback_present=True file=fault-midi-before-disable-windows-2025.txt
+  device-loss test job id=3
+  ready signal observed; disabling devnode
+  disable error: Disable-PnpDevice failed (Generic failure ); pnputil /disable-device exit=50
+  disable success=False
+  disable failed; attempting remove/recreate fallback while streams are live
+    remove-fallback: removed=True
+  remove fallback success=True
+    midi[during-disable] step: midiOutGetNumDevs
+    midi[during-disable]   midiOutGetNumDevs=1
+    midi[during-disable] step: midiOutGetDevCapsW[0]
+    midi[during-disable]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[during-disable] step: midiInGetNumDevs
+    midi[during-disable]   midiInGetNumDevs=0
+    midi[during-disable]   loopbackOut=[] loopbackIn=[]
+    midi[during-disable] probe: done
+  midi probe[during-disable]: exit=0 loopback_present=False file=fault-midi-during-disable-windows-2025.txt
+  observed signal: True
+    recreate: instance_id=ROOT\MEDIA\0001
+    recreate: bind_ok=True
+    recreate: reboot_required=False
+    recreate: bound_inf=D:\a\ruviform\ruviform\vaudio-pkg\RvfVirtualAudio.inf
+  recreate success=True new_instance_id=ROOT\MEDIA\0001
+  svc AudioEndpointBuilder : Running -> Running
+  svc Audiosrv : Running -> Running
+    midi[recovery-poll-1] step: midiOutGetNumDevs
+    midi[recovery-poll-1]   midiOutGetNumDevs=1
+    midi[recovery-poll-1] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-1]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-1] step: midiInGetNumDevs
+    midi[recovery-poll-1]   midiInGetNumDevs=0
+    midi[recovery-poll-1]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-1] probe: done
+  midi probe[recovery-poll-1]: exit=0 loopback_present=False file=fault-midi-recovery-poll-1-windows-2025.txt
+  audio probe[recovery-poll-1]: exit=0 pair_count=0 file=fault-audio-recovery-poll-1-windows-2025.txt
+    midi[recovery-poll-2] step: midiOutGetNumDevs
+    midi[recovery-poll-2]   midiOutGetNumDevs=1
+    midi[recovery-poll-2] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-2]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-2] step: midiInGetNumDevs
+    midi[recovery-poll-2]   midiInGetNumDevs=0
+    midi[recovery-poll-2]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-2] probe: done
+  midi probe[recovery-poll-2]: exit=0 loopback_present=False file=fault-midi-recovery-poll-2-windows-2025.txt
+  audio probe[recovery-poll-2]: exit=0 pair_count=0 file=fault-audio-recovery-poll-2-windows-2025.txt
+    midi[recovery-poll-3] step: midiOutGetNumDevs
+    midi[recovery-poll-3]   midiOutGetNumDevs=1
+    midi[recovery-poll-3] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-3]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-3] step: midiInGetNumDevs
+    midi[recovery-poll-3]   midiInGetNumDevs=0
+    midi[recovery-poll-3]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-3] probe: done
+  midi probe[recovery-poll-3]: exit=0 loopback_present=False file=fault-midi-recovery-poll-3-windows-2025.txt
+  audio probe[recovery-poll-3]: exit=0 pair_count=0 file=fault-audio-recovery-poll-3-windows-2025.txt
+    midi[recovery-poll-4] step: midiOutGetNumDevs
+    midi[recovery-poll-4]   midiOutGetNumDevs=1
+    midi[recovery-poll-4] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-4]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-4] step: midiInGetNumDevs
+    midi[recovery-poll-4]   midiInGetNumDevs=0
+    midi[recovery-poll-4]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-4] probe: done
+  midi probe[recovery-poll-4]: exit=0 loopback_present=False file=fault-midi-recovery-poll-4-windows-2025.txt
+  audio probe[recovery-poll-4]: exit=0 pair_count=0 file=fault-audio-recovery-poll-4-windows-2025.txt
+    midi[recovery-poll-5] step: midiOutGetNumDevs
+    midi[recovery-poll-5]   midiOutGetNumDevs=1
+    midi[recovery-poll-5] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-5]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-5] step: midiInGetNumDevs
+    midi[recovery-poll-5]   midiInGetNumDevs=0
+    midi[recovery-poll-5]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-5] probe: done
+  midi probe[recovery-poll-5]: exit=0 loopback_present=False file=fault-midi-recovery-poll-5-windows-2025.txt
+  audio probe[recovery-poll-5]: exit=0 pair_count=0 file=fault-audio-recovery-poll-5-windows-2025.txt
+    midi[recovery-poll-6] step: midiOutGetNumDevs
+    midi[recovery-poll-6]   midiOutGetNumDevs=1
+    midi[recovery-poll-6] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-6]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-6] step: midiInGetNumDevs
+    midi[recovery-poll-6]   midiInGetNumDevs=0
+    midi[recovery-poll-6]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-6] probe: done
+  midi probe[recovery-poll-6]: exit=0 loopback_present=False file=fault-midi-recovery-poll-6-windows-2025.txt
+  audio probe[recovery-poll-6]: exit=0 pair_count=0 file=fault-audio-recovery-poll-6-windows-2025.txt
+    midi[recovery-poll-7] step: midiOutGetNumDevs
+    midi[recovery-poll-7]   midiOutGetNumDevs=1
+    midi[recovery-poll-7] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-7]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-7] step: midiInGetNumDevs
+    midi[recovery-poll-7]   midiInGetNumDevs=0
+    midi[recovery-poll-7]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-7] probe: done
+  midi probe[recovery-poll-7]: exit=0 loopback_present=False file=fault-midi-recovery-poll-7-windows-2025.txt
+  audio probe[recovery-poll-7]: exit=0 pair_count=0 file=fault-audio-recovery-poll-7-windows-2025.txt
+    midi[recovery-poll-8] step: midiOutGetNumDevs
+    midi[recovery-poll-8]   midiOutGetNumDevs=1
+    midi[recovery-poll-8] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-8]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-8] step: midiInGetNumDevs
+    midi[recovery-poll-8]   midiInGetNumDevs=0
+    midi[recovery-poll-8]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-8] probe: done
+  midi probe[recovery-poll-8]: exit=0 loopback_present=False file=fault-midi-recovery-poll-8-windows-2025.txt
+  audio probe[recovery-poll-8]: exit=0 pair_count=0 file=fault-audio-recovery-poll-8-windows-2025.txt
+    midi[recovery-poll-9] step: midiOutGetNumDevs
+    midi[recovery-poll-9]   midiOutGetNumDevs=1
+    midi[recovery-poll-9] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-9]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-9] step: midiInGetNumDevs
+    midi[recovery-poll-9]   midiInGetNumDevs=0
+    midi[recovery-poll-9]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-9] probe: done
+  midi probe[recovery-poll-9]: exit=0 loopback_present=False file=fault-midi-recovery-poll-9-windows-2025.txt
+  audio probe[recovery-poll-9]: exit=0 pair_count=0 file=fault-audio-recovery-poll-9-windows-2025.txt
+    midi[recovery-poll-10] step: midiOutGetNumDevs
+    midi[recovery-poll-10]   midiOutGetNumDevs=1
+    midi[recovery-poll-10] step: midiOutGetDevCapsW[0]
+    midi[recovery-poll-10]   midiOut[0] rc=0 name='Microsoft GS Wavetable Synth' tech=0x0007 support=0x00000001
+    midi[recovery-poll-10] step: midiInGetNumDevs
+    midi[recovery-poll-10]   midiInGetNumDevs=0
+    midi[recovery-poll-10]   loopbackOut=[] loopbackIn=[]
+    midi[recovery-poll-10] probe: done
+  midi probe[recovery-poll-10]: exit=0 loopback_present=False file=fault-midi-recovery-poll-10-windows-2025.txt
+  audio probe[recovery-poll-10]: exit=0 pair_count=0 file=fault-audio-recovery-poll-10-windows-2025.txt
+  endpoint surface recovery timeout after 45 seconds (midi_present=False audio_pair_count=0)
+  endpoint surfaces did not both re-enumerate within the bounded recovery window
+    test:     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+    test:      Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+    test:
+    test: running 1 test
+    test: virtual_endpoint fault: controlled devnode loss/recovery
+    test: fault_case_result: case=device_loss_audio result=unsupported expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=typed-invalidation-not-surfaced;-recovery_observation_no-input-devices-on-this-host
+    test: test virtual_audio_device_loss_fault ... ok
+    test:
+    test: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 43.14s
+    test:
+  case result: case=device_loss_audio result=Unsupported expected=streaminvalidated-or-control-device-not-found+reopen observed=invalidated_0;-control_error_kind_0;-discontinuities_0;-recovery_recovery-failed detail=stimulus=remove-recreate; typed-invalidation-not-surfaced;-recovery_observation_no-input-devices-on-this-host
+  case result: case=midi_device_loss_observation result=Pass expected=present-before+absent-during; reappearance-recorded observed=before=True/0; during=False/0; after=False/0 detail=ruviform-midi-loopback-disappeared-during-remove-recreate; reappearance-not-observed-in-bounded-recovery
+  machine-readable case results: fault-cases-results-windows-2025.json

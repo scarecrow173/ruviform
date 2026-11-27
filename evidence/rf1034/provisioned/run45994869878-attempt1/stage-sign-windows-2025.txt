@@ -1,0 +1,44 @@
+projected from primitive stage 'sign' (rvf-virtual-audio-provisioning/v1)
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\signtool.exe
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  signtool hit: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe
+  signtool selected: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  The following certificate was selected:
+      Issued to: RvfVirtualAudio Probe (rf977)
+
+      Issued by: RvfVirtualAudio Probe (rf977)
+
+      Expires:   Sun Nov 29 12:03:27 2026
+
+      SHA1 hash: B9FA3BCA368E2A79F7857FABBA5919EE3280FDC5
+
+  Done Adding Additional Store
+  Successfully signed: D:\a\ruviform\ruviform\drivers\rvf-virtual-audio\x64\Release\RvfVirtualAudio.sys
+
+  Number of files successfully Signed: 1
+
+  Number of warnings: 0
+
+  Number of errors: 0
+
+  sign exit=0 file=RvfVirtualAudio.sys
+  The following certificate was selected:
+      Issued to: RvfVirtualAudio Probe (rf977)
+
+      Issued by: RvfVirtualAudio Probe (rf977)
+
+      Expires:   Sun Nov 29 12:03:27 2026
+
+      SHA1 hash: B9FA3BCA368E2A79F7857FABBA5919EE3280FDC5
+
+  Done Adding Additional Store
+  Successfully signed: D:\a\_temp\rvf-virtual-audio-primitive\workspace\vaudio-pkg\rvfvirtualaudio.cat
+
+  Number of files successfully Signed: 1
+
+  Number of warnings: 0
+
+  Number of errors: 0
+
+  sign exit=0 file=rvfvirtualaudio.cat
+stage=sign status=ok detail=signtool=C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe; targets=RvfVirtualAudio.sys,rvfvirtualaudio.cat

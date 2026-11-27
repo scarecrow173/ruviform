@@ -1,0 +1,120 @@
+projected from primitive stage 'enum-verify-pre-devnode' (rvf-virtual-audio-provisioning/v1)
+  enum-drivers: Microsoft PnP Utility
+  enum-drivers: Published Name:     oem10.inf
+  enum-drivers: Original Name:      azihsmvf.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         SecurityDevices
+  enum-drivers: Class GUID:         {d94ee5d8-d189-4994-83d2-f68d7d41b0e6}
+  enum-drivers: Driver Version:     02/13/2026 3.0.16.0
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem1.inf
+  enum-drivers: Original Name:      mlx4_bus.inf
+  enum-drivers: Provider Name:      Mellanox Technologies Ltd.
+  enum-drivers: Class Name:         System
+  enum-drivers: Class GUID:         {4d36e97d-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     02/10/2020 5.50.14740.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem9.inf
+  enum-drivers: Original Name:      stornvme_asap.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         SCSIAdapter
+  enum-drivers: Class GUID:         {4d36e97b-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     09/15/2025 6.70.2.29
+  enum-drivers: Signer Name:        Microsoft Windows
+  enum-drivers: Attributes:         Legacy
+  enum-drivers: Published Name:     oem0.inf
+  enum-drivers: Original Name:      ipoib6x.inf
+  enum-drivers: Provider Name:      Mellanox Technologies Ltd.
+  enum-drivers: Class Name:         Net
+  enum-drivers: Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     02/10/2020 5.50.14740.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem6.inf
+  enum-drivers: Original Name:      manavf.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         Net
+  enum-drivers: Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     08/05/2026 2.0.18.52
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem7.inf
+  enum-drivers: Original Name:      mana_bus_vf.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         MultiFunction
+  enum-drivers: Class GUID:         {4d36e971-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     08/05/2026 2.0.18.52
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem8.inf
+  enum-drivers: Original Name:      mana_ib_vf.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         RDMA
+  enum-drivers: Class GUID:         {0379f7db-5219-4898-b486-5a905fa04d60}
+  enum-drivers: Driver Version:     08/05/2026 2.0.18.52
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem2.inf
+  enum-drivers: Original Name:      mlx4eth63.inf
+  enum-drivers: Provider Name:      Mellanox Technologies Ltd.
+  enum-drivers: Class Name:         Net
+  enum-drivers: Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     02/10/2020 5.50.14740.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem5.inf
+  enum-drivers: Original Name:      mlx5.inf
+  enum-drivers: Provider Name:      Mellanox Technologies Ltd.
+  enum-drivers: Class Name:         Net
+  enum-drivers: Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     05/03/2023 23.4.26054.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem4.inf
+  enum-drivers: Original Name:      muxp.inf
+  enum-drivers: Provider Name:      Mellanox
+  enum-drivers: Class Name:         NetTrans
+  enum-drivers: Class GUID:         {4d36e975-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     02/10/2020 5.50.14740.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem3.inf
+  enum-drivers: Original Name:      mux_mp.inf
+  enum-drivers: Provider Name:      Mellanox
+  enum-drivers: Class Name:         Net
+  enum-drivers: Class GUID:         {4d36e972-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     02/10/2020 5.50.14740.1
+  enum-drivers: Signer Name:        Microsoft Windows Hardware Compatibility Publisher
+  enum-drivers: Attributes:         Legacy
+  enum-drivers:                     Attested
+  enum-drivers: Published Name:     oem11.inf
+  enum-drivers: Original Name:      prnms009.inf
+  enum-drivers: Provider Name:      Microsoft
+  enum-drivers: Class Name:         Printer
+  enum-drivers: Class GUID:         {4d36e979-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Class Version:      4.0
+  enum-drivers: Driver Version:     06/21/2006 10.0.26100.4484
+  enum-drivers: Signer Name:        Microsoft Windows
+  enum-drivers: Attributes:         Legacy
+  enum-drivers: Published Name:     oem12.inf
+  enum-drivers: Original Name:      rvfvirtualaudio.inf
+  enum-drivers: Provider Name:      Ruviform
+  enum-drivers: Class Name:         MEDIA
+  enum-drivers: Class GUID:         {4d36e96c-e325-11ce-bfc1-08002be10318}
+  enum-drivers: Driver Version:     01/01/2025 1.0.0.0
+  enum-drivers: Signer Name:        RvfVirtualAudio Probe (rf977)
+  enum-drivers: Attributes:         Legacy
+  RvfVirtualAudio.inf in driver store: True
+  matching PnpDevice: 0
+  pre-devnode observation: inf_in_store=True matching_devnodes=0
