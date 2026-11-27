@@ -21,10 +21,11 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The ZIP index gate proof lives beside the production decision core in
-//! `src/zip/read.rs`; the TAR declared-size and typeflag classification proofs
-//! live beside their production decision cores in `src/tar/read.rs`. Bounds
-//! and assumptions are documented in `docs/specs/formal-verification.md`.
+//! The ZIP index gate and declared entry-size gate proofs live beside their
+//! production decision cores in `src/zip/read.rs`; the TAR declared-size and
+//! typeflag classification proofs live beside their production decision cores
+//! in `src/tar/read.rs`. Bounds and assumptions are documented in
+//! `docs/specs/formal-verification.md`.
 
 mod common;
 
@@ -1333,5 +1334,54 @@ proptest! {
             .map(|(_, _, d)| u64::try_from(d.len()).unwrap_or(0))
             .sum();
         prop_assert_eq!(receipt.payload_bytes(), total_bytes);
+    }
+}
+
+/// Parser-core connection regression for the ZIP declared entry-size
+/// decision: boundary-1 and boundary values are accepted, boundary+1 is
+/// rejected with the entry-size budget before the local header or payload
+/// bytes are decoded.
+#[test]
+fn zip_declared_entry_size_connection_regression() {
+    const MAX_ENTRY: u64 = 16;
+
+    for declared in [MAX_ENTRY - 1, MAX_ENTRY] {
+        let mut spec = EntrySpec::stored("f", b"d");
+        spec.declared_uncompressed = u32::try_from(declared).expect("boundary fits u32");
+        let bytes = build_simple(&[spec]);
+        let mut limits = ArchiveReadLimits::default();
+        limits.max_entry_uncompressed_bytes = MAX_ENTRY;
+        let mut archive =
+            ZipArchiveReader::new(Cursor::new(bytes), limits).expect("index parses within budget");
+        let entry = archive
+            .open_entry(0)
+            .expect("in-cap declared entry size must be accepted");
+        assert_eq!(entry.info().uncompressed_size(), Some(declared));
+    }
+
+    let declared = MAX_ENTRY + 1;
+    let mut spec = EntrySpec::stored("f", b"d");
+    spec.declared_uncompressed = u32::try_from(declared).expect("boundary fits u32");
+    let mut bytes = build_simple(&[spec]);
+    bytes[0] = 0;
+    let mut limits = ArchiveReadLimits::default();
+    limits.max_entry_uncompressed_bytes = MAX_ENTRY;
+    let mut archive = ZipArchiveReader::new(Cursor::new(bytes), limits)
+        .expect("index parses without reading local headers");
+    match archive.open_entry(0) {
+        Err(error) => {
+            assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded);
+            assert!(
+                error.message().contains("max_entry_uncompressed_bytes"),
+                "over-limit rejection must name the entry-size budget: {}",
+                error.message()
+            );
+            assert!(
+                error.message().contains("declared 17 exceeds limit 16"),
+                "over-limit rejection must keep the declared/limit detail: {}",
+                error.message()
+            );
+        }
+        Ok(_) => panic!("over-limit declared entry size must be rejected"),
     }
 }

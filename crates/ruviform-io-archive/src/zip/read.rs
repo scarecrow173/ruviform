@@ -100,6 +100,23 @@ fn zip_index_gate_decision(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ZipDeclaredEntrySizeDecision {
+    Accept,
+    Reject,
+}
+
+fn zip_declared_entry_size_gate_decision(
+    declared: u64,
+    max_entry_uncompressed_bytes: u64,
+) -> ZipDeclaredEntrySizeDecision {
+    if declared > max_entry_uncompressed_bytes {
+        ZipDeclaredEntrySizeDecision::Reject
+    } else {
+        ZipDeclaredEntrySizeDecision::Accept
+    }
+}
+
 impl<R: Read + Seek> ZipArchiveReader<R> {
     /// Opens a ZIP stream: locates and parses EOCD + central directory
     /// under `limits`. See the module docs for the pipeline.
@@ -319,12 +336,18 @@ impl<R: Read + Seek> ZipArchiveReader<R> {
             ));
         }
         let declared = u64::from(record.uncompressed_size);
-        if declared > self.limits.max_entry_uncompressed_bytes {
-            return Err(limit_u64(
-                "max_entry_uncompressed_bytes",
-                declared,
-                self.limits.max_entry_uncompressed_bytes,
-            ));
+        match zip_declared_entry_size_gate_decision(
+            declared,
+            self.limits.max_entry_uncompressed_bytes,
+        ) {
+            ZipDeclaredEntrySizeDecision::Reject => {
+                return Err(limit_u64(
+                    "max_entry_uncompressed_bytes",
+                    declared,
+                    self.limits.max_entry_uncompressed_bytes,
+                ));
+            }
+            ZipDeclaredEntrySizeDecision::Accept => {}
         }
         let data_start =
             read_local_header(&mut self.inner, index, record, self.limits.max_path_bytes)?;
@@ -947,7 +970,10 @@ fn classify_source_error<R: Read + Seek>(
 
 #[cfg(kani)]
 mod proofs {
-    use super::{ZipIndexGateDecision, zip_index_gate_decision};
+    use super::{
+        ZipDeclaredEntrySizeDecision, ZipIndexGateDecision, zip_declared_entry_size_gate_decision,
+        zip_index_gate_decision,
+    };
 
     #[kani::proof]
     #[kani::unwind(2)]
@@ -1013,6 +1039,48 @@ mod proofs {
         kani::cover!(
             !entries_over && !metadata_over && actual == ZipIndexGateDecision::Accept,
             "in-cap acceptance is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_zip_entry_size_declared_gate_exactness() {
+        let declared: u64 = kani::any();
+        let max_entry_uncompressed_bytes: u64 = kani::any();
+
+        let actual = zip_declared_entry_size_gate_decision(declared, max_entry_uncompressed_bytes);
+        if declared > max_entry_uncompressed_bytes {
+            assert!(actual == ZipDeclaredEntrySizeDecision::Reject);
+        } else {
+            assert!(actual == ZipDeclaredEntrySizeDecision::Accept);
+        }
+
+        kani::cover!(
+            max_entry_uncompressed_bytes > 0
+                && declared == max_entry_uncompressed_bytes - 1
+                && actual == ZipDeclaredEntrySizeDecision::Accept,
+            "declared entry size boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            declared == max_entry_uncompressed_bytes
+                && actual == ZipDeclaredEntrySizeDecision::Accept,
+            "declared entry size boundary acceptance is reachable"
+        );
+        kani::cover!(
+            max_entry_uncompressed_bytes < u64::MAX
+                && declared == max_entry_uncompressed_bytes + 1
+                && actual == ZipDeclaredEntrySizeDecision::Reject,
+            "declared entry size boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            declared <= max_entry_uncompressed_bytes
+                && actual == ZipDeclaredEntrySizeDecision::Accept,
+            "in-cap acceptance is reachable"
+        );
+        kani::cover!(
+            declared > max_entry_uncompressed_bytes
+                && actual == ZipDeclaredEntrySizeDecision::Reject,
+            "over-cap rejection is reachable"
         );
     }
 }

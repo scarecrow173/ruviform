@@ -335,6 +335,7 @@ mise run test-formal-kani w-ipc-envelope  # selective W-IPC-ENVELOPE size/field 
 mise run test-formal-kani w-frm-codec     # selective frame length decision-core proofs only
 mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
 mise run test-formal-kani arc-payload-limit # selective TAR declared-size decision-core proof only
+mise run test-formal-kani arc-zip-entry-size # selective ZIP declared entry-size decision-core proof only
 mise run test-formal-kani arc-tar-struct  # selective TAR typeflag decision-core proof only
 mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
 mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
@@ -359,6 +360,7 @@ for the rf#1015 `W-IPC-OP` byte-core proofs, `w-ipc-envelope` for the intent
 envelope size/field decision-core proofs, `w-frm-codec` for the frame
 length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
 index decision-core proof, `arc-payload-limit` for the TAR declared-size
+decision-core proof, `arc-zip-entry-size` for the ZIP declared entry-size
 decision-core proof, `arc-tar-struct` for the TAR typeflag decision-core
 proof, `sd-csv-limits` for the CSV limit decision-core proofs, and
 `sd-byte-budget` for the `BoundedRead` proof.
@@ -398,8 +400,10 @@ exactness/boundary proofs live beside the private `valid_op_bytes` in
 decision-core proofs live beside the same private decision core in that file. The rf#1015 `ARC-IDX-LIMIT` exactness proof
 lives beside the private ZIP index decision core in
 `ruviform-io-archive/src/zip/read.rs`, the rf#1015 `ARC-PAYLOAD-LIMIT`
-exactness proof lives beside the private TAR declared-size decision core in
-`ruviform-io-archive/src/tar/read.rs`, and the rf#1015 `W-FRM-CODEC`
+TAR exactness proof lives beside the private TAR declared-size decision core in
+`ruviform-io-archive/src/tar/read.rs`, the ZIP declared entry-size exactness
+proof lives beside the private ZIP decision core in
+`ruviform-io-archive/src/zip/read.rs`, and the rf#1015 `W-FRM-CODEC`
 length-prefix/write-cap proofs live beside the private frame decision core in
 `ruviform-ui-test/src/transport.rs`. These proofs live in product sources
 because `cargo kani --tests` covers lib-target proofs. All other proofs stay out of
@@ -481,7 +485,7 @@ For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
 `w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`,
-`arc-tar-struct`, or `sd-csv-limits`),
+`arc-zip-entry-size`, `arc-tar-struct`, or `sd-csv-limits`),
 not only proptest. The mutant /
 observed failure / revert triple goes into `evidence/<issue>/` — a suite that
 cannot fail is not a gate.
