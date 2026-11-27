@@ -32,6 +32,46 @@ pub const ENV_SECRET: &str = "RVF_TEST_SECRET";
 /// Runtime kill-switch — any truthy value refuses every serve path.
 pub const ENV_DISABLE: &str = "RVF_TEST_DISABLE";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FrameWriteLengthDecision {
+    Accept { len: u32 },
+    Reject,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FrameReadLengthDecision {
+    InCap { declared: u32 },
+    TooLarge { declared: u32 },
+}
+
+fn frame_length_within_cap(len: usize) -> bool {
+    len <= MAX_INTENT_BYTES
+}
+
+fn frame_write_length_decision(body_len: usize) -> FrameWriteLengthDecision {
+    if frame_length_within_cap(body_len) {
+        match u32::try_from(body_len) {
+            Ok(len) => FrameWriteLengthDecision::Accept { len },
+            Err(_) => FrameWriteLengthDecision::Reject,
+        }
+    } else {
+        FrameWriteLengthDecision::Reject
+    }
+}
+
+fn encode_frame_length(len: u32) -> [u8; 4] {
+    len.to_le_bytes()
+}
+
+fn frame_read_length_decision(prefix: [u8; 4]) -> FrameReadLengthDecision {
+    let declared = u32::from_le_bytes(prefix);
+    if frame_length_within_cap(declared as usize) {
+        FrameReadLengthDecision::InCap { declared }
+    } else {
+        FrameReadLengthDecision::TooLarge { declared }
+    }
+}
+
 /// Frame read outcome.
 #[non_exhaustive]
 #[derive(Debug)]
@@ -60,19 +100,22 @@ pub fn read_frame(r: &mut impl Read) -> io::Result<FrameRead> {
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(FrameRead::Eof),
         Err(e) => return Err(e),
     }
-    let len = u32::from_le_bytes(len);
-    if len as usize > MAX_INTENT_BYTES {
-        // Drain the declared body so the stream stays frame-aligned —
-        // an oversized frame must not desync the session.
-        let mut discard = r.take(u64::from(len));
-        io::copy(&mut discard, &mut io::sink())?;
-        return Ok(FrameRead::TooLarge { declared: len });
+    match frame_read_length_decision(len) {
+        FrameReadLengthDecision::TooLarge { declared } => {
+            // Drain the declared body so the stream stays frame-aligned —
+            // an oversized frame must not desync the session.
+            let mut discard = r.take(u64::from(declared));
+            io::copy(&mut discard, &mut io::sink())?;
+            Ok(FrameRead::TooLarge { declared })
+        }
+        FrameReadLengthDecision::InCap { declared } => {
+            let mut buf = vec![0u8; declared as usize];
+            r.read_exact(&mut buf)?;
+            String::from_utf8(buf)
+                .map(FrameRead::Frame)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        }
     }
-    let mut buf = vec![0u8; len as usize];
-    r.read_exact(&mut buf)?;
-    String::from_utf8(buf)
-        .map(FrameRead::Frame)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 /// Writes one length-prefixed frame and flushes.
@@ -81,15 +124,16 @@ pub fn read_frame(r: &mut impl Read) -> io::Result<FrameRead> {
 /// [`io::Error`] on write failure, or when `body` exceeds
 /// [`MAX_INTENT_BYTES`].
 pub fn write_frame(w: &mut impl Write, body: &str) -> io::Result<()> {
-    if body.len() > MAX_INTENT_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("frame body {} exceeds {MAX_INTENT_BYTES} bytes", body.len()),
-        ));
-    }
-    let len = u32::try_from(body.len())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "frame too large"))?;
-    w.write_all(&len.to_le_bytes())?;
+    let len = match frame_write_length_decision(body.len()) {
+        FrameWriteLengthDecision::Accept { len } => len,
+        FrameWriteLengthDecision::Reject => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("frame body {} exceeds {MAX_INTENT_BYTES} bytes", body.len()),
+            ));
+        }
+    };
+    w.write_all(&encode_frame_length(len))?;
     w.write_all(body.as_bytes())?;
     w.flush()
 }
@@ -163,4 +207,147 @@ pub fn gen_token() -> String {
     h.write_u128(nanos);
     h.write_u32(std::process::id());
     format!("{:016x}", h.finish())
+}
+
+#[cfg(kani)]
+mod proofs {
+    use super::{
+        FrameReadLengthDecision, FrameWriteLengthDecision, encode_frame_length,
+        frame_read_length_decision, frame_write_length_decision,
+    };
+    use ruviform_ui::ipc::MAX_INTENT_BYTES;
+
+    fn write_length_oracle(body_len: usize) -> Option<(u32, [u8; 4])> {
+        if body_len > MAX_INTENT_BYTES {
+            return None;
+        }
+        let len = u32::try_from(body_len).ok()?;
+        let prefix = [
+            (len & 0xff) as u8,
+            ((len >> 8) & 0xff) as u8,
+            ((len >> 16) & 0xff) as u8,
+            ((len >> 24) & 0xff) as u8,
+        ];
+        Some((len, prefix))
+    }
+
+    fn decode_length_oracle(prefix: [u8; 4]) -> u32 {
+        u32::from(prefix[0])
+            | (u32::from(prefix[1]) << 8)
+            | (u32::from(prefix[2]) << 16)
+            | (u32::from(prefix[3]) << 24)
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn w_frm_codec_write_length_exactness() {
+        let body_len: usize = kani::any();
+        let actual = frame_write_length_decision(body_len);
+        match (actual, write_length_oracle(body_len)) {
+            (FrameWriteLengthDecision::Accept { len }, Some((oracle_len, oracle_prefix))) => {
+                assert_eq!(len, oracle_len);
+                let actual_prefix = encode_frame_length(len);
+                assert_eq!(actual_prefix[0], oracle_prefix[0]);
+                assert_eq!(actual_prefix[1], oracle_prefix[1]);
+                assert_eq!(actual_prefix[2], oracle_prefix[2]);
+                assert_eq!(actual_prefix[3], oracle_prefix[3]);
+            }
+            (FrameWriteLengthDecision::Reject, None) => {}
+            _ => panic!("write length decision mismatch"),
+        }
+
+        kani::cover!(
+            body_len == 0 && matches!(actual, FrameWriteLengthDecision::Accept { .. }),
+            "write length 0 acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES - 1
+                && matches!(actual, FrameWriteLengthDecision::Accept { .. }),
+            "write cap boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES
+                && matches!(actual, FrameWriteLengthDecision::Accept { .. }),
+            "write cap boundary acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES + 1 && matches!(actual, FrameWriteLengthDecision::Reject),
+            "write cap boundary+1 rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn w_frm_codec_prefix_exactness() {
+        let prefix: [u8; 4] = kani::any();
+        let declared = decode_length_oracle(prefix);
+        let actual = frame_read_length_decision(prefix);
+        match actual {
+            FrameReadLengthDecision::InCap {
+                declared: actual_declared,
+            } => {
+                assert_eq!(actual_declared, declared);
+                assert!(declared as usize <= MAX_INTENT_BYTES);
+            }
+            FrameReadLengthDecision::TooLarge {
+                declared: actual_declared,
+            } => {
+                assert_eq!(actual_declared, declared);
+                assert!(declared as usize > MAX_INTENT_BYTES);
+            }
+        }
+
+        kani::cover!(
+            declared == 0 && matches!(actual, FrameReadLengthDecision::InCap { .. }),
+            "read length 0 acceptance is reachable"
+        );
+        kani::cover!(
+            declared as usize == MAX_INTENT_BYTES - 1
+                && matches!(actual, FrameReadLengthDecision::InCap { .. }),
+            "read cap boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            declared as usize == MAX_INTENT_BYTES
+                && matches!(actual, FrameReadLengthDecision::InCap { .. }),
+            "read cap boundary acceptance is reachable"
+        );
+        kani::cover!(
+            declared as usize == MAX_INTENT_BYTES + 1
+                && matches!(actual, FrameReadLengthDecision::TooLarge { .. }),
+            "read cap boundary+1 rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn w_frm_codec_length_roundtrip() {
+        let body_len: usize = kani::any();
+        match frame_write_length_decision(body_len) {
+            FrameWriteLengthDecision::Accept { len } => {
+                assert!(body_len <= MAX_INTENT_BYTES);
+                let decoded = frame_read_length_decision(encode_frame_length(len));
+                assert!(matches!(
+                    decoded,
+                    FrameReadLengthDecision::InCap { declared } if declared == len
+                ));
+            }
+            FrameWriteLengthDecision::Reject => {
+                assert!(body_len > MAX_INTENT_BYTES);
+            }
+        }
+
+        kani::cover!(body_len == 0, "roundtrip length 0 input is reachable");
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES - 1,
+            "roundtrip cap boundary-1 input is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES,
+            "roundtrip cap boundary input is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES + 1,
+            "roundtrip cap boundary+1 input is reachable"
+        );
+    }
 }

@@ -15,9 +15,11 @@
 //!   a truncated body → `Err(UnexpectedEof)`, and a complete body
 //!   that is not UTF-8 → `Err(InvalidData)`.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries the same contracts
-//! as bounded proofs (run via `mise run test-formal-kani`); the
-//! bounds and assumptions are documented in
+//! The `#[cfg(kani)]` module at the bottom carries the legacy read-side
+//! shell contract as a bounded proof. The length-prefix/write-cap
+//! decision-core proofs live beside the production core in
+//! `src/transport.rs` and run via `mise run test-formal-kani w-frm-codec`;
+//! the bounds and assumptions are documented in
 //! `docs/specs/formal-verification.md`.
 
 use std::io::Cursor;
@@ -143,9 +145,41 @@ proptest! {
     }
 }
 
-/// Bounded proofs of the same contracts, verified exhaustively over
-/// symbolic input by Kani (`cargo kani --tests`; run via
-/// `mise run test-formal-kani`). Bounds and assumptions:
+/// Deterministic connection regression for the pure length decision core:
+/// exact-cap write/read acceptance, cap+1 pre-write rejection, u32le byte
+/// order, and read-side `TooLarge` classification must reach the public shell.
+#[test]
+fn frame_length_boundary_connection_regression() {
+    let max_body = "a".repeat(MAX_INTENT_BYTES);
+    for len in [0, MAX_INTENT_BYTES - 1, MAX_INTENT_BYTES] {
+        let body = &max_body[..len];
+        let mut buf = Vec::new();
+        write_frame(&mut buf, body).expect("in-cap boundary body must write");
+        assert_eq!(&buf[..4], &u32::try_from(len).unwrap().to_le_bytes());
+        let mut cur = Cursor::new(&buf);
+        match read_frame(&mut cur).expect("in-cap boundary frame must read") {
+            FrameRead::Frame(got) => assert_eq!(got, body),
+            _ => panic!("in-cap boundary frame must come back Frame"),
+        }
+    }
+
+    let over_body = "x".repeat(MAX_INTENT_BYTES + 1);
+    let mut buf = Vec::new();
+    let err = write_frame(&mut buf, &over_body).expect_err("cap+1 body must fail");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(buf.is_empty(), "cap+1 body must not write bytes");
+
+    let declared = u32::try_from(MAX_INTENT_BYTES + 1).unwrap();
+    let mut cur = Cursor::new(declared.to_le_bytes());
+    match read_frame(&mut cur).expect("cap+1 prefix must classify") {
+        FrameRead::TooLarge { declared: got } => assert_eq!(got, declared),
+        _ => panic!("cap+1 prefix must be TooLarge"),
+    }
+}
+
+/// Legacy bounded proof of the read-side shell contract, verified over
+/// bounded symbolic input by Kani (`cargo kani --tests`; run via the
+/// aggregate `mise run test-formal-kani`). Bounds and assumptions:
 /// `docs/specs/formal-verification.md`.
 #[cfg(kani)]
 mod proofs {
@@ -154,7 +188,7 @@ mod proofs {
     /// Bounded stream length — covers every `FrameRead` arm plus
     /// mid-frame EOF while keeping the I/O unwinding small. The 1 MiB
     /// declared-cap path stays reachable through the symbolic u32
-    /// prefix; the round-trip proof uses an in-cap symbolic body.
+    /// prefix.
     const STREAM_LEN: usize = 32;
 
     /// A symbolic stream of symbolic length ≤ `STREAM_LEN`.
@@ -196,31 +230,6 @@ mod proofs {
                     _ => panic!("unexpected io error kind"),
                 }
             }
-        }
-    }
-
-    /// `write_frame` → `read_frame` is the identity for bounded
-    /// in-cap bodies. Fixed-length body (16 arbitrary bytes accepted
-    /// as UTF-8 — a symbolic length would force CBMC to unwind every
-    /// allocation and read loop over a symbolic bound). The unwind
-    /// bound caps write/read/UTF-8 loops over the 16-byte body.
-    #[kani::proof]
-    #[kani::unwind(40)]
-    fn write_read_roundtrip() {
-        let bytes: [u8; 16] = kani::any();
-        let Ok(body) = core::str::from_utf8(&bytes) else {
-            return;
-        };
-        let mut buf = Vec::with_capacity(4 + bytes.len());
-        // `match`, not `.unwrap()` — Debug::fmt on `io::Error` recurses
-        // through `dyn Error` and is a known CBMC cost bomb.
-        if write_frame(&mut buf, body).is_err() {
-            unreachable!("in-cap body must write")
-        }
-        let mut cur = Cursor::new(&buf);
-        match read_frame(&mut cur) {
-            Ok(FrameRead::Frame(got)) => assert!(got == body),
-            _ => panic!("written frame must read back"),
         }
     }
 }

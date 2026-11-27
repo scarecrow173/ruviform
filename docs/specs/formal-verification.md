@@ -185,15 +185,28 @@ payload・診断構築を持たない。proof は製品実装と同じ `src/tar/
 PAX/GNU extension folding、複数 header、任意 malformed stream、数値 field 全体は
 Kani 未証明領域として残り、connection regression と既存 proptest が接続 coverageを担う。
 
+rf#1015 slice 7 では、Wire 側代表 Property のうち `W-FRM-CODEC` の
+length-prefix/write-cap decision subboundary を実装した。`write_frame` と
+`read_frame` は frame body length、`MAX_INTENT_BYTES`、4 byte の wire prefix
+だけを受け取る crate-private な decision core から accept/reject、u32le
+length prefix、declared length、in-cap/TooLarge 判定を導く。core は
+allocation・I/O・`Read`/`Write`・Vec growth・UTF-8 validation・environment
+access・診断構築を持たない。proof は製品実装と同じ `src/transport.rs` の
+`#[cfg(kani)] mod proofs` に置き、symbolic `usize` body length、symbolic
+`[u8; 4]` prefix、accepted length の encode→decode roundtripを検証する。
+body byte transport、UTF-8 validation、EOF/truncation 分類、oversize drain、
+Vec/Read/Write shell、実 OS pipe/TCP、shell-core接続は Kani 未証明領域として残り、
+既存 proptest と deterministic boundary regression が接続 coverageを担う。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
-`arc-payload-limit`、slice 6 の `arc-tar-struct` が最小入口である。
+`arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
-generic runner はまだない。`W-IPC-OP`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
+generic runner はまだない。`W-IPC-OP`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
 `SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5/6 の evidence を正本とする。
+ledger §6 と slice 2/3/4/5/6/7 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -250,6 +263,7 @@ ledger §6 と slice 2/3/4/5/6 の evidence を正本とする。
 | `mise run test-formal` | `cargo test --locked -p ruviform-ui --test formal_ipc` + `cargo test --locked -p ruviform-ui-test --test formal_transport` + `cargo test --locked -p ruviform-io-archive --test formal_archive` + `cargo test --locked -p ruviform-io-structured --all-features --test formal_structured` + `cargo test --locked -p ruviform-io-wav --test formal_wav` | なし（pure Rust・MSRV 内・CI と同一入口） |
 | `mise run test-formal-kani` | selector なし。`cargo kani --tests -p ruviform-ui -p ruviform-ui-test -p ruviform-io-archive` と `cargo kani --tests --all-features -p ruviform-io-structured` と `cargo kani --tests -p ruviform-io-wav` の 3 invocation（全て pass でのみ `pass` — `default = []` の crate は別途 `--all-features` が必要なため分割） | ネイティブ `cargo kani`、または `cargo` + `cargo kani` を持つ WSL2 ディストロ |
 | `mise run test-formal-kani w-ipc-op` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op` の 1 invocation。`src/ipc.rs` の `w_ipc_op_exactness_len0_16` と 3 件の `w_ipc_op_boundary_len*` だけを選び、Unwinding Assertions を無効化しない。未知 selector は Kani 実行前に exit 2 | 同上 |
+| `mise run test-formal-kani w-frm-codec` | `cargo kani -j1 --output-format terse -p ruviform-ui-test --harness w_frm_codec` の 1 invocation。`src/transport.rs` の 3 件の frame length decision proof だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-idx-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit` の 1 invocation。`src/zip/read.rs` の `arc_idx_limit_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-payload-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit` の 1 invocation。`src/tar/read.rs` の `arc_payload_limit_declared_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-struct` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct` の 1 invocation。`src/tar/read.rs` の `arc_tar_struct_typeflag_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
@@ -283,13 +297,24 @@ ledger §6 と slice 2/3/4/5/6 の evidence を正本とする。
 | `w_ipc_op_boundary_len{127_valid,128_valid,129_over_cap}`（in-src `src/ipc.rs`） | concrete 長 127/128/129。127・128 は valid witness、129 は他条件を満たす入力で cap 拒否を検査。`#[kani::unwind(131)]`・`#[kani::unwind(132)]`・`#[kani::unwind(132)]` | 17〜126 byte の interior、129 byte を超える任意長、grammar 個別条件の大入力変種 | grammar 個別条件は長 0〜16 の exactness proof、大入力と arbitrary Unicode は proptest で担保 |
 | `event_to_json_wellformed` | id = 6 byte 任意列のうち valid UTF-8・`result_ok`・`params=Null`。`#[kani::unwind(80)]` | 他 variant・大きな params | proptest `event_to_json_versioned_envelope` が全 variant・任意 `Value` で担保 |
 | `read_frame_contract` | stream = ≤32 byte 任意 byte 列。`#[kani::unwind(48)]` | 32 byte 超の stream・1 MiB 超 `declared` の drain 実走（symbolic u32 で `TooLarge` 判定自体は到達可） | proptest `read_frame_arbitrary_stream` / `too_large_drains_and_stays_aligned` で担保 |
-| `write_read_roundtrip` | body = 16 byte 任意列のうち valid UTF-8。`#[kani::unwind(40)]` | in-cap だが 16 byte 超または無効 UTF-8 の body（`&str` 引数のため構造上到達不可） | proptest `write_read_roundtrip`（in-cap 任意・exact-cap 境界含む）で担保 |
+| `w_frm_codec_write_length_exactness`（in-src `src/transport.rs`） | body length `usize` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | body byte transport、write/read shell接続、UTF-8 validation、実 writer | proptest `write_read_roundtrip` / `write_frame_over_cap_refused` と deterministic `frame_length_boundary_connection_regression` で担保 |
+| `w_frm_codec_prefix_exactness`（in-src `src/transport.rs`） | wire prefix `[u8; 4]` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | body byte transport、EOF/truncation 分類、oversize drainの実 I/O、UTF-8 validation | proptest `read_frame_arbitrary_stream` / `too_large_drains_and_stays_aligned` と deterministic boundary regression で担保 |
+| `w_frm_codec_length_roundtrip`（in-src `src/transport.rs`） | body length `usize` を全て symbolicし、accepted lengthの encode→decodeを検査。loopを持たず `#[kani::unwind(2)]`。assumeなし | body bytesそのものの roundtrip、Vec/Read/Write shell、UTF-8 validation、実 OS transport | proptest `write_read_roundtrip` と deterministic boundary regression で担保 |
 
 旧 `valid_op_soundness`（8 byte の valid UTF-8 `&str` を対象とする soundness
 harness）は rf#1015 slice 2 で退役した。新保証は byte 長 0〜16 の exactness と
 127/128/129 の concrete boundary matrix（長さごとに分割）に分かれる。旧保証より小さい入力域では
 受理だけでなく拒否の exactness まで検査するが、17〜126 byte と 129 byte 超の
 任意長は引き続き未証明領域である。
+
+旧 shell 向け `write_read_roundtrip` harness は rf#1015 slice 7 で退役した。
+旧保証は 16 byte bodyを Vec/Cursor/UTF-8 shellごと検査しようとする attempted proofであり、
+rf806では約90 CPU-min・5.4 GiBで verdictを返せなかった。新保証は length-prefix/write-cap
+decision coreの scalar exactnessに限定される。frame body bytesの輸送、UTF-8 validation、
+EOF/truncation 分類、oversize drain、Vec/Read/Write shell、実 OS transportはこの proofの
+保証に含めず、proptest・deterministic regression・統合テストと未証明領域に残す。
+`read_frame_contract` は `W-FRM-READCLASS` / `W-FRM-OVERSIZE` の legacy 状態を表す
+harnessなので、この sliceでは退役も証明済み扱いもしない。
 
 ### slice 2 archive harness と rf#1015 archive decision proofs
 
@@ -557,6 +582,13 @@ exactness assertionの反例である。mutantは完全に revertし、同じ se
 `mise run test-formal` の再実行で緑へ戻した。実行記録は
 `evidence/rf1015/verification-slice6-archive-typeflag.md` と `runs.jsonl` を参照する。
 
+rf#1015 slice 7 の `W-FRM-CODEC` では、decision coreの cap 判定を `<=` から `<`
+へ 1 箇所だけ変え、`mise run test-formal-kani w-frm-codec` が semantic assertion
+failureで exit 1 を返した。検出は unwinding assertion failureではなく、exact-cap
+acceptanceを期待する write/prefix/roundtrip assertionの反例である。mutantは完全に
+revertし、同じ selective laneと `mise run test-formal` の再実行で緑へ戻した。実行記録は
+`evidence/rf1015/verification-slice7-frame-codec.md` と `runs.jsonl` を参照する。
+
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
 harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
@@ -592,6 +624,13 @@ decision core、in-src proof、旧 parser-facing harness退役、selective lane�
 slice 6 の `ARC-TAR-STRUCT` では、verified Sync Commitを
 `9729366a37ebf10174132f829c5cdf07b0c2c980` とする。これは TAR typeflag decision core、
 in-src proof、旧 parser-facing harness退役、selective laneを含む最後の
+製品/proof/mise変更 commitであり、selective Kani・mutation・proptest・crate regressionの
+検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
+製品/proof/mise差分が加わった場合は再検証なしに進めない。
+
+slice 7 の `W-FRM-CODEC` では、verified Sync Commitを
+`82d260dfa0b98d9cf325dc1b085090f2bb2c6d0f` とする。これは frame length-prefix/write-cap
+decision core、in-src proof、旧 shell roundtrip harness退役、selective laneを含む最後の
 製品/proof/mise変更 commitであり、selective Kani・mutation・proptest・crate regressionの
 検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
 製品/proof/mise差分が加わった場合は再検証なしに進めない。
