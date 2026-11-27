@@ -316,7 +316,7 @@ fn render_timestamp_instrumentation_records_playback_absence_and_overflow() {
     for index in 0..total {
         let callback_ns = 1_000 + i64::try_from(index).unwrap();
         let playback_ns = (index != 0).then_some(callback_ns + 500);
-        instrument.observe(index, callback_ns, playback_ns, 480);
+        instrument.observe(index, callback_ns, playback_ns, 480, index * 480);
     }
 
     assert_eq!(instrument.log_overflows(), 2);
@@ -332,6 +332,97 @@ fn render_timestamp_instrumentation_records_playback_absence_and_overflow() {
         events[RENDER_TIMESTAMP_LOG_SLOTS - 1].callback_index,
         u64::try_from(RENDER_TIMESTAMP_LOG_SLOTS - 1).unwrap()
     );
+}
+
+#[test]
+fn render_timestamp_instrumentation_records_diagnostic_inputs_and_epoch_reset() {
+    let instrument = RenderTimestampInstrument::new();
+    instrument.observe(0, 1_000, Some(1_500), 480, 0);
+    instrument.observe(1, 2_000, Some(2_600), 480, 480);
+    instrument.split_epoch(2);
+    instrument.observe(2, 3_000, Some(3_700), 480, 960);
+
+    let events = instrument.events();
+    assert_eq!(events[1].supply_frame_cursor, 480);
+    assert_eq!(events[1].playback_interval_ns, Some(1_100));
+    assert_eq!(events[1].playback_lead_ns, Some(600));
+    assert!(events[1].host_interval_ns.is_some());
+    assert_eq!(events[2].interval_ns, None);
+    assert_eq!(events[2].host_interval_ns, None);
+    assert_eq!(events[2].playback_interval_ns, None);
+}
+
+#[test]
+fn render_timestamp_instrumentation_counts_playback_regression_without_changing_oracle() {
+    let instrument = RenderTimestampInstrument::new();
+    instrument.observe(0, 1_000, Some(2_000), 480, 0);
+    instrument.observe(1, 2_000, Some(1_500), 480, 480);
+
+    assert_eq!(instrument.playback_regression_count(), 1);
+    assert_eq!(instrument.raw_regressions(), 0);
+    assert_eq!(instrument.events()[1].playback_interval_ns, Some(-500));
+}
+
+#[test]
+fn render_timestamp_instrumentation_detects_callback_overlap_without_blocking() {
+    let instrument = RenderTimestampInstrument::new();
+    let first = instrument.enter_callback();
+    let second = instrument.enter_callback();
+    assert_eq!(instrument.max_active_callbacks(), 2);
+    assert_eq!(instrument.overlapping_callback_events(), 1);
+    drop(second);
+    drop(first);
+
+    let third = instrument.enter_callback();
+    assert_eq!(instrument.max_active_callbacks(), 2);
+    assert_eq!(instrument.overlapping_callback_events(), 1);
+    drop(third);
+}
+
+#[test]
+fn render_regression_diagnostics_preserves_layer_isolation_inputs() {
+    let event = |callback_index: u64,
+                 callback_ns: i64,
+                 host_monotonic_ns: u64,
+                 regression_backstep_ns: Option<i64>,
+                 playback_lead_ns: i64,
+                 playback_interval_ns: Option<i64>,
+                 supply_frame_cursor: u64| RenderTimestampEvent {
+        callback_index,
+        epoch: 0,
+        frames: 480,
+        callback_ns,
+        playback_ns: Some(callback_ns + playback_lead_ns),
+        interval_ns: None,
+        regression_backstep_ns,
+        host_monotonic_ns,
+        host_interval_ns: (callback_index != 24).then_some(10_000_000),
+        playback_interval_ns,
+        playback_lead_ns: Some(playback_lead_ns),
+        supply_frame_cursor,
+    };
+    let events = vec![
+        event(24, 2_000, 0, None, 100, None, 11_520),
+        event(25, 1_500, 10_000_000, Some(-500), 200, Some(600), 12_000),
+        event(26, 2_600, 20_000_000, None, 150, Some(550), 12_480),
+    ];
+
+    let diagnostics = render_regression_diagnostics(&events, u64::MAX);
+    assert_eq!(diagnostics.len(), 1);
+    let diagnostic = diagnostics[0];
+    assert_eq!(diagnostic.callback_index, 25);
+    assert_eq!(diagnostic.epoch_callback_offset, 25);
+    assert!(!diagnostic.startup_grace);
+    assert_eq!(diagnostic.reference_callback_index, Some(24));
+    assert_eq!(diagnostic.reference_callback_ns, Some(2_000));
+    assert_eq!(diagnostic.backend_two_step_ns, Some(600));
+    assert_eq!(diagnostic.host_two_step_ns, Some(20_000_000));
+    assert_eq!(diagnostic.supply_two_step_frames, Some(960));
+    assert_eq!(diagnostic.playback_lead_before_ns, Some(100));
+    assert_eq!(diagnostic.playback_lead_ns, Some(200));
+    assert_eq!(diagnostic.playback_lead_after_ns, Some(150));
+    assert_eq!(diagnostic.playback_interval_ns, Some(600));
+    assert_eq!(diagnostic.next_playback_interval_ns, Some(550));
 }
 
 /// PCM leg: `PcmFixture` block → per-channel `oracle::
@@ -977,6 +1068,11 @@ struct RenderTimestampEvent {
     playback_ns: Option<i64>,
     interval_ns: Option<i64>,
     regression_backstep_ns: Option<i64>,
+    host_monotonic_ns: u64,
+    host_interval_ns: Option<u64>,
+    playback_interval_ns: Option<i64>,
+    playback_lead_ns: Option<i64>,
+    supply_frame_cursor: u64,
 }
 
 struct RenderTimestampLog {
@@ -990,6 +1086,11 @@ struct RenderTimestampLog {
     playback_ns: [AtomicI64; RENDER_TIMESTAMP_LOG_SLOTS],
     interval_ns: [AtomicI64; RENDER_TIMESTAMP_LOG_SLOTS],
     regression_backstep_ns: [AtomicI64; RENDER_TIMESTAMP_LOG_SLOTS],
+    host_monotonic_ns: [AtomicU64; RENDER_TIMESTAMP_LOG_SLOTS],
+    host_interval_ns: [AtomicU64; RENDER_TIMESTAMP_LOG_SLOTS],
+    playback_interval_ns: [AtomicI64; RENDER_TIMESTAMP_LOG_SLOTS],
+    playback_lead_ns: [AtomicI64; RENDER_TIMESTAMP_LOG_SLOTS],
+    supply_frame_cursor: [AtomicU64; RENDER_TIMESTAMP_LOG_SLOTS],
 }
 
 impl RenderTimestampLog {
@@ -1005,6 +1106,11 @@ impl RenderTimestampLog {
             playback_ns: std::array::from_fn(|_| AtomicI64::new(i64::MIN)),
             interval_ns: std::array::from_fn(|_| AtomicI64::new(i64::MIN)),
             regression_backstep_ns: std::array::from_fn(|_| AtomicI64::new(i64::MAX)),
+            host_monotonic_ns: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            host_interval_ns: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            playback_interval_ns: std::array::from_fn(|_| AtomicI64::new(i64::MIN)),
+            playback_lead_ns: std::array::from_fn(|_| AtomicI64::new(i64::MIN)),
+            supply_frame_cursor: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
         }
     }
 
@@ -1030,6 +1136,20 @@ impl RenderTimestampLog {
             event.regression_backstep_ns.unwrap_or(i64::MAX),
             Ordering::Relaxed,
         );
+        self.host_monotonic_ns[index].store(event.host_monotonic_ns, Ordering::Relaxed);
+        self.host_interval_ns[index].store(
+            event.host_interval_ns.unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        self.playback_interval_ns[index].store(
+            event.playback_interval_ns.unwrap_or(i64::MIN),
+            Ordering::Relaxed,
+        );
+        self.playback_lead_ns[index].store(
+            event.playback_lead_ns.unwrap_or(i64::MIN),
+            Ordering::Relaxed,
+        );
+        self.supply_frame_cursor[index].store(event.supply_frame_cursor, Ordering::Relaxed);
     }
 
     fn events(&self) -> Vec<RenderTimestampEvent> {
@@ -1044,6 +1164,9 @@ impl RenderTimestampLog {
                 let playback_ns = self.playback_ns[index].load(Ordering::Relaxed);
                 let interval_ns = self.interval_ns[index].load(Ordering::Relaxed);
                 let backstep_ns = self.regression_backstep_ns[index].load(Ordering::Relaxed);
+                let host_interval_ns = self.host_interval_ns[index].load(Ordering::Relaxed);
+                let playback_interval_ns = self.playback_interval_ns[index].load(Ordering::Relaxed);
+                let playback_lead_ns = self.playback_lead_ns[index].load(Ordering::Relaxed);
                 RenderTimestampEvent {
                     callback_index: self.callback_index[index].load(Ordering::Relaxed),
                     epoch: self.epoch[index].load(Ordering::Relaxed),
@@ -1052,6 +1175,12 @@ impl RenderTimestampLog {
                     playback_ns: playback_present.then_some(playback_ns),
                     interval_ns: (interval_ns != i64::MIN).then_some(interval_ns),
                     regression_backstep_ns: (backstep_ns != i64::MAX).then_some(backstep_ns),
+                    host_monotonic_ns: self.host_monotonic_ns[index].load(Ordering::Relaxed),
+                    host_interval_ns: (host_interval_ns != u64::MAX).then_some(host_interval_ns),
+                    playback_interval_ns: (playback_interval_ns != i64::MIN)
+                        .then_some(playback_interval_ns),
+                    playback_lead_ns: (playback_lead_ns != i64::MIN).then_some(playback_lead_ns),
+                    supply_frame_cursor: self.supply_frame_cursor[index].load(Ordering::Relaxed),
                 }
             })
             .collect()
@@ -1073,6 +1202,13 @@ struct RenderTimestampInstrument {
     log: RenderTimestampLog,
     playback_some: AtomicU64,
     playback_none: AtomicU64,
+    playback_regressions: AtomicU64,
+    host_origin: Instant,
+    last_host_monotonic_ns: AtomicU64,
+    last_playback_ns: AtomicI64,
+    active_callbacks: AtomicU64,
+    max_active_callbacks: AtomicU64,
+    overlapping_callback_events: AtomicU64,
 }
 
 impl RenderTimestampInstrument {
@@ -1082,6 +1218,13 @@ impl RenderTimestampInstrument {
             log: RenderTimestampLog::new(),
             playback_some: AtomicU64::new(0),
             playback_none: AtomicU64::new(0),
+            playback_regressions: AtomicU64::new(0),
+            host_origin: Instant::now(),
+            last_host_monotonic_ns: AtomicU64::new(u64::MAX),
+            last_playback_ns: AtomicI64::new(i64::MIN),
+            active_callbacks: AtomicU64::new(0),
+            max_active_callbacks: AtomicU64::new(0),
+            overlapping_callback_events: AtomicU64::new(0),
         }
     }
 
@@ -1091,8 +1234,30 @@ impl RenderTimestampInstrument {
         callback_ns: i64,
         playback_ns: Option<i64>,
         frames: u64,
+        supply_frame_cursor: u64,
     ) {
         let observation = self.classifier.observe(callback_index, callback_ns);
+        let host_monotonic_ns = u64::try_from(
+            self.host_origin
+                .elapsed()
+                .as_nanos()
+                .min(u128::from(u64::MAX)),
+        )
+        .unwrap_or(u64::MAX);
+        let previous_host = self
+            .last_host_monotonic_ns
+            .swap(host_monotonic_ns, Ordering::Relaxed);
+        let host_interval_ns =
+            (previous_host != u64::MAX).then_some(host_monotonic_ns.saturating_sub(previous_host));
+        let previous_playback = playback_ns.map_or(i64::MIN, |playback| {
+            self.last_playback_ns.swap(playback, Ordering::Relaxed)
+        });
+        let playback_interval_ns = playback_ns.and_then(|playback| {
+            (previous_playback != i64::MIN).then_some(playback.saturating_sub(previous_playback))
+        });
+        if playback_interval_ns.is_some_and(|interval| interval < 0) {
+            self.playback_regressions.fetch_add(1, Ordering::Relaxed);
+        }
         if playback_ns.is_some() {
             self.playback_some.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -1106,11 +1271,31 @@ impl RenderTimestampInstrument {
             playback_ns,
             interval_ns: observation.interval_ns,
             regression_backstep_ns: observation.regression_backstep_ns,
+            host_monotonic_ns,
+            host_interval_ns,
+            playback_interval_ns,
+            playback_lead_ns: playback_ns.map(|playback| playback.saturating_sub(callback_ns)),
+            supply_frame_cursor,
         });
+    }
+
+    fn enter_callback(&self) -> RenderCallbackActivity<'_> {
+        let previous_active = self.active_callbacks.fetch_add(1, Ordering::Relaxed);
+        let active = previous_active.saturating_add(1);
+        self.max_active_callbacks
+            .fetch_max(active, Ordering::Relaxed);
+        if previous_active != 0 {
+            self.overlapping_callback_events
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        RenderCallbackActivity { instrument: self }
     }
 
     fn split_epoch(&self, boundary_cb: u64) {
         self.classifier.split_epoch(boundary_cb);
+        self.last_host_monotonic_ns
+            .store(u64::MAX, Ordering::Relaxed);
+        self.last_playback_ns.store(i64::MIN, Ordering::Relaxed);
     }
 
     fn raw_regressions(&self) -> u64 {
@@ -1133,6 +1318,18 @@ impl RenderTimestampInstrument {
         self.playback_none.load(Ordering::Relaxed)
     }
 
+    fn playback_regression_count(&self) -> u64 {
+        self.playback_regressions.load(Ordering::Relaxed)
+    }
+
+    fn max_active_callbacks(&self) -> u64 {
+        self.max_active_callbacks.load(Ordering::Relaxed)
+    }
+
+    fn overlapping_callback_events(&self) -> u64 {
+        self.overlapping_callback_events.load(Ordering::Relaxed)
+    }
+
     fn events(&self) -> Vec<RenderTimestampEvent> {
         self.log.events()
     }
@@ -1146,6 +1343,102 @@ impl Default for RenderTimestampInstrument {
     fn default() -> Self {
         Self::new()
     }
+}
+
+struct RenderCallbackActivity<'a> {
+    instrument: &'a RenderTimestampInstrument,
+}
+
+impl Drop for RenderCallbackActivity<'_> {
+    fn drop(&mut self) {
+        self.instrument
+            .active_callbacks
+            .fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct RenderRegressionDiagnostic {
+    callback_index: u64,
+    epoch: u64,
+    epoch_callback_offset: u64,
+    startup_grace: bool,
+    reference_callback_index: Option<u64>,
+    reference_callback_ns: Option<i64>,
+    regression_backstep_ns: i64,
+    backend_two_step_ns: Option<i64>,
+    host_two_step_ns: Option<u64>,
+    supply_two_step_frames: Option<u64>,
+    playback_lead_before_ns: Option<i64>,
+    playback_lead_ns: Option<i64>,
+    playback_lead_after_ns: Option<i64>,
+    playback_interval_ns: Option<i64>,
+    next_playback_interval_ns: Option<i64>,
+}
+
+fn epoch_start_for_callback(callback_index: u64, boundary_cb: u64) -> u64 {
+    if callback_index < boundary_cb {
+        0
+    } else {
+        boundary_cb
+    }
+}
+
+fn is_epoch_start_grace(callback_index: u64, boundary_cb: u64) -> bool {
+    callback_index.saturating_sub(epoch_start_for_callback(callback_index, boundary_cb))
+        < EPOCH_START_GRACE_CALLBACKS
+}
+
+/// Control-thread diagnostic projection of regression events already
+/// classified by `TimestampEpochClassifier`. This never changes the
+/// Pass/Fail oracle; it only preserves the values needed to separate
+/// scheduling, backend clock bookkeeping, timestamp conversion, and
+/// consumer-harness hypotheses in the provisioned artifact.
+fn render_regression_diagnostics(
+    events: &[RenderTimestampEvent],
+    boundary_cb: u64,
+) -> Vec<RenderRegressionDiagnostic> {
+    events
+        .iter()
+        .enumerate()
+        .filter_map(|(position, event)| {
+            let regression_backstep_ns = event.regression_backstep_ns?;
+            let previous = position.checked_sub(1).and_then(|index| events.get(index));
+            let next = events.get(position + 1);
+            let reference = events[..position]
+                .iter()
+                .filter(|candidate| candidate.epoch == event.epoch)
+                .max_by_key(|candidate| candidate.callback_ns);
+            let epoch_start = epoch_start_for_callback(event.callback_index, boundary_cb);
+            Some(RenderRegressionDiagnostic {
+                callback_index: event.callback_index,
+                epoch: event.epoch,
+                epoch_callback_offset: event.callback_index.saturating_sub(epoch_start),
+                startup_grace: is_epoch_start_grace(event.callback_index, boundary_cb),
+                reference_callback_index: reference.map(|event| event.callback_index),
+                reference_callback_ns: reference.map(|event| event.callback_ns),
+                regression_backstep_ns,
+                backend_two_step_ns: previous
+                    .zip(next)
+                    .map(|(previous, next)| next.callback_ns.saturating_sub(previous.callback_ns)),
+                host_two_step_ns: previous.zip(next).map(|(previous, next)| {
+                    next.host_monotonic_ns
+                        .saturating_sub(previous.host_monotonic_ns)
+                }),
+                supply_two_step_frames: previous.map(|previous| {
+                    event
+                        .supply_frame_cursor
+                        .saturating_add(event.frames)
+                        .saturating_sub(previous.supply_frame_cursor)
+                }),
+                playback_lead_before_ns: previous.and_then(|event| event.playback_lead_ns),
+                playback_lead_ns: event.playback_lead_ns,
+                playback_lead_after_ns: next.and_then(|event| event.playback_lead_ns),
+                playback_interval_ns: event.playback_interval_ns,
+                next_playback_interval_ns: next.and_then(|event| event.playback_interval_ns),
+            })
+        })
+        .collect()
 }
 
 /// Per-pair observation state shared with the RT callbacks — the
@@ -1723,13 +2016,16 @@ fn analyze_render_baseline(probe: &EndpointProbe) -> Vec<String> {
 
 fn render_baseline_summary(probe: &EndpointProbe) -> String {
     format!(
-        "callbacks={} frames={} raw_regressions={} effective_regressions={} playback_some={} playback_none={} log_overflow={}",
+        "callbacks={} frames={} raw_regressions={} effective_regressions={} playback_some={} playback_none={} playback_regressions={} max_active_callbacks={} overlap_events={} log_overflow={}",
         probe.out_callbacks.load(Ordering::Relaxed),
         probe.out_frames.load(Ordering::Relaxed),
         probe.out_timestamp.raw_regressions(),
         probe.out_timestamp.effective_regressions(),
         probe.out_timestamp.playback_some_count(),
         probe.out_timestamp.playback_none_count(),
+        probe.out_timestamp.playback_regression_count(),
+        probe.out_timestamp.max_active_callbacks(),
+        probe.out_timestamp.overlapping_callback_events(),
         probe.out_timestamp.log_overflows(),
     )
 }
@@ -1775,6 +2071,10 @@ fn optional_i64(value: Option<i64>) -> String {
     value.map_or_else(|| "none".to_owned(), |value| value.to_string())
 }
 
+fn optional_u64(value: Option<u64>) -> String {
+    value.map_or_else(|| "none".to_owned(), |value| value.to_string())
+}
+
 fn emit_render_timestamp_events(probe: &EndpointProbe) {
     let boundary_cb = probe
         .out_timestamp
@@ -1784,17 +2084,42 @@ fn emit_render_timestamp_events(probe: &EndpointProbe) {
     let events = probe.out_timestamp.events();
     for event in &events {
         eprintln!(
-            "render_timestamp_event: index={} epoch={} epoch_boundary_cb={} is_epoch_boundary={} frames={} callback_ns={} playback_present={} playback_ns={} interval_ns={} regression_backstep_ns={}",
+            "render_timestamp_event: index={} epoch={} epoch_boundary_cb={} is_epoch_boundary={} frames={} supply_frame_cursor={} callback_ns={} playback_present={} playback_ns={} interval_ns={} regression_backstep_ns={} host_monotonic_ns={} host_interval_ns={} playback_interval_ns={} playback_lead_ns={}",
             event.callback_index,
             event.epoch,
             boundary_cb,
             u8::from(event.callback_index == boundary_cb),
             event.frames,
+            event.supply_frame_cursor,
             event.callback_ns,
             u8::from(event.playback_ns.is_some()),
             optional_i64(event.playback_ns),
             optional_i64(event.interval_ns),
             optional_i64(event.regression_backstep_ns),
+            event.host_monotonic_ns,
+            optional_u64(event.host_interval_ns),
+            optional_i64(event.playback_interval_ns),
+            optional_i64(event.playback_lead_ns),
+        );
+    }
+    for diagnostic in render_regression_diagnostics(&events, boundary_cb) {
+        eprintln!(
+            "render_timestamp_regression_diag: index={} epoch={} epoch_offset={} startup_grace={} reference_index={} reference_callback_ns={} backstep_ns={} backend_two_step_ns={} host_two_step_ns={} supply_two_step_frames={} playback_lead_before_ns={} playback_lead_ns={} playback_lead_after_ns={} playback_interval_ns={} next_playback_interval_ns={}",
+            diagnostic.callback_index,
+            diagnostic.epoch,
+            diagnostic.epoch_callback_offset,
+            u8::from(diagnostic.startup_grace),
+            optional_u64(diagnostic.reference_callback_index),
+            optional_i64(diagnostic.reference_callback_ns),
+            diagnostic.regression_backstep_ns,
+            optional_i64(diagnostic.backend_two_step_ns),
+            optional_u64(diagnostic.host_two_step_ns),
+            optional_u64(diagnostic.supply_two_step_frames),
+            optional_i64(diagnostic.playback_lead_before_ns),
+            optional_i64(diagnostic.playback_lead_ns),
+            optional_i64(diagnostic.playback_lead_after_ns),
+            optional_i64(diagnostic.playback_interval_ns),
+            optional_i64(diagnostic.next_playback_interval_ns),
         );
     }
     eprintln!(
@@ -2117,16 +2442,18 @@ fn observe_output(
     if out.channels() != probe.out_expected_channels {
         probe.out_channel_mismatches.fetch_add(1, Ordering::Relaxed);
     }
+    let _activity = probe.out_timestamp.enter_callback();
     let callback_ns = info.timestamp.callback.value();
+    let base = probe
+        .out_render_cursor
+        .fetch_add(frames as u64, Ordering::Relaxed);
     probe.out_timestamp.observe(
         callback_index,
         callback_ns,
         info.timestamp.playback.map(MediaTime::value),
         frames as u64,
+        base,
     );
-    let base = probe
-        .out_render_cursor
-        .fetch_add(frames as u64, Ordering::Relaxed);
     if fixture.fill_view(base, out).is_err() {
         probe.out_fill_errors.fetch_add(1, Ordering::Relaxed);
     }
@@ -2186,8 +2513,7 @@ fn effective_regressions(raw: u64, slots: &[AtomicU64], boundary_cb: u64) -> u64
         .take(usize::try_from(raw).unwrap_or(usize::MAX))
     {
         let cb = slot.load(Ordering::Relaxed);
-        let epoch_start = if cb < boundary_cb { 0 } else { boundary_cb };
-        if cb.saturating_sub(epoch_start) < EPOCH_START_GRACE_CALLBACKS {
+        if is_epoch_start_grace(cb, boundary_cb) {
             transients += 1;
         }
     }
