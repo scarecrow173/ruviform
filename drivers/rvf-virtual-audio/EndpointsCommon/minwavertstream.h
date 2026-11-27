@@ -152,7 +152,7 @@ protected:
     ULONGLONG                   m_ullXrunWriteBytePosition;
     ULONGLONG                   m_ullXrunZeroStartByte;
     ULONGLONG                   m_ullXrunZeroEndByte;
-    BOOLEAN                     m_bXrunNotificationSuppressed;
+    BOOL                        m_bXrunNotificationSuppressed;
     ULONG                       m_ulXrunZeroFillState;
     ULONG                       m_ulXrunDroppedPacketEvents;
 
