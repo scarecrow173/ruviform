@@ -51,7 +51,7 @@ RT path では per-packet 無制限 event は追加していない。suppression
 
 ### harness (`crates/ruviform-audio-device/tests/virtual_endpoint.rs`)
 
-作業中の変更を含む。目的は次の additive diagnostics であり、verdict/oracle には使わない。
+目的は次の additive diagnostics であり、verdict/oracle には使わない。
 
 - bounded input packet trace: callback/capture timestamp、frame position、frames、timestamp delta、position delta、error event ordering、overflow counter。
 - inferred burst/stall と forward/backward/contiguous transition summary。
@@ -82,26 +82,53 @@ RT path では per-packet 無制限 event は追加していない。suppression
 
 run `45932170760` の追加 artifact copy は `evidence/rf1009/provisioned/run45932170760-attempt1/` にある。ETL binary は既存方針どおり commit せず、XML/provider log/case JSON/controller log/result JSON を commit する。run `45930911311` は driver compile failure の検証 runであり、xrun runtime evidence は無い。
 
-## provisioned run serialization
+### run45932170760 artifact sha256 inventory
 
-同一 provisioned workflow は branch 単位の concurrency group で直列化される。最初の検証 run `45930911311`（SHA `56f6bbdd`）は driver build lane で `minwavertstream.cpp(2105)` の `BOOL`→`BOOLEAN` warning-as-error を検出し、endpoint provisioning 前に停止した。これを `BOOL` 統一で修正し、直列化を確認して run `45932170760`（SHA `f7b2029a`）を実行した。
+対象は commit した machine-readable artifact copy の Git blob bytes である。ETL binary は commit していない。CRLF working-copy 表現ではなく、hook 正規化後に repository へ入る LF 正規化 bytes に対する sha256。
 
-## ローカル検証
+| file | bytes | sha256 |
+| --- | ---: | --- |
+| `rf1009-xrun-case-capture-content-gap-input-negative-windows-2025.json` | 2175 | `f998f20490e91510632ea6010008bcab5a6dce8caeb671ed60176dc957d79390` |
+| `rf1009-xrun-case-capture-overflow-drop-input-windows-2025.json` | 2204 | `f91f5b35edd13315d29e5f6572e8bfc0bf7c1618098a47f9d40379df80234d35` |
+| `rf1009-xrun-cases-windows-2025.json` | 4628 | `2abf7143e74b1019f5d7817b6d577b6e333c6adfbcd25e4d0b71aa255b1c3ccd` |
+| `xrun-capture-content-gap-input-negative-windows-2025-driver-trace-providers.txt` | 19882 | `6a4fd8a633c922c423fb031c672dbfa774eade1f7897e0c42e1b6b52d432e282` |
+| `xrun-capture-content-gap-input-negative-windows-2025-driver-trace.xml` | 3282 | `129c39250ff6e4b0b54fc6859a0c047ebb20b461d2c08308422ec2d5eff13bf1` |
+| `xrun-capture-content-gap-input-negative-windows-2025.result.json` | 30647 | `4f4e2728e3c729e8ccf1d5d34399ed6a218c7018871f66b73d43fc3cc6b2b3e4` |
+| `xrun-capture-overflow-drop-input-windows-2025-driver-trace-providers.txt` | 19882 | `6a4fd8a633c922c423fb031c672dbfa774eade1f7897e0c42e1b6b52d432e282` |
+| `xrun-capture-overflow-drop-input-windows-2025-driver-trace.xml` | 3266 | `80f6b87d61ef22c0436c8b74f6eef37fe0adbdec8f97c64b74f61b9c8b381b1d` |
+| `xrun-capture-overflow-drop-input-windows-2025.result.json` | 30973 | `b976d1ab2527196c17fd44ab33e1f2222a6adc1270f0108dcd972faeea670d9d` |
+| `xrun-controller-windows-2025.txt` | 3683 | `1b41741de3ee26a65b0fab019bfa079165dec925e3a08d0fb53ab6b4ae2f9c21` |
 
-| lane | 結果 |
-| --- | --- |
-| `mise run fmt-check` | Pass |
-| `mise run check ruviform-audio-device` | Pass |
-| `mise run lint ruviform-audio-device` | Pass |
-| `cargo test --locked -p ruviform-audio-device` | Pass（84 lib + 4 mock backend + 12 mock input + 6 doctest） |
-| `cargo test --locked -p ruviform-audio-device --features real-device --test virtual_endpoint` | Pass（19 passed / 7 ignored） |
-| `mise run test-ci-daily` | Pass（113/113） |
-| `mise run test-ci-tracker` | Pass（108/108） |
-| `mise exec -- prek run --all-files` | Pass |
-| `tools/virtual-audio-driver/Invoke-XrunCases.ps1 -ValidateOnly` | Pass（static validation only; runtime evidence ではない） |
-| driver binary build | NotRun（この local 環境には WDK build 環境がなく、provisioned workflow の driver build lane に委ねる） |
+## 検証記録
 
-これらは local validation であり、provisioned/CI acceptance ではない。最終 validation は merge 後 commit に対して再実行する。
+### ローカル検証（worker local OS: Microsoft Windows NT 10.0.26300.0）
+
+| 受入条件 / lane | コマンド | exit code | 結果 |
+| --- | --- | ---: | --- |
+| canonical format | `mise run fmt-check` | 0 | Pass |
+| canonical type check | `mise run check ruviform-audio-device` | 0 | Pass |
+| canonical lint | `mise run lint ruviform-audio-device` | 0 | Pass |
+| canonical package test | `mise run test ruviform-audio-device` | 0 | Pass（84 lib + 4 mock backend + 12 mock input + 6 doctest） |
+| canonical real-device feature lint | `mise run lint-audio-real-input` | 0 | Pass |
+| 対象 xrun filter lane | `mise run test -- ruviform-audio-device --features real-device --test virtual_endpoint xrun -- --test-threads=1` | 0 | Pass（14 passed / 3 ignored / 9 filtered out。endpoint-dependent case は ignored であり runtime Pass ではない） |
+| canonical RT contract lane | `mise run test-rt` | 0 | Pass（workspace `rt_` filter で 329 passed） |
+| driver build lane | `mise run build-vaudio-driver` | 1 | 環境不足により NotRun 相当。MSBuild はあるが `WindowsKernelModeDriver10.0` toolset が無く MSB8020。driver source correctness の build evidence は provisioned workflow 側で確認 |
+| canonical repository hooks | `mise exec -- prek run --all-files` | 0 | Pass |
+| controller static validation | `tools/virtual-audio-driver/Invoke-XrunCases.ps1 -ValidateOnly` | 0 | Pass（static validation only; runtime evidence ではない） |
+
+直接 `cargo test --locked -p ruviform-audio-device` と直接 `cargo test --locked -p ruviform-audio-device --features real-device --test virtual_endpoint` は補助証拠であり、canonical lane 代替ではない。両方とも exit 0 だったが、PR 判定には上記 canonical invocation を使う。
+
+### 統合検証 / provisioned 実測
+
+| lane | run / SHA | exit/status | 結果 |
+| --- | --- | ---: | --- |
+| provisioned virtual-audio-driver-probe driver build | `45932170760` / `f7b2029a` | workflow completed | driver build成功。最初の run `45930911311` では `BOOL`→`BOOLEAN` warning-as-error を検出し、`f7b2029a` で修正済み |
+| provisioned xrun cases | `45932170760` / `f7b2029a` | workflow completed | xrun stage は positive/negative とも oracle Fail。これは acceptance Pass ではなく、原因調査の実測結果として記録する |
+| merge後対象 SHA の CI / Daily | なし | NotRun | この repository workflow は PR/push trigger を持たず、branch `test/1009-xrun-cause-investigation` の CI run は 0 件。merge 後 SHA は未発生のため、post-merge CI/Daily は coordinator 側の後続判定である |
+| pstack Runtime Verification | 本 worker | Run | canonical lane、xrun filter lane、provisioned workflow の実 artifact 観測を実施。結果は上表のとおりで、xrun oracle は Fail を Fail として記録した |
+| pstack Formal Verification | 本 worker | NotRun | 本 slice には対応する formal verification artifact/skill が存在しない。driver ETW/event 観測の runtime 調査であり、formal proof を追加する scope ではない |
+
+これらは local validation と provisioned/integrated validation を混同しない。特に positive/negative case Fail を Pass と読み替えない。
 
 ## run 45932170760 の追加事実
 
@@ -110,6 +137,12 @@ run `45932170760` の追加 artifact copy は `evidence/rf1009/provisioned/run45
 - input callbacks は 300/299、output callbacks は 303/302、position transitions はすべて contiguous（forward/backward/reset 0）だった。error trace は空で typed xrun も backend error もなかった。
 - zero-run diagnostics は leading zero（positive 529 frames、negative 961 frames）のみ大きく、interior zero-run は最大 14 frames、trailing は 0 だった。注入 3 packet（約1440 frames）に相当する interior zero span は観測されなかった。
 - driver trace ETL/XML は capture されたが、XML には session header のみで `0x1001`-`0x1005` の IHV event は一件も無かった。`EventsLost=0` であり、provider log は `Microsoft-Windows-Audio` GUID `ae4bd3be-f36f-45b6-8d21-bdd6fb832853` が `audioses.dll` の user-mode provider であることを示す。したがって本 slice の driver ETW collection は provider 選定不一致により成立しなかった（H7の具体因）。
+
+## 残課題と後続 slice の境界
+
+- H1（registry snapshot/load timing）、H2（target pin 判定）、H3（suppression window）、H4（notification suppression → OS packet skip）、H6（content-gap byte span/zero-run detector）は未解決である。本 PR はこれらを確定したと主張しない。
+- 次件は kernel driver が実際に emit する ETW provider GUID/manifest を同定し、controller の logman provider 指定をその正しい provider へ修正することである。`Microsoft-Windows-Audio` は user-mode `audioses.dll` provider であり、今回の IHV-defined driver event 取得には使えないことが run `45932170760` で判明した。
+- capability matrix/runbook の実測更新、および output render underrun の調査/対応は後続 slice であり、本 PR の scope ではない。本 PR は xrun cause investigation の観測面と証跡整備に限定する。
 
 ## 結論
 
