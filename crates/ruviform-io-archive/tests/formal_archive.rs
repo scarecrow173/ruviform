@@ -22,10 +22,11 @@
 //!   drive actually consumed.
 //!
 //! The `#[cfg(kani)]` module at the bottom carries the remaining
-//! parser-facing TAR bounded proofs (run via `mise run test-formal-kani`).
+//! parser-facing TAR typeflag bounded proof (run via the aggregate Kani lane).
 //! The ZIP index gate proof lives beside the production decision core in
-//! `src/zip/read.rs`; bounds and assumptions are documented in
-//! `docs/specs/formal-verification.md`.
+//! `src/zip/read.rs`, and the TAR declared-size gate proof lives beside its
+//! production decision core in `src/tar/read.rs`; bounds and assumptions are
+//! documented in `docs/specs/formal-verification.md`.
 
 mod common;
 
@@ -1264,16 +1265,17 @@ proptest! {
     }
 }
 
-/// Bounded proofs of the parser-facing TAR contracts, verified
-/// exhaustively over symbolic input by Kani (`cargo kani --tests`; run
-/// via `mise run test-formal-kani`). Bounds and assumptions:
+/// Bounded proof of the remaining parser-facing TAR typeflag contract,
+/// verified exhaustively over symbolic input by Kani (`cargo kani --tests`;
+/// run via the aggregate Kani lane). Bounds and assumptions:
 /// `docs/specs/formal-verification.md`.
 ///
-/// Harnesses stay small by design (slice-1 lesson: symbolic byte streams
-/// and `fmt`/`RawVec` growth are CBMC cost bombs): all use a fixed
-/// concrete skeleton plus a symbolic *gate field* — a typeflag byte or
-/// `ArchiveReadLimits` budget — never a symbolic stream. The ZIP index
-/// gate proof is in `src/zip/read.rs` beside its pure decision core.
+/// The harness stays small by design (slice-1 lesson: symbolic byte streams
+/// and `fmt`/`RawVec` growth are CBMC cost bombs): it uses a fixed concrete
+/// skeleton plus a symbolic typeflag byte, never a symbolic stream. The ZIP
+/// index gate proof is in `src/zip/read.rs` beside its pure decision core,
+/// and the TAR declared-size gate proof is in `src/tar/read.rs` beside its
+/// pure decision core.
 #[cfg(kani)]
 mod proofs {
     use super::*;
@@ -1379,35 +1381,6 @@ mod proofs {
                 }
                 _ => unreachable!("unknown typeflag must be Unsupported"),
             },
-        }
-    }
-
-    /// A declared payload size above `max_entry_uncompressed_bytes` is
-    /// `LimitExceeded` before any payload byte is read; in-cap sizes
-    /// surface with the declared size intact. Symbolic limit against a
-    /// fixed declared 42 — pure comparison gate, the cheapest kind of
-    /// proof. Arbitrary streams are covered concretely by
-    /// `tar_arbitrary_stream_error_set`.
-    #[kani::proof]
-    #[kani::unwind(600)]
-    fn tar_declared_size_gate() {
-        let limit: u64 = kani::any();
-        let declared: u64 = 42;
-        let mut limits = ArchiveReadLimits::default();
-        limits.max_entry_uncompressed_bytes = limit;
-        let mut bytes = Vec::with_capacity(512);
-        bytes.extend_from_slice(&tar_block(b'0', b"f", declared));
-        let mut archive = TarArchiveReader::new(Cursor::new(bytes), limits);
-        match archive.next_entry() {
-            Err(e) => {
-                assert!(declared > limit);
-                assert!(e.kind() == ArchiveErrorKind::LimitExceeded);
-            }
-            Ok(Some(entry)) => {
-                assert!(declared <= limit);
-                assert!(entry.info().uncompressed_size() == Some(declared));
-            }
-            Ok(None) => unreachable!("a file header must surface or be gated"),
         }
     }
 }

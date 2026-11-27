@@ -60,6 +60,23 @@ struct ParsedEntry {
     declared: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TarDeclaredSizeDecision {
+    Accept,
+    Reject,
+}
+
+fn tar_declared_size_gate_decision(
+    declared: u64,
+    max_entry_uncompressed_bytes: u64,
+) -> TarDeclaredSizeDecision {
+    if declared > max_entry_uncompressed_bytes {
+        TarDeclaredSizeDecision::Reject
+    } else {
+        TarDeclaredSizeDecision::Accept
+    }
+}
+
 /// Streaming reader for a `Read` TAR byte stream.
 ///
 /// [`next_entry`](Self::next_entry) parses the next header (folding any
@@ -535,12 +552,15 @@ impl<R: Read> TarArchiveReader<R> {
                 u64::from(self.limits.max_path_bytes),
             ));
         }
-        if declared > self.limits.max_entry_uncompressed_bytes {
-            return Err(limit_u64(
-                "max_entry_uncompressed_bytes",
-                declared,
-                self.limits.max_entry_uncompressed_bytes,
-            ));
+        match tar_declared_size_gate_decision(declared, self.limits.max_entry_uncompressed_bytes) {
+            TarDeclaredSizeDecision::Reject => {
+                return Err(limit_u64(
+                    "max_entry_uncompressed_bytes",
+                    declared,
+                    self.limits.max_entry_uncompressed_bytes,
+                ));
+            }
+            TarDeclaredSizeDecision::Accept => {}
         }
         if self.entries_total >= self.limits.max_entries {
             return Err(limit_u64(
@@ -922,5 +942,49 @@ impl<R: Read> Drop for TarEntryReader<'_, R> {
             skip: self.declared - self.produced,
             pad: header::pad_len(self.declared),
         };
+    }
+}
+
+#[cfg(kani)]
+mod proofs {
+    use super::{TarDeclaredSizeDecision, tar_declared_size_gate_decision};
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_payload_limit_declared_exactness() {
+        let declared: u64 = kani::any();
+        let max_entry_uncompressed_bytes: u64 = kani::any();
+
+        let actual = tar_declared_size_gate_decision(declared, max_entry_uncompressed_bytes);
+        if declared > max_entry_uncompressed_bytes {
+            assert!(actual == TarDeclaredSizeDecision::Reject);
+        } else {
+            assert!(actual == TarDeclaredSizeDecision::Accept);
+        }
+
+        kani::cover!(
+            max_entry_uncompressed_bytes > 0
+                && declared == max_entry_uncompressed_bytes - 1
+                && actual == TarDeclaredSizeDecision::Accept,
+            "declared size boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            declared == max_entry_uncompressed_bytes && actual == TarDeclaredSizeDecision::Accept,
+            "declared size boundary acceptance is reachable"
+        );
+        kani::cover!(
+            max_entry_uncompressed_bytes < u64::MAX
+                && declared == max_entry_uncompressed_bytes + 1
+                && actual == TarDeclaredSizeDecision::Reject,
+            "declared size boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            declared <= max_entry_uncompressed_bytes && actual == TarDeclaredSizeDecision::Accept,
+            "in-cap acceptance is reachable"
+        );
+        kani::cover!(
+            declared > max_entry_uncompressed_bytes && actual == TarDeclaredSizeDecision::Reject,
+            "over-cap rejection is reachable"
+        );
     }
 }
