@@ -1548,15 +1548,17 @@ struct BackendTraceProviderSpec {
     keyword_mask: &'static str,
     level: &'static str,
     selection_reason: &'static str,
+    require_registered: bool,
 }
 
-const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 2] = [
+const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 4] = [
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-Audio",
         guid: "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
         keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
         level: BACKEND_TRACE_LEVEL,
         selection_reason: "baseline OS audio engine/audiodg event inventory",
+        require_registered: true,
     },
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-KernelStreaming",
@@ -1564,6 +1566,23 @@ const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 2] = [
         keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
         level: BACKEND_TRACE_LEVEL,
         selection_reason: "registered audio/KernelStreaming provider candidate for PortCls miniport events",
+        require_registered: true,
+    },
+    BackendTraceProviderSpec {
+        name: "Microsoft-Windows-AudioEngineVerbose",
+        guid: "{A6A00EFD-21F2-4A99-807E-9B3BF1D90285}",
+        keyword_mask: "0xffff",
+        level: BACKEND_TRACE_LEVEL,
+        selection_reason: "audio engine provider used by multimedia trace profiles; OS audio-engine correlation candidate even when not manifest-registered",
+        require_registered: false,
+    },
+    BackendTraceProviderSpec {
+        name: "PortCls-AudioEngineWMI",
+        guid: "{10EB6007-818C-4DB6-A694-B518E589D07A}",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        level: BACKEND_TRACE_LEVEL,
+        selection_reason: "GUID embedded in portcls.sys and used by core-audio trace guidance; primary PortCls miniport engine event candidate",
+        require_registered: false,
     },
 ];
 
@@ -1796,6 +1815,8 @@ struct BackendTraceXmlInventory {
     events_total: u64,
     audio_provider_events: u64,
     kernel_streaming_provider_events: u64,
+    audio_engine_provider_events: u64,
+    portcls_provider_events: u64,
     other_provider_events: u64,
     ae_position_events: u64,
     set_current_timestamp_events: u64,
@@ -1820,12 +1841,37 @@ fn extract_trace_data_u64(chunk: &str, name: &str) -> Option<u64> {
     }
 }
 
+fn trace_token_has_rvf_position_schema(token: &str) -> bool {
+    let value = if let Some(hex) = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))
+    {
+        u64::from_str_radix(hex, 16).ok()
+    } else {
+        token.parse::<u64>().ok()
+    };
+    value.is_some_and(|value| value & 0xffff == RVF_POSITION_ETW_PRESENTATION_POSITION_V1)
+}
+
+fn chunk_has_rvf_position_schema(chunk: &str) -> bool {
+    chunk
+        .split(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | ','))
+        .any(trace_token_has_rvf_position_schema)
+}
+
 fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXmlInventory) {
     inventory.events_total = inventory.events_total.saturating_add(1);
     let lower = chunk.to_ascii_lowercase();
     let audio_guid = BACKEND_TRACE_PROVIDERS[0].guid.to_ascii_lowercase();
     let kernel_guid = BACKEND_TRACE_PROVIDERS[1].guid.to_ascii_lowercase();
-    if lower.contains(&audio_guid) || lower.contains("microsoft-windows-audio") {
+    let audio_engine_guid = BACKEND_TRACE_PROVIDERS[2].guid.to_ascii_lowercase();
+    let portcls_guid = BACKEND_TRACE_PROVIDERS[3].guid.to_ascii_lowercase();
+    if lower.contains(&portcls_guid) {
+        inventory.portcls_provider_events = inventory.portcls_provider_events.saturating_add(1);
+    } else if lower.contains(&audio_engine_guid) || lower.contains("audioengine") {
+        inventory.audio_engine_provider_events =
+            inventory.audio_engine_provider_events.saturating_add(1);
+    } else if lower.contains(&audio_guid) || lower.contains("microsoft-windows-audio") {
         inventory.audio_provider_events = inventory.audio_provider_events.saturating_add(1);
     } else if lower.contains(&kernel_guid) || lower.contains("microsoft-windows-kernelstreaming") {
         inventory.kernel_streaming_provider_events =
@@ -1843,7 +1889,7 @@ fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXm
     if lower.contains("glitch") {
         inventory.glitch_events = inventory.glitch_events.saturating_add(1);
     }
-    if lower.contains("0x2001") || chunk.contains("8193") {
+    if chunk_has_rvf_position_schema(chunk) {
         inventory.rvf_position_events = inventory.rvf_position_events.saturating_add(1);
     }
     if lower.contains("get_presentation")
@@ -1997,6 +2043,9 @@ impl BackendOsTraceControl {
         let missing = BACKEND_TRACE_PROVIDERS
             .iter()
             .filter(|provider| {
+                if !provider.require_registered {
+                    return false;
+                }
                 let name = provider.name.to_ascii_lowercase();
                 let guid = provider.guid.to_ascii_lowercase();
                 !discovery_text.contains(&name) && !discovery_text.contains(&guid)
@@ -2206,7 +2255,7 @@ impl BackendOsTraceControl {
         let notes = backend_trace_bounded_text(&self.notes.join(";"));
         vec![
             format!(
-                "roundtrip_backend_os_trace: {context}status={} coverage={} session={} artifact_dir_source={} etl={} etl_bytes={} xml={} xml_bytes={} summary={} provider_events_audio={} provider_events_kernelstreaming={} ae_position_events={} set_current_timestamp_events={} glitch_events={} rvf_position_events={} standard_presentation_position_events={} start_exit={} stop_exit={} delete_exit={} tracerpt_exit={} notes={}",
+                "roundtrip_backend_os_trace: {context}status={} coverage={} session={} artifact_dir_source={} etl={} etl_bytes={} xml={} xml_bytes={} summary={} provider_events_audio={} provider_events_kernelstreaming={} provider_events_audioengine={} provider_events_portcls={} ae_position_events={} set_current_timestamp_events={} glitch_events={} rvf_position_events={} standard_presentation_position_events={} start_exit={} stop_exit={} delete_exit={} tracerpt_exit={} notes={}",
                 self.status,
                 self.driver_coverage(),
                 backend_trace_bounded_text(&self.session_name),
@@ -2224,6 +2273,8 @@ impl BackendOsTraceControl {
                 summary_name,
                 self.xml_inventory.audio_provider_events,
                 self.xml_inventory.kernel_streaming_provider_events,
+                self.xml_inventory.audio_engine_provider_events,
+                self.xml_inventory.portcls_provider_events,
                 self.xml_inventory.ae_position_events,
                 self.xml_inventory.set_current_timestamp_events,
                 self.xml_inventory.glitch_events,
@@ -2337,6 +2388,8 @@ impl BackendOsTraceControl {
                 "events_total": self.xml_inventory.events_total,
                 "audio_provider_events": self.xml_inventory.audio_provider_events,
                 "kernel_streaming_provider_events": self.xml_inventory.kernel_streaming_provider_events,
+                "audio_engine_provider_events": self.xml_inventory.audio_engine_provider_events,
+                "portcls_provider_events": self.xml_inventory.portcls_provider_events,
                 "other_provider_events": self.xml_inventory.other_provider_events,
                 "ae_position_events": self.xml_inventory.ae_position_events,
                 "set_current_timestamp_events": self.xml_inventory.set_current_timestamp_events,
@@ -4454,6 +4507,9 @@ fn backend_trace_etw_field_packing_round_trip() {
     assert_eq!(rvf_position_pin_facts_decode(pin_facts), (7, 3, true));
     let render_facts = rvf_position_pin_facts(7, 3, false);
     assert_eq!(rvf_position_pin_facts_decode(render_facts), (7, 3, false));
+    assert!(chunk_has_rvf_position_schema(&data1.to_string()));
+    assert!(chunk_has_rvf_position_schema("0x9896802001"));
+    assert!(!chunk_has_rvf_position_schema("0x9896802002"));
 }
 
 #[test]
