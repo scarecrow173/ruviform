@@ -21,10 +21,11 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The ZIP index gate proof lives beside the production decision core in
-//! `src/zip/read.rs`; the TAR declared-size and typeflag classification proofs
-//! live beside their production decision cores in `src/tar/read.rs`. Bounds
-//! and assumptions are documented in `docs/specs/formal-verification.md`.
+//! The ZIP index gate and declared entry-size gate proofs live beside their
+//! production decision cores in `src/zip/read.rs`; the TAR declared-size and
+//! typeflag classification proofs live beside their production decision cores
+//! in `src/tar/read.rs`. Bounds and assumptions are documented in
+//! `docs/specs/formal-verification.md`.
 
 mod common;
 
