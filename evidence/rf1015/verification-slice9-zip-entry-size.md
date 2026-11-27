@@ -8,9 +8,9 @@
   `arc-zip-entry-size` selective lane、proof placement documentation を含む最後の
   製品/proof/mise 変更 commit である。実装 commit `f582f3cb` に対し、`e04db55b` は
   test module documentationだけを更新する comment-only descendantである。
-- evidence sync commit: 本書・ledger・spec・skill・`runs.jsonl` を含む後続の
-  docs/evidence-only commit。evidence は自分自身を含む commit hash を固定点として
-  書けないため、最終 head SHA は PR 本文で追跡する。
+- evidence sync commit: `59498772b55db2ed9321db11f6d662a612963649`。本書・ledger・spec・skill・`runs.jsonl`
+  を含む初期 docs/evidence-only commitである。この SHA 自体を evidence 内へ記録する
+  correction commitも docs/evidence-onlyであり、最終 head SHA は PR 本文で追跡する。
 
 ## 実装した再設計
 
