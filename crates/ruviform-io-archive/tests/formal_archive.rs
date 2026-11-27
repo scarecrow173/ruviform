@@ -21,12 +21,10 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries the remaining
-//! parser-facing TAR typeflag bounded proof (run via the aggregate Kani lane).
 //! The ZIP index gate proof lives beside the production decision core in
-//! `src/zip/read.rs`, and the TAR declared-size gate proof lives beside its
-//! production decision core in `src/tar/read.rs`; bounds and assumptions are
-//! documented in `docs/specs/formal-verification.md`.
+//! `src/zip/read.rs`; the TAR declared-size and typeflag classification proofs
+//! live beside their production decision cores in `src/tar/read.rs`. Bounds
+//! and assumptions are documented in `docs/specs/formal-verification.md`.
 
 mod common;
 
@@ -603,6 +601,79 @@ fn drive_zip(bytes: &[u8]) -> Result<(), TestCaseError> {
         }
     }
     Ok(())
+}
+
+/// Parser-core connection regression for the typeflag decision: the raw
+/// byte classification must reach the observable entry kind/link target,
+/// extension folding must stay internal, global PAX must not override
+/// effective fields, and an unknown typeflag must stay `Unsupported`.
+#[test]
+fn tar_typeflag_connection_regression() {
+    let mut hard = HeaderSpec::new(b'1', b"hard", 0);
+    hard.linkname = b"hard-target";
+    let mut sym = HeaderSpec::new(b'2', b"sym", 0);
+    sym.linkname = b"sym-target";
+    let bytes = tar(&[
+        entry_with(&HeaderSpec::new(0, b"nul-file", 0), b""),
+        entry_with(&HeaderSpec::new(b'0', b"regular-file", 0), b""),
+        entry_with(&HeaderSpec::new(b'7', b"contiguous-file", 0), b""),
+        entry_with(&HeaderSpec::new(b'5', b"directory", 0), b""),
+        entry_with(&hard, b""),
+        entry_with(&sym, b""),
+    ]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let expected = [
+        EntryKind::File,
+        EntryKind::File,
+        EntryKind::File,
+        EntryKind::Directory,
+        EntryKind::HardLink,
+        EntryKind::SymbolicLink,
+    ];
+    for (index, expected_kind) in expected.iter().enumerate() {
+        let entry = archive
+            .next_entry()
+            .expect("surfaced entry")
+            .expect("some entry");
+        assert_eq!(entry.info().kind(), *expected_kind);
+        if index == 4 {
+            assert_eq!(
+                entry.info().link_name().map(ArchiveName::as_bytes),
+                Some(b"hard-target".as_slice())
+            );
+        }
+        if index == 5 {
+            assert_eq!(
+                entry.info().link_name().map(ArchiveName::as_bytes),
+                Some(b"sym-target".as_slice())
+            );
+        }
+        entry.finish().expect("entry finish");
+    }
+    assert!(archive.next_entry().expect("end").is_none());
+
+    let local_pax = pax_record(b"path", b"solaris-pax-name");
+    let global_pax = pax_record(b"path", b"global-must-not-apply");
+    let bytes = tar(&[
+        ext_entry(b'X', "X", &local_pax),
+        ext_entry(b'g', "g", &global_pax),
+        entry_with(&HeaderSpec::file("fallback", 0), b""),
+    ]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    let entry = archive
+        .next_entry()
+        .expect("post-extension entry")
+        .expect("some entry");
+    assert_eq!(entry.info().name().as_bytes(), b"solaris-pax-name");
+    entry.finish().expect("entry finish");
+    assert!(archive.next_entry().expect("end").is_none());
+
+    let bytes = tar(&[entry_with(&HeaderSpec::new(b'3', b"char-device", 0), b"")]);
+    let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
+    match archive.next_entry() {
+        Err(error) => assert_eq!(error.kind(), ArchiveErrorKind::Unsupported),
+        Ok(_) => panic!("unsupported typeflag must not surface"),
+    }
 }
 
 proptest! {
@@ -1262,125 +1333,5 @@ proptest! {
             .map(|(_, _, d)| u64::try_from(d.len()).unwrap_or(0))
             .sum();
         prop_assert_eq!(receipt.payload_bytes(), total_bytes);
-    }
-}
-
-/// Bounded proof of the remaining parser-facing TAR typeflag contract,
-/// verified exhaustively over symbolic input by Kani (`cargo kani --tests`;
-/// run via the aggregate Kani lane). Bounds and assumptions:
-/// `docs/specs/formal-verification.md`.
-///
-/// The harness stays small by design (slice-1 lesson: symbolic byte streams
-/// and `fmt`/`RawVec` growth are CBMC cost bombs): it uses a fixed concrete
-/// skeleton plus a symbolic typeflag byte, never a symbolic stream. The ZIP
-/// index gate proof is in `src/zip/read.rs` beside its pure decision core,
-/// and the TAR declared-size gate proof is in `src/tar/read.rs` beside its
-/// pure decision core.
-#[cfg(kani)]
-mod proofs {
-    use super::*;
-
-    /// Writes `value` as zero-padded octal digits + NUL into `field`.
-    /// Manual digits: `format!` pulls in fmt machinery — a CBMC cost
-    /// bomb per the slice-1 ledger.
-    fn put_octal(field: &mut [u8], mut value: u64) {
-        let digits = field.len() - 1;
-        for i in (0..digits).rev() {
-            field[i] = b'0' + (value & 7) as u8;
-            value >>= 3;
-        }
-        field[digits] = 0;
-    }
-
-    /// Byte-sum of the fixed header fields (`mode`/`uid`/`gid`/`mtime`,
-    /// the eight checksum-placeholder spaces, `ustar` magic) excluding
-    /// the name bytes, the size field, and byte 156 (typeflag). Must
-    /// stay in sync with `tar_block`'s literal layout — a drifted
-    /// constant produces a bad checksum and every harness arm below
-    /// fails loudly.
-    const TAR_HEADER_BASE: u32 = 2495;
-
-    /// Sum of `value`'s octal digits — the closed-form replacement for
-    /// the 512-iteration checksum loop, which was the dominant CBMC
-    /// unwind cost of the first harness version.
-    fn octal_digit_sum(mut value: u64) -> u32 {
-        let mut sum = 0;
-        while value != 0 {
-            sum += u32::from((value & 7) as u8);
-            value >>= 3;
-        }
-        sum
-    }
-
-    /// Minimal ustar header block — same layout as
-    /// `common::tar::HeaderSpec::block` but allocation- and fmt-free so
-    /// CBMC only pays for the product code under test. The checksum is
-    /// computed in closed form (`TAR_HEADER_BASE` + name bytes + the
-    /// 11 '0' + digit-sum of `size` + `typeflag`).
-    fn tar_block(typeflag: u8, name: &[u8], size: u64) -> [u8; 512] {
-        let mut block = [0_u8; 512];
-        block[..name.len()].copy_from_slice(name);
-        put_octal(&mut block[100..108], 0o644);
-        put_octal(&mut block[108..116], 0);
-        put_octal(&mut block[116..124], 0);
-        put_octal(&mut block[124..136], size);
-        put_octal(&mut block[136..148], 1_700_000_000);
-        block[148..156].copy_from_slice(b"        ");
-        block[156] = typeflag;
-        block[257..263].copy_from_slice(b"ustar\0");
-        block[263..265].copy_from_slice(b"00");
-        let mut sum = TAR_HEADER_BASE
-            + 528 // 11 '0' bytes of the size field
-            + octal_digit_sum(size)
-            + u32::from(typeflag);
-        for &b in name {
-            sum += u32::from(b);
-        }
-        for i in (0..6).rev() {
-            block[148 + i] = b'0' + (sum & 7) as u8;
-            sum >>= 3;
-        }
-        block[154] = 0;
-        block[155] = b' ';
-        block
-    }
-
-    /// Every TAR typeflag byte classifies exactly one way: surfaced
-    /// entry kinds, folded extensions, or `Unsupported`. The skeleton
-    /// is concrete; only byte 156 is symbolic, so the 512-iteration
-    /// checksum loops unwind deterministically. Exhaustive over all
-    /// 256 typeflag values.
-    #[kani::proof]
-    #[kani::unwind(600)]
-    fn tar_typeflag_classification() {
-        let typeflag: u8 = kani::any();
-        let mut bytes = Vec::with_capacity(1536);
-        bytes.extend_from_slice(&tar_block(typeflag, b"f", 0));
-        bytes.extend_from_slice(&[0_u8; 1024]);
-        let mut archive = TarArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default());
-        match typeflag {
-            b'0' | 0 | b'7' | b'5' | b'1' | b'2' => match archive.next_entry() {
-                Ok(Some(entry)) => {
-                    let expected = match typeflag {
-                        b'5' => EntryKind::Directory,
-                        b'1' => EntryKind::HardLink,
-                        b'2' => EntryKind::SymbolicLink,
-                        _ => EntryKind::File,
-                    };
-                    assert!(entry.info().kind() == expected);
-                }
-                _ => unreachable!("supported typeflag must surface"),
-            },
-            b'x' | b'g' | b'X' | b'L' | b'K' => match archive.next_entry() {
-                Ok(None) => {}
-                _ => unreachable!("extension flag must be folded, not surfaced"),
-            },
-            _ => match archive.next_entry() {
-                Err(e) => {
-                    assert!(e.kind() == ArchiveErrorKind::Unsupported);
-                }
-                _ => unreachable!("unknown typeflag must be Unsupported"),
-            },
-        }
     }
 }
