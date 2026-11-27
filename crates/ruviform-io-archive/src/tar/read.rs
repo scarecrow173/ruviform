@@ -111,6 +111,20 @@ fn tar_declared_size_gate_decision(
     }
 }
 
+enum TarMetadataBlockDecision {
+    Commit(u64),
+    OverLimit(u64),
+    Overflow,
+}
+
+fn tar_metadata_block_decision(before: u64, max_metadata_bytes: u64) -> TarMetadataBlockDecision {
+    match before.checked_add(BLOCK as u64) {
+        Some(total) if total <= max_metadata_bytes => TarMetadataBlockDecision::Commit(total),
+        Some(total) => TarMetadataBlockDecision::OverLimit(total),
+        None => TarMetadataBlockDecision::Overflow,
+    }
+}
+
 struct TarMetadataExtensionGateDecision {
     remaining_before: u64,
     accepted: bool,
@@ -476,13 +490,18 @@ impl<R: Read> TarArchiveReader<R> {
             if let Err(error) = self.read_block(&mut block) {
                 return self.fail(error);
             }
-            self.metadata_bytes += BLOCK as u64;
-            if self.metadata_bytes > self.limits.max_metadata_bytes {
-                return self.fail(limit_u64(
-                    "max_metadata_bytes",
-                    self.metadata_bytes,
-                    self.limits.max_metadata_bytes,
-                ));
+            let limit = self.limits.max_metadata_bytes;
+            match tar_metadata_block_decision(self.metadata_bytes, limit) {
+                TarMetadataBlockDecision::Commit(total) => self.metadata_bytes = total,
+                TarMetadataBlockDecision::OverLimit(total) => {
+                    return self.fail(limit_u64("max_metadata_bytes", total, limit));
+                }
+                TarMetadataBlockDecision::Overflow => {
+                    return self.fail(ArchiveError::new(
+                        ArchiveErrorKind::LimitExceeded,
+                        "max_metadata_bytes: block total exceeds u64::MAX",
+                    ));
+                }
             }
             if header::is_zero_block(&block) {
                 self.state = ReaderState::EndSeen;
@@ -1085,13 +1104,52 @@ impl<R: Read> Drop for TarEntryReader<'_, R> {
 #[cfg(kani)]
 mod proofs {
     use super::{
-        TarDeclaredSizeDecision, TarMeasuredTotalWindowDecision, TarSurfacedKind, TarTypeflagClass,
-        tar_declared_size_gate_decision, tar_entry_accumulate_produced,
-        tar_entry_payload_exhausted, tar_entry_read_window_decision, tar_entry_remaining_payload,
-        tar_measured_total_accumulate, tar_measured_total_remaining,
-        tar_measured_total_window_decision, tar_metadata_extension_gate_decision,
-        tar_typeflag_class,
+        TarDeclaredSizeDecision, TarMeasuredTotalWindowDecision, TarMetadataBlockDecision,
+        TarSurfacedKind, TarTypeflagClass, tar_declared_size_gate_decision,
+        tar_entry_accumulate_produced, tar_entry_payload_exhausted, tar_entry_read_window_decision,
+        tar_entry_remaining_payload, tar_measured_total_accumulate, tar_measured_total_remaining,
+        tar_measured_total_window_decision, tar_metadata_block_decision,
+        tar_metadata_extension_gate_decision, tar_typeflag_class,
     };
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_tar_block_budget_decision_exactness() {
+        let before: u64 = kani::any();
+        let max_metadata_bytes: u64 = kani::any();
+        let decision = tar_metadata_block_decision(before, max_metadata_bytes);
+
+        let sum = u128::from(before) + 512;
+        let limit = u128::from(max_metadata_bytes);
+        let largest = u128::from(u64::MAX);
+        let commits =
+            matches!(decision, TarMetadataBlockDecision::Commit(total) if u128::from(total) == sum);
+        let rejects = matches!(decision, TarMetadataBlockDecision::OverLimit(total) if u128::from(total) == sum);
+        let overflows = matches!(decision, TarMetadataBlockDecision::Overflow);
+        if sum > largest {
+            assert!(overflows, "nonrepresentable sum must report overflow");
+        } else if sum <= limit {
+            assert!(
+                commits,
+                "in-budget sum must commit exactly, including equality"
+            );
+        } else {
+            assert!(
+                rejects,
+                "representable over-limit sum must be reported exactly"
+            );
+        }
+
+        kani::cover!(sum + 1 == limit && commits, "one byte within limit");
+        kani::cover!(sum == limit && commits, "exact limit");
+        kani::cover!(sum == limit + 1 && rejects, "one byte over limit");
+        kani::cover!(sum == largest && commits, "largest representable sum");
+        kani::cover!(
+            sum == largest + 1 && limit == largest && overflows,
+            "first nonrepresentable sum at maximum limit"
+        );
+        kani::cover!(u128::from(before) > limit && rejects, "already over limit");
+    }
 
     #[kani::proof]
     #[kani::unwind(2)]
