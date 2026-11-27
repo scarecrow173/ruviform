@@ -1,0 +1,25 @@
+{
+  "case": "rf629.audio.virtual-endpoint.render-capture",
+  "diagnostic_artifact": true,
+  "driver_event_coverage": "incomplete-no-driver-event-decoded",
+  "miniport_event_counts": {
+    "invalid_rvf_position_schema": 0,
+    "missing_binary_payload": 0,
+    "rf_position_schema": 0,
+    "standard_presentation_position": 0,
+    "storage_overflow": 0,
+    "stored": 0,
+    "total_decoded": 0,
+    "undecoded_binary_payload": 0
+  },
+  "miniport_events": [],
+  "not_run_metadata_schema": true,
+  "pair": 0,
+  "path": "roundtrip_output",
+  "payload_layout": "PortCls EVENT_TRACE_HEADER uses WNODE_FLAG_USE_MOF_PTR; tracerpt BinaryEventData is the referenced 0x30-byte little-endian block: u64 trace_event_type, u64 data1, u64 data2, u64 data3, u64 data4, u64 trailing_zero",
+  "rf_driver_position_events": [],
+  "schema": "rf1034-driver-position-events/v1",
+  "session": "rvf1034_bt_5200_0",
+  "trace_event_type_base": 96,
+  "trace_status": "captured"
+}

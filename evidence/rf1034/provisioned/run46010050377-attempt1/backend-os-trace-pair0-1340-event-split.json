@@ -1,0 +1,205 @@
+{
+  "boundary_status": {
+    "classic_selftest": "classic-selftest-decoded",
+    "controller_enablement": "control-request-witnessed",
+    "kernel_wmi_capture_note": "user-mode classic positive control is not proof of kernel-mode WMI payload capture compatibility",
+    "miniport_lifecycle": "miniport-lifecycle-absent-after-stream-success",
+    "position_event": "position-event-absent"
+  },
+  "case": "rf629.audio.virtual-endpoint.render-capture",
+  "control_witness_counts": {
+    "disable_event_id": 15,
+    "disable_events": 3,
+    "disable_opcode19_events": 3,
+    "enable_event_id": 14,
+    "enable_events": 6,
+    "enable_opcode18_events": 6,
+    "kernel_eventtracing_events": 292,
+    "matched_session_disable": 3,
+    "matched_session_enable": 6,
+    "portcls_control_disable": 1,
+    "portcls_control_enable": 1,
+    "portcls_event_disable": 0,
+    "portcls_event_enable": 0,
+    "raw_message_available": 9,
+    "selftest_disable": 0,
+    "selftest_enable": 1
+  },
+  "decode_notes": [
+    "classic-selftest-decoded is a user-mode classic ETW capture/decode positive control, not proof of kernel-mode WMI payload compatibility",
+    "miniport-lifecycle-absent-after-stream-success does not separate driver emit drop, control delivery failure, PortCls buffering, and kernel WMI capture incompatibility"
+  ],
+  "diagnostic_artifact": true,
+  "driver_event_coverage": "incomplete-portcls-event-present-undecoded",
+  "miniport_counts": {
+    "missing_binary_payload": 0,
+    "ordinal": {
+      "0_ihv_defined": 0,
+      "1_buffer_complete": 0,
+      "2_pin_state": 0,
+      "3_get_stream_position": 0,
+      "4_set_wavert_buffer_write_position": 0,
+      "5_get_presentation_position": 0
+    },
+    "rf_position_schema_2001": 0,
+    "standard_presentation_position": 0,
+    "total_decoded": 0,
+    "undecoded_binary": 0,
+    "unmodeled_class": 2,
+    "xrun_schema_1001": 0,
+    "xrun_schema_1002": 0,
+    "xrun_schema_1003": 0,
+    "xrun_schema_1004": 0,
+    "xrun_schema_1005": 0
+  },
+  "not_run_metadata_schema": true,
+  "pair": 0,
+  "path": "roundtrip_output",
+  "provider_matrix": [
+    {
+      "enabled_in_session": true,
+      "guid": "{B675EC37-BDB6-4648-BC92-F3FDC74D3CA2}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "Microsoft-Windows-Kernel-EventTracing",
+      "role": "kernel-eventtracing-control"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "Microsoft-Windows-Audio",
+      "role": "manifest-control"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{548C4417-CE45-41FF-99DD-528F01CE0FE1}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "Microsoft-Windows-KernelStreaming",
+      "role": "manifest-control"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{A6A00EFD-21F2-4A99-807E-9B3BF1D90285}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "Microsoft-Windows-AudioEngineVerbose",
+      "role": "classic-or-wmi-control"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{10EB6007-818C-4DB6-A694-B518E589D07A}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "PortCls-AudioEngineWmiTraceControl",
+      "role": "classic-or-wmi-control"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{97BCD203-6286-4974-801D-A293B921F84B}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "PortCls-AudioEngine-WMIEvent",
+      "role": "wmi-event-class"
+    },
+    {
+      "enabled_in_session": true,
+      "guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2001}",
+      "keyword_mask": "0xffffffffffffffff",
+      "level": "0xff",
+      "name": "Rvf1034-ClassicSelftest-Control",
+      "role": "classic-selftest-control"
+    },
+    {
+      "enabled_in_session": false,
+      "guid": "{93BB152D-DF9E-4282-B709-1696392F2557}",
+      "keyword_mask": "not-enabled-event-class",
+      "level": "not-enabled-event-class",
+      "name": "PortCls-Position-WMIEvent",
+      "role": "wmi-event-class"
+    },
+    {
+      "enabled_in_session": false,
+      "guid": "{9502CBC6-AA74-4EFF-BA91-D9329BCCE758}",
+      "keyword_mask": "not-enabled-event-class",
+      "level": "not-enabled-event-class",
+      "name": "PortCls-Root-WMIEvent",
+      "role": "wmi-event-class"
+    }
+  ],
+  "raw_artifacts": {
+    "delete_log": {
+      "bytes": 147,
+      "file": "backend-os-trace-pair0-1340-delete-log.txt"
+    },
+    "etl": {
+      "bytes": 5578752,
+      "file": "backend-os-trace-pair0-1340.etl"
+    },
+    "provider_discovery": {
+      "bytes": 97624,
+      "file": "backend-os-trace-pair0-1340-provider-discovery.txt"
+    },
+    "provider_list": {
+      "bytes": 441,
+      "file": "backend-os-trace-pair0-1340-provider-list.txt"
+    },
+    "session_query_log": {
+      "bytes": 5351,
+      "file": "backend-os-trace-pair0-1340-session-query-log.txt"
+    },
+    "start_log": {
+      "bytes": 368,
+      "file": "backend-os-trace-pair0-1340-start-log.txt"
+    },
+    "stop_log": {
+      "bytes": 127,
+      "file": "backend-os-trace-pair0-1340-stop-log.txt"
+    },
+    "tracerpt_log": {
+      "bytes": 893,
+      "file": "backend-os-trace-pair0-1340-tracerpt-log.txt"
+    },
+    "xml": {
+      "bytes": 58720509,
+      "file": "backend-os-trace-pair0-1340.xml"
+    }
+  },
+  "schema": "rf1034-portcls-event-split/v1",
+  "selftest": {
+    "disable_callback_count": 0,
+    "emit_api_status": 0,
+    "emit_attempted": true,
+    "emit_count": 1,
+    "enable_callback_count": 1,
+    "enable_flags": 4294967295,
+    "enable_level": 255,
+    "enabled": true,
+    "error": null,
+    "implemented": true,
+    "registration_attempted": true,
+    "registration_handle_present": true,
+    "registration_status": 0,
+    "session_handle_present": true,
+    "unregister_attempted": true,
+    "unregister_status": 0
+  },
+  "selftest_decode": {
+    "events": 1,
+    "identity_match_count": 1,
+    "missing_payload_count": 0,
+    "payload_match_count": 1,
+    "payload_mismatch_count": 0
+  },
+  "selftest_identity": {
+    "event_class_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2002}",
+    "payload_hex": "525646313033345301200000000034100120000000001F5E0120000000000000",
+    "provider_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2001}"
+  },
+  "session": "rvf1034_bt_1340_0",
+  "split_verdict": "driver-upstream-or-portcls-emission-unresolved",
+  "stream_success_observed": true,
+  "trace_status": "captured"
+}
