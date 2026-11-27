@@ -103,7 +103,7 @@ fn zip_kind_is_stable(kind: ArchiveErrorKind) -> bool {
 
 /// Extracts the `ArchiveErrorKind` wrapped inside an entry-reader
 /// `io::Error` (`From<ArchiveError>` keeps it as the inner error).
-fn io_kind(error: &std::io::Error) -> Option<ArchiveErrorKind> {
+fn io_kind(error: &io::Error) -> Option<ArchiveErrorKind> {
     error
         .get_ref()
         .and_then(|e| e.downcast_ref::<ArchiveError>())
