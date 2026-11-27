@@ -112,7 +112,8 @@ rf#806 の harness inventory は後続の再設計で Property group 単位へ�
 選択再実行の台帳は `evidence/rf1015/property-ledger.md`、slice 1/2 の作業証跡は
 `evidence/rf1015/verification.md`・`evidence/rf1015/verification-slice2.md`・
 `evidence/rf1015/verification-slice3.md`・`evidence/rf1015/verification-slice4-archive.md`・
-`evidence/rf1015/verification-slice5-archive-payload.md`・`evidence/rf1015/runs.jsonl` であり、
+`evidence/rf1015/verification-slice5-archive-payload.md`・
+`evidence/rf1015/verification-slice6-archive-typeflag.md`・`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
@@ -120,8 +121,9 @@ legacy exception の判断では ledger を優先する。本書の表現と矛�
 
 slice 1 で確定した設計方向は次のとおり。structured の D-1 は slice 3 で、
 Archive 側代表 Property `ARC-IDX-LIMIT` は slice 4 で、`ARC-PAYLOAD-LIMIT`
-の TAR declared size gate は slice 5 で実施済みだが、WAV・他の wire/archive
-Property・read_frame・SampleFormat の方向は後続実装 slice の採用方針である。
+の TAR declared size gate は slice 5 で、`ARC-TAR-STRUCT` の typeflag
+classification は slice 6 で実施済みだが、WAV・他の wire/archive Property・
+read_frame・SampleFormat の方向は後続実装 slice の採用方針である。
 
 1. structured documents では crate 全体への `--no-unwinding-checks` を
    撤廃する。最終形は CSV limit decision を `csv_core` の DFA/reader
@@ -172,15 +174,26 @@ PAX/GNU override、任意 malformed stream、payload streaming、measured total
 uncompressed budget、ZIP entry size gate、decompression は Kani 未証明領域として残り、
 既存 proptest が接続 coverage を担う。
 
+rf#1015 slice 6 では、Archive 側代表 Property のうち `ARC-TAR-STRUCT` の
+TAR typeflag classification を実装した。`TarArchiveReader` は header typeflag
+byte だけを受け取る crate-private な `tar_typeflag_class` を entry dispatchの
+前に呼び、local/global PAX、GNU longname/longlink、surface kind、unsupported を
+一意に分類する。core は allocation・I/O・TAR header parser・checksum・extension
+payload・診断構築を持たない。proof は製品実装と同じ `src/tar/read.rs` の
+`#[cfg(kani)] mod proofs` に置き、production decision core を independent oracleと
+比較して全 256 byte値の exactnessを検証する。parser が core を呼ぶ接続条件、
+PAX/GNU extension folding、複数 header、任意 malformed stream、数値 field 全体は
+Kani 未証明領域として残り、connection regression と既存 proptest が接続 coverageを担う。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
-`arc-payload-limit` が最小入口である。
+`arc-payload-limit`、slice 6 の `arc-tar-struct` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
-generic runner はまだない。`W-IPC-OP`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `SD-CSV-LIMITS`,
-`SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
+generic runner はまだない。`W-IPC-OP`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
+`SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5 の evidence を正本とする。
+ledger §6 と slice 2/3/4/5/6 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -239,6 +252,7 @@ ledger §6 と slice 2/3/4/5 の evidence を正本とする。
 | `mise run test-formal-kani w-ipc-op` | `cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op` の 1 invocation。`src/ipc.rs` の `w_ipc_op_exactness_len0_16` と 3 件の `w_ipc_op_boundary_len*` だけを選び、Unwinding Assertions を無効化しない。未知 selector は Kani 実行前に exit 2 | 同上 |
 | `mise run test-formal-kani arc-idx-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit` の 1 invocation。`src/zip/read.rs` の `arc_idx_limit_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-payload-limit` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit` の 1 invocation。`src/tar/read.rs` の `arc_payload_limit_declared_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
+| `mise run test-formal-kani arc-tar-struct` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct` の 1 invocation。`src/tar/read.rs` の `arc_tar_struct_typeflag_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-csv-limits` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision` の 1 invocation。CSV limit decision core の 3 proofだけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-byte-budget` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate` の 1 invocation。Unwinding Assertions を無効化しない | 同上 |
 
@@ -284,12 +298,9 @@ slice 1 の教訓（任意 symbolic byte 列 × parser は CBMC unwind が非実
 symbolic gate field」のみを対象にする。任意 malformed stream は
 proptest の concrete coverage に委譲する。`ARC-IDX-LIMIT` の形式的証明は
 rf#1015 slice 4 で `src/zip/read.rs` の pure decision core exactnessへ移り、
-`ARC-PAYLOAD-LIMIT` の TAR declared size gate は slice 5 で
+`ARC-PAYLOAD-LIMIT` の TAR declared size gate は slice 5 で、
+`ARC-TAR-STRUCT` の typeflag classification は slice 6 でそれぞれ
 `src/tar/read.rs` の pure decision core exactnessへ移った。
-
-| Harness | Bound | 未証明領域 | 補完 |
-| --- | --- | --- | --- |
-| `tar_typeflag_classification` | 512 byte 固定 TAR header block（name は concrete、typeflag byte 156 のみ symbolic・全 256 値）。checksum は closed-form（`TAR_HEADER_BASE` + digit sum）で構築 | 複数 header・extension payload 中身・GNU/PAX 長名・数値 field 全体 | proptest `tar_arbitrary_stream_error_set` / `tar_pax_gnu_extensions` / roundtrip 系で担保 |
 
 旧 `zip_index_gates` harness は rf#1015 slice 4 で退役した。旧保証は concrete ZIP
 skeleton（1 local header + 1 central record + EOCD）上の symbolic budget を
@@ -316,10 +327,22 @@ parser-core接続と任意 malformed streamは proptest `tar_declared_size_gate`
 `tar_total_measured_gate` / `tar_arbitrary_stream_error_set` / roundtrip 系に委譲する。
 旧 harness が verdictを返せなかった経緯と mutation 未検出の履歴は削除しない。
 
+旧 parser-facing `tar_typeflag_classification` harness は rf#1015 slice 6 で退役した。
+旧保証は concrete TAR skeleton と header parser shell を含む attempted proofであり、
+rf806では約15 CPU-min・約21.8 GiBまで膨張して verdictを返せなかった。新保証は
+`arc_tar_struct_typeflag_exactness` が production decision coreを independent oracleと
+比較し、全 256 typeflag byte値の exactnessを Unwinding Assertions 有効で示すことである。
+TAR header parse、checksum、PAX/GNU extension folding、複数 header、任意 malformed
+stream、数値 field 全体、parser-core接続条件はこの proofの保証に含めない。parser-core
+接続は `tar_typeflag_connection_regression`、extension foldと任意 malformed streamは
+`tar_pax_gnu_extensions` / `tar_arbitrary_stream_error_set` / roundtrip 系に委譲する。
+旧 harnessが verdictを返せなかった経緯は削除しない。
+
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
 | `arc_idx_limit_decision_exactness`（in-src `src/zip/read.rs`） | declared count `u16`、declared central-directory size `u64`、`max_entries:u32`、`max_metadata_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、EOCD scan、実 CD parse、複数 entry、ZIP64、deflate payload、local/central 不整合、overlap audit | proptest `zip_index_limit_gates` / `zip_metadata_limit_gate` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
 | `arc_payload_limit_declared_exactness`（in-src `src/tar/read.rs`） | effective declared size `u64` と `max_entry_uncompressed_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、TAR header parse、PAX/GNU override、任意 malformed stream、payload streaming、measured total uncompressed budget、ZIP entry size gate、decompression | proptest `tar_declared_size_gate` / `tar_total_measured_gate` / `tar_arbitrary_stream_error_set` / roundtrip 系で担保 |
+| `arc_tar_struct_typeflag_exactness`（in-src `src/tar/read.rs`） | typeflag `u8` 全 256 値を symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、TAR header parse、checksum、PAX/GNU extension folding、複数 header、任意 malformed stream、数値 field 全体 | connection regression `tar_typeflag_connection_regression` と proptest `tar_pax_gnu_extensions` / `tar_arbitrary_stream_error_set` / roundtrip 系で担保 |
 
 ### slice 3 structured harness（`tests/formal_structured.rs` の `#[cfg(kani)] mod proofs` + `src/input.rs` の in-src proof）
 
@@ -526,6 +549,14 @@ assertionの反例である。mutantは完全に revertし、同じ selective la
 `mise run test-formal` の再実行で緑へ戻した。実行記録は
 `evidence/rf1015/verification-slice5-archive-payload.md` と `runs.jsonl` を参照する。
 
+rf#1015 slice 6 の `ARC-TAR-STRUCT` では、decision coreの `TYPE_SYMLINK` 分類を
+SymbolicLink から File へ 1 箇所だけ変え、`mise run test-formal-kani
+arc-tar-struct` が semantic assertion failureで exit 1 を返した。検出は
+unwinding assertion failureではなく、production coreと independent oracleの
+exactness assertionの反例である。mutantは完全に revertし、同じ selective laneと
+`mise run test-formal` の再実行で緑へ戻した。実行記録は
+`evidence/rf1015/verification-slice6-archive-typeflag.md` と `runs.jsonl` を参照する。
+
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
 harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
@@ -554,6 +585,13 @@ in-src proof、旧 parser-facing harness退役、selective laneを含む最後�
 slice 5 の `ARC-PAYLOAD-LIMIT` では、verified Sync Commitを
 `7a00436aa3ed1e85c11a00b1f05d93a626833a2e` とする。これは TAR declared-size
 decision core、in-src proof、旧 parser-facing harness退役、selective laneを含む最後の
+製品/proof/mise変更 commitであり、selective Kani・mutation・proptest・crate regressionの
+検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
+製品/proof/mise差分が加わった場合は再検証なしに進めない。
+
+slice 6 の `ARC-TAR-STRUCT` では、verified Sync Commitを
+`9729366a37ebf10174132f829c5cdf07b0c2c980` とする。これは TAR typeflag decision core、
+in-src proof、旧 parser-facing harness退役、selective laneを含む最後の
 製品/proof/mise変更 commitであり、selective Kani・mutation・proptest・crate regressionの
 検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
 製品/proof/mise差分が加わった場合は再検証なしに進めない。

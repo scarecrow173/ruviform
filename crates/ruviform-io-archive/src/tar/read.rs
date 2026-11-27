@@ -61,6 +61,40 @@ struct ParsedEntry {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+enum TarSurfacedKind {
+    File,
+    Directory,
+    HardLink,
+    SymbolicLink,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TarTypeflagClass {
+    LocalPax,
+    GlobalPax,
+    GnuLongName,
+    GnuLongLink,
+    Surface(TarSurfacedKind),
+    Unsupported,
+}
+
+fn tar_typeflag_class(typeflag: u8) -> TarTypeflagClass {
+    match typeflag {
+        TYPE_PAX | TYPE_PAX_SOLARIS => TarTypeflagClass::LocalPax,
+        TYPE_PAX_GLOBAL => TarTypeflagClass::GlobalPax,
+        TYPE_GNU_LONGNAME => TarTypeflagClass::GnuLongName,
+        TYPE_GNU_LONGLINK => TarTypeflagClass::GnuLongLink,
+        TYPE_REGULAR | TYPE_REGULAR_ALT | TYPE_CONTIGUOUS => {
+            TarTypeflagClass::Surface(TarSurfacedKind::File)
+        }
+        TYPE_DIRECTORY => TarTypeflagClass::Surface(TarSurfacedKind::Directory),
+        TYPE_HARDLINK => TarTypeflagClass::Surface(TarSurfacedKind::HardLink),
+        TYPE_SYMLINK => TarTypeflagClass::Surface(TarSurfacedKind::SymbolicLink),
+        _ => TarTypeflagClass::Unsupported,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TarDeclaredSizeDecision {
     Accept,
     Reject,
@@ -375,8 +409,8 @@ impl<R: Read> TarArchiveReader<R> {
                     ));
                 }
             };
-            match header.typeflag {
-                TYPE_PAX | TYPE_PAX_SOLARIS => {
+            match tar_typeflag_class(header.typeflag) {
+                TarTypeflagClass::LocalPax => {
                     let payload = match self.read_extension(&header) {
                         Ok(payload) => payload,
                         Err(error) => return self.fail(error),
@@ -385,7 +419,7 @@ impl<R: Read> TarArchiveReader<R> {
                         return self.fail(error);
                     }
                 }
-                TYPE_PAX_GLOBAL => {
+                TarTypeflagClass::GlobalPax => {
                     // Global records are grammar-validated and
                     // budgeted but never applied to effective fields —
                     // letting a global record rename/resize every entry
@@ -398,23 +432,22 @@ impl<R: Read> TarArchiveReader<R> {
                         return self.fail(error);
                     }
                 }
-                TYPE_GNU_LONGNAME => match self.read_extension(&header) {
+                TarTypeflagClass::GnuLongName => match self.read_extension(&header) {
                     Ok(payload) => self.pending_ext.gnu_name = Some(trim_nuls(&payload)),
                     Err(error) => return self.fail(error),
                 },
-                TYPE_GNU_LONGLINK => match self.read_extension(&header) {
+                TarTypeflagClass::GnuLongLink => match self.read_extension(&header) {
                     Ok(payload) => self.pending_ext.gnu_link = Some(trim_nuls(&payload)),
                     Err(error) => return self.fail(error),
                 },
-                TYPE_REGULAR | TYPE_REGULAR_ALT | TYPE_CONTIGUOUS | TYPE_DIRECTORY
-                | TYPE_HARDLINK | TYPE_SYMLINK => match self.surface(&header) {
+                TarTypeflagClass::Surface(kind) => match self.surface(&header, kind) {
                     Ok(parsed) => return Ok(Some(parsed)),
                     Err(error) => return self.fail(error),
                 },
-                other => {
+                TarTypeflagClass::Unsupported => {
                     return self.fail(ArchiveError::new(
                         ArchiveErrorKind::Unsupported,
-                        format!("unsupported tar entry typeflag 0x{other:02x}"),
+                        format!("unsupported tar entry typeflag 0x{:02x}", header.typeflag),
                     ));
                 }
             }
@@ -502,7 +535,11 @@ impl<R: Read> TarArchiveReader<R> {
 
     /// Resolves the effective name/link target/size for a real entry
     /// and enforces the per-entry budgets before handing it out.
-    fn surface(&mut self, header: &Header<'_>) -> Result<ParsedEntry, ArchiveError> {
+    fn surface(
+        &mut self,
+        header: &Header<'_>,
+        surfaced_kind: TarSurfacedKind,
+    ) -> Result<ParsedEntry, ArchiveError> {
         let extensions = std::mem::take(&mut self.pending_ext);
         let name: Vec<u8> = if let Some(path) = extensions.pax_path {
             path
@@ -517,8 +554,8 @@ impl<R: Read> TarArchiveReader<R> {
             joined.extend_from_slice(header.name);
             joined
         };
-        let link: Option<Vec<u8>> = match header.typeflag {
-            TYPE_HARDLINK | TYPE_SYMLINK => {
+        let link: Option<Vec<u8>> = match surfaced_kind {
+            TarSurfacedKind::HardLink | TarSurfacedKind::SymbolicLink => {
                 extensions.pax_linkpath.or(extensions.gnu_link).or_else(|| {
                     if header.linkname.is_empty() {
                         None
@@ -527,7 +564,7 @@ impl<R: Read> TarArchiveReader<R> {
                     }
                 })
             }
-            _ => None,
+            TarSurfacedKind::File | TarSurfacedKind::Directory => None,
         };
         let declared = extensions.pax_size.unwrap_or(header.size);
         if name.is_empty() {
@@ -570,11 +607,11 @@ impl<R: Read> TarArchiveReader<R> {
             ));
         }
         self.entries_total += 1;
-        let kind = match header.typeflag {
-            TYPE_DIRECTORY => EntryKind::Directory,
-            TYPE_HARDLINK => EntryKind::HardLink,
-            TYPE_SYMLINK => EntryKind::SymbolicLink,
-            _ => EntryKind::File,
+        let kind = match surfaced_kind {
+            TarSurfacedKind::File => EntryKind::File,
+            TarSurfacedKind::Directory => EntryKind::Directory,
+            TarSurfacedKind::HardLink => EntryKind::HardLink,
+            TarSurfacedKind::SymbolicLink => EntryKind::SymbolicLink,
         };
         let index = self.entries_total as usize - 1;
         Ok(ParsedEntry {
@@ -947,7 +984,90 @@ impl<R: Read> Drop for TarEntryReader<'_, R> {
 
 #[cfg(kani)]
 mod proofs {
-    use super::{TarDeclaredSizeDecision, tar_declared_size_gate_decision};
+    use super::{
+        TarDeclaredSizeDecision, TarSurfacedKind, TarTypeflagClass,
+        tar_declared_size_gate_decision, tar_typeflag_class,
+    };
+
+    fn typeflag_oracle(typeflag: u8) -> TarTypeflagClass {
+        if typeflag == b'x' || typeflag == b'X' {
+            TarTypeflagClass::LocalPax
+        } else if typeflag == b'g' {
+            TarTypeflagClass::GlobalPax
+        } else if typeflag == b'L' {
+            TarTypeflagClass::GnuLongName
+        } else if typeflag == b'K' {
+            TarTypeflagClass::GnuLongLink
+        } else if typeflag == 0 || typeflag == b'0' || typeflag == b'7' {
+            TarTypeflagClass::Surface(TarSurfacedKind::File)
+        } else if typeflag == b'5' {
+            TarTypeflagClass::Surface(TarSurfacedKind::Directory)
+        } else if typeflag == b'1' {
+            TarTypeflagClass::Surface(TarSurfacedKind::HardLink)
+        } else if typeflag == b'2' {
+            TarTypeflagClass::Surface(TarSurfacedKind::SymbolicLink)
+        } else {
+            TarTypeflagClass::Unsupported
+        }
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_tar_struct_typeflag_exactness() {
+        let typeflag: u8 = kani::any();
+
+        let actual = tar_typeflag_class(typeflag);
+        assert!(actual == typeflag_oracle(typeflag));
+
+        kani::cover!(
+            typeflag == 0 && actual == TarTypeflagClass::Surface(TarSurfacedKind::File),
+            "NUL typeflag file classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'0' && actual == TarTypeflagClass::Surface(TarSurfacedKind::File),
+            "regular typeflag file classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'7' && actual == TarTypeflagClass::Surface(TarSurfacedKind::File),
+            "contiguous typeflag file classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'5' && actual == TarTypeflagClass::Surface(TarSurfacedKind::Directory),
+            "directory classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'1' && actual == TarTypeflagClass::Surface(TarSurfacedKind::HardLink),
+            "hard link classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'2' && actual == TarTypeflagClass::Surface(TarSurfacedKind::SymbolicLink),
+            "symbolic link classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'x' && actual == TarTypeflagClass::LocalPax,
+            "local PAX classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'X' && actual == TarTypeflagClass::LocalPax,
+            "Solaris local PAX classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'g' && actual == TarTypeflagClass::GlobalPax,
+            "global PAX classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'L' && actual == TarTypeflagClass::GnuLongName,
+            "GNU longname classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'K' && actual == TarTypeflagClass::GnuLongLink,
+            "GNU longlink classification is reachable"
+        );
+        kani::cover!(
+            typeflag == b'3' && actual == TarTypeflagClass::Unsupported,
+            "unsupported classification is reachable"
+        );
+    }
 
     #[kani::proof]
     #[kani::unwind(2)]
