@@ -408,6 +408,54 @@ fn valid_op_bytes(op: &[u8]) -> bool {
     valid && saw_dot && segment_nonempty
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IntentBodySizeDecision {
+    Accept,
+    Reject,
+}
+
+fn intent_body_size_decision(body_len: usize) -> IntentBodySizeDecision {
+    if body_len <= MAX_INTENT_BYTES {
+        IntentBodySizeDecision::Accept
+    } else {
+        IntentBodySizeDecision::Reject
+    }
+}
+
+const INTENT_KIND_BYTES: &[u8] = b"intent";
+
+fn intent_kind_length_matches(len: usize) -> bool {
+    len == INTENT_KIND_BYTES.len()
+}
+
+fn intent_kind_content_matches(kind: &[u8]) -> bool {
+    kind == INTENT_KIND_BYTES
+}
+
+fn intent_kind_matches(kind: &[u8]) -> bool {
+    intent_kind_length_matches(kind.len()) && intent_kind_content_matches(kind)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IntentEnvelopeGateDecision {
+    Accept,
+    UnsupportedVersion,
+    UnsupportedKind,
+    InvalidOp,
+}
+
+fn intent_envelope_gate_decision(v: u32, kind: &[u8], op: &[u8]) -> IntentEnvelopeGateDecision {
+    if v != SCHEMA_VERSION {
+        IntentEnvelopeGateDecision::UnsupportedVersion
+    } else if !intent_kind_matches(kind) {
+        IntentEnvelopeGateDecision::UnsupportedKind
+    } else if !valid_op_bytes(op) {
+        IntentEnvelopeGateDecision::InvalidOp
+    } else {
+        IntentEnvelopeGateDecision::Accept
+    }
+}
+
 /// Parses a raw IPC body into an [`Intent`], enforcing the envelope
 /// contract (size cap, version, kind, op shape).
 ///
@@ -415,7 +463,7 @@ fn valid_op_bytes(op: &[u8]) -> bool {
 /// Returns [`ErrorBody`] with [`codes::MESSAGE_TOO_LARGE`] or
 /// [`codes::MALFORMED_MESSAGE`].
 pub fn parse_intent(body: &str) -> Result<Intent, ErrorBody> {
-    if body.len() > MAX_INTENT_BYTES {
+    if intent_body_size_decision(body.len()) == IntentBodySizeDecision::Reject {
         return Err(ErrorBody::new(
             codes::MESSAGE_TOO_LARGE,
             format!(
@@ -427,30 +475,30 @@ pub fn parse_intent(body: &str) -> Result<Intent, ErrorBody> {
     }
     let intent: Intent = serde_json::from_str(body)
         .map_err(|e| ErrorBody::new(codes::MALFORMED_MESSAGE, format!("invalid intent: {e}")))?;
-    if intent.v != SCHEMA_VERSION {
-        return Err(ErrorBody::new(
+    match intent_envelope_gate_decision(intent.v, intent.kind.as_bytes(), intent.op.as_bytes()) {
+        IntentEnvelopeGateDecision::Accept => Ok(intent),
+        IntentEnvelopeGateDecision::UnsupportedVersion => Err(ErrorBody::new(
             codes::MALFORMED_MESSAGE,
             format!("unsupported schema version {}", intent.v),
-        ));
-    }
-    if intent.kind != "intent" {
-        return Err(ErrorBody::new(
+        )),
+        IntentEnvelopeGateDecision::UnsupportedKind => Err(ErrorBody::new(
             codes::MALFORMED_MESSAGE,
             format!("unsupported kind {:?}", intent.kind),
-        ));
-    }
-    if !valid_op(&intent.op) {
-        return Err(ErrorBody::new(
+        )),
+        IntentEnvelopeGateDecision::InvalidOp => Err(ErrorBody::new(
             codes::MALFORMED_MESSAGE,
             format!("invalid op name {:?}", intent.op),
-        ));
+        )),
     }
-    Ok(intent)
 }
 
 #[cfg(kani)]
 mod proofs {
-    use super::{MAX_OP_LEN, valid_op_bytes};
+    use super::{
+        IntentBodySizeDecision, IntentEnvelopeGateDecision, MAX_INTENT_BYTES, MAX_OP_LEN,
+        SCHEMA_VERSION, intent_body_size_decision, intent_envelope_gate_decision,
+        intent_kind_content_matches, intent_kind_length_matches, valid_op_bytes,
+    };
 
     fn valid_op_spec(op: &[u8]) -> bool {
         if op.is_empty() || op.len() > MAX_OP_LEN {
@@ -470,6 +518,18 @@ mod proofs {
             }
         }
         dot_count > 0
+    }
+
+    fn intent_kind_spec(kind: &[u8]) -> bool {
+        if kind.len() != 6 {
+            return false;
+        }
+        kind[0] == b'i'
+            && kind[1] == b'n'
+            && kind[2] == b't'
+            && kind[3] == b'e'
+            && kind[4] == b'n'
+            && kind[5] == b't'
     }
 
     /// Exactness and totalness of the production byte predicate over every
@@ -523,5 +583,244 @@ mod proofs {
     #[kani::unwind(132)]
     fn w_ipc_op_boundary_len129_over_cap() {
         assert!(!valid_op_bytes(&OP_129));
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn w_ipc_envelope_size_exactness() {
+        let body_len: usize = kani::any();
+        let actual = intent_body_size_decision(body_len);
+        if body_len <= MAX_INTENT_BYTES {
+            assert!(actual == IntentBodySizeDecision::Accept);
+        } else {
+            assert!(actual == IntentBodySizeDecision::Reject);
+        }
+
+        kani::cover!(
+            body_len == 0 && actual == IntentBodySizeDecision::Accept,
+            "body length 0 acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES - 1 && actual == IntentBodySizeDecision::Accept,
+            "body cap boundary-1 acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES && actual == IntentBodySizeDecision::Accept,
+            "body cap boundary acceptance is reachable"
+        );
+        kani::cover!(
+            body_len == MAX_INTENT_BYTES + 1 && actual == IntentBodySizeDecision::Reject,
+            "body cap boundary+1 rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn w_ipc_envelope_version_exactness() {
+        let v: u32 = kani::any();
+        let actual = intent_envelope_gate_decision(v, b"intent", b"a.b");
+        if v == SCHEMA_VERSION {
+            assert!(actual == IntentEnvelopeGateDecision::Accept);
+        } else {
+            assert!(actual == IntentEnvelopeGateDecision::UnsupportedVersion);
+        }
+
+        kani::cover!(
+            v == SCHEMA_VERSION && actual == IntentEnvelopeGateDecision::Accept,
+            "valid version acceptance is reachable"
+        );
+        kani::cover!(
+            v == 0 && actual == IntentEnvelopeGateDecision::UnsupportedVersion,
+            "version 0 rejection is reachable"
+        );
+        kani::cover!(
+            v == SCHEMA_VERSION + 1 && actual == IntentEnvelopeGateDecision::UnsupportedVersion,
+            "version boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            v == u32::MAX && actual == IntentEnvelopeGateDecision::UnsupportedVersion,
+            "maximum version rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn w_ipc_envelope_kind_length_exactness() {
+        let len: usize = kani::any();
+        assert!(intent_kind_length_matches(len) == (len == 6));
+
+        kani::cover!(len == 0, "kind length 0 is reachable");
+        kani::cover!(len == 6, "kind length 6 is reachable");
+        kani::cover!(len == 8, "kind length 8 is reachable");
+        kani::cover!(len == usize::MAX, "maximum kind length input is reachable");
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn w_ipc_envelope_kind_content_exactness_len6() {
+        let bytes: [u8; 6] = kani::any();
+        let actual = intent_kind_content_matches(&bytes);
+        assert!(actual == intent_kind_spec(&bytes));
+
+        kani::cover!(actual, "valid kind content is reachable");
+        kani::cover!(!actual, "wrong kind content is reachable");
+    }
+
+    #[kani::proof]
+    #[kani::unwind(10)]
+    fn w_ipc_envelope_kind_exactness_len0_8() {
+        let bytes: [u8; 8] = kani::any();
+        let len: usize = kani::any();
+        kani::assume(len <= 8);
+        let kind = &bytes[..len];
+        let actual = intent_envelope_gate_decision(SCHEMA_VERSION, kind, b"a.b");
+        let expected = if intent_kind_spec(kind) {
+            IntentEnvelopeGateDecision::Accept
+        } else {
+            IntentEnvelopeGateDecision::UnsupportedKind
+        };
+        assert!(actual == expected);
+
+        kani::cover!(
+            len == 0 && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "empty kind rejection is reachable"
+        );
+        kani::cover!(
+            len == 6 && actual == IntentEnvelopeGateDecision::Accept,
+            "valid kind acceptance is reachable"
+        );
+        kani::cover!(
+            len == 6 && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "same-length wrong kind rejection is reachable"
+        );
+        kani::cover!(
+            len < 6 && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "short kind rejection is reachable"
+        );
+        kani::cover!(
+            len > 6 && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "long kind rejection is reachable"
+        );
+        kani::cover!(
+            len == 8 && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "length 8 kind rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(12)]
+    fn w_ipc_envelope_op_exactness_len0_8() {
+        let bytes: [u8; 8] = kani::any();
+        let len: usize = kani::any();
+        kani::assume(len <= 8);
+        let op = &bytes[..len];
+        let actual = intent_envelope_gate_decision(SCHEMA_VERSION, b"intent", op);
+        let expected = if valid_op_spec(op) {
+            IntentEnvelopeGateDecision::Accept
+        } else {
+            IntentEnvelopeGateDecision::InvalidOp
+        };
+        assert!(actual == expected);
+
+        kani::cover!(
+            len == 0 && actual == IntentEnvelopeGateDecision::InvalidOp,
+            "empty op rejection is reachable"
+        );
+        kani::cover!(
+            len == 3 && actual == IntentEnvelopeGateDecision::Accept,
+            "short valid op acceptance is reachable"
+        );
+        kani::cover!(
+            len == 8 && actual == IntentEnvelopeGateDecision::Accept,
+            "length 8 valid op acceptance is reachable"
+        );
+        kani::cover!(
+            len == 8 && actual == IntentEnvelopeGateDecision::InvalidOp,
+            "length 8 invalid op rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(131)]
+    fn w_ipc_envelope_op_boundary_len127_valid() {
+        assert!(
+            intent_envelope_gate_decision(SCHEMA_VERSION, b"intent", &OP_127)
+                == IntentEnvelopeGateDecision::Accept
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(132)]
+    fn w_ipc_envelope_op_boundary_len128_valid() {
+        assert!(
+            intent_envelope_gate_decision(SCHEMA_VERSION, b"intent", &OP_128)
+                == IntentEnvelopeGateDecision::Accept
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(132)]
+    fn w_ipc_envelope_op_boundary_len129_invalid() {
+        assert!(
+            intent_envelope_gate_decision(SCHEMA_VERSION, b"intent", &OP_129)
+                == IntentEnvelopeGateDecision::InvalidOp
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(12)]
+    fn w_ipc_envelope_gate_priority() {
+        let v: u32 = kani::any();
+        let kind_bytes: [u8; 8] = kani::any();
+        let kind_len: usize = kani::any();
+        kani::assume(kind_len <= 8);
+        let kind = &kind_bytes[..kind_len];
+        let op_bytes: [u8; 8] = kani::any();
+        let op_len: usize = kani::any();
+        kani::assume(op_len <= 8);
+        let op = &op_bytes[..op_len];
+
+        let actual = intent_envelope_gate_decision(v, kind, op);
+        let kind_valid = intent_kind_spec(kind);
+        let op_valid = valid_op_spec(op);
+        let expected = if v != SCHEMA_VERSION {
+            IntentEnvelopeGateDecision::UnsupportedVersion
+        } else if !kind_valid {
+            IntentEnvelopeGateDecision::UnsupportedKind
+        } else if !op_valid {
+            IntentEnvelopeGateDecision::InvalidOp
+        } else {
+            IntentEnvelopeGateDecision::Accept
+        };
+        assert!(actual == expected);
+
+        kani::cover!(
+            v != SCHEMA_VERSION
+                && !kind_valid
+                && !op_valid
+                && actual == IntentEnvelopeGateDecision::UnsupportedVersion,
+            "version priority path is reachable"
+        );
+        kani::cover!(
+            v == SCHEMA_VERSION
+                && !kind_valid
+                && !op_valid
+                && actual == IntentEnvelopeGateDecision::UnsupportedKind,
+            "kind priority path is reachable"
+        );
+        kani::cover!(
+            v == SCHEMA_VERSION
+                && kind_valid
+                && !op_valid
+                && actual == IntentEnvelopeGateDecision::InvalidOp,
+            "op priority path is reachable"
+        );
+        kani::cover!(
+            v == SCHEMA_VERSION
+                && kind_valid
+                && op_valid
+                && actual == IntentEnvelopeGateDecision::Accept,
+            "all-valid acceptance path is reachable"
+        );
     }
 }
