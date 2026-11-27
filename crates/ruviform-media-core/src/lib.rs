@@ -91,8 +91,8 @@ pub use transport::{TransportSnapshot, TransportStatus};
 pub use transport_schedule::{
     AppliedReceipt, ApplyDegradation, ApplyStatus, BlockContract, CallPartition, ClockEpochId,
     CommandId, DeliveryPolicy, EngineFrame, FaultKind, InBlockTransportSupport, LoopOccurrence,
-    PlanGeneration, RejectReason, ScheduleBudget, ScheduleFault, ScheduledEvent, SpanContext,
-    SpanSink, TempoMapRevision, TransportCommand, TransportGeneration, TransportPlan,
+    MusicalTimeSource, PlanGeneration, RejectReason, ScheduleBudget, ScheduleFault, ScheduledEvent,
+    SpanContext, SpanSink, TempoMapRevision, TransportCommand, TransportGeneration, TransportPlan,
     TransportPlanBuilder, TransportScheduler, TransportSpan, event_engine_frame,
     event_generation_matches, media_time_ticks, span_event_window,
 };

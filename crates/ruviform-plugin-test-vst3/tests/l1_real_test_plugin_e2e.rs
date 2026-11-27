@@ -791,7 +791,7 @@ fn host_block_transport(
 /// plus queued events) never reached the child at all — later
 /// matched outputs then reflect a child state the test's event
 /// script did not produce.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct LegDeltas {
     /// `passthrough_submits` delta: `> 0` ⇒ substituted output.
     passthrough: u64,
@@ -1348,13 +1348,17 @@ mod attach_integration {
         Activation, Availability, ConnDef, Direction, EdgeDelay, GraphBuilder, Multiplicity,
         NodeDef, NodeKind, PortDef, PortFormat, PortId, PortRef, Validator,
     };
+    use std::sync::Arc;
+
     use ruviform_media_core::{
-        ClockAnchor, ClockDomainId, ClockEpochId, DeliveryPolicy, EngineFrame, MediaTime,
-        MidiChannel, MidiController, MidiEvent, MidiGroup, MidiKind, MidiValue, NoteKey,
-        ScheduleBudget, TimeBase, TimestampProvenance,
+        BeatPosition, ClockAnchor, ClockDomainId, ClockEpochId, DeliveryPolicy, EngineFrame,
+        MediaDuration, MediaRange, MediaTime, MidiChannel, MidiController, MidiEvent, MidiGroup,
+        MidiKind, MidiValue, NoteKey, PlanGeneration, Ppqn, ScheduleBudget, TempoEvent,
+        TempoMapBuilder, TempoMapRevision, TimeBase, TimestampProvenance, TransportCommand,
+        TransportPlanBuilder,
     };
     use ruviform_plugin_core::LifecycleState;
-    use ruviform_plugin_core::{BusDescriptor, BusDirection, BusRole};
+    use ruviform_plugin_core::{BusDescriptor, BusDirection, BusRole, EventKind};
     use ruviform_plugin_host::{EndpointBounds, PluginHandle, PluginHost};
     use ruviform_rt::RtContext;
 
@@ -1604,12 +1608,15 @@ mod attach_integration {
     /// Zero input into the graph's source port (the instrument
     /// ignores it — the bus exists because the fixture declares a
     /// stereo pair).
-    fn feed_source(rt: &mut RtRuntime, port: PortId) {
-        let zeros = [0.0f32; BLOCK];
-        let mut slot = rt.input_writer(port, BLOCK).expect("input bound");
+    /// Zero input for one variable-length block. The transport oracle
+    /// uses 480 frames so 150 BPM / PPQN 480 advances by an exact
+    /// integer tick count at every block-start snapshot.
+    fn feed_source_frames(rt: &mut RtRuntime, port: PortId, frames: usize) {
+        let zeros = vec![0.0f32; frames];
+        let mut slot = rt.input_writer(port, frames).expect("input bound");
         for ch in 0..2 {
             let plane = slot.data.channel_mut(ch).expect("channel");
-            plane[..BLOCK].copy_from_slice(&zeros);
+            plane[..frames].copy_from_slice(&zeros);
         }
     }
 
@@ -1642,10 +1649,22 @@ mod attach_integration {
         midi: &mut MidiDriver,
         block_index: u64,
     ) -> (Vec<Vec<f32>>, LegDeltas) {
-        let upto = (block_index + 1) * BLOCK as u64 - 1;
+        pump_block_frames(rig, midi, block_index, BLOCK)
+    }
+
+    /// Variable-length variant of [`pump_block`]. `frames` stays within
+    /// the activated `1..=512` contract; the L1 wire block capacity is
+    /// unchanged and only the valid-frame count differs.
+    fn pump_block_frames(
+        rig: &mut AttachRig,
+        midi: &mut MidiDriver,
+        block_index: u64,
+        frames: usize,
+    ) -> (Vec<Vec<f32>>, LegDeltas) {
+        let upto = (block_index + 1) * frames as u64 - 1;
         midi.feed.pump_into_port(&midi.port, upto);
         rig.input_tx.pump(&mut *midi.input).expect("input pump");
-        feed_source(&mut rig.rt, rig.src_out);
+        feed_source_frames(&mut rig.rt, rig.src_out, frames);
         let pace_ms = if block_index < 4 { 25 } else { 5 };
         std::thread::sleep(std::time::Duration::from_millis(pace_ms));
         let counters = |h: &PluginHost| {
@@ -1653,7 +1672,7 @@ mod attach_integration {
                 .map_or((0, 0), |c| (c.passthrough_submits, c.dropped_submits))
         };
         let before = counters(&rig.host);
-        rig.rt.process(BLOCK, &RtContext::mint()).expect("process");
+        rig.rt.process(frames, &RtContext::mint()).expect("process");
         let after = counters(&rig.host);
         (
             drain_sink(&mut rig.rt, rig.sink_in),
@@ -1912,5 +1931,259 @@ mod attach_integration {
         assert_eq!(input.late, 0);
         assert_eq!(input.rejected, 0);
         assert_eq!(input.dropped_capacity, 0);
+    }
+
+    /// Frames in one production-graph transport block. At 150 BPM,
+    /// 48 kHz and host PPQN 480 one host tick is exactly 40 frames, so
+    /// a 480-frame block advances by exactly 12 host ticks (24 ticks
+    /// after the ABI projection to PPQN 960). This keeps every scripted
+    /// block-start position exactly representable instead of testing
+    /// adapter rounding.
+    const TRANSPORT_BLOCK: usize = 480;
+
+    /// Independent implementation of the rf#630 fixture click law:
+    /// `ceil((boundary_tick - position_ticks) * sample_rate * 60000 /
+    /// (bpm_milli * ppqn))` for every PPQN boundary whose frame is
+    /// inside the block. A position exactly on a boundary clicks at
+    /// frame 0. This deliberately does not call fixture or adapter code.
+    fn independent_click_frames(
+        position_ticks: i64,
+        bpm_milli: u32,
+        ppqn: u16,
+        frames: usize,
+        sample_rate: u32,
+    ) -> Vec<usize> {
+        let ppqn = i128::from(ppqn);
+        let pos = i128::from(position_ticks);
+        let mut boundary = pos.div_euclid(ppqn) * ppqn;
+        if boundary < pos {
+            boundary += ppqn;
+        }
+        let den = i128::from(bpm_milli) * ppqn;
+        let mut out = Vec::new();
+        if den <= 0 {
+            return out;
+        }
+        loop {
+            let delta = boundary - pos;
+            let num = delta * i128::from(sample_rate) * 60_000;
+            let frame = (num + den - 1) / den;
+            if frame < 0 || frame >= i128::try_from(frames).unwrap() {
+                break;
+            }
+            out.push(usize::try_from(frame).unwrap());
+            boundary += ppqn;
+        }
+        out
+    }
+
+    fn tempo_map_150bpm() -> Arc<ruviform_media_core::TempoMap> {
+        let mut b = TempoMapBuilder::new();
+        b.add_tempo_event(TempoEvent::at(BeatPosition::from_int(0), 150_000));
+        Arc::new(b.build().unwrap())
+    }
+
+    fn install_transport_plan(
+        rig: &mut AttachRig,
+        generation: u64,
+        with_tempo_map: bool,
+        with_ppqn: bool,
+    ) {
+        let mut builder =
+            TransportPlanBuilder::<EventKind>::new(frame_base(), PlanGeneration::new(generation));
+        if with_tempo_map && with_ppqn {
+            builder = builder.with_musical_transport(
+                tempo_map_150bpm(),
+                TempoMapRevision::new(1),
+                Ppqn::new(480).unwrap(),
+            );
+        } else if with_tempo_map {
+            builder = builder.with_tempo_map(tempo_map_150bpm(), TempoMapRevision::new(1));
+        } else if with_ppqn {
+            builder = builder.with_musical_ppqn(Ppqn::new(480).unwrap());
+        }
+        rig.control
+            .install_plan(Arc::new(builder.build()), 0)
+            .expect("install transport plan");
+    }
+
+    /// Media position whose ABI-projected PPQN-960 position is `tick`
+    /// at 150 BPM/48 kHz. One projected tick is exactly 20 frames; the
+    /// scripted ticks are even, hence also exact host PPQN-480 ticks.
+    fn seek_projected_tick(rig: &mut AttachRig, tick: i64) {
+        rig.control
+            .request(
+                TransportCommand::Seek(MediaTime::new(tick * 20, frame_base())),
+                0,
+            )
+            .expect("seek");
+    }
+
+    /// rf#1040 production graph-node oracle: the L1 `test_instrument`
+    /// is driven only through `attach()` → `PluginNode` → typed graph,
+    /// never through a caller-supplied `TransportInfo`. The plan-owned
+    /// musical source must therefore be what reaches the real ABI. The
+    /// host plan uses PPQN 480; both ABI adapters reproject the wire
+    /// position to the fixture-visible PPQN 960, so the click oracle is
+    /// evaluated at PPQN 960 (the ABI projection contract) while the
+    /// non-960 host handoff itself is pinned by the typed-graph oracle.
+    #[test]
+    #[expect(clippy::too_many_lines)]
+    #[ignore = "requires the workspace-built test-fixture cdylib and the `l1-runner`-feature L1 runner — `mise run test-l1-real-plugin` builds both and selects this test"]
+    fn attach_transport_clicks_follow_production_plan_musical_handoff() {
+        const PHASE: u64 = 8;
+        const MISSING_PPQN: u64 = 0;
+        const MISSING_MAP: u64 = PHASE;
+        const CLICK_954: u64 = 2 * PHASE;
+        const PAUSED: u64 = 3 * PHASE;
+        const STOPPED: u64 = 4 * PHASE;
+        const CLICK_958: u64 = 5 * PHASE;
+        const LOOP_START: u64 = 6 * PHASE;
+        const TOTAL: u64 = LOOP_START + 2 * PHASE;
+
+        assert_fixture_present();
+        let mut rig = build_rig();
+        let mut midi = MidiDriver::open(Vec::new());
+
+        // Phase layout in source-block space. Phases are redundant so
+        // asynchronous L1 substitution cannot turn a missing child
+        // block into a false pass; substituted blocks are never used
+        // as evidence.
+        install_transport_plan(&mut rig, 1, true, false);
+        rig.control
+            .request(TransportCommand::Play, 0)
+            .expect("play");
+
+        let click_at_954 = independent_click_frames(954, 150_000, 960, TRANSPORT_BLOCK, 48_000);
+        let click_at_958 = independent_click_frames(958, 150_000, 960, TRANSPORT_BLOCK, 48_000);
+        assert_eq!(click_at_954, vec![120]);
+        assert_eq!(click_at_958, vec![40]);
+
+        let mut drained = Vec::new();
+        let mut deltas = Vec::new();
+        for block in 0..TOTAL {
+            match block {
+                MISSING_MAP => install_transport_plan(&mut rig, 2, false, true),
+                CLICK_954 => install_transport_plan(&mut rig, 3, true, true),
+                PAUSED => rig
+                    .control
+                    .request(TransportCommand::Pause, 0)
+                    .expect("pause"),
+                STOPPED => rig
+                    .control
+                    .request(TransportCommand::Stop, 0)
+                    .expect("stop"),
+                CLICK_958 => rig
+                    .control
+                    .request(TransportCommand::Play, 0)
+                    .expect("resume play"),
+                LOOP_START => {
+                    let loop_start = MediaTime::new(930 * 20, frame_base());
+                    rig.control
+                        .request(
+                            TransportCommand::SetLoop(MediaRange::new(
+                                loop_start,
+                                MediaDuration::new(960, frame_base()),
+                            )),
+                            0,
+                        )
+                        .expect("set loop");
+                    seek_projected_tick(&mut rig, 930);
+                }
+                _ => {}
+            }
+            if (CLICK_954..PAUSED).contains(&block) {
+                seek_projected_tick(&mut rig, 954);
+            }
+            if (CLICK_958..LOOP_START).contains(&block) {
+                seek_projected_tick(&mut rig, 958);
+            }
+            let (block_pcm, d) = pump_block_frames(&mut rig, &mut midi, block, TRANSPORT_BLOCK);
+            drained.push(block_pcm);
+            deltas.push(d);
+        }
+
+        let mut click_verified = [0_u32; 3];
+        let mut silent_verified = [0_u32; 5];
+        for (idx, pcm) in drained.iter().enumerate() {
+            if deltas[idx].passthrough > 0 {
+                continue; // hold-last/substituted output is not fresh evidence
+            }
+            let Some(source) = u64::try_from(idx)
+                .expect("block index fits u64")
+                .checked_sub(L1_LOOKAHEAD)
+            else {
+                continue;
+            };
+            let (expected_click, click_slot, silent_slot) = match source {
+                s if (MISSING_PPQN..MISSING_MAP).contains(&s) => (None, None, Some(0)),
+                s if (MISSING_MAP..CLICK_954).contains(&s) => (None, None, Some(1)),
+                s if (CLICK_954..PAUSED).contains(&s) => (Some(click_at_954[0]), Some(0), None),
+                s if (PAUSED..STOPPED).contains(&s) => (None, None, Some(2)),
+                s if (STOPPED..CLICK_958).contains(&s) => (None, None, Some(3)),
+                s if (CLICK_958..LOOP_START).contains(&s) => (Some(click_at_958[0]), Some(1), None),
+                s if (LOOP_START..TOTAL).contains(&s) => {
+                    // 480 frames = 24 projected ticks. The two-block
+                    // loop visits projected ticks 930 and 954; only the
+                    // latter is close enough to the next beat boundary
+                    // to click inside this block. Every block recomputes
+                    // from its own snapshot rather than carrying time
+                    // remaining from the previous block.
+                    let lap_position = 930 + 24 * i64::try_from((s - LOOP_START) % 2).unwrap();
+                    let clicks = independent_click_frames(
+                        lap_position,
+                        150_000,
+                        960,
+                        TRANSPORT_BLOCK,
+                        48_000,
+                    );
+                    if let Some(&frame) = clicks.first() {
+                        (Some(frame), Some(2), None)
+                    } else {
+                        (None, None, Some(4))
+                    }
+                }
+                _ => continue,
+            };
+
+            let left = &pcm[0];
+            let right = &pcm[1];
+            assert_eq!(left.len(), TRANSPORT_BLOCK, "valid frames for block {idx}");
+            if let Some(frame) = expected_click {
+                assert_eq!(
+                    left[frame].to_bits(),
+                    0.5_f32.to_bits(),
+                    "source {source}: click impulse at independently computed frame {frame}"
+                );
+                assert!(
+                    left.iter()
+                        .enumerate()
+                        .all(|(i, &sample)| i == frame || sample == 0.0),
+                    "source {source}: click block must be silent outside frame {frame}"
+                );
+                assert_eq!(
+                    left, right,
+                    "source {source}: stereo click must be identical"
+                );
+                click_verified[click_slot.unwrap()] += 1;
+            } else {
+                assert!(
+                    is_silent(pcm),
+                    "source {source}: playing without complete musical data or non-playing transport must not click — first samples {:?}",
+                    &left[..left.len().min(8)]
+                );
+                silent_verified[silent_slot.unwrap()] += 1;
+            }
+        }
+
+        assert!(
+            click_verified.iter().all(|&n| n >= 2),
+            "fresh matched click evidence missing — click {click_verified:?}, deltas {deltas:?}"
+        );
+        assert!(
+            silent_verified[..4].iter().all(|&n| n >= 2) && silent_verified[4] >= 1,
+            "fresh matched negative-control evidence missing — silent {silent_verified:?}, deltas {deltas:?}"
+        );
+        assert_liveness(&rig);
     }
 }

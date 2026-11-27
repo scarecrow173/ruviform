@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use ruviform_media_core::{
     ApplyDegradation, ApplyStatus, BlockContract, DeliveryPolicy, EngineFrame, FaultKind,
-    InBlockTransportSupport, LoopOccurrence, MediaDuration, MediaRange, MediaTime, RejectReason,
-    ScheduleBudget, ScheduledEvent, SpanSink, TempoMap, TimeBase, TransportCommand,
-    TransportPlanBuilder, TransportScheduler, TransportSpan, TransportStatus,
+    InBlockTransportSupport, LoopOccurrence, MediaDuration, MediaRange, MediaTime,
+    MusicalTimeSource, RejectReason, ScheduleBudget, ScheduledEvent, SpanSink, TimeBase,
+    TransportCommand, TransportPlanBuilder, TransportScheduler, TransportSpan, TransportStatus,
 };
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, Event, EventKind, EventList, ParamEvent, ParamId, ParamValue,
@@ -142,8 +142,6 @@ impl PluginProcessor for RecordingProcessor {
 struct DriverSink<'a> {
     proc: &'a mut RecordingProcessor,
     contract: BlockContract,
-    tempo_map: Option<&'a TempoMap>,
-    ppqn: Option<ruviform_media_core::Ppqn>,
     event_scratch: &'a mut [Event],
     buffer: &'a mut [f32],
     skipped: &'a mut Vec<(u64, u64)>,
@@ -151,7 +149,12 @@ struct DriverSink<'a> {
 }
 
 impl SpanSink<u32> for DriverSink<'_> {
-    fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<u32>]) {
+    fn span(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<u32>],
+        musical: MusicalTimeSource<'_>,
+    ) {
         self.span_ctx.push(span.ctx);
         if !span.deliverable {
             self.skipped.push((span.start.frame(), span.end.frame()));
@@ -164,7 +167,7 @@ impl SpanSink<u32> for DriverSink<'_> {
         for i in 0..part.chunks() {
             let (off, frames) = part.chunk(i);
             let call_start = span.start.advance(u64::from(off));
-            let info = call_transport_info(&span.ctx, off, self.tempo_map, self.ppqn);
+            let info = call_transport_info(&span.ctx, off, musical.tempo_map, musical.ppqn);
             let Some(list) =
                 build_call_event_list(span, events, call_start, frames, self.event_scratch, kind)
             else {
@@ -191,8 +194,6 @@ struct MockDriver {
     sched: TransportScheduler<u32>,
     contract: BlockContract,
     proc: RecordingProcessor,
-    tempo_map: Option<Arc<TempoMap>>,
-    ppqn: Option<ruviform_media_core::Ppqn>,
     event_scratch: Vec<Event>,
     buffer: Vec<f32>,
     skipped: Vec<(u64, u64)>,
@@ -215,8 +216,6 @@ impl MockDriver {
             sched: TransportScheduler::new(base(), contract, policy, ScheduleBudget::default()),
             contract,
             proc,
-            tempo_map: None,
-            ppqn: None,
             event_scratch: vec![Event::new(0, kind(&0)); 512],
             buffer: vec![0.0; 8192],
             skipped: Vec::new(),
@@ -235,8 +234,6 @@ impl MockDriver {
         let mut sink = DriverSink {
             proc: &mut self.proc,
             contract: self.contract,
-            tempo_map: self.tempo_map.as_deref(),
-            ppqn: self.ppqn,
             event_scratch: &mut self.event_scratch,
             buffer: &mut self.buffer,
             skipped: &mut self.skipped,

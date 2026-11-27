@@ -63,10 +63,11 @@ pub fn calls_for_span(
 
 /// The [`TransportInfo`] snapshot for one physical call: status, the
 /// transport position at the call's offset inside its span, the active
-/// loop range, and — when a tempo map and a requested `ppqn` are given —
-/// the musical-time snapshot via [`TempoMap::media_to_beat`] +
-/// [`TempoMap::time_info`] (exact rational path, no fixed-PPQN
-/// assumption).
+/// loop range, and — when the transport is playing and both a tempo map
+/// and a requested `ppqn` are given — the musical-time snapshot via
+/// [`TempoMap::media_to_beat`] + [`TempoMap::time_info`] (exact rational
+/// path, no fixed-PPQN assumption). Stopped/paused snapshots carry their
+/// media position but never invent or retain musical timing.
 ///
 /// **RT contract:** RT-suitable — pure integer math.
 #[must_use]
@@ -81,7 +82,8 @@ pub fn call_transport_info(
     if let Some(range) = ctx.loop_range() {
         info = info.with_loop_range(range);
     }
-    if let (Some(map), Some(ppqn)) = (tempo_map, ppqn)
+    if ctx.status == TransportStatus::Playing
+        && let (Some(map), Some(ppqn)) = (tempo_map, ppqn)
         && let Ok(info_musical) = map
             .media_to_beat(position)
             .and_then(|beat| map.time_info(beat, ppqn))
@@ -516,6 +518,44 @@ mod tests {
         assert_eq!(info.status(), TransportStatus::Playing);
         assert_eq!(info.position(), MediaTime::new(1020, base()));
         assert_eq!(info.loop_range(), None);
+    }
+
+    #[test]
+    fn call_transport_musical_requires_playing_and_both_sources() {
+        let mut tempo_builder = ruviform_media_core::TempoMapBuilder::new();
+        tempo_builder.add_tempo_event(ruviform_media_core::TempoEvent::at(
+            ruviform_media_core::BeatPosition::from_int(0),
+            150_000,
+        ));
+        let map = tempo_builder.build().unwrap();
+        let ppqn = Ppqn::new(480).unwrap();
+
+        let playing = call_transport_info(&ctx(0), 0, Some(&map), Some(ppqn));
+        let musical = playing.musical().expect("playing complete source");
+        assert_eq!(musical.position_ticks, 0);
+        assert_eq!(musical.bpm_milli, 150_000);
+        assert_eq!(musical.ppqn, 480);
+
+        assert!(
+            call_transport_info(&ctx(0), 0, None, Some(ppqn))
+                .musical()
+                .is_none()
+        );
+        assert!(
+            call_transport_info(&ctx(0), 0, Some(&map), None)
+                .musical()
+                .is_none()
+        );
+        for status in [TransportStatus::Stopped, TransportStatus::Paused] {
+            let mut c = ctx(0);
+            c.status = status;
+            assert!(
+                call_transport_info(&c, 0, Some(&map), Some(ppqn))
+                    .musical()
+                    .is_none(),
+                "{status:?} must not carry musical timing"
+            );
+        }
     }
 
     #[test]
