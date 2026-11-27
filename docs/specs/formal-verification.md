@@ -113,7 +113,7 @@ rf#806 の harness inventory は後続の再設計で Property group 単位へ�
 `evidence/rf1015/verification.md`・`evidence/rf1015/verification-slice2.md`・
 `evidence/rf1015/verification-slice3.md`・`evidence/rf1015/verification-slice4-archive.md`・
 `evidence/rf1015/verification-slice5-archive-payload.md`・
-`evidence/rf1015/verification-slice6-archive-tar-struct.md`・`evidence/rf1015/runs.jsonl` であり、
+`evidence/rf1015/verification-slice6-archive-typeflag.md`・`evidence/rf1015/runs.jsonl` であり、
 以降の本書は rf#806 当時の Bound・unproven-area・complement table・
 resource-caused `not_run` の inventory として残す。Property group と
 legacy exception の判断では ledger を優先する。本書の表現と矛盾を見つけた
@@ -555,7 +555,7 @@ arc-tar-struct` が semantic assertion failureで exit 1 を返した。検出�
 unwinding assertion failureではなく、production coreと independent oracleの
 exactness assertionの反例である。mutantは完全に revertし、同じ selective laneと
 `mise run test-formal` の再実行で緑へ戻した。実行記録は
-`evidence/rf1015/verification-slice6-archive-tar-struct.md` と `runs.jsonl` を参照する。
+`evidence/rf1015/verification-slice6-archive-typeflag.md` と `runs.jsonl` を参照する。
 
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
