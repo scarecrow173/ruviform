@@ -337,6 +337,7 @@ mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core pr
 mise run test-formal-kani arc-payload-limit # selective TAR declared-size decision-core proof only
 mise run test-formal-kani arc-zip-entry-size # selective ZIP declared entry-size decision-core proof only
 mise run test-formal-kani arc-zip-output-cap # selective ZIP entry output-cap decision-core proof only
+mise run test-formal-kani arc-zip-measured-total # selective ZIP measured-total decision-core proof only
 mise run test-formal-kani arc-tar-struct  # selective TAR typeflag decision-core proof only
 mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
 mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
@@ -363,7 +364,8 @@ length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
 index decision-core proof, `arc-payload-limit` for the TAR declared-size
 decision-core proof, `arc-zip-entry-size` for the ZIP declared entry-size
 decision-core proof, `arc-zip-output-cap` for the ZIP entry output
-hard-cap/overflow decision-core proof, `arc-tar-struct` for the TAR typeflag
+hard-cap/overflow decision-core proof, `arc-zip-measured-total` for the ZIP
+measured total budget accumulation decision-core proof, `arc-tar-struct` for the TAR typeflag
 decision-core proof, `sd-csv-limits` for the CSV limit decision-core proofs,
 and `sd-byte-budget` for the `BoundedRead` proof.
 There is still no generic Property-group runner; record unaffected or
@@ -404,7 +406,8 @@ lives beside the private ZIP index decision core in
 `ruviform-io-archive/src/zip/read.rs`, the rf#1015 `ARC-PAYLOAD-LIMIT`
 TAR exactness proof lives beside the private TAR declared-size decision core in
 `ruviform-io-archive/src/tar/read.rs`, the ZIP declared entry-size exactness
-proof and ZIP entry output hard-cap/overflow exactness proof live beside the
+proof, ZIP entry output hard-cap/overflow exactness proof, and ZIP measured
+total budget accumulation exactness proof live beside the
 private ZIP decision cores in `ruviform-io-archive/src/zip/read.rs`, and the
 rf#1015 `W-FRM-CODEC` length-prefix/write-cap proofs live beside the private
 frame decision core in `ruviform-ui-test/src/transport.rs`. These proofs live in product sources
@@ -491,8 +494,8 @@ For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
 `w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`,
-`arc-zip-entry-size`, `arc-zip-output-cap`, `arc-tar-struct`, or
-`sd-csv-limits`),
+`arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`,
+`arc-tar-struct`, or `sd-csv-limits`),
 not only proptest. The mutant /
 observed failure / revert triple goes into `evidence/<issue>/` — a suite that
 cannot fail is not a gate.
