@@ -101,6 +101,19 @@ const EPOCH_START_GRACE_CALLBACKS: u64 = 24;
 const REGRESSION_INDEX_SLOTS: usize = 32;
 /// Bound on the per-callback render timestamp observation log.
 const RENDER_TIMESTAMP_LOG_SLOTS: usize = 512;
+/// Bound on the control-thread stream lifecycle context log. Lifecycle
+/// events are few by design; overflow means the run cannot be used for
+/// restart/mid-stream attribution without saying so.
+const STREAM_LIFECYCLE_LOG_SLOTS: usize = 32;
+/// Bound on the input/output error context log. Error callbacks can be
+/// noisy, so the artifact keeps a small fixed window plus an overflow
+/// count instead of allocating or logging without bound on the RT path.
+const STREAM_ERROR_LOG_SLOTS: usize = 16;
+/// Case id tagged on round-trip output timestamp diagnostics.
+const ROUNDTRIP_AUDIO_CASE_ID: &str = "rf629.audio.virtual-endpoint.render-capture";
+/// Timestamp-path tag distinguishing round-trip output rows from the
+/// render-only baseline rows, whose legacy line format stays unchanged.
+const ROUNDTRIP_OUTPUT_PATH: &str = "roundtrip_output";
 
 /// Impulse-train stimulus supplied through `PcmFixture::fill_view`:
 /// one 0.8 impulse every 100 ms of render time. The independent
@@ -423,6 +436,163 @@ fn render_regression_diagnostics_preserves_layer_isolation_inputs() {
     assert_eq!(diagnostic.playback_lead_after_ns, Some(150));
     assert_eq!(diagnostic.playback_interval_ns, Some(600));
     assert_eq!(diagnostic.next_playback_interval_ns, Some(550));
+}
+
+#[test]
+fn roundtrip_output_diagnostics_are_tagged_and_distinct_from_baseline() {
+    let probe = EndpointProbe::default();
+    probe.out_timestamp.observe(0, 1_000, Some(2_000), 480, 0);
+    probe.out_timestamp.observe(1, 2_000, Some(3_000), 480, 480);
+
+    let roundtrip = roundtrip_output_diagnostic_lines(&probe, 2);
+    assert!(roundtrip.iter().any(|line| line.starts_with(
+        "roundtrip_output_timestamp_summary: path=roundtrip_output case=rf629.audio.virtual-endpoint.render-capture pair=2 "
+    )));
+    assert!(roundtrip.iter().any(|line| line.starts_with(
+        "roundtrip_output_timestamp_event: path=roundtrip_output case=rf629.audio.virtual-endpoint.render-capture pair=2 index=0 "
+    )));
+
+    let baseline = baseline_timestamp_diagnostic_lines(&probe);
+    assert!(
+        baseline
+            .iter()
+            .any(|line| line.starts_with("render_timestamp_event: index=0 "))
+    );
+    assert!(
+        baseline
+            .iter()
+            .all(|line| !line.contains("path=roundtrip_output"))
+    );
+}
+
+#[test]
+fn roundtrip_output_regression_diag_preserves_epoch_offset_and_required_fields() {
+    let probe = EndpointProbe::default();
+    probe.out_timestamp.observe(0, 1_000, Some(1_500), 480, 0);
+    probe.out_timestamp.observe(1, 2_000, Some(2_500), 480, 480);
+    probe.out_timestamp.split_epoch(2);
+    for index in 2..=26_u64 {
+        let callback_ns = 10_000 + i64::try_from(index).unwrap() * 100;
+        probe.out_timestamp.observe(
+            index,
+            callback_ns,
+            Some(callback_ns + 500),
+            480,
+            index * 480,
+        );
+    }
+    probe
+        .out_timestamp
+        .observe(27, 12_500, Some(13_000), 480, 27 * 480);
+
+    let lines = roundtrip_output_diagnostic_lines(&probe, 0);
+    let diagnostic = lines
+        .iter()
+        .find(|line| {
+            line.starts_with("roundtrip_output_timestamp_regression_diag:")
+                && line.contains(" index=27 ")
+        })
+        .expect("round-trip regression diagnostic");
+    for field in [
+        "path=roundtrip_output",
+        "case=rf629.audio.virtual-endpoint.render-capture",
+        "pair=0",
+        "epoch=1",
+        "epoch_offset=25",
+        "startup_grace=0",
+        "reference_index=26",
+        "reference_callback_ns=",
+        "backstep_ns=",
+        "backend_two_step_ns=",
+        "host_two_step_ns=",
+        "supply_two_step_frames=",
+        "playback_lead_before_ns=",
+        "playback_lead_ns=",
+        "playback_lead_after_ns=",
+        "playback_interval_ns=",
+        "next_playback_interval_ns=",
+    ] {
+        assert!(
+            diagnostic.contains(field),
+            "missing {field} in {diagnostic}"
+        );
+    }
+}
+
+#[test]
+fn roundtrip_diagnostics_remain_available_when_capture_oracle_fails() {
+    let probe = EndpointProbe::default();
+    probe.in_callbacks.store(1, Ordering::Relaxed);
+    probe.in_frames.store(480, Ordering::Relaxed);
+    probe.out_callbacks.store(1, Ordering::Relaxed);
+    probe.out_frames.store(480, Ordering::Relaxed);
+    probe.out_timestamp.observe(0, 1_000, Some(2_000), 480, 0);
+    let format = AudioFormat {
+        sample_rate: SampleRate::new(48_000).unwrap(),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F32,
+    };
+
+    let failures = analyze_endpoint(&probe, &format);
+    assert!(
+        failures
+            .iter()
+            .any(|failure| failure.contains("insufficient captured audio")),
+        "expected capture oracle failure, got {failures:?}"
+    );
+    let lines = roundtrip_output_diagnostic_lines(&probe, 0);
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("roundtrip_output_timestamp_event:")),
+        "capture oracle failure must not suppress round-trip output diagnostics"
+    );
+}
+
+#[test]
+fn roundtrip_lifecycle_and_error_context_are_bounded_and_time_correlated() {
+    let probe = EndpointProbe::default();
+    probe.out_callbacks.store(4, Ordering::Relaxed);
+    probe.in_callbacks.store(3, Ordering::Relaxed);
+    record_stream_lifecycle(
+        &probe,
+        StreamDirection::Input,
+        StreamLifecycleAction::Start,
+        true,
+    );
+    record_stream_error(&probe, StreamDirection::Input, StreamErrorKind::Xrun);
+
+    let lines = roundtrip_output_diagnostic_lines(&probe, 1);
+    let lifecycle = lines
+        .iter()
+        .find(|line| line.starts_with("roundtrip_stream_lifecycle_event:"))
+        .expect("lifecycle event line");
+    assert!(lifecycle.contains("direction=input"));
+    assert!(lifecycle.contains("action=start"));
+    assert!(lifecycle.contains("result=ok"));
+    assert!(lifecycle.contains("input_callback_index=2"));
+    assert!(lifecycle.contains("output_callback_index=3"));
+    let error = lines
+        .iter()
+        .find(|line| line.starts_with("roundtrip_stream_error_event:"))
+        .expect("error event line");
+    assert!(error.contains("direction=input"));
+    assert!(error.contains("kind=xrun"));
+    assert!(error.contains("host_monotonic_ns="));
+
+    for _ in 0..STREAM_LIFECYCLE_LOG_SLOTS + 2 {
+        record_stream_lifecycle(
+            &probe,
+            StreamDirection::Output,
+            StreamLifecycleAction::Stop,
+            true,
+        );
+    }
+    assert_eq!(probe.stream_lifecycle_log.overflow_count(), 3);
+    for _ in 0..STREAM_ERROR_LOG_SLOTS + 2 {
+        record_stream_error(&probe, StreamDirection::Output, StreamErrorKind::Backend);
+    }
+    assert_eq!(probe.stream_error_log.overflow_count(), 3);
 }
 
 /// PCM leg: `PcmFixture` block → per-channel `oracle::
@@ -1237,13 +1407,7 @@ impl RenderTimestampInstrument {
         supply_frame_cursor: u64,
     ) {
         let observation = self.classifier.observe(callback_index, callback_ns);
-        let host_monotonic_ns = u64::try_from(
-            self.host_origin
-                .elapsed()
-                .as_nanos()
-                .min(u128::from(u64::MAX)),
-        )
-        .unwrap_or(u64::MAX);
+        let host_monotonic_ns = self.host_monotonic_ns();
         let previous_host = self
             .last_host_monotonic_ns
             .swap(host_monotonic_ns, Ordering::Relaxed);
@@ -1277,6 +1441,16 @@ impl RenderTimestampInstrument {
             playback_lead_ns: playback_ns.map(|playback| playback.saturating_sub(callback_ns)),
             supply_frame_cursor,
         });
+    }
+
+    fn host_monotonic_ns(&self) -> u64 {
+        u64::try_from(
+            self.host_origin
+                .elapsed()
+                .as_nanos()
+                .min(u128::from(u64::MAX)),
+        )
+        .unwrap_or(u64::MAX)
     }
 
     fn enter_callback(&self) -> RenderCallbackActivity<'_> {
@@ -1354,6 +1528,340 @@ impl Drop for RenderCallbackActivity<'_> {
         self.instrument
             .active_callbacks
             .fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum StreamDirection {
+    Input,
+    Output,
+    Unknown,
+}
+
+impl StreamDirection {
+    fn from_stored(value: u64) -> Self {
+        match value {
+            1 => Self::Input,
+            2 => Self::Output,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Input => "input",
+            Self::Output => "output",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn store_value(self) -> u64 {
+        match self {
+            Self::Input => 1,
+            Self::Output => 2,
+            Self::Unknown => u64::MAX,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum StreamLifecycleAction {
+    Start,
+    Stop,
+    EpochSplit,
+    Restart,
+    ReStop,
+    Unknown,
+}
+
+impl StreamLifecycleAction {
+    fn from_stored(value: u64) -> Self {
+        match value {
+            1 => Self::Start,
+            2 => Self::Stop,
+            3 => Self::EpochSplit,
+            4 => Self::Restart,
+            5 => Self::ReStop,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Stop => "stop",
+            Self::EpochSplit => "epoch_split",
+            Self::Restart => "restart",
+            Self::ReStop => "re_stop",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn store_value(self) -> u64 {
+        match self {
+            Self::Start => 1,
+            Self::Stop => 2,
+            Self::EpochSplit => 3,
+            Self::Restart => 4,
+            Self::ReStop => 5,
+            Self::Unknown => u64::MAX,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum StreamErrorKind {
+    Xrun,
+    ClockDiscontinuity,
+    StreamInvalidated,
+    Backend,
+    Other,
+    Unknown,
+}
+
+impl StreamErrorKind {
+    fn from_stored(value: u64) -> Self {
+        match value {
+            1 => Self::Xrun,
+            2 => Self::ClockDiscontinuity,
+            3 => Self::StreamInvalidated,
+            4 => Self::Backend,
+            5 => Self::Other,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Xrun => "xrun",
+            Self::ClockDiscontinuity => "clock_discontinuity",
+            Self::StreamInvalidated => "stream_invalidated",
+            Self::Backend => "backend",
+            Self::Other => "other",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    fn store_value(self) -> u64 {
+        match self {
+            Self::Xrun => 1,
+            Self::ClockDiscontinuity => 2,
+            Self::StreamInvalidated => 3,
+            Self::Backend => 4,
+            Self::Other => 5,
+            Self::Unknown => u64::MAX,
+        }
+    }
+}
+
+fn stream_error_kind(error: DeviceError) -> StreamErrorKind {
+    match error {
+        DeviceError::Xrun => StreamErrorKind::Xrun,
+        DeviceError::ClockDiscontinuity => StreamErrorKind::ClockDiscontinuity,
+        DeviceError::StreamInvalidated => StreamErrorKind::StreamInvalidated,
+        DeviceError::Backend(_) => StreamErrorKind::Backend,
+        _ => StreamErrorKind::Other,
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct StreamLifecycleEvent {
+    sequence: u64,
+    direction: StreamDirection,
+    action: StreamLifecycleAction,
+    succeeded: bool,
+    host_monotonic_ns: u64,
+    input_callback_index: u64,
+    output_callback_index: u64,
+}
+
+struct StreamLifecycleLog {
+    next: AtomicU64,
+    overflow: AtomicU64,
+    sequence: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    direction: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    action: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    succeeded: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    host_monotonic_ns: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    input_callback_index: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+    output_callback_index: [AtomicU64; STREAM_LIFECYCLE_LOG_SLOTS],
+}
+
+impl StreamLifecycleLog {
+    fn new() -> Self {
+        Self {
+            next: AtomicU64::new(0),
+            overflow: AtomicU64::new(0),
+            sequence: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            direction: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            action: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            succeeded: std::array::from_fn(|_| AtomicU64::new(0)),
+            host_monotonic_ns: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            input_callback_index: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            output_callback_index: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+        }
+    }
+
+    fn record(&self, event: StreamLifecycleEvent) {
+        let slot = self.next.fetch_add(1, Ordering::Relaxed);
+        let Ok(index) = usize::try_from(slot) else {
+            self.overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        if index >= STREAM_LIFECYCLE_LOG_SLOTS {
+            self.overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        self.sequence[index].store(slot, Ordering::Relaxed);
+        self.direction[index].store(event.direction.store_value(), Ordering::Relaxed);
+        self.action[index].store(event.action.store_value(), Ordering::Relaxed);
+        self.succeeded[index].store(u64::from(event.succeeded), Ordering::Relaxed);
+        self.host_monotonic_ns[index].store(event.host_monotonic_ns, Ordering::Relaxed);
+        self.input_callback_index[index].store(event.input_callback_index, Ordering::Relaxed);
+        self.output_callback_index[index].store(event.output_callback_index, Ordering::Relaxed);
+    }
+
+    fn events(&self) -> Vec<StreamLifecycleEvent> {
+        let len = self
+            .next
+            .load(Ordering::Relaxed)
+            .min(u64::try_from(STREAM_LIFECYCLE_LOG_SLOTS).unwrap_or(u64::MAX));
+        (0..len)
+            .map(|slot| {
+                let index = usize::try_from(slot).unwrap_or(usize::MAX);
+                StreamLifecycleEvent {
+                    sequence: self.sequence[index].load(Ordering::Relaxed),
+                    direction: StreamDirection::from_stored(
+                        self.direction[index].load(Ordering::Relaxed),
+                    ),
+                    action: StreamLifecycleAction::from_stored(
+                        self.action[index].load(Ordering::Relaxed),
+                    ),
+                    succeeded: self.succeeded[index].load(Ordering::Relaxed) != 0,
+                    host_monotonic_ns: self.host_monotonic_ns[index].load(Ordering::Relaxed),
+                    input_callback_index: self.input_callback_index[index].load(Ordering::Relaxed),
+                    output_callback_index: self.output_callback_index[index]
+                        .load(Ordering::Relaxed),
+                }
+            })
+            .collect()
+    }
+
+    fn event_count(&self) -> u64 {
+        self.next
+            .load(Ordering::Relaxed)
+            .min(u64::try_from(STREAM_LIFECYCLE_LOG_SLOTS).unwrap_or(u64::MAX))
+    }
+
+    fn total_count(&self) -> u64 {
+        self.next.load(Ordering::Relaxed)
+    }
+
+    fn overflow_count(&self) -> u64 {
+        self.overflow.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for StreamLifecycleLog {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct StreamErrorEvent {
+    sequence: u64,
+    direction: StreamDirection,
+    kind: StreamErrorKind,
+    host_monotonic_ns: u64,
+    input_callback_index: u64,
+    output_callback_index: u64,
+}
+
+struct StreamErrorLog {
+    next: AtomicU64,
+    overflow: AtomicU64,
+    sequence: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+    direction: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+    kind: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+    host_monotonic_ns: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+    input_callback_index: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+    output_callback_index: [AtomicU64; STREAM_ERROR_LOG_SLOTS],
+}
+
+impl StreamErrorLog {
+    fn new() -> Self {
+        Self {
+            next: AtomicU64::new(0),
+            overflow: AtomicU64::new(0),
+            sequence: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            direction: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            kind: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            host_monotonic_ns: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            input_callback_index: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+            output_callback_index: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
+        }
+    }
+
+    fn record(&self, event: StreamErrorEvent) {
+        let slot = self.next.fetch_add(1, Ordering::Relaxed);
+        let Ok(index) = usize::try_from(slot) else {
+            self.overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        if index >= STREAM_ERROR_LOG_SLOTS {
+            self.overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        self.sequence[index].store(slot, Ordering::Relaxed);
+        self.direction[index].store(event.direction.store_value(), Ordering::Relaxed);
+        self.kind[index].store(event.kind.store_value(), Ordering::Relaxed);
+        self.host_monotonic_ns[index].store(event.host_monotonic_ns, Ordering::Relaxed);
+        self.input_callback_index[index].store(event.input_callback_index, Ordering::Relaxed);
+        self.output_callback_index[index].store(event.output_callback_index, Ordering::Relaxed);
+    }
+
+    fn events(&self) -> Vec<StreamErrorEvent> {
+        let len = self
+            .next
+            .load(Ordering::Relaxed)
+            .min(u64::try_from(STREAM_ERROR_LOG_SLOTS).unwrap_or(u64::MAX));
+        (0..len)
+            .map(|slot| {
+                let index = usize::try_from(slot).unwrap_or(usize::MAX);
+                StreamErrorEvent {
+                    sequence: self.sequence[index].load(Ordering::Relaxed),
+                    direction: StreamDirection::from_stored(
+                        self.direction[index].load(Ordering::Relaxed),
+                    ),
+                    kind: StreamErrorKind::from_stored(self.kind[index].load(Ordering::Relaxed)),
+                    host_monotonic_ns: self.host_monotonic_ns[index].load(Ordering::Relaxed),
+                    input_callback_index: self.input_callback_index[index].load(Ordering::Relaxed),
+                    output_callback_index: self.output_callback_index[index]
+                        .load(Ordering::Relaxed),
+                }
+            })
+            .collect()
+    }
+
+    fn event_count(&self) -> u64 {
+        self.next
+            .load(Ordering::Relaxed)
+            .min(u64::try_from(STREAM_ERROR_LOG_SLOTS).unwrap_or(u64::MAX))
+    }
+
+    fn total_count(&self) -> u64 {
+        self.next.load(Ordering::Relaxed)
+    }
+
+    fn overflow_count(&self) -> u64 {
+        self.overflow.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for StreamErrorLog {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1469,6 +1977,8 @@ struct EndpointProbe {
     out_xruns: AtomicU64,
     out_invalidated: AtomicU64,
     out_backend_errors: AtomicU64,
+    stream_lifecycle_log: StreamLifecycleLog,
+    stream_error_log: StreamErrorLog,
     /// Absolute render-frame cursor for `PcmFixture::fill_view`.
     out_render_cursor: AtomicU64,
     /// Bounded channel-0 capture handoff.
@@ -1500,6 +2010,43 @@ impl EndpointProbe {
             ..Self::default()
         }
     }
+}
+
+fn last_callback_index(callbacks: &AtomicU64) -> u64 {
+    callbacks
+        .load(Ordering::Relaxed)
+        .checked_sub(1)
+        .unwrap_or(u64::MAX)
+}
+
+fn record_stream_lifecycle(
+    probe: &EndpointProbe,
+    direction: StreamDirection,
+    action: StreamLifecycleAction,
+    succeeded: bool,
+) {
+    let sequence = probe.stream_lifecycle_log.total_count();
+    probe.stream_lifecycle_log.record(StreamLifecycleEvent {
+        sequence,
+        direction,
+        action,
+        succeeded,
+        host_monotonic_ns: probe.out_timestamp.host_monotonic_ns(),
+        input_callback_index: last_callback_index(&probe.in_callbacks),
+        output_callback_index: last_callback_index(&probe.out_callbacks),
+    });
+}
+
+fn record_stream_error(probe: &EndpointProbe, direction: StreamDirection, kind: StreamErrorKind) {
+    let sequence = probe.stream_error_log.total_count();
+    probe.stream_error_log.record(StreamErrorEvent {
+        sequence,
+        direction,
+        kind,
+        host_monotonic_ns: probe.out_timestamp.host_monotonic_ns(),
+        input_callback_index: last_callback_index(&probe.in_callbacks),
+        output_callback_index: last_callback_index(&probe.out_callbacks),
+    });
 }
 
 /// Bounded channel-0 capture buffer — same discipline as the device
@@ -2075,59 +2622,233 @@ fn optional_u64(value: Option<u64>) -> String {
     value.map_or_else(|| "none".to_owned(), |value| value.to_string())
 }
 
-fn emit_render_timestamp_events(probe: &EndpointProbe) {
+fn timestamp_event_lines(
+    prefix: &str,
+    context: &str,
+    events: &[RenderTimestampEvent],
+    boundary_cb: u64,
+) -> Vec<String> {
+    events
+        .iter()
+        .map(|event| {
+            format!(
+                "{prefix}: {context}index={} epoch={} epoch_boundary_cb={} is_epoch_boundary={} frames={} supply_frame_cursor={} callback_ns={} playback_present={} playback_ns={} interval_ns={} regression_backstep_ns={} host_monotonic_ns={} host_interval_ns={} playback_interval_ns={} playback_lead_ns={}",
+                event.callback_index,
+                event.epoch,
+                boundary_cb,
+                u8::from(event.callback_index == boundary_cb),
+                event.frames,
+                event.supply_frame_cursor,
+                event.callback_ns,
+                u8::from(event.playback_ns.is_some()),
+                optional_i64(event.playback_ns),
+                optional_i64(event.interval_ns),
+                optional_i64(event.regression_backstep_ns),
+                event.host_monotonic_ns,
+                optional_u64(event.host_interval_ns),
+                optional_i64(event.playback_interval_ns),
+                optional_i64(event.playback_lead_ns),
+            )
+        })
+        .collect()
+}
+
+fn timestamp_regression_diagnostic_lines(
+    prefix: &str,
+    context: &str,
+    events: &[RenderTimestampEvent],
+    boundary_cb: u64,
+) -> Vec<String> {
+    render_regression_diagnostics(events, boundary_cb)
+        .iter()
+        .map(|diagnostic| {
+            format!(
+                "{prefix}: {context}index={} epoch={} epoch_offset={} startup_grace={} reference_index={} reference_callback_ns={} backstep_ns={} backend_two_step_ns={} host_two_step_ns={} supply_two_step_frames={} playback_lead_before_ns={} playback_lead_ns={} playback_lead_after_ns={} playback_interval_ns={} next_playback_interval_ns={}",
+                diagnostic.callback_index,
+                diagnostic.epoch,
+                diagnostic.epoch_callback_offset,
+                u8::from(diagnostic.startup_grace),
+                optional_u64(diagnostic.reference_callback_index),
+                optional_i64(diagnostic.reference_callback_ns),
+                diagnostic.regression_backstep_ns,
+                optional_i64(diagnostic.backend_two_step_ns),
+                optional_u64(diagnostic.host_two_step_ns),
+                optional_u64(diagnostic.supply_two_step_frames),
+                optional_i64(diagnostic.playback_lead_before_ns),
+                optional_i64(diagnostic.playback_lead_ns),
+                optional_i64(diagnostic.playback_lead_after_ns),
+                optional_i64(diagnostic.playback_interval_ns),
+                optional_i64(diagnostic.next_playback_interval_ns),
+            )
+        })
+        .collect()
+}
+
+fn baseline_timestamp_diagnostic_lines(probe: &EndpointProbe) -> Vec<String> {
     let boundary_cb = probe
         .out_timestamp
         .classifier
         .epoch_boundary_cb
         .load(Ordering::Relaxed);
     let events = probe.out_timestamp.events();
-    for event in &events {
-        eprintln!(
-            "render_timestamp_event: index={} epoch={} epoch_boundary_cb={} is_epoch_boundary={} frames={} supply_frame_cursor={} callback_ns={} playback_present={} playback_ns={} interval_ns={} regression_backstep_ns={} host_monotonic_ns={} host_interval_ns={} playback_interval_ns={} playback_lead_ns={}",
-            event.callback_index,
-            event.epoch,
-            boundary_cb,
-            u8::from(event.callback_index == boundary_cb),
-            event.frames,
-            event.supply_frame_cursor,
-            event.callback_ns,
-            u8::from(event.playback_ns.is_some()),
-            optional_i64(event.playback_ns),
-            optional_i64(event.interval_ns),
-            optional_i64(event.regression_backstep_ns),
-            event.host_monotonic_ns,
-            optional_u64(event.host_interval_ns),
-            optional_i64(event.playback_interval_ns),
-            optional_i64(event.playback_lead_ns),
-        );
-    }
-    for diagnostic in render_regression_diagnostics(&events, boundary_cb) {
-        eprintln!(
-            "render_timestamp_regression_diag: index={} epoch={} epoch_offset={} startup_grace={} reference_index={} reference_callback_ns={} backstep_ns={} backend_two_step_ns={} host_two_step_ns={} supply_two_step_frames={} playback_lead_before_ns={} playback_lead_ns={} playback_lead_after_ns={} playback_interval_ns={} next_playback_interval_ns={}",
-            diagnostic.callback_index,
-            diagnostic.epoch,
-            diagnostic.epoch_callback_offset,
-            u8::from(diagnostic.startup_grace),
-            optional_u64(diagnostic.reference_callback_index),
-            optional_i64(diagnostic.reference_callback_ns),
-            diagnostic.regression_backstep_ns,
-            optional_i64(diagnostic.backend_two_step_ns),
-            optional_u64(diagnostic.host_two_step_ns),
-            optional_u64(diagnostic.supply_two_step_frames),
-            optional_i64(diagnostic.playback_lead_before_ns),
-            optional_i64(diagnostic.playback_lead_ns),
-            optional_i64(diagnostic.playback_lead_after_ns),
-            optional_i64(diagnostic.playback_interval_ns),
-            optional_i64(diagnostic.next_playback_interval_ns),
-        );
-    }
-    eprintln!(
+    let mut lines = timestamp_event_lines("render_timestamp_event", "", &events, boundary_cb);
+    lines.extend(timestamp_regression_diagnostic_lines(
+        "render_timestamp_regression_diag",
+        "",
+        &events,
+        boundary_cb,
+    ));
+    lines.push(format!(
         "render_timestamp_log: events={} overflow={} bounded_slots={}",
         events.len(),
         probe.out_timestamp.log_overflows(),
         RENDER_TIMESTAMP_LOG_SLOTS,
-    );
+    ));
+    lines
+}
+
+fn emit_render_timestamp_events(probe: &EndpointProbe) {
+    for line in baseline_timestamp_diagnostic_lines(probe) {
+        eprintln!("{line}");
+    }
+}
+
+fn callback_index_text(index: u64) -> String {
+    if index == u64::MAX {
+        "none".to_owned()
+    } else {
+        index.to_string()
+    }
+}
+
+fn roundtrip_output_context(pair_index: usize) -> String {
+    format!("path={ROUNDTRIP_OUTPUT_PATH} case={ROUNDTRIP_AUDIO_CASE_ID} pair={pair_index} ")
+}
+
+fn roundtrip_output_summary_line(
+    probe: &EndpointProbe,
+    pair_index: usize,
+    timestamp_events: usize,
+) -> String {
+    let context = roundtrip_output_context(pair_index);
+    let classifier = &probe.out_timestamp.classifier;
+    format!(
+        "roundtrip_output_timestamp_summary: {context}input_callbacks={} output_callbacks={} output_frames={} raw_regressions={} effective_regressions={} epoch_resets={} boundary_cb={} regression_first_cb={} regression_last_cb={} regression_max_backstep_ns={} regression_idx=[{}] playback_some={} playback_none={} playback_regressions={} max_active_callbacks={} overlap_events={} timestamp_events={} timestamp_log_overflow={} input_errors={} input_xruns={} input_discontinuities={} input_invalidated={} input_backend_errors={} output_errors={} output_xruns={} output_invalidated={} output_backend_errors={} error_events={} error_log_overflow={} lifecycle_events={} lifecycle_log_overflow={}",
+        probe.in_callbacks.load(Ordering::Relaxed),
+        probe.out_callbacks.load(Ordering::Relaxed),
+        probe.out_frames.load(Ordering::Relaxed),
+        probe.out_timestamp.raw_regressions(),
+        probe.out_timestamp.effective_regressions(),
+        classifier.epoch_resets.load(Ordering::Relaxed),
+        classifier.epoch_boundary_cb.load(Ordering::Relaxed),
+        classifier.regression_first_cb.load(Ordering::Relaxed),
+        classifier.regression_last_cb.load(Ordering::Relaxed),
+        classifier
+            .regression_max_backstep_ns
+            .load(Ordering::Relaxed),
+        probe.out_timestamp.regression_index_log(),
+        probe.out_timestamp.playback_some_count(),
+        probe.out_timestamp.playback_none_count(),
+        probe.out_timestamp.playback_regression_count(),
+        probe.out_timestamp.max_active_callbacks(),
+        probe.out_timestamp.overlapping_callback_events(),
+        timestamp_events,
+        probe.out_timestamp.log_overflows(),
+        probe.in_errors.load(Ordering::Relaxed),
+        probe.in_xruns.load(Ordering::Relaxed),
+        probe.in_discontinuities.load(Ordering::Relaxed),
+        probe.in_invalidated.load(Ordering::Relaxed),
+        probe.in_backend_errors.load(Ordering::Relaxed),
+        probe.out_errors.load(Ordering::Relaxed),
+        probe.out_xruns.load(Ordering::Relaxed),
+        probe.out_invalidated.load(Ordering::Relaxed),
+        probe.out_backend_errors.load(Ordering::Relaxed),
+        probe.stream_error_log.event_count(),
+        probe.stream_error_log.overflow_count(),
+        probe.stream_lifecycle_log.event_count(),
+        probe.stream_lifecycle_log.overflow_count(),
+    )
+}
+
+fn stream_lifecycle_event_lines(probe: &EndpointProbe, context: &str) -> Vec<String> {
+    probe
+        .stream_lifecycle_log
+        .events()
+        .iter()
+        .map(|event| {
+            format!(
+                "roundtrip_stream_lifecycle_event: {context}sequence={} direction={} action={} result={} host_monotonic_ns={} input_callback_index={} output_callback_index={}",
+                event.sequence,
+                event.direction.as_str(),
+                event.action.as_str(),
+                if event.succeeded { "ok" } else { "error" },
+                event.host_monotonic_ns,
+                callback_index_text(event.input_callback_index),
+                callback_index_text(event.output_callback_index),
+            )
+        })
+        .collect()
+}
+
+fn stream_error_event_lines(probe: &EndpointProbe, context: &str) -> Vec<String> {
+    probe
+        .stream_error_log
+        .events()
+        .iter()
+        .map(|event| {
+            format!(
+                "roundtrip_stream_error_event: {context}sequence={} direction={} kind={} host_monotonic_ns={} input_callback_index={} output_callback_index={}",
+                event.sequence,
+                event.direction.as_str(),
+                event.kind.as_str(),
+                event.host_monotonic_ns,
+                callback_index_text(event.input_callback_index),
+                callback_index_text(event.output_callback_index),
+            )
+        })
+        .collect()
+}
+
+fn roundtrip_output_diagnostic_lines(probe: &EndpointProbe, pair_index: usize) -> Vec<String> {
+    let boundary_cb = probe
+        .out_timestamp
+        .classifier
+        .epoch_boundary_cb
+        .load(Ordering::Relaxed);
+    let events = probe.out_timestamp.events();
+    let context = roundtrip_output_context(pair_index);
+    let mut lines = vec![roundtrip_output_summary_line(
+        probe,
+        pair_index,
+        events.len(),
+    )];
+    lines.extend(stream_lifecycle_event_lines(probe, &context));
+    lines.extend(stream_error_event_lines(probe, &context));
+    lines.extend(timestamp_event_lines(
+        "roundtrip_output_timestamp_event",
+        &context,
+        &events,
+        boundary_cb,
+    ));
+    lines.extend(timestamp_regression_diagnostic_lines(
+        "roundtrip_output_timestamp_regression_diag",
+        &context,
+        &events,
+        boundary_cb,
+    ));
+    lines.push(format!(
+        "roundtrip_output_timestamp_log: {context}events={} overflow={} bounded_slots={}",
+        events.len(),
+        probe.out_timestamp.log_overflows(),
+        RENDER_TIMESTAMP_LOG_SLOTS,
+    ));
+    lines
+}
+
+fn emit_roundtrip_output_diagnostics(probe: &EndpointProbe, pair_index: usize) {
+    for line in roundtrip_output_diagnostic_lines(probe, pair_index) {
+        eprintln!("{line}");
+    }
 }
 
 /// Runs every stem-matched pair candidate until one completes the
@@ -2154,7 +2875,7 @@ fn run_audio_pair_candidates(pairs: Vec<Pair>, meta: &RunMetadata) {
             "pair[{index}]: render=\"{}\" capture=\"{}\" (candidate, unconfirmed)",
             pair.render.name, pair.capture.name
         );
-        match run_audio_round_trip(pair) {
+        match run_audio_round_trip(pair, index) {
             Ok((in_rate, out_rate)) => {
                 let record = endpoint_record_at(
                     "rf629.audio.virtual-endpoint.render-capture",
@@ -2206,7 +2927,7 @@ fn run_audio_pair_candidates(pairs: Vec<Pair>, meta: &RunMetadata) {
 /// negotiated `(input, output)` sample rates so the Pass record's
 /// `RunParameters` reflect what actually ran; `Err` carries every
 /// violation found.
-fn run_audio_round_trip(pair: Pair) -> Result<(u32, u32), Vec<String>> {
+fn run_audio_round_trip(pair: Pair, pair_index: usize) -> Result<(u32, u32), Vec<String>> {
     let Pair { render, capture } = pair;
     eprintln!(
         "  render: \"{}\" id={} | capture: \"{}\" id={}",
@@ -2239,12 +2960,19 @@ fn run_audio_round_trip(pair: Pair) -> Result<(u32, u32), Vec<String>> {
 
     let in_stream = match open_input_with_fallback(capture.device.as_ref(), in_format, &probe) {
         Ok(stream) => stream,
-        Err(error) => return Err(vec![format!("input open failed: {error}")]),
+        Err(error) => {
+            emit_roundtrip_output_diagnostics(&probe, pair_index);
+            return Err(vec![format!("input open failed: {error}")]);
+        }
     };
     let out_stream =
         match open_output_with_fallback(render.device.as_ref(), out_format, &probe, fixture) {
             Ok(stream) => stream,
-            Err(error) => return Err(vec![format!("output open failed: {error}")]),
+            Err(error) => {
+                drop(in_stream);
+                emit_roundtrip_output_diagnostics(&probe, pair_index);
+                return Err(vec![format!("output open failed: {error}")]);
+            }
         };
 
     let in_domain = in_stream.clock_domain();
@@ -2258,13 +2986,37 @@ fn run_audio_round_trip(pair: Pair) -> Result<(u32, u32), Vec<String>> {
         out_stream.format(),
     );
 
-    if let Err(error) = in_stream.start().and_then(|()| out_stream.start()) {
-        return Err(vec![format!("stream start failed: {error}")]);
+    let input_start = in_stream.start();
+    record_stream_lifecycle(
+        &probe,
+        StreamDirection::Input,
+        StreamLifecycleAction::Start,
+        input_start.is_ok(),
+    );
+    if let Err(error) = input_start {
+        drop(in_stream);
+        drop(out_stream);
+        emit_roundtrip_output_diagnostics(&probe, pair_index);
+        return Err(vec![format!("input stream start failed: {error}")]);
+    }
+    let output_start = out_stream.start();
+    record_stream_lifecycle(
+        &probe,
+        StreamDirection::Output,
+        StreamLifecycleAction::Start,
+        output_start.is_ok(),
+    );
+    if let Err(error) = output_start {
+        drop(in_stream);
+        drop(out_stream);
+        emit_roundtrip_output_diagnostics(&probe, pair_index);
+        return Err(vec![format!("output stream start failed: {error}")]);
     }
     thread::sleep(Duration::from_secs(CAPTURE_SECONDS));
     let lifecycle = run_audio_lifecycle(&probe, &*in_stream, &*out_stream);
     drop(in_stream);
     drop(out_stream);
+    emit_roundtrip_output_diagnostics(&probe, pair_index);
 
     let mut failures = analyze_endpoint(&probe, &in_format);
     failures.extend(lifecycle);
@@ -2281,13 +3033,25 @@ fn run_audio_lifecycle(
     out_stream: &dyn OutputStream,
 ) -> Vec<String> {
     let mut lifecycle = Vec::new();
-    for (label, result) in [
-        ("input stop", in_stream.stop()),
-        ("output stop", out_stream.stop()),
-    ] {
-        if let Err(error) = result {
-            lifecycle.push(format!("{label} failed: {error}"));
-        }
+    let input_stop = in_stream.stop();
+    record_stream_lifecycle(
+        probe,
+        StreamDirection::Input,
+        StreamLifecycleAction::Stop,
+        input_stop.is_ok(),
+    );
+    if let Err(error) = input_stop {
+        lifecycle.push(format!("input stop failed: {error}"));
+    }
+    let output_stop = out_stream.stop();
+    record_stream_lifecycle(
+        probe,
+        StreamDirection::Output,
+        StreamLifecycleAction::Stop,
+        output_stop.is_ok(),
+    );
+    if let Err(error) = output_stop {
+        lifecycle.push(format!("output stop failed: {error}"));
     }
     for (label, result) in [
         ("in buffer_size", in_stream.buffer_size().map(|_| ())),
@@ -2306,19 +3070,63 @@ fn run_audio_lifecycle(
     probe
         .in_timestamp
         .split_epoch(probe.in_callbacks.load(Ordering::Relaxed));
+    record_stream_lifecycle(
+        probe,
+        StreamDirection::Input,
+        StreamLifecycleAction::EpochSplit,
+        true,
+    );
     probe
         .out_timestamp
         .split_epoch(probe.out_callbacks.load(Ordering::Relaxed));
-    match in_stream.start().and_then(|()| out_stream.start()) {
+    record_stream_lifecycle(
+        probe,
+        StreamDirection::Output,
+        StreamLifecycleAction::EpochSplit,
+        true,
+    );
+
+    let input_restart = in_stream.start();
+    record_stream_lifecycle(
+        probe,
+        StreamDirection::Input,
+        StreamLifecycleAction::Restart,
+        input_restart.is_ok(),
+    );
+    let output_restart = if input_restart.is_ok() {
+        let result = out_stream.start();
+        record_stream_lifecycle(
+            probe,
+            StreamDirection::Output,
+            StreamLifecycleAction::Restart,
+            result.is_ok(),
+        );
+        result
+    } else {
+        Err(DeviceError::StreamInvalidated)
+    };
+    match input_restart.and(output_restart) {
         Ok(()) => {
             thread::sleep(Duration::from_millis(300));
-            for (label, result) in [
-                ("input re-stop", in_stream.stop()),
-                ("output re-stop", out_stream.stop()),
-            ] {
-                if let Err(error) = result {
-                    lifecycle.push(format!("{label} failed: {error}"));
-                }
+            let input_restop = in_stream.stop();
+            record_stream_lifecycle(
+                probe,
+                StreamDirection::Input,
+                StreamLifecycleAction::ReStop,
+                input_restop.is_ok(),
+            );
+            if let Err(error) = input_restop {
+                lifecycle.push(format!("input re-stop failed: {error}"));
+            }
+            let output_restop = out_stream.stop();
+            record_stream_lifecycle(
+                probe,
+                StreamDirection::Output,
+                StreamLifecycleAction::ReStop,
+                output_restop.is_ok(),
+            );
+            if let Err(error) = output_restop {
+                lifecycle.push(format!("output re-stop failed: {error}"));
             }
         }
         Err(error) => lifecycle.push(format!("restart start failed: {error}")),
@@ -2463,6 +3271,7 @@ fn input_error_callback(probe: &Arc<EndpointProbe>) -> InputErrorCallback {
     let probe = Arc::clone(probe);
     Box::new(move |error: DeviceError| {
         probe.in_errors.fetch_add(1, Ordering::Relaxed);
+        record_stream_error(&probe, StreamDirection::Input, stream_error_kind(error));
         match error {
             DeviceError::Xrun => {
                 probe.in_xruns.fetch_add(1, Ordering::Relaxed);
@@ -2485,6 +3294,7 @@ fn output_error_callback(probe: &Arc<EndpointProbe>) -> OutputErrorCallback {
     let probe = Arc::clone(probe);
     Box::new(move |error: DeviceError| {
         probe.out_errors.fetch_add(1, Ordering::Relaxed);
+        record_stream_error(&probe, StreamDirection::Output, stream_error_kind(error));
         match error {
             DeviceError::Xrun => {
                 probe.out_xruns.fetch_add(1, Ordering::Relaxed);
