@@ -8,7 +8,7 @@
 - PR #1052 merge commit: `16d448a3c53559d830cecb6e6aec76829ddc0da6`
 - original Worker/Dispatch: `orca_session_id:6042f97d-4ac3-4aa7-9718-a79e27efa013` / `task_a2fe58b942a2` / `ctx_151e50ec371b`
 - original実施日: 2026-11-27 UTC
-- evidence correction実施日: 2026-11-28 UTC
+- evidence correction実施日: 2026-11-27 UTC
 
 本sliceは製品修正ではなく、control IRP到達・driver emit/発火条件・ETW capture/decodeを分離するdiagnostic-only観測である。timestamp oracle、startup grace、regression row、driver behavior、workflow、cpal、adapter、RunMetadata/Case Schemaは変更していない。本版は PR #1052 merge後の derived evidence correctionであり、製品コード、proof、diagnostic harness、workflow、raw capture artifactは変更していない。
 
