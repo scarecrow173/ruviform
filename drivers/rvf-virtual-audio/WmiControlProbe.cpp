@@ -76,6 +76,8 @@ typedef struct _RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT
     ULONG       Function;
     ULONGLONG   EnableCount;
     ULONGLONG   DisableCount;
+    ULONGLONG   MirrorKeyCalls;
+    ULONGLONG   MirrorKeyEmitCalls;
     LONG64      LoggerHandle;
 } RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT;
 
@@ -234,6 +236,33 @@ RvfWmiProbeFireEvent
 }
 
 static
+ULONGLONG
+RvfWmiProbeMirrorCounterTotal
+(
+    _In_reads_(RVF1034_WMI_PROBE_MIRROR_SLOTS) LONG64 volatile* Counters
+)
+{
+    ULONGLONG total = 0;
+
+    for (ULONG index = 0; index < RVF1034_WMI_PROBE_MIRROR_SLOTS; index++)
+    {
+        total += (ULONGLONG)InterlockedCompareExchange64(&Counters[index], 0, 0);
+    }
+    return total;
+}
+
+static
+VOID
+RvfWmiProbeResetMirrorSamplingCounters()
+{
+    for (ULONG index = 0; index < RVF1034_WMI_PROBE_MIRROR_SLOTS; index++)
+    {
+        InterlockedExchange64(&g_RvfWriteEtwEventMirrorKeyCalls[index], 0);
+        InterlockedExchange64(&g_RvfWriteEtwEventMirrorKeyEmitCalls[index], 0);
+    }
+}
+
+static
 VOID
 RvfWmiProbeControlWorkItem
 (
@@ -260,8 +289,8 @@ RvfWmiProbeControlWorkItem
             workContext->Function,
             workContext->EnableCount,
             workContext->DisableCount,
-            0,
-            0);
+            workContext->MirrorKeyCalls,
+            workContext->MirrorKeyEmitCalls);
         ExFreePoolWithTag(workContext, SYSVAD_POOLTAG);
     }
 
@@ -280,6 +309,8 @@ RvfWmiProbeQueueControlEvent
     _In_ WMIENABLEDISABLECONTROL Function,
     _In_ ULONGLONG EnableCount,
     _In_ ULONGLONG DisableCount,
+    _In_ ULONGLONG MirrorKeyCalls,
+    _In_ ULONGLONG MirrorKeyEmitCalls,
     _In_ LONG64 LoggerHandle
 )
 {
@@ -308,6 +339,8 @@ RvfWmiProbeQueueControlEvent
     workContext->Function = (ULONG)Function;
     workContext->EnableCount = EnableCount;
     workContext->DisableCount = DisableCount;
+    workContext->MirrorKeyCalls = MirrorKeyCalls;
+    workContext->MirrorKeyEmitCalls = MirrorKeyEmitCalls;
     workContext->LoggerHandle = LoggerHandle;
 
     IoQueueWorkItemEx(workItem, RvfWmiProbeControlWorkItem, CriticalWorkQueue, workContext);
@@ -419,6 +452,7 @@ RvfWmiProbeFunctionControl
                 loggerHandle = (LONG64)wnode->HistoricalContext;
             }
 
+            RvfWmiProbeResetMirrorSamplingCounters();
             InterlockedExchange64(&g_RvfWmiProbeLoggerHandle, loggerHandle);
             InterlockedExchange(&g_RvfWmiProbeEnabled, loggerHandle != 0 ? 1 : 0);
             enableCount = (ULONGLONG)InterlockedIncrement64(&g_RvfWmiProbeEnableCount);
@@ -432,6 +466,8 @@ RvfWmiProbeFunctionControl
                 Function,
                 enableCount,
                 disableCount,
+                RvfWmiProbeMirrorCounterTotal(g_RvfWriteEtwEventMirrorKeyCalls),
+                RvfWmiProbeMirrorCounterTotal(g_RvfWriteEtwEventMirrorKeyEmitCalls),
                 loggerHandle);
         }
         else
@@ -449,6 +485,8 @@ RvfWmiProbeFunctionControl
                 Function,
                 enableCount,
                 disableCount,
+                RvfWmiProbeMirrorCounterTotal(g_RvfWriteEtwEventMirrorKeyCalls),
+                RvfWmiProbeMirrorCounterTotal(g_RvfWriteEtwEventMirrorKeyEmitCalls),
                 loggerHandle);
 
             InterlockedExchange(&g_RvfWmiProbeEnabled, 0);
@@ -473,11 +511,7 @@ RvfWmiProbeResetRuntimeCounters()
     InterlockedExchange64(&g_RvfWriteEtwEventForwardErrorCalls, 0);
     InterlockedExchange64(&g_RvfWriteEtwEventMirrorSuppressedCalls, 0);
 
-    for (ULONG index = 0; index < RVF1034_WMI_PROBE_MIRROR_SLOTS; index++)
-    {
-        InterlockedExchange64(&g_RvfWriteEtwEventMirrorKeyCalls[index], 0);
-        InterlockedExchange64(&g_RvfWriteEtwEventMirrorKeyEmitCalls[index], 0);
-    }
+    RvfWmiProbeResetMirrorSamplingCounters();
 }
 
 #pragma code_seg("PAGE")
@@ -576,6 +610,11 @@ RvfWmiProbeMirrorWriteEtwEvent
         InterlockedIncrement64(&g_RvfWriteEtwEventForwardErrorCalls);
     }
 
+    if (!InterlockedCompareExchange(&g_RvfWmiProbeEnabled, 0, 0))
+    {
+        return;
+    }
+
     keyCalls = (ULONGLONG)InterlockedIncrement64(&g_RvfWriteEtwEventMirrorKeyCalls[slot]);
     shouldEmit = keyCalls <= RVF1034_WMI_PROBE_MIRROR_FIRST ||
         (keyCalls % RVF1034_WMI_PROBE_MIRROR_INTERVAL) == 0;
@@ -583,11 +622,6 @@ RvfWmiProbeMirrorWriteEtwEvent
     if (!shouldEmit)
     {
         InterlockedIncrement64(&g_RvfWriteEtwEventMirrorSuppressedCalls);
-        return;
-    }
-
-    if (!InterlockedCompareExchange(&g_RvfWmiProbeEnabled, 0, 0))
-    {
         return;
     }
 
