@@ -716,10 +716,12 @@ in-src proof、旧 shell harness退役、deterministic regression、selective la
 製品/proof/mise差分が加わった場合は再検証なしに進めない。
 
 slice 9 の `ARC-PAYLOAD-LIMIT` ZIP declared entry-size gateでは、verified Sync Commitを
-`e04db55b508364002f55cf501b7b91401d8499cf` とする。これは ZIP declared entry-size decision core、
-in-src proof、deterministic regression、selective lane、proof placement documentationを含む最後の製品/proof/mise変更 commitであり、
-selective Kani・mutation・proptest・crate regressionの検証対象である。後続の docs/skill/evidence-only
-commitは verified Sync Commitを動かさない。製品/proof/mise差分が加わった場合は再検証なしに進めない。
+`f582f3cb700285e46ee24f99ba9c80841249156c` とする。これは ZIP declared entry-size decision core、
+in-src proof、deterministic regression、selective laneを含む最後の製品/proof/mise変更 commitであり、
+selective Kani・mutation・proptest・crate regressionの検証対象である。`e04db55b` は test module
+documentationだけの comment-only descendantであり、verified Sync Commitを動かさない。後続の
+docs/skill/evidence-only commitも verified Sync Commitを動かさない。製品/proof/mise差分が加わった場合は
+再検証なしに進めない。
 
 ## 判定語彙と fail-closed
 

@@ -3,11 +3,11 @@
 ## 対象と SHA の役割
 
 - base SHA: `092e18e30110b889bcc6cec3720136c7463a840c`（branch 開始時および最終検証前の `origin/main`）。
-- 検証対象 SHA / verified Sync Commit: `e04db55b508364002f55cf501b7b91401d8499cf`。
+- 検証対象 SHA / verified Sync Commit: `f582f3cb700285e46ee24f99ba9c80841249156c`。
   ZIP declared entry-size decision core、in-src proof、deterministic regression、
-  `arc-zip-entry-size` selective lane、proof placement documentation を含む最後の
-  製品/proof/mise 変更 commit である。実装 commit `f582f3cb` に対し、`e04db55b` は
-  test module documentationだけを更新する comment-only descendantである。
+  `arc-zip-entry-size` selective lane を含む最後の製品/proof/mise 変更 commit である。
+  `e04db55b` は test module documentationだけを更新する comment-only descendantであり、
+  verified Sync Commitを移動しない。
 - evidence sync commit: `59498772b55db2ed9321db11f6d662a612963649`。本書・ledger・spec・skill・`runs.jsonl`
   を含む初期 docs/evidence-only commitである。この SHA 自体を evidence 内へ記録する
   correction commitも docs/evidence-onlyであり、最終 head SHA は PR 本文で追跡する。
@@ -59,12 +59,12 @@ subboundary に限定する。既存 proptest `zip_entry_size_limit_gate`、
 | selective Kani pre-mutation | `mise run test-formal-kani arc-zip-entry-size` | 09:21:57–09:22:04 | 0 | Pass | 1/1 harness、0/16 failed、cover 5/5、verification time 0.090303086 s |
 | selective Kani mutation | `mise run test-formal-kani arc-zip-entry-size` | 09:22:24–09:22:30 | 1 | Fail（検出成功） | mutant で 1/16 failed、cover 4/5、verification time 0.07266181 s |
 | selective Kani post-revert | `mise run test-formal-kani arc-zip-entry-size` | 09:22:50–09:22:56 | 0 | Pass | 1/1 harness、0/16 failed、cover 5/5、verification time 0.08727401 s |
-| selective Kani final sync commit | `mise run test-formal-kani arc-zip-entry-size` | 09:34:39–09:34:45 | 0 | Pass | 1/1 harness、0/16 failed、cover 5/5、verification time 0.08582513 s |
+| selective Kani final validated descendant | `mise run test-formal-kani arc-zip-entry-size` | 09:34:39–09:34:45 | 0 | Pass | 1/1 harness、0/16 failed、cover 5/5、verification time 0.08582513 s |
 | fmt | `mise run fmt-check` | 09:34:04–09:34:15 | 0 | Pass | rustfmt diff なし |
 | check | `mise run check ruviform-io-archive` | 09:34:15–09:34:18 | 0 | Pass | crate check pass |
 | lint | `mise run lint ruviform-io-archive` | 09:34:18–09:34:20 | 0 | Pass | clippy `-D warnings` pass |
 | crate regression | `mise run test ruviform-io-archive` | 09:34:20–09:34:27 | 0 | Pass | unit/integration/formal archive/doctest pass |
-| proptest post-revert / final sync commit | `mise run test-formal` | 09:34:51–09:34:57 | 0 | Pass | `formal_ipc` 8/8、`formal_transport` 5/5、`formal_archive` 20/20、`formal_structured` 35/35、`formal_wav` 9/9 |
+| proptest post-revert / final validated descendant | `mise run test-formal` | 09:34:51–09:34:57 | 0 | Pass | `formal_ipc` 8/8、`formal_transport` 5/5、`formal_archive` 20/20、`formal_structured` 35/35、`formal_wav` 9/9 |
 | usage negative smoke | `mise run test-formal-kani invalid-selector` | 09:24:05–09:24:05 | 2 | Pass（期待どおり usage error） | unknown selector は environment detection/Kani 実行前に停止 |
 
 `mise run test ruviform-io-archive` では shell-core 接続を確認する deterministic regression
