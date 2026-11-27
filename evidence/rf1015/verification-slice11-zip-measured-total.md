@@ -6,8 +6,9 @@
 - 検証対象 SHA / verified Sync Commit: `1ffa93a90c11849778bd22c391c33d986ecaabd1`。
   ZIP measured total budget accumulation decision core、in-src proof、deterministic regression、
   `arc-zip-measured-total` selective lane を含む最後の製品/proof/mise 変更 commit である。
-- evidence sync commit は本 branch の後続 commit で確定する。evidence は自分自身を含む
-  commit hash を固定点として書けないため、最終 head SHA は PR 本文で追跡する。
+- evidence sync commit: `43ca4b09f9aae30d1c31a542885bce2a65bc2b68`（`docs(formal): sync zip measured total proof evidence`）。
+  evidence は自分自身を含む commit hash を固定点として書けないため、最終 head SHA は
+  PR 本文で追跡する。
 
 ## 実装した再設計
 
