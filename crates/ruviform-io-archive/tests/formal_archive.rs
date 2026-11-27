@@ -1472,6 +1472,46 @@ fn tar_measured_total_connection_regression() {
     }
 }
 
+#[test]
+fn tar_metadata_extension_gate_connection_regression() {
+    let extension_error = |payload: &[u8], budget| {
+        let mut limits = ArchiveReadLimits::default();
+        limits.max_metadata_bytes = budget;
+        // No end marker: an accepted extension should reach the next header read.
+        let bytes = ext_entry(b'g', "GlobalHead", payload);
+        let mut archive = TarArchiveReader::new(Cursor::new(bytes), limits);
+        match archive.next_entry() {
+            Err(error) => error,
+            Ok(_) => panic!("extension-only stream must not yield an entry or end marker"),
+        }
+    };
+    let payload = pax_record(b"comment", b"note");
+    let size = payload.len() as u64;
+    let header_bytes = BLOCK as u64;
+
+    for (payload, budget) in [
+        (payload.as_slice(), header_bytes + size),
+        (&[][..], header_bytes),
+    ] {
+        let error = extension_error(payload, budget);
+        assert_eq!(error.kind(), ArchiveErrorKind::Truncated);
+        assert_eq!(
+            error.message(),
+            "archive ended without an end-of-archive marker"
+        );
+    }
+
+    let error = extension_error(&payload, header_bytes + size - 1);
+    assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded);
+    assert_eq!(
+        error.message(),
+        format!(
+            "max_metadata_bytes: declared {size} exceeds limit {}",
+            size - 1
+        )
+    );
+}
+
 /// Shell-core connection regression for TAR entry progress and read-demand
 /// composition: a read is bounded by the entry remainder even when the caller
 /// buffer and total budget are larger, chunked reads accumulate exactly to the

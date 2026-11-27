@@ -127,7 +127,7 @@ legacy exception の判断では ledger を優先する。本書の表現と矛�
 場合は、どちらが正しいかを確認して修正し、同期状態を記録する。
 
 slice 1 で確定した設計方向は次のとおり。structured の D-1 は slice 3 で、
-Archive 側代表 Property `ARC-IDX-LIMIT` は slice 4 で、`ARC-PAYLOAD-LIMIT`
+Archive 側代表 Property `ARC-IDX-LIMIT` の ZIP index gate は slice 4 で、`ARC-PAYLOAD-LIMIT`
 の TAR declared size gate は slice 5 で、`ARC-TAR-STRUCT` の typeflag
 classification は slice 6 で、`ARC-PAYLOAD-LIMIT` の ZIP declared entry-size gateは slice 9 で、
 ZIP entry output hard-cap / cap-overflow classification は slice 10 で、ZIP measured total budget accumulation は slice 11 で、TAR measured total read-window / accumulation は slice 12 で、TAR entry progress / read-demand composition は slice 13 で実施済みだが、WAV・他の wire/archive Property・
@@ -159,8 +159,8 @@ slice 2 では、代表 important Property のうち `W-IPC-OP` だけを実装�
 `#[cfg(kani)] mod proofs` に置く。これは proof placement のための cfg であり、
 製品挙動を `cfg(kani)` で置き換える例外ではない。
 
-rf#1015 slice 4 では、Archive 側代表 Property のうち `ARC-IDX-LIMIT` を
-実装した。`ZipArchiveReader::new` は EOCD の declared central-directory
+rf#1015 slice 4 では、`ARC-IDX-LIMIT` の ZIP index gate を分離した。
+`ZipArchiveReader::new` は EOCD の declared central-directory
 count/size と `ArchiveReadLimits` だけを受け取る crate-private な
 `zip_index_gate_decision` を central directory buffering の前に呼ぶ。core は
 allocation・I/O・`Read`/`Seek`・EOCD/CD parser・Vec buffering・診断構築を
@@ -289,16 +289,29 @@ Kani 未証明領域として残り、deterministic regressionと既存 proptest
 
 rf#1015 slice 13 では、`ARC-PAYLOAD-LIMIT` の TAR entry progress / read-demand composition decision subboundaryを実装した。`TarEntryReader::read`、`discard_remaining`、`Drop`、`finish` は declared/producedだけから remaining entry payloadを導く `tar_entry_remaining_payload`、entry残量・total budget残量・caller buffer capacityだけから 1 回の read window・budget exhaustion・entry exhaustionを導く `tar_entry_read_window_decision`、producedと read bytesだけから次の producedを導く `tar_entry_accumulate_produced`、declared/producedだけから exhaustionを導く `tar_entry_payload_exhausted` を共有する。composition decisionは entry残量を demandとして slice 12の `tar_measured_total_window_decision` へ渡す合成であり、window計算を再実装しない。core は allocation・I/O・`Read`・TAR header parser・checksum・PAX/GNU extension folding・padding・pending state machine・environment access・診断/error message構築を持たない。proof は製品実装と同じ `src/tar/read.rs` の `#[cfg(kani)] mod proofs` に置き、5 つの symbolic `u64` の全 domainに対して remaining saturation、exhaustion equality、zero-demand no-read、budget exhaustion、window minimum、produced accumulation saturationを assumeなしで検証する。production invariant `produced <= declared` は assumeせず、全 domain proofは production reachable subsetを含む stronger proofである。`capacity == 0` は scalar exactnessでは window 0・non-exhaustionだが、production接続では entry read shellの empty-buffer early returnにより到達しない。shell-core接続、TAR streaming compositionの残部、複数 entry composition、pending/discard/finish state machine、TAR header parse、PAX/GNU extension folding、任意 malformed stream、TAR metadata/path/link gate、decompression、CRC、error priorityは Kani 未証明領域として残り、deterministic regressionと既存 proptestが接続 coverageを担う。退役すべき旧 TAR entry progress shell harnessはない。
 
+rf#1015 slice 14 は、`ARC-IDX-LIMIT` に TAR 拡張 payload の確保前判定を追加する。
+`read_extension` は確保前に `tar_metadata_extension_gate_decision` を呼ぶ。
+この core は設定上限から計上済みバイト数を引いた残量を求め、負になる場合は 0 とする。
+宣言長が残量以下なら受理して宣言長を加算し、残量を超えれば計上済みバイト数を変えない。
+拒否時の `LimitExceeded` には、宣言長を実値、残量を比較上限として渡す。
+padding を計上しない既存方針と `advance` の 512 バイト単位のヘッダー計上は変更しない。
+
+proof は `src/tar/read.rs` の製品 core を、設定上限・計上済みバイト数・宣言長の
+全 `u64` 入力について検証する。計上済みバイト数が上限以下であることは仮定しない。
+受理条件を `u128` の数学和と 0 バイト要求で定義し、残量、境界の等号、受理時の正確な
+加算と非オーバーフロー、拒否時の値の保持を確認する。allocation、I/O、parser、
+診断の生成、reader 状態は proof に含まない。旧 harness の退役はない。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
 `arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope`、
-slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress` が最小入口である。
+slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress`、slice 14 の `arc-tar-metadata-budget` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
 generic runner はまだない。`W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
 `SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
-ledger §6 と slice 2/3/4/5/6/7/8/9/10/11/12/13 の evidence を正本とする。
+ledger §6 と slice 2/3/4/5/6/7/8/9/10/11/12/13/14 の evidence を正本とする。
 
 ## 対象と検証する契約
 
@@ -364,6 +377,7 @@ ledger §6 と slice 2/3/4/5/6/7/8/9/10/11/12/13 の evidence を正本とする
 | `mise run test-formal-kani arc-zip-measured-total` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_zip_measured_total` の 1 invocation。`src/zip/read.rs` の `arc_zip_measured_total_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-measured-total` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_measured_total` の 1 invocation。`src/tar/read.rs` の `arc_tar_measured_total_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-entry-progress` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_entry_progress` の 1 invocation。`src/tar/read.rs` の `arc_tar_entry_progress_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
+| `mise run test-formal-kani arc-tar-metadata-budget` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_metadata_budget` の 1 invocation。`src/tar/read.rs` の `arc_tar_metadata_budget_decision_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani arc-tar-struct` | `cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_tar_struct` の 1 invocation。`src/tar/read.rs` の `arc_tar_struct_typeflag_exactness` だけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-csv-limits` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision` の 1 invocation。CSV limit decision core の 3 proofだけを選び、Unwinding Assertions を無効化しない | 同上 |
 | `mise run test-formal-kani sd-byte-budget` | `cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness bounded_read_budget_gate` の 1 invocation。Unwinding Assertions を無効化しない | 同上 |
@@ -432,8 +446,9 @@ harnessなので、この sliceでは退役も証明済み扱いもしない。
 slice 1 の教訓（任意 symbolic byte 列 × parser は CBMC unwind が非実用的）
 を踏まえ、残存する parser-facing archive harness は「concrete な最小 valid skeleton 上の
 symbolic gate field」のみを対象にする。任意 malformed stream は
-proptest の concrete coverage に委譲する。`ARC-IDX-LIMIT` の形式的証明は
-rf#1015 slice 4 で `src/zip/read.rs` の pure decision core exactnessへ移り、
+proptest の concrete coverage に委譲する。`ARC-IDX-LIMIT` の ZIP index gate は
+rf#1015 slice 4 で `src/zip/read.rs` の pure decision core exactnessへ移った。
+slice 14 で追加した TAR 拡張の確保前判定と合わせても、`ARC-IDX-LIMIT` 全体を証明したことにはならない。
 `ARC-PAYLOAD-LIMIT` の TAR declared size gate は slice 5 で、
 `ARC-TAR-STRUCT` の typeflag classification は slice 6 でそれぞれ
 `src/tar/read.rs` の pure decision core exactnessへ移り、`ARC-PAYLOAD-LIMIT` の
@@ -510,6 +525,7 @@ stream、数値 field 全体、parser-core接続条件はこの proofの保証�
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
 | `arc_idx_limit_decision_exactness`（in-src `src/zip/read.rs`） | declared count `u16`、declared central-directory size `u64`、`max_entries:u32`、`max_metadata_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | parser-core接続条件、EOCD scan、実 CD parse、複数 entry、ZIP64、deflate payload、local/central 不整合、overlap audit | proptest `zip_index_limit_gates` / `zip_metadata_limit_gate` / `zip_arbitrary_stream_error_set` / `zip_writer_roundtrip` で担保 |
+| `arc_tar_metadata_budget_decision_exactness`（in-src `src/tar/read.rs`） | 設定上限、計上済みバイト数、拡張 payload 宣言長の全 `u64` を symbolic とする。loop なし、`#[kani::unwind(2)]`、assume なし | `advance` の BLOCK 計上、TAR metadata のストリーム全体での計上、複数 entry、shell-core/parser-core 接続、ヘッダー解析、PAX/GNU folding、path/link gate、padding 方針、decompression、CRC | `tar_metadata_extension_gate_connection_regression` は等号、1 バイト超過、残量 0 での 0 バイト要求を実 reader で確認する。既存 `tar_metadata_gate` はヘッダー計上の proptest |
 | `arc_zip_entry_size_declared_gate_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64` と `max_entry_uncompressed_bytes:u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、measured total budget、entry output hard cap、cap overflow classification、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_declared_entry_size_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_output_cap_decision_exactness`（in-src `src/zip/read.rs`） | declared entry size `u64`、remaining budget `u64`、`None`/`Some` 選択を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし。symbolic bool + `u64` は full-domain encoding | shell-core接続条件、EOCD/CD/local-header parse、measured total budget accumulation、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream | connection regression `zip_output_cap_connection_regression` と proptest `zip_entry_size_limit_gate` / `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
 | `arc_zip_measured_total_decision_exactness`（in-src `src/zip/read.rs`） | total budget `u64`、accumulated-before `u64`、measured entry bytes `u64` を全て symbolic。loopを持たず `#[kani::unwind(2)]`。assumeなし | shell-core接続条件、EOCD/CD/local-header parse、decompression、CRC、local/central consistency、overlap audit、任意 malformed stream、複数 entry composition、error priority | connection regression `zip_measured_total_connection_regression` と proptest `zip_total_measured_gate` / `zip_writer_roundtrip` で担保 |
@@ -774,6 +790,11 @@ revertし、同じ selective laneと `mise run test-formal` の再実行で緑�
 
 rf#1015 slice 13 の `ARC-PAYLOAD-LIMIT` TAR entry progress / read-demand compositionでは、decision coreの remaining payload計算が producedを無視して declaredをそのまま返す mutantへ 1 箇所だけ変え、`mise run test-formal-kani arc-tar-entry-progress` が semantic assertion failureで exit 1 を返した。検出は unwinding assertion failureではなく、remaining equalityと exhaustion後 zero remainingを期待する assertionの反例である。mutantは完全に revertし、同じ selective laneと `mise run test-formal` の再実行で緑へ戻した。実行記録は `evidence/rf1015/verification-slice13-tar-entry-progress.md` と `runs.jsonl` を参照する。
 
+rf#1015 slice 14 の `ARC-IDX-LIMIT` TAR 拡張の確保前判定では、受理条件の `<=` を `<` に
+変えると `arc-tar-metadata-budget` が等号を含む受理条件の assertion で反例を検出した。
+検出後に変異を戻し、同じ selective lane と `mise run test-formal` を再実行した。
+実行記録は [slice 14 の証跡](../../evidence/rf1015/verification-slice14-tar-metadata-budget.md) を参照する。
+
 slice 2 の `W-IPC-OP` では、verified Sync Commit を
 `5024268f56339c91ba0487fe8d87198a8d529cab` とする。これは製品実装・proof
 harness・mise laneを変更した最後の commitであり、selective Kani、mutation、
@@ -854,6 +875,11 @@ proptest・crate regressionの検証対象である。後続の docs/skill/evide
 製品/proof/mise差分が加わった場合は再検証なしに進めない。
 
 slice 13 の `ARC-PAYLOAD-LIMIT` TAR entry progress / read-demand compositionでは、verified Sync Commitを `deca7e9b4752f1994df736d7d70f1bcd1b14d026` とする。これは TAR entry progress/read-demand composition decision core、in-src proof、deterministic regression、selective laneを含む最後の製品/proof/mise変更 commitであり、selective Kani・mutation・proptest・crate regressionの検証対象である。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。製品/proof/mise差分が加わった場合は再検証なしに進めない。
+
+slice 14 の `ARC-IDX-LIMIT` TAR 拡張の確保前判定では、verified Sync Commit を
+`1b0f492efeb12bc0de39347ebef3c5ec6ffc9aea` とする。これは製品 core、in-src proof、
+接続回帰テスト、selective lane を含む検証対象である。後続の docs/skill/evidence-only commit
+は verified Sync Commit を動かさない。
 
 ## 判定語彙と fail-closed
 

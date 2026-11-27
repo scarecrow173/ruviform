@@ -334,6 +334,7 @@ mise run test-formal-kani w-ipc-op        # selective W-IPC-OP byte-core proofs 
 mise run test-formal-kani w-ipc-envelope  # selective W-IPC-ENVELOPE size/field decision-core proofs only
 mise run test-formal-kani w-frm-codec     # selective frame length decision-core proofs only
 mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
+mise run test-formal-kani arc-tar-metadata-budget # selective TAR extension metadata pre-buffer proof only
 mise run test-formal-kani arc-payload-limit # selective TAR declared-size decision-core proof only
 mise run test-formal-kani arc-zip-entry-size # selective ZIP declared entry-size decision-core proof only
 mise run test-formal-kani arc-zip-output-cap # selective ZIP entry output-cap decision-core proof only
@@ -363,7 +364,8 @@ implemented selective re-run entries are `mise run test-formal-kani w-ipc-op`
 for the rf#1015 `W-IPC-OP` byte-core proofs, `w-ipc-envelope` for the intent
 envelope size/field decision-core proofs, `w-frm-codec` for the frame
 length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
-index decision-core proof, `arc-payload-limit` for the TAR declared-size
+index decision-core proof, `arc-tar-metadata-budget` for the TAR extension
+metadata pre-buffer decision-core proof, `arc-payload-limit` for the TAR declared-size
 decision-core proof, `arc-zip-entry-size` for the ZIP declared entry-size
 decision-core proof, `arc-zip-output-cap` for the ZIP entry output
 hard-cap/overflow decision-core proof, `arc-zip-measured-total` for the ZIP
@@ -408,7 +410,15 @@ exactness/boundary proofs live beside the private `valid_op_bytes` in
 `ruviform-ui/src/ipc.rs`, and the rf#1015 `W-IPC-ENVELOPE` size/field
 decision-core proofs live beside the same private decision core in that file. The rf#1015 `ARC-IDX-LIMIT` exactness proof
 lives beside the private ZIP index decision core in
-`ruviform-io-archive/src/zip/read.rs`, the rf#1015 `ARC-PAYLOAD-LIMIT`
+`ruviform-io-archive/src/zip/read.rs`. The other `ARC-IDX-LIMIT` proof,
+`arc_tar_metadata_budget_decision_exactness`, lives in
+`ruviform-io-archive/src/tar/read.rs` and checks the extension pre-buffer
+decision over three unrestricted `u64` inputs, including exact,
+non-overflowing accepted spends. `tar_metadata_extension_gate_connection_regression`
+checks the reader connection at equality, one byte over, and zero demand at
+zero remaining. Neither the header-block gate in `advance` nor TAR streaming
+composition or shell-core/parser-core connections are Kani-proven by this proof.
+The rf#1015 `ARC-PAYLOAD-LIMIT`
 TAR exactness proof lives beside the private TAR declared-size decision core in
 `ruviform-io-archive/src/tar/read.rs`, the ZIP declared entry-size exactness
 proof, ZIP entry output hard-cap/overflow exactness proof, and ZIP measured
@@ -501,7 +511,7 @@ mutated invariant, record the failure, revert completely, and re-run green.
 For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
-`w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-payload-limit`,
+`w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-tar-metadata-budget`, `arc-payload-limit`,
 `arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`,
 `arc-tar-measured-total`, `arc-tar-entry-progress`, `arc-tar-struct`, or `sd-csv-limits`),
 not only proptest. The mutant /

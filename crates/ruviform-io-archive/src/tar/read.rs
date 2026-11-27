@@ -111,6 +111,31 @@ fn tar_declared_size_gate_decision(
     }
 }
 
+struct TarMetadataExtensionGateDecision {
+    remaining_before: u64,
+    accepted: bool,
+    accumulated_after: u64,
+}
+
+fn tar_metadata_extension_gate_decision(
+    max_metadata_bytes: u64,
+    accumulated_before: u64,
+    ext_size: u64,
+) -> TarMetadataExtensionGateDecision {
+    let remaining_before = max_metadata_bytes.saturating_sub(accumulated_before);
+    let accepted = ext_size <= remaining_before;
+    let accumulated_after = if accepted {
+        accumulated_before + ext_size
+    } else {
+        accumulated_before
+    };
+    TarMetadataExtensionGateDecision {
+        remaining_before,
+        accepted,
+        accumulated_after,
+    }
+}
+
 fn tar_measured_total_remaining(max_total_uncompressed_bytes: u64, accumulated_before: u64) -> u64 {
     max_total_uncompressed_bytes.saturating_sub(accumulated_before)
 }
@@ -556,14 +581,19 @@ impl<R: Read> TarArchiveReader<R> {
     /// against the remaining metadata budget **before** the payload is
     /// buffered.
     fn read_extension(&mut self, header: &Header<'_>) -> Result<Vec<u8>, ArchiveError> {
-        let remaining = self
-            .limits
-            .max_metadata_bytes
-            .saturating_sub(self.metadata_bytes);
-        if header.size > remaining {
-            return Err(limit_u64("max_metadata_bytes", header.size, remaining));
+        let decision = tar_metadata_extension_gate_decision(
+            self.limits.max_metadata_bytes,
+            self.metadata_bytes,
+            header.size,
+        );
+        if !decision.accepted {
+            return Err(limit_u64(
+                "max_metadata_bytes",
+                header.size,
+                decision.remaining_before,
+            ));
         }
-        self.metadata_bytes += header.size;
+        self.metadata_bytes = decision.accumulated_after;
         let len = usize::try_from(header.size).unwrap_or(usize::MAX);
         let mut payload = vec![0_u8; len];
         self.inner
@@ -1059,8 +1089,77 @@ mod proofs {
         tar_declared_size_gate_decision, tar_entry_accumulate_produced,
         tar_entry_payload_exhausted, tar_entry_read_window_decision, tar_entry_remaining_payload,
         tar_measured_total_accumulate, tar_measured_total_remaining,
-        tar_measured_total_window_decision, tar_typeflag_class,
+        tar_measured_total_window_decision, tar_metadata_extension_gate_decision,
+        tar_typeflag_class,
     };
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_tar_metadata_budget_decision_exactness() {
+        let max_metadata_bytes: u64 = kani::any();
+        let accumulated_before: u64 = kani::any();
+        let ext_size: u64 = kani::any();
+        let decision =
+            tar_metadata_extension_gate_decision(max_metadata_bytes, accumulated_before, ext_size);
+
+        let before = u128::from(accumulated_before);
+        let limit = u128::from(max_metadata_bytes);
+        let sum = before + u128::from(ext_size);
+        if before > limit {
+            assert!(
+                decision.remaining_before == 0,
+                "over-budget remaining is zero"
+            );
+        } else {
+            assert!(
+                before + u128::from(decision.remaining_before) == limit,
+                "accounted bytes and remaining budget sum to the configured limit"
+            );
+        }
+        assert!(
+            decision.accepted == (ext_size == 0 || sum <= limit),
+            "zero demand or an in-budget mathematical sum must be accepted, including equality"
+        );
+        if decision.accepted {
+            assert!(
+                sum <= u128::from(u64::MAX),
+                "accepted spend cannot overflow"
+            );
+            assert!(
+                u128::from(decision.accumulated_after) == sum,
+                "accepted spend must equal the mathematical sum"
+            );
+        } else {
+            assert!(
+                decision.accumulated_after == accumulated_before,
+                "rejected demand must not be charged"
+            );
+        }
+
+        kani::cover!(ext_size > 0 && sum + 1 == limit, "one byte within budget");
+        kani::cover!(
+            ext_size > 0 && sum == limit,
+            "exact positive spend at the limit"
+        );
+        kani::cover!(before <= limit && sum == limit + 1, "one byte over budget");
+        kani::cover!(
+            before > limit && ext_size == 0,
+            "zero demand above the limit"
+        );
+        kani::cover!(
+            before > limit && ext_size == 1,
+            "positive demand above the limit"
+        );
+        kani::cover!(limit == 0 && ext_size == 0, "zero demand at zero limit");
+        kani::cover!(
+            before < limit && ext_size == u64::MAX && sum > limit,
+            "maximum demand exceeds a positive remaining budget"
+        );
+        kani::cover!(
+            ext_size == u64::MAX && sum == limit,
+            "maximum demand fits exactly when the entire range remains"
+        );
+    }
 
     fn typeflag_oracle(typeflag: u8) -> TarTypeflagClass {
         if typeflag == b'x' || typeflag == b'X' {
