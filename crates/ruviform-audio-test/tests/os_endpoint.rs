@@ -1551,7 +1551,7 @@ struct BackendTraceProviderSpec {
     require_registered: bool,
 }
 
-const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 4] = [
+const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 5] = [
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-Audio",
         guid: "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
@@ -1581,7 +1581,15 @@ const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 4] = [
         guid: "{10EB6007-818C-4DB6-A694-B518E589D07A}",
         keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
         level: BACKEND_TRACE_LEVEL,
-        selection_reason: "GUID embedded in portcls.sys and used by core-audio trace guidance; primary PortCls miniport engine event candidate",
+        selection_reason: "GUID embedded in portcls.sys and used by core-audio trace guidance; possible PortCls classic-provider control GUID",
+        require_registered: false,
+    },
+    BackendTraceProviderSpec {
+        name: "PortCls-AudioEngine-WMIEvent",
+        guid: "{97BCD203-6286-4974-801D-A293B921F84B}",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        level: BACKEND_TRACE_LEVEL,
+        selection_reason: "WMI class qualifier for PortCls_AudioEngine / Miniport_AudioEngine_Event; direct miniport engine event candidate",
         require_registered: false,
     },
 ];
@@ -1869,7 +1877,8 @@ fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXm
     let kernel_guid = BACKEND_TRACE_PROVIDERS[1].guid.to_ascii_lowercase();
     let audio_engine_guid = BACKEND_TRACE_PROVIDERS[2].guid.to_ascii_lowercase();
     let portcls_guid = BACKEND_TRACE_PROVIDERS[3].guid.to_ascii_lowercase();
-    if lower.contains(&portcls_guid) {
+    let portcls_event_guid = BACKEND_TRACE_PROVIDERS[4].guid.to_ascii_lowercase();
+    if lower.contains(&portcls_guid) || lower.contains(&portcls_event_guid) {
         inventory.portcls_provider_events = inventory.portcls_provider_events.saturating_add(1);
     } else if lower.contains(&audio_engine_guid) || lower.contains("audioengine") {
         inventory.audio_engine_provider_events =
