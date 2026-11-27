@@ -1850,7 +1850,10 @@ fn trace_token_has_rvf_position_schema(token: &str) -> bool {
     } else {
         token.parse::<u64>().ok()
     };
-    value.is_some_and(|value| value & 0xffff == RVF_POSITION_ETW_PRESENTATION_POSITION_V1)
+    value.is_some_and(|value| {
+        value & 0xffff == RVF_POSITION_ETW_PRESENTATION_POSITION_V1
+            && (100_000..=100_000_000).contains(&(value >> RVF_POSITION_ETW_FREQUENCY_SHIFT))
+    })
 }
 
 fn chunk_has_rvf_position_schema(chunk: &str) -> bool {
@@ -4510,6 +4513,8 @@ fn backend_trace_etw_field_packing_round_trip() {
     assert!(chunk_has_rvf_position_schema(&data1.to_string()));
     assert!(chunk_has_rvf_position_schema("0x9896802001"));
     assert!(!chunk_has_rvf_position_schema("0x9896802002"));
+    assert!(!chunk_has_rvf_position_schema("8193"));
+    assert!(!chunk_has_rvf_position_schema("5242888193"));
 }
 
 #[test]
