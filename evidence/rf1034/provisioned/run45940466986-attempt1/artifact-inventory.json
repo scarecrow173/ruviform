@@ -1,0 +1,46 @@
+{
+  "schema": "rf1034-provisioned-artifact-inventory/v1",
+  "run": {
+    "id": "45940466986",
+    "attempt": "1",
+    "url": "https://github.com/scarecrow173/ruviform/actions/runs/45940466986",
+    "artifact": "virtual-audio-driver-probe-windows-2025-attempt-1",
+    "head_branch": "test/1034-mid-epoch-repro",
+    "head_sha": "ffd8d73f45d3da99673a696f8567f7a14e4db5d5",
+    "artifact_id": "15173006911"
+  },
+  "downloaded_at_utc": "2026-11-27T04:39:29Z",
+  "note": "Artifact 全体ではなく rf#1034 判定に必要な stage/log/RunMetadata のみを抽出。binary package や fault/xrun artifact は対象外 evidence として複製していない。repository hygiene のため抽出 text の行末は LF、行末空白は除去しており、hash はこの正規化済み抽出ファイルに対するもの。原本 artifact は GitHub Actions run に残る。 JSON metadata も repository hygiene のため終端 newline を保持する。",
+  "files": [
+    {
+      "path": "endpoint-probe-windows-2025.txt",
+      "bytes": 5372,
+      "sha256": "15a1fa32a3c90b0a5b3cf694b616e9317beec1296da52453f681510f6f535f4e"
+    },
+    {
+      "path": "run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json",
+      "bytes": 1024,
+      "sha256": "adb9e742368e4b4f716b177ef08072e7d9cc440eb32f3e4226efe76f7302fc65"
+    },
+    {
+      "path": "run-metadata-rf629-audio-virtual-endpoint-render-capture.json",
+      "bytes": 611,
+      "sha256": "b154f1f47f92f8cd2e594caf43839c41dc0f4d740e871e7a7fa66354583b717d"
+    },
+    {
+      "path": "run-metadata-rf629-midi-virtual-endpoint-loopback.json",
+      "bytes": 828,
+      "sha256": "dbd18663324b9b9731f3c88d2afb66addc556060d06cad4179683e17fb9a4dad"
+    },
+    {
+      "path": "stage-os-endpoint-wiring-windows-2025.txt",
+      "bytes": 128290,
+      "sha256": "5b69c84966aaa8adcb8d0d714d3865ebc1900398299be34543255a72ccde9073"
+    },
+    {
+      "path": "vaudio-probe-windows-2025.json",
+      "bytes": 4855,
+      "sha256": "50b290a919965650266f4d8f828e18bcdb7ce7d53bd43b507b7f4ab5e9a5cb1c"
+    }
+  ]
+}
