@@ -16,7 +16,9 @@
 //!    `deliverable` span becomes a `BlockContract` partition of
 //!    physical calls; each call merges `release ++ chase ++ plan ++
 //!    live` into one process-start-relative `EventList` plus a
-//!    `TransportInfo` snapshot; every undeliverable span becomes
+//!    `TransportInfo` snapshot whose musical half comes from the active
+//!    plan's tempo map/PPQN source (never a fixed fallback); every
+//!    undeliverable span becomes
 //!    silence plus a [`NodeReport::UndeliverableSpan`]. A changed span
 //!    context (epoch / generations / loop occurrence) marks a
 //!    discontinuity: the delivered-note ledger releases at the span's
@@ -34,8 +36,9 @@ use ruviform_audio_core::midi_input::TimedMidiInput;
 use ruviform_graph::{Direction, NodeSpec, PortFormat, PortRole};
 use ruviform_media_core::{
     BlockContract, ClockEpochId, DeliveryPolicy, EngineFrame, LoopOccurrence, MidiEvent,
-    NOTE_LEDGER_CAPACITY, NoteLedger, PlanGeneration, ScheduleBudget, ScheduledEvent, SpanSink,
-    TransportGeneration, TransportPlan, TransportScheduler, TransportSpan,
+    MusicalTimeSource, NOTE_LEDGER_CAPACITY, NoteLedger, PlanGeneration, ScheduleBudget,
+    ScheduledEvent, SpanSink, TransportGeneration, TransportPlan, TransportScheduler,
+    TransportSpan,
 };
 use ruviform_plugin_core::{
     BufferView, BufferViewMut, BusDescriptor, BusDirection, BusRole, Event, EventKind, EventList,
@@ -371,7 +374,12 @@ impl<'io> CallSink<'_, 'io> {
 }
 
 impl SpanSink<EventKind> for CallSink<'_, '_> {
-    fn span(&mut self, span: &TransportSpan, events: &[ScheduledEvent<EventKind>]) {
+    fn span(
+        &mut self,
+        span: &TransportSpan,
+        events: &[ScheduledEvent<EventKind>],
+        musical: MusicalTimeSource<'_>,
+    ) {
         let span_start = match span.start.checked_offset(self.callback_start) {
             Some(off) => usize::try_from(off).unwrap_or(usize::MAX),
             // A span outside the callback window is a scheduler bug —
@@ -429,7 +437,9 @@ impl SpanSink<EventKind> for CallSink<'_, '_> {
             } else {
                 (0, 0)
             };
-            self.run_call(span, events, rel, len_u32, buf_off, len, rel_n, ch_n);
+            self.run_call(
+                span, events, musical, rel, len_u32, buf_off, len, rel_n, ch_n,
+            );
         }
     }
 }
@@ -555,7 +565,8 @@ impl CallSink<'_, '_> {
     /// `evict ++ release ++ chase ++ plan ++ live` into the call's `EventList`
     /// (each source already offset-sorted; release/chase ride only the
     /// span's first call), feeds the delivered-note ledger with
-    /// exactly what the plugin receives, then runs the endpoint.
+    /// exactly what the plugin receives, supplies the span's plan-owned
+    /// musical source to the transport snapshot, then runs the endpoint.
     /// Every defined failure stays bounded, counted and reported.
     ///
     /// **RT contract:** RT-suitable — bounded work, no allocation.
@@ -564,6 +575,7 @@ impl CallSink<'_, '_> {
         &mut self,
         span: &TransportSpan,
         events: &[ScheduledEvent<EventKind>],
+        musical: MusicalTimeSource<'_>,
         rel: u32,
         len_u32: u32,
         buf_off: usize,
@@ -654,7 +666,7 @@ impl CallSink<'_, '_> {
                 }
             }
         }
-        let transport = call_transport_info(&span.ctx, rel, None, None);
+        let transport = call_transport_info(&span.ctx, rel, musical.tempo_map, musical.ppqn);
         self.status.bump(Counter::PhysicalCall);
         let result = self.endpoint.process(
             &hins[..self.bus_in.len()],
