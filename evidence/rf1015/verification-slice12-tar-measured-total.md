@@ -12,7 +12,7 @@ slice 12 は `ARC-PAYLOAD-LIMIT` のうち、TAR interactive `Read` pathと drai
 | --- | --- |
 | base SHA | `9aab551cb4d258896035a7db5a44cbc7222ae3ef` |
 | 検証対象 SHA / verified Sync Commit | `486b52963757fc7dd807fae287eedc078440600c` |
-| 初期 evidence sync commit | 後続 commit で確定する |
+| 初期 evidence sync commit | `a73201aa114c3d80cc7421490639a054151b270d` |
 | 最終 head SHA | PR 本文で追跡する |
 
 `486b52963757fc7dd807fae287eedc078440600c` は TAR measured total decision core、in-src proof、deterministic regression、selective laneを含む最後の製品/proof/mise変更 commitである。後続の docs/skill/evidence-only commitは verified Sync Commitを動かさない。
