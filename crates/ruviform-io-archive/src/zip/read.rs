@@ -117,6 +117,31 @@ fn zip_declared_entry_size_gate_decision(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ZipEntryOutputOverflowDecision {
+    DeclaredOverproduction,
+    BudgetExceeded,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ZipEntryOutputCapDecision {
+    hard_cap: u64,
+    overflow: ZipEntryOutputOverflowDecision,
+}
+
+fn zip_entry_output_cap_decision(
+    declared: u64,
+    total_budget: Option<u64>,
+) -> ZipEntryOutputCapDecision {
+    let hard_cap = total_budget.map_or(declared, |remaining| declared.min(remaining));
+    let overflow = if hard_cap < declared {
+        ZipEntryOutputOverflowDecision::BudgetExceeded
+    } else {
+        ZipEntryOutputOverflowDecision::DeclaredOverproduction
+    };
+    ZipEntryOutputCapDecision { hard_cap, overflow }
+}
+
 impl<R: Read + Seek> ZipArchiveReader<R> {
     /// Opens a ZIP stream: locates and parses EOCD + central directory
     /// under `limits`. See the module docs for the pipeline.
@@ -374,16 +399,14 @@ impl<R: Read + Seek> ZipArchiveReader<R> {
             let take = (&mut self.inner).take(u64::from(record.compressed_size));
             EntrySource::Deflate(DeflateDecoder::new(take))
         };
-        let mut hard_cap = declared;
-        if let Some(remaining) = total_budget {
-            hard_cap = hard_cap.min(remaining);
-        }
+        let output_cap = zip_entry_output_cap_decision(declared, total_budget);
         Ok(ZipEntryReader {
             info: entry_info(index, record),
             source,
             verified: &mut self.verified[index],
             produced: 0,
-            hard_cap,
+            hard_cap: output_cap.hard_cap,
+            cap_overflow: output_cap.overflow,
             declared,
             data_start,
             data_end,
@@ -779,6 +802,8 @@ pub struct ZipEntryReader<'a, R: Read + Seek> {
     produced: u64,
     /// Output cap: `min(declared, remaining budget)`.
     hard_cap: u64,
+    /// Overflow classification attached to the output cap decision.
+    cap_overflow: ZipEntryOutputOverflowDecision,
     declared: u64,
     data_start: u64,
     data_end: u64,
@@ -938,13 +963,12 @@ impl<R: Read + Seek> ZipEntryReader<'_, R> {
         let mut scratch = [0_u8; 1];
         match self.source.read(&mut scratch) {
             Ok(0) => Ok(()),
-            Ok(_) => {
-                if self.hard_cap < self.declared {
-                    Err(ArchiveErrorKind::LimitExceeded)
-                } else {
-                    Err(ArchiveErrorKind::SizeMismatch)
+            Ok(_) => Err(match self.cap_overflow {
+                ZipEntryOutputOverflowDecision::BudgetExceeded => ArchiveErrorKind::LimitExceeded,
+                ZipEntryOutputOverflowDecision::DeclaredOverproduction => {
+                    ArchiveErrorKind::SizeMismatch
                 }
-            }
+            }),
             Err(error) => Err(classify_source_error(&self.source, &error)),
         }
     }
@@ -971,7 +995,8 @@ fn classify_source_error<R: Read + Seek>(
 #[cfg(kani)]
 mod proofs {
     use super::{
-        ZipDeclaredEntrySizeDecision, ZipIndexGateDecision, zip_declared_entry_size_gate_decision,
+        ZipDeclaredEntrySizeDecision, ZipEntryOutputOverflowDecision, ZipIndexGateDecision,
+        zip_declared_entry_size_gate_decision, zip_entry_output_cap_decision,
         zip_index_gate_decision,
     };
 
@@ -1081,6 +1106,59 @@ mod proofs {
             declared > max_entry_uncompressed_bytes
                 && actual == ZipDeclaredEntrySizeDecision::Reject,
             "over-cap rejection is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_zip_output_cap_decision_exactness() {
+        let declared: u64 = kani::any();
+        let has_budget: bool = kani::any();
+        let remaining: u64 = kani::any();
+        let total_budget = if has_budget { Some(remaining) } else { None };
+
+        let actual = zip_entry_output_cap_decision(declared, total_budget);
+        if has_budget {
+            assert!(actual.hard_cap == declared.min(remaining));
+            if remaining < declared {
+                assert!(actual.overflow == ZipEntryOutputOverflowDecision::BudgetExceeded);
+            } else {
+                assert!(actual.overflow == ZipEntryOutputOverflowDecision::DeclaredOverproduction);
+            }
+        } else {
+            assert!(actual.hard_cap == declared);
+            assert!(actual.overflow == ZipEntryOutputOverflowDecision::DeclaredOverproduction);
+        }
+
+        kani::cover!(
+            has_budget && declared > 0 && remaining == declared - 1,
+            "remaining budget boundary-1 is reachable"
+        );
+        kani::cover!(
+            has_budget && remaining == declared,
+            "remaining budget boundary equality is reachable"
+        );
+        kani::cover!(
+            has_budget && declared < u64::MAX && remaining == declared + 1,
+            "remaining budget boundary+1 is reachable"
+        );
+        kani::cover!(
+            has_budget
+                && remaining < declared
+                && actual.overflow == ZipEntryOutputOverflowDecision::BudgetExceeded,
+            "budget-capped overflow classification is reachable"
+        );
+        kani::cover!(
+            has_budget
+                && remaining > declared
+                && actual.overflow == ZipEntryOutputOverflowDecision::DeclaredOverproduction,
+            "declared-capped overflow classification is reachable"
+        );
+        kani::cover!(
+            !has_budget
+                && actual.hard_cap == declared
+                && actual.overflow == ZipEntryOutputOverflowDecision::DeclaredOverproduction,
+            "no-budget overflow classification is reachable"
         );
     }
 }
