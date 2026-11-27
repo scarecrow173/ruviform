@@ -2,7 +2,7 @@
 
 - Issue: `scarecrow173/ruviform#1034`（closeoutではない。PR linkageは `Refs #1034`）
 - branch: `test/1034-portcls-wmi-control-probe`
-- PR #1057 final head: `d24decae4db56ae9f208b55a184e986154b55137`
+- PR #1057 final head: `b48d8f26b7520658ae549196f6d1a2f8ec7272e1`（evidence記録commit。provisioned run headは `d24decae4db56ae9f208b55a184e986154b55137`）
 - Worker/Dispatch: `orca_session_id:18a44828-875d-4dfa-86dd-9b27f9263ded` / `task_44fc75e61f55` / `ctx_2ab735260993`
 
 本sliceはdiagnostic-only観測であり、issue closeout、製品修正、root cause確定、driver innocence証拠、regression-count-zero完了証明ではない。timestamp oracle、startup grace、regression row、driver behavior、workflow、cpal、adapter、RunMetadata/Case Schemaは変更していない。
@@ -25,7 +25,7 @@ driver-owned WMI control/callsite probeを追加し、driver側のWMI制御callb
 
 final-head runはserializedに1本ずつ実行した。各dispatch前にin-progress/queuedが空であることとhead一致を確認し、前runをforegroundでterminalまでwatchしてartifact抽出後に次へ進んだ。workflow fileとrunner状態は変更していない。
 
-final serialized runは2本で十分と判断した。両runのprobe verdictが一致するため、optionalな第3runは省略した。これ以前のrunはimplementation-iteration evidenceであり、final-head proofとしては使わない。
+final serialized runは2本で十分と判断した。run head `d24decae...` から evidence commit `b48d8f26...` までの driver/harness差分はなく、evidence追加のみである。両runのprobe verdictが一致するため、optionalな第3runは省略した。これ以前のrunはimplementation-iteration evidenceであり、final-head proofとしては使わない。
 
 | run | head SHA | run URL | artifact id | artifact zip SHA-256 | created / updated (UTC) | workflow conclusion |
 | --- | --- | --- | --- | --- | --- | --- |
