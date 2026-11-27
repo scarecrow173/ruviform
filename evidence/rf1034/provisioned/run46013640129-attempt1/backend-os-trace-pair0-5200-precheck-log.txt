@@ -1,0 +1,8 @@
+$ logman.exe "query" "rvf1034_bt_5200_0" "-ets"
+exit_code=-2144337918
+--- stdout ---
+
+Error:
+Data Collector Set was not found.
+
+--- stderr ---

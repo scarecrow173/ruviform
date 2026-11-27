@@ -1,0 +1,77 @@
+{
+  "schema": "rf1034-provisioned-artifact-inventory/v1",
+  "run": {
+    "id": "46011572850",
+    "attempt": "1",
+    "url": "https://github.com/scarecrow173/ruviform/actions/runs/46011572850",
+    "artifact": "virtual-audio-driver-probe-windows-2025-attempt-1",
+    "artifact_id": "15205360513",
+    "artifact_zip_sha256": "df9d167a64e086b1f5e8c7301766e71f6b4df171ef7b7c4aae8b1205ded58f6b",
+    "artifact_size_in_bytes": 195131,
+    "artifact_digest": "sha256:df9d167a64e086b1f5e8c7301766e71f6b4df171ef7b7c4aae8b1205ded58f6b",
+    "head_branch": "feat/1034-portcls-event-split",
+    "head_sha": "d690cdbdb88a5d0b9c6c9b947a1258bff29aec7b",
+    "run_status": "completed",
+    "run_conclusion": "success",
+    "created_at": "2026-11-27T13:57:27Z",
+    "started_at": "2026-11-27T13:57:27Z",
+    "updated_at": "2026-11-27T14:09:55Z"
+  },
+  "note": "rf#1034 event split判定に必要なstage/log/RunMetadata/backend trace artifactを抽出。text/xml/jsonはrepository hygieneのためLF/行末空白を正規化し、ETLはbyte-exactのまま保持。hashは抽出ファイルに対するもの。原本artifact zip SHA-256も記録。",
+  "files": [
+    {
+      "path": "endpoint-probe-windows-2025.txt",
+      "bytes": 5372,
+      "sha256": "e9352f29ea79d19ad7c68331de4e2ade7ee494a6922f81136806e3f060116ba1"
+    },
+    {
+      "path": "run-metadata-rf253-midi-virtual-endpoint-host-plugin-e2e.json",
+      "bytes": 1640,
+      "sha256": "fcb444efca14eba359597079bbf59789fa39588bd57c55ae1f88bf39f5099fe9"
+    },
+    {
+      "path": "run-metadata-rf1034-audio-virtual-endpoint-render-timestamp-baseline.json",
+      "bytes": 1024,
+      "sha256": "ada48ab819a5a1d0e34a780d2988faffcfc65ca82d69b8ee6d5b1dab448e8d69"
+    },
+    {
+      "path": "stage-cleanup-windows-2025.txt",
+      "bytes": 12021,
+      "sha256": "dd0a246abdb766d075af3e2b5f12edf54fae77dbca21e0f83343afbc4eb6ad4b"
+    },
+    {
+      "path": "stage-driver-build-windows-2025.txt",
+      "bytes": 8879,
+      "sha256": "84539ed357d3657cdbd351d2dc1a95e2fca51a76298e3d04e0d6d56db53b0692"
+    },
+    {
+      "path": "stage-fault-cases-windows-2025.txt",
+      "bytes": 17562,
+      "sha256": "d6eaea9b79124bdfb3cbe147fa05a72cdb56745a059071fa6fdfd33deebda550"
+    },
+    {
+      "path": "stage-os-endpoint-wiring-windows-2025.txt",
+      "bytes": 123870,
+      "sha256": "922300ac8cd0e9cd96bf86db389a7990ae45b0f72d82a4dc0f74996bc978758c"
+    },
+    {
+      "path": "stage-stream-roundtrip-windows-2025.txt",
+      "bytes": 2139,
+      "sha256": "f6072c7a12db02ebb5df4806bee4a972d7c15ef5b5c56d90dd20cec894dc76a7"
+    },
+    {
+      "path": "stage-xrun-cases-windows-2025.txt",
+      "bytes": 56,
+      "sha256": "0a68e6c70e0817e290528400861c66a2ad4831275cd065da62cc02e4e2422380"
+    },
+    {
+      "path": "vaudio-probe-windows-2025.json",
+      "bytes": 4749,
+      "sha256": "99bf4f9a46a01559d0a0c402c635f248cce86d20a100bd1f403e5dbae8eabb2b"
+    }
+  ],
+  "missing_or_mismatch_count": 0,
+  "missing_or_mismatch_notes": [
+    "prek end-of-file normalization applied after extraction; inventory hashes were refreshed to match committed normalized files"
+  ]
+}

@@ -1,0 +1,20 @@
+  prerequisite endpoint-probe: ok
+  mic-consent primitive record: hklm-devacc=Allow, hkcu-devacc=Allow, hklm-cam=Allow, hkcu-cam=Allow, policy=1, AudioEndpointBuilder=Running, Audiosrv=Running
+  [35m[test-audio-virtual-endpoint][0m [1m$ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1[0m
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 1.44s
+       Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+
+  running 7 tests
+  test render_capture_round_trip ... ok
+  rf1029_channel_width_observation: {"schema":"rf1029-channel-width-observation/v1","case":{"name":"ruviform-cable-stereo-preserve","contract":"stereo-preserve","result":"Pass","detail":"independent-left-right-content-preserved"},"endpoint":{"render_name":"Ruviform Cable Input (Ruviform Virtual Audio Device)","capture_name":"Ruviform Cable Output (Ruviform Virtual Audio Device)","capture_instance_id":"DeviceId(\"wasapi:{0.0.1.00000000}.{efaf2513-88c2-496b-b59d-ad154f84cf16}\")"},"negotiation":{"render":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"},"capture":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"}},"oracle":{"mode":"stereo-preserve","captured_frames":157920,"tone_measurement":{"present":true,"left_440_ratio":0.9544571448291703,"left_880_ratio":0.0001236117043847443,"right_440_ratio":0.00000003851288651831939,"right_880_ratio":0.9935362444750409,"min_target_ratio":0.25,"min_separation_ratio":4}}}
+  test ruviform_channel_width_contract ... ok
+  test virtual_audio_device_loss_fault ... ok
+  test virtual_audio_permission_denial_fault ... ok
+  test virtual_audio_xrun_capture_content_gap_input_negative ... ok
+  test virtual_audio_xrun_capture_overflow_drop_input ... ok
+  test virtual_audio_xrun_probe ... ok
+
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 6.84s
+
+  test exit=0 verdict=no-verdict-line
