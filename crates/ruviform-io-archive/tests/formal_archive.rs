@@ -21,11 +21,12 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The ZIP index gate, declared entry-size gate, and entry output hard-cap
-//! decision proofs live beside their production decision cores in
-//! `src/zip/read.rs`; the TAR declared-size and typeflag classification proofs
-//! live beside their production decision cores in `src/tar/read.rs`. Bounds
-//! and assumptions are documented in `docs/specs/formal-verification.md`.
+//! The ZIP index gate, declared entry-size gate, entry output hard-cap, and
+//! measured total budget accumulation decision proofs live beside their
+//! production decision cores in `src/zip/read.rs`; the TAR declared-size
+//! and typeflag classification proofs live beside their production decision
+//! cores in `src/tar/read.rs`. Bounds and assumptions are documented in
+//! `docs/specs/formal-verification.md`.
 
 mod common;
 
@@ -1437,4 +1438,52 @@ fn zip_output_cap_connection_regression() {
         ArchiveErrorKind::SizeMismatch,
         "remaining budget boundary+1 must keep the cap at the declared size"
     );
+}
+
+/// Shell-core connection regression for ZIP measured total budget
+/// accumulation: measured bytes from earlier entries reduce the remaining
+/// budget passed to later entries, exact budget use is inclusive, and a
+/// zero-length entry can still be verified after the budget is exhausted.
+#[test]
+fn zip_measured_total_connection_regression() {
+    fn archive_for(lens: &[usize], budget: u64) -> ZipArchiveReader<Cursor<Vec<u8>>> {
+        let specs: Vec<EntrySpec> = lens
+            .iter()
+            .enumerate()
+            .map(|(i, &len)| EntrySpec::stored(&format!("f{i}"), &vec![b'x'; len]))
+            .collect();
+        let bytes = build_simple(&specs);
+        let mut limits = ArchiveReadLimits::default();
+        limits.max_total_uncompressed_bytes = budget;
+        ZipArchiveReader::new(Cursor::new(bytes), limits).expect("index parses within budget")
+    }
+
+    let mut equality = archive_for(&[3, 5], 8);
+    let receipt = equality
+        .verify_all()
+        .expect("measured total equal to the budget must be accepted");
+    assert_eq!(receipt.payload_bytes(), 8);
+    assert_eq!(receipt.entries_total(), 2);
+    assert_eq!(receipt.entries_verified(), 2);
+    assert_eq!(receipt.entries_unverified(), 0);
+
+    let mut single = archive_for(&[6], 8);
+    single
+        .verify_all()
+        .expect("the second entry size alone is within the total budget");
+
+    let mut overflow = archive_for(&[3, 6], 8);
+    match overflow.verify_all() {
+        Err(error) => assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded),
+        Ok(_) => panic!("measured total one byte over the budget must be rejected"),
+    }
+
+    let mut exhausted = archive_for(&[3, 5, 0], 8);
+    let receipt = exhausted
+        .verify_all()
+        .expect("zero-length entry must remain verifiable after exact budget use");
+    assert_eq!(receipt.payload_bytes(), 8);
+    assert_eq!(receipt.entries_total(), 3);
+    assert_eq!(receipt.entries_verified(), 3);
+    assert_eq!(receipt.entries_unverified(), 0);
 }
