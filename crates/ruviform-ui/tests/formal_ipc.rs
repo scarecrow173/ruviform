@@ -16,9 +16,10 @@
 //! - `Event::to_json` always emits a parseable versioned envelope
 //!   (`v == SCHEMA_VERSION`) preserving the variant kind and fields.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries bounded proofs for
-//! the envelope and event contracts (run via `mise run test-formal-kani`).
-//! The `valid_op` byte-core proofs live beside the production predicate in
+//! The `#[cfg(kani)]` module at the bottom carries the remaining bounded
+//! proof for the event contract (run via `mise run test-formal-kani`).
+//! The `valid_op` byte-core proofs and envelope size/field decision-core
+//! proofs live beside the production predicates in
 //! `crates/ruviform-ui/src/ipc.rs`; bounds and assumptions are documented in
 //! `docs/specs/formal-verification.md`.
 
@@ -138,6 +139,33 @@ fn arb_broken_op() -> impl Strategy<Value = String> {
 fn arb_intent() -> impl Strategy<Value = Intent> {
     (".{0,32}", arb_valid_op(), arb_json_value())
         .prop_map(|(id, op, params)| Intent::new(id, op, params))
+}
+
+fn envelope_json(v: u32, kind: &str, op: &str) -> String {
+    serde_json::to_string(&json!({
+        "v": v,
+        "kind": kind,
+        "id": "i",
+        "op": op,
+        "params": {},
+    }))
+    .unwrap()
+}
+
+fn padded_valid_envelope_body(pad_len: usize) -> String {
+    let prefix = "{\"v\":1,\"kind\":\"intent\",\"id\":\"i\",\"op\":\"a.b\",\"params\":{\"pad\":\"";
+    let suffix = "\"}}";
+    format!("{prefix}{}{suffix}", "x".repeat(pad_len))
+}
+
+fn exact_cap_pad_len() -> usize {
+    let prefix = "{\"v\":1,\"kind\":\"intent\",\"id\":\"i\",\"op\":\"a.b\",\"params\":{\"pad\":\"";
+    let suffix = "\"}}";
+    MAX_INTENT_BYTES - prefix.len() - suffix.len()
+}
+
+fn exact_cap_valid_envelope_body() -> String {
+    padded_valid_envelope_body(exact_cap_pad_len())
 }
 
 /// Arbitrary `ErrorBody` payloads for `Event::Result`/`Job`/`Error`
@@ -345,66 +373,64 @@ proptest! {
     }
 }
 
-/// Bounded proofs of the same contracts, verified exhaustively over
-/// symbolic input by Kani (`cargo kani --tests`; run via
+/// Direct shell-to-core connection checks for the behavior-preserving
+/// envelope decision-core refactor. The message assertions are a regression
+/// oracle for current behavior only; they do not promote the messages or gate
+/// priority to a new stable wire contract.
+#[test]
+fn envelope_gate_connection_regression() {
+    let exact = exact_cap_valid_envelope_body();
+    assert_eq!(exact.len(), MAX_INTENT_BYTES);
+    let parsed = parse_intent(&exact).expect("exact-cap valid envelope must parse");
+    assert_eq!(parsed.v, SCHEMA_VERSION);
+    assert_eq!(parsed.kind, "intent");
+    assert_eq!(parsed.op, "a.b");
+    assert_eq!(
+        parsed.params["pad"].as_str().unwrap().len(),
+        exact_cap_pad_len()
+    );
+
+    let mut over_and_malformed = exact.clone();
+    over_and_malformed.push('!');
+    assert_eq!(over_and_malformed.len(), MAX_INTENT_BYTES + 1);
+    let err = parse_intent(&over_and_malformed).unwrap_err();
+    assert_eq!(err.code, codes::MESSAGE_TOO_LARGE);
+
+    let small = envelope_json(SCHEMA_VERSION, "intent", "a.b");
+    parse_intent(&small).expect("small valid envelope must parse");
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION + 1, "intent", "a.b")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("unsupported schema version"));
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION, "result", "a.b")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("unsupported kind"));
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION, "intent", "..")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("invalid op name"));
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION + 1, "result", "..")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("unsupported schema version"));
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION, "result", "..")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("unsupported kind"));
+
+    let err = parse_intent(&envelope_json(SCHEMA_VERSION, "intent", "..")).unwrap_err();
+    assert_eq!(err.code, codes::MALFORMED_MESSAGE);
+    assert!(err.message.starts_with("invalid op name"));
+}
+
+/// Bounded proofs of the remaining event contract, verified exhaustively
+/// over symbolic input by Kani (`cargo kani --tests`; run via
 /// `mise run test-formal-kani`). Bounds and assumptions:
 /// `docs/specs/formal-verification.md`.
 #[cfg(kani)]
 mod proofs {
     use super::*;
-
-    /// For every in-cap input `parse_intent` terminates without
-    /// panic, `Err` codes stay in the stable set, and a parsed intent
-    /// always satisfies the envelope gates. Symbolic envelope field
-    /// values on a fixed JSON skeleton — exercises the `v` / `kind` /
-    /// `op` / `params`-typing gates exhaustively at this bound.
-    /// Arbitrary malformed byte streams are covered concretely by
-    /// `parse_intent_arbitrary_error_set` (proptest). The body is
-    /// built with `push_str` on a pre-sized `String` — `format!`
-    /// would pull in `fmt` machinery and growth branches. The unwind
-    /// bound caps library loops over the ≤64-byte skeleton body.
-    #[kani::proof]
-    #[kani::unwind(80)]
-    fn parse_intent_error_contract() {
-        let v_idx: u8 = kani::any();
-        // `v` gate is `v == 1` — cover both sides plus edge values.
-        let v_str = ["1", "0", "2", "255"][(v_idx % 4) as usize];
-        let kind_idx: u8 = kani::any();
-        let kind = ["intent", "result", "notify", "job", "x"][(kind_idx % 5) as usize];
-        let id_bytes: [u8; 6] = kani::any();
-        let Ok(id) = core::str::from_utf8(&id_bytes) else {
-            return;
-        };
-        let op_bytes: [u8; 6] = kani::any();
-        let Ok(op) = core::str::from_utf8(&op_bytes) else {
-            return;
-        };
-        let params_idx: u8 = kani::any();
-        let params = ["null", "true", "17", "\"x\"", "[1,2]", "{\"a\":1}", "oops"]
-            [(params_idx % 7) as usize];
-        let mut body = String::with_capacity(64);
-        body.push_str("{\"v\":");
-        body.push_str(v_str);
-        body.push_str(",\"kind\":\"");
-        body.push_str(kind);
-        body.push_str("\",\"id\":\"");
-        body.push_str(id);
-        body.push_str("\",\"op\":\"");
-        body.push_str(op);
-        body.push_str("\",\"params\":");
-        body.push_str(params);
-        body.push('}');
-        match parse_intent(&body) {
-            Err(e) => {
-                assert!(e.code == codes::MESSAGE_TOO_LARGE || e.code == codes::MALFORMED_MESSAGE)
-            }
-            Ok(intent) => {
-                assert!(intent.v == SCHEMA_VERSION);
-                assert!(intent.kind == "intent");
-                assert!(valid_op(&intent.op));
-            }
-        }
-    }
 
     /// `to_json` always produces a parseable `v=1` envelope — shown
     /// for a `result` event with a symbolic correlation id. The
