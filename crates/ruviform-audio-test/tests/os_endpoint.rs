@@ -36,12 +36,14 @@
 //! the test binary's temp dir. `RUVIFORM_RUN_REPO`/`RUVIFORM_RUN_SHA`
 //! override the recorded repo/sha; unset values record `"unknown"`.
 
-use std::path::Path;
+use std::fs;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ruviform_audio_core::device::{
     BufferSize, Device, DeviceEnumerator, DeviceError, InputCallbackInfo, InputDataCallback,
@@ -1531,6 +1533,845 @@ impl Drop for RenderCallbackActivity<'_> {
     }
 }
 
+// rf#1034 backend OS/driver diagnostic trace control.
+
+const BACKEND_TRACE_MAX_LOG_MB: &str = "64";
+const BACKEND_TRACE_KEYWORD_MASK: &str = "0xffffffffffffffff";
+const BACKEND_TRACE_LEVEL: &str = "5";
+const RVF_POSITION_ETW_PRESENTATION_POSITION_V1: u64 = 0x2001;
+const RVF_POSITION_ETW_FREQUENCY_SHIFT: u32 = 16;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct BackendTraceProviderSpec {
+    name: &'static str,
+    guid: &'static str,
+    keyword_mask: &'static str,
+    level: &'static str,
+    selection_reason: &'static str,
+}
+
+const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 2] = [
+    BackendTraceProviderSpec {
+        name: "Microsoft-Windows-Audio",
+        guid: "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        level: BACKEND_TRACE_LEVEL,
+        selection_reason: "baseline OS audio engine/audiodg event inventory",
+    },
+    BackendTraceProviderSpec {
+        name: "Microsoft-Windows-KernelStreaming",
+        guid: "{548C4417-CE45-41FF-99DD-528F01CE0FE1}",
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        level: BACKEND_TRACE_LEVEL,
+        selection_reason: "registered audio/KernelStreaming provider candidate for PortCls miniport events",
+    },
+];
+
+fn rvf_position_diagnostic_data1(schema_id: u64, qpc_frequency: u64) -> u64 {
+    (schema_id & 0xffff) | (qpc_frequency << RVF_POSITION_ETW_FREQUENCY_SHIFT)
+}
+
+fn rvf_position_diagnostic_data1_decode(data1: u64) -> (u64, u64) {
+    (data1 & 0xffff, data1 >> RVF_POSITION_ETW_FREQUENCY_SHIFT)
+}
+
+fn rvf_position_pin_facts(device_type: u64, pin: u64, capture: bool) -> u64 {
+    ((device_type & 0xffff) << 16) | ((pin & 0xff) << 8) | u64::from(capture)
+}
+
+fn rvf_position_pin_facts_decode(pin_facts: u64) -> (u64, u64, bool) {
+    (
+        (pin_facts >> 16) & 0xffff,
+        (pin_facts >> 8) & 0xff,
+        pin_facts & 1 != 0,
+    )
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct BackendTracePaths {
+    artifact_dir: PathBuf,
+    provider_discovery: PathBuf,
+    provider_list: PathBuf,
+    precheck_log: PathBuf,
+    start_log: PathBuf,
+    stop_log: PathBuf,
+    delete_log: PathBuf,
+    convert_log: PathBuf,
+    etl: PathBuf,
+    xml: PathBuf,
+    summary_json: PathBuf,
+    provider_logs: Vec<(String, PathBuf)>,
+}
+
+impl BackendTracePaths {
+    fn new(artifact_dir: &Path, base_name: &str) -> Self {
+        let path = |suffix: &str| artifact_dir.join(format!("{base_name}{suffix}"));
+        let provider_logs = BACKEND_TRACE_PROVIDERS
+            .iter()
+            .map(|provider| {
+                (
+                    provider.name.to_owned(),
+                    path(&format!(
+                        "-provider-{}.txt",
+                        backend_trace_file_component(provider.name)
+                    )),
+                )
+            })
+            .collect();
+        Self {
+            artifact_dir: artifact_dir.to_path_buf(),
+            provider_discovery: path("-provider-discovery.txt"),
+            provider_list: path("-provider-list.txt"),
+            precheck_log: path("-precheck-log.txt"),
+            start_log: path("-start-log.txt"),
+            stop_log: path("-stop-log.txt"),
+            delete_log: path("-delete-log.txt"),
+            convert_log: path("-tracerpt-log.txt"),
+            etl: path(".etl"),
+            xml: path(".xml"),
+            summary_json: path("-summary.json"),
+            provider_logs,
+        }
+    }
+}
+
+fn backend_trace_file_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+fn backend_trace_session_name(pair_index: usize) -> String {
+    format!("rvf1034_bt_{}_{}", process::id(), pair_index)
+}
+
+fn backend_trace_base_name(pair_index: usize) -> String {
+    format!("backend-os-trace-pair{pair_index}-{}", process::id())
+}
+
+fn discover_backend_trace_artifact_dir(
+    github_workspace: Option<&Path>,
+    cargo_target_tmpdir: Option<&Path>,
+) -> Result<(PathBuf, &'static str), String> {
+    if let Some(workspace) = github_workspace
+        && workspace.is_dir()
+    {
+        let mut candidates = fs::read_dir(workspace)
+            .map_err(|error| format!("GITHUB_WORKSPACE read_dir failed: {error}"))?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.is_dir()
+                    && path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.starts_with("os-endpoint-run-metadata-"))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort();
+        if let Some(candidate) = candidates.into_iter().next() {
+            return Ok((candidate, "github-workspace-os-endpoint-run-metadata"));
+        }
+    }
+    if let Some(tmpdir) = cargo_target_tmpdir
+        && tmpdir.is_dir()
+    {
+        return Ok((tmpdir.to_path_buf(), "cargo-target-tmpdir"));
+    }
+    Err("no artifact directory: no existing os-endpoint-run-metadata-* under GITHUB_WORKSPACE and no CARGO_TARGET_TMPDIR".to_owned())
+}
+
+fn backend_trace_artifact_dir_from_env() -> Result<(PathBuf, &'static str), String> {
+    let workspace = std::env::var_os("GITHUB_WORKSPACE").map(PathBuf::from);
+    let target_tmp = std::env::var("CARGO_TARGET_TMPDIR")
+        .ok()
+        .or_else(|| option_env!("CARGO_TARGET_TMPDIR").map(str::to_owned))
+        .map(PathBuf::from);
+    discover_backend_trace_artifact_dir(workspace.as_deref(), target_tmp.as_deref())
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+struct BackendTraceCalibration {
+    host_monotonic_ns: u64,
+    system_time_unix_ns: u64,
+}
+
+fn backend_trace_calibration(host_origin: Instant) -> BackendTraceCalibration {
+    let host_monotonic_ns =
+        u64::try_from(host_origin.elapsed().as_nanos().min(u128::from(u64::MAX)))
+            .unwrap_or(u64::MAX);
+    let system_time_unix_ns = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            u64::try_from(duration.as_nanos().min(u128::from(u64::MAX))).unwrap_or(u64::MAX)
+        });
+    BackendTraceCalibration {
+        host_monotonic_ns,
+        system_time_unix_ns,
+    }
+}
+
+#[derive(Clone, Debug)]
+struct BackendTraceCommandObservation {
+    label: String,
+    program: String,
+    args: Vec<String>,
+    exit_code: Option<i32>,
+    success: bool,
+    error: Option<String>,
+    log_file: Option<PathBuf>,
+}
+
+fn write_artifact_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    fs::write(path, bytes).map_err(|error| format!("write {} failed: {error}", path.display()))
+}
+
+fn run_backend_trace_command(
+    label: &str,
+    program: &str,
+    args: &[&str],
+    log_file: Option<&Path>,
+) -> BackendTraceCommandObservation {
+    let rendered_command = format!(
+        "{} {}",
+        program,
+        args.iter()
+            .map(|arg| format!("\"{arg}\""))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let result = process::Command::new(program).args(args).output();
+    let (exit_code, success, error, stdout, stderr) = match result {
+        Ok(output) => (
+            output.status.code(),
+            output.status.success(),
+            None,
+            output.stdout,
+            output.stderr,
+        ),
+        Err(spawn_error) => (
+            None,
+            false,
+            Some(spawn_error.to_string()),
+            Vec::new(),
+            Vec::new(),
+        ),
+    };
+    if let Some(path) = log_file {
+        let mut bytes = format!("$ {rendered_command}\n").into_bytes();
+        if let Some(code) = exit_code {
+            bytes.extend_from_slice(format!("exit_code={code}\n").as_bytes());
+        } else {
+            bytes.extend_from_slice(b"exit_code=spawn-error\n");
+        }
+        if let Some(error) = &error {
+            bytes.extend_from_slice(format!("spawn_error={error}\n").as_bytes());
+        }
+        bytes.extend_from_slice(b"--- stdout ---\n");
+        bytes.extend_from_slice(&stdout);
+        bytes.extend_from_slice(b"\n--- stderr ---\n");
+        bytes.extend_from_slice(&stderr);
+        let _ = write_artifact_bytes(path, &bytes);
+    }
+    BackendTraceCommandObservation {
+        label: label.to_owned(),
+        program: program.to_owned(),
+        args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+        exit_code,
+        success,
+        error,
+        log_file: log_file.map(Path::to_path_buf),
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct BackendTraceXmlInventory {
+    events_total: u64,
+    audio_provider_events: u64,
+    kernel_streaming_provider_events: u64,
+    other_provider_events: u64,
+    ae_position_events: u64,
+    set_current_timestamp_events: u64,
+    glitch_events: u64,
+    rvf_position_events: u64,
+    standard_presentation_position_events: u64,
+    perf_freq: Option<u64>,
+    start_time: Option<u64>,
+    decode_error: Option<String>,
+}
+
+fn extract_trace_data_u64(chunk: &str, name: &str) -> Option<u64> {
+    let needle = format!("<Data Name=\"{name}\">");
+    let start = chunk.find(&needle)? + needle.len();
+    let tail = &chunk[start..];
+    let end = tail.find("</Data>")?;
+    let raw = tail[..end].trim();
+    if let Some(hex) = raw.strip_prefix("0x") {
+        u64::from_str_radix(hex, 16).ok()
+    } else {
+        raw.parse::<u64>().ok()
+    }
+}
+
+fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXmlInventory) {
+    inventory.events_total = inventory.events_total.saturating_add(1);
+    let lower = chunk.to_ascii_lowercase();
+    let audio_guid = BACKEND_TRACE_PROVIDERS[0].guid.to_ascii_lowercase();
+    let kernel_guid = BACKEND_TRACE_PROVIDERS[1].guid.to_ascii_lowercase();
+    if lower.contains(&audio_guid) || lower.contains("microsoft-windows-audio") {
+        inventory.audio_provider_events = inventory.audio_provider_events.saturating_add(1);
+    } else if lower.contains(&kernel_guid) || lower.contains("microsoft-windows-kernelstreaming") {
+        inventory.kernel_streaming_provider_events =
+            inventory.kernel_streaming_provider_events.saturating_add(1);
+    } else {
+        inventory.other_provider_events = inventory.other_provider_events.saturating_add(1);
+    }
+    if lower.contains("aeposition") {
+        inventory.ae_position_events = inventory.ae_position_events.saturating_add(1);
+    }
+    if lower.contains("setcurrenttimestamp") {
+        inventory.set_current_timestamp_events =
+            inventory.set_current_timestamp_events.saturating_add(1);
+    }
+    if lower.contains("glitch") {
+        inventory.glitch_events = inventory.glitch_events.saturating_add(1);
+    }
+    if lower.contains("0x2001") || chunk.contains("8193") {
+        inventory.rvf_position_events = inventory.rvf_position_events.saturating_add(1);
+    }
+    if lower.contains("get_presentation")
+        || lower.contains("presentation_position")
+        || lower.contains("presentationposition")
+    {
+        inventory.standard_presentation_position_events = inventory
+            .standard_presentation_position_events
+            .saturating_add(1);
+    }
+    if inventory.perf_freq.is_none() {
+        inventory.perf_freq = extract_trace_data_u64(chunk, "PerfFreq");
+    }
+    if inventory.start_time.is_none() {
+        inventory.start_time = extract_trace_data_u64(chunk, "StartTime");
+    }
+}
+
+fn scan_backend_trace_xml(path: &Path) -> Result<BackendTraceXmlInventory, String> {
+    let file =
+        fs::File::open(path).map_err(|error| format!("open {} failed: {error}", path.display()))?;
+    let reader = BufReader::new(file);
+    let mut inventory = BackendTraceXmlInventory::default();
+    let mut chunk = String::new();
+    let mut in_event = false;
+    for line in reader.lines() {
+        let line = line.map_err(|error| format!("read {} failed: {error}", path.display()))?;
+        if line.starts_with("<Event ") {
+            in_event = true;
+            chunk.clear();
+        }
+        if in_event {
+            chunk.push_str(&line);
+            chunk.push('\n');
+        }
+        if in_event && line.starts_with("</Event>") {
+            analyze_backend_trace_event_chunk(&chunk, &mut inventory);
+            in_event = false;
+            chunk.clear();
+        }
+    }
+    Ok(inventory)
+}
+
+fn backend_trace_driver_coverage(
+    inventory: &BackendTraceXmlInventory,
+    xml_present: bool,
+) -> &'static str {
+    if inventory.rvf_position_events != 0 {
+        "driver-diagnostic-event-present"
+    } else if inventory.standard_presentation_position_events != 0 {
+        "standard-miniport-event-present"
+    } else if xml_present {
+        "incomplete-no-driver-event-decoded"
+    } else {
+        "unavailable-no-xml"
+    }
+}
+
+fn backend_trace_bounded_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ':' | '\\' | '/') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(160)
+        .collect()
+}
+
+fn backend_trace_file_size(path: &Path) -> Option<u64> {
+    fs::metadata(path).ok().map(|metadata| metadata.len())
+}
+
+fn backend_trace_file_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown")
+        .to_owned()
+}
+
+struct BackendOsTraceControl {
+    pair_index: usize,
+    session_name: String,
+    host_origin: Instant,
+    artifact_dir: Option<PathBuf>,
+    artifact_dir_source: Option<&'static str>,
+    paths: Option<BackendTracePaths>,
+    status: String,
+    started: bool,
+    finished: bool,
+    notes: Vec<String>,
+    commands: Vec<BackendTraceCommandObservation>,
+    start_calibration: Option<BackendTraceCalibration>,
+    stop_before_calibration: Option<BackendTraceCalibration>,
+    stop_after_calibration: Option<BackendTraceCalibration>,
+    xml_inventory: BackendTraceXmlInventory,
+    xml_present: bool,
+}
+
+impl BackendOsTraceControl {
+    fn new(pair_index: usize, host_origin: Instant) -> Self {
+        Self {
+            pair_index,
+            session_name: backend_trace_session_name(pair_index),
+            host_origin,
+            artifact_dir: None,
+            artifact_dir_source: None,
+            paths: None,
+            status: "unsupported".to_owned(),
+            started: false,
+            finished: false,
+            notes: Vec::new(),
+            commands: Vec::new(),
+            start_calibration: None,
+            stop_before_calibration: None,
+            stop_after_calibration: None,
+            xml_inventory: BackendTraceXmlInventory::default(),
+            xml_present: false,
+        }
+    }
+
+    fn command_exit(&self, label: &str) -> Option<i32> {
+        self.commands
+            .iter()
+            .find(|command| command.label == label)
+            .and_then(|command| command.exit_code)
+    }
+
+    fn prepare_providers(&mut self, paths: &BackendTracePaths) -> bool {
+        let discovery = run_backend_trace_command(
+            "provider_discovery",
+            "logman.exe",
+            &["query", "providers"],
+            Some(&paths.provider_discovery),
+        );
+        if !discovery.success {
+            self.notes.push(format!(
+                "provider discovery failed exit={:?} error={:?}",
+                discovery.exit_code, discovery.error
+            ));
+            self.commands.push(discovery);
+            return false;
+        }
+        let discovery_text = fs::read(&paths.provider_discovery)
+            .map(|bytes| String::from_utf8_lossy(&bytes).to_ascii_lowercase())
+            .unwrap_or_default();
+        let missing = BACKEND_TRACE_PROVIDERS
+            .iter()
+            .filter(|provider| {
+                let name = provider.name.to_ascii_lowercase();
+                let guid = provider.guid.to_ascii_lowercase();
+                !discovery_text.contains(&name) && !discovery_text.contains(&guid)
+            })
+            .map(|provider| provider.name)
+            .collect::<Vec<_>>();
+        self.commands.push(discovery);
+        if !missing.is_empty() {
+            self.notes.push(format!(
+                "required provider missing from discovery: {}",
+                missing.join(",")
+            ));
+            return false;
+        }
+
+        for (provider, log_path) in &paths.provider_logs {
+            let observation = run_backend_trace_command(
+                "wevtutil_gp",
+                "wevtutil.exe",
+                &["gp", provider],
+                Some(log_path),
+            );
+            if !observation.success {
+                self.notes.push(format!(
+                    "wevtutil gp failed for {provider} exit={:?}",
+                    observation.exit_code
+                ));
+            }
+            self.commands.push(observation);
+        }
+
+        let provider_list = BACKEND_TRACE_PROVIDERS
+            .iter()
+            .map(|provider| {
+                format!(
+                    "{} {} {}",
+                    provider.guid, provider.keyword_mask, provider.level
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        if let Err(error) = write_artifact_bytes(&paths.provider_list, provider_list.as_bytes()) {
+            self.notes.push(error);
+            return false;
+        }
+        true
+    }
+
+    fn precheck_session(&mut self, paths: &BackendTracePaths) -> bool {
+        let precheck = run_backend_trace_command(
+            "precheck_query",
+            "logman.exe",
+            &["query", &self.session_name, "-ets"],
+            Some(&paths.precheck_log),
+        );
+        if precheck.success {
+            self.notes.push(format!(
+                "trace session residue exists for {}; refusing to reuse it",
+                self.session_name
+            ));
+            self.commands.push(precheck);
+            return false;
+        }
+        self.commands.push(precheck);
+        true
+    }
+
+    fn start(&mut self) {
+        if !cfg!(windows) {
+            self.notes
+                .push("non-windows host: backend ETW trace unsupported".to_owned());
+            return;
+        }
+        let (artifact_dir, source) = match backend_trace_artifact_dir_from_env() {
+            Ok(result) => result,
+            Err(error) => {
+                self.notes.push(error);
+                return;
+            }
+        };
+        self.artifact_dir = Some(artifact_dir.clone());
+        self.artifact_dir_source = Some(source);
+        let paths =
+            BackendTracePaths::new(&artifact_dir, &backend_trace_base_name(self.pair_index));
+        self.paths = Some(paths.clone());
+        if !self.prepare_providers(&paths) || !self.precheck_session(&paths) {
+            return;
+        }
+
+        self.start_calibration = Some(backend_trace_calibration(self.host_origin));
+        let etl = paths.etl.to_string_lossy().to_string();
+        let provider_file = paths.provider_list.to_string_lossy().to_string();
+        let start = run_backend_trace_command(
+            "logman_start",
+            "logman.exe",
+            &[
+                "start",
+                &self.session_name,
+                "-o",
+                &etl,
+                "-pf",
+                &provider_file,
+                "-max",
+                BACKEND_TRACE_MAX_LOG_MB,
+                "-ct",
+                "perf",
+                "-ets",
+            ],
+            Some(&paths.start_log),
+        );
+        if !start.success {
+            self.notes.push(format!(
+                "logman start failed exit={:?} error={:?}",
+                start.exit_code, start.error
+            ));
+            self.commands.push(start);
+            return;
+        }
+        self.commands.push(start);
+        self.started = true;
+        "incomplete".clone_into(&mut self.status);
+    }
+
+    fn finish(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.finished = true;
+        self.stop_before_calibration = Some(backend_trace_calibration(self.host_origin));
+        if self.started
+            && let Some(paths) = self.paths.clone()
+        {
+            let stop = run_backend_trace_command(
+                "logman_stop",
+                "logman.exe",
+                &["stop", &self.session_name, "-ets"],
+                Some(&paths.stop_log),
+            );
+            let stop_success = stop.success;
+            self.commands.push(stop);
+            let delete = run_backend_trace_command(
+                "logman_delete",
+                "logman.exe",
+                &["delete", &self.session_name, "-ets"],
+                Some(&paths.delete_log),
+            );
+            self.commands.push(delete);
+            let etl_size = backend_trace_file_size(&paths.etl);
+            if stop_success && etl_size.is_some_and(|size| size != 0) {
+                let etl = paths.etl.to_string_lossy().to_string();
+                let xml = paths.xml.to_string_lossy().to_string();
+                let convert = run_backend_trace_command(
+                    "tracerpt_xml",
+                    "tracerpt.exe",
+                    &[&etl, "-o", &xml, "-of", "XML"],
+                    Some(&paths.convert_log),
+                );
+                let convert_success = convert.success;
+                self.commands.push(convert);
+                self.xml_present = convert_success
+                    && backend_trace_file_size(&paths.xml).is_some_and(|size| size != 0);
+                if self.xml_present {
+                    match scan_backend_trace_xml(&paths.xml) {
+                        Ok(inventory) => self.xml_inventory = inventory,
+                        Err(error) => {
+                            self.xml_inventory.decode_error = Some(error.clone());
+                            self.notes
+                                .push(format!("xml inventory scan failed: {error}"));
+                        }
+                    }
+                } else {
+                    self.notes.push(
+                        "tracerpt XML conversion failed or empty; raw ETL retained".to_owned(),
+                    );
+                }
+                "captured".clone_into(&mut self.status);
+            } else {
+                self.notes.push(format!(
+                    "trace stop/etl incomplete stop_success={stop_success} etl_size={etl_size:?}"
+                ));
+            }
+        }
+        self.stop_after_calibration = Some(backend_trace_calibration(self.host_origin));
+        self.write_summary();
+        for line in self.diagnostic_lines() {
+            eprintln!("{line}");
+        }
+    }
+
+    fn driver_coverage(&self) -> &'static str {
+        backend_trace_driver_coverage(&self.xml_inventory, self.xml_present)
+    }
+
+    fn diagnostic_lines(&self) -> Vec<String> {
+        let context = roundtrip_output_context(self.pair_index);
+        let (etl_name, xml_name, summary_name) = self.paths.as_ref().map_or_else(
+            || ("none".to_owned(), "none".to_owned(), "none".to_owned()),
+            |paths| {
+                (
+                    backend_trace_file_name(&paths.etl),
+                    backend_trace_file_name(&paths.xml),
+                    backend_trace_file_name(&paths.summary_json),
+                )
+            },
+        );
+        let notes = backend_trace_bounded_text(&self.notes.join(";"));
+        vec![
+            format!(
+                "roundtrip_backend_os_trace: {context}status={} coverage={} session={} artifact_dir_source={} etl={} etl_bytes={} xml={} xml_bytes={} summary={} provider_events_audio={} provider_events_kernelstreaming={} ae_position_events={} set_current_timestamp_events={} glitch_events={} rvf_position_events={} standard_presentation_position_events={} start_exit={} stop_exit={} delete_exit={} tracerpt_exit={} notes={}",
+                self.status,
+                self.driver_coverage(),
+                backend_trace_bounded_text(&self.session_name),
+                self.artifact_dir_source.unwrap_or("none"),
+                etl_name,
+                self.paths
+                    .as_ref()
+                    .and_then(|paths| backend_trace_file_size(&paths.etl))
+                    .map_or_else(|| "none".to_owned(), |size| size.to_string()),
+                xml_name,
+                self.paths
+                    .as_ref()
+                    .and_then(|paths| backend_trace_file_size(&paths.xml))
+                    .map_or_else(|| "none".to_owned(), |size| size.to_string()),
+                summary_name,
+                self.xml_inventory.audio_provider_events,
+                self.xml_inventory.kernel_streaming_provider_events,
+                self.xml_inventory.ae_position_events,
+                self.xml_inventory.set_current_timestamp_events,
+                self.xml_inventory.glitch_events,
+                self.xml_inventory.rvf_position_events,
+                self.xml_inventory.standard_presentation_position_events,
+                self.command_exit("logman_start")
+                    .map_or_else(|| "none".to_owned(), |code| code.to_string()),
+                self.command_exit("logman_stop")
+                    .map_or_else(|| "none".to_owned(), |code| code.to_string()),
+                self.command_exit("logman_delete")
+                    .map_or_else(|| "none".to_owned(), |code| code.to_string()),
+                self.command_exit("tracerpt_xml")
+                    .map_or_else(|| "none".to_owned(), |code| code.to_string()),
+                notes,
+            ),
+            format!(
+                "roundtrip_backend_os_trace_calibration: {context}start_host_monotonic_ns={} start_system_time_unix_ns={} stop_before_host_monotonic_ns={} stop_before_system_time_unix_ns={} stop_after_host_monotonic_ns={} stop_after_system_time_unix_ns={} etw_perf_freq={} etw_start_time={}",
+                self.start_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.host_monotonic_ns.to_string()),
+                self.start_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.system_time_unix_ns.to_string()),
+                self.stop_before_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.host_monotonic_ns.to_string()),
+                self.stop_before_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.system_time_unix_ns.to_string()),
+                self.stop_after_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.host_monotonic_ns.to_string()),
+                self.stop_after_calibration
+                    .map_or_else(|| "none".to_owned(), |c| c.system_time_unix_ns.to_string()),
+                self.xml_inventory
+                    .perf_freq
+                    .map_or_else(|| "none".to_owned(), |value| value.to_string()),
+                self.xml_inventory
+                    .start_time
+                    .map_or_else(|| "none".to_owned(), |value| value.to_string()),
+            ),
+        ]
+    }
+
+    fn write_summary(&mut self) {
+        let Some(paths) = self.paths.clone() else {
+            return;
+        };
+        let commands = self
+            .commands
+            .iter()
+            .map(|command| {
+                serde_json::json!({
+                    "label": command.label,
+                    "program": command.program,
+                    "args": command.args,
+                    "exit_code": command.exit_code,
+                    "success": command.success,
+                    "error": command.error,
+                    "log_file": command.log_file.as_ref().map(|path| backend_trace_file_name(path)),
+                })
+            })
+            .collect::<Vec<_>>();
+        let providers = BACKEND_TRACE_PROVIDERS
+            .iter()
+            .map(|provider| {
+                serde_json::json!({
+                    "name": provider.name,
+                    "guid": provider.guid,
+                    "keyword_mask": provider.keyword_mask,
+                    "level": provider.level,
+                    "selection_reason": provider.selection_reason,
+                })
+            })
+            .collect::<Vec<_>>();
+        let file_entry = |path: &Path| serde_json::json!({"file": backend_trace_file_name(path), "bytes": backend_trace_file_size(path)});
+        let summary = serde_json::json!({
+            "schema": "rf1034-backend-os-trace/v1",
+            "diagnostic_artifact": true,
+            "not_run_metadata_schema": true,
+            "case": ROUNDTRIP_AUDIO_CASE_ID,
+            "path": ROUNDTRIP_OUTPUT_PATH,
+            "pair": self.pair_index,
+            "session": self.session_name,
+            "status": self.status,
+            "driver_event_coverage": self.driver_coverage(),
+            "coverage_note": "coverage absence is incomplete observation, never driver innocence evidence",
+            "artifact_dir": self.artifact_dir.as_ref().map(|path| path.display().to_string()),
+            "artifact_dir_source": self.artifact_dir_source,
+            "max_etl_mb": BACKEND_TRACE_MAX_LOG_MB,
+            "trace_clock_type": "perf",
+            "providers": providers,
+            "files": {
+                "provider_discovery": file_entry(&paths.provider_discovery),
+                "provider_list": file_entry(&paths.provider_list),
+                "precheck_log": file_entry(&paths.precheck_log),
+                "start_log": file_entry(&paths.start_log),
+                "stop_log": file_entry(&paths.stop_log),
+                "delete_log": file_entry(&paths.delete_log),
+                "convert_log": file_entry(&paths.convert_log),
+                "etl": file_entry(&paths.etl),
+                "xml": file_entry(&paths.xml),
+            },
+            "commands": commands,
+            "calibration": {
+                "system_time_unit": "unix epoch nanoseconds (UTC timescale)",
+                "host_clock": "std::time::Instant elapsed since probe host_origin",
+                "start": self.start_calibration,
+                "stop_before": self.stop_before_calibration,
+                "stop_after": self.stop_after_calibration,
+                "etw_header_perf_freq": self.xml_inventory.perf_freq,
+                "etw_header_start_time": self.xml_inventory.start_time,
+                "conversion": "unresolved unless ETW perf clock and host Instant relationship is independently established",
+            },
+            "xml_inventory": {
+                "events_total": self.xml_inventory.events_total,
+                "audio_provider_events": self.xml_inventory.audio_provider_events,
+                "kernel_streaming_provider_events": self.xml_inventory.kernel_streaming_provider_events,
+                "other_provider_events": self.xml_inventory.other_provider_events,
+                "ae_position_events": self.xml_inventory.ae_position_events,
+                "set_current_timestamp_events": self.xml_inventory.set_current_timestamp_events,
+                "glitch_events": self.xml_inventory.glitch_events,
+                "rvf_position_events": self.xml_inventory.rvf_position_events,
+                "standard_presentation_position_events": self.xml_inventory.standard_presentation_position_events,
+                "decode_error": self.xml_inventory.decode_error,
+            },
+            "notes": self.notes,
+        });
+        match serde_json::to_vec_pretty(&summary) {
+            Ok(bytes) => {
+                if let Err(error) = write_artifact_bytes(&paths.summary_json, &bytes) {
+                    self.notes.push(error);
+                }
+            }
+            Err(error) => self
+                .notes
+                .push(format!("summary json serialization failed: {error}")),
+        }
+    }
+}
+
+impl Drop for BackendOsTraceControl {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+fn start_backend_os_trace(pair_index: usize, host_origin: Instant) -> BackendOsTraceControl {
+    let mut control = BackendOsTraceControl::new(pair_index, host_origin);
+    control.start();
+    control
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum StreamDirection {
     Input,
@@ -2958,6 +3799,8 @@ fn run_audio_round_trip(pair: Pair, pair_index: usize) -> Result<(u32, u32), Vec
     )
     .map_err(|error| vec![format!("fixture construction failed: {error}")])?;
 
+    let mut backend_trace = start_backend_os_trace(pair_index, probe.out_timestamp.host_origin);
+
     let in_stream = match open_input_with_fallback(capture.device.as_ref(), in_format, &probe) {
         Ok(stream) => stream,
         Err(error) => {
@@ -3017,6 +3860,7 @@ fn run_audio_round_trip(pair: Pair, pair_index: usize) -> Result<(u32, u32), Vec
     drop(in_stream);
     drop(out_stream);
     emit_roundtrip_output_diagnostics(&probe, pair_index);
+    backend_trace.finish();
 
     let mut failures = analyze_endpoint(&probe, &in_format);
     failures.extend(lifecycle);
@@ -3574,4 +4418,73 @@ fn rms(samples: &[f32]) -> f64 {
         .map(|&sample| f64::from(sample) * f64::from(sample))
         .sum();
     (sum_sq / samples.len() as f64).sqrt()
+}
+
+#[test]
+fn backend_trace_session_and_file_names_are_unique() {
+    let pid = process::id().to_string();
+    let session0 = backend_trace_session_name(0);
+    let session1 = backend_trace_session_name(1);
+    assert_ne!(session0, session1);
+    assert!(session0.contains(&pid));
+    assert!(session0.starts_with("rvf1034_bt_"));
+    let base0 = backend_trace_base_name(0);
+    let base1 = backend_trace_base_name(1);
+    assert_ne!(base0, base1);
+    assert!(base0.starts_with("backend-os-trace-pair0-"));
+    assert!(base0.contains(&pid));
+}
+
+#[test]
+fn backend_trace_artifact_dir_failure_is_honest() {
+    let missing = Path::new("definitely-missing-rvf1034-backend-trace-workspace");
+    let error = discover_backend_trace_artifact_dir(Some(missing), None).unwrap_err();
+    assert!(error.contains("no artifact directory"));
+}
+
+#[test]
+fn backend_trace_etw_field_packing_round_trip() {
+    let frequency = 10_000_000_u64;
+    let data1 = rvf_position_diagnostic_data1(RVF_POSITION_ETW_PRESENTATION_POSITION_V1, frequency);
+    assert_eq!(
+        rvf_position_diagnostic_data1_decode(data1),
+        (RVF_POSITION_ETW_PRESENTATION_POSITION_V1, frequency)
+    );
+    let pin_facts = rvf_position_pin_facts(7, 3, true);
+    assert_eq!(rvf_position_pin_facts_decode(pin_facts), (7, 3, true));
+    let render_facts = rvf_position_pin_facts(7, 3, false);
+    assert_eq!(rvf_position_pin_facts_decode(render_facts), (7, 3, false));
+}
+
+#[test]
+fn backend_trace_diagnostic_lines_are_bounded_and_not_oracle_lines() {
+    let mut control = BackendOsTraceControl::new(0, Instant::now());
+    control.finished = true;
+    control.notes.push("x".repeat(1_000));
+    let lines = control.diagnostic_lines();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].starts_with("roundtrip_backend_os_trace: "));
+    assert!(lines[1].starts_with("roundtrip_backend_os_trace_calibration: "));
+    assert!(lines.iter().all(|line| line.len() < 2_048));
+    assert!(
+        lines
+            .iter()
+            .all(|line| !line.starts_with("roundtrip_output_timestamp_"))
+    );
+}
+
+#[test]
+fn backend_trace_unsupported_status_does_not_change_timestamp_classifier() {
+    let classifier = TimestampEpochClassifier::new();
+    let epoch_resets_before = classifier.epoch_resets.load(Ordering::Relaxed);
+    let regressions_before = classifier.raw_regressions();
+    let mut control = BackendOsTraceControl::new(0, Instant::now());
+    control.status = "unsupported".to_owned();
+    control.finished = true;
+    assert_eq!(control.status, "unsupported");
+    assert_eq!(
+        classifier.epoch_resets.load(Ordering::Relaxed),
+        epoch_resets_before
+    );
+    assert_eq!(classifier.raw_regressions(), regressions_before);
 }

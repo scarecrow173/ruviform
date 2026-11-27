@@ -20,6 +20,13 @@ Abstract:
 #define MINWAVERTSTREAM_POOLTAG 'SRWM'
 #define HNSTIME_PER_MILLISECOND 10000
 
+// Additive rf#1034 diagnostic ETW schema, emitted through eMINIPORT_IHV_DEFINED.
+// Data1: low 16 bits = schema id, bits 16..63 = raw performance-counter frequency.
+// Data2: bit 0 = capture, bits 8..15 = pin, bits 16..31 = device type.
+// Data3: presentation position in blocks. Data4: raw KeQueryPerformanceCounter value.
+#define RVF_POSITION_ETW_PRESENTATION_POSITION_V1 0x2001ULL
+#define RVF_POSITION_ETW_FREQUENCY_SHIFT 16
+
 #pragma warning (disable : 4127)
 
 #pragma code_seg("PAGE")
@@ -766,6 +773,23 @@ NTSTATUS CMiniportWaveRTStream::GetPresentationPosition(_Out_  KSAUDIO_PRESENTAT
                                 m_ulCurrentWritePosition,
                                 _pPresentationPosition->u64PositionInBlocks,
                                 0);  // always zero
+
+    // rf#1034 additive diagnostic observation: copy values already computed
+    // for the standard event, plus the raw QPC and endpoint discriminator the
+    // standard payload cannot represent. This does not alter position, clock,
+    // lock, state, notification, or buffer behavior.
+    ULONGLONG pinFacts =
+        ((ULONGLONG)m_pMiniport->m_DeviceType << 16) |
+        ((ULONGLONG)m_ulPin << 8) |
+        (m_bCapture ? 1ULL : 0ULL);
+    ULONGLONG diagnosticIdAndFrequency =
+        RVF_POSITION_ETW_PRESENTATION_POSITION_V1 |
+        ((ULONGLONG)m_ullPerformanceCounterFrequency.QuadPart << RVF_POSITION_ETW_FREQUENCY_SHIFT);
+    pAdapterComm->WriteEtwEvent(eMINIPORT_IHV_DEFINED,
+                                diagnosticIdAndFrequency,
+                                pinFacts,
+                                _pPresentationPosition->u64PositionInBlocks,
+                                _pPresentationPosition->u64QPCPosition);
     return STATUS_SUCCESS;
 }
 
