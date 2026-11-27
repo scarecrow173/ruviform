@@ -67,10 +67,22 @@ typedef struct _RVF1034_WMI_PROBE_EVENT
     RVF1034_WMI_PROBE_PAYLOAD   Payload;
 } RVF1034_WMI_PROBE_EVENT;
 
+typedef struct _RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT
+{
+    ULONG       Kind;
+    NTSTATUS    Status;
+    ULONG       Flags;
+    ULONG       GuidIndex;
+    ULONG       Function;
+    ULONGLONG   EnableCount;
+    ULONGLONG   DisableCount;
+    LONG64      LoggerHandle;
+} RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT;
+
 static WMIGUIDREGINFO g_RvfWmiProbeGuidList[] =
 {
     { &RVF1034_WMI_PROBE_CONTROL_GUID, 1, WMIREG_FLAG_TRACED_GUID | WMIREG_FLAG_TRACE_CONTROL_GUID },
-    { &RVF1034_WMI_PROBE_EVENT_GUID, 1, WMIREG_FLAG_EVENT_ONLY_GUID | WMIREG_FLAG_TRACED_GUID }
+    { &RVF1034_WMI_PROBE_EVENT_GUID, 1, WMIREG_FLAG_TRACED_GUID }
 };
 
 static WMILIB_CONTEXT g_RvfWmiProbeContext;
@@ -124,8 +136,9 @@ RvfWmiProbeMirrorSlot
 
 static
 NTSTATUS
-RvfWmiProbeFireEvent
+RvfWmiProbeFireEventWithLogger
 (
+    _In_ LONG64 LoggerHandle,
     _In_ ULONG Kind,
     _In_ NTSTATUS Status,
     _In_ ULONG Flags,
@@ -139,7 +152,7 @@ RvfWmiProbeFireEvent
     _In_ ULONGLONG MirrorKeyEmitCalls
 )
 {
-    LONG64 loggerHandle = InterlockedCompareExchange64(&g_RvfWmiProbeLoggerHandle, 0, 0);
+    LONG64 loggerHandle = LoggerHandle;
     RVF1034_WMI_PROBE_EVENT event;
     NTSTATUS fireStatus;
 
@@ -186,6 +199,118 @@ RvfWmiProbeFireEvent
     fireStatus = IoWMIWriteEvent(&event);
     InterlockedExchange(&g_RvfWmiProbeLastFireStatus, (LONG)fireStatus);
     return fireStatus;
+}
+
+static
+NTSTATUS
+RvfWmiProbeFireEvent
+(
+    _In_ ULONG Kind,
+    _In_ NTSTATUS Status,
+    _In_ ULONG Flags,
+    _In_ ULONG MiniportEventOrdinal,
+    _In_ ULONG MiniportSchemaId,
+    _In_ ULONGLONG Data1,
+    _In_ ULONGLONG Data2,
+    _In_ ULONGLONG Data3,
+    _In_ ULONGLONG Data4,
+    _In_ ULONGLONG MirrorKeyCalls,
+    _In_ ULONGLONG MirrorKeyEmitCalls
+)
+{
+    return RvfWmiProbeFireEventWithLogger(
+        InterlockedCompareExchange64(&g_RvfWmiProbeLoggerHandle, 0, 0),
+        Kind,
+        Status,
+        Flags,
+        MiniportEventOrdinal,
+        MiniportSchemaId,
+        Data1,
+        Data2,
+        Data3,
+        Data4,
+        MirrorKeyCalls,
+        MirrorKeyEmitCalls);
+}
+
+static
+VOID
+RvfWmiProbeControlWorkItem
+(
+    _In_ PVOID IoObject,
+    _In_opt_ PVOID Context,
+    _In_ PIO_WORKITEM IoWorkItem
+)
+{
+    RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT* workContext =
+        (RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT*)Context;
+
+    UNREFERENCED_PARAMETER(IoObject);
+
+    if (workContext != NULL)
+    {
+        RvfWmiProbeFireEventWithLogger(
+            workContext->LoggerHandle,
+            workContext->Kind,
+            workContext->Status,
+            workContext->Flags,
+            RVF1034_WMI_PROBE_CONTROL_ORDINAL,
+            0,
+            workContext->GuidIndex,
+            workContext->Function,
+            workContext->EnableCount,
+            workContext->DisableCount,
+            0,
+            0);
+        ExFreePoolWithTag(workContext, SYSVAD_POOLTAG);
+    }
+
+    IoFreeWorkItem(IoWorkItem);
+}
+
+static
+VOID
+RvfWmiProbeQueueControlEvent
+(
+    _In_ PDEVICE_OBJECT DeviceObject,
+    _In_ ULONG Kind,
+    _In_ NTSTATUS Status,
+    _In_ ULONG Flags,
+    _In_ ULONG GuidIndex,
+    _In_ WMIENABLEDISABLECONTROL Function,
+    _In_ ULONGLONG EnableCount,
+    _In_ ULONGLONG DisableCount,
+    _In_ LONG64 LoggerHandle
+)
+{
+    PIO_WORKITEM workItem = IoAllocateWorkItem(DeviceObject);
+    RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT* workContext;
+
+    if (workItem == NULL)
+    {
+        return;
+    }
+
+    workContext = (RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT*)ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
+        sizeof(RVF1034_WMI_PROBE_CONTROL_WORK_CONTEXT),
+        SYSVAD_POOLTAG);
+    if (workContext == NULL)
+    {
+        IoFreeWorkItem(workItem);
+        return;
+    }
+
+    workContext->Kind = Kind;
+    workContext->Status = Status;
+    workContext->Flags = Flags;
+    workContext->GuidIndex = GuidIndex;
+    workContext->Function = (ULONG)Function;
+    workContext->EnableCount = EnableCount;
+    workContext->DisableCount = DisableCount;
+    workContext->LoggerHandle = LoggerHandle;
+
+    IoQueueWorkItemEx(workItem, RvfWmiProbeControlWorkItem, CriticalWorkQueue, workContext);
 }
 
 static
@@ -298,35 +423,33 @@ RvfWmiProbeFunctionControl
             InterlockedExchange(&g_RvfWmiProbeEnabled, loggerHandle != 0 ? 1 : 0);
             enableCount = (ULONGLONG)InterlockedIncrement64(&g_RvfWmiProbeEnableCount);
 
-            RvfWmiProbeFireEvent(
+            RvfWmiProbeQueueControlEvent(
+                DeviceObject,
                 RVF1034_WMI_PROBE_KIND_CONTROL_ENABLE,
                 registrationStatus,
                 RvfWmiProbeStateFlags(additionalFlags),
-                RVF1034_WMI_PROBE_CONTROL_ORDINAL,
-                0,
                 GuidIndex,
-                (ULONGLONG)Function,
+                Function,
                 enableCount,
                 disableCount,
-                0,
-                0);
+                loggerHandle);
         }
         else
         {
             disableCount = (ULONGLONG)InterlockedIncrement64(&g_RvfWmiProbeDisableCount);
 
-            RvfWmiProbeFireEvent(
+            LONG64 loggerHandle = InterlockedCompareExchange64(&g_RvfWmiProbeLoggerHandle, 0, 0);
+
+            RvfWmiProbeQueueControlEvent(
+                DeviceObject,
                 RVF1034_WMI_PROBE_KIND_CONTROL_DISABLE,
                 registrationStatus,
                 RvfWmiProbeStateFlags(additionalFlags),
-                RVF1034_WMI_PROBE_CONTROL_ORDINAL,
-                0,
                 GuidIndex,
-                (ULONGLONG)Function,
+                Function,
                 enableCount,
                 disableCount,
-                0,
-                0);
+                loggerHandle);
 
             InterlockedExchange(&g_RvfWmiProbeEnabled, 0);
             InterlockedExchange64(&g_RvfWmiProbeLoggerHandle, 0);

@@ -37,7 +37,7 @@
 //! override the recorded repo/sha; unset values record `"unknown"`.
 
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -2331,8 +2331,86 @@ struct BackendTraceCommandObservation {
     log_file: Option<PathBuf>,
 }
 
+struct BackendTraceCommandOutput {
+    exit_code: Option<i32>,
+    success: bool,
+    error: Option<String>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
 fn write_artifact_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|error| format!("write {} failed: {error}", path.display()))
+}
+
+fn spawn_pipe_reader(mut pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(pipe) = pipe.as_mut() {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
+fn wait_child_with_timeout(
+    child: &mut process::Child,
+    timeout: Duration,
+) -> (Option<process::ExitStatus>, Option<String>) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return (Some(status), None),
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let status = child.wait().ok();
+                return (
+                    status,
+                    Some(format!("command timed out after {}s", timeout.as_secs())),
+                );
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(10)),
+            Err(wait_error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return (None, Some(format!("wait failed: {wait_error}")));
+            }
+        }
+    }
+}
+
+fn run_process_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> BackendTraceCommandOutput {
+    let spawn_result = process::Command::new(program)
+        .args(args)
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
+        .spawn();
+    let mut child = match spawn_result {
+        Ok(child) => child,
+        Err(spawn_error) => {
+            return BackendTraceCommandOutput {
+                exit_code: None,
+                success: false,
+                error: Some(spawn_error.to_string()),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            };
+        }
+    };
+    let stdout_reader = spawn_pipe_reader(child.stdout.take());
+    let stderr_reader = spawn_pipe_reader(child.stderr.take());
+    let (status, error) = wait_child_with_timeout(&mut child, timeout);
+    BackendTraceCommandOutput {
+        exit_code: status.and_then(|status| status.code()),
+        success: error.is_none() && status.is_some_and(|status| status.success()),
+        error,
+        stdout: stdout_reader.join().unwrap_or_default(),
+        stderr: stderr_reader.join().unwrap_or_default(),
+    }
 }
 
 fn run_backend_trace_command(
@@ -2349,46 +2427,35 @@ fn run_backend_trace_command(
             .collect::<Vec<_>>()
             .join(" ")
     );
-    let result = process::Command::new(program).args(args).output();
-    let (exit_code, success, error, stdout, stderr) = match result {
-        Ok(output) => (
-            output.status.code(),
-            output.status.success(),
-            None,
-            output.stdout,
-            output.stderr,
-        ),
-        Err(spawn_error) => (
-            None,
-            false,
-            Some(spawn_error.to_string()),
-            Vec::new(),
-            Vec::new(),
-        ),
+    let timeout = if label == "tracerpt_xml" {
+        Duration::from_secs(180)
+    } else {
+        Duration::from_secs(20)
     };
+    let output = run_process_with_timeout(program, args, timeout);
     if let Some(path) = log_file {
         let mut bytes = format!("$ {rendered_command}\n").into_bytes();
-        if let Some(code) = exit_code {
+        if let Some(code) = output.exit_code {
             bytes.extend_from_slice(format!("exit_code={code}\n").as_bytes());
         } else {
             bytes.extend_from_slice(b"exit_code=spawn-error\n");
         }
-        if let Some(error) = &error {
+        if let Some(error) = &output.error {
             bytes.extend_from_slice(format!("spawn_error={error}\n").as_bytes());
         }
         bytes.extend_from_slice(b"--- stdout ---\n");
-        bytes.extend_from_slice(&stdout);
+        bytes.extend_from_slice(&output.stdout);
         bytes.extend_from_slice(b"\n--- stderr ---\n");
-        bytes.extend_from_slice(&stderr);
+        bytes.extend_from_slice(&output.stderr);
         let _ = write_artifact_bytes(path, &bytes);
     }
     BackendTraceCommandObservation {
         label: label.to_owned(),
         program: program.to_owned(),
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
-        exit_code,
-        success,
-        error,
+        exit_code: output.exit_code,
+        success: output.success,
+        error: output.error,
         log_file: log_file.map(Path::to_path_buf),
     }
 }
