@@ -397,7 +397,8 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # (Kani cannot run on native Windows). With no selector it keeps the
 # legacy aggregate behavior. Selective Property-group entries are
 # `w-ipc-op` for the valid_op byte-core proofs, `arc-idx-limit` for the
-# ZIP index decision-core proof, `sd-csv-limits` for the structured CSV
+# ZIP index decision-core proof, `arc-payload-limit` for the TAR
+# declared-size decision-core proof, `sd-csv-limits` for the structured CSV
 # limit decision-core proofs, and `sd-byte-budget` for the structured
 # BoundedRead proof. Unknown selectors are usage errors and exit before
 # environment detection. In
@@ -428,14 +429,14 @@ cargo test --locked -p ruviform-io-wav --test formal_wav
 # (fail-closed). Provision runbook:
 # docs/specs/formal-verification.md.
 [tasks.test-formal-kani]
-description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the aggregate invocations; `w-ipc-op`, `arc-idx-limit`, `sd-csv-limits`, and `sd-byte-budget` run only their selective proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
+description = "Issue #806/#1015 Kani bounded-proof lane (manual/opt-in — NOT a CI-required gate): no selector keeps the aggregate invocations; `w-ipc-op`, `arc-idx-limit`, `arc-payload-limit`, `sd-csv-limits`, and `sd-byte-budget` run only their selective proofs; unknown selectors exit 2 before Kani. env-detect (native cargo kani → WSL2 distro); WSL target dir on the native FS, never /mnt; verdict aggregates invocations; honest `not_run` + reason + provision guidance and exit 0 when no environment exists; exit 1 only on a real verification failure"
 raw_args = true
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 
 usage() {
-  echo "usage: mise run test-formal-kani [w-ipc-op|arc-idx-limit|sd-csv-limits|sd-byte-budget]" >&2
+  echo "usage: mise run test-formal-kani [w-ipc-op|arc-idx-limit|arc-payload-limit|sd-csv-limits|sd-byte-budget]" >&2
 }
 
 if [ "$#" -gt 1 ]; then
@@ -444,7 +445,7 @@ if [ "$#" -gt 1 ]; then
 fi
 SELECTOR="${1:-}"
 case "$SELECTOR" in
-  ""|w-ipc-op|arc-idx-limit|sd-csv-limits|sd-byte-budget) ;;
+  ""|w-ipc-op|arc-idx-limit|arc-payload-limit|sd-csv-limits|sd-byte-budget) ;;
   *)
     usage
     exit 2
@@ -463,6 +464,8 @@ if cargo kani --version >/dev/null 2>&1; then
     cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op || rc=1
   elif [ "$SELECTOR" = "arc-idx-limit" ]; then
     cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit || rc=1
+  elif [ "$SELECTOR" = "arc-payload-limit" ]; then
+    cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit || rc=1
   elif [ "$SELECTOR" = "sd-csv-limits" ]; then
     cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision || rc=1
   elif [ "$SELECTOR" = "sd-byte-budget" ]; then
@@ -504,6 +507,8 @@ if command -v wsl.exe >/dev/null 2>&1; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-ui --harness w_ipc_op" || rc=1
     elif [ "$SELECTOR" = "arc-idx-limit" ]; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_idx_limit" || rc=1
+    elif [ "$SELECTOR" = "arc-payload-limit" ]; then
+      wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse -p ruviform-io-archive --harness arc_payload_limit" || rc=1
     elif [ "$SELECTOR" = "sd-csv-limits" ]; then
       wsl.exe -d "$DISTRO" -- bash -lc "cd '$REPO_WSL' && CARGO_TARGET_DIR=\"\$HOME/.cache/ruviform-kani/target\" cargo kani -j1 --output-format terse --all-features -p ruviform-io-structured --harness csv_limit_decision" || rc=1
     elif [ "$SELECTOR" = "sd-byte-budget" ]; then
