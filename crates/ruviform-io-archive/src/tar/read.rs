@@ -111,6 +111,43 @@ fn tar_declared_size_gate_decision(
     }
 }
 
+fn tar_measured_total_remaining(max_total_uncompressed_bytes: u64, accumulated_before: u64) -> u64 {
+    max_total_uncompressed_bytes.saturating_sub(accumulated_before)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TarMeasuredTotalWindowDecision {
+    window: u64,
+    budget_exhausted: bool,
+}
+
+fn tar_measured_total_window_decision(
+    remaining_budget: u64,
+    demand: u64,
+    capacity: u64,
+) -> TarMeasuredTotalWindowDecision {
+    if demand == 0 {
+        TarMeasuredTotalWindowDecision {
+            window: 0,
+            budget_exhausted: false,
+        }
+    } else if remaining_budget == 0 {
+        TarMeasuredTotalWindowDecision {
+            window: 0,
+            budget_exhausted: true,
+        }
+    } else {
+        TarMeasuredTotalWindowDecision {
+            window: demand.min(remaining_budget).min(capacity),
+            budget_exhausted: false,
+        }
+    }
+}
+
+fn tar_measured_total_accumulate(accumulated_before: u64, measured_bytes: u64) -> u64 {
+    accumulated_before.saturating_add(measured_bytes)
+}
+
 /// Streaming reader for a `Read` TAR byte stream.
 ///
 /// [`next_entry`](Self::next_entry) parses the next header (folding any
@@ -634,18 +671,19 @@ impl<R: Read> TarArchiveReader<R> {
     fn drain_bytes(&mut self, mut count: u64) -> Result<(), ArchiveError> {
         let mut scratch = [0_u8; 8192];
         while count > 0 {
-            let remaining = self
-                .limits
-                .max_total_uncompressed_bytes
-                .saturating_sub(self.payload_bytes);
-            if remaining == 0 {
+            let remaining = tar_measured_total_remaining(
+                self.limits.max_total_uncompressed_bytes,
+                self.payload_bytes,
+            );
+            let decision = tar_measured_total_window_decision(remaining, count, 8192);
+            if decision.budget_exhausted {
                 return self.fail(limit_u64(
                     "max_total_uncompressed_bytes",
                     self.payload_bytes + count,
                     self.limits.max_total_uncompressed_bytes,
                 ));
             }
-            let want = usize::try_from(count.min(remaining).min(8192)).unwrap_or(8192);
+            let want = usize::try_from(decision.window).unwrap_or(8192);
             if let Err(error) = self
                 .inner
                 .read_exact(&mut scratch[..want])
@@ -653,7 +691,7 @@ impl<R: Read> TarArchiveReader<R> {
             {
                 return self.fail(error);
             }
-            self.payload_bytes += want as u64;
+            self.payload_bytes = tar_measured_total_accumulate(self.payload_bytes, want as u64);
             count -= want as u64;
         }
         Ok(())
@@ -909,12 +947,12 @@ impl<R: Read> Read for TarEntryReader<'_, R> {
             self.status = EntryStatus::Exhausted;
             return Ok(0);
         }
-        let budget_left = self
-            .archive
-            .limits
-            .max_total_uncompressed_bytes
-            .saturating_sub(self.archive.payload_bytes);
-        if budget_left == 0 {
+        let budget_left = tar_measured_total_remaining(
+            self.archive.limits.max_total_uncompressed_bytes,
+            self.archive.payload_bytes,
+        );
+        let decision = tar_measured_total_window_decision(budget_left, remaining, buf.len() as u64);
+        if decision.budget_exhausted {
             self.status = EntryStatus::Failed(ArchiveErrorKind::LimitExceeded);
             self.archive.state = ReaderState::Failed;
             return Err(std::io::Error::from(limit_u64(
@@ -923,9 +961,7 @@ impl<R: Read> Read for TarEntryReader<'_, R> {
                 self.archive.limits.max_total_uncompressed_bytes,
             )));
         }
-        let want = usize::try_from(remaining.min(budget_left))
-            .unwrap_or(usize::MAX)
-            .min(buf.len());
+        let want = usize::try_from(decision.window).unwrap_or(usize::MAX);
         match self.archive.inner.read(&mut buf[..want]) {
             Ok(0) => {
                 self.status = EntryStatus::Failed(ArchiveErrorKind::Truncated);
@@ -942,7 +978,8 @@ impl<R: Read> Read for TarEntryReader<'_, R> {
             }
             Ok(n) => {
                 self.produced += n as u64;
-                self.archive.payload_bytes += n as u64;
+                self.archive.payload_bytes =
+                    tar_measured_total_accumulate(self.archive.payload_bytes, n as u64);
                 if self.produced == self.declared {
                     self.status = EntryStatus::Exhausted;
                 }
@@ -985,8 +1022,9 @@ impl<R: Read> Drop for TarEntryReader<'_, R> {
 #[cfg(kani)]
 mod proofs {
     use super::{
-        TarDeclaredSizeDecision, TarSurfacedKind, TarTypeflagClass,
-        tar_declared_size_gate_decision, tar_typeflag_class,
+        TarDeclaredSizeDecision, TarMeasuredTotalWindowDecision, TarSurfacedKind, TarTypeflagClass,
+        tar_declared_size_gate_decision, tar_measured_total_accumulate,
+        tar_measured_total_remaining, tar_measured_total_window_decision, tar_typeflag_class,
     };
 
     fn typeflag_oracle(typeflag: u8) -> TarTypeflagClass {
@@ -1066,6 +1104,158 @@ mod proofs {
         kani::cover!(
             typeflag == b'3' && actual == TarTypeflagClass::Unsupported,
             "unsupported classification is reachable"
+        );
+    }
+
+    #[kani::proof]
+    #[kani::unwind(2)]
+    fn arc_tar_measured_total_decision_exactness() {
+        let max_total_uncompressed_bytes: u64 = kani::any();
+        let accumulated_before: u64 = kani::any();
+        let demand: u64 = kani::any();
+        let capacity: u64 = kani::any();
+        let measured_bytes: u64 = kani::any();
+
+        let remaining =
+            tar_measured_total_remaining(max_total_uncompressed_bytes, accumulated_before);
+        if accumulated_before < max_total_uncompressed_bytes {
+            assert!(remaining > 0);
+            assert!(
+                remaining <= max_total_uncompressed_bytes
+                    && max_total_uncompressed_bytes - remaining == accumulated_before
+            );
+        } else {
+            assert!(remaining == 0);
+        }
+
+        let window_decision = tar_measured_total_window_decision(remaining, demand, capacity);
+        let expected_exhaustion = demand != 0 && remaining == 0;
+        assert!(window_decision.budget_exhausted == expected_exhaustion);
+        if demand == 0 {
+            assert!(window_decision.window == 0);
+            assert!(!window_decision.budget_exhausted);
+        } else if remaining == 0 {
+            assert!(window_decision.window == 0);
+            assert!(window_decision.budget_exhausted);
+        } else {
+            assert!(!window_decision.budget_exhausted);
+            assert!(window_decision.window <= demand);
+            assert!(window_decision.window <= remaining);
+            assert!(window_decision.window <= capacity);
+            assert!(
+                window_decision.window == demand
+                    || window_decision.window == remaining
+                    || window_decision.window == capacity
+            );
+            if capacity > 0 {
+                assert!(window_decision.window > 0);
+            }
+        }
+
+        let accumulated_after = tar_measured_total_accumulate(accumulated_before, measured_bytes);
+        let headroom = u64::MAX - accumulated_before;
+        if measured_bytes <= headroom {
+            assert!(
+                accumulated_after >= accumulated_before
+                    && accumulated_after - accumulated_before == measured_bytes
+            );
+        } else {
+            assert!(accumulated_after == u64::MAX);
+        }
+
+        kani::cover!(
+            accumulated_before < max_total_uncompressed_bytes
+                && max_total_uncompressed_bytes - accumulated_before == 1
+                && remaining == 1,
+            "remaining budget boundary-1 is reachable"
+        );
+        kani::cover!(
+            accumulated_before == max_total_uncompressed_bytes && remaining == 0,
+            "remaining budget boundary equality is reachable"
+        );
+        kani::cover!(
+            max_total_uncompressed_bytes < u64::MAX
+                && accumulated_before == max_total_uncompressed_bytes + 1
+                && remaining == 0,
+            "remaining budget boundary+1 saturation is reachable"
+        );
+        kani::cover!(
+            demand == 0
+                && remaining == 0
+                && window_decision
+                    == TarMeasuredTotalWindowDecision {
+                        window: 0,
+                        budget_exhausted: false,
+                    },
+            "zero demand remains a no-read decision even at budget exhaustion"
+        );
+        kani::cover!(
+            demand > 0 && remaining == 0 && window_decision.budget_exhausted,
+            "positive demand at zero remaining budget is exhaustion"
+        );
+        kani::cover!(
+            demand > 0
+                && remaining > 0
+                && capacity > 0
+                && demand < remaining
+                && demand < capacity
+                && window_decision.window == demand,
+            "demand strict minimum window is reachable"
+        );
+        kani::cover!(
+            demand > 0
+                && remaining > 0
+                && capacity > 0
+                && remaining < demand
+                && remaining < capacity
+                && window_decision.window == remaining,
+            "remaining budget strict minimum window is reachable"
+        );
+        kani::cover!(
+            demand > 0
+                && remaining > 0
+                && capacity > 0
+                && capacity < demand
+                && capacity < remaining
+                && window_decision.window == capacity,
+            "capacity strict minimum window is reachable"
+        );
+        kani::cover!(
+            demand > 0
+                && demand == remaining
+                && remaining == capacity
+                && window_decision.window == demand,
+            "three-way equality tie window is reachable"
+        );
+        kani::cover!(
+            demand > 0
+                && remaining > 0
+                && capacity == 0
+                && window_decision
+                    == TarMeasuredTotalWindowDecision {
+                        window: 0,
+                        budget_exhausted: false,
+                    },
+            "zero-capacity scalar window is reachable without exhaustion"
+        );
+        kani::cover!(
+            measured_bytes == 0 && accumulated_after == accumulated_before,
+            "zero-measured accumulation identity is reachable"
+        );
+        kani::cover!(
+            measured_bytes > 0
+                && measured_bytes < headroom
+                && accumulated_after >= accumulated_before
+                && accumulated_after - accumulated_before == measured_bytes,
+            "non-overflow accumulation sum is reachable"
+        );
+        kani::cover!(
+            measured_bytes == headroom && accumulated_after == u64::MAX,
+            "accumulation exact u64::MAX boundary is reachable"
+        );
+        kani::cover!(
+            measured_bytes > headroom && accumulated_after == u64::MAX,
+            "accumulation overflow saturation is reachable"
         );
     }
 

@@ -25,7 +25,9 @@
 //! measured total budget accumulation decision proofs live beside their
 //! production decision cores in `src/zip/read.rs`; the TAR declared-size
 //! and typeflag classification proofs live beside their production decision
-//! cores in `src/tar/read.rs`. Bounds and assumptions are documented in
+//! cores in `src/tar/read.rs`; the TAR measured-total read-window and
+//! accumulation proof lives beside the same production decision core. Bounds
+//! and assumptions are documented in
 //! `docs/specs/formal-verification.md`.
 
 mod common;
@@ -1335,6 +1337,138 @@ proptest! {
             .map(|(_, _, d)| u64::try_from(d.len()).unwrap_or(0))
             .sum();
         prop_assert_eq!(receipt.payload_bytes(), total_bytes);
+    }
+}
+
+fn tar_measured_total_archive_for(
+    lens: &[usize],
+    budget: u64,
+) -> TarArchiveReader<Cursor<Vec<u8>>> {
+    let parts: Vec<Vec<u8>> = lens
+        .iter()
+        .enumerate()
+        .map(|(i, &len)| file_entry(&format!("f{i}"), &vec![b'x'; len]))
+        .collect();
+    let mut limits = ArchiveReadLimits::default();
+    limits.max_total_uncompressed_bytes = budget;
+    TarArchiveReader::new(Cursor::new(tar(&parts)), limits)
+}
+
+fn read_in_windows(reader: &mut impl Read, capacity: usize) -> Vec<u8> {
+    let mut scratch = vec![0_u8; capacity];
+    let mut out = Vec::new();
+    loop {
+        let n = reader.read(&mut scratch).expect("in-budget read");
+        assert!(
+            n <= scratch.len(),
+            "one read must not exceed caller capacity"
+        );
+        if n == 0 {
+            break;
+        }
+        out.extend_from_slice(&scratch[..n]);
+    }
+    out
+}
+
+/// Shell-core connection regression for TAR measured total budget windows and
+/// accumulation: interactive reads stay inside the caller buffer and remaining
+/// budget, exact budget use is inclusive, one byte over the budget is
+/// `LimitExceeded`, zero-length entries remain acceptable after exact use, and
+/// the drain paths share the same budget decision.
+#[test]
+fn tar_measured_total_connection_regression() {
+    // (a) A small caller buffer bounds every interactive read, and multiple
+    // entries can use the total budget exactly.
+    let mut archive = tar_measured_total_archive_for(&[3, 5], 8);
+    for expected_len in [3_usize, 5] {
+        let mut entry = archive
+            .next_entry()
+            .expect("entry walk succeeds")
+            .expect("file entry");
+        let out = read_in_windows(&mut entry, 2);
+        assert_eq!(out, vec![b'x'; expected_len]);
+        entry.finish().expect("fully read entry finishes");
+    }
+    let (_inner, receipt) = archive.finish().expect("exact budget archive finishes");
+    assert_eq!(receipt.payload_bytes(), 8);
+    assert_eq!(receipt.entries_total(), 2);
+    assert_eq!(receipt.entries_verified(), 2);
+    assert_eq!(receipt.entries_unverified(), 0);
+
+    // (b) A total one byte over the budget yields only the remaining budget;
+    // the next positive-demand read is the budget-exhaustion error.
+    let mut archive = tar_measured_total_archive_for(&[3, 6], 8);
+    let mut first = archive
+        .next_entry()
+        .expect("first entry walk succeeds")
+        .expect("first file entry");
+    let mut first_out = Vec::new();
+    first
+        .read_to_end(&mut first_out)
+        .expect("first entry reads within budget");
+    first.finish().expect("first entry finishes");
+    let mut second = archive
+        .next_entry()
+        .expect("second entry walk succeeds")
+        .expect("second file entry");
+    let mut out = Vec::new();
+    let error = second
+        .read_to_end(&mut out)
+        .expect_err("second entry must fail at the total budget");
+    assert_eq!(out.len(), 5);
+    assert_eq!(io_kind(&error), Some(ArchiveErrorKind::LimitExceeded));
+
+    // (c) A zero-length entry does not need additional budget after exact use.
+    let mut archive = tar_measured_total_archive_for(&[3, 5, 0], 8);
+    for _ in 0..2 {
+        let mut entry = archive
+            .next_entry()
+            .expect("entry walk succeeds")
+            .expect("file entry");
+        let mut out = Vec::new();
+        entry
+            .read_to_end(&mut out)
+            .expect("non-empty entry reads within exact total budget");
+        entry.finish().expect("non-empty entry finishes");
+    }
+    let mut empty = archive
+        .next_entry()
+        .expect("zero-length entry walk succeeds")
+        .expect("zero-length file entry");
+    let mut out = Vec::new();
+    empty
+        .read_to_end(&mut out)
+        .expect("zero-length entry has no positive demand");
+    assert_eq!(out, Vec::<u8>::new());
+    empty
+        .finish()
+        .expect("zero-length entry finishes after exact budget use");
+    let (_inner, receipt) = archive
+        .finish()
+        .expect("archive finishes after zero-length entry");
+    assert_eq!(receipt.payload_bytes(), 8);
+    assert_eq!(receipt.entries_total(), 3);
+    assert_eq!(receipt.entries_verified(), 3);
+
+    // (d) The drain path accepts exact budget use and rejects one byte over.
+    let mut equality = tar_measured_total_archive_for(&[3, 5], 8);
+    for _ in 0..2 {
+        let entry = equality
+            .next_entry()
+            .expect("entry walk succeeds")
+            .expect("file entry");
+        entry
+            .discard_remaining()
+            .expect("discard drain accepts exact total budget");
+    }
+    let (_inner, receipt) = equality.finish().expect("finish after discard drain");
+    assert_eq!(receipt.payload_bytes(), 8);
+
+    let overflow = tar_measured_total_archive_for(&[3, 6], 8);
+    match overflow.finish() {
+        Err(error) => assert_eq!(error.kind(), ArchiveErrorKind::LimitExceeded),
+        Ok(_) => panic!("finish drain one byte over the budget must be rejected"),
     }
 }
 
