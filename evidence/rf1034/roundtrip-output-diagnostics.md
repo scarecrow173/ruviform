@@ -88,7 +88,7 @@ run 1〜4 は rf629 case pass で effective regression 0 だったが、これ�
 
 ## local canonical verification
 
-canonical は mise タスクであり、直接 cargo 実行は補助証拠にすぎない。最終検証前に main `84abc76f4674ba587482197d314005054d7bda6f` を取り込んだ。OS は Windows local である。
+canonical は mise タスクであり、直接 cargo 実行は補助証拠にすぎない。最終検証前に main `511e1a7944c35797942ba065c092b9263067c48a` を取り込んだ。OS は Windows local である。
 
 | command | exit | 判定 |
 | --- | ---: | --- |
