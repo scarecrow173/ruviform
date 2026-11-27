@@ -577,6 +577,13 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
         PPORTCLSETWHELPER _pPortClsEtwHelper
     ) PURE;
 
+    STDMETHOD_(NTSTATUS,        RegisterWmiProbe)
+    (
+        THIS_
+        _In_opt_ PPORTWMIREGISTRATION PortWmiRegistration,
+        _In_ NTSTATUS QueryStatus
+    ) PURE;
+
     STDMETHOD_(NTSTATUS,        InstallSubdevice)
     (
         _In_opt_        PIRP                                        Irp,
