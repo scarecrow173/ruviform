@@ -21,11 +21,11 @@
 //!   / `entries_unverified` / `payload_bytes`) agree with what the
 //!   drive actually consumed.
 //!
-//! The ZIP index gate and declared entry-size gate proofs live beside their
-//! production decision cores in `src/zip/read.rs`; the TAR declared-size and
-//! typeflag classification proofs live beside their production decision cores
-//! in `src/tar/read.rs`. Bounds and assumptions are documented in
-//! `docs/specs/formal-verification.md`.
+//! The ZIP index gate, declared entry-size gate, and entry output hard-cap
+//! decision proofs live beside their production decision cores in
+//! `src/zip/read.rs`; the TAR declared-size and typeflag classification proofs
+//! live beside their production decision cores in `src/tar/read.rs`. Bounds
+//! and assumptions are documented in `docs/specs/formal-verification.md`.
 
 mod common;
 
@@ -1384,4 +1384,57 @@ fn zip_declared_entry_size_connection_regression() {
         }
         Ok(_) => panic!("over-limit declared entry size must be rejected"),
     }
+}
+
+/// Shell-core connection regression for the ZIP entry output hard cap:
+/// standalone open caps at the declared size, while `verify_all` caps at
+/// `min(declared, remaining budget)` and classifies overflow at that cap.
+/// The equality boundary stays declared-overproduction (`SizeMismatch`);
+/// only a remaining budget below the declared size is budget overflow
+/// (`LimitExceeded`).
+#[test]
+fn zip_output_cap_connection_regression() {
+    fn verify_all_kind(data: &[u8], declared: u32, remaining_budget: u64) -> ArchiveErrorKind {
+        let mut spec = EntrySpec::stored("f", data);
+        spec.declared_uncompressed = declared;
+        let bytes = build_simple(&[spec]);
+        let mut limits = ArchiveReadLimits::default();
+        limits.max_total_uncompressed_bytes = remaining_budget;
+        let mut archive =
+            ZipArchiveReader::new(Cursor::new(bytes), limits).expect("index parses within budget");
+        match archive.verify_all() {
+            Err(error) => error.kind(),
+            Ok(_) => panic!("over-producing entry must fail verification"),
+        }
+    }
+
+    let mut spec = EntrySpec::stored("f", b"abcdefghX");
+    spec.declared_uncompressed = 8;
+    let bytes = build_simple(&[spec]);
+    let mut archive = ZipArchiveReader::new(Cursor::new(bytes), ArchiveReadLimits::default())
+        .expect("index parses within budget");
+    let mut entry = archive.open_entry(0).expect("open entry");
+    let mut out = Vec::new();
+    let error = entry
+        .read_to_end(&mut out)
+        .expect_err("physical output past the declared cap must fail");
+    assert_eq!(io_kind(&error), Some(ArchiveErrorKind::SizeMismatch));
+    assert_eq!(out, b"abcdefgh");
+    drop(entry);
+
+    assert_eq!(
+        verify_all_kind(b"abcdefgh", 8, 7),
+        ArchiveErrorKind::LimitExceeded,
+        "remaining budget boundary-1 must be budget overflow"
+    );
+    assert_eq!(
+        verify_all_kind(b"abcdefghX", 8, 8),
+        ArchiveErrorKind::SizeMismatch,
+        "remaining budget equality must stay declared-overproduction"
+    );
+    assert_eq!(
+        verify_all_kind(b"abcdefghX", 8, 9),
+        ArchiveErrorKind::SizeMismatch,
+        "remaining budget boundary+1 must keep the cap at the declared size"
+    );
 }
