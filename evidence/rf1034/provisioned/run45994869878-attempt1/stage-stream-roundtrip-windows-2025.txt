@@ -1,0 +1,51 @@
+  prerequisite endpoint-probe: ok
+  mic-consent primitive record: hklm-devacc=Allow, hkcu-devacc=Allow, hklm-cam=Allow, hkcu-cam=Allow, policy=1, AudioEndpointBuilder=Running, Audiosrv=Running
+  [35m[test-audio-virtual-endpoint][0m [1m$ cargo test -p ruviform-audio-device --features real-device --test virtual_endpoint -- --ignored --test-threads=1[0m
+     Compiling ruviform-audio-device v0.1.0 (D:\a\ruviform\ruviform\crates\ruviform-audio-device)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 2.45s
+       Running tests\virtual_endpoint.rs (target\debug\deps\virtual_endpoint-bfef20241f68652e.exe)
+
+  running 7 tests
+  test render_capture_round_trip ... ok
+  rf1029_channel_width_observation: {"schema":"rf1029-channel-width-observation/v1","case":{"name":"ruviform-cable-stereo-preserve","contract":"stereo-preserve","result":"Fail","detail":"stream-contract-failures:output timestamp regressions: 1; channel_width=independent-left-right-content-preserved"},"endpoint":{"render_name":"Ruviform Cable Input (Ruviform Virtual Audio Device)","capture_name":"Ruviform Cable Output (Ruviform Virtual Audio Device)","capture_instance_id":"DeviceId(\"wasapi:{0.0.1.00000000}.{b29a2dcb-c8ba-4e96-9466-f8f15461dba4}\")"},"negotiation":{"render":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"},"capture":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"}},"oracle":{"mode":"stereo-preserve","captured_frames":157920,"tone_measurement":{"present":true,"left_440_ratio":0.9544571448291703,"left_880_ratio":0.0001236117043847443,"right_440_ratio":0.00000003851288651831939,"right_880_ratio":0.9935362444750409,"min_target_ratio":0.25,"min_separation_ratio":4}}}
+  test ruviform_channel_width_contract ... FAILED
+  test virtual_audio_device_loss_fault ... ok
+  test virtual_audio_permission_denial_fault ... ok
+  test virtual_audio_xrun_capture_content_gap_input_negative ... ok
+  test virtual_audio_xrun_capture_overflow_drop_input ... ok
+  test virtual_audio_xrun_probe ... ok
+
+  failures:
+
+  ---- ruviform_channel_width_contract stdout ----
+    channel-width negotiated in=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 } out=AudioFormat { sample_rate: SampleRate(48000), layout: Stereo, sample_format: F32 }
+    oracle level: observed_rms=0.1442 expected_rms=0.1446 ratio=0.997
+    oracle tone: 440Hz share of power=0.954
+    clock domains: in=ClockDomainId(2) out=ClockDomainId(2) same_clock_domain=true
+    --- pair evidence ---
+    callbacks: in=329 out=332 | frames: in=157920 out=158976
+    frames/callback: in min=480 max=480 | out min=96 max=480
+    timestamps: in regressions=0 effective=0 epoch_resets=1 domain mismatches=0 | out regressions=2 effective=1 epoch_resets=1
+    regression detail: in cb[first..last]=18446744073709551615..0 max_backstep_ns=9223372036854775807 boundary_cb=299 idx=[] | out cb[first..last]=3..269 max_backstep_ns=-9851800 boundary_cb=302 idx=[3,269]
+    capture stamps: some=329 none=0 order violations=0
+    frame_position: some=329 gaps=0 first=0 last=157440 discontinuities=0
+    samples: non_finite=0 peak_bits=0x3f474c00 | capture stored=157920 overflow=0 lock_failures=0
+    in latency (callback-capture): min=10033000ns max=20145100ns mean=11840792ns
+    out latency (playback-callback): min=0ns max=40979167ns mean=31700427ns some=332 none=0
+    errors: in total=0 xrun=0 discontinuity=0 invalidated=0 last_kind=0 | out total=0 xrun=0 last_kind=0
+    StreamInvalidated: exercised only by controller-armed fault cases in this target
+  rf1029_channel_width_observation: {"schema":"rf1029-channel-width-observation/v1","case":{"name":"ruviform-cable-stereo-preserve","contract":"stereo-preserve","result":"Fail","detail":"stream-contract-failures:output timestamp regressions: 1; channel_width=independent-left-right-content-preserved"},"endpoint":{"render_name":"Ruviform Cable Input (Ruviform Virtual Audio Device)","capture_name":"Ruviform Cable Output (Ruviform Virtual Audio Device)","capture_instance_id":"DeviceId(\"wasapi:{0.0.1.00000000}.{b29a2dcb-c8ba-4e96-9466-f8f15461dba4}\")"},"negotiation":{"render":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"},"capture":{"present":true,"sample_rate":48000,"channels":2,"layout":"Stereo","sample_format":"F32"}},"oracle":{"mode":"stereo-preserve","captured_frames":157920,"tone_measurement":{"present":true,"left_440_ratio":0.9544571448291703,"left_880_ratio":0.0001236117043847443,"right_440_ratio":0.00000003851288651831939,"right_880_ratio":0.9935362444750409,"min_target_ratio":0.25,"min_separation_ratio":4}}}
+
+  thread 'ruviform_channel_width_contract' (2436) panicked at crates\ruviform-audio-device\tests\virtual_endpoint.rs:2740:5:
+  verdict: Fail — stream-contract-failures:output timestamp regressions: 1; channel_width=independent-left-right-content-preserved
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+  failures:
+      ruviform_channel_width_contract
+
+  test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 19 filtered out; finished in 6.83s
+
+  error: test failed, to rerun pass `-p ruviform-audio-device --test virtual_endpoint`
+  [35m[test-audio-virtual-endpoint][0m [31mERROR[0m task failed
+  test exit=101 verdict=Fail — stream-contract-failures:output timestamp regressions: 1; channel_width=independent-left-right-content-preserved

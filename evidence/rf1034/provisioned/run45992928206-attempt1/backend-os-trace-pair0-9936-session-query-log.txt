@@ -1,0 +1,63 @@
+$ logman.exe "query" "rvf1034_bt_9936_0" "-ets"
+exit_code=0
+--- stdout ---
+
+Name:                 rvf1034_bt_9936_0
+Status:               Running
+Root Path:            D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025
+Segment:              Off
+Schedules:            On
+Segment Max Size:     64 MB
+
+Name:                 rvf1034_bt_9936_0\rvf1034_bt_9936_0
+Type:                 Trace
+Output Location:      D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-9936.etl
+Append:               Off
+Circular:             Off
+Overwrite:            Off
+Buffer Size:          8
+Buffers Lost:         0
+Buffers Written:      1
+Buffer Flush Timer:   0
+Clock Type:           Performance
+File Mode:            File
+
+Provider:
+Name:                 {10EB6007-818C-4DB6-A694-B518E589D07A}
+Provider Guid:        {10EB6007-818C-4DB6-A694-B518E589D07A}
+Level:                255
+KeywordsAll:          0x0
+KeywordsAny:          0xffffffffffffffff
+Properties:           0
+Filter Type:          0
+
+Provider:
+Name:                 Microsoft-Windows-KernelStreaming
+Provider Guid:        {548C4417-CE45-41FF-99DD-528F01CE0FE1}
+Level:                255
+KeywordsAll:          0x0
+KeywordsAny:          0xffffffffffffffff (Microsoft-Windows-KernelStreaming/Operational,Microsoft-Windows-KernelStreaming/Analytic,0x1,0x2,0x4,0x8,0x10,0x20,0x40,0x80,0x100,0x200,0x400,0x800,0x1000,0x2000,0x4000,0x8000,0x10000,0x20000,0x40000,0x80000,0x100000,0x200000,0x400000,0x800000,0x1000000,0x2000000,0x4000000,0x8000000,0x10000000,0x20000000,0x40000000,0x80000000,0x100000000,0x200000000,0x400000000,0x800000000,0x1000000000,0x2000000000,0x4000000000,0x8000000000,0x10000000000,0x20000000000,0x40000000000,0x80000000000,0x100000000000,0x200000000000,0x400000000000,0x800000000000,0x1000000000000,0x2000000000000,0x4000000000000,0x8000000000000,0x10000000000000,0x20000000000000,0x40000000000000,0x80000000000000,0x100000000000000,0x200000000000000,0x400000000000000,0x800000000000000,0x1000000000000000,0x2000000000000000)
+Properties:           64
+Filter Type:          0
+
+Provider:
+Name:                 Microsoft-Windows-Audio
+Provider Guid:        {AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}
+Level:                255
+KeywordsAll:          0x0
+KeywordsAny:          0xffffffffffffffff (win:ResponseTime,Application,Microsoft-Windows-Audio/Operational,Microsoft-Windows-Audio/CaptureMonitor,Microsoft-Windows-Audio/Performance,Microsoft-Windows-Audio/PlaybackManager,Microsoft-Windows-Audio/GlitchDetection,Microsoft-Windows-Audio/Informational,0x1,0x2,0x4,0x8,0x10,0x20,0x40,0x80,0x100,0x200,0x400,0x800,0x1000,0x2000,0x4000,0x8000,0x10000,0x20000,0x40000,0x80000,0x100000,0x200000,0x400000,0x800000,0x1000000,0x2000000,0x4000000,0x8000000,0x10000000,0x20000000,0x40000000,0x80000000,0x100000000,0x200000000,0x400000000,0x800000000,0x1000000000,0x2000000000,0x4000000000,0x8000000000,0x10000000000,0x20000000000,0x40000000000,0x80000000000,0x100000000000,0x200000000000,0x400000000000,0x800000000000,0x2000000000000,0x4000000000000,0x8000000000000,0x10000000000000,0x20000000000000,0x40000000000000,0x80000000000000,0x100000000000000)
+Properties:           64
+Filter Type:          0
+
+Provider:
+Name:                 {A6A00EFD-21F2-4A99-807E-9B3BF1D90285}
+Provider Guid:        {A6A00EFD-21F2-4A99-807E-9B3BF1D90285}
+Level:                255
+KeywordsAll:          0x0
+KeywordsAny:          0xffffffffffffffff
+Properties:           0
+Filter Type:          0
+
+The command completed successfully.
+
+--- stderr ---

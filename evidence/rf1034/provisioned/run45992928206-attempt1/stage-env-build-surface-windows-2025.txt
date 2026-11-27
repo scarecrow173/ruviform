@@ -1,0 +1,72 @@
+projected from primitive stage 'environment' (rvf-virtual-audio-provisioning/v1)
+runner: GitHub Actions 1000008521 os=Windows arch=X64
+ref: refs/heads/feat/1034-driver-position-observation sha: 3809df8122171c7266bf0363d10a0a0ecfdc4e8c
+run: https://github.com/scarecrow173/ruviform/actions/runs/45992928206 attempt=1
+host: runnervmbpeip user: runnervmbpeip\runneradmin timestamp-utc: 2026-11-27T11:47:50Z
+os: Microsoft Windows Server 2025 Datacenter version=10.0.26100 build=26100 arch=AMD64
+github_actions=true runner_environment=github-hosted runner_os=Windows runner_arch=X64 admin=True
+testsigning=True secure_boot=False bcdedit_exit=0
+  bcdedit: Windows Boot Manager
+  bcdedit: --------------------
+  bcdedit: identifier              {bootmgr}
+  bcdedit: device                  partition=\Device\HarddiskVolume2
+  bcdedit: path                    \EFI\Microsoft\Boot\bootmgfw.efi
+  bcdedit: description             Windows Boot Manager
+  bcdedit: locale                  en-US
+  bcdedit: inherit                 {globalsettings}
+  bcdedit: bootshutdowndisabled    Yes
+  bcdedit: default                 {current}
+  bcdedit: resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  bcdedit: displayorder            {current}
+  bcdedit: toolsdisplayorder       {memdiag}
+  bcdedit: timeout                 30
+  bcdedit: Windows Boot Loader
+  bcdedit: -------------------
+  bcdedit: identifier              {current}
+  bcdedit: device                  partition=C:
+  bcdedit: path                    \Windows\system32\winload.efi
+  bcdedit: description             Windows Server
+  bcdedit: locale                  en-US
+  bcdedit: inherit                 {bootloadersettings}
+  bcdedit: recoverysequence        {6019ac8d-debe-11f1-aef6-3833c5d5ecc5}
+  bcdedit: displaymessageoverride  Recovery
+  bcdedit: recoveryenabled         No
+  bcdedit: testsigning             Yes
+  bcdedit: isolatedcontext         Yes
+  bcdedit: allowedinmemorysettings 0x15000075
+  bcdedit: osdevice                partition=C:
+  bcdedit: systemroot              \Windows
+  bcdedit: resumeobject            {6019ac89-debe-11f1-aef6-3833c5d5ecc5}
+  bcdedit: nx                      OptOut
+  bcdedit: bootstatuspolicy        IgnoreAllFailures
+  bcdedit: hypervisorlaunchtype    Auto
+  bcdedit: hypervisorschedulertype Root
+  bcdedit: ems                     Yes
+== tools on PATH ==
+  pnputil: C:\Windows\system32\pnputil.exe
+  signtool: not on PATH
+  devcon: not on PATH
+  infverif: not on PATH
+  Inf2Cat: not on PATH
+  makecat: not on PATH
+  certutil: C:\Windows\system32\certutil.exe
+  vswhere: C:\ProgramData\Chocolatey\bin\vswhere.exe
+  msbuild: not on PATH
+  cl: not on PATH
+  link: C:\Program Files\Git\usr\bin\link.exe
+  winget: C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps\winget.exe
+  dotnet: C:\Program Files\dotnet\dotnet.exe
+  git: C:\Program Files\Git\bin\git.exe
+== Windows Kits bin hits ==
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\signtool.exe
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe
+  signtool.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\signtool.exe
+  Inf2Cat.exe: absent
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\arm64\makecat.exe
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makecat.exe
+  makecat.exe -> C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x86\makecat.exe
+  devcon.exe: absent
+  infverif.exe: absent
+  certutil.exe -> C:\Windows\system32\certutil.exe
+initial build surface: msbuild=present toolset=3 kmHeaders=0 kmLibs=0 signtoolKits=3 inf2catKits=0 makecatKits=3 winget=present
+stage=environment status=ok detail=msbuild=present; toolset=3; kmHeaders=0; kmLibs=0; signtoolKits=3; inf2catKits=0; winget=present
