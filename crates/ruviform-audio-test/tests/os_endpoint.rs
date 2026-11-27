@@ -1536,10 +1536,35 @@ impl Drop for RenderCallbackActivity<'_> {
 // rf#1034 backend OS/driver diagnostic trace control.
 
 const BACKEND_TRACE_MAX_LOG_MB: &str = "64";
-const BACKEND_TRACE_KEYWORD_MASK: &str = "0x0";
+const BACKEND_TRACE_KEYWORD_MASK_ALL: &str = "0xffffffffffffffff";
 const BACKEND_TRACE_LEVEL: &str = "0xff";
 const RVF_POSITION_ETW_PRESENTATION_POSITION_V1: u64 = 0x2001;
 const RVF_POSITION_ETW_FREQUENCY_SHIFT: u32 = 16;
+const PORTCLS_AUDIOENGINE_CONTROL_GUID: &str = "{10EB6007-818C-4DB6-A694-B518E589D07A}";
+const PORTCLS_AUDIOENGINE_EVENT_GUID: &str = "{97BCD203-6286-4974-801D-A293B921F84B}";
+const PORTCLS_POSITION_EVENT_GUID: &str = "{93BB152D-DF9E-4282-B709-1696392F2557}";
+const PORTCLS_ROOT_EVENT_GUID: &str = "{9502CBC6-AA74-4EFF-BA91-D9329BCCE758}";
+const PORTCLS_MINIPORT_TRACE_TYPE_BASE: u64 = 96;
+const PORTCLS_MINIPORT_MAX_ORDINAL: u64 = 10;
+const PORTCLS_MINIPORT_PAYLOAD_U64S: usize = 5;
+const DRIVER_POSITION_EVENT_LIMIT: usize = 16_384;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum BackendTraceProviderRole {
+    ManifestControl,
+    ClassicOrWmiControl,
+    WmiEventClass,
+}
+
+impl BackendTraceProviderRole {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ManifestControl => "manifest-control",
+            Self::ClassicOrWmiControl => "classic-or-wmi-control",
+            Self::WmiEventClass => "wmi-event-class",
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 struct BackendTraceProviderSpec {
@@ -1547,49 +1572,81 @@ struct BackendTraceProviderSpec {
     guid: &'static str,
     keyword_mask: &'static str,
     level: &'static str,
+    role: BackendTraceProviderRole,
+    enabled_in_session: bool,
     selection_reason: &'static str,
     require_registered: bool,
 }
 
-const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 5] = [
+const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 7] = [
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-Audio",
         guid: "{AE4BD3BE-F36F-45B6-8D21-BDD6FB832853}",
-        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
         level: BACKEND_TRACE_LEVEL,
-        selection_reason: "baseline OS audio engine/audiodg event inventory",
+        role: BackendTraceProviderRole::ManifestControl,
+        enabled_in_session: true,
+        selection_reason: "manifest-registered OS audio engine/audiodg correlation provider",
         require_registered: true,
     },
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-KernelStreaming",
         guid: "{548C4417-CE45-41FF-99DD-528F01CE0FE1}",
-        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
         level: BACKEND_TRACE_LEVEL,
-        selection_reason: "registered audio/KernelStreaming provider candidate for PortCls miniport events",
+        role: BackendTraceProviderRole::ManifestControl,
+        enabled_in_session: true,
+        selection_reason: "manifest-registered KernelStreaming provider relevant to PortCls streaming correlation",
         require_registered: true,
     },
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-AudioEngineVerbose",
         guid: "{A6A00EFD-21F2-4A99-807E-9B3BF1D90285}",
-        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
         level: BACKEND_TRACE_LEVEL,
-        selection_reason: "audio engine provider used by multimedia trace profiles; OS audio-engine correlation candidate even when not manifest-registered",
+        role: BackendTraceProviderRole::ClassicOrWmiControl,
+        enabled_in_session: true,
+        selection_reason: "unmanifested audio-engine control GUID used by Microsoft core-audio trace guidance",
         require_registered: false,
     },
     BackendTraceProviderSpec {
-        name: "PortCls-AudioEngineWMI",
-        guid: "{10EB6007-818C-4DB6-A694-B518E589D07A}",
-        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
+        name: "PortCls-AudioEngineWmiTraceControl",
+        guid: PORTCLS_AUDIOENGINE_CONTROL_GUID,
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
         level: BACKEND_TRACE_LEVEL,
-        selection_reason: "GUID embedded in portcls.sys and used by core-audio trace guidance; possible PortCls classic-provider control GUID",
+        role: BackendTraceProviderRole::ClassicOrWmiControl,
+        enabled_in_session: true,
+        selection_reason: "PortCls WMI trace control GUID: embedded in portcls.sys registration path and used by Microsoft core-audio trace guidance",
         require_registered: false,
     },
     BackendTraceProviderSpec {
         name: "PortCls-AudioEngine-WMIEvent",
-        guid: "{97BCD203-6286-4974-801D-A293B921F84B}",
-        keyword_mask: BACKEND_TRACE_KEYWORD_MASK,
-        level: BACKEND_TRACE_LEVEL,
-        selection_reason: "WMI class qualifier for PortCls_AudioEngine / Miniport_AudioEngine_Event; direct miniport engine event candidate",
+        guid: PORTCLS_AUDIOENGINE_EVENT_GUID,
+        keyword_mask: "not-enabled-event-class",
+        level: "not-enabled-event-class",
+        role: BackendTraceProviderRole::WmiEventClass,
+        enabled_in_session: false,
+        selection_reason: "WMI event-class GUID for PortCls_AudioEngine / Miniport_AudioEngine_Event; decoded event identity, not a session control GUID",
+        require_registered: false,
+    },
+    BackendTraceProviderSpec {
+        name: "PortCls-Position-WMIEvent",
+        guid: PORTCLS_POSITION_EVENT_GUID,
+        keyword_mask: "not-enabled-event-class",
+        level: "not-enabled-event-class",
+        role: BackendTraceProviderRole::WmiEventClass,
+        enabled_in_session: false,
+        selection_reason: "WMI event-class GUID for PortCls_Position / PC_Position; event identity only, payload schema not claimed by this decoder",
+        require_registered: false,
+    },
+    BackendTraceProviderSpec {
+        name: "PortCls-Root-WMIEvent",
+        guid: PORTCLS_ROOT_EVENT_GUID,
+        keyword_mask: "not-enabled-event-class",
+        level: "not-enabled-event-class",
+        role: BackendTraceProviderRole::WmiEventClass,
+        enabled_in_session: false,
+        selection_reason: "abstract root WMIEvent class GUID for PortClsEvent; inheritance root only, not a session control GUID",
         require_registered: false,
     },
 ];
@@ -1621,12 +1678,15 @@ struct BackendTracePaths {
     provider_list: PathBuf,
     precheck_log: PathBuf,
     start_log: PathBuf,
+    session_query_log: PathBuf,
     stop_log: PathBuf,
     delete_log: PathBuf,
     convert_log: PathBuf,
     etl: PathBuf,
     xml: PathBuf,
     summary_json: PathBuf,
+    driver_position_events_json: PathBuf,
+    driver_position_correlation_json: PathBuf,
     provider_logs: Vec<(String, PathBuf)>,
 }
 
@@ -1651,12 +1711,15 @@ impl BackendTracePaths {
             provider_list: path("-provider-list.txt"),
             precheck_log: path("-precheck-log.txt"),
             start_log: path("-start-log.txt"),
+            session_query_log: path("-session-query-log.txt"),
             stop_log: path("-stop-log.txt"),
             delete_log: path("-delete-log.txt"),
             convert_log: path("-tracerpt-log.txt"),
             etl: path(".etl"),
             xml: path(".xml"),
             summary_json: path("-summary.json"),
+            driver_position_events_json: path("-driver-position-events.json"),
+            driver_position_correlation_json: path("-driver-position-correlation.json"),
             provider_logs,
         }
     }
@@ -1818,6 +1881,36 @@ fn run_backend_trace_command(
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+struct PortClsMiniportEvent {
+    trace_event_type: u64,
+    miniport_event_ordinal: u64,
+    event_kind: String,
+    data1: u64,
+    data2: u64,
+    data3: u64,
+    data4: u64,
+    system_time: Option<String>,
+    provider_guid: Option<String>,
+    event_guid: Option<String>,
+    level: Option<u64>,
+    opcode: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+struct RvfDriverPositionEvent {
+    source_event_index: usize,
+    schema_id: u64,
+    frequency_hz: u64,
+    capture: bool,
+    pin: u64,
+    device_type: u64,
+    presentation_position_blocks: u64,
+    raw_qpc: u64,
+    raw_qpc_ns: Option<u64>,
+    system_time: Option<String>,
+}
+
 #[derive(Clone, Debug, Default)]
 struct BackendTraceXmlInventory {
     events_total: u64,
@@ -1829,8 +1922,17 @@ struct BackendTraceXmlInventory {
     ae_position_events: u64,
     set_current_timestamp_events: u64,
     glitch_events: u64,
+    binary_event_data_events: u64,
+    miniport_events_total: u64,
+    portcls_events_missing_binary_payload: u64,
+    undecoded_portcls_binary_events: u64,
+    unmodeled_portcls_event_class_events: u64,
+    invalid_rvf_position_events: u64,
+    driver_position_event_overflow: u64,
     rvf_position_events: u64,
     standard_presentation_position_events: u64,
+    miniport_events: Vec<PortClsMiniportEvent>,
+    rvf_driver_position_events: Vec<RvfDriverPositionEvent>,
     perf_freq: Option<u64>,
     start_time: Option<u64>,
     decode_error: Option<String>,
@@ -1849,25 +1951,203 @@ fn extract_trace_data_u64(chunk: &str, name: &str) -> Option<u64> {
     }
 }
 
-fn trace_token_has_rvf_position_schema(token: &str) -> bool {
-    let value = if let Some(hex) = token
-        .strip_prefix("0x")
-        .or_else(|| token.strip_prefix("0X"))
-    {
-        u64::from_str_radix(hex, 16).ok()
-    } else {
-        token.parse::<u64>().ok()
-    };
-    value.is_some_and(|value| {
-        value & 0xffff == RVF_POSITION_ETW_PRESENTATION_POSITION_V1
-            && (100_000..=100_000_000).contains(&(value >> RVF_POSITION_ETW_FREQUENCY_SHIFT))
+fn extract_xml_element_text<'a>(chunk: &'a str, tag: &str) -> Option<&'a str> {
+    let open = format!("<{tag}>");
+    let start = chunk.find(&open)? + open.len();
+    let tail = &chunk[start..];
+    let end = tail.find(&format!("</{tag}>"))?;
+    Some(tail[..end].trim())
+}
+
+fn extract_xml_element_u64(chunk: &str, tag: &str) -> Option<u64> {
+    extract_xml_element_text(chunk, tag)?.parse::<u64>().ok()
+}
+
+fn extract_xml_attribute(chunk: &str, element: &str, attribute: &str) -> Option<String> {
+    let element_start = chunk.find(&format!("<{element}"))?;
+    let tail = &chunk[element_start..];
+    let element_end = tail.find('>')?;
+    let header = &tail[..element_end];
+    let needle = format!("{attribute}=\"");
+    let value_start = header.find(&needle)? + needle.len();
+    let value_tail = &header[value_start..];
+    let value_end = value_tail.find('"')?;
+    Some(value_tail[..value_end].to_owned())
+}
+
+fn decode_hex_bytes(hex: &str) -> Option<Vec<u8>> {
+    if !hex.len().is_multiple_of(2) || hex.is_empty() {
+        return None;
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|index| u8::from_str_radix(hex.get(index..index + 2)?, 16).ok())
+        .collect()
+}
+
+fn read_le_u64(bytes: &[u8], offset: usize) -> Option<u64> {
+    let end = offset.checked_add(8)?;
+    let raw = bytes.get(offset..end)?;
+    Some(u64::from_le_bytes(raw.try_into().ok()?))
+}
+
+fn portcls_miniport_event_kind(ordinal: u64) -> &'static str {
+    match ordinal {
+        0 => "eMINIPORT_IHV_DEFINED",
+        1 => "eMINIPORT_BUFFER_COMPLETE",
+        2 => "eMINIPORT_PIN_STATE",
+        3 => "eMINIPORT_GET_STREAM_POSITION",
+        4 => "eMINIPORT_SET_WAVERT_BUFFER_WRITE_POSITION",
+        5 => "eMINIPORT_GET_PRESENTATION_POSITION",
+        6 => "eMINIPORT_PROGRAM_DMA",
+        7 => "eMINIPORT_GLITCH_REPORT",
+        8 => "eMINIPORT_LAST_BUFFER_RENDERED",
+        9 => "eMINIPORT_PROCESSING_MODE",
+        10 => "eMINIPORT_FX_CLSID",
+        _ => "unknown",
+    }
+}
+
+fn decode_portcls_miniport_payload(
+    hex: &str,
+    system_time: Option<String>,
+    provider_guid: Option<String>,
+    event_guid: Option<String>,
+    level: Option<u64>,
+    opcode: Option<u64>,
+) -> Option<PortClsMiniportEvent> {
+    let bytes = decode_hex_bytes(hex)?;
+    if bytes.len() < PORTCLS_MINIPORT_PAYLOAD_U64S * 8 {
+        return None;
+    }
+    let trace_event_type = read_le_u64(&bytes, 0)?;
+    let miniport_event_ordinal = trace_event_type.checked_sub(PORTCLS_MINIPORT_TRACE_TYPE_BASE)?;
+    if miniport_event_ordinal > PORTCLS_MINIPORT_MAX_ORDINAL {
+        return None;
+    }
+    Some(PortClsMiniportEvent {
+        trace_event_type,
+        miniport_event_ordinal,
+        event_kind: portcls_miniport_event_kind(miniport_event_ordinal).to_owned(),
+        data1: read_le_u64(&bytes, 8)?,
+        data2: read_le_u64(&bytes, 16)?,
+        data3: read_le_u64(&bytes, 24)?,
+        data4: read_le_u64(&bytes, 32)?,
+        system_time,
+        provider_guid,
+        event_guid,
+        level,
+        opcode,
     })
 }
 
-fn chunk_has_rvf_position_schema(chunk: &str) -> bool {
-    chunk
-        .split(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"' | ','))
-        .any(trace_token_has_rvf_position_schema)
+fn qpc_ticks_to_ns(raw_qpc: u64, frequency_hz: u64) -> Option<u64> {
+    if frequency_hz == 0 {
+        return None;
+    }
+    let nanos = u128::from(raw_qpc).saturating_mul(1_000_000_000) / u128::from(frequency_hz);
+    u64::try_from(nanos).ok()
+}
+
+fn rvf_driver_position_from_miniport(
+    source_event_index: usize,
+    event: &PortClsMiniportEvent,
+) -> Option<RvfDriverPositionEvent> {
+    if event.miniport_event_ordinal != 0 {
+        return None;
+    }
+    let (schema_id, frequency_hz) = rvf_position_diagnostic_data1_decode(event.data1);
+    if schema_id != RVF_POSITION_ETW_PRESENTATION_POSITION_V1
+        || !(100_000..=100_000_000).contains(&frequency_hz)
+    {
+        return None;
+    }
+    let (device_type, pin, capture) = rvf_position_pin_facts_decode(event.data2);
+    Some(RvfDriverPositionEvent {
+        source_event_index,
+        schema_id,
+        frequency_hz,
+        capture,
+        pin,
+        device_type,
+        presentation_position_blocks: event.data3,
+        raw_qpc: event.data4,
+        raw_qpc_ns: qpc_ticks_to_ns(event.data4, frequency_hz),
+        system_time: event.system_time.clone(),
+    })
+}
+
+fn guid_eq(value: Option<&str>, expected: &str) -> bool {
+    value.is_some_and(|value| value.eq_ignore_ascii_case(expected))
+}
+
+fn analyze_portcls_event_chunk(
+    chunk: &str,
+    binary_hex: Option<&str>,
+    inventory: &mut BackendTraceXmlInventory,
+) {
+    let system_time = extract_xml_attribute(chunk, "TimeCreated", "SystemTime");
+    let provider_guid = extract_xml_attribute(chunk, "Provider", "Guid");
+    let event_guid = extract_xml_element_text(chunk, "EventGuid").map(str::to_owned);
+    let level = extract_xml_element_u64(chunk, "Level");
+    let opcode = extract_xml_element_u64(chunk, "Opcode");
+    let audioengine_event_identity = if event_guid.is_some() {
+        guid_eq(event_guid.as_deref(), PORTCLS_AUDIOENGINE_EVENT_GUID)
+    } else {
+        guid_eq(provider_guid.as_deref(), PORTCLS_AUDIOENGINE_CONTROL_GUID)
+            || guid_eq(provider_guid.as_deref(), PORTCLS_AUDIOENGINE_EVENT_GUID)
+    };
+    if !audioengine_event_identity {
+        inventory.unmodeled_portcls_event_class_events = inventory
+            .unmodeled_portcls_event_class_events
+            .saturating_add(1);
+        return;
+    }
+    let Some(binary_hex) = binary_hex else {
+        inventory.portcls_events_missing_binary_payload = inventory
+            .portcls_events_missing_binary_payload
+            .saturating_add(1);
+        return;
+    };
+    let Some(event) = decode_portcls_miniport_payload(
+        binary_hex,
+        system_time,
+        provider_guid,
+        event_guid,
+        level,
+        opcode,
+    ) else {
+        inventory.undecoded_portcls_binary_events =
+            inventory.undecoded_portcls_binary_events.saturating_add(1);
+        return;
+    };
+    inventory.miniport_events_total = inventory.miniport_events_total.saturating_add(1);
+    if event.miniport_event_ordinal == 5 {
+        inventory.standard_presentation_position_events = inventory
+            .standard_presentation_position_events
+            .saturating_add(1);
+    }
+    let source_event_index = inventory.miniport_events.len();
+    if event.miniport_event_ordinal == 0 {
+        if let Some(driver_event) = rvf_driver_position_from_miniport(source_event_index, &event) {
+            inventory.rvf_position_events = inventory.rvf_position_events.saturating_add(1);
+            if inventory.rvf_driver_position_events.len() < DRIVER_POSITION_EVENT_LIMIT {
+                inventory.rvf_driver_position_events.push(driver_event);
+            } else {
+                inventory.driver_position_event_overflow =
+                    inventory.driver_position_event_overflow.saturating_add(1);
+            }
+        } else {
+            inventory.invalid_rvf_position_events =
+                inventory.invalid_rvf_position_events.saturating_add(1);
+        }
+    }
+    if inventory.miniport_events.len() < DRIVER_POSITION_EVENT_LIMIT {
+        inventory.miniport_events.push(event);
+    } else {
+        inventory.driver_position_event_overflow =
+            inventory.driver_position_event_overflow.saturating_add(1);
+    }
 }
 
 fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXmlInventory) {
@@ -1876,9 +2156,15 @@ fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXm
     let audio_guid = BACKEND_TRACE_PROVIDERS[0].guid.to_ascii_lowercase();
     let kernel_guid = BACKEND_TRACE_PROVIDERS[1].guid.to_ascii_lowercase();
     let audio_engine_guid = BACKEND_TRACE_PROVIDERS[2].guid.to_ascii_lowercase();
-    let portcls_guid = BACKEND_TRACE_PROVIDERS[3].guid.to_ascii_lowercase();
-    let portcls_event_guid = BACKEND_TRACE_PROVIDERS[4].guid.to_ascii_lowercase();
-    if lower.contains(&portcls_guid) || lower.contains(&portcls_event_guid) {
+    let is_portcls = [
+        PORTCLS_AUDIOENGINE_CONTROL_GUID,
+        PORTCLS_AUDIOENGINE_EVENT_GUID,
+        PORTCLS_POSITION_EVENT_GUID,
+        PORTCLS_ROOT_EVENT_GUID,
+    ]
+    .iter()
+    .any(|guid| lower.contains(&guid.to_ascii_lowercase()));
+    if is_portcls {
         inventory.portcls_provider_events = inventory.portcls_provider_events.saturating_add(1);
     } else if lower.contains(&audio_engine_guid) || lower.contains("audioengine") {
         inventory.audio_engine_provider_events =
@@ -1901,16 +2187,13 @@ fn analyze_backend_trace_event_chunk(chunk: &str, inventory: &mut BackendTraceXm
     if lower.contains("glitch") {
         inventory.glitch_events = inventory.glitch_events.saturating_add(1);
     }
-    if chunk_has_rvf_position_schema(chunk) {
-        inventory.rvf_position_events = inventory.rvf_position_events.saturating_add(1);
+
+    let binary_hex = extract_xml_element_text(chunk, "BinaryEventData");
+    if binary_hex.is_some() {
+        inventory.binary_event_data_events = inventory.binary_event_data_events.saturating_add(1);
     }
-    if lower.contains("get_presentation")
-        || lower.contains("presentation_position")
-        || lower.contains("presentationposition")
-    {
-        inventory.standard_presentation_position_events = inventory
-            .standard_presentation_position_events
-            .saturating_add(1);
+    if is_portcls {
+        analyze_portcls_event_chunk(chunk, binary_hex, inventory);
     }
     if inventory.perf_freq.is_none() {
         inventory.perf_freq = extract_trace_data_u64(chunk, "PerfFreq");
@@ -1951,9 +2234,13 @@ fn backend_trace_driver_coverage(
     xml_present: bool,
 ) -> &'static str {
     if inventory.rvf_position_events != 0 {
-        "driver-diagnostic-event-present"
+        "driver-diagnostic-event-decoded"
     } else if inventory.standard_presentation_position_events != 0 {
-        "standard-miniport-event-present"
+        "standard-miniport-event-decoded"
+    } else if inventory.miniport_events_total != 0 {
+        "miniport-event-decoded-no-position-schema"
+    } else if inventory.portcls_provider_events != 0 {
+        "incomplete-portcls-event-present-undecoded"
     } else if xml_present {
         "incomplete-no-driver-event-decoded"
     } else {
@@ -1975,6 +2262,25 @@ fn backend_trace_bounded_text(value: &str) -> String {
         .collect()
 }
 
+fn backend_trace_provider_file_text() -> String {
+    BACKEND_TRACE_PROVIDERS
+        .iter()
+        .filter(|provider| provider.enabled_in_session)
+        .map(|provider| {
+            format!(
+                "{} {} {}",
+                provider.guid, provider.keyword_mask, provider.level
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        )
+        + "
+"
+}
+
 fn backend_trace_file_size(path: &Path) -> Option<u64> {
     fs::metadata(path).ok().map(|metadata| metadata.len())
 }
@@ -1986,10 +2292,243 @@ fn backend_trace_file_name(path: &Path) -> String {
         .to_owned()
 }
 
+fn clamp_i128_to_i64(value: i128) -> i64 {
+    i64::try_from(value.clamp(i128::from(i64::MIN), i128::from(i64::MAX))).unwrap_or(i64::MAX)
+}
+
+fn driver_event_reference_json(
+    rf_event_index: usize,
+    event: &RvfDriverPositionEvent,
+    callback_ns: Option<i64>,
+) -> serde_json::Value {
+    let delta_ns = callback_ns.and_then(|callback_ns| {
+        let callback_ns = u64::try_from(callback_ns).ok()?;
+        event
+            .raw_qpc_ns
+            .map(|raw_qpc_ns| clamp_i128_to_i64(i128::from(raw_qpc_ns) - i128::from(callback_ns)))
+    });
+    serde_json::json!({
+        "rf_event_index": rf_event_index,
+        "source_event_index": event.source_event_index,
+        "capture": event.capture,
+        "pin": event.pin,
+        "device_type": event.device_type,
+        "frequency_hz": event.frequency_hz,
+        "presentation_position_blocks": event.presentation_position_blocks,
+        "raw_qpc": event.raw_qpc,
+        "raw_qpc_ns": event.raw_qpc_ns,
+        "delta_from_callback_ns": delta_ns,
+        "system_time": event.system_time,
+    })
+}
+
+fn nearest_driver_event(
+    events: &[RvfDriverPositionEvent],
+    capture: bool,
+    callback_ns: i64,
+    before: bool,
+) -> Option<(usize, &RvfDriverPositionEvent)> {
+    let callback_ns = u64::try_from(callback_ns).ok()?;
+    events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| event.capture == capture)
+        .filter(|(_, event)| {
+            event.raw_qpc_ns.is_some_and(|raw_qpc_ns| {
+                if before {
+                    raw_qpc_ns <= callback_ns
+                } else {
+                    raw_qpc_ns >= callback_ns
+                }
+            })
+        })
+        .min_by_key(|(_, event)| {
+            event
+                .raw_qpc_ns
+                .map_or(u64::MAX, |raw| raw.abs_diff(callback_ns))
+        })
+}
+
+fn nearby_driver_events_json(
+    events: &[RvfDriverPositionEvent],
+    capture: bool,
+    callback_ns: i64,
+) -> Vec<serde_json::Value> {
+    let Ok(callback_ns_u64) = u64::try_from(callback_ns) else {
+        return Vec::new();
+    };
+    let mut nearest = events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| event.capture == capture && event.raw_qpc_ns.is_some())
+        .map(|(index, event)| {
+            (
+                index,
+                event,
+                event
+                    .raw_qpc_ns
+                    .map_or(u64::MAX, |raw| raw.abs_diff(callback_ns_u64)),
+            )
+        })
+        .collect::<Vec<_>>();
+    nearest.sort_by_key(|(_, _, distance)| *distance);
+    nearest
+        .into_iter()
+        .take(8)
+        .map(|(index, event, _)| driver_event_reference_json(index, event, Some(callback_ns)))
+        .collect()
+}
+
+fn direction_window_stats_json(
+    events: &[RvfDriverPositionEvent],
+    capture: bool,
+    callback_ns: i64,
+    span_ns: u64,
+) -> serde_json::Value {
+    let Ok(center) = u64::try_from(callback_ns) else {
+        return serde_json::json!({"capture": capture, "status": "callback-ns-negative"});
+    };
+    let lower = center.saturating_sub(span_ns);
+    let upper = center.saturating_add(span_ns);
+    let window = events
+        .iter()
+        .filter(|event| event.capture == capture)
+        .filter(|event| {
+            event
+                .raw_qpc_ns
+                .is_some_and(|raw| (lower..=upper).contains(&raw))
+        })
+        .collect::<Vec<_>>();
+    let mut qpc_negative_steps = 0_u64;
+    let mut position_negative_steps = 0_u64;
+    let mut previous_qpc = None;
+    let mut previous_position = None;
+    for event in &window {
+        if let Some(raw_qpc_ns) = event.raw_qpc_ns {
+            if previous_qpc.is_some_and(|previous| raw_qpc_ns < previous) {
+                qpc_negative_steps = qpc_negative_steps.saturating_add(1);
+            }
+            previous_qpc = Some(raw_qpc_ns);
+        }
+        if previous_position.is_some_and(|previous| event.presentation_position_blocks < previous) {
+            position_negative_steps = position_negative_steps.saturating_add(1);
+        }
+        previous_position = Some(event.presentation_position_blocks);
+    }
+    serde_json::json!({
+        "capture": capture,
+        "window_half_span_ns": span_ns,
+        "event_count": window.len(),
+        "first_raw_qpc_ns": window.first().and_then(|event| event.raw_qpc_ns),
+        "last_raw_qpc_ns": window.last().and_then(|event| event.raw_qpc_ns),
+        "first_presentation_position_blocks": window.first().map(|event| event.presentation_position_blocks),
+        "last_presentation_position_blocks": window.last().map(|event| event.presentation_position_blocks),
+        "qpc_negative_steps_in_xml_order": qpc_negative_steps,
+        "position_negative_steps_in_xml_order": position_negative_steps,
+    })
+}
+
+fn build_driver_position_correlation(
+    probe: &EndpointProbe,
+    inventory: &BackendTraceXmlInventory,
+) -> serde_json::Value {
+    let callback_events = probe.out_timestamp.events();
+    let boundary_cb = probe
+        .out_timestamp
+        .classifier
+        .epoch_boundary_cb
+        .load(Ordering::Relaxed);
+    let diagnostics = render_regression_diagnostics(&callback_events, boundary_cb);
+    let rows = diagnostics
+        .iter()
+        .map(|diagnostic| {
+            let callback_event = callback_events
+                .iter()
+                .find(|event| event.callback_index == diagnostic.callback_index);
+            let callback_ns = callback_event.map(|event| event.callback_ns);
+            let render_before = callback_ns.and_then(|callback_ns| {
+                nearest_driver_event(
+                    &inventory.rvf_driver_position_events,
+                    false,
+                    callback_ns,
+                    true,
+                )
+            });
+            let render_after = callback_ns.and_then(|callback_ns| {
+                nearest_driver_event(
+                    &inventory.rvf_driver_position_events,
+                    false,
+                    callback_ns,
+                    false,
+                )
+            });
+            let capture_before = callback_ns.and_then(|callback_ns| {
+                nearest_driver_event(
+                    &inventory.rvf_driver_position_events,
+                    true,
+                    callback_ns,
+                    true,
+                )
+            });
+            let capture_after = callback_ns.and_then(|callback_ns| {
+                nearest_driver_event(
+                    &inventory.rvf_driver_position_events,
+                    true,
+                    callback_ns,
+                    false,
+                )
+            });
+            serde_json::json!({
+                "callback_index": diagnostic.callback_index,
+                "effective_regression": !diagnostic.startup_grace,
+                "epoch": diagnostic.epoch,
+                "epoch_callback_offset": diagnostic.epoch_callback_offset,
+                "startup_grace": diagnostic.startup_grace,
+                "callback_ns": callback_ns,
+                "reference_callback_index": diagnostic.reference_callback_index,
+                "reference_callback_ns": diagnostic.reference_callback_ns,
+                "regression_backstep_ns": diagnostic.regression_backstep_ns,
+                "backend_two_step_ns": diagnostic.backend_two_step_ns,
+                "host_two_step_ns": diagnostic.host_two_step_ns,
+                "supply_two_step_frames": diagnostic.supply_two_step_frames,
+                "playback_lead_before_ns": diagnostic.playback_lead_before_ns,
+                "playback_lead_ns": diagnostic.playback_lead_ns,
+                "playback_lead_after_ns": diagnostic.playback_lead_after_ns,
+                "playback_interval_ns": diagnostic.playback_interval_ns,
+                "next_playback_interval_ns": diagnostic.next_playback_interval_ns,
+                "render_driver_event_before": render_before.map(|(index, event)| driver_event_reference_json(index, event, callback_ns)),
+                "render_driver_event_after": render_after.map(|(index, event)| driver_event_reference_json(index, event, callback_ns)),
+                "capture_driver_event_before": capture_before.map(|(index, event)| driver_event_reference_json(index, event, callback_ns)),
+                "capture_driver_event_after": capture_after.map(|(index, event)| driver_event_reference_json(index, event, callback_ns)),
+                "nearby_render_driver_events": callback_ns.map_or_else(Vec::new, |callback_ns| nearby_driver_events_json(&inventory.rvf_driver_position_events, false, callback_ns)),
+                "nearby_capture_driver_events": callback_ns.map_or_else(Vec::new, |callback_ns| nearby_driver_events_json(&inventory.rvf_driver_position_events, true, callback_ns)),
+                "render_window_stats": callback_ns.map_or_else(|| serde_json::json!({"status":"missing-callback-ns"}), |callback_ns| direction_window_stats_json(&inventory.rvf_driver_position_events, false, callback_ns, 20_000_000)),
+                "capture_window_stats": callback_ns.map_or_else(|| serde_json::json!({"status":"missing-callback-ns"}), |callback_ns| direction_window_stats_json(&inventory.rvf_driver_position_events, true, callback_ns, 20_000_000)),
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "schema": "rf1034-driver-position-correlation/v1",
+        "diagnostic_artifact": true,
+        "not_run_metadata_schema": true,
+        "case": ROUNDTRIP_AUDIO_CASE_ID,
+        "path": ROUNDTRIP_OUTPUT_PATH,
+        "clock_conversion": "driver raw_qpc_ns = floor(raw_qpc * 1e9 / frequency_hz); callback ns are cpal StreamInstant values derived from WASAPI qpc_position 100ns units multiplied by 100; correlation assumes both are QPC-derived. ETW perf clock to host Instant calibration remains unresolved.",
+        "raw_regressions": probe.out_timestamp.raw_regressions(),
+        "effective_regressions": probe.out_timestamp.effective_regressions(),
+        "epoch_boundary_cb": boundary_cb,
+        "decoded_rvf_driver_position_events": inventory.rvf_position_events,
+        "stored_rvf_driver_position_events": inventory.rvf_driver_position_events.len(),
+        "driver_position_event_overflow": inventory.driver_position_event_overflow,
+        "regressions": rows,
+    })
+}
+
 struct BackendOsTraceControl {
     pair_index: usize,
     session_name: String,
     host_origin: Instant,
+    probe: Option<Arc<EndpointProbe>>,
     artifact_dir: Option<PathBuf>,
     artifact_dir_source: Option<&'static str>,
     paths: Option<BackendTracePaths>,
@@ -2005,12 +2544,39 @@ struct BackendOsTraceControl {
     xml_present: bool,
 }
 
+fn backend_trace_xml_inventory_json(inventory: &BackendTraceXmlInventory) -> serde_json::Value {
+    serde_json::json!({
+        "events_total": inventory.events_total,
+        "audio_provider_events": inventory.audio_provider_events,
+        "kernel_streaming_provider_events": inventory.kernel_streaming_provider_events,
+        "audio_engine_provider_events": inventory.audio_engine_provider_events,
+        "portcls_provider_events": inventory.portcls_provider_events,
+        "other_provider_events": inventory.other_provider_events,
+        "ae_position_events": inventory.ae_position_events,
+        "set_current_timestamp_events": inventory.set_current_timestamp_events,
+        "glitch_events": inventory.glitch_events,
+        "binary_event_data_events": inventory.binary_event_data_events,
+        "miniport_events_total": inventory.miniport_events_total,
+        "portcls_events_missing_binary_payload": inventory.portcls_events_missing_binary_payload,
+        "undecoded_portcls_binary_events": inventory.undecoded_portcls_binary_events,
+        "unmodeled_portcls_event_class_events": inventory.unmodeled_portcls_event_class_events,
+        "invalid_rvf_position_events": inventory.invalid_rvf_position_events,
+        "driver_position_event_overflow": inventory.driver_position_event_overflow,
+        "rvf_position_events": inventory.rvf_position_events,
+        "standard_presentation_position_events": inventory.standard_presentation_position_events,
+        "stored_miniport_events": inventory.miniport_events.len(),
+        "stored_rvf_driver_position_events": inventory.rvf_driver_position_events.len(),
+        "decode_error": inventory.decode_error,
+    })
+}
+
 impl BackendOsTraceControl {
     fn new(pair_index: usize, host_origin: Instant) -> Self {
         Self {
             pair_index,
             session_name: backend_trace_session_name(pair_index),
             host_origin,
+            probe: None,
             artifact_dir: None,
             artifact_dir_source: None,
             paths: None,
@@ -2089,17 +2655,7 @@ impl BackendOsTraceControl {
             self.commands.push(observation);
         }
 
-        let provider_list = BACKEND_TRACE_PROVIDERS
-            .iter()
-            .map(|provider| {
-                format!(
-                    "{} {} {}",
-                    provider.guid, provider.keyword_mask, provider.level
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n";
+        let provider_list = backend_trace_provider_file_text();
         if let Err(error) = write_artifact_bytes(&paths.provider_list, provider_list.as_bytes()) {
             self.notes.push(error);
             return false;
@@ -2178,6 +2734,19 @@ impl BackendOsTraceControl {
             return;
         }
         self.commands.push(start);
+        let session_query = run_backend_trace_command(
+            "logman_query_session",
+            "logman.exe",
+            &["query", &self.session_name, "-ets"],
+            Some(&paths.session_query_log),
+        );
+        if !session_query.success {
+            self.notes.push(format!(
+                "logman session query failed exit={:?} error={:?}",
+                session_query.exit_code, session_query.error
+            ));
+        }
+        self.commands.push(session_query);
         self.started = true;
         "incomplete".clone_into(&mut self.status);
     }
@@ -2213,7 +2782,7 @@ impl BackendOsTraceControl {
                 let convert = run_backend_trace_command(
                     "tracerpt_xml",
                     "tracerpt.exe",
-                    &[&etl, "-o", &xml, "-of", "XML"],
+                    &[&etl, "-o", &xml, "-of", "XML", "-lr"],
                     Some(&paths.convert_log),
                 );
                 let convert_success = convert.success;
@@ -2242,6 +2811,7 @@ impl BackendOsTraceControl {
             }
         }
         self.stop_after_calibration = Some(backend_trace_calibration(self.host_origin));
+        self.write_driver_position_sidecars();
         self.write_summary();
         for line in self.diagnostic_lines() {
             eprintln!("{line}");
@@ -2267,7 +2837,7 @@ impl BackendOsTraceControl {
         let notes = backend_trace_bounded_text(&self.notes.join(";"));
         vec![
             format!(
-                "roundtrip_backend_os_trace: {context}status={} coverage={} session={} artifact_dir_source={} etl={} etl_bytes={} xml={} xml_bytes={} summary={} provider_events_audio={} provider_events_kernelstreaming={} provider_events_audioengine={} provider_events_portcls={} ae_position_events={} set_current_timestamp_events={} glitch_events={} rvf_position_events={} standard_presentation_position_events={} start_exit={} stop_exit={} delete_exit={} tracerpt_exit={} notes={}",
+                "roundtrip_backend_os_trace: {context}status={} coverage={} session={} artifact_dir_source={} etl={} etl_bytes={} xml={} xml_bytes={} summary={} provider_events_audio={} provider_events_kernelstreaming={} provider_events_audioengine={} provider_events_portcls={} ae_position_events={} set_current_timestamp_events={} glitch_events={} rvf_position_events={} standard_presentation_position_events={} miniport_events_total={} portcls_missing_payload={} portcls_undecoded_binary={} invalid_rvf_position_events={} driver_position_event_overflow={} start_exit={} stop_exit={} delete_exit={} tracerpt_exit={} notes={}",
                 self.status,
                 self.driver_coverage(),
                 backend_trace_bounded_text(&self.session_name),
@@ -2292,6 +2862,11 @@ impl BackendOsTraceControl {
                 self.xml_inventory.glitch_events,
                 self.xml_inventory.rvf_position_events,
                 self.xml_inventory.standard_presentation_position_events,
+                self.xml_inventory.miniport_events_total,
+                self.xml_inventory.portcls_events_missing_binary_payload,
+                self.xml_inventory.undecoded_portcls_binary_events,
+                self.xml_inventory.invalid_rvf_position_events,
+                self.xml_inventory.driver_position_event_overflow,
                 self.command_exit("logman_start")
                     .map_or_else(|| "none".to_owned(), |code| code.to_string()),
                 self.command_exit("logman_stop")
@@ -2326,6 +2901,66 @@ impl BackendOsTraceControl {
         ]
     }
 
+    fn write_driver_position_sidecars(&mut self) {
+        let Some(paths) = self.paths.clone() else {
+            return;
+        };
+        let Some(probe) = self.probe.clone() else {
+            self.notes
+                .push("driver-position sidecar skipped: probe unavailable".to_owned());
+            return;
+        };
+        let events = serde_json::json!({
+            "schema": "rf1034-driver-position-events/v1",
+            "diagnostic_artifact": true,
+            "not_run_metadata_schema": true,
+            "case": ROUNDTRIP_AUDIO_CASE_ID,
+            "path": ROUNDTRIP_OUTPUT_PATH,
+            "pair": self.pair_index,
+            "session": self.session_name,
+            "trace_status": self.status,
+            "driver_event_coverage": self.driver_coverage(),
+            "payload_layout": "PortCls EVENT_TRACE_HEADER uses WNODE_FLAG_USE_MOF_PTR; tracerpt BinaryEventData is the referenced 0x30-byte little-endian block: u64 trace_event_type, u64 data1, u64 data2, u64 data3, u64 data4, u64 trailing_zero",
+            "trace_event_type_base": PORTCLS_MINIPORT_TRACE_TYPE_BASE,
+            "miniport_event_counts": {
+                "total_decoded": self.xml_inventory.miniport_events_total,
+                "stored": self.xml_inventory.miniport_events.len(),
+                "standard_presentation_position": self.xml_inventory.standard_presentation_position_events,
+                "rf_position_schema": self.xml_inventory.rvf_position_events,
+                "invalid_rvf_position_schema": self.xml_inventory.invalid_rvf_position_events,
+                "missing_binary_payload": self.xml_inventory.portcls_events_missing_binary_payload,
+                "undecoded_binary_payload": self.xml_inventory.undecoded_portcls_binary_events,
+                "storage_overflow": self.xml_inventory.driver_position_event_overflow,
+            },
+            "miniport_events": self.xml_inventory.miniport_events.clone(),
+            "rf_driver_position_events": self.xml_inventory.rvf_driver_position_events.clone(),
+        });
+        match serde_json::to_vec_pretty(&events) {
+            Ok(bytes) => {
+                if let Err(error) = write_artifact_bytes(&paths.driver_position_events_json, &bytes)
+                {
+                    self.notes.push(error);
+                }
+            }
+            Err(error) => self.notes.push(format!(
+                "driver-position events json serialization failed: {error}"
+            )),
+        }
+        let correlation = build_driver_position_correlation(&probe, &self.xml_inventory);
+        match serde_json::to_vec_pretty(&correlation) {
+            Ok(bytes) => {
+                if let Err(error) =
+                    write_artifact_bytes(&paths.driver_position_correlation_json, &bytes)
+                {
+                    self.notes.push(error);
+                }
+            }
+            Err(error) => self.notes.push(format!(
+                "driver-position correlation json serialization failed: {error}"
+            )),
+        }
+    }
+
     fn write_summary(&mut self) {
         let Some(paths) = self.paths.clone() else {
             return;
@@ -2353,6 +2988,8 @@ impl BackendOsTraceControl {
                     "guid": provider.guid,
                     "keyword_mask": provider.keyword_mask,
                     "level": provider.level,
+                    "role": provider.role.as_str(),
+                    "enabled_in_session": provider.enabled_in_session,
                     "selection_reason": provider.selection_reason,
                 })
             })
@@ -2379,11 +3016,14 @@ impl BackendOsTraceControl {
                 "provider_list": file_entry(&paths.provider_list),
                 "precheck_log": file_entry(&paths.precheck_log),
                 "start_log": file_entry(&paths.start_log),
+                "session_query_log": file_entry(&paths.session_query_log),
                 "stop_log": file_entry(&paths.stop_log),
                 "delete_log": file_entry(&paths.delete_log),
                 "convert_log": file_entry(&paths.convert_log),
                 "etl": file_entry(&paths.etl),
                 "xml": file_entry(&paths.xml),
+                "driver_position_events_json": file_entry(&paths.driver_position_events_json),
+                "driver_position_correlation_json": file_entry(&paths.driver_position_correlation_json),
             },
             "commands": commands,
             "calibration": {
@@ -2396,20 +3036,7 @@ impl BackendOsTraceControl {
                 "etw_header_start_time": self.xml_inventory.start_time,
                 "conversion": "unresolved unless ETW perf clock and host Instant relationship is independently established",
             },
-            "xml_inventory": {
-                "events_total": self.xml_inventory.events_total,
-                "audio_provider_events": self.xml_inventory.audio_provider_events,
-                "kernel_streaming_provider_events": self.xml_inventory.kernel_streaming_provider_events,
-                "audio_engine_provider_events": self.xml_inventory.audio_engine_provider_events,
-                "portcls_provider_events": self.xml_inventory.portcls_provider_events,
-                "other_provider_events": self.xml_inventory.other_provider_events,
-                "ae_position_events": self.xml_inventory.ae_position_events,
-                "set_current_timestamp_events": self.xml_inventory.set_current_timestamp_events,
-                "glitch_events": self.xml_inventory.glitch_events,
-                "rvf_position_events": self.xml_inventory.rvf_position_events,
-                "standard_presentation_position_events": self.xml_inventory.standard_presentation_position_events,
-                "decode_error": self.xml_inventory.decode_error,
-            },
+            "xml_inventory": backend_trace_xml_inventory_json(&self.xml_inventory),
             "notes": self.notes,
         });
         match serde_json::to_vec_pretty(&summary) {
@@ -2431,8 +3058,13 @@ impl Drop for BackendOsTraceControl {
     }
 }
 
-fn start_backend_os_trace(pair_index: usize, host_origin: Instant) -> BackendOsTraceControl {
+fn start_backend_os_trace(
+    pair_index: usize,
+    host_origin: Instant,
+    probe: &Arc<EndpointProbe>,
+) -> BackendOsTraceControl {
     let mut control = BackendOsTraceControl::new(pair_index, host_origin);
+    control.probe = Some(Arc::clone(probe));
     control.start();
     control
 }
@@ -3864,7 +4496,8 @@ fn run_audio_round_trip(pair: Pair, pair_index: usize) -> Result<(u32, u32), Vec
     )
     .map_err(|error| vec![format!("fixture construction failed: {error}")])?;
 
-    let mut backend_trace = start_backend_os_trace(pair_index, probe.out_timestamp.host_origin);
+    let mut backend_trace =
+        start_backend_os_trace(pair_index, probe.out_timestamp.host_origin, &probe);
 
     let in_stream = match open_input_with_fallback(capture.device.as_ref(), in_format, &probe) {
         Ok(stream) => stream,
@@ -4507,8 +5140,94 @@ fn backend_trace_artifact_dir_failure_is_honest() {
     assert!(error.contains("no artifact directory"));
 }
 
+fn portcls_binary_payload_hex(
+    trace_event_type: u64,
+    data1: u64,
+    data2: u64,
+    data3: u64,
+    data4: u64,
+) -> String {
+    let mut bytes = Vec::new();
+    for value in [trace_event_type, data1, data2, data3, data4, 0] {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut out, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(&mut out, "{byte:02X}");
+            out
+        })
+}
+
+fn portcls_binary_event_chunk(binary_hex: &str) -> String {
+    format!(
+        r#"<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+<System>
+<Provider Name="PortCls-AudioEngineWmiTraceControl" Guid="{{10EB6007-818C-4DB6-A694-B518E589D07A}}" />
+<EventID>0</EventID>
+<Version>0</Version>
+<Level>5</Level>
+<Task>0</Task>
+<Opcode>96</Opcode>
+<Keywords>0x0</Keywords>
+<TimeCreated SystemTime="2026-11-27T00:00:00.000000000+00:00" />
+</System>
+<BinaryEventData>{binary_hex}</BinaryEventData>
+<ExtendedTracingInfo xmlns="http://schemas.microsoft.com/win/2004/08/events/trace">
+<EventGuid>{{97BCD203-6286-4974-801D-A293B921F84B}}</EventGuid>
+</ExtendedTracingInfo>
+</Event>
+"#
+    )
+}
+
 #[test]
-fn backend_trace_etw_field_packing_round_trip() {
+fn backend_trace_provider_matrix_separates_control_and_event_guids() {
+    let enabled = BACKEND_TRACE_PROVIDERS
+        .iter()
+        .filter(|provider| provider.enabled_in_session)
+        .collect::<Vec<_>>();
+    assert_eq!(enabled.len(), 4);
+    assert!(
+        enabled
+            .iter()
+            .all(|provider| provider.keyword_mask == BACKEND_TRACE_KEYWORD_MASK_ALL)
+    );
+    assert!(
+        enabled
+            .iter()
+            .any(|provider| provider.guid == PORTCLS_AUDIOENGINE_CONTROL_GUID)
+    );
+    assert!(
+        enabled
+            .iter()
+            .all(|provider| provider.guid != PORTCLS_AUDIOENGINE_EVENT_GUID)
+    );
+    let event_class = BACKEND_TRACE_PROVIDERS
+        .iter()
+        .find(|provider| provider.guid == PORTCLS_AUDIOENGINE_EVENT_GUID)
+        .expect("PortCls_AudioEngine event class matrix entry");
+    assert_eq!(event_class.role, BackendTraceProviderRole::WmiEventClass);
+    let control = BACKEND_TRACE_PROVIDERS
+        .iter()
+        .find(|provider| provider.guid == PORTCLS_AUDIOENGINE_CONTROL_GUID)
+        .expect("PortCls WMI trace control matrix entry");
+    assert_eq!(control.role, BackendTraceProviderRole::ClassicOrWmiControl);
+
+    let provider_file = backend_trace_provider_file_text();
+    assert_eq!(provider_file.lines().count(), 4);
+    assert!(provider_file.contains(PORTCLS_AUDIOENGINE_CONTROL_GUID));
+    assert!(!provider_file.contains(PORTCLS_AUDIOENGINE_EVENT_GUID));
+    assert!(
+        provider_file
+            .lines()
+            .all(|line| line.contains(BACKEND_TRACE_KEYWORD_MASK_ALL))
+    );
+}
+
+#[test]
+fn backend_trace_etw_field_packing_and_binary_decode_round_trip() {
     let frequency = 10_000_000_u64;
     let data1 = rvf_position_diagnostic_data1(RVF_POSITION_ETW_PRESENTATION_POSITION_V1, frequency);
     assert_eq!(
@@ -4519,11 +5238,80 @@ fn backend_trace_etw_field_packing_round_trip() {
     assert_eq!(rvf_position_pin_facts_decode(pin_facts), (7, 3, true));
     let render_facts = rvf_position_pin_facts(7, 3, false);
     assert_eq!(rvf_position_pin_facts_decode(render_facts), (7, 3, false));
-    assert!(chunk_has_rvf_position_schema(&data1.to_string()));
-    assert!(chunk_has_rvf_position_schema("0x9896802001"));
-    assert!(!chunk_has_rvf_position_schema("0x9896802002"));
-    assert!(!chunk_has_rvf_position_schema("8193"));
-    assert!(!chunk_has_rvf_position_schema("5242888193"));
+
+    let raw_qpc = 987_654_321_u64;
+    let payload = portcls_binary_payload_hex(96, data1, pin_facts, 12_345, raw_qpc);
+    let chunk = portcls_binary_event_chunk(&payload);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(&chunk, &mut inventory);
+    assert_eq!(inventory.portcls_provider_events, 1);
+    assert_eq!(inventory.miniport_events_total, 1);
+    assert_eq!(inventory.rvf_position_events, 1);
+    assert_eq!(inventory.undecoded_portcls_binary_events, 0);
+    assert_eq!(inventory.invalid_rvf_position_events, 0);
+    let event = inventory
+        .rvf_driver_position_events
+        .first()
+        .expect("decoded rf driver position event");
+    assert_eq!(event.schema_id, RVF_POSITION_ETW_PRESENTATION_POSITION_V1);
+    assert_eq!(event.frequency_hz, frequency);
+    assert!(event.capture);
+    assert_eq!((event.device_type, event.pin), (7, 3));
+    assert_eq!(event.presentation_position_blocks, 12_345);
+    assert_eq!(event.raw_qpc, raw_qpc);
+    assert_eq!(event.raw_qpc_ns, Some(98_765_432_100));
+}
+
+#[test]
+fn backend_trace_standard_miniport_binary_decode_is_distinct() {
+    let payload = portcls_binary_payload_hex(101, 111, 222, 12_345, 0);
+    let chunk = portcls_binary_event_chunk(&payload);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(&chunk, &mut inventory);
+    assert_eq!(inventory.miniport_events_total, 1);
+    assert_eq!(inventory.standard_presentation_position_events, 1);
+    assert_eq!(inventory.rvf_position_events, 0);
+    let event = inventory
+        .miniport_events
+        .first()
+        .expect("standard miniport event");
+    assert_eq!(event.event_kind, "eMINIPORT_GET_PRESENTATION_POSITION");
+    assert_eq!(
+        (event.data1, event.data2, event.data3, event.data4),
+        (111, 222, 12_345, 0)
+    );
+}
+
+#[test]
+fn backend_trace_rvf_decode_rejects_token_scan_false_positives() {
+    let frequency = 10_000_000_u64;
+    let valid_data1 =
+        rvf_position_diagnostic_data1(RVF_POSITION_ETW_PRESENTATION_POSITION_V1, frequency);
+    let mut inventory = BackendTraceXmlInventory::default();
+    let token_only = format!(
+        "<Event xmlns=\"x\"><System><Provider Name=\"PortCls-AudioEngineWmiTraceControl\" Guid=\"{PORTCLS_AUDIOENGINE_CONTROL_GUID}\" /></System><EventData><Data Name=\"token\">{valid_data1}</Data></EventData><ExtendedTracingInfo><EventGuid>{PORTCLS_AUDIOENGINE_EVENT_GUID}</EventGuid></ExtendedTracingInfo></Event>"
+    );
+    analyze_backend_trace_event_chunk(&token_only, &mut inventory);
+    assert_eq!(inventory.rvf_position_events, 0);
+    assert_eq!(inventory.portcls_events_missing_binary_payload, 1);
+
+    let wrong_schema = rvf_position_diagnostic_data1(0x2002, frequency);
+    let payload = portcls_binary_payload_hex(96, wrong_schema, 0, 0, 0);
+    let chunk = portcls_binary_event_chunk(&payload);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(&chunk, &mut inventory);
+    assert_eq!(inventory.miniport_events_total, 1);
+    assert_eq!(inventory.rvf_position_events, 0);
+    assert_eq!(inventory.invalid_rvf_position_events, 1);
+
+    let implausible_frequency =
+        rvf_position_diagnostic_data1(RVF_POSITION_ETW_PRESENTATION_POSITION_V1, 1);
+    let payload = portcls_binary_payload_hex(96, implausible_frequency, 0, 0, 0);
+    let chunk = portcls_binary_event_chunk(&payload);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(&chunk, &mut inventory);
+    assert_eq!(inventory.rvf_position_events, 0);
+    assert_eq!(inventory.invalid_rvf_position_events, 1);
 }
 
 #[test]
