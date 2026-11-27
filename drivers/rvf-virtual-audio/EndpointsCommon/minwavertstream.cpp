@@ -14,6 +14,14 @@
 #define RVF_XRUN_START_PACKET_MAX               4096
 #define RVF_XRUN_PACKET_COUNT_MAX               16
 
+// IHV-defined ETW diagnostic ids. These events are diagnostics only; they
+// are bounded per stream/run and are not part of the xrun oracle.
+#define RVF_XRUN_ETW_SCENARIO_SNAPSHOT          0x1001
+#define RVF_XRUN_ETW_ZERO_RANGE                 0x1002
+#define RVF_XRUN_ETW_SUPPRESSION_TRANSITION     0x1003
+#define RVF_XRUN_ETW_ZERO_FILL_BOUNDARY         0x1004
+#define RVF_XRUN_ETW_OS_PACKET_GAP              0x1005
+
 #pragma warning (disable : 4127)
 
 //=============================================================================
@@ -167,6 +175,21 @@ NTSTATUS CMiniportWaveRTStream::ReadRegistrySettings()
 
     if (!NT_SUCCESS(ntStatus))
     {
+        if (m_pMiniport != NULL)
+        {
+            ULONGLONG pinFacts =
+                ((ULONGLONG)m_pMiniport->m_DeviceType << 16) |
+                ((ULONGLONG)m_ulPin << 8) |
+                ((m_pMiniport->m_DeviceType == eMicInDevice &&
+                  m_ulPin == KSPIN_WAVEIN_HOST &&
+                  m_pMiniport->IsSystemCapturePin(m_ulPin)) ? 1ULL : 0ULL);
+            m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
+                eMINIPORT_IHV_DEFINED,
+                RVF_XRUN_ETW_SCENARIO_SNAPSHOT,
+                pinFacts,
+                0,
+                (ULONGLONG)ntStatus);
+        }
         return ntStatus;
     }
 
@@ -221,6 +244,24 @@ NTSTATUS CMiniportWaveRTStream::ReadRegistrySettings()
     if (DriverKey)
     {
         ZwClose(DriverKey);
+    }
+
+    if (m_pMiniport != NULL)
+    {
+        ULONGLONG pinFacts =
+            ((ULONGLONG)m_pMiniport->m_DeviceType << 16) |
+            ((ULONGLONG)m_ulPin << 8) |
+            (m_bXrunInjectionTarget ? 1ULL : 0ULL);
+        ULONGLONG scenarioFacts =
+            ((ULONGLONG)m_ulXrunScenario << 32) |
+            ((ULONGLONG)m_ulXrunStartPacket << 8) |
+            (ULONGLONG)m_ulXrunPacketCount;
+        m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
+            eMINIPORT_IHV_DEFINED,
+            RVF_XRUN_ETW_SCENARIO_SNAPSHOT,
+            pinFacts,
+            scenarioFacts,
+            (ULONGLONG)ntStatus);
     }
 
     return ntStatus;
@@ -322,6 +363,9 @@ Return Value:
     m_ullXrunWriteBytePosition = 0;
     m_ullXrunZeroStartByte = 0;
     m_ullXrunZeroEndByte = 0;
+    m_bXrunNotificationSuppressed = FALSE;
+    m_ulXrunZeroFillState = 0;
+    m_ulXrunDroppedPacketEvents = 0;
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
     m_SidebandOpen = FALSE;
@@ -662,6 +706,12 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
         m_ullXrunZeroStartByte = (ULONGLONG)m_ulXrunStartPacket * packetBytes;
         m_ullXrunZeroEndByte =
             (ULONGLONG)(m_ulXrunStartPacket + m_ulXrunPacketCount) * packetBytes;
+        m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
+            eMINIPORT_IHV_DEFINED,
+            RVF_XRUN_ETW_ZERO_RANGE,
+            ((ULONGLONG)packetBytes << 8) | NotificationCount_,
+            m_ullXrunZeroStartByte,
+            m_ullXrunZeroEndByte);
     }
     m_ullXrunCompletionIndex = 0;
     m_ullXrunWriteBytePosition = 0;
@@ -919,6 +969,12 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
+    m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
+        eMINIPORT_IHV_DEFINED,
+        RVF_XRUN_ETW_ZERO_RANGE,
+        0,
+        0,
+        0);
 
     //
     // Publish the render DMA buffer to the adapter loopback registry so
@@ -1067,9 +1123,15 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // If more than one packet has transferred since the last packet read by
     // the OS, then those were dropped. That is, a glitch occurred.
     droppedPackets = availablePacketNumber - m_ulLastOsReadPacket - 1;
-    if (droppedPackets > 0)
+    if (droppedPackets > 0 && m_ulXrunDroppedPacketEvents < 16)
     {
-        // Trace a glitch
+        m_ulXrunDroppedPacketEvents++;
+        m_pMiniport->GetAdapterCommObj()->WriteEtwEvent(
+            eMINIPORT_IHV_DEFINED,
+            RVF_XRUN_ETW_OS_PACKET_GAP,
+            (ULONGLONG)droppedPackets,
+            (ULONGLONG)availablePacketNumber,
+            (ULONGLONG)m_ulLastOsReadPacket);
     }
 
     // Return next packet number to be read
@@ -1307,6 +1369,9 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 m_ullPresentationPosition = 0;
                 m_ullXrunCompletionIndex = 0;
                 m_ullXrunWriteBytePosition = 0;
+                m_bXrunNotificationSuppressed = FALSE;
+                m_ulXrunZeroFillState = 0;
+                m_ulXrunDroppedPacketEvents = 0;
             }
             else
             {
@@ -1724,9 +1789,33 @@ ByteDisplacement - # of bytes to process.
                     }
                 }
 
+                ULONGLONG chunkEnd = position + chunk;
                 if (zeroChunk)
                 {
+                    if (m_ulXrunZeroFillState == 0)
+                    {
+                        pAdapterComm->WriteEtwEvent(
+                            eMINIPORT_IHV_DEFINED,
+                            RVF_XRUN_ETW_ZERO_FILL_BOUNDARY,
+                            1,
+                            position,
+                            chunkEnd);
+                    }
                     RtlZeroMemory(m_pDmaBuffer + bufferOffset + runOffset, chunk);
+                    if (chunkEnd >= m_ullXrunZeroEndByte)
+                    {
+                        pAdapterComm->WriteEtwEvent(
+                            eMINIPORT_IHV_DEFINED,
+                            RVF_XRUN_ETW_ZERO_FILL_BOUNDARY,
+                            2,
+                            position,
+                            chunkEnd);
+                        m_ulXrunZeroFillState = 2;
+                    }
+                    else
+                    {
+                        m_ulXrunZeroFillState = 1;
+                    }
                 }
                 else
                 {
@@ -2002,6 +2091,8 @@ TimerNotifyRT
 
     _this->UpdatePosition(qpc);
 
+    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
+
     if (_this->m_bXrunInjectionTarget &&
         bufferCompleted &&
         _this->m_KsState == KSSTATE_RUN)
@@ -2015,6 +2106,17 @@ TimerNotifyRT
             completionIndex < suppressionEndPacket)
         {
             suppressNotification = TRUE;
+        }
+
+        if ((suppressNotification != FALSE) != (_this->m_bXrunNotificationSuppressed != FALSE))
+        {
+            _this->m_bXrunNotificationSuppressed = suppressNotification;
+            pAdapterComm->WriteEtwEvent(
+                eMINIPORT_IHV_DEFINED,
+                RVF_XRUN_ETW_SUPPRESSION_TRANSITION,
+                completionIndex,
+                suppressNotification ? 1ULL : 0ULL,
+                suppressionEndPacket);
         }
 
         _this->m_ullXrunCompletionIndex++;
@@ -2041,8 +2143,6 @@ TimerNotifyRT
     {
         goto End;
     }
-
-    PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
 
     // Simple buffer underrun detection.
     if (!_this->IsCurrentWaveRTWritePositionUpdated() && !_this->m_bEoSReceived)

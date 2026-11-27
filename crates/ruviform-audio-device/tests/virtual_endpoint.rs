@@ -61,16 +61,16 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ruviform_audio_core::device::{
-    BufferSize, Device, DeviceEnumerator, DeviceError, InputCallbackInfo, InputDataCallback,
-    InputErrorCallback, InputStream, InputStreamConfig, OutputCallbackInfo, OutputDataCallback,
-    OutputErrorCallback, OutputStream, OutputStreamConfig, SupportedInputFormat,
-    SupportedOutputFormat, same_clock_domain,
+    BufferSize, DEVICE_CLOCK_TIMEBASE, Device, DeviceEnumerator, DeviceError, InputCallbackInfo,
+    InputDataCallback, InputErrorCallback, InputStream, InputStreamConfig, InputTimestamp,
+    OutputCallbackInfo, OutputDataCallback, OutputErrorCallback, OutputStream, OutputStreamConfig,
+    SupportedInputFormat, SupportedOutputFormat, same_clock_domain,
 };
 use ruviform_audio_core::{
     AudioBufferView, AudioBufferViewMut, AudioFormat, ChannelLayout, SampleFormat, SampleRate,
 };
 use ruviform_audio_device::{Host, default_host};
-use ruviform_media_core::ClockDomainId;
+use ruviform_media_core::{ClockDomainId, MediaTime, MediaTimestamp};
 
 /// How long each pair streams the stimulus.
 const CAPTURE_SECONDS: u64 = 3;
@@ -95,6 +95,198 @@ const EPOCH_START_GRACE_CALLBACKS: u64 = 24;
 /// edge transients; raw regressions past this bound cannot be
 /// classified and stay fatal.
 const REGRESSION_INDEX_SLOTS: usize = 32;
+/// Bounded input-callback diagnostic trace depth. Ninety-six entries
+/// cover injection starts through packet 20 with enough surrounding
+/// packets to compare pre-injection, injection, and recovery timing.
+const INPUT_CALLBACK_TRACE_SLOTS: usize = 96;
+/// Bounded input-error diagnostic trace depth.
+const INPUT_ERROR_TRACE_SLOTS: usize = 16;
+/// Sentinel used in fixed atomic trace slots when a delta cannot exist
+/// (the first position-bearing callback, a missing position, or the
+/// first callback timestamp). Kept outside the clamped representable
+/// diagnostic delta range so a real backward jump cannot collide with it.
+const INPUT_TRACE_NO_DELTA: i64 = i64::MIN;
+/// Conservative adjacent-callback burst threshold. Wake grouping is not
+/// exposed by the stream contract, so sub-2 ms adjacent delivery is the
+/// only harness-local evidence of a coalesced wake burst.
+const XRUN_BURST_THRESHOLD_NS: i64 = 2_000_000;
+
+/// One input-callback record copied into the bounded atomic trace. The
+/// callback builds this `Copy` value on the stack; the trace itself owns
+/// no heap memory and takes no lock.
+#[derive(Copy, Clone, Debug, Default)]
+struct InputCallbackTraceSample {
+    sequence: u64,
+    callback_index: u64,
+    callback_timestamp_ns: i64,
+    capture_timestamp_ns: Option<i64>,
+    frame_position: Option<u64>,
+    frames: u64,
+    delta_previous_callback_ns: Option<i64>,
+    position_delta_vs_expected: Option<i64>,
+}
+
+/// One input-error record copied into the bounded atomic trace.
+#[derive(Copy, Clone, Debug, Default)]
+struct InputErrorTraceSample {
+    sequence: u64,
+    input_callback_count: u64,
+    error_kind: usize,
+}
+
+/// Fixed-capacity input data/error event trace. Arrays of atomics keep
+/// callback recording allocation-free and lock-free; the slot is derived
+/// from the serial callback index, so entries are stable when read after
+/// streaming. Overflow is counted explicitly rather than overwriting the
+/// important first packets.
+struct InputEventTrace {
+    callback_sequence: [AtomicU64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_index: [AtomicU64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_timestamp_ns: [AtomicI64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_capture_present: [AtomicUsize; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_capture_timestamp_ns: [AtomicI64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_frame_position_present: [AtomicUsize; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_frame_position: [AtomicU64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_frames: [AtomicU64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_delta_previous_ns: [AtomicI64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_position_delta: [AtomicI64; INPUT_CALLBACK_TRACE_SLOTS],
+    callback_overflow: AtomicU64,
+    error_sequence: [AtomicU64; INPUT_ERROR_TRACE_SLOTS],
+    error_input_callback_count: [AtomicU64; INPUT_ERROR_TRACE_SLOTS],
+    error_kind: [AtomicUsize; INPUT_ERROR_TRACE_SLOTS],
+    error_overflow: AtomicU64,
+}
+
+impl Default for InputEventTrace {
+    fn default() -> Self {
+        Self {
+            callback_sequence: std::array::from_fn(|_| AtomicU64::new(0)),
+            callback_index: std::array::from_fn(|_| AtomicU64::new(0)),
+            callback_timestamp_ns: std::array::from_fn(|_| AtomicI64::new(0)),
+            callback_capture_present: std::array::from_fn(|_| AtomicUsize::new(0)),
+            callback_capture_timestamp_ns: std::array::from_fn(|_| AtomicI64::new(0)),
+            callback_frame_position_present: std::array::from_fn(|_| AtomicUsize::new(0)),
+            callback_frame_position: std::array::from_fn(|_| AtomicU64::new(0)),
+            callback_frames: std::array::from_fn(|_| AtomicU64::new(0)),
+            callback_delta_previous_ns: std::array::from_fn(|_| {
+                AtomicI64::new(INPUT_TRACE_NO_DELTA)
+            }),
+            callback_position_delta: std::array::from_fn(|_| AtomicI64::new(INPUT_TRACE_NO_DELTA)),
+            callback_overflow: AtomicU64::new(0),
+            error_sequence: std::array::from_fn(|_| AtomicU64::new(0)),
+            error_input_callback_count: std::array::from_fn(|_| AtomicU64::new(0)),
+            error_kind: std::array::from_fn(|_| AtomicUsize::new(0)),
+            error_overflow: AtomicU64::new(0),
+        }
+    }
+}
+
+impl InputEventTrace {
+    /// Records one input callback without allocation or locking. Input
+    /// callbacks are serial per stream; the callback index therefore
+    /// selects a stable slot.
+    fn record_callback(&self, sample: InputCallbackTraceSample) {
+        let Ok(slot) = usize::try_from(sample.callback_index) else {
+            self.callback_overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        if slot >= INPUT_CALLBACK_TRACE_SLOTS {
+            self.callback_overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        self.callback_sequence[slot].store(sample.sequence, Ordering::Relaxed);
+        self.callback_index[slot].store(sample.callback_index, Ordering::Relaxed);
+        self.callback_timestamp_ns[slot].store(sample.callback_timestamp_ns, Ordering::Relaxed);
+        self.callback_capture_present[slot].store(
+            usize::from(sample.capture_timestamp_ns.is_some()),
+            Ordering::Relaxed,
+        );
+        self.callback_capture_timestamp_ns[slot]
+            .store(sample.capture_timestamp_ns.unwrap_or(0), Ordering::Relaxed);
+        self.callback_frame_position_present[slot].store(
+            usize::from(sample.frame_position.is_some()),
+            Ordering::Relaxed,
+        );
+        self.callback_frame_position[slot]
+            .store(sample.frame_position.unwrap_or(0), Ordering::Relaxed);
+        self.callback_frames[slot].store(sample.frames, Ordering::Relaxed);
+        self.callback_delta_previous_ns[slot].store(
+            sample
+                .delta_previous_callback_ns
+                .unwrap_or(INPUT_TRACE_NO_DELTA),
+            Ordering::Relaxed,
+        );
+        self.callback_position_delta[slot].store(
+            sample
+                .position_delta_vs_expected
+                .unwrap_or(INPUT_TRACE_NO_DELTA),
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Records one input error without allocation or locking.
+    fn record_error(&self, error_index: usize, sample: InputErrorTraceSample) {
+        if error_index >= INPUT_ERROR_TRACE_SLOTS {
+            self.error_overflow.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        self.error_sequence[error_index].store(sample.sequence, Ordering::Relaxed);
+        self.error_input_callback_count[error_index]
+            .store(sample.input_callback_count, Ordering::Relaxed);
+        self.error_kind[error_index].store(sample.error_kind, Ordering::Relaxed);
+    }
+
+    /// Copies recorded callback slots into owned control-thread values.
+    /// This postprocessing method allocates; it is never called from the
+    /// audio callback.
+    fn callback_entries(&self, input_callback_count: usize) -> Vec<InputCallbackTraceEntry> {
+        let len = input_callback_count.min(INPUT_CALLBACK_TRACE_SLOTS);
+        (0..len)
+            .map(|slot| {
+                let capture_present =
+                    self.callback_capture_present[slot].load(Ordering::Relaxed) != 0;
+                let position_present =
+                    self.callback_frame_position_present[slot].load(Ordering::Relaxed) != 0;
+                InputCallbackTraceEntry {
+                    sequence: self.callback_sequence[slot].load(Ordering::Relaxed),
+                    callback_index: self.callback_index[slot].load(Ordering::Relaxed),
+                    callback_timestamp_ns: self.callback_timestamp_ns[slot].load(Ordering::Relaxed),
+                    capture_timestamp_ns: capture_present
+                        .then(|| self.callback_capture_timestamp_ns[slot].load(Ordering::Relaxed)),
+                    frame_position: position_present
+                        .then(|| self.callback_frame_position[slot].load(Ordering::Relaxed)),
+                    frames: self.callback_frames[slot].load(Ordering::Relaxed),
+                    delta_previous_callback_ns: trace_delta_option(
+                        self.callback_delta_previous_ns[slot].load(Ordering::Relaxed),
+                    ),
+                    position_delta_vs_expected: trace_delta_option(
+                        self.callback_position_delta[slot].load(Ordering::Relaxed),
+                    ),
+                }
+            })
+            .collect()
+    }
+
+    /// Copies recorded error slots into owned control-thread values.
+    fn error_entries(&self, input_error_count: usize) -> Vec<InputErrorTraceEntry> {
+        let len = input_error_count.min(INPUT_ERROR_TRACE_SLOTS);
+        (0..len)
+            .map(|slot| InputErrorTraceEntry {
+                sequence: self.error_sequence[slot].load(Ordering::Relaxed),
+                input_callback_count: self.error_input_callback_count[slot].load(Ordering::Relaxed),
+                error_kind: self.error_kind[slot].load(Ordering::Relaxed),
+            })
+            .collect()
+    }
+}
+
+fn trace_delta_option(value: i64) -> Option<i64> {
+    if value == INPUT_TRACE_NO_DELTA {
+        None
+    } else {
+        Some(value)
+    }
+}
 
 /// Stimulus: 440 Hz sine at 0.20 amplitude — the tonal component the
 /// spectral oracle checks survives the cable's SRC.
@@ -194,6 +386,16 @@ struct Probe {
     in_nonzero_sample_seen: AtomicUsize,
     in_sample_gap_detected: AtomicUsize,
     in_last_error_kind: AtomicUsize,
+    /// Shared input data/error event sequence. Data and error callbacks
+    /// both allocate from this counter so the bounded traces can be
+    /// interleaved in emission order during postprocessing.
+    in_event_sequence: AtomicU64,
+    /// Exact previous input callback timestamp used only for diagnostic
+    /// deltas; the oracle's `in_last_callback_ns` remains a max register.
+    in_trace_previous_callback_ns: AtomicI64,
+    in_event_trace: InputEventTrace,
+    in_contiguous_position_transitions: AtomicUsize,
+    in_fixed_buffer_fallback: AtomicUsize,
     // output direction
     out_callbacks: AtomicUsize,
     out_frames: AtomicU64,
@@ -219,6 +421,7 @@ struct Probe {
     out_invalidated: AtomicUsize,
     out_backend_errors: AtomicUsize,
     out_last_error_kind: AtomicUsize,
+    out_fixed_buffer_fallback: AtomicUsize,
     /// Absolute render-frame cursor — advanced once per callback by
     /// the delivered frame count so [`signal_sample`] sees a
     /// continuous stimulus index across variable-size callbacks.
@@ -253,6 +456,7 @@ impl Probe {
             in_latency_max_ns: AtomicI64::new(i64::MIN),
             in_first_forward_gap_cb: AtomicU64::new(u64::MAX),
             in_stall_last_callback_ns: AtomicI64::new(i64::MIN),
+            in_trace_previous_callback_ns: AtomicI64::new(i64::MIN),
             in_first_position: AtomicU64::new(u64::MAX),
             in_expected_position: AtomicU64::new(u64::MAX),
             out_min_frames: AtomicUsize::new(usize::MAX),
@@ -1153,10 +1357,14 @@ fn evaluate_positive_xrun(observation: &XrunOracleObservation) -> (XrunCaseVerdi
     if observation.output_callbacks == 0 {
         failures.push("output-callbacks-missing");
     }
-    if observation.continuity_mask & XRUN_INPUT_BEFORE_INJECTION == 0 {
+    if observation.forward_frame_position_gaps > 0
+        && observation.continuity_mask & XRUN_INPUT_BEFORE_INJECTION == 0
+    {
         failures.push("input-callbacks-did-not-progress-before-injection");
     }
-    if observation.continuity_mask & XRUN_INPUT_RESUMED_AFTER_INJECTION == 0 {
+    if observation.forward_frame_position_gaps > 0
+        && observation.continuity_mask & XRUN_INPUT_RESUMED_AFTER_INJECTION == 0
+    {
         failures.push("input-callbacks-did-not-resume-after-injection");
     }
     if observation.continuity_mask & XRUN_OUTPUT_CALLBACKS_CONTINUED == 0 {
@@ -1305,6 +1513,7 @@ struct XrunHarnessOutput {
     injection_packet_count: u32,
     injection_armed: bool,
     oracle: XrunOracleObservation,
+    diagnostics: XrunDiagnostics,
 }
 
 fn xrun_injection_output_values(case: &str) -> (String, u32, u32) {
@@ -1340,6 +1549,665 @@ fn xrun_output_shell(
         injection_packet_count: packet_count,
         injection_armed: xrun_armed_case().is_some(),
         oracle: XrunOracleObservation::default(),
+        diagnostics: XrunDiagnostics::default(),
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+struct InputCallbackTraceEntry {
+    sequence: u64,
+    callback_index: u64,
+    callback_timestamp_ns: i64,
+    capture_timestamp_ns: Option<i64>,
+    frame_position: Option<u64>,
+    frames: u64,
+    delta_previous_callback_ns: Option<i64>,
+    position_delta_vs_expected: Option<i64>,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+struct InputErrorTraceEntry {
+    sequence: u64,
+    input_callback_count: u64,
+    error_kind: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+enum BackendBufferSizeObservation {
+    #[default]
+    NotCollected,
+    Fixed(usize),
+    Default,
+    Other(String),
+    Error(String),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunStreamDirectionDiagnostics {
+    sample_rate: u32,
+    channels: usize,
+    sample_format: String,
+    requested_fixed_buffer_frames: usize,
+    fixed_to_default_fallback: bool,
+    backend_buffer_size: BackendBufferSizeObservation,
+    latency_frames: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunStreamDiagnostics {
+    input: XrunStreamDirectionDiagnostics,
+    output: XrunStreamDirectionDiagnostics,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunInputEventDiagnostics {
+    callback_overflow_count: u64,
+    error_overflow_count: u64,
+    callbacks: Vec<InputCallbackTraceEntry>,
+    errors: Vec<InputErrorTraceEntry>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct ZeroRunExtent {
+    start_sample: usize,
+    end_sample_exclusive: usize,
+    frames: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct ApproximateCallbackLocation {
+    callback_index: u64,
+    frame_offset_in_callback: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ZeroGapDiagnostics {
+    captured_frames: usize,
+    captured_channels: usize,
+    capture_overflow_frames: u64,
+    capture_lock_failures: u64,
+    longest_zero_run: Option<ZeroRunExtent>,
+    approximate_longest_start_location: Option<ApproximateCallbackLocation>,
+    max_leading_zero_run_frames: usize,
+    max_trailing_zero_run_frames: usize,
+    max_interior_zero_run_frames: usize,
+    channels_beyond_channel0_captured: bool,
+    channels_beyond_channel0_zero_scanned: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct InferredBurst {
+    start_callback_index: u64,
+    end_callback_index: u64,
+    start_sequence: u64,
+    end_sequence: u64,
+    callback_count: usize,
+    deltas_ns: Vec<i64>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunTimingDiagnostics {
+    inferred_bursts: Vec<InferredBurst>,
+    max_callback_stall_ms: u64,
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+struct XrunPositionTransitionDiagnostics {
+    forward: usize,
+    backward_or_reset: usize,
+    contiguous: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunRuntimeDiagnostics {
+    input_events: XrunInputEventDiagnostics,
+    zero_gap: ZeroGapDiagnostics,
+    timing: XrunTimingDiagnostics,
+    position_transitions: XrunPositionTransitionDiagnostics,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct XrunDiagnostics {
+    stream: XrunStreamDiagnostics,
+    runtime: XrunRuntimeDiagnostics,
+}
+
+fn json_field_raw(key: &str, value: &str) -> String {
+    format!("{}:{}", json_string(key), value)
+}
+
+fn json_array(items: &[String]) -> String {
+    format!("[{}]", items.join(","))
+}
+
+fn json_optional_number<T: std::fmt::Display>(value: Option<T>) -> String {
+    value.map_or_else(|| "null".to_owned(), |number| number.to_string())
+}
+
+fn error_kind_name(code: usize) -> &'static str {
+    match code {
+        1 => "DeviceNotFound",
+        2 => "DeviceBusy",
+        3 => "UnsupportedConfig",
+        4 => "Unsupported",
+        5 => "Xrun",
+        6 => "RealtimeDenied",
+        7 => "StreamInvalidated",
+        8 => "ClockDiscontinuity",
+        9 => "Backend",
+        _ => "Unknown",
+    }
+}
+
+fn input_callback_trace_entry_json(entry: &InputCallbackTraceEntry) -> String {
+    json_object(&[
+        json_field_number("sequence", entry.sequence),
+        json_field_number("callback_index", entry.callback_index),
+        json_field_number("callback_timestamp_ns", entry.callback_timestamp_ns),
+        json_field_bool(
+            "capture_timestamp_present",
+            entry.capture_timestamp_ns.is_some(),
+        ),
+        json_field_raw(
+            "capture_timestamp_ns",
+            &json_optional_number(entry.capture_timestamp_ns),
+        ),
+        json_field_bool("frame_position_present", entry.frame_position.is_some()),
+        json_field_raw(
+            "frame_position",
+            &json_optional_number(entry.frame_position),
+        ),
+        json_field_number("frames", entry.frames),
+        json_field_raw(
+            "delta_previous_callback_ns",
+            &json_optional_number(entry.delta_previous_callback_ns),
+        ),
+        json_field_raw(
+            "position_delta_vs_expected",
+            &json_optional_number(entry.position_delta_vs_expected),
+        ),
+    ])
+}
+
+fn input_error_trace_entry_json(entry: &InputErrorTraceEntry) -> String {
+    json_object(&[
+        json_field_number("sequence", entry.sequence),
+        json_field_number("input_callback_count", entry.input_callback_count),
+        json_field_number("error_kind_code", entry.error_kind),
+        json_field_string("error_kind", error_kind_name(entry.error_kind)),
+    ])
+}
+
+fn backend_buffer_size_json(observation: &BackendBufferSizeObservation) -> String {
+    match observation {
+        BackendBufferSizeObservation::NotCollected => {
+            json_object(&[json_field_string("state", "not_collected")])
+        }
+        BackendBufferSizeObservation::Fixed(frames) => json_object(&[
+            json_field_string("state", "fixed"),
+            json_field_number("frames", frames),
+        ]),
+        BackendBufferSizeObservation::Default => {
+            json_object(&[json_field_string("state", "default")])
+        }
+        BackendBufferSizeObservation::Other(detail) => json_object(&[
+            json_field_string("state", "other"),
+            json_field_string("detail", detail),
+        ]),
+        BackendBufferSizeObservation::Error(detail) => json_object(&[
+            json_field_string("state", "error"),
+            json_field_string("detail", detail),
+        ]),
+    }
+}
+
+fn stream_direction_diagnostics_json(direction: &XrunStreamDirectionDiagnostics) -> String {
+    json_object(&[
+        json_field_number("sample_rate", direction.sample_rate),
+        json_field_number("channels", direction.channels),
+        json_field_string("sample_format", &direction.sample_format),
+        json_field_number(
+            "requested_fixed_buffer_frames",
+            direction.requested_fixed_buffer_frames,
+        ),
+        json_field_bool(
+            "fixed_to_default_fallback",
+            direction.fixed_to_default_fallback,
+        ),
+        json_field_raw(
+            "backend_buffer_size",
+            &backend_buffer_size_json(&direction.backend_buffer_size),
+        ),
+        json_field_raw(
+            "latency_frames",
+            &json_optional_number(direction.latency_frames),
+        ),
+    ])
+}
+
+fn zero_run_extent_json(extent: &ZeroRunExtent) -> String {
+    json_object(&[
+        json_field_number("start_sample", extent.start_sample),
+        json_field_number("end_sample_exclusive", extent.end_sample_exclusive),
+        json_field_number("frames", extent.frames),
+    ])
+}
+
+fn approximate_location_json(location: &ApproximateCallbackLocation) -> String {
+    json_object(&[
+        json_field_number("callback_index", location.callback_index),
+        json_field_number(
+            "frame_offset_in_callback",
+            location.frame_offset_in_callback,
+        ),
+        json_field_bool("approximate", true),
+    ])
+}
+
+fn zero_gap_diagnostics_json(zero_gap: &ZeroGapDiagnostics) -> String {
+    let longest = zero_gap
+        .longest_zero_run
+        .as_ref()
+        .map_or_else(|| "null".to_owned(), zero_run_extent_json);
+    let location = zero_gap
+        .approximate_longest_start_location
+        .as_ref()
+        .map_or_else(|| "null".to_owned(), approximate_location_json);
+    json_object(&[
+        json_field_number("captured_frames", zero_gap.captured_frames),
+        json_field_number("captured_channels", zero_gap.captured_channels),
+        json_field_number("capture_overflow_frames", zero_gap.capture_overflow_frames),
+        json_field_number("capture_lock_failures", zero_gap.capture_lock_failures),
+        json_field_raw("longest_zero_run", &longest),
+        json_field_raw("approximate_longest_start_location", &location),
+        json_field_number(
+            "max_leading_zero_run_frames",
+            zero_gap.max_leading_zero_run_frames,
+        ),
+        json_field_number(
+            "max_trailing_zero_run_frames",
+            zero_gap.max_trailing_zero_run_frames,
+        ),
+        json_field_number(
+            "max_interior_zero_run_frames",
+            zero_gap.max_interior_zero_run_frames,
+        ),
+        json_field_bool(
+            "channels_beyond_channel0_captured",
+            zero_gap.channels_beyond_channel0_captured,
+        ),
+        json_field_bool(
+            "channels_beyond_channel0_zero_scanned",
+            zero_gap.channels_beyond_channel0_zero_scanned,
+        ),
+    ])
+}
+
+fn inferred_burst_json(burst: &InferredBurst) -> String {
+    let deltas = burst
+        .deltas_ns
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    json_object(&[
+        json_field_number("start_callback_index", burst.start_callback_index),
+        json_field_number("end_callback_index", burst.end_callback_index),
+        json_field_number("start_sequence", burst.start_sequence),
+        json_field_number("end_sequence", burst.end_sequence),
+        json_field_number("callback_count", burst.callback_count),
+        json_field_raw("deltas_ns", &json_array(&deltas)),
+    ])
+}
+
+fn input_events_diagnostics_json(events: &XrunInputEventDiagnostics) -> String {
+    let callbacks = events
+        .callbacks
+        .iter()
+        .map(input_callback_trace_entry_json)
+        .collect::<Vec<_>>();
+    let errors = events
+        .errors
+        .iter()
+        .map(input_error_trace_entry_json)
+        .collect::<Vec<_>>();
+    json_object(&[
+        json_field_number("callback_trace_capacity", INPUT_CALLBACK_TRACE_SLOTS),
+        json_field_number(
+            "callback_trace_overflow_count",
+            events.callback_overflow_count,
+        ),
+        json_field_number("error_trace_capacity", INPUT_ERROR_TRACE_SLOTS),
+        json_field_number("error_trace_overflow_count", events.error_overflow_count),
+        json_field_raw("callback_trace_entries", &json_array(&callbacks)),
+        json_field_raw("error_trace_entries", &json_array(&errors)),
+    ])
+}
+
+fn timing_diagnostics_json(timing: &XrunTimingDiagnostics) -> String {
+    let bursts = timing
+        .inferred_bursts
+        .iter()
+        .map(inferred_burst_json)
+        .collect::<Vec<_>>();
+    let max_burst_callbacks = timing
+        .inferred_bursts
+        .iter()
+        .map(|burst| burst.callback_count)
+        .max()
+        .unwrap_or(0);
+    json_object(&[
+        json_field_number("burst_threshold_ns", XRUN_BURST_THRESHOLD_NS),
+        json_field_number("inferred_burst_count", timing.inferred_bursts.len()),
+        json_field_number("inferred_burst_max_callbacks", max_burst_callbacks),
+        json_field_raw("inferred_bursts", &json_array(&bursts)),
+        json_field_number("max_callback_stall_ms", timing.max_callback_stall_ms),
+    ])
+}
+
+fn position_transitions_json(transitions: XrunPositionTransitionDiagnostics) -> String {
+    json_object(&[
+        json_field_number("forward", transitions.forward),
+        json_field_number("backward_or_reset", transitions.backward_or_reset),
+        json_field_number("contiguous", transitions.contiguous),
+    ])
+}
+
+fn xrun_diagnostics_json(diagnostics: &XrunDiagnostics) -> String {
+    let stream = json_object(&[
+        json_field_raw(
+            "input",
+            &stream_direction_diagnostics_json(&diagnostics.stream.input),
+        ),
+        json_field_raw(
+            "output",
+            &stream_direction_diagnostics_json(&diagnostics.stream.output),
+        ),
+    ]);
+    json_object(&[
+        json_field_raw("stream", &stream),
+        json_field_raw(
+            "input_events",
+            &input_events_diagnostics_json(&diagnostics.runtime.input_events),
+        ),
+        json_field_raw(
+            "zero_gap",
+            &zero_gap_diagnostics_json(&diagnostics.runtime.zero_gap),
+        ),
+        json_field_raw(
+            "timing",
+            &timing_diagnostics_json(&diagnostics.runtime.timing),
+        ),
+        json_field_raw(
+            "position_transitions",
+            &position_transitions_json(diagnostics.runtime.position_transitions),
+        ),
+    ])
+}
+
+fn observe_backend_buffer_size(
+    result: Result<BufferSize, DeviceError>,
+) -> BackendBufferSizeObservation {
+    match result {
+        Ok(BufferSize::Fixed(frames)) => BackendBufferSizeObservation::Fixed(frames),
+        Ok(BufferSize::Default) => BackendBufferSizeObservation::Default,
+        Ok(other) => BackendBufferSizeObservation::Other(format!("{other:?}")),
+        Err(error) => BackendBufferSizeObservation::Error(error.to_string()),
+    }
+}
+
+fn stream_direction_base(
+    format: AudioFormat,
+    fixed_to_default_fallback: bool,
+    buffer_size: Result<BufferSize, DeviceError>,
+    latency_frames: Option<u64>,
+) -> XrunStreamDirectionDiagnostics {
+    XrunStreamDirectionDiagnostics {
+        sample_rate: format.sample_rate.get(),
+        channels: usize::try_from(format.layout.channels()).unwrap_or(usize::MAX),
+        sample_format: format!("{:?}", format.sample_format),
+        requested_fixed_buffer_frames: REQUESTED_FRAMES,
+        fixed_to_default_fallback,
+        backend_buffer_size: observe_backend_buffer_size(buffer_size),
+        latency_frames,
+    }
+}
+
+fn collect_xrun_stream_diagnostics(
+    probe: &Probe,
+    in_stream: &dyn InputStream,
+    out_stream: &dyn OutputStream,
+) -> XrunStreamDiagnostics {
+    XrunStreamDiagnostics {
+        input: stream_direction_base(
+            in_stream.format(),
+            probe.in_fixed_buffer_fallback.load(Ordering::Relaxed) != 0,
+            in_stream.buffer_size(),
+            in_stream
+                .input_latency()
+                .ok()
+                .flatten()
+                .map(|latency| latency.frames),
+        ),
+        output: stream_direction_base(
+            out_stream.format(),
+            probe.out_fixed_buffer_fallback.load(Ordering::Relaxed) != 0,
+            out_stream.buffer_size(),
+            out_stream
+                .output_latency()
+                .ok()
+                .flatten()
+                .map(|latency| latency.frames),
+        ),
+    }
+}
+
+fn finish_zero_run(
+    start_sample: usize,
+    end_sample_exclusive: usize,
+    total_samples: usize,
+    longest: &mut Option<ZeroRunExtent>,
+    leading: &mut usize,
+    trailing: &mut usize,
+    interior: &mut usize,
+) {
+    let frames = end_sample_exclusive - start_sample;
+    let extent = ZeroRunExtent {
+        start_sample,
+        end_sample_exclusive,
+        frames,
+    };
+    if longest.is_none_or(|current| frames > current.frames) {
+        *longest = Some(extent);
+    }
+    if start_sample == 0 {
+        *leading = (*leading).max(frames);
+    }
+    if end_sample_exclusive == total_samples {
+        *trailing = (*trailing).max(frames);
+    }
+    if start_sample != 0 && end_sample_exclusive != total_samples {
+        *interior = (*interior).max(frames);
+    }
+}
+
+/// Classifies exact-zero runs in captured channel 0. Leading and
+/// trailing classes are boundary-inclusive; a whole-zero capture is both
+/// leading and trailing, never interior.
+fn analyze_zero_runs(samples: &[f32]) -> (Option<ZeroRunExtent>, usize, usize, usize) {
+    let mut longest = None;
+    let mut leading = 0_usize;
+    let mut trailing = 0_usize;
+    let mut interior = 0_usize;
+    let mut run_start = None;
+    for (index, &sample) in samples.iter().enumerate() {
+        if sample == 0.0 {
+            if run_start.is_none() {
+                run_start = Some(index);
+            }
+        } else if let Some(start) = run_start.take() {
+            finish_zero_run(
+                start,
+                index,
+                samples.len(),
+                &mut longest,
+                &mut leading,
+                &mut trailing,
+                &mut interior,
+            );
+        }
+    }
+    if let Some(start) = run_start {
+        finish_zero_run(
+            start,
+            samples.len(),
+            samples.len(),
+            &mut longest,
+            &mut leading,
+            &mut trailing,
+            &mut interior,
+        );
+    }
+    (longest, leading, trailing, interior)
+}
+
+fn approximate_callback_location(
+    entries: &[InputCallbackTraceEntry],
+    sample_index: usize,
+) -> Option<ApproximateCallbackLocation> {
+    let mut base = 0_usize;
+    for entry in entries {
+        let frames = usize::try_from(entry.frames).unwrap_or(usize::MAX);
+        let end = base.saturating_add(frames);
+        if frames > 0 && sample_index < end {
+            return Some(ApproximateCallbackLocation {
+                callback_index: entry.callback_index,
+                frame_offset_in_callback: sample_index.saturating_sub(base),
+            });
+        }
+        base = end;
+    }
+    None
+}
+
+fn analyze_capture_zero_gap(
+    capture: &CaptureBuf,
+    entries: &[InputCallbackTraceEntry],
+    capture_lock_failures: u64,
+) -> ZeroGapDiagnostics {
+    let samples = capture.channel(0);
+    let (longest, leading, trailing, interior) = analyze_zero_runs(samples);
+    let approximate_location =
+        longest.and_then(|extent| approximate_callback_location(entries, extent.start_sample));
+    ZeroGapDiagnostics {
+        captured_frames: capture.len,
+        captured_channels: capture.channels,
+        capture_overflow_frames: capture.overflow_frames,
+        capture_lock_failures,
+        longest_zero_run: longest,
+        approximate_longest_start_location: approximate_location,
+        max_leading_zero_run_frames: leading,
+        max_trailing_zero_run_frames: trailing,
+        max_interior_zero_run_frames: interior,
+        channels_beyond_channel0_captured: capture.channels > 1,
+        // The zero-run postprocess is deliberately channel-0-only; other
+        // captured channels remain available in the bounded handoff but
+        // are not scanned here.
+        channels_beyond_channel0_zero_scanned: false,
+    }
+}
+
+fn make_inferred_burst(
+    entries: &[InputCallbackTraceEntry],
+    start: usize,
+    end: usize,
+    deltas_ns: Vec<i64>,
+) -> InferredBurst {
+    InferredBurst {
+        start_callback_index: entries[start].callback_index,
+        end_callback_index: entries[end].callback_index,
+        start_sequence: entries[start].sequence,
+        end_sequence: entries[end].sequence,
+        callback_count: end - start + 1,
+        deltas_ns,
+    }
+}
+
+/// Groups adjacent callbacks whose nonnegative timestamp deltas are at
+/// most `threshold_ns`. This is conservative inference, not backend wake
+/// grouping: a burst is a run of callbacks linked by close delivery.
+fn infer_callback_bursts(
+    entries: &[InputCallbackTraceEntry],
+    threshold_ns: i64,
+) -> Vec<InferredBurst> {
+    let mut bursts = Vec::new();
+    let mut burst_start = None;
+    let mut deltas = Vec::new();
+    for index in 1..entries.len() {
+        let close_delta = entries[index]
+            .delta_previous_callback_ns
+            .filter(|delta| (0..=threshold_ns).contains(delta));
+        if let Some(delta) = close_delta {
+            if burst_start.is_none() {
+                burst_start = Some(index - 1);
+            }
+            deltas.push(delta);
+        } else if let Some(start) = burst_start.take() {
+            bursts.push(make_inferred_burst(
+                entries,
+                start,
+                index - 1,
+                std::mem::take(&mut deltas),
+            ));
+        }
+    }
+    if let Some(start) = burst_start {
+        bursts.push(make_inferred_burst(
+            entries,
+            start,
+            entries.len() - 1,
+            deltas,
+        ));
+    }
+    bursts
+}
+
+fn collect_xrun_runtime_diagnostics(probe: &Probe) -> XrunRuntimeDiagnostics {
+    let callbacks = probe
+        .in_event_trace
+        .callback_entries(probe.in_callbacks.load(Ordering::Relaxed));
+    let errors = probe
+        .in_event_trace
+        .error_entries(probe.in_errors.load(Ordering::Relaxed));
+    let zero_gap = {
+        let capture = capture_buffer(probe);
+        analyze_capture_zero_gap(
+            &capture,
+            &callbacks,
+            probe.capture_lock_failures.load(Ordering::Relaxed),
+        )
+    };
+    XrunRuntimeDiagnostics {
+        input_events: XrunInputEventDiagnostics {
+            callback_overflow_count: probe
+                .in_event_trace
+                .callback_overflow
+                .load(Ordering::Relaxed),
+            error_overflow_count: probe.in_event_trace.error_overflow.load(Ordering::Relaxed),
+            callbacks: callbacks.clone(),
+            errors,
+        },
+        zero_gap,
+        timing: XrunTimingDiagnostics {
+            inferred_bursts: infer_callback_bursts(&callbacks, XRUN_BURST_THRESHOLD_NS),
+            max_callback_stall_ms: probe.in_max_callback_stall_ms.load(Ordering::Relaxed),
+        },
+        position_transitions: XrunPositionTransitionDiagnostics {
+            forward: probe.in_forward_position_gaps.load(Ordering::Relaxed),
+            backward_or_reset: probe.in_backward_position_jumps.load(Ordering::Relaxed),
+            contiguous: probe
+                .in_contiguous_position_transitions
+                .load(Ordering::Relaxed),
+        },
     }
 }
 
@@ -1387,6 +2255,7 @@ fn xrun_observation_json(output: &XrunHarnessOutput) -> String {
         format!("{}:{}", json_string("endpoint"), endpoint),
         format!("{}:{}", json_string("injection"), injection),
         format!("{}:{}", json_string("oracle"), oracle),
+        json_field_raw("diagnostics", &xrun_diagnostics_json(&output.diagnostics)),
     ])
 }
 
@@ -2232,6 +3101,7 @@ fn run_rf1009_xrun_case(case: &str) {
             return;
         }
     };
+    output.diagnostics.stream = collect_xrun_stream_diagnostics(&probe, &*in_stream, &*out_stream);
     if let Err(error) = in_stream.start() {
         drop(in_stream);
         drop(out_stream);
@@ -2270,6 +3140,7 @@ fn run_rf1009_xrun_case(case: &str) {
     }
     drop(in_stream);
     drop(out_stream);
+    output.diagnostics.runtime = collect_xrun_runtime_diagnostics(&probe);
 
     output.oracle = XrunOracleObservation::from_probe(
         &probe,
@@ -2992,6 +3863,7 @@ fn open_input_with_fallback(
     ) {
         Ok(stream) => Ok(stream),
         Err(DeviceError::UnsupportedConfig) => {
+            probe.in_fixed_buffer_fallback.store(1, Ordering::Relaxed);
             eprintln!(
                 "  open input Fixed({REQUESTED_FRAMES}) → UnsupportedConfig; retrying Default"
             );
@@ -3027,6 +3899,7 @@ fn open_output_with_fallback(
     ) {
         Ok(stream) => Ok(stream),
         Err(DeviceError::UnsupportedConfig) => {
+            probe.out_fixed_buffer_fallback.store(1, Ordering::Relaxed);
             eprintln!(
                 "  open output Fixed({REQUESTED_FRAMES}) → UnsupportedConfig; retrying Default"
             );
@@ -3092,31 +3965,72 @@ fn observe_input_stall(probe: &Probe, callback_ns: i64) {
     }
 }
 
-fn observe_input_frame_position(probe: &Probe, position: u64, frames: usize, callback_index: u64) {
+/// Clamps a wide signed delta into the diagnostic `i64` range while
+/// reserving [`INPUT_TRACE_NO_DELTA`] as the no-delta sentinel.
+fn clamped_diagnostic_delta(delta: i128) -> i64 {
+    let clamped = delta.clamp(i128::from(i64::MIN) + 1, i128::from(i64::MAX));
+    match i64::try_from(clamped) {
+        Ok(value) => value,
+        Err(_) if delta.is_positive() => i64::MAX,
+        Err(_) => i64::MIN + 1,
+    }
+}
+
+/// Signed `observed - expected` frame-position delta. `None` means this
+/// is the first position-bearing callback (or expected position state is
+/// unavailable); the fixed trace encodes that as [`INPUT_TRACE_NO_DELTA`].
+fn signed_position_delta(expected: u64, observed: u64) -> Option<i64> {
+    if expected == u64::MAX {
+        return None;
+    }
+    Some(clamped_diagnostic_delta(
+        i128::from(observed) - i128::from(expected),
+    ))
+}
+
+/// Signed nanosecond delta clamped into the diagnostic range.
+fn timestamp_delta_ns(previous_ns: i64, current_ns: i64) -> i64 {
+    clamped_diagnostic_delta(i128::from(current_ns) - i128::from(previous_ns))
+}
+
+fn observe_input_frame_position(
+    probe: &Probe,
+    position: u64,
+    frames: usize,
+    callback_index: u64,
+) -> Option<i64> {
     probe.in_position_some.fetch_add(1, Ordering::Relaxed);
     // The next callback's first-frame position must equal this packet's
     // `position + frames` — contiguous capture-clock spans unless a
     // discontinuity was reported. Callbacks are serial per stream.
     let expected = probe.in_expected_position.load(Ordering::Relaxed);
-    if expected != u64::MAX
-        && let Some(gap) = classify_frame_position(expected, position)
-    {
-        probe.in_position_gaps.fetch_add(1, Ordering::Relaxed);
-        match gap {
-            FramePositionGap::Forward(gap_frames) => {
-                probe
-                    .in_forward_position_gaps
-                    .fetch_add(1, Ordering::Relaxed);
-                probe
-                    .in_max_forward_gap_frames
-                    .fetch_max(gap_frames, Ordering::Relaxed);
-                probe
-                    .in_first_forward_gap_cb
-                    .fetch_min(callback_index, Ordering::Relaxed);
+    let position_delta = signed_position_delta(expected, position);
+    if expected != u64::MAX {
+        match classify_frame_position(expected, position) {
+            Some(gap) => {
+                probe.in_position_gaps.fetch_add(1, Ordering::Relaxed);
+                match gap {
+                    FramePositionGap::Forward(gap_frames) => {
+                        probe
+                            .in_forward_position_gaps
+                            .fetch_add(1, Ordering::Relaxed);
+                        probe
+                            .in_max_forward_gap_frames
+                            .fetch_max(gap_frames, Ordering::Relaxed);
+                        probe
+                            .in_first_forward_gap_cb
+                            .fetch_min(callback_index, Ordering::Relaxed);
+                    }
+                    FramePositionGap::BackwardOrReset => {
+                        probe
+                            .in_backward_position_jumps
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                }
             }
-            FramePositionGap::BackwardOrReset => {
+            None => {
                 probe
-                    .in_backward_position_jumps
+                    .in_contiguous_position_transitions
                     .fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -3130,6 +4044,7 @@ fn observe_input_frame_position(probe: &Probe, position: u64, frames: usize, cal
     probe
         .in_last_position
         .fetch_max(position, Ordering::Relaxed);
+    position_delta
 }
 
 /// Streaming interior-zero-run detector over channel 0. A run is counted
@@ -3155,12 +4070,39 @@ fn observe_input_zero_run(probe: &Probe, input: &AudioBufferView<'_, f32>) {
     }
 }
 
+fn observe_input_capture_latency(probe: &Probe, capture: MediaTimestamp, callback_ns: i64) {
+    probe.in_capture_some.fetch_add(1, Ordering::Relaxed);
+    // `callback - capture` = effective input latency —
+    // recorded, not asserted. A negative delta is an ordering
+    // violation: the capture instant must precede delivery.
+    let delta_ns = callback_ns - capture.time.value();
+    probe
+        .in_latency_min_ns
+        .fetch_min(delta_ns, Ordering::Relaxed);
+    probe
+        .in_latency_max_ns
+        .fetch_max(delta_ns, Ordering::Relaxed);
+    // Summed clamped to ±1000 s — an unclamped bogus instant
+    // would wrap i64 and poison the record.
+    probe.in_latency_sum_ns.fetch_add(
+        delta_ns.clamp(-1_000_000_000_000, 1_000_000_000_000),
+        Ordering::Relaxed,
+    );
+    probe.in_latency_count.fetch_add(1, Ordering::Relaxed);
+    if delta_ns < 0 {
+        probe
+            .in_capture_order_violations
+            .fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Input-callback observation body — mirrors
 /// `real_input_e2e.rs`'s discipline (relaxed atomics, one bounded
 /// slab pass) plus the bounded channel-0 handoff copy.
 fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCallbackInfo) {
     let frames = input.frames();
     let channels = input.channels();
+    let event_sequence = probe.in_event_sequence.fetch_add(1, Ordering::Relaxed) + 1;
     let callback_index = probe.in_callbacks.fetch_add(1, Ordering::Relaxed) as u64;
     probe.in_frames.fetch_add(frames as u64, Ordering::Relaxed);
     probe.in_min_frames.fetch_min(frames, Ordering::Relaxed);
@@ -3171,6 +4113,14 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
 
     let callback_ns = info.timestamp.callback.value();
     observe_input_stall(probe, callback_ns);
+    let trace_previous_ns = probe
+        .in_trace_previous_callback_ns
+        .swap(callback_ns, Ordering::Relaxed);
+    let delta_previous_callback_ns = if trace_previous_ns == i64::MIN {
+        None
+    } else {
+        Some(timestamp_delta_ns(trace_previous_ns, callback_ns))
+    };
     let previous = probe
         .in_last_callback_ns
         .fetch_max(callback_ns, Ordering::Relaxed);
@@ -3195,38 +4145,26 @@ fn observe_input(probe: &Probe, input: AudioBufferView<'_, f32>, info: InputCall
         probe.in_domain_mismatches.fetch_add(1, Ordering::Relaxed);
     }
     match info.timestamp.capture {
-        Some(capture) => {
-            probe.in_capture_some.fetch_add(1, Ordering::Relaxed);
-            // `callback - capture` = effective input latency —
-            // recorded, not asserted. A negative delta is an ordering
-            // violation: the capture instant must precede delivery.
-            let delta_ns = callback_ns - capture.time.value();
-            probe
-                .in_latency_min_ns
-                .fetch_min(delta_ns, Ordering::Relaxed);
-            probe
-                .in_latency_max_ns
-                .fetch_max(delta_ns, Ordering::Relaxed);
-            // Summed clamped to ±1000 s — an unclamped bogus instant
-            // would wrap i64 and poison the record.
-            probe.in_latency_sum_ns.fetch_add(
-                delta_ns.clamp(-1_000_000_000_000, 1_000_000_000_000),
-                Ordering::Relaxed,
-            );
-            probe.in_latency_count.fetch_add(1, Ordering::Relaxed);
-            if delta_ns < 0 {
-                probe
-                    .in_capture_order_violations
-                    .fetch_add(1, Ordering::Relaxed);
-            }
-        }
+        Some(capture) => observe_input_capture_latency(probe, capture, callback_ns),
         None => {
             probe.in_capture_none.fetch_add(1, Ordering::Relaxed);
         }
     }
-    if let Some(position) = info.frame_position {
-        observe_input_frame_position(probe, position, frames, callback_index);
-    }
+    let position_delta_vs_expected = info
+        .frame_position
+        .and_then(|position| observe_input_frame_position(probe, position, frames, callback_index));
+    probe
+        .in_event_trace
+        .record_callback(InputCallbackTraceSample {
+            sequence: event_sequence,
+            callback_index,
+            callback_timestamp_ns: callback_ns,
+            capture_timestamp_ns: info.timestamp.capture.map(|capture| capture.time.value()),
+            frame_position: info.frame_position,
+            frames: frames as u64,
+            delta_previous_callback_ns,
+            position_delta_vs_expected,
+        });
 
     // One bounded pass over the slab: non-finite scan + peak.
     let mut non_finite = 0_usize;
@@ -3359,10 +4297,18 @@ fn observe_output(
 fn input_error_callback(probe: &Arc<Probe>) -> InputErrorCallback {
     let probe = Arc::clone(probe);
     Box::new(move |error: DeviceError| {
-        probe.in_errors.fetch_add(1, Ordering::Relaxed);
-        probe
-            .in_last_error_kind
-            .store(error_kind_code(error), Ordering::Relaxed);
+        let event_sequence = probe.in_event_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        let error_index = probe.in_errors.fetch_add(1, Ordering::Relaxed);
+        let kind = error_kind_code(error);
+        probe.in_event_trace.record_error(
+            error_index,
+            InputErrorTraceSample {
+                sequence: event_sequence,
+                input_callback_count: probe.in_callbacks.load(Ordering::Relaxed) as u64,
+                error_kind: kind,
+            },
+        );
+        probe.in_last_error_kind.store(kind, Ordering::Relaxed);
         if error == DeviceError::Xrun {
             probe.in_xruns.fetch_add(1, Ordering::Relaxed);
         }
@@ -3985,5 +4931,340 @@ fn layout_for_channels(channels: u32) -> Option<ChannelLayout> {
         6 => Some(ChannelLayout::FivePointOne),
         8 => Some(ChannelLayout::SevenPointOne),
         _ => None,
+    }
+}
+
+fn xrun_test_input_info(callback_ns: i64, frame_position: Option<u64>) -> InputCallbackInfo {
+    InputCallbackInfo {
+        timestamp: InputTimestamp {
+            callback: MediaTime::new(callback_ns, DEVICE_CLOCK_TIMEBASE),
+            capture: None,
+        },
+        clock_domain: ClockDomainId::MONOTONIC,
+        frame_position,
+    }
+}
+
+fn xrun_test_trace_entry(
+    callback_index: u64,
+    sequence: u64,
+    delta_previous_callback_ns: Option<i64>,
+) -> InputCallbackTraceEntry {
+    InputCallbackTraceEntry {
+        sequence,
+        callback_index,
+        callback_timestamp_ns: callback_index.cast_signed() * 10_000_000,
+        delta_previous_callback_ns,
+        ..InputCallbackTraceEntry::default()
+    }
+}
+
+#[test]
+fn xrun_input_trace_slots_are_bounded_and_overflow_is_counted() {
+    let probe = Probe::default();
+    for index in 0..(INPUT_CALLBACK_TRACE_SLOTS + 2) {
+        let sequence = probe.in_event_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        probe
+            .in_event_trace
+            .record_callback(InputCallbackTraceSample {
+                sequence,
+                callback_index: index as u64,
+                callback_timestamp_ns: 1_000_000,
+                capture_timestamp_ns: Some(900_000),
+                frame_position: Some(index as u64 * 480),
+                frames: 480,
+                delta_previous_callback_ns: Some(10_000),
+                position_delta_vs_expected: Some(0),
+            });
+    }
+    assert_eq!(
+        probe
+            .in_event_trace
+            .callback_overflow
+            .load(Ordering::Relaxed),
+        2
+    );
+    let entries = probe
+        .in_event_trace
+        .callback_entries(INPUT_CALLBACK_TRACE_SLOTS + 2);
+    assert_eq!(entries.len(), INPUT_CALLBACK_TRACE_SLOTS);
+    assert_eq!(entries[0].capture_timestamp_ns, Some(900_000));
+    assert_eq!(entries[0].frame_position, Some(0));
+    assert_eq!(entries[0].delta_previous_callback_ns, Some(10_000));
+    assert_eq!(entries[INPUT_CALLBACK_TRACE_SLOTS - 1].callback_index, 95);
+
+    for error_index in 0..(INPUT_ERROR_TRACE_SLOTS + 2) {
+        let sequence = probe.in_event_sequence.fetch_add(1, Ordering::Relaxed) + 1;
+        probe.in_event_trace.record_error(
+            error_index,
+            InputErrorTraceSample {
+                sequence,
+                input_callback_count: 7,
+                error_kind: 3,
+            },
+        );
+    }
+    assert_eq!(
+        probe.in_event_trace.error_overflow.load(Ordering::Relaxed),
+        2
+    );
+    let errors = probe
+        .in_event_trace
+        .error_entries(INPUT_ERROR_TRACE_SLOTS + 2);
+    assert_eq!(errors.len(), INPUT_ERROR_TRACE_SLOTS);
+    assert_eq!(errors[0].input_callback_count, 7);
+    assert_eq!(errors[0].error_kind, 3);
+}
+
+#[test]
+fn xrun_data_error_sequence_and_signed_position_deltas_are_ordered() {
+    let probe = Arc::new(Probe::default());
+    probe
+        .in_expected_position
+        .store(u64::MAX, Ordering::Relaxed);
+    let samples = [0.2_f32; 4];
+    let view = AudioBufferView::try_new(&samples, 1, 4).expect("shape is valid");
+    let mut error_callback = input_error_callback(&probe);
+
+    observe_input(&probe, view, xrun_test_input_info(1_000_000, Some(100)));
+    error_callback(DeviceError::Xrun);
+    observe_input(&probe, view, xrun_test_input_info(2_000_000, Some(104)));
+    observe_input(&probe, view, xrun_test_input_info(3_000_000, Some(110)));
+    observe_input(&probe, view, xrun_test_input_info(4_000_000, Some(20)));
+
+    let entries = probe.in_event_trace.callback_entries(4);
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.sequence)
+            .collect::<Vec<_>>(),
+        [1, 3, 4, 5]
+    );
+    let errors = probe.in_event_trace.error_entries(1);
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].sequence, 2);
+    assert_eq!(errors[0].input_callback_count, 1);
+    assert_eq!(errors[0].error_kind, 5);
+
+    assert_eq!(
+        probe.in_event_trace.callback_position_delta[0].load(Ordering::Relaxed),
+        INPUT_TRACE_NO_DELTA
+    );
+    assert_eq!(entries[0].position_delta_vs_expected, None);
+    assert_eq!(entries[1].position_delta_vs_expected, Some(0));
+    assert_eq!(entries[2].position_delta_vs_expected, Some(2));
+    assert_eq!(entries[3].position_delta_vs_expected, Some(-94));
+    assert_eq!(entries[1].delta_previous_callback_ns, Some(1_000_000));
+    assert_eq!(signed_position_delta(u64::MAX, 100), None);
+    assert_eq!(signed_position_delta(100, 130), Some(30));
+    assert_eq!(signed_position_delta(100, 20), Some(-80));
+    assert_eq!(
+        probe
+            .in_contiguous_position_transitions
+            .load(Ordering::Relaxed),
+        1
+    );
+    assert_eq!(probe.in_forward_position_gaps.load(Ordering::Relaxed), 1);
+    assert_eq!(probe.in_backward_position_jumps.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn xrun_zero_run_analysis_classifies_boundaries_and_approximates_location() {
+    let samples = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+    let (longest, leading, trailing, interior) = analyze_zero_runs(&samples);
+    assert_eq!(
+        longest,
+        Some(ZeroRunExtent {
+            start_sample: 3,
+            end_sample_exclusive: 7,
+            frames: 4,
+        })
+    );
+    assert_eq!(leading, 2);
+    assert_eq!(trailing, 3);
+    assert_eq!(interior, 4);
+
+    let all_zero = [0.0_f32; 5];
+    let (all_longest, all_leading, all_trailing, all_interior) = analyze_zero_runs(&all_zero);
+    assert_eq!(all_longest.map(|extent| extent.frames), Some(5));
+    assert_eq!(all_leading, 5);
+    assert_eq!(all_trailing, 5);
+    assert_eq!(all_interior, 0);
+
+    let entries = [
+        InputCallbackTraceEntry {
+            callback_index: 0,
+            frames: 3,
+            ..InputCallbackTraceEntry::default()
+        },
+        InputCallbackTraceEntry {
+            callback_index: 1,
+            frames: 4,
+            ..InputCallbackTraceEntry::default()
+        },
+    ];
+    assert_eq!(
+        approximate_callback_location(&entries, 4),
+        Some(ApproximateCallbackLocation {
+            callback_index: 1,
+            frame_offset_in_callback: 1,
+        })
+    );
+    assert_eq!(approximate_callback_location(&entries, 7), None);
+}
+
+#[test]
+fn xrun_burst_inference_groups_only_close_nonnegative_deltas() {
+    let entries = [
+        xrun_test_trace_entry(0, 1, None),
+        xrun_test_trace_entry(1, 2, Some(1_000_000)),
+        xrun_test_trace_entry(2, 3, Some(XRUN_BURST_THRESHOLD_NS)),
+        xrun_test_trace_entry(3, 4, Some(3_000_000)),
+        xrun_test_trace_entry(4, 5, Some(1_000_000)),
+        xrun_test_trace_entry(5, 6, Some(-1)),
+    ];
+    let bursts = infer_callback_bursts(&entries, XRUN_BURST_THRESHOLD_NS);
+    assert_eq!(bursts.len(), 2);
+    assert_eq!(bursts[0].start_callback_index, 0);
+    assert_eq!(bursts[0].end_callback_index, 2);
+    assert_eq!(bursts[0].callback_count, 3);
+    assert_eq!(bursts[0].deltas_ns, [1_000_000, XRUN_BURST_THRESHOLD_NS]);
+    assert_eq!(bursts[1].start_callback_index, 3);
+    assert_eq!(bursts[1].end_callback_index, 4);
+    assert_eq!(bursts[1].callback_count, 2);
+    assert!(
+        infer_callback_bursts(&entries[..1], XRUN_BURST_THRESHOLD_NS).is_empty(),
+        "one callback cannot form a burst"
+    );
+}
+
+fn xrun_diagnostics_stream_fixture(output: &mut XrunHarnessOutput) {
+    output.diagnostics.stream.input = XrunStreamDirectionDiagnostics {
+        sample_rate: 48_000,
+        channels: 2,
+        sample_format: "F32".to_owned(),
+        requested_fixed_buffer_frames: REQUESTED_FRAMES,
+        fixed_to_default_fallback: true,
+        backend_buffer_size: BackendBufferSizeObservation::Fixed(REQUESTED_FRAMES),
+        latency_frames: Some(960),
+    };
+    output.diagnostics.stream.output = XrunStreamDirectionDiagnostics {
+        sample_rate: 48_000,
+        channels: 2,
+        sample_format: "F32".to_owned(),
+        requested_fixed_buffer_frames: REQUESTED_FRAMES,
+        fixed_to_default_fallback: false,
+        backend_buffer_size: BackendBufferSizeObservation::Default,
+        latency_frames: None,
+    };
+}
+
+fn xrun_diagnostics_runtime_fixture(output: &mut XrunHarnessOutput) {
+    output
+        .diagnostics
+        .runtime
+        .input_events
+        .callbacks
+        .push(InputCallbackTraceEntry {
+            sequence: 1,
+            callback_index: 0,
+            callback_timestamp_ns: 1_000_000,
+            capture_timestamp_ns: Some(900_000),
+            frame_position: Some(0),
+            frames: 480,
+            delta_previous_callback_ns: None,
+            position_delta_vs_expected: Some(0),
+        });
+    output
+        .diagnostics
+        .runtime
+        .input_events
+        .errors
+        .push(InputErrorTraceEntry {
+            sequence: 2,
+            input_callback_count: 1,
+            error_kind: 5,
+        });
+    output.diagnostics.runtime.zero_gap = ZeroGapDiagnostics {
+        captured_frames: 1_000,
+        captured_channels: 2,
+        longest_zero_run: Some(ZeroRunExtent {
+            start_sample: 10,
+            end_sample_exclusive: 20,
+            frames: 10,
+        }),
+        approximate_longest_start_location: Some(ApproximateCallbackLocation {
+            callback_index: 0,
+            frame_offset_in_callback: 10,
+        }),
+        max_leading_zero_run_frames: 2,
+        max_trailing_zero_run_frames: 3,
+        max_interior_zero_run_frames: 10,
+        channels_beyond_channel0_captured: true,
+        channels_beyond_channel0_zero_scanned: false,
+        ..ZeroGapDiagnostics::default()
+    };
+    output.diagnostics.runtime.timing = XrunTimingDiagnostics {
+        inferred_bursts: vec![InferredBurst {
+            start_callback_index: 0,
+            end_callback_index: 2,
+            start_sequence: 1,
+            end_sequence: 3,
+            callback_count: 3,
+            deltas_ns: vec![1_000_000, 2_000_000],
+        }],
+        max_callback_stall_ms: 40,
+    };
+    output.diagnostics.runtime.position_transitions = XrunPositionTransitionDiagnostics {
+        forward: 1,
+        backward_or_reset: 2,
+        contiguous: 7,
+    };
+}
+
+#[test]
+fn xrun_diagnostics_json_contains_additive_sections_and_stream_shape() {
+    let mut output = xrun_output_shell(XRUN_POSITIVE_CASE, XrunCaseVerdict::Pass, "detail");
+    xrun_diagnostics_stream_fixture(&mut output);
+    xrun_diagnostics_runtime_fixture(&mut output);
+
+    let json = xrun_observation_json(&output);
+    for required in [
+        "\"diagnostics\":{",
+        "\"stream\":{",
+        "\"sample_rate\":48000",
+        "\"channels\":2",
+        "\"sample_format\":\"F32\"",
+        "\"requested_fixed_buffer_frames\":480",
+        "\"fixed_to_default_fallback\":true",
+        "\"backend_buffer_size\":{\"state\":\"fixed\",\"frames\":480}",
+        "\"latency_frames\":960",
+        "\"input_events\":{",
+        "\"callback_trace_capacity\":96",
+        "\"error_trace_capacity\":16",
+        "\"capture_timestamp_present\":true",
+        "\"frame_position_present\":true",
+        "\"position_delta_vs_expected\":0",
+        "\"error_kind\":\"Xrun\"",
+        "\"zero_gap\":{",
+        "\"longest_zero_run\":{",
+        "\"start_sample\":10",
+        "\"end_sample_exclusive\":20",
+        "\"max_leading_zero_run_frames\":2",
+        "\"max_trailing_zero_run_frames\":3",
+        "\"max_interior_zero_run_frames\":10",
+        "\"channels_beyond_channel0_captured\":true",
+        "\"channels_beyond_channel0_zero_scanned\":false",
+        "\"timing\":{",
+        "\"burst_threshold_ns\":2000000",
+        "\"inferred_burst_count\":1",
+        "\"inferred_burst_max_callbacks\":3",
+        "\"max_callback_stall_ms\":40",
+        "\"position_transitions\":{",
+        "\"forward\":1",
+        "\"backward_or_reset\":2",
+        "\"contiguous\":7",
+    ] {
+        assert!(json.contains(required), "missing {required}: {json}");
     }
 }

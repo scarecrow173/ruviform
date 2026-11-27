@@ -152,6 +152,9 @@ protected:
     ULONGLONG                   m_ullXrunWriteBytePosition;
     ULONGLONG                   m_ullXrunZeroStartByte;
     ULONGLONG                   m_ullXrunZeroEndByte;
+    BOOLEAN                     m_bXrunNotificationSuppressed;
+    ULONG                       m_ulXrunZeroFillState;
+    ULONG                       m_ulXrunDroppedPacketEvents;
 
 #if defined(SYSVAD_BTH_BYPASS) || defined(SYSVAD_USB_SIDEBAND)
     BOOL                        m_SidebandOpen;
