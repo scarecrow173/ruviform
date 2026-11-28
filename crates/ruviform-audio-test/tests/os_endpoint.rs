@@ -1784,6 +1784,7 @@ impl ClassicSelftestObservation {
         self.flags & bit != 0
     }
 
+    #[cfg(windows)]
     fn set_flag(&mut self, bit: u32, value: bool) {
         if value {
             self.flags |= bit;
@@ -2135,6 +2136,10 @@ mod classic_etw_selftest {
 }
 
 #[cfg(not(windows))]
+#[expect(
+    clippy::unused_self,
+    reason = "stub signatures mirror the Windows classic ETW selftest interface without mutable state"
+)]
 mod classic_etw_selftest_stub {
     use super::ClassicSelftestObservation;
     use std::time::Duration;
