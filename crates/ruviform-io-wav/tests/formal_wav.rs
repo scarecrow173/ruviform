@@ -483,6 +483,43 @@ fn decode_planes(bytes: &[u8]) -> (StreamInfo, usize, Vec<Vec<f32>>) {
     (info, frames, planes)
 }
 
+/// The shell half of the rf#1015 slice-18 boundary: a non-wire
+/// declaration is rejected `Unsupported`, and the lazy diagnostic source
+/// remains an `InvalidInput` `io::Error` saying that the format is outside
+/// the `wav_capabilities` wire set. The exact sentence is not promoted to
+/// a wire contract; the assertions pin only the stable kind and meaning.
+#[test]
+fn unsupported_wire_format_rejection_carries_invalid_input_diagnostic() {
+    let spec = WavOutputSpec {
+        sample_rate: SampleRate::new(48_000).expect("nonzero rate"),
+        layout: ChannelLayout::Stereo,
+        sample_format: SampleFormat::F64,
+    };
+    let info = spec.stream_info();
+    let results: [ruviform_media_io::Result<()>; 2] = [
+        make_encoder(&info).map(|_| ()),
+        open_muxer(Cursor::new(Vec::new()), &[info]).map(|_| ()),
+    ];
+    for result in results {
+        let error = result.expect_err("non-wire format must be rejected");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+        let source = std::error::Error::source(&error).expect("io diagnostic source");
+        let io_error = source
+            .downcast_ref::<std::io::Error>()
+            .expect("unsupported diagnostic is an io::Error");
+        assert_eq!(io_error.kind(), std::io::ErrorKind::InvalidInput);
+        let diagnostic = io_error.to_string();
+        assert!(
+            diagnostic.contains("F64"),
+            "diagnostic names the format: {diagnostic}"
+        );
+        assert!(
+            diagnostic.contains("is not in wav_capabilities"),
+            "diagnostic explains the wire-set rejection: {diagnostic}"
+        );
+    }
+}
+
 proptest! {
     /// The stream-declaration gate is a biconditional: a spec is
     /// accepted iff its wire format is advertised AND
@@ -1156,17 +1193,18 @@ proptest! {
 /// symbolic `WavOutputSpec` was infeasible on this WSL2 box:
 /// `SampleRate::new` normalizes via `TimeBase::new`'s Euclid
 /// `while` loop whose nested symbolic `%` unrolls exhaust CBMC
-/// memory. `Wire::new`'s `Unsupported` arm used to eagerly build
-/// `std::io::Error::new` + `format!`, which was even worse — the
-/// diagnostic payload is now `cfg(kani)`-substituted in production
-/// (`unsupported_sample_format` in `src/wav.rs`), shrinking every
-/// `Wire::new` unroll. Each `open_muxer` unroll still costs ~1-2
+/// memory. `Wire::new` now delegates its numeric/membership decision to
+/// the pure scalar core in `src/wav.rs`; there is no `cfg(kani)`
+/// substitution of production diagnostics. The concrete success matrix
+/// never reaches the unsupported-diagnostic shell, while the decision
+/// proofs avoid shell/error machinery entirely. Each `open_muxer`
+/// unroll still costs ~1-2
 /// GiB of SSA (std `Cursor`/`Write`/`io::Error` machinery plus the
 /// stream-declaration builder), so the matrices below split per
 /// outcome class: the PCM-form and extensible-form success + stream
 /// declaration in `open_muxer_spec_contract_{pcm,extensible}`.
 /// The byte-rate overflow rejection is proven at the `Wire::new`
-/// gate by `wire_new_gate_is_exact_*` in `src/wav.rs` — its
+/// gate by `wav_decl_gate_byte_rate_boundary_*` in `src/wav.rs` — its
 /// boundary matrix covers this exact spec (7.1 F32 at
 /// `u32::MAX / 32 + 1`). The composite Err-direction formula
 /// exceeds the reference WSL2 envelope at *every* depth tried:
@@ -1179,7 +1217,7 @@ proptest! {
 /// proptest-covered
 /// (`muxer_rejections_are_invalid_data_and_not_sticky`). The
 /// 16-byte `fmt ` success path is proven at the serialization
-/// layer by `fmt_and_header_layout`; its `open_muxer` glue is
+/// layer by `wav_decl_gate_fmt_and_header_layout`; its `open_muxer` glue is
 /// identical to the extensible form's and stays proptest-covered
 /// (`open_muxer_writes_complete_header`).
 #[cfg(kani)]
@@ -1246,13 +1284,13 @@ mod proofs {
     /// kind, never a panic. `unwind(96)` covers the builtin
     /// memmove loops inside the sink writes of the 68-byte header.
     ///
-    /// Split into two disjoint success proofs — like the `wire_new`
+    /// Split into two disjoint success proofs — like the declaration-gate
     /// gate proofs, the split is solver-RAM, not semantics: each
     /// `open_muxer` unroll encodes its internal diagnostic paths,
     /// and the single 6-spec matrix exhausted the reference WSL2
     /// service (~2.5 GiB RSS before `Wsl/Service/E_UNEXPECTED`).
     /// The rejection half is covered at the `Wire::new` gate
-    /// (`wire_new_gate_is_exact_*`); the composite `open_muxer`
+    /// (`wav_decl_gate_byte_rate_boundary_*`); the composite `open_muxer`
     /// Err-direction proof stays out of the lane — it never
     /// produces a verdict in-envelope (see the module doc).
     fn check_open_muxer(specs: &[WavOutputSpec]) {
