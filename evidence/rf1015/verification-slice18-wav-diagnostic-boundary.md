@@ -73,6 +73,12 @@ transient mutant は production core の byte-rate 計算を `u64::from(rate) * 
 | post-revert selective Kani / test-formal / crate test | 0 / 0 / 0 | Pass |
 | `mise exec -- prek run --all-files` | 0 | Pass |
 
+## branch CI
+
+`gh workflow run ci.yml --repo scarecrow173/ruviform --ref test/1015-wav-diagnostic-boundary` で manual dispatchし、foreground `gh run watch 46155331315 --repo scarecrow173/ruviform --exit-status --interval 60` を実行した。run URLは <https://github.com/scarecrow173/ruviform/actions/runs/46155331315>、target headは evidence commit `662875a21d2bc5c7e4b88f52b2caa30a8dde133e`、status `completed`、conclusion `success`、23/23 job success（`ci-summary` を含む）、createdAt `2026-11-28T14:34:07Z`、updatedAt `2026-11-28T14:43:05Z` である。先行 run 46153737523 は proof内 warning cleanup前の `3cb0ae09` を対象とし、最終対象 SHA へ進めるため cancelした superseded runであり、受入証拠には使わない。
+
+branch CI は対象 branch headの検証であり、Proof Passや consumer互換 Passへ転用しない。merge後 main統合検証の代用でもない。
+
 ## Consumer impact assessment（repo 内 baseline）
 
 最終 PR head に対する consumer verdict は、SHA 関係を壊さないため repo 内 evidence に後追い commit せず、GitHub Actions artifact/Job Summary と PR 本文を正本とする。ここには checkout 時点の影響調査だけを記録する。
