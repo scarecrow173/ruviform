@@ -90,6 +90,12 @@ branch CI は対象 branch headの検証であり、Proof Passや consumer互換
 
 既知 baseline run 46144010070 は最終 PR head の candidate evidence ではない。Synvelis `test-rt` linker bus error が最終 candidate runで再現した場合も、ruviform 製品回帰・consumer 既存問題・インフラ/flaky を根拠なく混同せず、unknown または該当 lane 未達として分類する。
 
+## Completion Gate ledger correction
+
+Completion Gate の needs-fix を受け、ledger 構造だけを evidence-only で修正した。§3.1 に混入していた 5列 mutation row を除去し、§6.1 には 5列 mutation row、§6.2 には 5列 budget row を置いた。full Property group rowは §3.4 のみに残る。slice 12 TAR measured total の mutation evidenceは `2/58 semantic assertion failed` へ復元し、`57.783` は slice 18 lane wall clockであって slice 12 check countではないことを確認した。
+
+この修正は製品/proof/mise差分を持たない evidence-only descendantである。verified Sync Commit `8322a6bc298a0bc8bee24ae0daeb2ee969ee820a`、branch CI target `662875a21d2bc5c7e4b88f52b2caa30a8dde133e`、初回 final-head consumer target `d2eb93b8c567ce6741c2b730a82643d4ee92736c` はいずれもこの修正 commitの ancestorであり、新 final headそのものの SHAではない。Completion Gate fixed-point解釈に従い、新 final headに対する fresh consumer-verify verdictは repo内証跡へ追記せず GitHub Actions artifactとPR本文に記録する。
+
 ## 残る未証明領域
 
 - shell-core 接続、`Wire::new` の rejection class → `ErrorKind` 写像、diagnostic payload meaning は Kani ではなく deterministic/proptest regression。
