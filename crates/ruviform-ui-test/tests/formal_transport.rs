@@ -9,18 +9,18 @@
 //!   longer than `MAX_INTENT_BYTES` is `Err(InvalidInput)` with
 //!   nothing written.
 //! - `read_frame` tri-classifies: a complete frame → `Frame`, a
-//!   length prefix that cannot complete (< 4 bytes) → `Eof`, a
-//!   declared length over the cap → `TooLarge { declared }` after
-//!   draining the declared body so the stream stays frame-aligned,
-//!   a truncated body → `Err(UnexpectedEof)`, and a complete body
-//!   that is not UTF-8 → `Err(InvalidData)`.
+//!   clean EOF before the first length-prefix byte → `Eof`, a partial
+//!   length prefix (1..=3 bytes) → `Err(UnexpectedEof)`, a declared
+//!   length over the cap → `TooLarge { declared }` after draining the
+//!   declared body so the stream stays frame-aligned, a truncated body
+//!   → `Err(UnexpectedEof)`, and a complete body that is not UTF-8 →
+//!   `Err(InvalidData)`.
 //!
-//! The `#[cfg(kani)]` module at the bottom carries the legacy read-side
-//! shell contract as a bounded proof. The length-prefix/write-cap
-//! decision-core proofs live beside the production core in
-//! `src/transport.rs` and run via `mise run test-formal-kani w-frm-codec`;
-//! the bounds and assumptions are documented in
-//! `docs/specs/formal-verification.md`.
+//! The read-classification and length-prefix/write-cap decision-core
+//! proofs live beside the production core in `src/transport.rs` and run
+//! via `mise run test-formal-kani w-frm-readclass` /
+//! `mise run test-formal-kani w-frm-codec`; the bounds and assumptions
+//! are documented in `docs/specs/formal-verification.md`.
 
 use std::io::Cursor;
 
@@ -84,7 +84,7 @@ proptest! {
                 prop_assert_eq!(body.as_bytes(), &bytes[4..4 + declared as usize]);
             }
             Ok(FrameRead::Eof) => {
-                prop_assert!(bytes.len() < 4, "Eof requires a short length prefix");
+                prop_assert!(bytes.is_empty(), "Eof requires EOF before the first prefix byte");
             }
             Ok(FrameRead::TooLarge { declared }) => {
                 prop_assert!(bytes.len() >= 4);
@@ -95,23 +95,24 @@ proptest! {
                 prop_assert_eq!(cur.position(), bytes.len() as u64);
             }
             Ok(_) => prop_assert!(false, "new FrameRead variant — extend the property"),
-            Err(e) => {
-                prop_assert!(bytes.len() >= 4, "a short stream cannot produce Err");
-                let declared = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-                match e.kind() {
-                    // declared body truncated mid-frame
-                    std::io::ErrorKind::UnexpectedEof => {
-                        prop_assert!(declared as usize <= MAX_INTENT_BYTES);
-                        prop_assert!(bytes.len() - 4 < declared as usize);
-                    }
-                    // complete body that is not valid UTF-8
-                    std::io::ErrorKind::InvalidData => {
-                        prop_assert!(declared as usize <= MAX_INTENT_BYTES);
-                        prop_assert!(bytes.len() - 4 >= declared as usize);
-                    }
-                    other => prop_assert!(false, "unexpected io error kind {other:?}"),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::UnexpectedEof if bytes.len() < 4 => {
+                    prop_assert!(!bytes.is_empty(), "empty input must be clean EOF");
                 }
-            }
+                std::io::ErrorKind::UnexpectedEof => {
+                    let declared = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+                    prop_assert!(declared as usize <= MAX_INTENT_BYTES);
+                    prop_assert!(bytes.len() - 4 < declared as usize);
+                }
+                // complete body that is not valid UTF-8
+                std::io::ErrorKind::InvalidData => {
+                    prop_assert!(bytes.len() >= 4);
+                    let declared = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+                    prop_assert!(declared as usize <= MAX_INTENT_BYTES);
+                    prop_assert!(bytes.len() - 4 >= declared as usize);
+                }
+                other => prop_assert!(false, "unexpected io error kind {other:?}"),
+            },
         }
     }
 }
@@ -177,59 +178,65 @@ fn frame_length_boundary_connection_regression() {
     }
 }
 
-/// Legacy bounded proof of the read-side shell contract, verified over
-/// bounded symbolic input by Kani (`cargo kani --tests`; run via the
-/// aggregate `mise run test-formal-kani`). Bounds and assumptions:
-/// `docs/specs/formal-verification.md`.
-#[cfg(kani)]
-mod proofs {
-    use super::*;
-
-    /// Bounded stream length — covers every `FrameRead` arm plus
-    /// mid-frame EOF while keeping the I/O unwinding small. The 1 MiB
-    /// declared-cap path stays reachable through the symbolic u32
-    /// prefix.
-    const STREAM_LEN: usize = 32;
-
-    /// A symbolic stream of symbolic length ≤ `STREAM_LEN`.
-    fn any_stream() -> ([u8; STREAM_LEN], usize) {
-        let bytes: [u8; STREAM_LEN] = kani::any();
-        let len: usize = kani::any();
-        kani::assume(len <= STREAM_LEN);
-        (bytes, len)
+/// Deterministic connection regression for read classification: clean EOF,
+/// every partial-prefix length, body truncation, invalid UTF-8, extra bytes
+/// as the next frame's input, and oversized-frame drain alignment must reach
+/// the public shell.
+#[test]
+fn read_frame_classification_connection_regression() {
+    let mut cur = Cursor::new(Vec::<u8>::new());
+    match read_frame(&mut cur).expect("empty input must classify") {
+        FrameRead::Eof => {}
+        _ => panic!("empty input must be clean EOF"),
     }
 
-    /// `read_frame` terminates on every bounded stream and honors
-    /// the tri-class contract and the TooLarge drain position. The
-    /// unwind bound caps I/O, drain, and UTF-8 loops over the
-    /// ≤32-byte stream.
-    #[kani::proof]
-    #[kani::unwind(48)]
-    fn read_frame_contract() {
-        let (bytes, len) = any_stream();
-        let mut cur = Cursor::new(&bytes[..len]);
-        match read_frame(&mut cur) {
-            Ok(FrameRead::Frame(body)) => {
-                let declared = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                assert_eq!(declared as usize, body.len());
-                assert_eq!(cur.position(), 4 + u64::from(declared));
-            }
-            Ok(FrameRead::Eof) => assert!(len < 4),
-            Ok(FrameRead::TooLarge { declared }) => {
-                assert!(declared as usize > MAX_INTENT_BYTES);
-                assert_eq!(cur.position(), len as u64);
-            }
-            Ok(_) => panic!("unexpected FrameRead variant"),
-            Err(e) => {
-                assert!(len >= 4);
-                let declared = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                assert!(declared as usize <= MAX_INTENT_BYTES);
-                match e.kind() {
-                    std::io::ErrorKind::UnexpectedEof => assert!(len - 4 < declared as usize),
-                    std::io::ErrorKind::InvalidData => assert!(len - 4 >= declared as usize),
-                    _ => panic!("unexpected io error kind"),
-                }
-            }
-        }
+    for prefix_len in 1usize..=3 {
+        let bytes = vec![0u8; prefix_len];
+        let mut cur = Cursor::new(bytes);
+        let err = read_frame(&mut cur).expect_err("partial prefix must fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    let mut truncated = Vec::new();
+    truncated.extend_from_slice(&2u32.to_le_bytes());
+    truncated.push(b'a');
+    let mut cur = Cursor::new(truncated);
+    let err = read_frame(&mut cur).expect_err("truncated body must fail");
+    assert_eq!(err.kind(), std::io::ErrorKind::UnexpectedEof);
+
+    let mut invalid_utf8 = Vec::new();
+    invalid_utf8.extend_from_slice(&1u32.to_le_bytes());
+    invalid_utf8.push(0xff);
+    let mut cur = Cursor::new(invalid_utf8);
+    let err = read_frame(&mut cur).expect_err("invalid UTF-8 body must fail");
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+
+    let mut two_frames = Vec::new();
+    write_frame(&mut two_frames, "first").unwrap();
+    write_frame(&mut two_frames, "second").unwrap();
+    let mut cur = Cursor::new(two_frames);
+    match read_frame(&mut cur).expect("first frame must read") {
+        FrameRead::Frame(body) => assert_eq!(body, "first"),
+        _ => panic!("first complete frame must come back Frame"),
+    }
+    match read_frame(&mut cur).expect("extra bytes must remain as the next frame") {
+        FrameRead::Frame(body) => assert_eq!(body, "second"),
+        _ => panic!("bytes after the first frame must remain frame-aligned"),
+    }
+
+    let declared = u32::try_from(MAX_INTENT_BYTES + 1).unwrap();
+    let tail = "aligned";
+    let mut stream = Vec::with_capacity(4 + declared as usize + 4 + tail.len());
+    stream.extend_from_slice(&declared.to_le_bytes());
+    stream.extend_from_slice(&vec![b'z'; declared as usize]);
+    write_frame(&mut stream, tail).unwrap();
+    let mut cur = Cursor::new(stream);
+    match read_frame(&mut cur).expect("oversized frame must classify") {
+        FrameRead::TooLarge { declared: got } => assert_eq!(got, declared),
+        _ => panic!("oversized frame must be TooLarge"),
+    }
+    match read_frame(&mut cur).expect("tail frame must remain aligned") {
+        FrameRead::Frame(body) => assert_eq!(body, tail),
+        _ => panic!("oversized drain must preserve frame alignment"),
     }
 }

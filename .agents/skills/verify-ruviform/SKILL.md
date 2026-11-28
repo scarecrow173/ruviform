@@ -333,6 +333,7 @@ mise run test-formal-kani                 # legacy aggregate Kani proofs (native
 mise run test-formal-kani w-ipc-op        # selective W-IPC-OP byte-core proofs only
 mise run test-formal-kani w-ipc-envelope  # selective W-IPC-ENVELOPE size/field decision-core proofs only
 mise run test-formal-kani w-frm-codec     # selective frame length decision-core proofs only
+mise run test-formal-kani w-frm-readclass  # selective frame read-classification decision-core proofs only
 mise run test-formal-kani arc-idx-limit   # selective ZIP index decision-core proof only
 mise run test-formal-kani arc-tar-metadata-budget # selective TAR extension metadata pre-buffer proof only
 mise run test-formal-kani arc-tar-block-budget # selective TAR fixed metadata block proof only
@@ -364,7 +365,8 @@ rather than treating harness count, process exit 0, or CI green as proof. The
 implemented selective re-run entries are `mise run test-formal-kani w-ipc-op`
 for the rf#1015 `W-IPC-OP` byte-core proofs, `w-ipc-envelope` for the intent
 envelope size/field decision-core proofs, `w-frm-codec` for the frame
-length-prefix/write-cap decision-core proofs, `arc-idx-limit` for the ZIP
+length-prefix/write-cap decision-core proofs, `w-frm-readclass` for the frame
+read EOF/UTF-8/length classification decision-core proofs, `arc-idx-limit` for the ZIP
 index decision-core proof, `arc-tar-metadata-budget` for the TAR extension
 metadata pre-buffer decision-core proof, `arc-tar-block-budget` for the TAR
 fixed metadata block decision-core proof, `arc-payload-limit` for the TAR declared-size
@@ -429,8 +431,9 @@ private ZIP decision cores in `ruviform-io-archive/src/zip/read.rs`, the TAR mea
 total read-window/accumulation exactness proof lives beside the private TAR measured-total
 decision core in `ruviform-io-archive/src/tar/read.rs`, the TAR entry progress/read-demand
 composition exactness proof lives beside the private TAR entry-progress decision core in the same file, and the
-rf#1015 `W-FRM-CODEC` length-prefix/write-cap proofs live beside the private
-frame decision core in `ruviform-ui-test/src/transport.rs`. These proofs live in product sources
+rf#1015 `W-FRM-CODEC` length-prefix/write-cap proofs and `W-FRM-READCLASS`
+read-classification proofs live beside the private frame decision cores in
+`ruviform-ui-test/src/transport.rs`. These proofs live in product sources
 because `cargo kani --tests` covers lib-target proofs. All other proofs stay out of
 product sources. The proofs use a concrete skeleton plus a symbolic gate
 field (record/field limits, the byte budget); arbitrary byte streams stay
@@ -458,8 +461,11 @@ proofs. Its filter selects only harness names containing `w_ipc_envelope`;
 the retired `parse_intent_error_contract` shell harness is not selected. The
 `w-frm-codec` selector runs one `-j1 -p ruviform-ui-test --harness
 w_frm_codec` invocation against the three in-src frame length decision-core
-proofs. Its filter selects only harness names containing `w_frm_codec`; the
-legacy `read_frame_contract` shell harness is not selected. The archive selectors use exact substring filters: `arc_idx_limit` selects
+proofs. Its filter selects only harness names containing `w_frm_codec`. The
+`w-frm-readclass` selector runs one `-j1 -p ruviform-ui-test --harness
+w_frm_readclass` invocation against the two in-src read-classification
+proofs. Its filter selects only harness names containing `w_frm_readclass`;
+the retired `read_frame_contract` shell harness is not selected. The archive selectors use exact substring filters: `arc_idx_limit` selects
 only `zip::read::proofs::arc_idx_limit_decision_exactness`,
 `arc_payload_limit` selects only
 `tar::read::proofs::arc_payload_limit_declared_exactness`,
@@ -510,10 +516,10 @@ replays them first.
 Mutation-fail proof is required evidence: temporarily break one codec
 invariant, run the property suite or the selective proof lane that owns the
 mutated invariant, record the failure, revert completely, and re-run green.
-For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `ARC-IDX-LIMIT`,
+For `W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `W-FRM-READCLASS`, `ARC-IDX-LIMIT`,
 `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`, and the structured slice-3 proofs, the
 required mutation evidence is the selective Kani lane (`w-ipc-op`,
-`w-ipc-envelope`, `w-frm-codec`, `arc-idx-limit`, `arc-tar-metadata-budget`,
+`w-ipc-envelope`, `w-frm-codec`, `w-frm-readclass`, `arc-idx-limit`, `arc-tar-metadata-budget`,
 `arc-tar-block-budget`, `arc-payload-limit`,
 `arc-zip-entry-size`, `arc-zip-output-cap`, `arc-zip-measured-total`,
 `arc-tar-measured-total`, `arc-tar-entry-progress`, `arc-tar-struct`, or `sd-csv-limits`),
