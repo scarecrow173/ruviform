@@ -726,6 +726,7 @@ InstallEndpointRenderFilters(
     PUNKNOWN                    unknownTopology         = NULL;
     PUNKNOWN                    unknownWave             = NULL;
     PPORTCLSETWHELPER           pPortClsEtwHelper       = NULL;
+    PPORTWMIREGISTRATION        pPortWmiRegistration    = NULL;
 #ifdef _USE_IPortClsRuntimePower
     PPORTCLSRUNTIMEPOWER        pPortClsRuntimePower    = NULL;
 #endif // _USE_IPortClsRuntimePower
@@ -753,6 +754,12 @@ InstallEndpointRenderFilters(
             ASSERT(pPortClsEtwHelper != NULL);
             pPortClsEtwHelper->Release();
         }
+
+        NTSTATUS ntWmiProbeQueryStatus = unknownWave->QueryInterface(IID_IPortWMIRegistration, (PVOID *)&pPortWmiRegistration);
+        _pAdapterCommon->RegisterWmiProbe(
+            NT_SUCCESS(ntWmiProbeQueryStatus) ? pPortWmiRegistration : NULL,
+            ntWmiProbeQueryStatus);
+        SAFE_RELEASE(pPortWmiRegistration);
 
 #ifdef _USE_IPortClsRuntimePower
         // Let's get the runtime power interface on PortCls.

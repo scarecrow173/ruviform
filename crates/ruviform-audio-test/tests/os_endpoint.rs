@@ -37,7 +37,7 @@
 //! override the recorded repo/sha; unset values record `"unknown"`.
 
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -1555,6 +1555,8 @@ const PORTCLS_POSITION_EVENT_GUID: &str = "{93BB152D-DF9E-4282-B709-1696392F2557
 const PORTCLS_ROOT_EVENT_GUID: &str = "{9502CBC6-AA74-4EFF-BA91-D9329BCCE758}";
 const CLASSIC_SELFTEST_PROVIDER_GUID: &str = "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2001}";
 const CLASSIC_SELFTEST_EVENT_CLASS_GUID: &str = "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2002}";
+const DRIVER_WMI_PROBE_CONTROL_GUID: &str = "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2101}";
+const DRIVER_WMI_PROBE_EVENT_GUID: &str = "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2102}";
 const KERNEL_EVENTTRACING_ENABLE_EVENT_ID: u64 = 14;
 const KERNEL_EVENTTRACING_DISABLE_EVENT_ID: u64 = 15;
 const KERNEL_EVENTTRACING_ENABLE_OPCODE: u64 = 18;
@@ -1563,6 +1565,7 @@ const PORTCLS_MINIPORT_TRACE_TYPE_BASE: u64 = 96;
 const PORTCLS_MINIPORT_MAX_ORDINAL: u64 = 10;
 const PORTCLS_MINIPORT_PAYLOAD_U64S: usize = 5;
 const DRIVER_POSITION_EVENT_LIMIT: usize = 16_384;
+const DRIVER_WMI_PROBE_EVENT_LIMIT: usize = 4_096;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum BackendTraceProviderRole {
@@ -1570,6 +1573,7 @@ enum BackendTraceProviderRole {
     ManifestControl,
     ClassicOrWmiControl,
     ClassicSelftestControl,
+    DriverWmiProbeControl,
     WmiEventClass,
 }
 
@@ -1580,6 +1584,7 @@ impl BackendTraceProviderRole {
             Self::ManifestControl => "manifest-control",
             Self::ClassicOrWmiControl => "classic-or-wmi-control",
             Self::ClassicSelftestControl => "classic-selftest-control",
+            Self::DriverWmiProbeControl => "driver-wmi-probe-control",
             Self::WmiEventClass => "wmi-event-class",
         }
     }
@@ -1597,7 +1602,7 @@ struct BackendTraceProviderSpec {
     require_registered: bool,
 }
 
-const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 9] = [
+const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 10] = [
     BackendTraceProviderSpec {
         name: "Microsoft-Windows-Kernel-EventTracing",
         guid: MICROSOFT_WINDOWS_KERNEL_EVENTTRACING_GUID,
@@ -1666,6 +1671,16 @@ const BACKEND_TRACE_PROVIDERS: [BackendTraceProviderSpec; 9] = [
         role: BackendTraceProviderRole::ClassicSelftestControl,
         enabled_in_session: true,
         selection_reason: "test-only classic ETW provider control GUID; emits one bounded known-payload event before stream open as a user-mode capture/decode positive control",
+        require_registered: false,
+    },
+    BackendTraceProviderSpec {
+        name: "Rvf1034-DriverWmiProbe-Control",
+        guid: DRIVER_WMI_PROBE_CONTROL_GUID,
+        keyword_mask: BACKEND_TRACE_KEYWORD_MASK_ALL,
+        level: BACKEND_TRACE_LEVEL,
+        role: BackendTraceProviderRole::DriverWmiProbeControl,
+        enabled_in_session: true,
+        selection_reason: "driver-owned diagnostic WMI trace control GUID registered through IPortWMIRegistration; enable callback captures the kernel logger handle and emits bounded driver-owned positive-control/callsite events",
         require_registered: false,
     },
     BackendTraceProviderSpec {
@@ -2188,6 +2203,7 @@ struct BackendTracePaths {
     driver_position_events_json: PathBuf,
     driver_position_correlation_json: PathBuf,
     event_split_json: PathBuf,
+    wmi_control_probe_json: PathBuf,
     provider_logs: Vec<(String, PathBuf)>,
 }
 
@@ -2222,6 +2238,7 @@ impl BackendTracePaths {
             driver_position_events_json: path("-driver-position-events.json"),
             driver_position_correlation_json: path("-driver-position-correlation.json"),
             event_split_json: path("-event-split.json"),
+            wmi_control_probe_json: path("-wmi-control-probe.json"),
             provider_logs,
         }
     }
@@ -2321,8 +2338,86 @@ struct BackendTraceCommandObservation {
     log_file: Option<PathBuf>,
 }
 
+struct BackendTraceCommandOutput {
+    exit_code: Option<i32>,
+    success: bool,
+    error: Option<String>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
 fn write_artifact_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|error| format!("write {} failed: {error}", path.display()))
+}
+
+fn spawn_pipe_reader(mut pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(pipe) = pipe.as_mut() {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        bytes
+    })
+}
+
+fn wait_child_with_timeout(
+    child: &mut process::Child,
+    timeout: Duration,
+) -> (Option<process::ExitStatus>, Option<String>) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return (Some(status), None),
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let status = child.wait().ok();
+                return (
+                    status,
+                    Some(format!("command timed out after {}s", timeout.as_secs())),
+                );
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(10)),
+            Err(wait_error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return (None, Some(format!("wait failed: {wait_error}")));
+            }
+        }
+    }
+}
+
+fn run_process_with_timeout(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> BackendTraceCommandOutput {
+    let spawn_result = process::Command::new(program)
+        .args(args)
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
+        .spawn();
+    let mut child = match spawn_result {
+        Ok(child) => child,
+        Err(spawn_error) => {
+            return BackendTraceCommandOutput {
+                exit_code: None,
+                success: false,
+                error: Some(spawn_error.to_string()),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            };
+        }
+    };
+    let stdout_reader = spawn_pipe_reader(child.stdout.take());
+    let stderr_reader = spawn_pipe_reader(child.stderr.take());
+    let (status, error) = wait_child_with_timeout(&mut child, timeout);
+    BackendTraceCommandOutput {
+        exit_code: status.and_then(|status| status.code()),
+        success: error.is_none() && status.is_some_and(|status| status.success()),
+        error,
+        stdout: stdout_reader.join().unwrap_or_default(),
+        stderr: stderr_reader.join().unwrap_or_default(),
+    }
 }
 
 fn run_backend_trace_command(
@@ -2339,46 +2434,35 @@ fn run_backend_trace_command(
             .collect::<Vec<_>>()
             .join(" ")
     );
-    let result = process::Command::new(program).args(args).output();
-    let (exit_code, success, error, stdout, stderr) = match result {
-        Ok(output) => (
-            output.status.code(),
-            output.status.success(),
-            None,
-            output.stdout,
-            output.stderr,
-        ),
-        Err(spawn_error) => (
-            None,
-            false,
-            Some(spawn_error.to_string()),
-            Vec::new(),
-            Vec::new(),
-        ),
+    let timeout = if label == "tracerpt_xml" {
+        Duration::from_secs(180)
+    } else {
+        Duration::from_secs(20)
     };
+    let output = run_process_with_timeout(program, args, timeout);
     if let Some(path) = log_file {
         let mut bytes = format!("$ {rendered_command}\n").into_bytes();
-        if let Some(code) = exit_code {
+        if let Some(code) = output.exit_code {
             bytes.extend_from_slice(format!("exit_code={code}\n").as_bytes());
         } else {
             bytes.extend_from_slice(b"exit_code=spawn-error\n");
         }
-        if let Some(error) = &error {
+        if let Some(error) = &output.error {
             bytes.extend_from_slice(format!("spawn_error={error}\n").as_bytes());
         }
         bytes.extend_from_slice(b"--- stdout ---\n");
-        bytes.extend_from_slice(&stdout);
+        bytes.extend_from_slice(&output.stdout);
         bytes.extend_from_slice(b"\n--- stderr ---\n");
-        bytes.extend_from_slice(&stderr);
+        bytes.extend_from_slice(&output.stderr);
         let _ = write_artifact_bytes(path, &bytes);
     }
     BackendTraceCommandObservation {
         label: label.to_owned(),
         program: program.to_owned(),
         args: args.iter().map(|arg| (*arg).to_owned()).collect(),
-        exit_code,
-        success,
-        error,
+        exit_code: output.exit_code,
+        success: output.success,
+        error: output.error,
         log_file: log_file.map(Path::to_path_buf),
     }
 }
@@ -2413,6 +2497,75 @@ struct RvfDriverPositionEvent {
     system_time: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+struct DriverWmiProbeEvent {
+    schema_version: u32,
+    kind: u32,
+    sequence: u64,
+    status: u32,
+    flags: u32,
+    miniport_event_ordinal: u32,
+    miniport_schema_id: u32,
+    data1: u64,
+    data2: u64,
+    data3: u64,
+    data4: u64,
+    write_etw_event_calls: u64,
+    helper_null_calls: u64,
+    forward_error_calls: u64,
+    mirror_suppressed_calls: u64,
+    mirror_key_calls: u64,
+    mirror_key_emit_calls: u64,
+    system_time: Option<String>,
+    provider_guid: Option<String>,
+    event_guid: Option<String>,
+}
+
+fn read_le_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+    let end = offset.checked_add(4)?;
+    let raw = bytes.get(offset..end)?;
+    Some(u32::from_le_bytes(raw.try_into().ok()?))
+}
+
+fn decode_driver_wmi_probe_payload(
+    hex: &str,
+    system_time: Option<String>,
+    provider_guid: Option<String>,
+    event_guid: Option<String>,
+) -> Option<DriverWmiProbeEvent> {
+    let hex = hex.strip_prefix("0x").unwrap_or(hex);
+    let bytes = decode_hex_bytes(hex)?;
+    if bytes.len() != 120 || bytes.get(..8)? != b"RVF1034W" {
+        return None;
+    }
+    let schema_version = read_le_u32(&bytes, 8)?;
+    if schema_version != 1 {
+        return None;
+    }
+    Some(DriverWmiProbeEvent {
+        schema_version,
+        kind: read_le_u32(&bytes, 12)?,
+        sequence: read_le_u64(&bytes, 16)?,
+        status: read_le_u32(&bytes, 24)?,
+        flags: read_le_u32(&bytes, 28)?,
+        miniport_event_ordinal: read_le_u32(&bytes, 32)?,
+        miniport_schema_id: read_le_u32(&bytes, 36)?,
+        data1: read_le_u64(&bytes, 40)?,
+        data2: read_le_u64(&bytes, 48)?,
+        data3: read_le_u64(&bytes, 56)?,
+        data4: read_le_u64(&bytes, 64)?,
+        write_etw_event_calls: read_le_u64(&bytes, 72)?,
+        helper_null_calls: read_le_u64(&bytes, 80)?,
+        forward_error_calls: read_le_u64(&bytes, 88)?,
+        mirror_suppressed_calls: read_le_u64(&bytes, 96)?,
+        mirror_key_calls: read_le_u64(&bytes, 104)?,
+        mirror_key_emit_calls: read_le_u64(&bytes, 112)?,
+        system_time,
+        provider_guid,
+        event_guid,
+    })
+}
+
 #[derive(Clone, Debug, Default)]
 struct BackendTraceXmlInventory {
     events_total: u64,
@@ -2440,6 +2593,21 @@ struct BackendTraceXmlInventory {
     classic_selftest_payload_match_events: u64,
     classic_selftest_missing_payload_events: u64,
     classic_selftest_payload_mismatch_events: u64,
+    kernel_witness_driver_probe_enable_events: u64,
+    kernel_witness_driver_probe_disable_events: u64,
+    driver_wmi_probe_events: u64,
+    driver_wmi_probe_identity_match_events: u64,
+    driver_wmi_probe_payload_match_events: u64,
+    driver_wmi_probe_missing_payload_events: u64,
+    driver_wmi_probe_payload_mismatch_events: u64,
+    driver_wmi_probe_control_enable_events: u64,
+    driver_wmi_probe_control_disable_events: u64,
+    driver_wmi_probe_write_mirror_events: u64,
+    driver_wmi_probe_event_overflow: u64,
+    driver_wmi_probe_mirror_ordinal_counts: [u64; 16],
+    driver_wmi_probe_control_enable_snapshot: Option<DriverWmiProbeEvent>,
+    driver_wmi_probe_control_disable_snapshot: Option<DriverWmiProbeEvent>,
+    driver_wmi_probe_stored_events: Vec<DriverWmiProbeEvent>,
     ae_position_events: u64,
     set_current_timestamp_events: u64,
     glitch_events: u64,
@@ -2715,6 +2883,58 @@ fn analyze_portcls_event_chunk(
     }
 }
 
+fn record_kernel_eventtracing_witness(
+    enabled: bool,
+    witnessed_provider: Option<&str>,
+    inventory: &mut BackendTraceXmlInventory,
+) {
+    let is_portcls_control = guid_eq(witnessed_provider, PORTCLS_AUDIOENGINE_CONTROL_GUID);
+    let is_portcls_event = guid_eq(witnessed_provider, PORTCLS_AUDIOENGINE_EVENT_GUID);
+    let is_selftest = guid_eq(witnessed_provider, CLASSIC_SELFTEST_PROVIDER_GUID);
+    let is_driver_probe = guid_eq(witnessed_provider, DRIVER_WMI_PROBE_CONTROL_GUID);
+    if is_portcls_control {
+        if enabled {
+            inventory.kernel_witness_portcls_control_enable_events = inventory
+                .kernel_witness_portcls_control_enable_events
+                .saturating_add(1);
+        } else {
+            inventory.kernel_witness_portcls_control_disable_events = inventory
+                .kernel_witness_portcls_control_disable_events
+                .saturating_add(1);
+        }
+    } else if is_portcls_event {
+        if enabled {
+            inventory.kernel_witness_portcls_event_enable_events = inventory
+                .kernel_witness_portcls_event_enable_events
+                .saturating_add(1);
+        } else {
+            inventory.kernel_witness_portcls_event_disable_events = inventory
+                .kernel_witness_portcls_event_disable_events
+                .saturating_add(1);
+        }
+    } else if is_selftest {
+        if enabled {
+            inventory.kernel_witness_selftest_enable_events = inventory
+                .kernel_witness_selftest_enable_events
+                .saturating_add(1);
+        } else {
+            inventory.kernel_witness_selftest_disable_events = inventory
+                .kernel_witness_selftest_disable_events
+                .saturating_add(1);
+        }
+    } else if is_driver_probe {
+        if enabled {
+            inventory.kernel_witness_driver_probe_enable_events = inventory
+                .kernel_witness_driver_probe_enable_events
+                .saturating_add(1);
+        } else {
+            inventory.kernel_witness_driver_probe_disable_events = inventory
+                .kernel_witness_driver_probe_disable_events
+                .saturating_add(1);
+        }
+    }
+}
+
 fn analyze_kernel_eventtracing_chunk(
     chunk: &str,
     inventory: &mut BackendTraceXmlInventory,
@@ -2778,40 +2998,7 @@ fn analyze_kernel_eventtracing_chunk(
             .kernel_witness_matched_session_disable_events
             .saturating_add(1);
     }
-    let is_portcls_control = guid_eq(witnessed_provider, PORTCLS_AUDIOENGINE_CONTROL_GUID);
-    let is_portcls_event = guid_eq(witnessed_provider, PORTCLS_AUDIOENGINE_EVENT_GUID);
-    let is_selftest = guid_eq(witnessed_provider, CLASSIC_SELFTEST_PROVIDER_GUID);
-    if is_portcls_control {
-        if enabled {
-            inventory.kernel_witness_portcls_control_enable_events = inventory
-                .kernel_witness_portcls_control_enable_events
-                .saturating_add(1);
-        } else {
-            inventory.kernel_witness_portcls_control_disable_events = inventory
-                .kernel_witness_portcls_control_disable_events
-                .saturating_add(1);
-        }
-    } else if is_portcls_event {
-        if enabled {
-            inventory.kernel_witness_portcls_event_enable_events = inventory
-                .kernel_witness_portcls_event_enable_events
-                .saturating_add(1);
-        } else {
-            inventory.kernel_witness_portcls_event_disable_events = inventory
-                .kernel_witness_portcls_event_disable_events
-                .saturating_add(1);
-        }
-    } else if is_selftest {
-        if enabled {
-            inventory.kernel_witness_selftest_enable_events = inventory
-                .kernel_witness_selftest_enable_events
-                .saturating_add(1);
-        } else {
-            inventory.kernel_witness_selftest_disable_events = inventory
-                .kernel_witness_selftest_disable_events
-                .saturating_add(1);
-        }
-    }
+    record_kernel_eventtracing_witness(enabled, witnessed_provider, inventory);
 }
 
 fn analyze_classic_selftest_chunk(
@@ -2845,6 +3032,76 @@ fn analyze_classic_selftest_chunk(
         inventory.classic_selftest_payload_mismatch_events = inventory
             .classic_selftest_payload_mismatch_events
             .saturating_add(1);
+    }
+}
+
+fn analyze_driver_wmi_probe_chunk(
+    chunk: &str,
+    binary_hex: Option<&str>,
+    inventory: &mut BackendTraceXmlInventory,
+) {
+    let provider_guid = extract_xml_attribute(chunk, "Provider", "Guid");
+    let event_guid = extract_xml_element_text(chunk, "EventGuid").map(str::to_owned);
+    if !guid_eq(provider_guid.as_deref(), DRIVER_WMI_PROBE_CONTROL_GUID)
+        && !guid_eq(provider_guid.as_deref(), DRIVER_WMI_PROBE_EVENT_GUID)
+        && !guid_eq(event_guid.as_deref(), DRIVER_WMI_PROBE_EVENT_GUID)
+    {
+        return;
+    }
+    inventory.driver_wmi_probe_events = inventory.driver_wmi_probe_events.saturating_add(1);
+    inventory.driver_wmi_probe_identity_match_events = inventory
+        .driver_wmi_probe_identity_match_events
+        .saturating_add(1);
+    let payload_hex = binary_hex.or_else(|| extract_trace_data_text(chunk, "win:ExtraPayload"));
+    let Some(payload_hex) = payload_hex else {
+        inventory.driver_wmi_probe_missing_payload_events = inventory
+            .driver_wmi_probe_missing_payload_events
+            .saturating_add(1);
+        return;
+    };
+    let system_time = extract_xml_attribute(chunk, "TimeCreated", "SystemTime");
+    let Some(event) =
+        decode_driver_wmi_probe_payload(payload_hex, system_time, provider_guid, event_guid)
+    else {
+        inventory.driver_wmi_probe_payload_mismatch_events = inventory
+            .driver_wmi_probe_payload_mismatch_events
+            .saturating_add(1);
+        return;
+    };
+    inventory.driver_wmi_probe_payload_match_events = inventory
+        .driver_wmi_probe_payload_match_events
+        .saturating_add(1);
+    match event.kind {
+        1 => {
+            inventory.driver_wmi_probe_control_enable_events = inventory
+                .driver_wmi_probe_control_enable_events
+                .saturating_add(1);
+            if inventory.driver_wmi_probe_control_enable_snapshot.is_none() {
+                inventory.driver_wmi_probe_control_enable_snapshot = Some(event.clone());
+            }
+        }
+        2 => {
+            inventory.driver_wmi_probe_control_disable_events = inventory
+                .driver_wmi_probe_control_disable_events
+                .saturating_add(1);
+            inventory.driver_wmi_probe_control_disable_snapshot = Some(event.clone());
+        }
+        3 => {
+            inventory.driver_wmi_probe_write_mirror_events = inventory
+                .driver_wmi_probe_write_mirror_events
+                .saturating_add(1);
+            if (event.miniport_event_ordinal as usize) < 16 {
+                inventory.driver_wmi_probe_mirror_ordinal_counts
+                    [event.miniport_event_ordinal as usize] += 1;
+            }
+        }
+        _ => {}
+    }
+    if inventory.driver_wmi_probe_stored_events.len() < DRIVER_WMI_PROBE_EVENT_LIMIT {
+        inventory.driver_wmi_probe_stored_events.push(event);
+    } else {
+        inventory.driver_wmi_probe_event_overflow =
+            inventory.driver_wmi_probe_event_overflow.saturating_add(1);
     }
 }
 
@@ -2898,6 +3155,7 @@ fn analyze_backend_trace_event_chunk_for_session(
     }
     analyze_kernel_eventtracing_chunk(chunk, inventory, session_name);
     analyze_classic_selftest_chunk(chunk, binary_hex, inventory);
+    analyze_driver_wmi_probe_chunk(chunk, binary_hex, inventory);
     if is_portcls {
         analyze_portcls_event_chunk(chunk, binary_hex, inventory);
     }
@@ -3005,6 +3263,47 @@ fn classic_selftest_status(
         return "classic-selftest-unsupported";
     }
     "classic-selftest-missing"
+}
+
+fn driver_wmi_probe_control_window_write_delta(
+    inventory: &BackendTraceXmlInventory,
+) -> Option<u64> {
+    let enable = inventory
+        .driver_wmi_probe_control_enable_snapshot
+        .as_ref()?;
+    let disable = inventory
+        .driver_wmi_probe_control_disable_snapshot
+        .as_ref()?;
+    Some(
+        disable
+            .write_etw_event_calls
+            .saturating_sub(enable.write_etw_event_calls),
+    )
+}
+
+fn driver_wmi_probe_callsite_evidence_present(inventory: &BackendTraceXmlInventory) -> bool {
+    inventory.driver_wmi_probe_write_mirror_events != 0
+        || driver_wmi_probe_control_window_write_delta(inventory).is_some_and(|delta| delta != 0)
+}
+
+fn driver_wmi_probe_status(inventory: &BackendTraceXmlInventory) -> &'static str {
+    if inventory.driver_wmi_probe_control_enable_events != 0
+        && driver_wmi_probe_callsite_evidence_present(inventory)
+    {
+        "driver-wmi-control-and-callsite-decoded"
+    } else if inventory.driver_wmi_probe_control_enable_events != 0 {
+        "driver-wmi-control-decoded-callsite-absent"
+    } else if inventory.driver_wmi_probe_payload_match_events != 0 {
+        "driver-wmi-payload-decoded-control-absent"
+    } else if inventory.driver_wmi_probe_identity_match_events != 0 {
+        "driver-wmi-identity-present-payload-undecoded"
+    } else if inventory.kernel_witness_driver_probe_enable_events != 0 {
+        "driver-wmi-control-request-witnessed-callback-absent"
+    } else if inventory.kernel_eventtracing_events == 0 {
+        "driver-wmi-control-unresolved"
+    } else {
+        "driver-wmi-control-absent"
+    }
 }
 
 fn miniport_lifecycle_marker_count(inventory: &BackendTraceXmlInventory) -> u64 {
@@ -3382,6 +3681,12 @@ fn backend_trace_xml_inventory_json(inventory: &BackendTraceXmlInventory) -> ser
         "kernel_eventtracing_events": inventory.kernel_eventtracing_events,
         "classic_selftest_events": inventory.classic_selftest_events,
         "classic_selftest_payload_match_events": inventory.classic_selftest_payload_match_events,
+        "driver_wmi_probe_events": inventory.driver_wmi_probe_events,
+        "driver_wmi_probe_payload_match_events": inventory.driver_wmi_probe_payload_match_events,
+        "driver_wmi_probe_control_enable_events": inventory.driver_wmi_probe_control_enable_events,
+        "driver_wmi_probe_control_disable_events": inventory.driver_wmi_probe_control_disable_events,
+        "driver_wmi_probe_write_mirror_events": inventory.driver_wmi_probe_write_mirror_events,
+        "stored_driver_wmi_probe_events": inventory.driver_wmi_probe_stored_events.len(),
         "ae_position_events": inventory.ae_position_events,
         "set_current_timestamp_events": inventory.set_current_timestamp_events,
         "glitch_events": inventory.glitch_events,
@@ -3400,6 +3705,101 @@ fn backend_trace_xml_inventory_json(inventory: &BackendTraceXmlInventory) -> ser
         "stored_miniport_events": inventory.miniport_events.len(),
         "stored_rvf_driver_position_events": inventory.rvf_driver_position_events.len(),
         "decode_error": inventory.decode_error,
+    })
+}
+
+fn driver_wmi_probe_control_window_json(inventory: &BackendTraceXmlInventory) -> serde_json::Value {
+    let enable = inventory.driver_wmi_probe_control_enable_snapshot.as_ref();
+    let disable = inventory.driver_wmi_probe_control_disable_snapshot.as_ref();
+    let status = match (enable, disable) {
+        (Some(_), Some(_)) => "enable-disable-snapshot-pair",
+        (Some(_), None) => "enable-without-disable",
+        (None, Some(_)) => "disable-without-enable",
+        (None, None) => "no-control-snapshot",
+    };
+    let counter = |select: fn(&DriverWmiProbeEvent) -> u64| {
+        let enable_value = enable.map(select);
+        let disable_value = disable.map(select);
+        serde_json::json!({
+            "enable": enable_value,
+            "disable": disable_value,
+            "delta": enable_value.zip(disable_value).map(|(start, end)| end.saturating_sub(start)),
+        })
+    };
+    serde_json::json!({
+        "status": status,
+        "write_etw_event_calls": counter(|event| event.write_etw_event_calls),
+        "helper_null_calls": counter(|event| event.helper_null_calls),
+        "forward_error_calls": counter(|event| event.forward_error_calls),
+        "mirror_suppressed_calls": counter(|event| event.mirror_suppressed_calls),
+        "mirror_key_calls": counter(|event| event.mirror_key_calls),
+        "mirror_key_emit_calls": counter(|event| event.mirror_key_emit_calls),
+    })
+}
+
+fn driver_wmi_probe_decode_json(inventory: &BackendTraceXmlInventory) -> serde_json::Value {
+    serde_json::json!({
+        "identity_event_count": inventory.driver_wmi_probe_events,
+        "identity_match_count": inventory.driver_wmi_probe_identity_match_events,
+        "payload_match_count": inventory.driver_wmi_probe_payload_match_events,
+        "missing_payload_count": inventory.driver_wmi_probe_missing_payload_events,
+        "payload_mismatch_count": inventory.driver_wmi_probe_payload_mismatch_events,
+        "control_enable_count": inventory.driver_wmi_probe_control_enable_events,
+        "control_disable_count": inventory.driver_wmi_probe_control_disable_events,
+        "write_mirror_count": inventory.driver_wmi_probe_write_mirror_events,
+        "callsite_evidence": driver_wmi_probe_callsite_evidence_present(inventory),
+        "control_window": driver_wmi_probe_control_window_json(inventory),
+        "mirror_ordinal_counts": inventory.driver_wmi_probe_mirror_ordinal_counts,
+        "stored_events": inventory.driver_wmi_probe_stored_events.len(),
+        "storage_overflow": inventory.driver_wmi_probe_event_overflow,
+        "decoded_events": inventory.driver_wmi_probe_stored_events.clone(),
+    })
+}
+
+fn driver_wmi_probe_position_frequency_json(
+    inventory: &BackendTraceXmlInventory,
+    input_callback_count: u64,
+    output_callback_count: u64,
+) -> serde_json::Value {
+    let mirror_events = inventory
+        .driver_wmi_probe_stored_events
+        .iter()
+        .filter(|event| event.kind == 3);
+    let ordinal4 = mirror_events
+        .clone()
+        .filter(|event| event.miniport_event_ordinal == 4)
+        .count() as u64;
+    let ordinal5 = mirror_events
+        .clone()
+        .filter(|event| event.miniport_event_ordinal == 5)
+        .count() as u64;
+    let schema2001 = mirror_events
+        .filter(|event| event.miniport_schema_id == 0x2001)
+        .count() as u64;
+    let window = driver_wmi_probe_control_window_json(inventory);
+    serde_json::json!({
+        "driver_source_side": {
+            "ordinal4_set_wavert_buffer_write_position_mirror_events": ordinal4,
+            "ordinal5_get_presentation_position_mirror_events": ordinal5,
+            "schema_2001_position_mirror_events": schema2001,
+            "all_mirror_key_calls_control_window_delta": window["mirror_key_calls"]["delta"],
+            "all_mirror_key_emit_calls_control_window_delta": window["mirror_key_emit_calls"]["delta"],
+            "count_semantics": "emitted mirror counts are exact observations of sampled source-side calls because the first four calls per ordinal/schema key are emitted; absence means no sampled source-side call was observed, not proof that the OS never queried position outside the control window",
+        },
+        "stream_callbacks": {
+            "input_callback_count": input_callback_count,
+            "output_callback_count": output_callback_count,
+        },
+        "os_event_counts": {
+            "microsoft_windows_audio_ae_position_events": inventory.ae_position_events,
+            "set_current_timestamp_events": inventory.set_current_timestamp_events,
+            "portcls_standard_presentation_position_events": inventory.standard_presentation_position_events,
+            "portcls_rvf_schema_2001_position_events": inventory.rvf_position_events,
+        },
+        "cpal_iaudioclock_getposition_lower_bound": {
+            "status": "unresolved-no-direct-polling-or-call-count-surface",
+            "stream_now_note": "stream.now() timestamp reads in this harness are not IAudioClock::GetPosition call evidence; cpal timestamp conversion may use device position internally depending on the backend path, but this slice has no direct polling or API call counter surface",
+        }
     })
 }
 
@@ -3422,6 +3822,14 @@ fn event_split_details_json(
             "event_class_guid": CLASSIC_SELFTEST_EVENT_CLASS_GUID,
             "payload_hex": classic_selftest_payload_hex(),
         },
+        "driver_wmi_probe_identity": {
+            "control_guid": DRIVER_WMI_PROBE_CONTROL_GUID,
+            "event_guid": DRIVER_WMI_PROBE_EVENT_GUID,
+            "payload_signature": "RVF1034W",
+            "payload_schema_version": 1,
+            "payload_bytes": 120,
+            "sampling": "first 4 calls per ordinal/schema key, then every 32nd call while the probe control is enabled",
+        },
         "control_witness_counts": {
             "kernel_eventtracing_events": inventory.kernel_eventtracing_events,
             "enable_event_id": KERNEL_EVENTTRACING_ENABLE_EVENT_ID,
@@ -3439,6 +3847,8 @@ fn event_split_details_json(
             "portcls_event_disable": inventory.kernel_witness_portcls_event_disable_events,
             "selftest_enable": inventory.kernel_witness_selftest_enable_events,
             "selftest_disable": inventory.kernel_witness_selftest_disable_events,
+            "driver_probe_enable": inventory.kernel_witness_driver_probe_enable_events,
+            "driver_probe_disable": inventory.kernel_witness_driver_probe_disable_events,
         },
         "selftest_decode": {
             "events": inventory.classic_selftest_events,
@@ -3447,6 +3857,7 @@ fn event_split_details_json(
             "missing_payload_count": inventory.classic_selftest_missing_payload_events,
             "payload_mismatch_count": inventory.classic_selftest_payload_mismatch_events,
         },
+        "driver_wmi_probe_decode": driver_wmi_probe_decode_json(inventory),
         "miniport_counts": {
             "ordinal": {
                 "0_ihv_defined": inventory.miniport_ordinal_counts[0],
@@ -3482,6 +3893,7 @@ fn event_split_details_json(
         "decode_notes": [
             "classic-selftest-decoded is a user-mode classic ETW capture/decode positive control, not proof of kernel-mode WMI payload compatibility",
             "miniport-lifecycle-absent-after-stream-success does not separate driver emit drop, control delivery failure, PortCls buffering, and kernel WMI capture incompatibility",
+            "driver-owned WMI probe events are bounded diagnostic observations; mirror sampling/counters expose callsite reachability but do not make ETW emission lossless",
         ],
     })
 }
@@ -3524,29 +3936,32 @@ impl BackendOsTraceControl {
             &["query", "providers"],
             Some(&paths.provider_discovery),
         );
-        if !discovery.success {
+        let discovery_success = discovery.success;
+        if !discovery_success {
             self.notes.push(format!(
-                "provider discovery failed exit={:?} error={:?}",
+                "provider discovery failed exit={:?} error={:?}; continuing with explicit provider list",
                 discovery.exit_code, discovery.error
             ));
-            self.commands.push(discovery);
-            return false;
         }
         let discovery_text = fs::read(&paths.provider_discovery)
             .map(|bytes| String::from_utf8_lossy(&bytes).to_ascii_lowercase())
             .unwrap_or_default();
-        let missing = BACKEND_TRACE_PROVIDERS
-            .iter()
-            .filter(|provider| {
-                if !provider.require_registered {
-                    return false;
-                }
-                let name = provider.name.to_ascii_lowercase();
-                let guid = provider.guid.to_ascii_lowercase();
-                !discovery_text.contains(&name) && !discovery_text.contains(&guid)
-            })
-            .map(|provider| provider.name)
-            .collect::<Vec<_>>();
+        let missing = if discovery_success {
+            BACKEND_TRACE_PROVIDERS
+                .iter()
+                .filter(|provider| {
+                    if !provider.require_registered {
+                        return false;
+                    }
+                    let name = provider.name.to_ascii_lowercase();
+                    let guid = provider.guid.to_ascii_lowercase();
+                    !discovery_text.contains(&name) && !discovery_text.contains(&guid)
+                })
+                .map(|provider| provider.name)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
         self.commands.push(discovery);
         if !missing.is_empty() {
             self.notes.push(format!(
@@ -3556,20 +3971,26 @@ impl BackendOsTraceControl {
             return false;
         }
 
-        for (provider, log_path) in &paths.provider_logs {
-            let observation = run_backend_trace_command(
-                "wevtutil_gp",
-                "wevtutil.exe",
-                &["gp", provider],
-                Some(log_path),
-            );
-            if !observation.success {
-                self.notes.push(format!(
-                    "wevtutil gp failed for {provider} exit={:?}",
-                    observation.exit_code
-                ));
+        if discovery_success {
+            for (provider, log_path) in &paths.provider_logs {
+                let observation = run_backend_trace_command(
+                    "wevtutil_gp",
+                    "wevtutil.exe",
+                    &["gp", provider],
+                    Some(log_path),
+                );
+                if !observation.success {
+                    self.notes.push(format!(
+                        "wevtutil gp failed for {provider} exit={:?}",
+                        observation.exit_code
+                    ));
+                }
+                self.commands.push(observation);
             }
-            self.commands.push(observation);
+        } else {
+            self.notes.push(
+                "wevtutil provider metadata skipped after provider discovery failure".to_owned(),
+            );
         }
 
         let provider_list = backend_trace_provider_file_text();
@@ -3737,6 +4158,7 @@ impl BackendOsTraceControl {
         }
         self.stop_after_calibration = Some(backend_trace_calibration(self.host_origin));
         self.write_event_split_sidecar();
+        self.write_wmi_control_probe_sidecar();
         self.write_driver_position_sidecars();
         self.write_summary();
         for line in self.diagnostic_lines() {
@@ -3746,6 +4168,28 @@ impl BackendOsTraceControl {
 
     fn driver_coverage(&self) -> &'static str {
         backend_trace_driver_coverage(&self.xml_inventory, self.xml_present)
+    }
+
+    fn driver_wmi_probe_diagnostic_line(&self, context: &str) -> String {
+        format!(
+            "roundtrip_driver_wmi_control_probe: {context}status={} witness_enable={} witness_disable={} events={} payload_match={} control_enable={} control_disable={} mirrors={} mirror_ordinal0={} mirror_ordinal1={} mirror_ordinal2={} mirror_ordinal4={} mirror_ordinal5={} missing_payload={} payload_mismatch={}",
+            driver_wmi_probe_status(&self.xml_inventory),
+            self.xml_inventory.kernel_witness_driver_probe_enable_events,
+            self.xml_inventory
+                .kernel_witness_driver_probe_disable_events,
+            self.xml_inventory.driver_wmi_probe_events,
+            self.xml_inventory.driver_wmi_probe_payload_match_events,
+            self.xml_inventory.driver_wmi_probe_control_enable_events,
+            self.xml_inventory.driver_wmi_probe_control_disable_events,
+            self.xml_inventory.driver_wmi_probe_write_mirror_events,
+            self.xml_inventory.driver_wmi_probe_mirror_ordinal_counts[0],
+            self.xml_inventory.driver_wmi_probe_mirror_ordinal_counts[1],
+            self.xml_inventory.driver_wmi_probe_mirror_ordinal_counts[2],
+            self.xml_inventory.driver_wmi_probe_mirror_ordinal_counts[4],
+            self.xml_inventory.driver_wmi_probe_mirror_ordinal_counts[5],
+            self.xml_inventory.driver_wmi_probe_missing_payload_events,
+            self.xml_inventory.driver_wmi_probe_payload_mismatch_events,
+        )
     }
 
     fn diagnostic_lines(&self) -> Vec<String> {
@@ -3825,6 +4269,7 @@ impl BackendOsTraceControl {
                 self.xml_inventory.miniport_ordinal_counts[2],
                 self.xml_inventory.miniport_ordinal_counts[4],
             ),
+            self.driver_wmi_probe_diagnostic_line(&context),
             format!(
                 "roundtrip_backend_os_trace_calibration: {context}start_host_monotonic_ns={} start_system_time_unix_ns={} stop_before_host_monotonic_ns={} stop_before_system_time_unix_ns={} stop_after_host_monotonic_ns={} stop_after_system_time_unix_ns={} etw_perf_freq={} etw_start_time={}",
                 self.start_calibration
@@ -3898,6 +4343,7 @@ impl BackendOsTraceControl {
                 "classic_selftest": statuses.classic_selftest,
                 "miniport_lifecycle": statuses.miniport_lifecycle,
                 "position_event": statuses.position_event,
+                "driver_wmi_probe": driver_wmi_probe_status(&self.xml_inventory),
                 "kernel_wmi_capture_note": "user-mode classic positive control is not proof of kernel-mode WMI payload capture compatibility",
             },
             "selftest": classic_selftest_observation_json(&observation),
@@ -3917,6 +4363,56 @@ impl BackendOsTraceControl {
             Err(error) => self
                 .notes
                 .push(format!("event-split json serialization failed: {error}")),
+        }
+    }
+
+    fn write_wmi_control_probe_sidecar(&mut self) {
+        let Some(paths) = self.paths.clone() else {
+            return;
+        };
+        let Some(probe) = self.probe.clone() else {
+            self.notes
+                .push("wmi-control-probe sidecar skipped: probe unavailable".to_owned());
+            return;
+        };
+        let input_callback_count = probe.in_callbacks.load(Ordering::Relaxed);
+        let output_callback_count = probe.out_callbacks.load(Ordering::Relaxed);
+        let sidecar = serde_json::json!({
+            "schema": "rf1034-portcls-wmi-control-probe/v1",
+            "diagnostic_artifact": true,
+            "not_run_metadata_schema": true,
+            "case": ROUNDTRIP_AUDIO_CASE_ID,
+            "path": ROUNDTRIP_OUTPUT_PATH,
+            "pair": self.pair_index,
+            "session": self.session_name,
+            "trace_status": self.status,
+            "stream_success_observed": self.stream_success(),
+            "driver_event_coverage": self.driver_coverage(),
+            "driver_wmi_probe": driver_wmi_probe_status(&self.xml_inventory),
+            "driver_wmi_probe_identity": {
+                "control_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2101}",
+                "event_guid": "{6F1D2B3A-1034-4A7F-9E2C-5A11C0FF2102}",
+                "payload_bytes": 120,
+                "payload_schema_version": 1,
+                "payload_signature": "RVF1034W",
+                "sampling": "first 4 calls per ordinal/schema key, then every 32nd call while the probe control is enabled",
+            },
+            "driver_wmi_probe_decode": driver_wmi_probe_decode_json(&self.xml_inventory),
+            "position_frequency_comparison": driver_wmi_probe_position_frequency_json(
+                &self.xml_inventory,
+                input_callback_count,
+                output_callback_count,
+            ),
+        });
+        match serde_json::to_vec_pretty(&sidecar) {
+            Ok(bytes) => {
+                if let Err(error) = write_artifact_bytes(&paths.wmi_control_probe_json, &bytes) {
+                    self.notes.push(error);
+                }
+            }
+            Err(error) => self.notes.push(format!(
+                "wmi-control-probe json serialization failed: {error}"
+            )),
         }
     }
 
@@ -4044,6 +4540,7 @@ impl BackendOsTraceControl {
                 "driver_position_events_json": file_entry(&paths.driver_position_events_json),
                 "driver_position_correlation_json": file_entry(&paths.driver_position_correlation_json),
                 "event_split_json": file_entry(&paths.event_split_json),
+                "wmi_control_probe_json": file_entry(&paths.wmi_control_probe_json),
             },
             "commands": commands,
             "calibration": {
@@ -4064,6 +4561,7 @@ impl BackendOsTraceControl {
                 "classic_selftest": self.event_split_statuses().classic_selftest,
                 "miniport_lifecycle": self.event_split_statuses().miniport_lifecycle,
                 "position_event": self.event_split_statuses().position_event,
+                "driver_wmi_probe": driver_wmi_probe_status(&self.xml_inventory),
             },
             "notes": self.notes,
         });
@@ -6216,7 +6714,7 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
         .iter()
         .filter(|provider| provider.enabled_in_session)
         .collect::<Vec<_>>();
-    assert_eq!(enabled.len(), 7);
+    assert_eq!(enabled.len(), 8);
     assert!(
         enabled
             .iter()
@@ -6232,6 +6730,11 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
             .iter()
             .any(|provider| provider.guid == PORTCLS_AUDIOENGINE_EVENT_GUID)
     );
+    assert!(
+        enabled
+            .iter()
+            .any(|provider| provider.guid == DRIVER_WMI_PROBE_CONTROL_GUID)
+    );
     let event_class = BACKEND_TRACE_PROVIDERS
         .iter()
         .find(|provider| provider.guid == PORTCLS_AUDIOENGINE_EVENT_GUID)
@@ -6244,7 +6747,7 @@ fn backend_trace_provider_matrix_separates_control_and_event_guids() {
     assert_eq!(control.role, BackendTraceProviderRole::ClassicOrWmiControl);
 
     let provider_file = backend_trace_provider_file_text();
-    assert_eq!(provider_file.lines().count(), 7);
+    assert_eq!(provider_file.lines().count(), 8);
     assert!(provider_file.contains(PORTCLS_AUDIOENGINE_CONTROL_GUID));
     assert!(provider_file.contains(PORTCLS_AUDIOENGINE_EVENT_GUID));
     assert!(
@@ -6348,10 +6851,11 @@ fn backend_trace_diagnostic_lines_are_bounded_and_not_oracle_lines() {
     control.finished = true;
     control.notes.push("x".repeat(1_000));
     let lines = control.diagnostic_lines();
-    assert_eq!(lines.len(), 3);
+    assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("roundtrip_backend_os_trace: "));
     assert!(lines[1].starts_with("roundtrip_portcls_event_split: "));
-    assert!(lines[2].starts_with("roundtrip_backend_os_trace_calibration: "));
+    assert!(lines[2].starts_with("roundtrip_driver_wmi_control_probe: "));
+    assert!(lines[3].starts_with("roundtrip_backend_os_trace_calibration: "));
     assert!(lines.iter().all(|line| line.len() < 2_048));
     assert!(
         lines
@@ -6483,6 +6987,200 @@ fn classic_selftest_status_requires_successful_register_enable_and_emit() {
     assert_eq!(
         classic_selftest_status(&observation, &inventory),
         "classic-selftest-unsupported"
+    );
+}
+
+fn driver_wmi_probe_payload_hex(kind: u32, ordinal: u32, schema: u32) -> String {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"RVF1034W");
+    bytes.extend_from_slice(&1_u32.to_le_bytes());
+    bytes.extend_from_slice(&kind.to_le_bytes());
+    bytes.extend_from_slice(&7_u64.to_le_bytes());
+    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    bytes.extend_from_slice(&0x1f_u32.to_le_bytes());
+    bytes.extend_from_slice(&ordinal.to_le_bytes());
+    bytes.extend_from_slice(&schema.to_le_bytes());
+    bytes.extend_from_slice(&11_u64.to_le_bytes());
+    bytes.extend_from_slice(&22_u64.to_le_bytes());
+    bytes.extend_from_slice(&33_u64.to_le_bytes());
+    bytes.extend_from_slice(&44_u64.to_le_bytes());
+    bytes.extend_from_slice(&50_u64.to_le_bytes());
+    bytes.extend_from_slice(&2_u64.to_le_bytes());
+    bytes.extend_from_slice(&1_u64.to_le_bytes());
+    bytes.extend_from_slice(&6_u64.to_le_bytes());
+    bytes.extend_from_slice(&5_u64.to_le_bytes());
+    bytes.extend_from_slice(&2_u64.to_le_bytes());
+    assert_eq!(bytes.len(), 120);
+    hex_encode(&bytes)
+}
+
+fn driver_wmi_probe_payload_hex_with_counters(
+    kind: u32,
+    write_calls: u64,
+    mirror_key_calls: u64,
+    mirror_key_emit_calls: u64,
+) -> String {
+    let mut bytes = decode_hex_bytes(&driver_wmi_probe_payload_hex(kind, 0xffff_ffff, 0))
+        .expect("base driver WMI probe payload");
+    bytes[72..80].copy_from_slice(&write_calls.to_le_bytes());
+    bytes[104..112].copy_from_slice(&mirror_key_calls.to_le_bytes());
+    bytes[112..120].copy_from_slice(&mirror_key_emit_calls.to_le_bytes());
+    hex_encode(&bytes)
+}
+
+fn driver_wmi_probe_event_chunk(payload_hex: &str) -> String {
+    format!(
+        r#"<Event><System><Provider /><EventID>0</EventID><TimeCreated SystemTime="2026-01-01T00:00:00.000000000+00:00" /></System><BinaryEventData>{payload_hex}</BinaryEventData><ExtendedTracingInfo><EventGuid>{DRIVER_WMI_PROBE_EVENT_GUID}</EventGuid></ExtendedTracingInfo></Event>"#
+    )
+}
+
+#[test]
+fn driver_wmi_probe_binary_decode_is_strict_and_counts_kinds() {
+    let mirror_payload = driver_wmi_probe_payload_hex(3, 5, 0x2001);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(
+        &driver_wmi_probe_event_chunk(&mirror_payload),
+        &mut inventory,
+    );
+    assert_eq!(inventory.driver_wmi_probe_events, 1);
+    assert_eq!(inventory.driver_wmi_probe_identity_match_events, 1);
+    assert_eq!(inventory.driver_wmi_probe_payload_match_events, 1);
+    assert_eq!(inventory.driver_wmi_probe_write_mirror_events, 1);
+    assert_eq!(inventory.driver_wmi_probe_mirror_ordinal_counts[5], 1);
+    let event = inventory
+        .driver_wmi_probe_stored_events
+        .first()
+        .expect("stored driver WMI probe event");
+    assert_eq!(event.sequence, 7);
+    assert_eq!(event.miniport_event_ordinal, 5);
+    assert_eq!(event.miniport_schema_id, 0x2001);
+    assert_eq!(
+        (event.data1, event.data2, event.data3, event.data4),
+        (11, 22, 33, 44)
+    );
+    assert_eq!(event.write_etw_event_calls, 50);
+    assert_eq!(event.helper_null_calls, 2);
+    assert_eq!(event.forward_error_calls, 1);
+    assert_eq!(event.mirror_suppressed_calls, 6);
+    assert_eq!(
+        (event.mirror_key_calls, event.mirror_key_emit_calls),
+        (5, 2)
+    );
+
+    let control_payload = driver_wmi_probe_payload_hex(1, 0xffff_ffff, 0);
+    analyze_backend_trace_event_chunk(
+        &driver_wmi_probe_event_chunk(&control_payload),
+        &mut inventory,
+    );
+    assert_eq!(inventory.driver_wmi_probe_control_enable_events, 1);
+    assert_eq!(
+        driver_wmi_probe_status(&inventory),
+        "driver-wmi-control-and-callsite-decoded"
+    );
+
+    let mut mismatch = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(&driver_wmi_probe_event_chunk("0000"), &mut mismatch);
+    assert_eq!(mismatch.driver_wmi_probe_payload_mismatch_events, 1);
+    assert_eq!(mismatch.driver_wmi_probe_payload_match_events, 0);
+
+    let mut missing = BackendTraceXmlInventory::default();
+    let token_only = format!(
+        "<Event><System><Provider Guid=\"{DRIVER_WMI_PROBE_CONTROL_GUID}\" /></System><EventData><Data Name=\"token\">{mirror_payload}</Data></EventData></Event>"
+    );
+    analyze_backend_trace_event_chunk(&token_only, &mut missing);
+    assert_eq!(missing.driver_wmi_probe_events, 1);
+    assert_eq!(missing.driver_wmi_probe_missing_payload_events, 1);
+    assert_eq!(missing.driver_wmi_probe_payload_match_events, 0);
+}
+
+#[test]
+fn driver_wmi_probe_position_frequency_sidecar_counts_are_explicit() {
+    let mirror_payload = driver_wmi_probe_payload_hex(3, 5, 0x2001);
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk(
+        &driver_wmi_probe_event_chunk(&mirror_payload),
+        &mut inventory,
+    );
+    inventory.ae_position_events = 9;
+    inventory.standard_presentation_position_events = 0;
+    inventory.rvf_position_events = 0;
+    let comparison = driver_wmi_probe_position_frequency_json(&inventory, 3, 4);
+    assert_eq!(
+        comparison["driver_source_side"]["ordinal5_get_presentation_position_mirror_events"],
+        1
+    );
+    assert_eq!(
+        comparison["driver_source_side"]["schema_2001_position_mirror_events"],
+        1
+    );
+    assert_eq!(comparison["stream_callbacks"]["input_callback_count"], 3);
+    assert_eq!(comparison["stream_callbacks"]["output_callback_count"], 4);
+    assert_eq!(
+        comparison["os_event_counts"]["microsoft_windows_audio_ae_position_events"],
+        9
+    );
+    assert_eq!(
+        comparison["cpal_iaudioclock_getposition_lower_bound"]["status"],
+        "unresolved-no-direct-polling-or-call-count-surface"
+    );
+}
+
+#[test]
+fn driver_wmi_probe_control_window_counters_classify_callsite_without_mirror() {
+    let mut inventory = BackendTraceXmlInventory::default();
+    for payload in [
+        driver_wmi_probe_payload_hex_with_counters(1, 100, 0, 0),
+        driver_wmi_probe_payload_hex_with_counters(2, 113, 11, 4),
+    ] {
+        analyze_backend_trace_event_chunk(&driver_wmi_probe_event_chunk(&payload), &mut inventory);
+    }
+    assert_eq!(inventory.driver_wmi_probe_write_mirror_events, 0);
+    assert_eq!(
+        driver_wmi_probe_control_window_write_delta(&inventory),
+        Some(13)
+    );
+    assert!(driver_wmi_probe_callsite_evidence_present(&inventory));
+    assert_eq!(
+        driver_wmi_probe_status(&inventory),
+        "driver-wmi-control-and-callsite-decoded"
+    );
+    let window = driver_wmi_probe_control_window_json(&inventory);
+    assert_eq!(window["write_etw_event_calls"]["delta"], 13);
+    assert_eq!(window["mirror_key_emit_calls"]["delta"], 4);
+
+    let mut unchanged = BackendTraceXmlInventory::default();
+    for payload in [
+        driver_wmi_probe_payload_hex_with_counters(1, 100, 0, 0),
+        driver_wmi_probe_payload_hex_with_counters(2, 100, 0, 0),
+    ] {
+        analyze_backend_trace_event_chunk(&driver_wmi_probe_event_chunk(&payload), &mut unchanged);
+    }
+    assert!(!driver_wmi_probe_callsite_evidence_present(&unchanged));
+    assert_eq!(
+        driver_wmi_probe_status(&unchanged),
+        "driver-wmi-control-decoded-callsite-absent"
+    );
+}
+
+#[test]
+fn driver_wmi_probe_kernel_witness_is_classified_separately() {
+    let session_name = "rvf1034_bt_123_0";
+    let mut inventory = BackendTraceXmlInventory::default();
+    analyze_backend_trace_event_chunk_for_session(
+        &kernel_eventtracing_enable_chunk(session_name, DRIVER_WMI_PROBE_CONTROL_GUID),
+        &mut inventory,
+        session_name,
+    );
+    assert_eq!(inventory.kernel_witness_driver_probe_enable_events, 1);
+    assert_eq!(inventory.kernel_witness_portcls_control_enable_events, 0);
+    assert_eq!(inventory.kernel_witness_selftest_enable_events, 0);
+    assert_eq!(
+        driver_wmi_probe_status(&inventory),
+        "driver-wmi-control-request-witnessed-callback-absent"
+    );
+    assert_eq!(
+        control_witness_status(&inventory),
+        "control-request-witness-absent"
     );
 }
 

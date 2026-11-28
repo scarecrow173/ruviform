@@ -1,0 +1,61 @@
+$ tracerpt.exe "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-6012.etl" "-o" "D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-6012.xml" "-of" "XML" "-lr"
+exit_code=0
+--- stdout ---
+
+Input
+----------------
+File(s):
+     D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-6012.etl
+
+0.00%2.33%4.66%7.00%9.33%11.66%13.99%16.33%18.66%20.99%23.32%25.66%27.99%30.32%32.65%34.99%37.32%39.65%41.98%44.31%46.65%48.98%51.31%53.64%55.98%58.31%60.64%62.97%65.31%67.64%69.97%72.30%74.64%76.97%79.30%81.63%83.97%86.30%88.63%90.96%93.29%95.63%97.96%100.00%
+
+Output
+----------------
+DumpFile:           D:\a\ruviform\ruviform\os-endpoint-run-metadata-windows-2025\backend-os-trace-pair0-6012.xml
+
+The command completed successfully.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--- stderr ---

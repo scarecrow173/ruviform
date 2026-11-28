@@ -21,6 +21,7 @@ Abstract:
 #include "IHVPrivatePropertySet.h"
 #include "simple.h"
 #include "RvfLoopback.h"
+#include "WmiControlProbe.h"
 
 #ifdef SYSVAD_BTH_BYPASS
 #include <limits.h>
@@ -207,6 +208,12 @@ class CAdapterCommon :
         STDMETHODIMP_(VOID)     SetEtwHelper
         (
             PPORTCLSETWHELPER _pPortClsEtwHelper
+        );
+
+        STDMETHODIMP_(NTSTATUS) RegisterWmiProbe
+        (
+            _In_opt_ PPORTWMIREGISTRATION PortWmiRegistration,
+            _In_ NTSTATUS QueryStatus
         );
 
         STDMETHODIMP_(NTSTATUS) InstallSubdevice
@@ -681,6 +688,7 @@ Return Value:
         delete m_pHW;
         m_pHW = NULL;
     }
+    RvfWmiProbeUnregister(m_pDeviceObject);
     SAFE_RELEASE(m_pPortClsEtwHelper);
     SAFE_RELEASE(m_pServiceGroupWave);
 
@@ -988,13 +996,38 @@ CAdapterCommon::WriteEtwEvent
 )
 {
     NTSTATUS ntStatus = STATUS_SUCCESS;
+    PPORTCLSETWHELPER portClsEtwHelper = m_pPortClsEtwHelper;
 
-    if (m_pPortClsEtwHelper)
+    if (portClsEtwHelper)
     {
-        ntStatus = m_pPortClsEtwHelper->MiniportWriteEtwEvent( miniportEventType, ullData1, ullData2, ullData3, ullData4) ;
+        ntStatus = portClsEtwHelper->MiniportWriteEtwEvent( miniportEventType, ullData1, ullData2, ullData3, ullData4) ;
     }
+
+    RvfWmiProbeMirrorWriteEtwEvent(
+        miniportEventType,
+        ullData1,
+        ullData2,
+        ullData3,
+        ullData4,
+        ntStatus,
+        portClsEtwHelper != NULL);
+
     return ntStatus;
 } // WriteEtwEvent
+
+//=============================================================================
+#pragma code_seg("PAGE")
+STDMETHODIMP_(NTSTATUS)
+CAdapterCommon::RegisterWmiProbe
+(
+    _In_opt_ PPORTWMIREGISTRATION PortWmiRegistration,
+    _In_ NTSTATUS QueryStatus
+)
+{
+    PAGED_CODE();
+
+    return RvfWmiProbeRegister(m_pDeviceObject, PortWmiRegistration, QueryStatus);
+} // RegisterWmiProbe
 
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -2396,6 +2429,7 @@ CAdapterCommon::Cleanup()
     CleanupA2dpSideband();
 #endif // SYSVAD_A2DP_SIDEBAND
 
+    RvfWmiProbeUnregister(m_pDeviceObject);
     EmptySubdeviceCache();
 }
 

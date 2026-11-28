@@ -1,0 +1,236 @@
+$ wevtutil.exe "gp" "Microsoft-Windows-Kernel-EventTracing"
+exit_code=0
+--- stdout ---
+name: Microsoft-Windows-Kernel-EventTracing
+guid: b675ec37-bdb6-4648-bc92-f3fdc74d3ca2
+helpLink:
+resourceFileName: %systemroot%\system32\Microsoft-Windows-System-Events.dll
+messageFileName: %systemroot%\system32\Microsoft-Windows-System-Events.dll
+message: 901
+channels:
+  channel:
+    name: Microsoft-Windows-Kernel-EventTracing/Admin
+    id: 16
+    flags: 0
+    message: 944
+  channel:
+    name: Microsoft-Windows-Kernel-EventTracing/Analytic
+    id: 17
+    flags: 0
+    message: 943
+levels:
+  level:
+    name: win:Error
+    value: 2
+    message: 1342177282
+  level:
+    name: win:Warning
+    value: 3
+    message: 1342177283
+  level:
+    name: win:Informational
+    value: 4
+    message: 1342177284
+  level:
+    name: win:Verbose
+    value: 5
+    message: 1526726661
+opcodes:
+  opcode:
+    name: win:Info
+    value: 0
+      task: 0
+      opcode: 0
+    message: 822083584
+  opcode:
+    name: win:Start
+    value: 65536
+      task: 0
+      opcode: 1
+    message: 838860801
+  opcode:
+    name: win:Stop
+    value: 131072
+      task: 0
+      opcode: 2
+    message: 838860802
+  opcode:
+    name: ETW_OPCODE_WRITE_BUFFER
+    value: 655360
+      task: 0
+      opcode: 10
+    message: 935
+  opcode:
+    name: ETW_OPCODE_FILE_SWITCH
+    value: 720896
+      task: 0
+      opcode: 11
+    message: 936
+  opcode:
+    name: ETW_OPCODE_START
+    value: 786432
+      task: 0
+      opcode: 12
+    message: 926
+  opcode:
+    name: ETW_OPCODE_STOP
+    value: 917504
+      task: 0
+      opcode: 14
+    message: 925
+  opcode:
+    name: ETW_OPCODE_FLUSH
+    value: 983040
+      task: 0
+      opcode: 15
+    message: 931
+  opcode:
+    name: ETW_OPCODE_REGISTER
+    value: 1048576
+      task: 0
+      opcode: 16
+    message: 930
+  opcode:
+    name: ETW_OPCODE_UNREGISTER
+    value: 1114112
+      task: 0
+      opcode: 17
+    message: 929
+  opcode:
+    name: ETW_OPCODE_ENABLE
+    value: 1179648
+      task: 0
+      opcode: 18
+    message: 928
+  opcode:
+    name: ETW_OPCODE_DISABLE
+    value: 1245184
+      task: 0
+      opcode: 19
+    message: 927
+  opcode:
+    name: ETW_OPCODE_CONFIGURE
+    value: 1310720
+      task: 0
+      opcode: 20
+    message: 932
+  opcode:
+    name: ETW_OPCODE_USER_MODE_STACK_TRACE
+    value: 1572864
+      task: 0
+      opcode: 24
+    message: 942
+  opcode:
+    name: ETW_OPCODE_SET_TRAITS
+    value: 1638400
+      task: 0
+      opcode: 25
+    message: 853
+  opcode:
+    name: ETW_OPCODE_GROUP_JOIN
+    value: 1703936
+      task: 0
+      opcode: 26
+    message: 854
+  opcode:
+    name: ETW_OPCODE_CAPTURE_STATE
+    value: 1769472
+      task: 0
+      opcode: 27
+    message: 849
+tasks:
+  task:
+    name: ETW_TASK_LOGGING
+    value: 1
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 923
+  task:
+    name: ETW_TASK_SESSION
+    value: 2
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 921
+  task:
+    name: ETW_TASK_PROVIDER
+    value: 3
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 920
+  task:
+    name: ETW_TASK_GUID_ENTRY
+    value: 4
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 958
+  task:
+    name: ETW_TASK_GROUP_ENTRY
+    value: 5
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 959
+  task:
+    name: ETW_TASK_STACK_TRACE
+    value: 6
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 941
+  task:
+    name: ETW_TASK_LOST_EVENT
+    value: 7
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 945
+  task:
+    name: SavePersistedLogger
+    value: 8
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message:
+  task:
+    name: ETW_TASK_ENABLE_INFO
+    value: 9
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 852
+  task:
+    name: ETW_TASK_LOST_TLG_EVENT
+    value: 10
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 860
+  task:
+    name: ETW_TASK_LOST_WPP_EVENT
+    value: 11
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 861
+  task:
+    name: ETW_TASK_LOST_SYSTEM_EVENT
+    value: 12
+    eventGUID: 00000000-0000-0000-0000-000000000000
+    message: 862
+keywords:
+  keyword:
+    name: ETW_KEYWORD_SESSION
+    mask: 10
+    message: 939
+  keyword:
+    name: ETW_KEYWORD_PROVIDER
+    mask: 20
+    message: 938
+  keyword:
+    name: ETW_KEYWORD_LOST_EVENT
+    mask: 40
+    message: 946
+  keyword:
+    name: ETW_KEYWORD_SOFT_RESTART
+    mask: 80
+    message:
+  keyword:
+    name: ETW_KEYWORD_CAPTURE_STATE
+    mask: 100
+    message:
+  keyword:
+    name: ETW_KEYWORD_REGISTRATION
+    mask: 200
+    message:
+  keyword:
+    name: ETW_KEYWORD_ENABLEMENT
+    mask: 400
+    message:
+  keyword:
+    name: ETW_KEYWORD_GROUP
+    mask: 800
+    message:
+
+--- stderr ---
