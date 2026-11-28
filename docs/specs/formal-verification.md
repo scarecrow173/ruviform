@@ -321,6 +321,10 @@ rf#1015 slice 15 は、`ARC-IDX-LIMIT` のうち `TarArchiveReader::advance` に
 判定は block 読み取りの成功後、ゼロ終端 block やヘッダーを解釈する前に実行する。
 `read_extension` の確保前判定は変更せず、従来の `tar_metadata_gate` も維持する。
 
+rf#1015 slice 18 の事前境界は、`WAV-DECL-GATE` を production scalar/pure decision core で証明することである。core は `SampleFormat`、layout 由来の正の channel count、normalized 済みの正の rate から accept 時の `channels`/`block_align`/`byte_rate` または rejection class を返し、`io::Error`、`Error` payload、`format!`、allocation、Vec、header serialization、`SampleRate::new` normalization、環境アクセスを持たない。`Wire::new` は scalar 抽出、core 呼び出し、rejection class の `ErrorKind` への写像、accept 値への speaker mask/extensible 付与だけを行う thin shell とする。unsupported rejection の production diagnostic は shell に残り、少なくとも source の `io::ErrorKind::InvalidInput` と「対象 sample format が wav_capabilities の wire set にない」という meaning を維持する。
+
+slice 18 の Kani 対象は、core の membership exactness、channel/block_align width exactness、distinct block_align representative × byte_rate boundary ±1、rejection class exactnessと、直接依存する fmt/header serialization non-regressionである。shell-core 接続、`ErrorKind` 写像、diagnostic payload meaning は deterministic regression/proptest に残し、Kani Pass に含めない。diagnostic text、`io::Error` 表現、Vec/header write、`SampleRate::new` normalization、SampleFormat canonical inventory、symbolic rate interior、任意 sink/任意 layout serialization は除外する。channel/rate が正であることは production invariant に由来する入力域であり、`%10` 列挙の限界は D-5 未解決の residual risk として残る。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
 `arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope`、
