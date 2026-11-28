@@ -58,7 +58,9 @@ driver-owned WMI control/callsite probeは次の診断面を分離する。製�
 | `46052251860` | `15224319150` | `159ee5baf40c1249e97bec55e2c8833901e946ecd47bb79bd3a6eed920394a0e` | `driver-wmi-control-and-callsite-decoded` | 13 | 13 / 5 | 0 | pass / fail / pass |
 | `46053237700` | `15225373315` | `416678b6caa4a5f8047d816cf4a8570f5d42b33bfa30aea73659c9d410ead934` | `driver-wmi-control-and-callsite-decoded` | 15 | 15 / 5 | 0 | fail / fail / pass |
 
-両runで、driver-owned control enable/disable eventがidentity+payload一致でdecodeされ、`WriteEtwEvent` mirror 5件もdecodeされた。counter windowではhelper-null delta 0、forward-error delta 0だった。この範囲では、driver-owned WMI control callback経路、kernel WMI payload capture、sampled `WriteEtwEvent` callsite到達はpositiveである。
+run `46052251860` のupdated_atは `2026-11-27T18:57:06Z`、run `46053237700` のcreated_atは `2026-11-27T18:57:35Z`、updated_atは `2026-11-27T19:06:00Z` だった。第2run作成時刻が第1run終了時刻より後であることは、この2本に限ったtimestamp上の非重複根拠である。ただし、それは全seriesのserialization適合を証明するものではなく、前述の超過・重複dispatchを解消しない。
+
+両runで、driver-owned control enable/disable eventがidentity+payload一致でdecodeされ、`WriteEtwEvent` mirror 5件もdecodeされた。counter windowではhelper-null delta 0、forward-error delta 0だった。trace statusは両runとも `captured`、provider discovery / logman start / stop / tracerptはsuccess、classic self-testはdecode済み、stream successはtrueだった。callback countはrun `46052251860` がinput 328 / output 331、run `46053237700` がinput 329 / output 332だった。run `46052251860` のrf629 audio failはoutput timestamp regression 1件によるものだった。この範囲では、driver-owned WMI control callback経路、kernel WMI payload capture、sampled `WriteEtwEvent` callsite到達はpositiveである。
 
 一方、実PortCls miniport eventは両runとも0件であり、rf position schema `0x2001`・standard presentation position eventも観測されなかった。sidecarのposition比較でもordinal4 mirror 0、ordinal5 mirror 0、schema `0x2001` mirror 0だった。したがってpin/xrun-like callsite到達とdownstream miniport absenceの分離にはなるが、position source-side callの有無・頻度はこのcontrol windowでは確定できない。
 
@@ -67,16 +69,31 @@ driver-owned WMI control/callsite probeは次の診断面を分離する。製�
 - 本evidenceはdiagnostic-onlyであり、回帰解消、root cause確定、driver無関係、driver innocence、regression-count-zeroを主張しない。
 - workflow conclusion successとcase-level resultは別である。rf1034/rf629 audioのfailをpassとは読まない。
 - miniport/position event未観測は、発火条件未成立、PortCls/publication/capture visibility、kernel WMI capture非互換を単独では分けない。
+- ETW clock calibrationは確立していない。ETW event timestamp、driver raw QPC、host monotonic timestampの変換・比較は未解決のままである。
 - cpal conversion、adapter passthrough、consumer harness、environmentはdirect evidenceで排除されていない限りunresolvedのままである。
 - serialization手順不適合があるため、既存run結果は正式受入ではなく後続sliceの履歴・診断入力である。
 
+## `c231c15f` 版にあった過去のlocal verification記録
+
+以下は `c231c15f` 版へ記録されていた過去の記録の復元である。scopeはfinal harness変更後のlocal検証、sourceは当時のcanonical=mise実行結果であり、本証跡訂正で再実行した結果ではない。
+
+| verification | 当時のexit/result | 当時の解釈 |
+| --- | --- | --- |
+| `mise run fmt-check` | 0 | Pass |
+| `mise run check ruviform-audio-test` | 0 | Pass |
+| `mise run lint ruviform-audio-test` | 0 | Pass |
+| `mise run test ruviform-audio-test` | 0 | Pass。os_endpoint 32 passed / 3 ignored |
+| `mise run test-os-endpoint-wiring` | process exit 0 | runtime Passとは読まない |
+| `mise run build-vaudio-driver` | NotRun/Unsupported | WindowsKernelModeDriver10.0不在。provisioned driver-build stageが実build evidence |
+| `mise exec -- prek run --all-files` | 0 | Pass。当時のevidence追加後のhygiene |
+
 ## 検証
 
-本訂正は `evidence/rf1034/portcls-wmi-control-probe.md` のみを変更する証跡訂正であり、driver/harness/unit testの再検証や追加実走は行わない。訂正後に実行するのは `git diff --check` と `mise exec -- prek run --files evidence/rf1034/portcls-wmi-control-probe.md` だけである。
+本訂正は `evidence/rf1034/portcls-wmi-control-probe.md` のみを変更する証跡訂正であり、driver/harness/unit testの再検証や追加実走は行わない。訂正後に実行するのは `git diff --check` と `mise exec -- prek run --files evidence/rf1034/portcls-wmi-control-probe.md` だけであり、実測は完了報告に記録する。
 
 ## artifact inventory
 
-run `46052251860` / `46053237700` の抽出artifact、byte size、SHA-256、artifact zip SHA-256は `evidence/rf1034/provisioned/run46052251860-attempt1/artifact-inventory.json` と `evidence/rf1034/provisioned/run46053237700-attempt1/artifact-inventory.json` に記録されている。raw artifactやinventoryは本訂正で変更していない。
+run `46052251860` / `46053237700` の抽出artifact、byte size、SHA-256、artifact zip SHA-256は `evidence/rf1034/provisioned/run46052251860-attempt1/artifact-inventory.json` と `evidence/rf1034/provisioned/run46053237700-attempt1/artifact-inventory.json` に記録されている。text/XML/JSONはrepository hygieneのためLF/行末空白を正規化した抽出物であり、ETLはbyte-exactで保持されている。raw artifact zipや正規化前XMLは上書きしていない。raw artifactやinventoryは本訂正で変更していない。
 
 ## next minimum handoff
 
