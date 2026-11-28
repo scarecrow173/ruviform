@@ -102,6 +102,14 @@ runner OSは Windows 11 x86_64（10.0.26300.9974、MSYS2/MinGW shell）、toolch
 
 これらは current main `eea9e209` に対するローカル非回帰である。`test-formal` は Kaniを起動しない Property Test laneであり、Required Kani proofの再実行ではない。
 
+## branch CI
+
+`gh workflow run ci.yml --repo scarecrow173/ruviform --ref test/1015-consumer-regression` で manual dispatchし、`gh run watch 46145831482 --repo scarecrow173/ruviform --exit-status --interval 60` を実行した。watch exit codeは 0、run statusは `completed`、conclusionは `success` だった。run URLは <https://github.com/scarecrow173/ruviform/actions/runs/46145831482>、createdAtは 2026-11-28T12:40:26Z、最終更新は 2026-11-28T12:50:10Zである。
+
+CI target headは evidence commit `955a20a8b7198cd07434c072716651f21db00ed9`。23/23 jobが successで、`ci-summary` も successだった。manual dispatchの `expected_sha` inputは空であり、ci-summaryは checkout SHA artifactに基づく実 checkout記録を行う通常経路で評価された。
+
+この CI結果を evidenceへ追記する commitは CI targetの子孫になる。ただし差分は `evidence/rf1015/` のみで、製品コード・workflow・build設定・lockfileの code headは変わらない。したがって CI target `955a20a8` と最終 evidence headの関係は「evidence-only追記による派生」であり、コード検証対象が変わったわけではない。
+
 ## 実行しなかった検証・non-claims
 
 | 項目 | state / verdict | 理由 |
@@ -119,5 +127,5 @@ runner OSは Windows 11 x86_64（10.0.26300.9974、MSYS2/MinGW shell）、toolch
 1. synvelis `test-rt` linker Bus errorの恒久原因切り分け。linker/toolchain環境、test binary構成、runner resourceのどれかを consumer側または infra側で特定する必要がある。
 2. synvelisの独立回帰は `test-rt`通過後に、rf628 oracle、RT-alloc oracle、UI、candidate GUI contract laneまで到達させる必要がある。
 3. consumer-side通常 View/Domain headless fixture、実window、PLUGIN-NATIVE-DOCK、macOS/実 OS laneは owner付き NotRun/Unsupportedのままである。
-4. branch CIは evidence commit後の headで manual dispatchし、CI targetと最終 headの関係を PR本文へ記録する。
+4. 恒久受入には merge後 main SHAの統合検証が必要である。branch CIは `955a20a8b7198cd07434c072716651f21db00ed9` で success済みだが、merge後 mainの証拠ではない。
 5. docs indexは Coordinatorが統合時に整備する。本 sliceでは編集しない。
