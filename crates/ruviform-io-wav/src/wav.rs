@@ -329,8 +329,12 @@ mod proofs {
                 );
                 assert!(u64::from(scalars.byte_rate) == 48_000 * u64::from(scalars.block_align));
             }
-            Err(WireRejection::Unsupported) => assert!(is_non_wire),
-            Err(WireRejection::InvalidValue) => assert!(false),
+            Err(WireRejection::Unsupported) => {
+                assert!(is_non_wire);
+            }
+            Err(WireRejection::InvalidValue) => {
+                unreachable!("membership proof excludes InvalidValue")
+            }
         }
         kani::cover!(
             matches!(decision, Ok(_)),
@@ -372,7 +376,7 @@ mod proofs {
                     assert!(u64::from(scalars.block_align) == align64);
                     assert!(u64::from(scalars.byte_rate) == align64);
                 }
-                Err(_) => assert!(false),
+                Err(_) => unreachable!("fitting width gates must accept"),
             }
         }
 
@@ -433,7 +437,7 @@ mod proofs {
                     Err(WireRejection::InvalidValue) => {
                         assert!(product > u64::from(u32::MAX));
                     }
-                    Err(WireRejection::Unsupported) => assert!(false),
+                    Err(WireRejection::Unsupported) => unreachable!("wire formats are supported"),
                 }
                 kani::cover!(
                     matches!(decision, Err(WireRejection::InvalidValue))
