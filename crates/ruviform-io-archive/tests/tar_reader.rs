@@ -428,6 +428,49 @@ fn metadata_bytes_limit_covers_extensions() {
 }
 
 #[test]
+fn metadata_bytes_limit_accumulates_across_pax_entries() {
+    let first_path = b"pax/first.txt";
+    let second_path = b"pax/nested/second.txt";
+    let first_record = pax_record(b"path", first_path);
+    let second_record = pax_record(b"path", second_path);
+    let bytes = tar(&[
+        ext_entry(b'x', "PaxHeader", &first_record),
+        file_entry("first.txt", b"alpha"),
+        ext_entry(b'x', "PaxHeader", &second_record),
+        file_entry("second.txt", b"beta-beta"),
+    ]);
+    let pax_bytes = first_record.len() + second_record.len();
+    // The exact limit includes four entry headers and the first zero block.
+    let exact_limit = (5 * BLOCK + pax_bytes) as u64;
+    let short_limit = (3 * BLOCK + pax_bytes - 1) as u64;
+
+    for (limit, second_entry_fits) in [(exact_limit, true), (short_limit, false)] {
+        let mut archive = reader_with(bytes.clone(), limits(|l| l.max_metadata_bytes = limit));
+        let mut first = archive.next_entry().expect("first entry").expect("some");
+        assert_eq!(first.info().name().as_bytes(), first_path);
+        assert_eq!(read_all(&mut first), b"alpha");
+        first.finish().expect("finish first entry");
+
+        if !second_entry_fits {
+            assert_eq!(
+                kind_of(archive.next_entry()),
+                ArchiveErrorKind::LimitExceeded
+            );
+            // Three headers and two padded payload blocks precede the second PAX payload.
+            assert_eq!(archive.into_inner().position(), (5 * BLOCK) as u64);
+            continue;
+        }
+
+        let mut second = archive.next_entry().expect("second entry").expect("some");
+        assert_eq!(second.info().name().as_bytes(), second_path);
+        assert_eq!(read_all(&mut second), b"beta-beta");
+        second.finish().expect("finish second entry");
+        assert!(archive.next_entry().expect("end marker").is_none());
+        archive.finish().expect("archive EOF");
+    }
+}
+
+#[test]
 fn malformed_pax_payload_is_malformed() {
     let bytes = tar(&[
         ext_entry(b'x', "PaxHeader", b"not-a-record"),
