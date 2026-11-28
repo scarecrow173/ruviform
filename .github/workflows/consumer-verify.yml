@@ -379,14 +379,12 @@ jobs:
           set -euo pipefail
           # ruviform git 依存を候補 rev に正規化する。rev pin 置換・branch 追従・
           # rev 未指定（既定ブランチ追従）の 3 形態を同一ルールで `rev = "$RUVIFORM_REV"` へ揃える。
-          sed -i -E "/scarecrow173\/ruviform\.git/ {
-            s/\{ *rev = \"[0-9a-f]{40}\", */{ /;
-            s/, *rev = \"[0-9a-f]{40}\"//;
-            s/\{ *branch = \"[^\"]+\", */{ /;
-            s/, *branch = \"[^\"]+\"//;
-            s/ *\}/, rev = \"$RUVIFORM_REV\" }/
-          }" Cargo.toml
-          git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
+          # workspace root だけでなく member crate の crate-local direct dependency も
+          # 同一 helper で処理し、扱えない TOML 形状は fail-closed にする。
+          node "$GITHUB_WORKSPACE/ci/consumer-verify/pin-ruviform-rev.mjs" \
+            --repo "$CONSUMER_DIR" \
+            --rev "$RUVIFORM_REV"
+          git diff >> "$GITHUB_STEP_SUMMARY" || true
       - name: cargo fetch + single-SHA lockfile guard
         id: fetch
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true'
@@ -641,8 +639,8 @@ jobs:
             rec "${CONSUMER_NAME}-preflight|$DEF" "preflight" "-" "-" "fail" "preflight failed"
           elif [ "$GATE" = "run" ]; then
             rec "${CONSUMER_NAME}-dep-access|$DEF" "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
-            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
-            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (workspace-aware helper)" "node ci/consumer-verify/pin-ruviform-rev.mjs" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "pin helper + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
             rec "${CONSUMER_NAME}-lock-check|$DEF" "mise run check-ruviform-lock" "mise run check-ruviform-lock" "workspace" "$(o '${{ steps.lock.outcome }}')"
             rec "${CONSUMER_NAME}-check-full|$DEF" "mise run check-full (legacy check-ci fallback)" "mise run check-full || mise run check-ci" "workspace" "$(o '${{ steps.check.outcome }}')"
             rec "${CONSUMER_NAME}-cli-smoke-build|$DEF" "cargo build -p al-cli --profile ci (smoke)" "cargo build -p al-cli --profile ci" "al-cli headless" "$(o '${{ steps.smoke_build.outcome }}')"
@@ -894,15 +892,13 @@ jobs:
           set -euo pipefail
           # synvelis は ruviform 依存を既定ブランチ追従（rev 未指定）で宣言する
           # ため、verify-audiolens と同一の正規化で `rev = "$RUVIFORM_REV"` を
-          # 注入する。scratch checkout 内のみの変更（consumer repo には残さない）。
-          sed -i -E "/scarecrow173\/ruviform\.git/ {
-            s/\{ *rev = \"[0-9a-f]{40}\", */{ /;
-            s/, *rev = \"[0-9a-f]{40}\"//;
-            s/\{ *branch = \"[^\"]+\", */{ /;
-            s/, *branch = \"[^\"]+\"//;
-            s/ *\}/, rev = \"$RUVIFORM_REV\" }/
-          }" Cargo.toml
-          git diff Cargo.toml >> "$GITHUB_STEP_SUMMARY" || true
+          # 注入する。root の workspace dependency だけでなく member crate の
+          # crate-local direct dependency も scratch checkout 内でのみ正規化する
+          # （consumer repo には残さない）。扱えない TOML 形状は fail-closed。
+          node "$GITHUB_WORKSPACE/ci/consumer-verify/pin-ruviform-rev.mjs" \
+            --repo "$CONSUMER_DIR" \
+            --rev "$RUVIFORM_REV"
+          git diff >> "$GITHUB_STEP_SUMMARY" || true
       - name: cargo fetch + single-SHA lockfile guard
         id: fetch
         if: steps.gate.outputs.gate == 'run' && steps.resolution.outputs.tuple_ok == 'true' && steps.presence.outputs.presence == 'present'
@@ -1173,8 +1169,8 @@ jobs:
             rec "${CONSUMER_NAME}-workspace-presence|$DEF" "workspace presence (Cargo.toml)" "-" "-" "not_run" "no buildable workspace"
           elif [ "$GATE" = "run" ]; then
             rec "${CONSUMER_NAME}-dep-access|$DEF" "dep access probe (url.insteadOf + ls-remote)" "git config + ls-remote" "access" "$(o '${{ steps.dep.outcome }}')"
-            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (sed 正規化)" "sed -i -E Cargo.toml" "workspace" "$(o '${{ steps.pin.outcome }}')"
-            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "sed + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-pin|$DEF" "manifest rev pin (workspace-aware helper)" "node ci/consumer-verify/pin-ruviform-rev.mjs" "workspace" "$(o '${{ steps.pin.outcome }}')"
+            rec "${CONSUMER_NAME}-manifest-fetch|$DEF" "manifest rev pin + cargo fetch (lockfile re-resolve)" "pin helper + mise exec -- cargo fetch" "workspace" "$(o '${{ steps.fetch.outcome }}')"
             rec "${CONSUMER_NAME}-rev-check|$DEF" "mise run check-ruviform-rev (lock 単一 SHA)" "mise run check-ruviform-rev" "workspace" "$(o '${{ steps.rev.outcome }}')"
             rec "${CONSUMER_NAME}-check-full|$DEF" "mise run check-full (legacy check fallback)" "mise run check-full || legacy mise run check" "workspace" "$(o '${{ steps.check.outcome }}')"
             rec "${CONSUMER_NAME}-test-full|$DEF" "mise run test-full (legacy test fallback; LFS fixtures)" "git lfs pull && (mise run test-full || legacy mise run test)" "workspace" "$(o '${{ steps.test.outcome }}')"

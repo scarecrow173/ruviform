@@ -142,6 +142,18 @@ for (const [name, job] of [
     assert.ok(laneSteps.length >= 8, `expected >=8 tuple_ok-gated steps, got ${laneSteps.length}`);
   });
 
+  test(`contract: ${name} manifest pin uses the shared workspace-aware helper`, () => {
+    // Issue #1064: nested workspace members may declare direct ruviform git
+    // dependencies (Synvelis synvelis-player / synvelis-script-luau). The
+    // workflow must not reimplement root-only sed rules in each lane.
+    const pin = job.slice(job.indexOf("id: pin"), job.indexOf("id: fetch"));
+    assert.ok(pin.includes("ci/consumer-verify/pin-ruviform-rev.mjs"), "shared pin helper call missing");
+    assert.ok(pin.includes('--repo "$CONSUMER_DIR"'), "helper must target the consumer scratch checkout");
+    assert.ok(pin.includes('--rev "$RUVIFORM_REV"'), "helper must pin the candidate revision");
+    assert.ok(!/sed -i -E/.test(pin), "root-only sed rewrite must not remain in the pin step");
+    assert.ok(/git diff >> "\$GITHUB_STEP_SUMMARY"/.test(pin), "manifest diff evidence must include every helper-rewritten file");
+  });
+
   test(`contract: ${name} lanes file is truncated before recording`, () => {
     assert.ok(/: > "\$RUNNER_TEMP\/\w+-lanes\.jsonl"/.test(job),
       "stale JSONL rows on persistent runners could fabricate pass");
