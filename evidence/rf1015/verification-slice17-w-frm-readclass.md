@@ -73,13 +73,13 @@ UTCは 2026-11-28。wallは mise lane全体である。
 | lane | command | 時刻 | exit | verdict | 記録 |
 | --- | --- | --- | ---: | --- | --- |
 | selective Kani pre-mutation | `mise run test-formal-kani w-frm-readclass` | 06:49:03–06:49:30 | 0 | Pass | 2/2 harness successful、cover 9/9と8/8 |
-| selective Kani mutation | `mise run test-formal-kani w-frm-readclass` | 06:49:43–06:50:01 | 1 | Fail（検出成功） | 両 harnessが semantic assertion failure |
+| selective Kani mutation | `mise run test-formal-kani w-frm-readclass` | 07:02:30–07:02:59 | 1 | Fail（検出成功） | 両 harnessが semantic assertion failure |
 | fmt | `mise run fmt-check` | 06:50:50–06:51:02 | 0 | Pass | rustfmt diffなし |
 | check | `mise run check ruviform-ui-test` | 06:51:03–06:51:05 | 0 | Pass | crate check pass |
 | lint | `mise run lint ruviform-ui-test` | 06:51:05–06:51:13 | 0 | Pass | clippy `-D warnings` pass |
 | crate regression | `mise run test ruviform-ui-test` | 06:51:13–06:52:00 | 0 | Pass | `formal_transport` 6/6を含む |
 | proptest post-revert | `mise run test-formal` | 06:52:00–06:52:24 | 0 | Pass | `formal_transport` 6/6を含む全 lane pass |
-| selective Kani post-revert | `mise run test-formal-kani w-frm-readclass` | 06:52:24–06:52:43 | 0 | Pass | 2/2 harness successful、cover 9/9と8/8 |
+| selective Kani post-revert | `mise run test-formal-kani w-frm-readclass` | 07:03:09–07:03:27 | 0 | Pass | 2/2 harness successful、cover 9/9と8/8 |
 | existing proof non-regression | `mise run test-formal-kani w-frm-codec` | 06:52:43–06:52:57 | 0 | Pass | 3/3 harness successful、各 cover 4/4 |
 | usage negative smoke | `mise run test-formal-kani invalid-selector` | 06:52:57 | 2 | Pass（期待どおり usage error） | Kani実行前に停止 |
 
@@ -105,16 +105,16 @@ stream length 0〜32の bit-vector比較であり、旧 shell proofの Vec/Read/
 
 ## Mutation-fail と revert
 
-実施した mutantは `frame_read_classification` の partial prefix分類を `UnexpectedEof` から
-`Eof` へ変える 1箇所だけである。transient mutantは commitしていない。
+実施した mutantは `frame_read_classification` の partial prefix分類を
+`FrameReadClassification::UnexpectedEof` から `FrameReadClassification::Eof` へ変える 1箇所だけである。
+制御した mutation runを 2026-11-28T07:02:30Z–07:02:59Z に再取得した。transient mutantは commitしていない。
 
-- mutation run: `mise run test-formal-kani w-frm-readclass`、2026-11-28T06:49:43Z–06:50:01Z、exit 1。
+- mutation run: `mise run test-formal-kani w-frm-readclass`、2026-11-28T07:02:30Z–07:02:59Z、exit 1。
 - 検出: `w_frm_readclass_window_exactness_len32` と `w_frm_readclass_fact_exactness` の両方で
   `assertion failed: actual == expected`。unwinding assertion failureではなく semantic violationである。
   coverはそれぞれ 6/9、5/8 satisfiedだった。
 - revert: 該当行を `UnexpectedEof` へ戻した。revert後の製品/proof/mise差分は verified Sync Commitに含まれる。
-- revert後再検証: selective Kaniが 06:52:24Z–06:52:43Zに exit 0 / pass、`test-formal` が
-  06:52:00Z–06:52:24Zに exit 0 / pass。
+- revert後再検証: selective Kaniが 07:03:09Z–07:03:27Zに exit 0 / pass（verification time 0.952017 s / 0.3605135 s）、`test-formal` も revert後に再実行して exit 0 / pass。
 
 mutationの failは lane regressionではなく検出成功として記録する。mutation実験の副産物は残していない。
 
