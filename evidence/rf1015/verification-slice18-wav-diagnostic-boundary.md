@@ -5,11 +5,11 @@
 | 項目 | 値 |
 | --- | --- |
 | base SHA | `979128b4c400e7b1ed96f7a1a80479db83cdda49` |
-| 検証対象 SHA / verified Sync Commit | `eee229d86507cd017c3c1691b4878255385f9e98` |
+| 検証対象 SHA / verified Sync Commit | `8322a6bc298a0bc8bee24ae0daeb2ee969ee820a` |
 | 対象 group | `WAV-DECL-GATE`（直接依存する `WAV-HEADER` serialization non-regression を含む） |
 | canonical selective lane | `mise run test-formal-kani wav-decl-gate` |
 
-`eee229d8` は production decision core、Kani proof、regression test、selective lane を含む最後の製品/proof/mise 変更 commit である。後続 commit は docs/skill/evidence の同期に限定し、verified Sync Commit を動かさない。最終 PR head SHA は evidence が自分自身を固定点として書けないため PR 本文で記録する。
+`8322a6bc` は production decision core、Kani proof、regression test、selective lane、proof内の expression-position macro警告修正を含む最後の製品/proof/mise 変更 commit である。後続 commit は docs/skill/evidence の同期に限定し、verified Sync Commit を動かさない。最終 PR head SHA は evidence が自分自身を固定点として書けないため PR 本文で記録する。
 
 ## 境界と保証
 
@@ -28,11 +28,11 @@ canonical verdict は WSL2 (`Ubuntu`) 経路の mise lane で取得した。補�
 | OS/Arch | WSL2 Ubuntu, Linux x86_64 |
 | Kani | Kani Rust Verifier 0.68.0 (cargo plugin) |
 | CBMC | 6.11.0 |
-| canonical lane wall clock | 58 s |
-| canonical harness verification time 合計 | 39.723 s（fmt/header 33.938 s が dominant cost） |
-| auxiliary CPU time | user 50.79 s + system 4.50 s = 55.29 s（0.92 CPU-min） |
-| auxiliary wall clock | 57.69 s |
-| auxiliary peak memory | maximum resident set size 1,233,948 KiB（GNU `/usr/bin/time -v`、compile を含む） |
+| canonical lane wall clock | 57.783 s（shell `time` 実測。host側 user/sysはWSL子プロセス待機中心で内訳にならない） |
+| canonical harness verification time 合計 | 39.330 s（fmt/header 33.606 s が dominant cost） |
+| auxiliary CPU time | user 48.31 s + system 4.09 s = 52.40 s（0.873 CPU-min） |
+| auxiliary wall clock | 54.29 s |
+| auxiliary peak memory | maximum resident set size 1,237,604 KiB（GNU `/usr/bin/time -v`、compile を含む） |
 | 事前予算 | 20 CPU-min / 4 GiB |
 | 判定 | 予算内 |
 
@@ -40,18 +40,18 @@ canonical verdict は WSL2 (`Ubuntu`) 経路の mise lane で取得した。補�
 
 | harness | verdict | verification time | cover |
 | --- | --- | ---: | --- |
-| `wav::proofs::wav_decl_gate_fmt_and_header_layout` | `SUCCESSFUL`、0/3897 failed（311 unreachable） | 33.93782 s | cover なし |
-| `wav::proofs::wav_decl_gate_byte_rate_boundary_large_align` | `SUCCESSFUL`、0/181 failed（2 unreachable） | 1.3031628 s | 1/1 satisfied |
-| `wav::proofs::wav_decl_gate_byte_rate_boundary_mid_align` | `SUCCESSFUL`、0/181 failed（2 unreachable） | 1.2767345 s | 1/1 satisfied |
-| `wav::proofs::wav_decl_gate_byte_rate_boundary_small_align` | `SUCCESSFUL`、0/189 failed（2 unreachable） | 1.6473343 s | 2/2 satisfied |
-| `wav::proofs::wav_decl_gate_width_exactness` | `SUCCESSFUL`、0/44 failed（1 unreachable） | 0.39271986 s | 4/4 satisfied |
-| `wav::proofs::wav_decl_gate_membership_exactness` | `SUCCESSFUL`、0/113 failed（2 unreachable） | 1.1656963 s | 2/2 satisfied |
+| `wav::proofs::wav_decl_gate_fmt_and_header_layout` | `SUCCESSFUL`、0/3897 failed（311 unreachable） | 33.605972 s | cover なし |
+| `wav::proofs::wav_decl_gate_byte_rate_boundary_large_align` | `SUCCESSFUL`、0/181 failed（1 unreachable） | 1.2392182 s | 1/1 satisfied |
+| `wav::proofs::wav_decl_gate_byte_rate_boundary_mid_align` | `SUCCESSFUL`、0/181 failed（1 unreachable） | 1.2490643 s | 1/1 satisfied |
+| `wav::proofs::wav_decl_gate_byte_rate_boundary_small_align` | `SUCCESSFUL`、0/189 failed（1 unreachable） | 1.671027 s | 2/2 satisfied |
+| `wav::proofs::wav_decl_gate_width_exactness` | `SUCCESSFUL`、0/44 failed | 0.41489103 s | 4/4 satisfied |
+| `wav::proofs::wav_decl_gate_membership_exactness` | `SUCCESSFUL`、0/113 failed（1 unreachable） | 1.1495965 s | 2/2 satisfied |
 
 代表的な unreachable は rejected arm の不可達性や serialization matrix の dead branchであり、 unwinding assertion failure ではない。`fmt_and_header` は serialization の concrete matrixが支配コストで、pure scalar gate 自体は各 0.4–1.7 s に収まった。
 
 ## Mutation / Able to Fail
 
-transient mutant は production core の byte-rate 計算を `rate * block_align + 1` へ 1 箇所だけ変更する off-by-one fault とした。commit には含めず、実行後に byte-for-byte で復元した（`cmp` 一致）。
+transient mutant は production core の byte-rate 計算を `u64::from(rate) * u64::from(block_align) + 1` へ 1 箇所だけ変更する off-by-one fault とした。commit には含めず、実行後に byte-for-byte で復元した（`cmp` 一致）。
 
 - mutation run: `mise run test-formal-kani wav-decl-gate`、exit 1、lane verdict `fail`
 - 検出: 5/6 harness が semantic assertion failure。代表反例は `u64::from(scalars.byte_rate) == product`、exact boundary acceptance、membership output equality。unwinding assertion failure の副産物ではない
@@ -79,7 +79,7 @@ transient mutant は production core の byte-rate 計算を `rate * block_align
 
 | consumer | checkout SHA | crate reference / exact symbol |
 | --- | --- | --- |
-| audio-lens | `0f1a1aac86336bff98df8bab1162e23bf5c36672` | `ruviform-io-wav` / `ruviform_io_wav` / `WavOutputSpec` / `make_encoder` / `open_muxer` / `wav_capabilities` の direct hit なし |
+| audio-lens | `f187ab33927359dc927dd32b39e4a65bd8cfb704` | `ruviform-io-wav` / `ruviform_io_wav` / `WavOutputSpec` / `make_encoder` / `open_muxer` / `wav_capabilities` の direct hit なし |
 | synvelis | `a5e29228e6a08940e7396325daab138295a5e894` | crate reference: workspace/root `Cargo.toml`、`synvelis-render`、`synvelis-player`。exact symbol: `synvelis-render/src/preflight.rs` の `wav_capabilities`、`synvelis-render/src/export.rs` の `WavOutputSpec`/`make_encoder`/`open_muxer`/`wav_capabilities`、`synvelis-player/src/publish.rs` と複数 test の `WavOutputSpec`/`make_encoder`/`open_muxer` |
 
 既知 baseline run 46144010070 は最終 PR head の candidate evidence ではない。Synvelis `test-rt` linker bus error が最終 candidate runで再現した場合も、ruviform 製品回帰・consumer 既存問題・インフラ/flaky を根拠なく混同せず、unknown または該当 lane 未達として分類する。
