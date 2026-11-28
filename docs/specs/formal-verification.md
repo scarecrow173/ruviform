@@ -91,10 +91,11 @@ relations:
 >
 > `ruviform-io-structured` に対する `--no-unwinding-checks` は
 > rf#1015 slice 3 で撤廃済みであり、旧結果は legacy-exception result
-> として扱う。WAV の `cfg(kani)` 診断 payload 置換は未移行の
-> legacy exception であり、`scarecrow173/ruviform#1015` の再評価対象である。
-> これらを通常の Proof Pass の根拠や新規にコピーしてよい pattern
-> として扱わない。
+> として扱う。WAV の `cfg(kani)` 診断 payload 置換は rf#1015
+> slice 18 で撤廃し、production scalar/pure decision core と lazy
+> diagnostic shell の境界へ移行した。置換時代の旧結果は legacy-exception
+> result であり、通常の Proof Pass の根拠や新規にコピーしてよい
+> pattern として扱わない。
 
 Issue `scarecrow173/ruviform#806` の実装 spec。slice 1 で unsafe を
 含まない wire codec に proptest と Kani を個別 Property に対応する
@@ -321,14 +322,18 @@ rf#1015 slice 15 は、`ARC-IDX-LIMIT` のうち `TarArchiveReader::advance` に
 判定は block 読み取りの成功後、ゼロ終端 block やヘッダーを解釈する前に実行する。
 `read_extension` の確保前判定は変更せず、従来の `tar_metadata_gate` も維持する。
 
+rf#1015 slice 18 の実装境界は、`WAV-DECL-GATE` を production scalar/pure decision core で証明することである。core は `SampleFormat`、layout 由来の正の channel count、normalized 済みの正の rate から accept 時の `channels`/`block_align`/`byte_rate` または rejection class を返し、`io::Error`、`Error` payload、`format!`、allocation、Vec、header serialization、`SampleRate::new` normalization、環境アクセスを持たない。`Wire::new` は scalar 抽出、core 呼び出し、rejection class の `ErrorKind` への写像、accept 値への speaker mask/extensible 付与だけを行う thin shell とする。unsupported rejection の production diagnostic は shell に残り、少なくとも source の `io::ErrorKind::InvalidInput` と「対象 sample format が wav_capabilities の wire set にない」という meaning を維持する。
+
+slice 18 の Kani 対象は、core の membership exactness、channel/block_align width exactness、distinct block_align representative × byte_rate boundary ±1、rejection class exactnessと、直接依存する fmt/header serialization non-regressionである。shell-core 接続、`ErrorKind` 写像、diagnostic payload meaning は deterministic regression/proptest に残し、Kani Pass に含めない。diagnostic text、`io::Error` 表現、Vec/header write、`SampleRate::new` normalization、SampleFormat canonical inventory、symbolic rate interior、任意 sink/任意 layout serialization は除外する。channel/rate が正であることは production invariant に由来する入力域であり、`%10` 列挙の限界は D-5 未解決の residual risk として残る。
+
 選択再実行は `mise run test-formal-kani w-ipc-op` / `w-ipc-envelope` に加え、slice 3 の
 `sd-csv-limits` / `sd-byte-budget`、slice 4 の `arc-idx-limit`、slice 5 の
 `arc-payload-limit`、slice 6 の `arc-tar-struct`、slice 7 の `w-frm-codec`、slice 8 の `w-ipc-envelope`、
-slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress`、slice 14 の `arc-tar-metadata-budget`、slice 15 の `arc-tar-block-budget`、slice 17 の `w-frm-readclass` が最小入口である。
+slice 9 の `arc-zip-entry-size`、slice 10 の `arc-zip-output-cap`、slice 11 の `arc-zip-measured-total`、slice 12 の `arc-tar-measured-total`、slice 13 の `arc-tar-entry-progress`、slice 14 の `arc-tar-metadata-budget`、slice 15 の `arc-tar-block-budget`、slice 17 の `w-frm-readclass`、slice 18 の `wav-decl-gate` が最小入口である。
 selector なしの `test-formal-kani` は従来の aggregate 挙動を維持し、未知 selector は
 Kani 実行前に exit 2 の usage error で止まる。Property group 全件を対象にした
 generic runner はまだない。`W-IPC-OP`, `W-IPC-ENVELOPE`, `W-FRM-CODEC`, `W-FRM-READCLASS`, `ARC-IDX-LIMIT`, `ARC-PAYLOAD-LIMIT`, `ARC-TAR-STRUCT`,
-`SD-CSV-LIMITS`, `SD-BYTE-BUDGET` の選択再実行は `synced`、他 group は引き続き `not_synced`
+`SD-CSV-LIMITS`, `SD-BYTE-BUDGET`, `WAV-DECL-GATE` の選択再実行は `synced`、他 group は引き続き `not_synced`
 または `deferred` と記録する。実装済みの bound・実測コスト・mutation 証跡は
 ledger §6 と各 slice の evidence を正本とする。
 
@@ -580,39 +585,45 @@ proptest/integration test に委譲する。`BoundedRead` は `pub(crate)`
 
 ### slice 4 WAV harness（`src/convert.rs` + `src/wav.rs` の in-src proofs + `tests/formal_wav.rs` の `#[cfg(kani)] mod proofs`）
 
-slice 2/3 と同じ責務分割 — symbolic は「契約を一意に決める軸」
-だけに絞り、それ以外は concrete matrix か proptest へ委譲する。
-`SampleRate::new` は `TimeBase::new` 経由で Euclid の `while` loop
-を含み、symbolic rate の nested `%` unroll が参照 WSL2 環境
-（31 GiB）を枯渇させるため、rate を含む harness は全て concrete
-boundary matrix として設計した。
+rf#1015 slice 18 で、`WAV-DECL-GATE` は production scalar/pure decision core
+`wire_declaration_decision` を対象に再編した。core は `SampleFormat`、正の
+channel count、normalized 済みの正の rate から accept 値または rejection class
+を返し、`io::Error`、`Error` payload、`format!`、allocation、Vec、header
+serialization、`SampleRate::new` normalization、環境アクセスを持たない。
+`Wire::new` は scalar 抽出、core 呼び出し、rejection class の `ErrorKind` への
+写像、speaker mask/extensible 付与だけを行う thin shell であり、unsupported
+rejection 時だけ `InvalidInput` の `io::Error` source を lazy に構築する。
+製品挙動を `cfg(kani)` で置き換えるコードは残らない。
 
 | Harness | Bound | 未証明領域 | 補完 |
 | --- | --- | --- | --- |
-| `write_sample_documented_policy`（in-src `src/convert.rs`） | symbolic `f32`（NaN・±Inf・±0・subnormal・±full-scale・任意内部値を全網羅）× symbolic wire format 選択。`#[kani::unwind(16)]` | 非 wire format（`write_sample` の wire 外への振る舞い）・frame→packet の batch 経路 | 非 wire format は proptest `sample_conversion_matches_documented_policy` が全 10 variant で担保・batch 経路は `encoder_packet_stream_is_the_frame_stream` が担保 |
-| `format_tag_membership_is_wire_formats`（in-src `src/wav.rs`） | symbolic `SampleFormat` 全 10 variant（enum discriminant symbolic）— `format_tag` の `Some/None` と `WIRE_FORMATS` membership の一致を尽きる。`#[kani::unwind(8)]` | —（全 variant を尽きるため gap なし） | `wire_new_non_wire_is_unsupported` が実 `Wire::new` 経路の `Unsupported` kind を concrete 全 5 非 wire format で証明・proptest `wire_gate_is_exact_membership_plus_byte_rate` が encoder/muxer 実経路で担保 |
-| `wire_new_non_wire_is_unsupported`（in-src `src/wav.rs`） | concrete: 全 5 非 wire `SampleFormat` — `Wire::new` が `ErrorKind::Unsupported` を返すことを尽きる。`#[kani::unwind(8)]` | 診断 payload 文面（`cfg(kani)` で簡略化 — 下記仮定参照） | proptest `declaration_mutations_keep_stable_error_kinds` / `wire_gate_is_exact_membership_plus_byte_rate` が kind 安定集合を実経路で担保 |
-| `wire_new_gate_is_exact_{small,mid,large}_align`（in-src `src/wav.rs`） | concrete matrix: 全 13 種の distinct `block_align`（1..128 を 5+4+4 reps に 3 分割）× boundary rate `u32::MAX/align` の ±1。`#[kani::unwind(8)]` | `u32::MAX/align` から ±2 以上離れた interior rate・symbolic rate 全空間 | interior domain は proptest `wire_gate_is_exact_membership_plus_byte_rate`（boundary ±4 band + uniform rate）が担保 |
-| `fmt_and_header_layout`（in-src `src/wav.rs`） | concrete matrix: 5 spec（16 byte `fmt ` 2 件 Mono S16/Stereo F32・extensible 40 byte 3 件 5.1 S24/7.1 F32/custom mask S32）。`#[kani::unwind(64)]`（builtin `memcmp` の byte unroll — 最大比較は 40 byte `fmt ` body） | symbolic byte 内容・header 以外の write 経路 | 任意 spec での header 構造は proptest `open_muxer_writes_complete_header` が担保・wire byte 実経路は roundtrip property が担保 |
-| `open_muxer_spec_contract_{pcm,extensible}`（tests `#[cfg(kani)]`） | concrete success matrix: 16B form 1 spec（Mono U8）・40B form 3 spec（5.1 S24・7.1 F32・custom mask S32）— 固定 80B 配列の最小 `Write+Seek` sink（`KaniSink`）で `Cursor<Vec<u8>>` splice/growth の SSA 膨張を排除。`#[kani::unwind(96)]` | symbolic `WavOutputSpec`・finalize 後 backpatch・複数 stream | finalize/backpatch・one-shot・receipt 値は proptest `muxer_finalize_receipt_backpatch_one_shot` が担保・16B 非 ext の全 byte layout は `fmt_and_header_layout` が担保 |
-| ~~`open_muxer_rejects_invalid_value`~~（tests `#[cfg(kani)]` — residual slice で lane から退役） | concrete: byte-rate overflow 1 spec（7.1 F32・rate = `u32::MAX/32+1`）— `open_muxer` が `ErrorKind::InvalidValue` に写像することを証明する Err-direction harness。`#[kani::unwind(4)]`（到達可能 loop は 1 要素の stream 検証と GCD のみ・header write unroll は dead path） | symbolic spec — および verdict 自体: 参照 WSL2 環境（31 GiB）では `open_muxer` 経由が untrimmed/trimmed/KaniSink/unwind 96/16/4 の全形で cbmc ~31.7 GiB に張り付き（slice 4）、residual slice で gate 直上の `validate_stream` 単体に再設計しても concrete 入力で ~31.9 GiB に張り付いた（dominant cost は `open_muxer` の死後段 CFG ではなく `validate_stream` 自身の error-arm SSA — `Error::with_source` + `format!`/`io::Error` 構築）。verdict 未発行の `not_run`（環境起因）が確定したため harness は lane から除去 — 永久に verdict を返さない証明を残すと全実行が fail になる。`evidence/rf806` residual 節を参照 | `wire_new_gate_is_exact_*` が source gate の `InvalidValue` を exhaustive に証明（この正確な spec を boundary matrix で網羅）・`open_muxer` の `?` 伝播は proptest `muxer_rejections_are_invalid_data_and_not_sticky` が任意 spec で担保 |
+| `write_sample_documented_policy`（in-src `src/convert.rs`） | symbolic `f32`（NaN・±Inf・±0・subnormal・±full-scale・任意内部値を全網羅）× symbolic wire format 選択。`#[kani::unwind(16)]` | 非 wire format・frame→packet batch 経路 | 非 wire format は proptest `sample_conversion_matches_documented_policy`、batch 経路は `encoder_packet_stream_is_the_frame_stream` |
+| `wav_decl_gate_membership_exactness`（in-src `src/wav.rs`） | 現行の手動 `%10` inventory の symbolic `SampleFormat` × fixed valid scalars。`#[kani::unwind(8)]` | 将来 variant を含む canonical inventory（D-5）、shell-core 接続、`ErrorKind` 写像、diagnostic payload | proptest `wire_gate_is_exact_membership_plus_byte_rate` と deterministic `unsupported_wire_format_rejection_carries_invalid_input_diagnostic` |
+| `wav_decl_gate_width_exactness`（in-src `src/wav.rs`） | positive symbolic `u32` channel count × symbolic wire format、`rate = 1`。`#[kani::unwind(4)]` | production layout が現在到達する 1..=32 を超える scalar 領域は core の stronger domain であり production bug の主張ではない。byte-rate overflow は `rate = 1` で除外 | shell 経路の kind 安定性は proptest `declaration_mutations_keep_stable_error_kinds` |
+| `wav_decl_gate_byte_rate_boundary_{small,mid,large}_align`（in-src `src/wav.rs`） | concrete matrix: 全 13 種の distinct `block_align`（1..128 を 5+4+4 reps に 3 分割）× boundary rate `u32::MAX/align` の ±1。`#[kani::unwind(8)]` | `u32::MAX/align` から ±2 以上離れた interior rate・symbolic rate 全空間 | interior domain は proptest `wire_gate_is_exact_membership_plus_byte_rate`（boundary ±4 band + uniform rate） |
+| `wav_decl_gate_fmt_and_header_layout`（in-src `src/wav.rs`） | concrete matrix: 5 spec（16 byte `fmt ` 2 件 Mono S16/Stereo F32・extensible 40 byte 3 件 5.1 S24/7.1 F32/custom mask S32）。`#[kani::unwind(64)]` | symbolic byte 内容・header 以外の write 経路 | 任意 spec での header 構造は proptest `open_muxer_writes_complete_header`、wire byte 実経路は roundtrip property |
+| `open_muxer_spec_contract_{pcm,extensible}`（tests `#[cfg(kani)]`） | concrete success matrix: 16B form 1 spec（Mono U8）・40B form 3 spec（5.1 S24・7.1 F32・custom mask S32）— 固定 80B `KaniSink`。`#[kani::unwind(96)]` | symbolic `WavOutputSpec`・finalize 後 backpatch・複数 stream | finalize/backpatch/one-shot/receipt は proptest `muxer_finalize_receipt_backpatch_one_shot`、16B 非 ext の全 byte layout は `wav_decl_gate_fmt_and_header_layout` |
 
-仮定（slice 4 固有）:
+`open_muxer` の Err-direction harness（旧 `open_muxer_rejects_invalid_value`）は
+slice 4/residual slice で verdict を返せず退役したままである。byte-rate overflow の
+`InvalidValue` decision は boundary matrix が production core で証明し、shell の `?`
+伝播と kind 写像は proptest/deterministic regression が担保する。これは Kani Pass に
+含めない。
 
-- `Wire::new` の `Unsupported` 経路は `std::io::Error::new` +
-  `format!`（symbolic `{:?}` 診断）を構築し、その式構築だけで
-  参照 WSL2 環境が枯渇することを実測（concrete 列挙でも同様）。
-  そのため `src/wav.rs` では診断文面の構築を
-  `unsupported_sample_format` helper に隔離し、`cfg(kani)` 時は
-  `format!` を持たない軽量診断に切り替える（`ErrorKind`・分岐
-  条件は不変 — 診断 payload 文面のみの `cfg` 差分）。この置換は
-  `scarecrow173/ruviform#1015` が再評価する legacy exception であり、
-  新規 proof にコピーしてよい pattern ではない。これにより
-  非 wire format の `Unsupported` kind は
-  `wire_new_non_wire_is_unsupported` が concrete 全 5 variant で
-  証明し、membership の exhaustiveness は
-  `format_tag_membership_is_wire_formats`、encoder/muxer 実経路は
-  proptest が担保する 3 つの補完関係。
+仮定（slice 4/slice 18 固有）:
+
+- `wire_declaration_decision` の channel/rate は正を入力域とする。これは
+  production invariant（`ChannelLayout` は非空、`SampleRate` は nonzero）に
+  由来し、overflow を除外するための assume ではない。width proof の
+  `channels > 0` はこの入力域を表す充足可能な仮定であり、boundary overflow
+  自体は core が判定する。
+- `SampleFormat` の `%10` inventory は `#[non_exhaustive]` enum に対する手動
+  列挙であり、将来 variant を恒久的に尽くす証明ではない。D-5 は未解決の
+  residual risk として残る。
+- unsupported diagnostic の exact text と `io::Error` 表現は wire contract で
+  はなく未証明領域である。shell が `ErrorKind::Unsupported` と source の
+  `io::ErrorKind::InvalidInput`、「wav_capabilities の wire set にない」という
+  meaning を維持することは deterministic regression が担保する。
 - symbolic `SampleRate::new` は `TimeBase::new` の Euclid `while`
   loop で nested symbolic `%` を生成し、rate を symbolic に含む
   harness は全て参照環境で infeasible だった。rate を使う全
@@ -622,7 +633,7 @@ boundary matrix として設計した。
 - `#[kani::unwind(N)]` は `fmt ` body の slice 比較（≤40 byte）・
   builtin memmove/memcmp・GCD loop の concrete unroll を含む
   最小 bound + 余裕。bound 超過は unwinding assertion として
-  loud に検出される（`fmt_and_header_layout` は `memcmp` loop の
+  loud に検出される（`wav_decl_gate_fmt_and_header_layout` は `memcmp` loop の
   unwinding assertion を 1 度検出し、unwind を 16→64 に
   引き上げて解決した記録あり）。
 - `open_muxer` の Err-direction（「必ず `InvalidValue` で reject
@@ -682,8 +693,8 @@ boundary matrix として設計した。
 - `ruviform-io-structured` に対するクレート単位の
   `--no-unwinding-checks` invocation — slice 3 で撤廃済み。旧結果は
   legacy-exception result として履歴に残し、通常の Proof Passに数えない。
-- WAV backend の `cfg(kani)` による診断 payload 置換 — 未移行の
-  legacy exception。
+- WAV backend の `cfg(kani)` による診断 payload 置換 — rf#1015 slice 18
+  で撤廃済み。置換時代の旧結果は legacy-exception result として履歴に残す。
 
 これらを 通常の Proof Pass の根拠や新規 proof にコピー可能な
 pattern として扱わない。本文書内の関連記述は、当時の境界と未証明領域を
@@ -691,8 +702,7 @@ pattern として扱わない。本文書内の関連記述は、当時の境界
 `#[cfg(kani)] mod proofs` とは区別する。rf#1015 slice 1 の再評価では、
 structured は DFA/reader 境界再設計と crate 単位 invocation 撤廃、WAV は
 lazy/pure diagnostic boundary への移行と `cfg(kani)` 置換撤廃を採用した。
-structured は slice 3 で実施済みであり、WAVは実施完了まで legacy exception
-のまま会計する。新 verdict だけを
+structured は slice 3 で、WAV は slice 18 で実施済みである。新 verdict だけを
 Proof Pass に計上する（decision matrix: `evidence/rf1015/property-ledger.md`
 §4 D-1/D-2）。
 

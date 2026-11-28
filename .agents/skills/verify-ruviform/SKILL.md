@@ -346,6 +346,7 @@ mise run test-formal-kani arc-tar-entry-progress # selective TAR entry-progress 
 mise run test-formal-kani arc-tar-struct  # selective TAR typeflag decision-core proof only
 mise run test-formal-kani sd-csv-limits   # selective CSV limit decision-core proofs only
 mise run test-formal-kani sd-byte-budget  # selective BoundedRead byte-budget proof only
+mise run test-formal-kani wav-decl-gate  # selective WAV declaration-gate proofs plus fmt/header non-regression only
 ```
 
 Responsibilities are split rather than duplicated. `POLICIES.md` §6 is the
@@ -378,7 +379,7 @@ for the TAR measured total read-window/accumulation decision-core proof,
 `arc-tar-entry-progress` for the TAR entry progress/read-demand composition
 decision-core proof, `arc-tar-struct` for the TAR typeflag
 decision-core proof, `sd-csv-limits` for the CSV limit decision-core proofs,
-and `sd-byte-budget` for the `BoundedRead` proof.
+and `sd-byte-budget` for the `BoundedRead` proof, and `wav-decl-gate` for the WAV declaration-gate core plus directly dependent fmt/header serialization proofs.
 There is still no generic Property-group runner; record unaffected or
 unimplemented selectors as `not_synced` instead of claiming synchronization.
 Unknown selectors are usage errors (exit 2) before environment detection or
@@ -408,7 +409,7 @@ Kani proofs sit in a `#[cfg(kani)] mod proofs` at the bottom of the same
 test file, plus deliberate exceptions where the type under proof is
 `pub(crate)` or private: the `BoundedRead` proof lives in a
 `#[cfg(kani)] mod proofs` inside `src/input.rs`, the slice-4
-`write_sample`/`Wire`/`fmt` proofs live in
+`write_sample` proof and the slice-18 WAV declaration-gate/`fmt` proofs live in
 `ruviform-io-wav/src/convert.rs`/`wav.rs`, and the rf#1015 `W-IPC-OP`
 exactness/boundary proofs live beside the private `valid_op_bytes` in
 `ruviform-ui/src/ipc.rs`, and the rf#1015 `W-IPC-ENVELOPE` size/field
@@ -477,8 +478,14 @@ only `zip::read::proofs::arc_idx_limit_decision_exactness`,
 `tar::read::proofs::arc_tar_struct_typeflag_exactness`. The
 structured selectors likewise use exact substring filters:
 `csv_limit_decision` selects the three CSV decision-core exactness proofs and
-`bounded_read_budget_gate` selects the byte-budget proof. None of these
-selective entries disables Unwinding Assertions.
+`bounded_read_budget_gate` selects the byte-budget proof. The
+`wav-decl-gate` selector runs one `--tests -j1 -p ruviform-io-wav --harness
+wav_decl_gate` invocation; the substring selects the six migrated harnesses
+`wav_decl_gate_membership_exactness`, `wav_decl_gate_width_exactness`,
+`wav_decl_gate_byte_rate_boundary_{small,mid,large}_align`, and
+`wav_decl_gate_fmt_and_header_layout`, and does not select the separate
+`open_muxer_spec_contract_*` harnesses. None of these selective entries
+disables Unwinding Assertions.
 
 The former `--no-unwinding-checks` invocation for `ruviform-io-structured`
 was removed in rf#1015 slice 3. The historical invocation bounded `csv_core`'s
@@ -487,13 +494,15 @@ that explanation remains inventory history, not approval, and old results are
 legacy-exception results rather than ordinary Proof Pass. The replacement CSV
 proofs verify a pure decision core that does not include `build_dfa`; the
 parser-to-core connection remains outside Kani and is covered by proptest and
-integration tests. The `cfg(kani)` diagnostic-payload substitution in the WAV
-backend is still an unmigrated legacy exception owned by
-`scarecrow173/ruviform#1015`; do not confuse it with proof-placement-only
-`#[cfg(kani)] mod proofs`. The rf#1015 design direction is to remove the WAV
-exception through the lazy/pure diagnostic boundary, but until that
-implementation is re-verified its results remain legacy-exception results and
-are not ordinary Proof Pass.
+integration tests. The WAV backend's former `cfg(kani)` diagnostic-payload substitution was
+removed in rf#1015 slice 18. `wire_declaration_decision` is the production
+scalar/pure decision core; `Wire::new` is the lazy diagnostic shell that maps
+its rejection classes to the existing error kinds and preserves the
+unsupported-format `InvalidInput` source meaning. Do not confuse the
+proof-placement-only `#[cfg(kani)] mod proofs` with the removed behavior
+substitution, and do not copy the historical substitution pattern into new
+proofs. Shell-core connection, error-kind mapping, and diagnostic meaning are
+proptest/deterministic regression responsibilities, not Kani Pass contents.
 
 When product code, a model, a harness, or a dependency changes:
 

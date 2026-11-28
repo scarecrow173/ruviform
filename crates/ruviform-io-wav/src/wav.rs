@@ -85,28 +85,80 @@ pub(crate) struct Wire {
     pub extensible: bool,
 }
 
+/// The validated scalar products of the stream-declaration gate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WireScalars {
+    /// Channel count (`layout.channels()`), u16-safe.
+    channels: u16,
+    /// `channels * bits_per_sample / 8`.
+    block_align: u16,
+    /// `rate * block_align`.
+    byte_rate: u32,
+}
+
+/// The rejection class of the stream-declaration gate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WireRejection {
+    /// The sample format is outside [`WIRE_FORMATS`].
+    Unsupported,
+    /// A RIFF integer field cannot represent the declaration.
+    InvalidValue,
+}
+
+/// The authoritative scalar decision behind [`Wire::new`]: sample-format
+/// membership, channel-count width, block-align width, and byte-rate
+/// overflow. Positive channel counts and rates are the input domain — the
+/// production caller derives them from [`ChannelLayout`] and
+/// `SampleRate` — while overflow classes are decided here, not assumed.
+///
+/// This core deliberately carries no `Error`, `io::Error`, diagnostic
+/// payload, allocation, header serialization, `SampleRate` normalization,
+/// or environment access. The shell attaches diagnostics only when the
+/// decision rejects a declaration.
+fn wire_declaration_decision(
+    sample_format: SampleFormat,
+    channels: u32,
+    rate: u32,
+) -> std::result::Result<WireScalars, WireRejection> {
+    if format_tag(sample_format).is_none() {
+        return Err(WireRejection::Unsupported);
+    }
+    let channels = u16::try_from(channels).map_err(|_| WireRejection::InvalidValue)?;
+    let bytes_per_sample = u64::from(sample_format.bits_per_sample()) / 8;
+    let block_align = u16::try_from(u64::from(channels) * bytes_per_sample)
+        .map_err(|_| WireRejection::InvalidValue)?;
+    let byte_rate = u32::try_from(u64::from(rate) * u64::from(block_align))
+        .map_err(|_| WireRejection::InvalidValue)?;
+    Ok(WireScalars {
+        channels,
+        block_align,
+        byte_rate,
+    })
+}
+
 impl Wire {
     /// Builds wire parameters from a declared wire [`AudioFormat`];
     /// rejects sample formats outside the advertised set and channel
     /// counts/byte rates that overflow the RIFF fields.
     pub(crate) fn new(format: &AudioFormat) -> Result<Self> {
         let sample_format = format.sample_format;
-        if format_tag(sample_format).is_none() {
-            return Err(unsupported_sample_format(sample_format));
-        }
-        let channels = u16::try_from(format.layout.channels())
-            .map_err(|_| Error::from_kind(ErrorKind::InvalidValue))?;
-        let bytes_per_sample = u64::from(sample_format.bits_per_sample()) / 8;
-        let block_align = u16::try_from(u64::from(channels) * bytes_per_sample)
-            .map_err(|_| Error::from_kind(ErrorKind::InvalidValue))?;
-        let byte_rate = u32::try_from(u64::from(format.sample_rate.get()) * u64::from(block_align))
-            .map_err(|_| Error::from_kind(ErrorKind::InvalidValue))?;
+        let rate = format.sample_rate.get();
+        let scalars = match wire_declaration_decision(sample_format, format.layout.channels(), rate)
+        {
+            Ok(scalars) => scalars,
+            Err(WireRejection::Unsupported) => {
+                return Err(unsupported_sample_format(sample_format));
+            }
+            Err(WireRejection::InvalidValue) => {
+                return Err(Error::from_kind(ErrorKind::InvalidValue));
+            }
+        };
         Ok(Self {
             format: sample_format,
-            channels,
-            rate: format.sample_rate.get(),
-            block_align,
-            byte_rate,
+            channels: scalars.channels,
+            rate,
+            block_align: scalars.block_align,
+            byte_rate: scalars.byte_rate,
             channel_mask: format.layout.speaker_mask().bits(),
             extensible: use_extensible(format.layout),
         })
@@ -115,16 +167,11 @@ impl Wire {
 
 /// The `Unsupported` rejection for a non-wire [`SampleFormat`].
 ///
-/// The production form carries an `io::Error` source with a `{:?}`
-/// diagnostic. CBMC encodes that `format!`/`io::Error::new`
-/// construction into the SSA for *every* `Wire::new` unroll —
-/// measured at ~0.3 GiB per call on the slice-4 reference WSL2 box,
-/// which made any proof unrolling `Wire::new` more than a handful of
-/// times infeasible (`Wsl/Service/E_UNEXPECTED` at ~4 GiB RSS). The
-/// `kani` form keeps the verified contract — `ErrorKind::Unsupported`
-/// — while dropping the diagnostic payload, which is not part of the
-/// wire contract (the proptest gate likewise asserts the kind only).
-#[cfg(not(kani))]
+/// This is the lazy diagnostic shell half of the declaration boundary:
+/// it runs only after the pure decision core rejects the format, so the
+/// success path never pays for the `io::Error` payload. The payload is a
+/// diagnostic, not part of the verified wire contract; its stable meaning
+/// is that the rejected format is outside `wav_capabilities`'s wire set.
 fn unsupported_sample_format(sample_format: SampleFormat) -> Error {
     Error::with_source(
         ErrorKind::Unsupported,
@@ -133,12 +180,6 @@ fn unsupported_sample_format(sample_format: SampleFormat) -> Error {
             format!("wire sample format {sample_format:?} is not in wav_capabilities"),
         ),
     )
-}
-
-/// See the `not(kani)` variant — same contract, source-less error.
-#[cfg(kani)]
-fn unsupported_sample_format(_sample_format: SampleFormat) -> Error {
-    Error::from_kind(ErrorKind::Unsupported)
 }
 
 /// Bytes of a 16-bit little-endian value.
@@ -195,43 +236,31 @@ pub(crate) fn header(wire: &Wire) -> (Vec<u8>, u64) {
 /// Byte offset of the `RIFF` chunk size field (always 4).
 pub(crate) const RIFF_SIZE_OFFSET: u64 = 4;
 
-/// Kani proofs of the `Wire` gate and `fmt `/header serialization
-/// contract — `pub(crate)` items, so the harnesses live in-source;
-/// `cargo kani --tests` covers lib-target proofs (run via
+/// Kani proofs of the production wire-declaration decision core and the
+/// `fmt `/header serialization contract — private items, so the harnesses
+/// live in-source; `cargo kani` covers lib-target proofs (run via
 /// `mise run test-formal-kani`).
 ///
-/// Slice-1 lesson applied: symbolic scalars (rate bits, a layout
-/// selector plus mask bits, a format selector) on a concrete
-/// serialization skeleton — no symbolic byte streams. Two bounded
-/// costs shaped the harnesses:
-///
-/// - `Wire::new`'s `Unsupported` arm builds `std::io::Error::new`
-///   + a `format!` diagnostic eagerly, which exhausted the slice-4
-///   WSL2 box even over a concrete 5-iteration loop — the boxed
-///   `io::Error` repr, not the state space, is the formula bomb.
-///   `unsupported_sample_format` isolates that construction and
-///   drops the payload under `cfg(kani)`, which keeps every
-///   `Wire::new` unroll small enough to verify: the membership
-///   oracle is proven exhaustively over a symbolic `SampleFormat`
-///   (`format_tag_membership_is_wire_formats`), the `Unsupported`
-///   kind itself is proven on the concrete non-wire enumeration
-///   (`wire_new_non_wire_is_unsupported`), and the wire-format
-///   gate proofs only ever reach `InvalidValue`
-///   (`Error::from_kind` — no boxed source).
-/// - `SampleRate::new(rate)` normalizes via `TimeBase::new`'s
-///   Euclid `while` loop — `gcd(1, rate)` exits in <= 3 iterations,
-///   but each unrolled iteration nests another symbolic `%`, so
-///   the unwind bound (not the state space) sets the formula size.
-///   The small bounds below cover every real loop with headroom;
-///   the unwinding assertion stays fail-closed.
+/// rf#1015 slice-18 boundary: the gate proofs target
+/// `wire_declaration_decision`, not a model, test double, or a
+/// `cfg(kani)`-substituted production error. The core is scalar-only and
+/// carries no diagnostic construction, `SampleRate::new` normalization,
+/// allocation, or header serialization. `Wire::new` remains the thin
+/// shell that extracts those scalars and lazily attaches diagnostics; the
+/// shell-core connection and diagnostic meaning are deterministic/proptest
+/// coverage, not part of these Kani verdicts. Symbolic-rate interiors stay
+/// in proptest, while the boundary matrix keeps the exact machine-word
+/// comparisons that define the gate. The small unwind bounds cover every
+/// real loop with headroom; unwinding assertions stay fail-closed.
 #[cfg(kani)]
 mod proofs {
     use super::*;
     use ruviform_audio_core::{AudioFormat, ChannelLayout, SampleRate, SpeakerMask};
 
     /// The non-wire `SampleFormat` variants — `WIRE_FORMATS`'s
-    /// complement as of this proof; `format_tag_membership_is_wire_formats`
-    /// keeps the two sets in sync.
+    /// complement as of this proof. This manual inventory is the known
+    /// D-5 limitation of a `#[non_exhaustive]` enum, not a permanent
+    /// exhaustive proof over future variants.
     const NON_WIRE_FORMATS: &[SampleFormat] = &[
         SampleFormat::F64,
         SampleFormat::S8,
@@ -240,15 +269,12 @@ mod proofs {
         SampleFormat::U32,
     ];
 
-    /// The membership oracle `Wire::new` consults: for a fully
-    /// symbolic `SampleFormat`, `Some(_)` iff the format is in the
-    /// advertised `WIRE_FORMATS` set. Pure `match` — no diagnostic
-    /// construction — so the whole enum is symbolic here.
-    #[kani::proof]
-    #[kani::unwind(8)]
-    fn format_tag_membership_is_wire_formats() {
+    /// The known `SampleFormat` inventory used by the membership proof.
+    /// Adding a variant without updating this map makes the proof
+    /// inventory stale; it is not absorbed into the verified domain.
+    fn any_known_sample_format() -> SampleFormat {
         let sel: u8 = kani::any();
-        let format = match sel % 10 {
+        match sel % 10 {
             0 => SampleFormat::F32,
             1 => SampleFormat::F64,
             2 => SampleFormat::U8,
@@ -259,55 +285,139 @@ mod proofs {
             7 => SampleFormat::S24,
             8 => SampleFormat::U32,
             _ => SampleFormat::S32,
-        };
-        assert!(format_tag(format).is_some() == WIRE_FORMATS.contains(&format));
-        assert!(format_tag(format).is_none() == NON_WIRE_FORMATS.contains(&format));
-    }
-
-    /// Every non-wire `SampleFormat` reaches `Wire::new`'s
-    /// `Unsupported` rejection — concrete enumeration (no symbolic
-    /// rate, so no GCD unroll). Feasible only because
-    /// `unsupported_sample_format` drops the `format!`/`io::Error`
-    /// payload under `cfg(kani)`; the verified contract is the kind.
-    #[kani::proof]
-    #[kani::unwind(8)]
-    fn wire_new_non_wire_is_unsupported() {
-        for &sample_format in NON_WIRE_FORMATS {
-            let format = AudioFormat {
-                sample_rate: SampleRate::new(48_000).expect("nonzero rate"),
-                layout: ChannelLayout::Stereo,
-                sample_format,
-            };
-            let error = Wire::new(&format).expect_err("non-wire format must be rejected");
-            assert!(error.kind() == ErrorKind::Unsupported);
         }
     }
 
-    /// `Wire::new` acceptance over the wire formats is exactly
+    /// A known wire format for scalar-width proofs. The `% 5` selector is
+    /// exhaustive for the fixed wire set; future wire-set changes must
+    /// update this harness with the inventory they advertise.
+    fn any_wire_format() -> SampleFormat {
+        let sel: u8 = kani::any();
+        match sel % 5 {
+            0 => SampleFormat::U8,
+            1 => SampleFormat::S16,
+            2 => SampleFormat::S24,
+            3 => SampleFormat::S32,
+            _ => SampleFormat::F32,
+        }
+    }
+
+    /// Membership exactness of the production decision core over the
+    /// known `SampleFormat` inventory: accepted exactly for
+    /// `WIRE_FORMATS`, rejected `Unsupported` exactly for its documented
+    /// complement. Fixed valid scalars keep the numeric gates accepted so
+    /// this proof isolates membership. It also preserves the old
+    /// `format_tag` oracle equality, because `format_tag` remains the
+    /// serialization helper the core consults.
+    #[kani::proof]
+    #[kani::unwind(8)]
+    fn wav_decl_gate_membership_exactness() {
+        let format = any_known_sample_format();
+        let decision = wire_declaration_decision(format, 2, 48_000);
+        let is_wire = WIRE_FORMATS.contains(&format);
+        let is_non_wire = NON_WIRE_FORMATS.contains(&format);
+        assert!(is_wire != is_non_wire);
+        assert!(format_tag(format).is_some() == is_wire);
+        assert!(format_tag(format).is_none() == is_non_wire);
+        assert!(!matches!(decision, Err(WireRejection::InvalidValue)));
+        match decision {
+            Ok(scalars) => {
+                assert!(is_wire);
+                assert!(scalars.channels == 2);
+                assert!(
+                    u64::from(scalars.block_align) == 2 * u64::from(format.bits_per_sample()) / 8
+                );
+                assert!(u64::from(scalars.byte_rate) == 48_000 * u64::from(scalars.block_align));
+            }
+            Err(WireRejection::Unsupported) => {
+                assert!(is_non_wire);
+            }
+            Err(WireRejection::InvalidValue) => {
+                unreachable!("membership proof excludes InvalidValue")
+            }
+        }
+        kani::cover!(
+            matches!(decision, Ok(_)),
+            "supported format acceptance is reachable"
+        );
+        kani::cover!(
+            matches!(decision, Err(WireRejection::Unsupported)),
+            "non-wire unsupported rejection is reachable"
+        );
+    }
+
+    /// Width-gate exactness over every positive `u32` channel count and
+    /// every known wire format. `rate = 1` makes byte-rate overflow
+    /// impossible after the u16 block-align gate, isolating the channel
+    /// and block-align decisions. Production layouts currently reach only
+    /// 1..=32 channels, so the widened scalar domain proves the core's
+    /// machine-word boundary rather than claiming a production layout
+    /// defect path.
+    #[kani::proof]
+    #[kani::unwind(4)]
+    fn wav_decl_gate_width_exactness() {
+        let format = any_wire_format();
+        let channels: u32 = kani::any();
+        kani::assume(channels > 0);
+        let decision = wire_declaration_decision(format, channels, 1);
+        let bytes_per_sample = u64::from(format.bits_per_sample()) / 8;
+        let channels64 = u64::from(channels);
+        let align64 = channels64 * bytes_per_sample;
+        let channels_fit = channels64 <= u64::from(u16::MAX);
+        let align_fits = align64 <= u64::from(u16::MAX);
+
+        assert!(!matches!(decision, Err(WireRejection::Unsupported)));
+        if !channels_fit || !align_fits {
+            assert!(matches!(decision, Err(WireRejection::InvalidValue)));
+        } else {
+            match decision {
+                Ok(scalars) => {
+                    assert!(u32::from(scalars.channels) == channels);
+                    assert!(u64::from(scalars.block_align) == align64);
+                    assert!(u64::from(scalars.byte_rate) == align64);
+                }
+                Err(_) => unreachable!("fitting width gates must accept"),
+            }
+        }
+
+        kani::cover!(
+            format == SampleFormat::U8
+                && channels == u32::from(u16::MAX)
+                && matches!(decision, Ok(_)),
+            "u16 channel boundary acceptance is reachable"
+        );
+        kani::cover!(
+            format == SampleFormat::U8
+                && channels == u32::from(u16::MAX) + 1
+                && matches!(decision, Err(WireRejection::InvalidValue)),
+            "u16 channel boundary+1 rejection is reachable"
+        );
+        kani::cover!(
+            format == SampleFormat::S32 && channels == 16_383 && matches!(decision, Ok(_)),
+            "u16 block-align near-boundary acceptance is reachable"
+        );
+        kani::cover!(
+            format == SampleFormat::S32
+                && channels == 16_385
+                && matches!(decision, Err(WireRejection::InvalidValue)),
+            "u16 block-align boundary+1 rejection is reachable"
+        );
+    }
+
+    /// Byte-rate acceptance over the wire formats is exactly
     /// "`rate * block_align <= u32::MAX`" — proven at the boundary:
-    /// one (layout, format) rep per *distinct `block_align`*, rates
-    /// straddling `u32::MAX / block_align`, accept iff the product
-    /// fits, reject `InvalidValue` iff it does not. The gate's whole
-    /// contract is that comparison, so per-align reps lose no
-    /// coverage. The proof is split over three disjoint align
-    /// subsets — not for semantics (each rep is independent) but for
-    /// solver RAM: CBMC's formula grows ~linearly with the unrolled
-    /// `Wire::new` count and a single 39-case matrix pushed the
-    /// reference WSL2 box past the point where its service crashes
-    /// (`Wsl/Service/E_UNEXPECTED` — see
-    /// `docs/specs/formal-verification.md`). Everything is concrete —
-    /// `SampleRate::new` runs Euclid's `while` loop, whose nested
-    /// symbolic `%` unrolls are likewise infeasible here. The
-    /// interior `u32` domain is proptest-covered
-    /// (`wire_gate_is_exact_membership_plus_byte_rate` generates the
-    /// same ±4 boundary band plus uniform rates). The
-    /// channel-count (<= 32) / block-align (<= 256) `u16` gates can
-    /// never trip here — a future wider layout that could trip them
-    /// changes the proof, not just the odds.
-    fn check_wire_gate(cases: &[(ChannelLayout, SampleFormat)]) {
-        for &(layout, sample_format) in cases {
-            let block_align =
-                u64::from(layout.channels()) * u64::from(sample_format.bits_per_sample()) / 8;
+    /// one (channel-count, format) rep per *distinct `block_align`*,
+    /// rates straddling `u32::MAX / block_align`, accept iff the product
+    /// fits, reject `InvalidValue` iff it does not. The core input is
+    /// scalar, so this matrix no longer unrolls `SampleRate::new`'s
+    /// Euclid loop or the diagnostic shell. The proof is split over three
+    /// disjoint align subsets for solver RAM, not semantics. The interior
+    /// `u32` domain remains proptest-covered
+    /// (`wire_gate_is_exact_membership_plus_byte_rate` generates the same
+    /// ±4 boundary band plus uniform rates).
+    fn check_wav_decl_gate_byte_rate(cases: &[(u32, SampleFormat)]) {
+        for &(channels, sample_format) in cases {
+            let block_align = u64::from(channels) * u64::from(sample_format.bits_per_sample()) / 8;
             let boundary =
                 u32::try_from(u64::from(u32::MAX) / block_align).expect("boundary fits u32");
             for rate in [
@@ -315,79 +425,76 @@ mod proofs {
                 boundary,
                 boundary.saturating_add(1),
             ] {
-                let format = AudioFormat {
-                    sample_rate: SampleRate::new(rate).expect("nonzero rate"),
-                    layout,
-                    sample_format,
-                };
-                match Wire::new(&format) {
-                    Ok(wire) => {
-                        assert!(u64::from(rate) * block_align <= u64::from(u32::MAX));
-                        assert!(wire.format == sample_format);
-                        assert!(u32::from(wire.channels) == layout.channels());
-                        assert!(wire.rate == rate);
-                        assert!(u64::from(wire.block_align) == block_align);
-                        assert!(u64::from(wire.byte_rate) == u64::from(rate) * block_align);
-                        assert!(wire.channel_mask == layout.speaker_mask().bits());
-                        assert!(wire.extensible == use_extensible(layout));
+                let decision = wire_declaration_decision(sample_format, channels, rate);
+                let product = u64::from(rate) * block_align;
+                match decision {
+                    Ok(scalars) => {
+                        assert!(product <= u64::from(u32::MAX));
+                        assert!(u32::from(scalars.channels) == channels);
+                        assert!(u64::from(scalars.block_align) == block_align);
+                        assert!(u64::from(scalars.byte_rate) == product);
                     }
-                    Err(error) => {
-                        assert!(error.kind() == ErrorKind::InvalidValue);
-                        assert!(u64::from(rate) * block_align > u64::from(u32::MAX));
+                    Err(WireRejection::InvalidValue) => {
+                        assert!(product > u64::from(u32::MAX));
                     }
+                    Err(WireRejection::Unsupported) => unreachable!("wire formats are supported"),
                 }
+                kani::cover!(
+                    matches!(decision, Err(WireRejection::InvalidValue))
+                        && product == u64::from(u32::MAX) + 1,
+                    "byte-rate boundary+1 rejection is reachable"
+                );
             }
         }
     }
 
-    /// Small `block_align` reps — {1,2,3,4,6} via Mono{U8,S16,S24,S32}
-    /// and Stereo S24. `unwind(8)` covers the outer/inner loops and
-    /// the concrete GCD unrolls.
+    /// Small `block_align` reps — {1,2,3,4,6} through one/two-channel
+    /// integer formats. `unwind(8)` covers the outer/inner loops with
+    /// headroom.
     #[kani::proof]
     #[kani::unwind(8)]
-    fn wire_new_gate_is_exact_small_align() {
-        check_wire_gate(&[
-            (ChannelLayout::Mono, SampleFormat::U8),
-            (ChannelLayout::Mono, SampleFormat::S16),
-            (ChannelLayout::Mono, SampleFormat::S24),
-            (ChannelLayout::Mono, SampleFormat::S32),
-            (ChannelLayout::Stereo, SampleFormat::S24),
+    fn wav_decl_gate_byte_rate_boundary_small_align() {
+        let exact = wire_declaration_decision(SampleFormat::U8, 1, u32::MAX);
+        assert!(matches!(
+            exact,
+            Ok(scalars) if scalars.byte_rate == u32::MAX
+        ));
+        kani::cover!(
+            matches!(exact, Ok(_)),
+            "byte-rate exact boundary acceptance is reachable"
+        );
+        check_wav_decl_gate_byte_rate(&[
+            (1, SampleFormat::U8),
+            (1, SampleFormat::S16),
+            (1, SampleFormat::S24),
+            (1, SampleFormat::S32),
+            (2, SampleFormat::S24),
         ]);
     }
 
-    /// Mid `block_align` reps — {8,12,16,24} via Stereo F32, Quad
-    /// S24, Quad F32, 5.1 S32. `unwind(8)` as above.
+    /// Mid `block_align` reps — {8,12,16,24} through stereo/quad/5.1
+    /// channel counts. `unwind(8)` as above.
     #[kani::proof]
     #[kani::unwind(8)]
-    fn wire_new_gate_is_exact_mid_align() {
-        check_wire_gate(&[
-            (ChannelLayout::Stereo, SampleFormat::F32),
-            (ChannelLayout::Quad, SampleFormat::S24),
-            (ChannelLayout::Quad, SampleFormat::F32),
-            (ChannelLayout::FivePointOne, SampleFormat::S32),
+    fn wav_decl_gate_byte_rate_boundary_mid_align() {
+        check_wav_decl_gate_byte_rate(&[
+            (2, SampleFormat::F32),
+            (4, SampleFormat::S24),
+            (4, SampleFormat::F32),
+            (6, SampleFormat::S32),
         ]);
     }
 
-    /// Large `block_align` reps — {32,64,96,128} via 7.1 F32 and
-    /// arbitrary-mask custom layouts (16/24/32 speakers). Covers the
-    /// extensible `fmt ` path. `unwind(8)` as above.
+    /// Large `block_align` reps — {32,64,96,128} through 7.1 and
+    /// 16/24/32-channel custom-layout widths. `unwind(8)` as above.
     #[kani::proof]
     #[kani::unwind(8)]
-    fn wire_new_gate_is_exact_large_align() {
-        check_wire_gate(&[
-            (ChannelLayout::SevenPointOne, SampleFormat::F32),
-            (
-                ChannelLayout::custom(SpeakerMask::from_bits(0x0000_FFFF)).expect("non-empty mask"),
-                SampleFormat::S32,
-            ),
-            (
-                ChannelLayout::custom(SpeakerMask::from_bits(0x00FF_FFFF)).expect("non-empty mask"),
-                SampleFormat::F32,
-            ),
-            (
-                ChannelLayout::custom(SpeakerMask::from_bits(0xFFFF_FFFF)).expect("non-empty mask"),
-                SampleFormat::F32,
-            ),
+    fn wav_decl_gate_byte_rate_boundary_large_align() {
+        check_wav_decl_gate_byte_rate(&[
+            (8, SampleFormat::F32),
+            (16, SampleFormat::S32),
+            (24, SampleFormat::F32),
+            (32, SampleFormat::F32),
         ]);
     }
 
@@ -399,12 +506,12 @@ mod proofs {
     /// the data-size offset immediately after `data`. Concrete
     /// (layout, format) matrix — `SampleRate::new`'s Euclid loop and
     /// the `Vec` write path are both formula-heavy under a symbolic
-    /// domain on this environment (see `wire_new_gate_is_exact`).
+    /// domain on this environment (see the byte-rate boundary proofs).
     /// `unwind(64)` covers the builtin `memcmp` loop inside the
     /// slice-equality asserts (largest compare: 40 bytes).
     #[kani::proof]
     #[kani::unwind(64)]
-    fn fmt_and_header_layout() {
+    fn wav_decl_gate_fmt_and_header_layout() {
         for format in [
             AudioFormat {
                 sample_rate: SampleRate::new(48_000).expect("nonzero rate"),
